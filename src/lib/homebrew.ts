@@ -1,5 +1,5 @@
 import type {
-  Ability,
+  Attribute,
   AddedSpell,
   DndApiRef,
   DndSpell,
@@ -13,7 +13,7 @@ export function isHomebrewIndex(index: string): boolean {
 
 export function homebrewToDndSpell(args: { entry: AddedSpell; hb: HomebrewSpell }): DndSpell {
   const mechanic: HomebrewSpellMechanic = args.hb.mechanic ?? 'none'
-  const saveAbility: Ability | undefined = args.hb.saveAbility
+  const saveAbility: Attribute | undefined = args.hb.saveAbility
 
   const componentsRaw = Array.isArray(args.hb.components) ? args.hb.components : []
   const components = (['V', 'S', 'M'] as const).filter((c) => componentsRaw.includes(c))

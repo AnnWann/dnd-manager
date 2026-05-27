@@ -1,4 +1,6 @@
-export type Ability = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'
+import type { CharacterSkills, HitDice } from "./features/characters/characterSheet/character.types"
+
+export type Attribute = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'
 
 export type ProficiencyMode = 'totalLevel' | 'classLevel'
 
@@ -56,7 +58,7 @@ export interface SpellEffect {
   /** Numeric value for add/set modes. */
   value?: number
   /** Optional: used when target is attack/save/ability. */
-  ability?: Ability
+  ability?: Attribute
   /** Optional: for speed; defaults to 'ft' when omitted. */
   unit?: 'ft' | 'm'
   /** Optional: when target is condition. */
@@ -121,7 +123,7 @@ export interface HomebrewSpell {
   /** Optional: mark if this spell uses spell attack and/or saving throws */
   mechanic?: HomebrewSpellMechanic
   /** When mechanic is "save" or "both" */
-  saveAbility?: Ability
+  saveAbility?: Attribute
 
   /** Description text (free-form, typically PT-BR) */
   desc?: string
@@ -134,7 +136,7 @@ export interface CharacterClass {
   classIndex: string
   className: string
   level: number
-  castingAbility: Ability
+  castingAbility: Attribute
 
   /** Optional: override for multiclass spell slot progression (used for special cases like EK/AT). */
   spellcastingProgression?: 'auto' | 'third'
@@ -158,7 +160,7 @@ export interface AddedSpell {
 
   /** When sourceType === 'feat' */
   featName?: string
-  featAbility?: Ability
+  featAbility?: Attribute
   addedAt: number
 
   /** Optional: user-provided Portuguese display name override */
@@ -210,10 +212,20 @@ export interface AddedSpell {
   homebrew?: HomebrewSpell
 }
 
+
+export type CharacterTypes = 'pc' | 'npc' | 'besta' | 'humanoide' | 'monstruosidade' | 'morto-vivo' | 'constructo' | 'elemental' | 'féerico' | 'corruptor' | 'gigante' | 'dragão' | 'celestial' | 'aberração' | 'gosma'
 export interface Character {
   id: string
   name: string
-  abilities: Record<Ability, number>
+  type: CharacterTypes
+  maxHp: number
+  currentHp: number
+  temporaryHp: number
+  initiativeBonus?: number
+  hitDice: HitDice
+  armorClass: number
+  attributes: Record<Attribute, number>
+  skills: CharacterSkills
   classes: CharacterClass[]
   spells: AddedSpell[]
   proficiencyMode: ProficiencyMode

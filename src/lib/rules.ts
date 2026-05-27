@@ -1,4 +1,4 @@
-import type { Ability, MagicCircleLevel, ProficiencyMode } from '../types'
+import type { Attribute, MagicCircleLevel, ProficiencyMode } from '../types'
 
 export function abilityModifier(score: number): number {
   return Math.floor((score - 10) / 2)
@@ -63,7 +63,7 @@ export function magicCircleOptions(): MagicCircleLevel[] {
   return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 }
 
-export const ABILITIES: Array<{ key: Ability; label: string }> = [
+export const ABILITIES: Array<{ key: Attribute; label: string }> = [
   { key: 'str', label: 'STR' },
   { key: 'dex', label: 'DEX' },
   { key: 'con', label: 'CON' },

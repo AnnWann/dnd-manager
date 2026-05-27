@@ -1,6 +1,6 @@
 import { Button } from "../components/ui/Button"
 import { InitiativeCarousel } from "../features/initiative/initiativeCarousel"
-import { InitiativeForm } from "../features/initiative/InitiativeForm"
+import { InitiativeForm } from "../features/initiative/initiativeForm"
 import { useInitiative } from "../features/initiative/useIniciative"
 import type { Character } from "../types"
 

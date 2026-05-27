@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import type {
-  Ability,
+  Attribute,
   AddedSpell,
   ActionEconomyKey,
   Character,
@@ -70,7 +70,7 @@ function badge(text: string, opts?: { title?: string; limit?: boolean; kind?: 'i
   )
 }
 
-const ABILITY_KEYS: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
+const ABILITY_KEYS: Attribute[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 
 export function AddedSpellsCard(props: {
   activeCharacter: Character
@@ -341,7 +341,7 @@ export function AddedSpellsCard(props: {
     { value: 'charmed', label: 'Enfeitiçado' },
   ]
 
-  const abilityLabel = (a: Ability) => abilityShort(a)
+  const abilityLabel = (a: Attribute) => abilityShort(a)
 
   const conditionLabel = (c: ConditionKey) =>
     conditionOptions.find((x) => x.value === c)?.label ?? c
@@ -1253,12 +1253,12 @@ export function AddedSpellsCard(props: {
                       ? isAllowedSchoolForClass(castAs.classIndex, detail)
                       : true
 
-                  const castingAbility: Ability | undefined =
+                  const castingAbility: Attribute | undefined =
                     sourceType === 'feat'
                       ? (entry.featAbility ?? 'cha')
                       : castAs?.castingAbility
                   const castingAbilityScore = castingAbility
-                    ? activeCharacter.abilities[castingAbility]
+                    ? activeCharacter.attributes[castingAbility]
                     : undefined
                   const classLevelForSpell =
                     sourceType === 'feat'
@@ -1287,9 +1287,9 @@ export function AddedSpellsCard(props: {
 
                   const descLower = (detail?.desc ?? []).join(' ').toLowerCase()
 
-                  const saveAbility = ((): Ability | null => {
+                  const saveAbility = ((): Attribute | null => {
                     const idx = detail?.dc?.dc_type?.index?.trim()
-                    if (idx && (ABILITY_KEYS as string[]).includes(idx)) return idx as Ability
+                    if (idx && (ABILITY_KEYS as string[]).includes(idx)) return idx as Attribute
                     const name = detail?.dc?.dc_type?.name?.trim().toLowerCase()
                     if (!name) return null
                     if (name === 'str' || name === 'strength') return 'str'
@@ -1851,7 +1851,7 @@ export function AddedSpellsCard(props: {
                                 onClick={(e) => e.stopPropagation()}
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onChange={(e) => {
-                                  const featAbility = e.target.value as Ability
+                                  const featAbility = e.target.value as Attribute
                                   updateCharacter(activeCharacter.id, (c) => ({
                                     ...c,
                                     spells: c.spells.map((s) =>

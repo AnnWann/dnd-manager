@@ -1,6 +1,6 @@
-import type { Ability, CharacterClass, DndApiRef } from '../types'
+import type { Attribute, CharacterClass, DndApiRef } from '../types'
 
-export const CLASS_OPTIONS: Array<{ index: string; name: string; defaultAbility: Ability }> = [
+export const CLASS_OPTIONS: Array<{ index: string; name: string; defaultAbility: Attribute }> = [
   { index: 'artificer', name: 'Artífice', defaultAbility: 'int' },
   { index: 'bard', name: 'Bardo', defaultAbility: 'cha' },
   { index: 'cleric', name: 'Clérigo', defaultAbility: 'wis' },

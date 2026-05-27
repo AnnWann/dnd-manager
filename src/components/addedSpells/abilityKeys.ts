@@ -1,3 +1,3 @@
-import type { Ability } from '../../types'
+import type { Attribute } from '../../types'
 
-export const ABILITY_KEYS: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
+export const ABILITY_KEYS: Attribute[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']

@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type {
-  Ability,
+  Attribute,
   AddedSpell,
   Character,
   DndApiRef,
@@ -27,7 +27,7 @@ export type TranslateStatus =
 
   
 export function SpellsView(props: {
-  abilityShort: (ability: Ability) => string
+  abilityShort: (ability: Attribute) => string
 
   // Homebrew creator state
   hbName: string
@@ -38,8 +38,8 @@ export function SpellsView(props: {
   setHbSchool: (v: string) => void
   hbMechanic: HomebrewSpellMechanic
   setHbMechanic: (v: HomebrewSpellMechanic) => void
-  hbSaveAbility: Ability
-  setHbSaveAbility: (v: Ability) => void
+  hbSaveAbility: Attribute
+  setHbSaveAbility: (v: Attribute) => void
   hbDesc: string
   setHbDesc: (v: string) => void
   hbHigher: string
@@ -91,8 +91,8 @@ export function SpellsView(props: {
   setHbSourceClassId: (v: string) => void
   hbFeatName: string
   setHbFeatName: (v: string) => void
-  hbFeatAbility: Ability
-  setHbFeatAbility: (v: Ability) => void
+  hbFeatAbility: Attribute
+  setHbFeatAbility: (v: Attribute) => void
 
   hbBaseClasses: string[]
   setHbBaseClasses: (v: string[]) => void
@@ -550,7 +550,7 @@ export function SpellsView(props: {
               {hbMechanic === 'save' || hbMechanic === 'both' ? (
                 <div>
                   <label className="text-xs text-text">Resistência (atributo)</label>
-                  <Select className="mt-1" value={hbSaveAbility} onChange={(e) => setHbSaveAbility(e.target.value as Ability)}>
+                  <Select className="mt-1" value={hbSaveAbility} onChange={(e) => setHbSaveAbility(e.target.value as Attribute)}>
                     {ABILITIES.map(({ key }) => (
                       <option key={key} value={key}>
                         {abilityShort(key)}
@@ -644,7 +644,7 @@ export function SpellsView(props: {
                   </div>
                   <div>
                     <label className="text-xs text-text">Atributo do feat</label>
-                    <Select className="mt-1" value={hbFeatAbility} onChange={(e) => setHbFeatAbility(e.target.value as Ability)}>
+                    <Select className="mt-1" value={hbFeatAbility} onChange={(e) => setHbFeatAbility(e.target.value as Attribute)}>
                       {ABILITIES.map(({ key }) => (
                         <option key={key} value={key}>
                           {abilityShort(key)}

@@ -1,5 +1,5 @@
 import type {
-  Ability,
+  Attribute,
   ActionEconomyKey,
   AddedSpell,
   Character,
@@ -389,7 +389,7 @@ export function SpellModifiersTab(props: {
                                 ? { ...effects[idx], economy: raw as ActionEconomyKey }
                                 : needsCondition
                                   ? { ...effects[idx], condition: raw as ConditionKey }
-                                  : { ...effects[idx], ability: raw as Ability }
+                                  : { ...effects[idx], ability: raw as Attribute }
                               return { ...s, effects }
                             }),
                           }))

@@ -1,5 +1,5 @@
 import type { InitiativeResult } from "./initiative"
-import { InitiativeCard } from "./InitiativeCard"
+import { InitiativeCard } from "./initiativeCard"
 
 type Props = {
   order: InitiativeResult[]

@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
-import type { Ability } from '../types'
+import type { Attribute } from '../types'
 
 export type Locale = 'pt-BR' | 'en'
 
@@ -19,14 +19,14 @@ export type I18nKey =
 
 type I18n = {
   locale: Locale
-  abilityShort: (ability: Ability) => string
-  abilityLong: (ability: Ability) => string
+  abilityShort: (ability: Attribute) => string
+  abilityLong: (ability: Attribute) => string
   t: (key: I18nKey) => string
 }
 
 const I18nContext = createContext<I18n | null>(null)
 
-const PT_ABILITIES: Record<Ability, { short: string; long: string }> = {
+const PT_ABILITIES: Record<Attribute, { short: string; long: string }> = {
   str: { short: 'FOR', long: 'Força' },
   dex: { short: 'DES', long: 'Destreza' },
   con: { short: 'CON', long: 'Constituição' },
@@ -35,7 +35,7 @@ const PT_ABILITIES: Record<Ability, { short: string; long: string }> = {
   cha: { short: 'CAR', long: 'Carisma' },
 }
 
-const EN_ABILITIES: Record<Ability, { short: string; long: string }> = {
+const EN_ABILITIES: Record<Attribute, { short: string; long: string }> = {
   str: { short: 'STR', long: 'Strength' },
   dex: { short: 'DEX', long: 'Dexterity' },
   con: { short: 'CON', long: 'Constitution' },

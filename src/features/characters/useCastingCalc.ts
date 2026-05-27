@@ -20,8 +20,8 @@ export function useCastingCalc(activeCharacter: Character | undefined) {
 
     const selectedCalcClass = activeCharacter.classes.find((c) => c.id === effectiveCalcClassId)
     const calcAbilityScore = selectedCalcClass
-      ? activeCharacter.abilities[selectedCalcClass.castingAbility]
-      : activeCharacter.abilities.int
+      ? activeCharacter.attributes[selectedCalcClass.castingAbility]
+      : activeCharacter.attributes.int
     const calcClassLevel = selectedCalcClass?.level ?? activeCharacterTotalLevel
 
     const atk = spellAttackBonus({

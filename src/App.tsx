@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type {
-  Ability,
+  Attribute,
   AddedSpell,
   Character,
   CharacterClass,
@@ -188,7 +188,7 @@ function App() {
   const [hbLevel, setHbLevel] = useState<MagicCircleLevel>(1)
   const [hbSchool, setHbSchool] = useState<string>('Evocation')
   const [hbMechanic, setHbMechanic] = useState<HomebrewSpellMechanic>('none')
-  const [hbSaveAbility, setHbSaveAbility] = useState<Ability>('dex')
+  const [hbSaveAbility, setHbSaveAbility] = useState<Attribute>('dex')
   const [hbDesc, setHbDesc] = useState('')
   const [hbHigher, setHbHigher] = useState('')
 
@@ -218,7 +218,7 @@ function App() {
   const [hbSourceType, setHbSourceType] = useState<'class' | 'feat'>('class')
   const [hbSourceClassId, setHbSourceClassId] = useState<string>('')
   const [hbFeatName, setHbFeatName] = useState('')
-  const [hbFeatAbility, setHbFeatAbility] = useState<Ability>('cha')
+  const [hbFeatAbility, setHbFeatAbility] = useState<Attribute>('cha')
 
   const [hbBaseClasses, setHbBaseClasses] = useState<string[]>([])
 
@@ -448,7 +448,7 @@ function App() {
 
     const limitsByClassId: Record<string, number> = {}
     for (const cls of activeCharacter.classes) {
-      const abilityScore = activeCharacter.abilities[cls.castingAbility]
+      const abilityScore = activeCharacter.attributes[cls.castingAbility]
       const limit = preparedLimitForClass({
         classIndex: cls.classIndex,
         classLevel: cls.level,
