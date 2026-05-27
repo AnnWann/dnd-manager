@@ -36,6 +36,16 @@ export function CharacterInfo({ character, updateCharacter }: Props) {
   const dexMod = abilityModifier(character.attributes.dex)
   const initiative = dexMod + (character.initiativeBonus ?? 0)
 
+  const perceptionProficiency =
+  character.skills?.perception ?? "none"
+
+  const perceptionBonus =
+    abilityModifier(character.attributes.wis) +
+    (perceptionProficiency === "proficient" ? 2 : 0) +
+    (perceptionProficiency === "expertise" ? 4 : 0)
+
+  const passivePerception = 10 + perceptionBonus
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -186,6 +196,18 @@ export function CharacterInfo({ character, updateCharacter }: Props) {
                 temporaryHp: Number(e.target.value),
               }))
             }
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-text">
+            Percepção Passiva
+          </label>
+
+          <Input
+            className="mt-1"
+            value={passivePerception}
+            readOnly
           />
         </div>
 
