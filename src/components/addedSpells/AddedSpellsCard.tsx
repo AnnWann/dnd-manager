@@ -1884,7 +1884,7 @@ export function AddedSpellsCard(props: {
                           </Button>
                         </td>
                       </tr>
-
+                      
                       <SpellQuickDetailsModalRow
                         isOpen={openDetailsSpellIndex === entry.spellIndex}
                         entry={entry}

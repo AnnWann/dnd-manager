@@ -60,7 +60,7 @@ export function AddSpellsCard(props: {
     spellTranslations,
   } = props
 
-  const [showDescMode, setShowDescMode] = useState<'off' | 'on'>('off')
+  const [showDescMode, setShowDescMode] = useState<'off' | 'on'>('on')
   const [openDescIndex, setOpenDescIndex] = useState<string | null>(null)
   const [openDescLoading, setOpenDescLoading] = useState(false)
   const [openDescError, setOpenDescError] = useState<string | null>(null)
@@ -78,15 +78,10 @@ export function AddSpellsCard(props: {
   }, [openDescIndex, spellTranslations])
 
   useEffect(() => {
-    if (!openDescIndex) return
-    if (showDescMode !== 'on') {
-      setOpenDescIndex(null)
-      return
-    }
-    if (!unaddedResults.some((s) => s.index === openDescIndex)) {
-      setOpenDescIndex(null)
-    }
-  }, [openDescIndex, showDescMode, unaddedResults])
+  if (showDescMode !== 'on') {
+    setOpenDescIndex(null)
+  }
+  }, [showDescMode])
 
   const toggleDescription = (spellIndex: string) => {
     if (showDescMode !== 'on') return

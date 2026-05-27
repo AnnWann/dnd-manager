@@ -784,7 +784,7 @@ function App() {
     const c = newCharacter(`Personagem ${characters.length + 1}`)
     setAppState((prev) => ({
       ...prev,
-      characters: prev.characters.map(normalizeCharacter),
+      characters: [...prev.characters.map(normalizeCharacter), c],
       activeCharacterId: c.id,
     }))
   }
