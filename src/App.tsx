@@ -13,17 +13,7 @@ import type {
   SpellCastTimeKind,
   SpellTranslation,
 } from './types'
-import { loadSpellDb, spellDbToList } from './lib/spellDb'
-import {
-  ABILITIES,
-  abilityModifier,
-  cantripDiceMultiplier,
-  formatSigned,
-  magicCircleOptions,
-  spellAttackBonus,
-  spellSaveDc,
-  totalLevel,
-} from './lib/rules'
+
 import { newCharacter } from './lib/character'
 import { preparedLimitForClass } from './lib/prepared'
 import { spellListClassIndex } from './lib/spellAccess'
@@ -31,50 +21,30 @@ import { homebrewToDndSpell, isHomebrewIndex } from './lib/homebrew'
 import { castTimeKindFromText } from './lib/castTime'
 import {
   CLASS_OPTIONS,
-  SCHOOL_NAME_PT,
-  classDisplayName,
-  classLabel,
-  apiClassLabel,
   schoolLabel,
 } from './lib/spellLabels'
 import { useRemoteAppState } from './lib/remoteState'
 import { Button } from './components/ui/Button'
-import { Input } from './components/ui/Input'
-import { Select } from './components/ui/Select'
 import { Card, CardContent, CardHeader } from './components/ui/Card'
-import { Textarea } from './components/ui/Textarea'
-import { AddedSpellsCard } from './components/AddedSpellsCard'
-import { AddSpellsCard } from './components/AddSpellsCard'
 import { useI18n } from './i18n/I18nContext'
+import { SyncView } from './views/SyncView'
+import { CharacterView } from './views/CharacterView'
+import { SpellsView } from './views/SpellsView'
 
-function badge(text: string) {
-  return (
-    <span className="inline-flex items-center rounded-md border border-accentBorder bg-accentBg px-2 py-0.5 text-xs text-textH">
-      {text}
-    </span>
-  )
-}
-function clampInt(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, Math.trunc(value)))
-}
-
-function clampStep(value: number, min: number, max: number, step: number): number {
-  const v = Number.isFinite(value) ? value : min
-  const clamped = Math.max(min, Math.min(max, v))
-  const snapped = Math.round(clamped / step) * step
-  // Keep one decimal for 1.5m increments (e.g. 4.5), avoid float artifacts.
-  return Math.round(snapped * 10) / 10
-}
-
-function formatPtNumber(n: number): string {
-  const rounded = Math.round(n * 10) / 10
-  const isInt = Math.abs(rounded - Math.round(rounded)) < 1e-9
-  const s = isInt ? String(Math.round(rounded)) : String(rounded)
-  return s.replace('.', ',')
-}
+import { useSwipeViews } from './hooks/useSwipeViews'
+import { useSpellDb } from './features/spells/useSpellDb'
+import { useCastingCalc } from './features/characters/useCastingCalc'
+import { translateTexts } from './features/spells/translateApi'
+import { clampInt, clampStep, formatPtNumber } from './lib/numberFormat'
+import { effectsEqual } from './lib/spellEffects'
+import { InitiativeView } from './views/InitiativeView'
 
 function App() {
   const { abilityShort } = useI18n()
+
+  const swipe = useSwipeViews({ viewCount: 4, initialIndex: 1 })
+  type ViewsCount = 0 | 1 | 2 | 3
+  const viewIndex = swipe.viewIndex as ViewsCount
 
   const {
     syncKey,
@@ -117,42 +87,10 @@ function App() {
     }
   }, [activeCharacter, characters, setAppState])
 
-  function effectsEqual(a: SpellEffect[] | undefined, b: SpellEffect[] | undefined): boolean {
-    const aa = a ?? []
-    const bb = b ?? []
-    if (aa.length !== bb.length) return false
-    for (let i = 0; i < aa.length; i++) {
-      if (JSON.stringify(aa[i]) !== JSON.stringify(bb[i])) return false
-    }
-    return true
-  }
-
-  const [spellList, setSpellList] = useState<DndApiRef[] | null>(null)
-  const [spellListError, setSpellListError] = useState<string | null>(null)
-  const [spellDetails, setSpellDetails] = useState<Record<string, DndSpell | undefined>>({})
-  const [spellDetailsError, setSpellDetailsError] = useState<Record<string, string | undefined>>({})
-
-  const ensureSpellDetailsLoaded = useCallback(
-    async (): Promise<void> => {
-      // No-op: spell details are preloaded from /spells.v1.json (single request at startup).
-    },
-    [],
-  )
-
-  const getSpellDetailsLocal = useCallback(
-    async (index: string, signal?: AbortSignal): Promise<DndSpell> => {
-      if (signal?.aborted) throw new Error('Aborted')
-      if (isHomebrewIndex(index)) throw new Error('Homebrew spell has no official details')
-
-      const spell = spellDetails[index] ?? spellCache[index]
-      if (spell) return spell
-
-      throw new Error(
-        'Detalhes da magia não carregados. Gere /public/spells.v1.json com `npm run spells:fetch` e recarregue a página.',
-      )
-    },
-    [spellCache, spellDetails],
-  )
+  const spellDb = useSpellDb({ spellCache })
+  const { spellList, spellListError, spellDetails, spellDetailsError } = spellDb
+  const ensureSpellDetailsLoaded = spellDb.ensureSpellDetailsLoaded
+  const getSpellDetailsLocal = spellDb.getSpellDetailsLocal
 
   useEffect(() => {
     // Bootstrap: if characters already contain homebrew spells, ensure they are also
@@ -246,8 +184,6 @@ function App() {
   const [unaddedSchoolFilter, setUnaddedSchoolFilter] = useState<string>('any')
   const [unaddedClassFilter, setUnaddedClassFilter] = useState<string>('any')
 
-  const [calcClassId, setCalcClassId] = useState<string>('')
-
   const [hbName, setHbName] = useState('')
   const [hbLevel, setHbLevel] = useState<MagicCircleLevel>(1)
   const [hbSchool, setHbSchool] = useState<string>('Evocation')
@@ -295,40 +231,6 @@ function App() {
     | { kind: 'error'; spellIndex: string; message: string }
 
   const [translateStatus, setTranslateStatus] = useState((): TranslateStatus => ({ kind: 'idle' }))
-
-  async function translateTexts(args: {
-    texts: string[]
-    source?: string
-    target?: string
-  }): Promise<string[]> {
-    const payload = {
-      texts: args.texts,
-      source: args.source ?? 'en',
-      target: args.target ?? 'pt',
-    }
-
-    const res = await fetch('/api/translate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-
-    if (!res.ok) {
-      if (res.status === 404) {
-        throw new Error(
-          'API /api/translate não encontrada (HTTP 404). Em desenvolvimento local, rode com "vercel dev" (Vite não executa a pasta /api). Em produção, confirme que a função /api/translate foi deployada na Vercel.',
-        )
-      }
-      const text = await res.text().catch(() => '')
-      throw new Error(text || `HTTP ${res.status}`)
-    }
-
-    const data = (await res.json()) as { translations?: unknown; error?: unknown }
-    if (!Array.isArray(data.translations) || data.translations.some((t) => typeof t !== 'string')) {
-      throw new Error('Resposta inválida da API de tradução.')
-    }
-    return data.translations as string[]
-  }
 
   async function translateOfficialToPt(args: {
     spellIndex: string
@@ -415,7 +317,7 @@ function App() {
     setTranslateStatus({ kind: 'loading', spellIndex: spellRef.index })
     try {
       const detail = await getSpellDetailsLocal(spellRef.index)
-      setSpellDetails((prev) => ({ ...prev, [detail.index]: detail }))
+      spellDb.setSpellDetails((prev) => ({ ...prev, [detail.index]: detail }))
 
       const characterClasses = activeCharacter.classes
       const eligible = characterClasses.length
@@ -512,38 +414,8 @@ function App() {
     }
   }
 
-  useEffect(() => {
-    let alive = true
-    loadSpellDb()
-      .then((payload) => {
-        if (!alive) return
-        const spells = payload.spells ?? {}
-        // Merge in any previously-synced cache entries as a fallback, without fetching.
-        const merged = { ...spellCache, ...spells }
-        setSpellDetails(merged)
-        setSpellDetailsError({})
-        setSpellList(spellDbToList(merged))
-        setSpellListError(null)
-      })
-      .catch((err: unknown) => {
-        if (!alive) return
-        setSpellListError(
-          err instanceof Error
-            ? err.message
-            : 'Failed to load local spell DB (/spells.v1.json). Run: npm run spells:fetch',
-        )
-        setSpellList(null)
-      })
-    return () => {
-      alive = false
-    }
-  }, [])
-
-  const activeCharacterTotalLevel = useMemo(() => {
-    if (!activeCharacter) return 1
-    const levels = activeCharacter.classes.map((c) => c.level)
-    return Math.max(1, totalLevel(levels))
-  }, [activeCharacter])
+  const { calcClassId, setCalcClassId, activeCharacterTotalLevel, effectiveCalcClassId, atk, dc } =
+    useCastingCalc(activeCharacter)
 
   const activeCharacterSpellsSet = useMemo(() => {
     const set = new Set<string>()
@@ -1001,7 +873,7 @@ function App() {
     }
 
     const detail = await getSpellDetailsLocal(spellRef.index)
-    setSpellDetails((prev) => ({ ...prev, [detail.index]: detail }))
+    spellDb.setSpellDetails((prev) => ({ ...prev, [detail.index]: detail }))
 
     const characterClasses = activeCharacter.classes
     const eligible = characterClasses.length
@@ -1234,34 +1106,54 @@ function App() {
     )
   }
 
-  const effectiveCalcClassId = calcClassId || activeCharacter.classes[0]?.id || ''
-  const selectedCalcClass = activeCharacter.classes.find((c) => c.id === effectiveCalcClassId)
-  const calcAbilityScore = selectedCalcClass
-    ? activeCharacter.abilities[selectedCalcClass.castingAbility]
-    : activeCharacter.abilities.int
-  const calcClassLevel = selectedCalcClass?.level ?? activeCharacterTotalLevel
-  const atk = spellAttackBonus({
-    proficiencyMode: activeCharacter.proficiencyMode,
-    totalCharacterLevel: activeCharacterTotalLevel,
-    classLevel: calcClassLevel,
-    abilityScore: calcAbilityScore,
-  })
-  const dc = spellSaveDc({
-    proficiencyMode: activeCharacter.proficiencyMode,
-    totalCharacterLevel: activeCharacterTotalLevel,
-    classLevel: calcClassLevel,
-    abilityScore: calcAbilityScore,
-  })
+  function setView(next: ViewsCount) {
+    swipe.setViewIndex(next)
+  }
+
+  const innerTransform = swipe.innerTransform
 
   return (
     <div className="min-h-svh bg-[color:var(--social-bg)] text-text">
       <header className="border-b border-accentBorder bg-accentBg">
-        <div className="flex w-full items-center justify-between px-4 py-3">
+        <div className="flex w-full flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="font-heading text-xl text-textH">Gerenciador de Magias (D&amp;D)</h1>
-            <p className="text-xs text-text">Personagens • Magias adicionadas • Filtros • Cálculo</p>
+            <p className="text-xs text-text">Sync • Ficha • Magias • Iniciativa </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant={viewIndex === 0 ? 'primary' : 'secondary'}
+                onClick={() => setView(0)}
+              >
+                Sync
+              </Button>
+              <Button
+                size="sm"
+                variant={viewIndex === 1 ? 'primary' : 'secondary'}
+                onClick={() => setView(1)}
+              >
+                Ficha
+              </Button>
+              <Button
+                size="sm"
+                variant={viewIndex === 2 ? 'primary' : 'secondary'}
+                onClick={() => setView(2)}
+              >
+                Magias
+              </Button>
+
+              <Button
+                size="sm"
+                variant={viewIndex === 3 ? 'primary' : 'secondary'}
+                onClick={() => setView(3)}
+              >
+                Iniciativa
+              </Button>
+                
+            </div>
+
             <a
               className="text-xs font-medium text-accent underline decoration-accentBorder underline-offset-2 opacity-90 hover:opacity-100"
               href="https://www.dnd5eapi.co/"
@@ -1274,870 +1166,172 @@ function App() {
         </div>
       </header>
 
-      <main className="grid w-full grid-cols-1 gap-4 px-4 py-6 md:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className="min-w-0 space-y-3">
-          <Card>
-            <CardHeader>
-              <div className="text-sm font-semibold text-textH">Sincronização (grupo)</div>
-              <div className="mt-1 text-xs text-text">
-                Use uma chave secreta compartilhada (mín. 12 caracteres).
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-2">
-                <Input
-                  className="h-9 text-xs"
-                  value={syncKey}
-                  onChange={(e) => setSyncKey(e.target.value)}
-                  placeholder="ex: minha-chave-super-secreta"
-                />
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => void pullFromServer()}
-                  disabled={!canSync}
-                  title={!canSync ? 'A chave precisa ter pelo menos 12 caracteres' : 'Carregar do servidor'}
-                >
-                  Carregar
-                </Button>
-              </div>
-              <div className="mt-2 text-xs text-text">
-                Status:{' '}
-                <span className="font-mono">
-                  {syncStatus.kind === 'idle'
-                    ? 'local'
-                    : syncStatus.kind === 'loading'
-                      ? 'carregando…'
-                      : syncStatus.kind === 'saving'
-                        ? 'salvando…'
-                        : syncStatus.kind === 'synced'
-                          ? 'sincronizado'
-                          : `erro`}
-                </span>
-                {syncStatus.kind === 'error' ? (
-                  <div className="mt-1 text-[11px] text-text">{syncStatus.message}</div>
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
+      <main
+        ref={swipe.swipeRootRef}
+        className="mmSwipeRoot w-full overflow-hidden"
+        onPointerDown={swipe.onPointerDown}
+        onPointerMove={swipe.onPointerMove}
+        onPointerUp={swipe.onPointerUpOrCancel}
+        onPointerCancel={swipe.onPointerUpOrCancel}
+      >
+        <div
+          className="mmSwipeInner flex"
+          style={{
+            transform: innerTransform,
+            transition: swipe.isDragging ? 'none' : 'transform 220ms ease',
+          }}
+        >
+          {/* View 1: Sync */}
+          <div className="basis-full shrink-0 px-4 py-6">
+            <SyncView
+              syncKey={syncKey}
+              setSyncKey={setSyncKey}
+              canSync={canSync}
+              pullFromServer={pullFromServer}
+              syncStatus={syncStatus}
+            />
+          </div>
 
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-textH">Personagens</div>
-                <Button size="sm" variant="primary" onClick={addCharacter}>
-                  + Adicionar
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col gap-2">
-                {characters.map((c) => (
-                  <button
-                    key={c.id}
-                    className={
-                      c.id === activeCharacter.id
-                        ? 'flex w-full items-center justify-between rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-left'
-                        : 'flex w-full items-center justify-between rounded-lg border border-border bg-bg px-3 py-2 text-left hover:bg-[color:var(--social-bg)]'
-                    }
-                    onClick={() => setAppState((s) => ({ ...s, activeCharacterId: c.id }))}
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-textH">{c.name}</div>
-                      <div className="text-xs text-text">
-                        {c.spells.length} magias • {totalLevel(c.classes.map((x) => x.level)) || 0} nv
-                      </div>
-                    </div>
-                    {c.id === activeCharacter.id ? badge('Ativo') : null}
-                  </button>
-                ))}
-              </div>
+          {/* View 2: Character sheet */}
+          <div className="basis-full shrink-0 px-4 py-6">
+            <CharacterView
+              characters={characters}
+              activeCharacter={activeCharacter}
+              setActiveCharacterId={(id) => setAppState((s) => ({ ...s, activeCharacterId: id }))}
+              addCharacter={addCharacter}
+              deleteActiveCharacter={() => deleteCharacter(activeCharacter.id)}
+              disableDelete={characters.length <= 1}
+              abilityShort={abilityShort}
+              updateCharacter={updateCharacter}
+              addClassToActive={addClassToActive}
+              effectiveCalcClassId={effectiveCalcClassId}
+              setCalcClassId={setCalcClassId}
+              disableCalcClassSelect={activeCharacter.classes.length === 0}
+              activeCharacterTotalLevel={activeCharacterTotalLevel}
+              atk={atk}
+              dc={dc}
+            />
+          </div>
 
-              <div className="mt-3">
-                <Button
-                  className="w-full"
-                  variant="secondary"
-                  onClick={() => deleteCharacter(activeCharacter.id)}
-                  disabled={characters.length <= 1}
-                  title={
-                    characters.length <= 1
-                      ? 'Mantenha pelo menos 1 personagem'
-                      : 'Excluir personagem'
-                  }
-                >
-                  Excluir personagem ativo
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </aside>
+          {/* View 3: Spell listing */}
+          <div className="basis-full shrink-0 px-4 py-6">
+            <SpellsView
+              abilityShort={abilityShort}
+              hbName={hbName}
+              setHbName={setHbName}
+              hbLevel={hbLevel}
+              setHbLevel={setHbLevel}
+              hbSchool={hbSchool}
+              setHbSchool={setHbSchool}
+              hbMechanic={hbMechanic}
+              setHbMechanic={setHbMechanic}
+              hbSaveAbility={hbSaveAbility}
+              setHbSaveAbility={setHbSaveAbility}
+              hbDesc={hbDesc}
+              setHbDesc={setHbDesc}
+              hbHigher={hbHigher}
+              setHbHigher={setHbHigher}
+              hbRangeKind={hbRangeKind}
+              setHbRangeKind={setHbRangeKind}
+              hbRangeValue={hbRangeValue}
+              setHbRangeValue={setHbRangeValue}
+              hbAreaShape={hbAreaShape}
+              setHbAreaShape={setHbAreaShape}
+              hbAreaSize={hbAreaSize}
+              setHbAreaSize={setHbAreaSize}
+              hbAreaUnit={hbAreaUnit}
+              setHbAreaUnit={setHbAreaUnit}
+              hbDurationKind={hbDurationKind}
+              setHbDurationKind={setHbDurationKind}
+              hbDurationValue={hbDurationValue}
+              setHbDurationValue={setHbDurationValue}
+              hbDamageKind={hbDamageKind}
+              setHbDamageKind={setHbDamageKind}
+              hbDamageCount={hbDamageCount}
+              setHbDamageCount={setHbDamageCount}
+              hbDamageDie={hbDamageDie}
+              setHbDamageDie={setHbDamageDie}
+              hbDamageBonus={hbDamageBonus}
+              setHbDamageBonus={setHbDamageBonus}
+              hbCastTimeKind={hbCastTimeKind}
+              setHbCastTimeKind={setHbCastTimeKind}
+              hbReactionWhen={hbReactionWhen}
+              setHbReactionWhen={setHbReactionWhen}
+              hbConcentration={hbConcentration}
+              setHbConcentration={setHbConcentration}
+              hbRitual={hbRitual}
+              setHbRitual={setHbRitual}
+              hbComponents={hbComponents}
+              setHbComponents={setHbComponents}
+              hbMaterial={hbMaterial}
+              setHbMaterial={setHbMaterial}
+              hbSourceType={hbSourceType}
+              setHbSourceType={setHbSourceType}
+              hbSourceClassId={hbSourceClassId}
+              setHbSourceClassId={setHbSourceClassId}
+              hbFeatName={hbFeatName}
+              setHbFeatName={setHbFeatName}
+              hbFeatAbility={hbFeatAbility}
+              setHbFeatAbility={setHbFeatAbility}
+              hbBaseClasses={hbBaseClasses}
+              setHbBaseClasses={setHbBaseClasses}
+              effectiveCalcClassId={effectiveCalcClassId}
+              addHomebrewToActive={addHomebrewToActive}
+              activeCharacter={activeCharacter}
+              activeCharacterSchools={activeCharacterSchools}
+              activeCharacterTotalLevel={activeCharacterTotalLevel}
+              filteredAddedSpells={filteredAddedSpells}
+              spellDetails={spellDetails}
+              spellDetailsError={spellDetailsError}
+              ensureSpellDetailsLoaded={ensureSpellDetailsLoaded}
+              preparedMeta={preparedMeta}
+              spellTranslations={spellTranslations}
+              addedNameFilter={addedNameFilter}
+              setAddedNameFilter={setAddedNameFilter}
+              addedLevelFilter={addedLevelFilter}
+              setAddedLevelFilter={setAddedLevelFilter}
+              addedSchoolFilter={addedSchoolFilter}
+              setAddedSchoolFilter={setAddedSchoolFilter}
+              addedPreparedFilter={addedPreparedFilter}
+              setAddedPreparedFilter={setAddedPreparedFilter}
+              addedClassFilter={addedClassFilter}
+              setAddedClassFilter={setAddedClassFilter}
+              hideUa={hideUa}
+              setHideUa={setHideUa}
+              openSpellIndex={openSpellIndex}
+              setOpenSpellIndex={setOpenSpellIndex}
+              openSpellTab={openSpellTab}
+              setOpenSpellTab={setOpenSpellTab}
+              translateStatus={translateStatus}
+              translateOfficialToPt={translateOfficialToPt}
+              updateCharacter={updateCharacter}
+              removeSpellFromActive={removeSpellFromActive}
+              availableSpellRefs={availableSpellRefs}
+              spellListError={spellListError}
+              unaddedSearch={unaddedSearch}
+              setUnaddedSearch={setUnaddedSearch}
+              unaddedLevelFilter={unaddedLevelFilter}
+              setUnaddedLevelFilter={setUnaddedLevelFilter}
+              unaddedSchoolFilter={unaddedSchoolFilter}
+              setUnaddedSchoolFilter={setUnaddedSchoolFilter}
+              unaddedClassFilter={unaddedClassFilter}
+              setUnaddedClassFilter={setUnaddedClassFilter}
+              unaddedResults={unaddedResults}
+              activeCharacterSpellsSet={activeCharacterSpellsSet}
+              addSpellToActive={addSpellToActive}
+              addSpellToActiveTranslated={addSpellToActiveTranslated}
+              getSpellDetailsLocal={getSpellDetailsLocal}
+              homebrewLibrary={homebrewLibrary}
+            />
+          </div>
 
-        <section className="min-w-0 space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="text-sm font-semibold text-textH">Ficha rápida</div>
-              <div className="mt-1 text-xs text-text">Nome, atributos e regra de proficiência.</div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                <div className="w-full">
-                  <label className="text-xs text-text">Nome do personagem</label>
-                  <Input
-                    className="mt-1"
-                    value={activeCharacter.name}
-                    onChange={(e) =>
-                      updateCharacter(activeCharacter.id, (c) => ({ ...c, name: e.target.value }))
-                    }
-                  />
-                </div>
-                <div className="w-full md:w-[320px]">
-                  <label className="text-xs text-text">Cálculo de proficiência</label>
-                  <Select
-                    className="mt-1"
-                    value={activeCharacter.proficiencyMode}
-                    onChange={(e) =>
-                      updateCharacter(activeCharacter.id, (c) => ({
-                        ...c,
-                        proficiencyMode:
-                          e.target.value === 'classLevel' ? 'classLevel' : 'totalLevel',
-                      }))
-                    }
-                  >
-                    <option value="totalLevel">Nível total (padrão 5e)</option>
-                    <option value="classLevel">Por classe (regra da casa)</option>
-                  </Select>
-                </div>
-              </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-6">
-              {ABILITIES.map(({ key }) => (
-                <div key={key}>
-                  <label className="text-xs text-text">{abilityShort(key)}</label>
-                  <div className="mt-1 flex items-center gap-2">
-                    <Input
-                      type="number"
-                      className="h-9 px-2"
-                      value={activeCharacter.abilities[key]}
-                      min={1}
-                      max={30}
-                      onChange={(e) => {
-                        const score = clampInt(Number(e.target.value), 1, 30)
-                        updateCharacter(activeCharacter.id, (c) => ({
-                          ...c,
-                          abilities: { ...c.abilities, [key]: score },
-                        }))
-                      }}
-                    />
-                    <div className="w-10 text-right text-xs text-text">
-                      {formatSigned(abilityModifier(activeCharacter.abilities[key]))}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-5">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium text-textH">Classes</div>
-                <Select
-                  className="h-9 w-auto px-2 text-xs"
-                  defaultValue=""
-                  onChange={(e) => {
-                    const v = e.target.value
-                    if (!v) return
-                    addClassToActive(v)
-                    e.currentTarget.value = ''
-                  }}
-                >
-                  <option value="">+ Adicionar classe…</option>
-                  {CLASS_OPTIONS.map((c) => (
-                    <option key={c.index} value={c.index}>
-                      {c.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              {activeCharacter.classes.length === 0 ? (
-                <p className="mt-2 text-xs text-text">
-                  Adicione pelo menos uma classe para calcular bônus e auto-atribuir magias.
-                </p>
-              ) : (
-                <div className="mt-3 grid gap-2">
-                  {activeCharacter.classes.map((cls) => (
-                    <div
-                      key={cls.id}
-                      className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 md:grid-cols-[1fr_100px_160px_44px]"
-                    >
-                      <div className="min-w-0">
-                        <div className="text-xs text-text">Classe</div>
-                        <div className="truncate text-sm text-textH">{classLabel(cls)}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-text">Nível</div>
-                        <Input
-                          type="number"
-                          className="mt-1 h-9 px-2"
-                          min={1}
-                          max={20}
-                          value={cls.level}
-                          onChange={(e) => {
-                            const level = clampInt(Number(e.target.value), 1, 20)
-                            updateCharacter(activeCharacter.id, (c) => ({
-                              ...c,
-                              classes: c.classes.map((x) => (x.id === cls.id ? { ...x, level } : x)),
-                            }))
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <div className="text-xs text-text">Atributo (conjuração)</div>
-                        <Select
-                          className="mt-1 h-9 px-2 py-1"
-                          value={cls.castingAbility}
-                          onChange={(e) => {
-                            const castingAbility = e.target.value as Ability
-                            updateCharacter(activeCharacter.id, (c) => ({
-                              ...c,
-                              classes: c.classes.map((x) =>
-                                x.id === cls.id ? { ...x, castingAbility } : x,
-                              ),
-                            }))
-                          }}
-                        >
-                          {ABILITIES.map((a) => (
-                            <option key={a.key} value={a.key}>
-                              {abilityShort(a.key)}
-                            </option>
-                          ))}
-                        </Select>
-
-                        {cls.classIndex === 'fighter' || cls.classIndex === 'rogue' ? (
-                          <div className="mt-2">
-                            <div className="text-xs text-text">Slots (multiclasse)</div>
-                            <Select
-                              className="mt-1 h-9 px-2 py-1"
-                              value={cls.spellcastingProgression ?? 'auto'}
-                              onChange={(e) => {
-                                const v = e.target.value as 'auto' | 'third'
-                                updateCharacter(activeCharacter.id, (c) => ({
-                                  ...c,
-                                  classes: c.classes.map((x) =>
-                                    x.id === cls.id
-                                      ? {
-                                          ...x,
-                                          spellcastingProgression: v === 'auto' ? undefined : v,
-                                        }
-                                      : x,
-                                  ),
-                                }))
-                              }}
-                              title="Fighter/Rogue só contam como 1/3 conjurador se forem Cavaleiro Arcano / Trapaceiro Arcano."
-                            >
-                              <option value="auto">Padrão (sem slots)</option>
-                              <option value="third">1/3 conjurador (EK/AT)</option>
-                            </Select>
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className="flex items-end">
-                        <Button
-                          className="w-full"
-                          size="sm"
-                          variant="secondary"
-                          onClick={() =>
-                            updateCharacter(activeCharacter.id, (c) => ({
-                              ...c,
-                              classes: c.classes.filter((x) => x.id !== cls.id),
-                              spells: c.spells.map((s) =>
-                                s.sourceClassId === cls.id ? { ...s, sourceClassId: undefined } : s,
-                              ),
-                            }))
-                          }
-                          title="Remover classe"
-                        >
-                          ✕
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-textH">Calculadora de conjuração</div>
-                  <div className="mt-1 text-xs text-text">
-                    Calcula bônus de ataque mágico e CD. Truques mostram a escala de dano.
-                  </div>
-                </div>
-                <div className="text-xs text-text">Nível total: {activeCharacterTotalLevel}</div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div>
-                  <label className="text-xs text-text">Conjurar como</label>
-                  <Select
-                    className="mt-1"
-                    value={effectiveCalcClassId}
-                    onChange={(e) => setCalcClassId(e.target.value)}
-                    disabled={activeCharacter.classes.length === 0}
-                  >
-                    {activeCharacter.classes.length === 0 ? (
-                      <option value="">Adicione uma classe primeiro</option>
-                    ) : (
-                      activeCharacter.classes.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {classDisplayName(c)}
-                        </option>
-                      ))
-                    )}
-                  </Select>
-                </div>
-                <div className="rounded-lg border border-border bg-[color:var(--social-bg)] p-3">
-                  <div className="text-xs text-text">Resultados</div>
-                  <div className="mt-1 text-sm text-textH">
-                    Ataque Mágico: <span className="font-mono">{formatSigned(atk)}</span>
-                  </div>
-                  <div className="text-sm text-textH">
-                    CD (Resistência): <span className="font-mono">{dc}</span>
-                  </div>
-                  <div className="mt-2 text-xs text-text">
-                    {`Dado de dano do truque: x${cantripDiceMultiplier(activeCharacterTotalLevel)} (escala 5e). ATQ/CD não mudam com o círculo.`}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="text-sm font-semibold text-textH">Criar magia (Homebrew)</div>
-              <div className="mt-1 text-xs text-text">
-                Cria uma magia personalizada e adiciona ao personagem (sincroniza junto).
-              </div>
-            </CardHeader>
-            <CardContent>
-              <details className="group">
-                <summary className="cursor-pointer list-none select-none rounded-md border border-accentBorder bg-[color:var(--social-bg)] px-3 py-2 text-sm text-textH hover:bg-accentBg">
-                  Abrir criador
-                </summary>
-                <div className="mt-3 grid grid-cols-1 gap-2">
-                  <div>
-                    <label className="text-xs text-text">Nome</label>
-                    <Input
-                      className="mt-1"
-                      value={hbName}
-                      onChange={(e) => setHbName(e.target.value)}
-                      placeholder="ex: Raio de Gelo Azul"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                    <div>
-                      <label className="text-xs text-text">Nível</label>
-                      <Select
-                        className="mt-1"
-                        value={hbLevel}
-                        onChange={(e) => setHbLevel(Number(e.target.value) as MagicCircleLevel)}
-                      >
-                        {magicCircleOptions().map((lvl) => (
-                          <option key={lvl} value={lvl}>
-                            {lvl}
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-text">Escola</label>
-                      <Select
-                        className="mt-1"
-                        value={hbSchool}
-                        onChange={(e) => setHbSchool(e.target.value)}
-                      >
-                        {Object.keys(SCHOOL_NAME_PT)
-                          .sort((a, b) => schoolLabel(a).localeCompare(schoolLabel(b), 'pt-BR'))
-                          .map((k) => (
-                            <option key={k} value={k}>
-                              {schoolLabel(k)}
-                            </option>
-                          ))}
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                    <div>
-                      <label className="text-xs text-text">Alcance</label>
-                      <div className="mt-1 grid grid-cols-1 gap-2 md:grid-cols-[1fr_120px]">
-                        <Select
-                          value={hbRangeKind}
-                          onChange={(e) => setHbRangeKind(e.target.value as typeof hbRangeKind)}
-                        >
-                          <option value="self">Pessoal</option>
-                          <option value="touch">Toque</option>
-                          <option value="meters">Distância (m)</option>
-                          <option value="feet">Distância (ft)</option>
-                          <option value="sight">Visão</option>
-                          <option value="special">Especial</option>
-                          <option value="unlimited">Ilimitado</option>
-                        </Select>
-                        <Input
-                          type="number"
-                          value={hbRangeKind === 'meters' || hbRangeKind === 'feet' ? hbRangeValue : ''}
-                          disabled={!(hbRangeKind === 'meters' || hbRangeKind === 'feet')}
-                          onChange={(e) => {
-                            const v = Number(e.target.value)
-                            if (Number.isFinite(v)) setHbRangeValue(v)
-                          }}
-                          min={hbRangeKind === 'feet' ? 5 : 1.5}
-                          max={9999}
-                          step={hbRangeKind === 'feet' ? 5 : 1.5}
-                          placeholder="ex: 18"
-                          title="Valor do alcance (quando aplicável)"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs text-text">Área</label>
-                      <div className="mt-1 grid grid-cols-1 gap-2 md:grid-cols-[1fr_120px_84px]">
-                        <Select
-                          value={hbAreaShape}
-                          onChange={(e) => setHbAreaShape(e.target.value as typeof hbAreaShape)}
-                        >
-                          <option value="none">(sem área)</option>
-                          <option value="cone">Cone</option>
-                          <option value="sphere">Esfera</option>
-                          <option value="cylinder">Cilindro</option>
-                          <option value="line">Linha</option>
-                          <option value="cube">Cubo</option>
-                        </Select>
-                        <Input
-                          type="number"
-                          value={hbAreaShape === 'none' ? '' : hbAreaSize}
-                          disabled={hbAreaShape === 'none'}
-                          onChange={(e) => {
-                            const v = Number(e.target.value)
-                            if (Number.isFinite(v)) setHbAreaSize(v)
-                          }}
-                          min={hbAreaUnit === 'ft' ? 5 : 1.5}
-                          max={9999}
-                          step={hbAreaUnit === 'ft' ? 5 : 1.5}
-                          placeholder="ex: 6"
-                          title="Tamanho da área (quando aplicável)"
-                        />
-                        <Select
-                          value={hbAreaUnit}
-                          onChange={(e) => setHbAreaUnit(e.target.value as typeof hbAreaUnit)}
-                          disabled={hbAreaShape === 'none'}
-                          title="Unidade"
-                        >
-                          <option value="m">m</option>
-                          <option value="ft">ft</option>
-                        </Select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                    <div>
-                      <label className="text-xs text-text">Duração</label>
-                      <div className="mt-1 grid grid-cols-1 gap-2 md:grid-cols-[1fr_120px]">
-                        <Select
-                          value={hbDurationKind}
-                          onChange={(e) => setHbDurationKind(e.target.value as typeof hbDurationKind)}
-                        >
-                          <option value="instant">Instantânea</option>
-                          <option value="rounds">Rodadas</option>
-                          <option value="minutes">Minutos</option>
-                          <option value="hours">Horas</option>
-                          <option value="special">Especial</option>
-                        </Select>
-                        <Input
-                          type="number"
-                          value={hbDurationKind === 'rounds' || hbDurationKind === 'minutes' || hbDurationKind === 'hours' ? hbDurationValue : ''}
-                          disabled={!(hbDurationKind === 'rounds' || hbDurationKind === 'minutes' || hbDurationKind === 'hours')}
-                          onChange={(e) => setHbDurationValue(Number(e.target.value))}
-                          min={1}
-                          max={9999}
-                          placeholder="ex: 1"
-                          title="Valor da duração (quando aplicável)"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs text-text">Conjuração</label>
-                      <Select
-                        className="mt-1"
-                        value={hbCastTimeKind}
-                        onChange={(e) => {
-                          const next = e.target.value as SpellCastTimeKind
-                          setHbCastTimeKind(next)
-                          if (next !== 'reaction') setHbReactionWhen('')
-                        }}
-                      >
-                        <option value="action">Ação</option>
-                        <option value="bonus">Bônus</option>
-                        <option value="reaction">Reação</option>
-                      </Select>
-
-                      {hbCastTimeKind === 'reaction' ? (
-                        <div className="mt-2">
-                          <div className="text-xs text-text">Quando (reação)</div>
-                          <Input
-                            className="mt-1"
-                            value={hbReactionWhen}
-                            onChange={(e) => setHbReactionWhen(e.target.value)}
-                            placeholder="ex: quando você for atingido por um ataque…"
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-                    <div>
-                      <label className="text-xs text-text">Concentração</label>
-                      <div className="mt-2 flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={hbConcentration}
-                          onChange={(e) => setHbConcentration(e.target.checked)}
-                        />
-                        <span className="text-xs text-text">Exige concentração</span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-text">Ritual</label>
-                      <div className="mt-2 flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={hbRitual}
-                          onChange={(e) => setHbRitual(e.target.checked)}
-                        />
-                        <span className="text-xs text-text">Pode ser conjurada como ritual</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-text">Componentes</label>
-                    <div className="mt-2 flex flex-wrap items-center gap-3">
-                      {(['V', 'S', 'M'] as const).map((comp) => {
-                        const checked = hbComponents.includes(comp)
-                        return (
-                          <label key={comp} className="flex items-center gap-2 text-xs text-text">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(e) => {
-                                const nextChecked = e.target.checked
-                                const set = new Set(hbComponents)
-                                if (nextChecked) set.add(comp)
-                                else set.delete(comp)
-                                const next = Array.from(set) as Array<'V' | 'S' | 'M'>
-                                setHbComponents(next)
-                                if (comp === 'M' && !nextChecked) setHbMaterial('')
-                              }}
-                            />
-                            <span>{comp}</span>
-                          </label>
-                        )
-                      })}
-                    </div>
-
-                    {hbComponents.includes('M') ? (
-                      <div className="mt-2">
-                        <Input
-                          className="mt-1"
-                          value={hbMaterial}
-                          onChange={(e) => setHbMaterial(e.target.value)}
-                          placeholder="Material (ex: um pedaço de fio de cobre…)"
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                    <div>
-                      <label className="text-xs text-text">Dano (base)</label>
-                      <div className="mt-1 grid grid-cols-1 gap-2 md:grid-cols-[1fr_88px_88px_88px]">
-                        <Select
-                          value={hbDamageKind}
-                          onChange={(e) => setHbDamageKind(e.target.value as typeof hbDamageKind)}
-                          title="Tipo de dano base"
-                        >
-                          <option value="none">(sem dano)</option>
-                          <option value="dice">Dados</option>
-                        </Select>
-                        <Input
-                          type="number"
-                          value={hbDamageKind === 'dice' ? hbDamageCount : ''}
-                          disabled={hbDamageKind !== 'dice'}
-                          onChange={(e) => setHbDamageCount(Number(e.target.value))}
-                          min={0}
-                          max={99}
-                          placeholder="Qtd"
-                          title="Quantidade de dados"
-                        />
-                        <Select
-                          value={String(hbDamageDie)}
-                          disabled={hbDamageKind !== 'dice'}
-                          onChange={(e) => setHbDamageDie(Number(e.target.value) as 4 | 6 | 8 | 10 | 12)}
-                          title="Tamanho do dado"
-                        >
-                          <option value="4">d4</option>
-                          <option value="6">d6</option>
-                          <option value="8">d8</option>
-                          <option value="10">d10</option>
-                          <option value="12">d12</option>
-                        </Select>
-                        <Input
-                          type="number"
-                          value={hbDamageKind === 'dice' ? hbDamageBonus : ''}
-                          disabled={hbDamageKind !== 'dice'}
-                          onChange={(e) => setHbDamageBonus(Number(e.target.value))}
-                          min={0}
-                          max={999}
-                          placeholder="+0"
-                          title="Bônus fixo (opcional)"
-                        />
-                      </div>
-                      <div className="mt-1 text-[11px] text-text">
-                        Usado só para estimativa de dano (ex.: 2d6+3). Pode ser 0 (ex.: 0d6) para cantrips que começam a dar dano no nível 5.
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs text-text">Mecânica</label>
-                      <Select
-                        className="mt-1"
-                        value={hbMechanic}
-                        onChange={(e) => setHbMechanic(e.target.value as HomebrewSpellMechanic)}
-                      >
-                        <option value="none">Nenhuma</option>
-                        <option value="attack">Ataque</option>
-                        <option value="save">Teste de resistência</option>
-                        <option value="both">Ataque + Teste</option>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {hbMechanic === 'save' || hbMechanic === 'both' ? (
-                    <div>
-                      <label className="text-xs text-text">Resistência (atributo)</label>
-                      <Select
-                        className="mt-1"
-                        value={hbSaveAbility}
-                        onChange={(e) => setHbSaveAbility(e.target.value as Ability)}
-                      >
-                        {ABILITIES.map(({ key }) => (
-                          <option key={key} value={key}>
-                            {abilityShort(key)}
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-                  ) : null}
-
-                  <div>
-                    <label className="text-xs text-text">Fonte</label>
-                    <Select
-                      className="mt-1"
-                      value={hbSourceType}
-                      onChange={(e) => setHbSourceType(e.target.value as 'class' | 'feat')}
-                    >
-                      <option value="class">Classe</option>
-                      <option value="feat">Feat</option>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-text">Classes base</label>
-                    <div className="mt-1 text-[11px] text-text">
-                      Define quais classes têm essa magia na lista (coluna “Classes”).
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-3">
-                      {(
-                        [
-                          'artificer',
-                          'barbarian',
-                          'bard',
-                          'cleric',
-                          'druid',
-                          'fighter',
-                          'monk',
-                          'paladin',
-                          'ranger',
-                          'rogue',
-                          'sorcerer',
-                          'warlock',
-                          'wizard',
-                        ] as const
-                      ).map((idx) => {
-                        const checked = hbBaseClasses.includes(idx)
-                        const label = apiClassLabel({ index: idx, name: idx, url: '' })
-                        return (
-                          <label key={idx} className="flex items-center gap-2 text-xs text-text">
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(e) => {
-                                const nextChecked = e.target.checked
-                                const set = new Set(hbBaseClasses)
-                                if (nextChecked) set.add(idx)
-                                else set.delete(idx)
-                                setHbBaseClasses(Array.from(set).sort())
-                              }}
-                            />
-                            <span>{label}</span>
-                          </label>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  {hbSourceType === 'class' ? (
-                    <div>
-                      <label className="text-xs text-text">Conjurar como (classe)</label>
-                      <Select
-                        className="mt-1"
-                        value={hbSourceClassId || effectiveCalcClassId}
-                        onChange={(e) => setHbSourceClassId(e.target.value)}
-                        disabled={activeCharacter.classes.length === 0}
-                      >
-                        {activeCharacter.classes.length === 0 ? (
-                          <option value="">Adicione uma classe primeiro</option>
-                        ) : (
-                          activeCharacter.classes.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {classDisplayName(c)}
-                            </option>
-                          ))
-                        )}
-                      </Select>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                      <div>
-                        <label className="text-xs text-text">Nome do feat</label>
-                        <Input
-                          className="mt-1"
-                          value={hbFeatName}
-                          onChange={(e) => setHbFeatName(e.target.value)}
-                          placeholder="ex: Fey Touched"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs text-text">Atributo do feat</label>
-                        <Select
-                          className="mt-1"
-                          value={hbFeatAbility}
-                          onChange={(e) => setHbFeatAbility(e.target.value as Ability)}
-                        >
-                          {ABILITIES.map(({ key }) => (
-                            <option key={key} value={key}>
-                              {abilityShort(key)}
-                            </option>
-                          ))}
-                        </Select>
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="text-xs text-text">Descrição</label>
-                    <Textarea
-                      className="mt-1"
-                      value={hbDesc}
-                      onChange={(e) => setHbDesc(e.target.value)}
-                      placeholder="Opcional. Texto livre."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-text">Em níveis superiores</label>
-                    <Textarea
-                      className="mt-1"
-                      value={hbHigher}
-                      onChange={(e) => setHbHigher(e.target.value)}
-                      placeholder="Opcional. Se preencher, aparece badge de upcast."
-                    />
-                  </div>
-
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onClick={addHomebrewToActive}
-                    disabled={!hbName.trim()}
-                    title={!hbName.trim() ? 'Preencha o nome' : 'Adicionar magia homebrew'}
-                  >
-                    Adicionar homebrew
-                  </Button>
-                </div>
-              </details>
-            </CardContent>
-          </Card>
-
-          <AddedSpellsCard
-            activeCharacter={activeCharacter}
-            activeCharacterSchools={activeCharacterSchools}
-            activeCharacterTotalLevel={activeCharacterTotalLevel}
-            filteredAddedSpells={filteredAddedSpells}
-            spellDetails={spellDetails}
-            spellDetailsError={spellDetailsError}
-            ensureSpellDetailsLoaded={ensureSpellDetailsLoaded}
-            preparedMeta={preparedMeta}
-            spellTranslations={spellTranslations}
-            addedNameFilter={addedNameFilter}
-            setAddedNameFilter={setAddedNameFilter}
-            addedLevelFilter={addedLevelFilter}
-            setAddedLevelFilter={setAddedLevelFilter}
-            addedSchoolFilter={addedSchoolFilter}
-            setAddedSchoolFilter={setAddedSchoolFilter}
-            addedPreparedFilter={addedPreparedFilter}
-            setAddedPreparedFilter={setAddedPreparedFilter}
-            addedClassFilter={addedClassFilter}
-            setAddedClassFilter={setAddedClassFilter}
-            hideUa={hideUa}
-            setHideUa={setHideUa}
-            openSpellIndex={openSpellIndex}
-            setOpenSpellIndex={setOpenSpellIndex}
-            openSpellTab={openSpellTab}
-            setOpenSpellTab={setOpenSpellTab}
-            translateStatus={translateStatus}
-            translateOfficialToPt={translateOfficialToPt}
-            updateCharacter={updateCharacter}
-            removeSpellFromActive={removeSpellFromActive}
-          />
-
-          <AddSpellsCard
-            spellList={availableSpellRefs.length ? availableSpellRefs : null}
-            spellListError={spellListError}
-            unaddedSearch={unaddedSearch}
-            setUnaddedSearch={setUnaddedSearch}
-            unaddedLevelFilter={unaddedLevelFilter}
-            setUnaddedLevelFilter={setUnaddedLevelFilter}
-            unaddedSchoolFilter={unaddedSchoolFilter}
-            setUnaddedSchoolFilter={setUnaddedSchoolFilter}
-            unaddedClassFilter={unaddedClassFilter}
-            setUnaddedClassFilter={setUnaddedClassFilter}
-            hideUa={hideUa}
-            setHideUa={setHideUa}
-            unaddedResults={unaddedResults}
-            activeCharacter={activeCharacter}
-            activeCharacterSpellsSet={activeCharacterSpellsSet}
-            addSpellToActive={addSpellToActive}
-            addSpellToActiveTranslated={addSpellToActiveTranslated}
-            translateStatus={translateStatus}
-            getSpellDetails={getSpellDetailsLocal}
-            homebrewLibrary={homebrewLibrary}
-            spellTranslations={spellTranslations}
-          />
-        </section>
+          {/* View 4: Initiative tracker */}
+          < div className="basis-full shrink-0 px-4 py-6">
+            <InitiativeView
+              characters={characters}
+            />
+          </div>
+        </div>
       </main>
     </div>
   )

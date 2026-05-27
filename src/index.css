@@ -98,3 +98,11 @@ body {
 #root {
   min-height: 100svh;
 }
+
+.mmSwipeRoot {
+  touch-action: pan-y;
+}
+
+.mmSwipeInner {
+  will-change: transform;
+}

@@ -1,12 +1,12 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import type { Character, DndApiRef, DndSpell, HomebrewSpell, MagicCircleLevel, SpellTranslation } from '../types'
-import { magicCircleOptions } from '../lib/rules'
-import { CLASS_NAME_BY_INDEX, CLASS_OPTIONS, classDisplayName, SCHOOL_NAME_PT, schoolLabel } from '../lib/spellLabels'
-import { Button } from './ui/Button'
-import { Card, CardContent, CardHeader } from './ui/Card'
-import { Input } from './ui/Input'
-import { Select } from './ui/Select'
-import { InlineMarkdown } from './InlineMarkdown'
+import type { Character, DndApiRef, DndSpell, HomebrewSpell, MagicCircleLevel, SpellTranslation } from '../../types'
+import { magicCircleOptions } from '../../lib/rules'
+import { CLASS_NAME_BY_INDEX, CLASS_OPTIONS, classDisplayName, SCHOOL_NAME_PT, schoolLabel } from '../../lib/spellLabels'
+import { Button } from '../ui/Button'
+import { Card, CardContent, CardHeader } from '../ui/Card'
+import { Input } from '../ui/Input'
+import { Select } from '../ui/Select'
+import { InlineMarkdown } from '../InlineMarkdown'
 
 type TranslateStatus =
   | { kind: 'idle' }

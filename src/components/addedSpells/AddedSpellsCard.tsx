@@ -11,35 +11,35 @@ import type {
   RestResetKind,
   SpellEffect,
   SpellTranslation,
-} from '../types'
+} from '../../types'
 import {
   cantripDiceMultiplier,
   formatSigned,
   magicCircleOptions,
   spellAttackBonus,
   spellSaveDc,
-} from '../lib/rules'
-import { homebrewToDndSpell } from '../lib/homebrew'
-import { estimateSpellDamageDice, upcastRuleLabel } from '../lib/spellDamage'
-import { isAllowedSchoolForClass } from '../lib/spellAccess'
-import { spellMeta } from '../lib/spellMeta'
-import { loadMetamagicDb, metamagicDisplayName, type MetamagicOption } from '../lib/metamagicDb'
-import { multiclassSpellSlots } from '../lib/spellSlots'
-import { castTimeKindFromText, castTimeKindLabelPt } from '../lib/castTime'
+} from '../../lib/rules'
+import { homebrewToDndSpell } from '../../lib/homebrew'
+import { estimateSpellDamageDice, upcastRuleLabel } from '../../lib/spellDamage'
+import { isAllowedSchoolForClass } from '../../lib/spellAccess'
+import { spellMeta } from '../../lib/spellMeta'
+import { loadMetamagicDb, metamagicDisplayName, type MetamagicOption } from '../../lib/metamagicDb'
+import { multiclassSpellSlots } from '../../lib/spellSlots'
+import { castTimeKindFromText, castTimeKindLabelPt } from '../../lib/castTime'
 import {
   apiClassLabel,
   classDisplayName,
   classLabel,
   schoolLabel,
-} from '../lib/spellLabels'
-import { Button } from './ui/Button'
-import { Card, CardContent, CardHeader } from './ui/Card'
-import { Input } from './ui/Input'
-import { Select } from './ui/Select'
-import { Textarea } from './ui/Textarea'
-import { useI18n } from '../i18n/I18nContext'
-import { SpellQuickDetailsModalRow } from './addedSpells/SpellQuickDetailsModalRow'
-import { SpellEditorModal } from './addedSpells/spellEditor/SpellEditorModal'
+} from '../../lib/spellLabels'
+import { Button } from '../ui/Button'
+import { Card, CardContent, CardHeader } from '../ui/Card'
+import { Input } from '../ui/Input'
+import { Select } from '../ui/Select'
+import { Textarea } from '../ui/Textarea'
+import { useI18n } from '../../i18n/I18nContext'
+import { SpellQuickDetailsModalRow } from './SpellQuickDetailsModalRow'
+import { SpellEditorModal } from './spellEditor/SpellEditorModal'
 
 type PreparedMeta = {
   limitsByClassId: Record<string, number>
