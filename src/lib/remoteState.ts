@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Character, DndSpell, HomebrewSpell, SpellEffect, SpellTranslation } from '../types'
 import { readLocalStorageJson, writeLocalStorageJson } from './storage'
+import { normalizeAppState } from './normaliseCharacter'
 
 export type AppStateV1 = {
   version: 1
@@ -107,7 +108,8 @@ async function apiPutState(syncKey: string, state: AppStateV1): Promise<void> {
 export function useRemoteAppState() {
   const [syncKey, setSyncKey] = useState<string>(() => readSyncKey())
   const [state, setState] = useState<AppStateV1>(() => {
-    return readLocalStorageJson<AppStateV1>(LOCAL_STATE_KEY) ?? defaultState()
+    const local = readLocalStorageJson<AppStateV1>(LOCAL_STATE_KEY)
+    return local ? normalizeAppState(local) : defaultState()
   })
   const [status, setStatus] = useState<SyncStatus>({ kind: 'idle' })
 
@@ -140,11 +142,11 @@ export function useRemoteAppState() {
       const data = await apiGetState(syncKey)
       hydratedFromRemote.current = true
       if (data.state) {
-        setState(data.state)
+        setState(normalizeAppState(data.state))
       } else {
         // Bootstrap: if the key has no remote state yet, persist the current local state
         // so subsequent pulls work across devices without requiring an extra local change.
-        await apiPutState(syncKey, stateRef.current)
+        await apiPutState(syncKey, normalizeAppState(stateRef.current))
       }
       setStatus({ kind: 'synced', at: Date.now() })
     } catch (err: unknown) {
@@ -168,7 +170,7 @@ export function useRemoteAppState() {
     setStatus({ kind: 'saving' })
 
     saveTimer.current = window.setTimeout(() => {
-      apiPutState(syncKey, state)
+      apiPutState(syncKey, normalizeAppState(state))
         .then(() => {
           setStatus({ kind: 'synced', at: Date.now() })
         })

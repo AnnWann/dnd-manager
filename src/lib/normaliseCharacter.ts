@@ -1,32 +1,42 @@
 import type { Character } from "../types";
+import type { AppStateV1 } from "./remoteState";
 
-export function normalizeCharacter(c: any): Character {
-  return {
-    ...c,
-
-    type: c.type ?? 'pc',
-
-    attributes: c.attributes ?? c.abilities ?? {
+export function normalizeCharacter(character: any): Character {
+  const attributes =
+    character.attributes ??
+    character.abilities ??
+    {
       str: 10,
       dex: 10,
       con: 10,
       int: 10,
       wis: 10,
       cha: 10,
-    },
+    }
 
-    skills: c.skills ?? {},
+  return {
+    ...character,
+    attributes,
+    type: character.type ?? 'pc',
+    skills: character.skills ?? {},
+    classes: character.classes ?? [],
+    spells: character.spells ?? [],
+    armorClass: character.armorClass ?? 10,
+    initiativeBonus: character.initiativeBonus ?? 0,
+    maxHp: character.maxHp ?? 0,
+    currentHp: Math.min(character.currentHp ?? 0, character.maxHp ?? 0),
+    temporaryHp: character.temporaryHp ?? 0,
+    hitDice: character.hitDice ?? [],
+  }
+}
 
-    armorClass: c.armorClass ?? 10,
-    initiativeBonus: c.initiativeBonus ?? 0,
-
-    maxHp: c.maxHp ?? 0,
-    currentHp: Math.min(c.currentHp ?? 0, c.maxHp ?? 0),
-    temporaryHp: c.temporaryHp ?? 0,
-
-    hitDice: c.hitDice ?? [],
-
-    classes: c.classes ?? [],
-    spells: c.spells ?? [],
+export function normalizeAppState(state: AppStateV1): AppStateV1 {
+  return {
+    ...state,
+    characters: state.characters.map(normalizeCharacter),
+    spellCache: state.spellCache ?? {},
+    effectPresets: state.effectPresets ?? {},
+    homebrewLibrary: state.homebrewLibrary ?? {},
+    spellTranslations: state.spellTranslations ?? {},
   }
 }
