@@ -50,7 +50,10 @@ export function CharacterSelector({
                         {c.spells.length} magias • {totalLevel(c.classes.map((x) => x.level)) || 0} nv
                       </div>
                     </div>
-                    {c.id === activeCharacter.id ? badge('Ativo') : null}
+                    <div className="flex shrink-0 items-center gap-2">
+                      {badge(c.visibilityRole === 'master' ? 'Master' : `Player: ${c.ownerKey?.trim() || 'sem nome'}`)}
+                      {c.id === activeCharacter.id ? badge('Ativo') : null}
+                    </div>
                   </button>
                 ))}
               </div>

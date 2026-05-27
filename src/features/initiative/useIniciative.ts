@@ -1,6 +1,6 @@
 import { useState } from "react"
 import type { Character } from "../../types"
-import { calcCharacterInitiative, type InitiativeResult } from "./initiative"
+import { calcCharacterInitiative, type InitiativeEffect, type InitiativeResult } from "./initiative"
 
 export function useInitiative() {
   const [initiativeOrder, setInitiativeOrder] = useState<InitiativeResult[]>([])
@@ -10,8 +10,50 @@ export function useInitiative() {
     const initiative = calcCharacterInitiative(character, rolledValue)
 
     setInitiativeOrder((prev) =>
-      [...prev, { character, rolledValue, initiative }]
-        .sort((a, b) => b.initiative - a.initiative),
+      [...prev, { character, rolledValue, initiative, effects: [] }].sort(
+        (a, b) => b.initiative - a.initiative,
+      ),
+    )
+  }
+
+  function applyEffect(characterId: string, effectLabel: string) {
+    const label = effectLabel.trim()
+    if (!label) return
+
+    setInitiativeOrder((prev) =>
+      prev.map((entry) => {
+        if (entry.character.id !== characterId) return entry
+
+        const exists = entry.effects.some(
+          (effect) => effect.label.toLowerCase() === label.toLowerCase(),
+        )
+        if (exists) return entry
+
+        const nextEffect: InitiativeEffect = {
+          id: crypto.randomUUID(),
+          label,
+          turnsRemaining: 1,
+          defer: true,
+        }
+
+        return {
+          ...entry,
+          effects: [...entry.effects, nextEffect],
+        }
+      }),
+    )
+  }
+
+  function removeEffect(characterId: string, effectId: string) {
+    setInitiativeOrder((prev) =>
+      prev.map((entry) => {
+        if (entry.character.id !== characterId) return entry
+
+        return {
+          ...entry,
+          effects: entry.effects.filter((effect) => effect.id !== effectId),
+        }
+      }),
     )
   }
 
@@ -46,6 +88,8 @@ export function useInitiative() {
     currentTurnIndex,
     currentTurn,
     addToInitiative,
+    applyEffect,
+    removeEffect,
     removeFromInitiative,
     clearInitiative,
     nextTurn,

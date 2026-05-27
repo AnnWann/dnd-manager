@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Character, DndSpell, HomebrewSpell, SpellEffect, SpellTranslation } from '../types'
+import type { InitiativeResult } from '../features/initiative/initiative'
 import { readLocalStorageJson, writeLocalStorageJson } from './storage'
 import { normalizeAppState } from './normaliseCharacter'
 
@@ -19,10 +20,16 @@ export type AppStateV1 = {
 
   /** Optional: cached translations for official spells (synced across devices). */
   spellTranslations?: Record<string, SpellTranslation>
+
+  /** Optional: shared initiative tracker (synced across devices). */
+  initiativeOrder?: InitiativeResult[]
+  currentTurnIndex?: number
 }
 
 const LOCAL_STATE_KEY = 'dndmm.appState.v1'
 const SYNC_KEY_STORAGE = 'dndmm.syncKey.v1'
+const USER_ROLE_STORAGE = 'dndmm.userRole.v1'
+const USER_KEY_STORAGE = 'dndmm.userKey.v1'
 
 type SyncStatus =
   | { kind: 'idle' }
@@ -40,6 +47,8 @@ function defaultState(): AppStateV1 {
     effectPresets: {},
     homebrewLibrary: {},
     spellTranslations: {},
+    initiativeOrder: [],
+    currentTurnIndex: 0,
   }
 }
 
@@ -72,6 +81,27 @@ export function readSyncKey(): string {
 export function writeSyncKey(key: string): void {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(SYNC_KEY_STORAGE, key)
+}
+
+export function readUserRole(): 'master' | 'player' {
+  if (typeof window === 'undefined') return 'player'
+  const stored = window.localStorage.getItem(USER_ROLE_STORAGE)
+  return stored === 'master' ? 'master' : 'player'
+}
+
+export function writeUserRole(role: 'master' | 'player'): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(USER_ROLE_STORAGE, role)
+}
+
+export function readUserKey(): string {
+  if (typeof window === 'undefined') return ''
+  return window.localStorage.getItem(USER_KEY_STORAGE) ?? ''
+}
+
+export function writeUserKey(key: string): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(USER_KEY_STORAGE, key)
 }
 
 async function apiGetState(syncKey: string): Promise<{ state: AppStateV1 | null }> {
@@ -107,6 +137,8 @@ async function apiPutState(syncKey: string, state: AppStateV1): Promise<void> {
 
 export function useRemoteAppState() {
   const [syncKey, setSyncKey] = useState<string>(() => readSyncKey())
+  const [userRole, setUserRole] = useState<'master' | 'player'>(() => readUserRole())
+  const [userKey, setUserKey] = useState<string>(() => readUserKey())
   const [state, setState] = useState<AppStateV1>(() => {
     const local = readLocalStorageJson<AppStateV1>(LOCAL_STATE_KEY)
     return local ? normalizeAppState(local) : defaultState()
@@ -129,6 +161,14 @@ export function useRemoteAppState() {
   useEffect(() => {
     writeSyncKey(syncKey)
   }, [syncKey])
+
+  useEffect(() => {
+    writeUserRole(userRole)
+  }, [userRole])
+
+  useEffect(() => {
+    writeUserKey(userKey)
+  }, [userKey])
 
   const canSync = useMemo(() => syncKey.trim().length >= 12, [syncKey])
 
@@ -190,6 +230,10 @@ export function useRemoteAppState() {
   return {
     syncKey,
     setSyncKey,
+    userRole,
+    setUserRole,
+    userKey,
+    setUserKey,
     canSync,
     state,
     setState,

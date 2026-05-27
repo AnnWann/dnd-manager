@@ -18,6 +18,8 @@ export function normalizeCharacter(character: any): Character {
     ...character,
     attributes,
     type: character.type ?? 'pc',
+    visibilityRole: character.visibilityRole ?? 'player',
+    ownerKey: character.ownerKey ?? '',
     skills: character.skills ?? {},
     classes: character.classes ?? [],
     spells: character.spells ?? [],
@@ -31,6 +33,11 @@ export function normalizeCharacter(character: any): Character {
 }
 
 export function normalizeAppState(state: AppStateV1): AppStateV1 {
+  const initiativeOrder = (state.initiativeOrder ?? []).map((entry) => ({
+    ...entry,
+    effects: entry.effects ?? [],
+  }))
+
   return {
     ...state,
     characters: state.characters.map(normalizeCharacter),
@@ -38,5 +45,10 @@ export function normalizeAppState(state: AppStateV1): AppStateV1 {
     effectPresets: state.effectPresets ?? {},
     homebrewLibrary: state.homebrewLibrary ?? {},
     spellTranslations: state.spellTranslations ?? {},
+    initiativeOrder,
+    currentTurnIndex:
+      initiativeOrder.length === 0
+        ? 0
+        : Math.min(state.currentTurnIndex ?? 0, initiativeOrder.length - 1),
   }
 }

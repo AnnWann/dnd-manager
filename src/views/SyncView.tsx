@@ -13,37 +13,65 @@ export type SyncStatus =
 export function SyncView(props: {
   syncKey: string
   setSyncKey: (value: string) => void
+  userRole: 'master' | 'player'
+  setUserRole: (value: 'master' | 'player') => void
+  userKey: string
+  setUserKey: (value: string) => void
   canSync: boolean
   pullFromServer: () => Promise<void> | void
   syncStatus: SyncStatus
   footer?: ReactNode
 }) {
-  const { syncKey, setSyncKey, canSync, pullFromServer, syncStatus, footer } = props
+  const { syncKey, setSyncKey, userRole, setUserRole, userKey, setUserKey, canSync, pullFromServer, syncStatus, footer } = props
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4">
       <Card>
         <CardHeader>
           <div className="text-sm font-semibold text-textH">Sincronização (grupo)</div>
-          <div className="mt-1 text-xs text-text">Use uma chave secreta compartilhada (mín. 12 caracteres).</div>
+          <div className="mt-1 text-xs text-text">Use a senha da sessão, escolha seu papel e defina o nome de Jogador que identifica seu usuário.</div>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-2">
-            <Input
-              className="h-9 text-xs"
-              value={syncKey}
-              onChange={(e) => setSyncKey(e.target.value)}
-              placeholder="ex: minha-chave-super-secreta"
-            />
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => void pullFromServer()}
-              disabled={!canSync}
-              title={!canSync ? 'A chave precisa ter pelo menos 12 caracteres' : 'Carregar do servidor'}
-            >
-              Carregar
-            </Button>
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-2">
+              <Input
+                className="h-9 text-xs"
+                value={syncKey}
+                onChange={(e) => setSyncKey(e.target.value)}
+                placeholder="ex: minha-senha-compartilhada"
+              />
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => void pullFromServer()}
+                disabled={!canSync}
+                title={!canSync ? 'A senha precisa ter pelo menos 12 caracteres' : 'Carregar do servidor'}
+              >
+                Carregar
+              </Button>
+            </div>
+
+            <label className="flex items-center gap-2 text-xs text-text">
+              <span className="min-w-16 font-medium text-textH">Papel</span>
+              <select
+                className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-text outline-none transition-colors focus:border-accent"
+                value={userRole}
+                onChange={(e) => setUserRole(e.target.value as 'master' | 'player')}
+              >
+                <option value="player">Player</option>
+                <option value="master">Master</option>
+              </select>
+            </label>
+
+            <label className="flex items-center gap-2 text-xs text-text">
+              <span className="min-w-16 font-medium text-textH">Nome do Jogador</span>
+              <Input
+                className="h-9 text-xs"
+                value={userKey}
+                onChange={(e) => setUserKey(e.target.value)}
+                placeholder="ex: nome-do-player"
+              />
+            </label>
           </div>
 
           <div className="mt-2 text-xs text-text">

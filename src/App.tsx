@@ -37,6 +37,7 @@ import { useCastingCalc } from './features/characters/useCastingCalc'
 import { translateTexts } from './features/spells/translateApi'
 import { clampInt, clampStep, formatPtNumber } from './lib/numberFormat'
 import { effectsEqual } from './lib/spellEffects'
+import { calcCharacterInitiative, decrementInitiativeEffect, type InitiativeEffect, type InitiativeResult } from './features/initiative/initiative'
 import { InitiativeView } from './views/InitiativeView'
 import { normalizeCharacter } from './lib/normaliseCharacter'
 
@@ -50,6 +51,10 @@ function App() {
   const {
     syncKey,
     setSyncKey,
+    userRole,
+    setUserRole,
+    userKey,
+    setUserKey,
     canSync,
     state: appState,
     setState: setAppState,
@@ -57,21 +62,60 @@ function App() {
     pullFromServer,
   } = useRemoteAppState()
 
+  const [selectedCharacterId, setSelectedCharacterId] = useState('')
+
   const characters = appState.characters
-  const activeCharacterId = appState.activeCharacterId
   const spellCache = appState.spellCache ?? {}
   const effectPresets = appState.effectPresets ?? {}
   const homebrewLibrary = appState.homebrewLibrary ?? {}
   const spellTranslations = appState.spellTranslations ?? {}
+  const initiativeOrder = appState.initiativeOrder ?? []
+  const currentTurnIndex = appState.currentTurnIndex ?? 0
+  const canEditInitiative = userRole === 'master'
+
+  const visibleCharacters = useMemo(() => {
+    if (userRole === 'master') return characters
+    const key = userKey.trim()
+    if (!key) return []
+    return characters.filter((character) => (character.ownerKey ?? '').trim() === key)
+  }, [characters, userKey, userRole])
+
+  const canSeeCharacterDetails = useCallback(
+    (character: Character) => {
+      if (userRole === 'master') return true
+      return (character.ownerKey ?? '').trim() === userKey.trim() && character.visibilityRole !== 'master'
+    },
+    [userKey, userRole],
+  )
 
   const activeCharacter = useMemo(
-    () => characters.find((c) => c.id === activeCharacterId) ?? characters[0],
-    [activeCharacterId, characters],
+    () =>
+      visibleCharacters.find((c) => c.id === selectedCharacterId) ??
+      visibleCharacters.find((c) => c.id === appState.activeCharacterId) ??
+      visibleCharacters[0],
+    [appState.activeCharacterId, selectedCharacterId, visibleCharacters],
   )
+
+  useEffect(() => {
+    if (visibleCharacters.length === 0) {
+      if (selectedCharacterId !== '') setSelectedCharacterId('')
+      return
+    }
+
+    const resolved =
+      visibleCharacters.find((c) => c.id === selectedCharacterId) ??
+      visibleCharacters.find((c) => c.id === appState.activeCharacterId) ??
+      visibleCharacters[0]
+
+    if (resolved && resolved.id !== selectedCharacterId) {
+      setSelectedCharacterId(resolved.id)
+    }
+  }, [appState.activeCharacterId, selectedCharacterId, visibleCharacters])
 
   useEffect(() => {
     if (characters.length === 0) {
       const c = newCharacter('Meu personagem')
+      c.ownerKey = userKey.trim()
       setAppState({
         version: 1,
         characters: [c],
@@ -80,13 +124,16 @@ function App() {
         effectPresets: {},
         homebrewLibrary: {},
         spellTranslations: {},
+        initiativeOrder: [],
+        currentTurnIndex: 0,
       })
+      setSelectedCharacterId(c.id)
       return
     }
-    if (!activeCharacter && characters[0]) {
-      setAppState((s) => ({ ...s, activeCharacterId: characters[0].id }))
+    if (!activeCharacter && visibleCharacters[0]) {
+      setSelectedCharacterId(visibleCharacters[0].id)
     }
-  }, [activeCharacter, characters, setAppState])
+  }, [activeCharacter, characters, setAppState, userKey, visibleCharacters])
 
   const spellDb = useSpellDb({ spellCache })
   const { spellList, spellListError, spellDetails, spellDetailsError } = spellDb
@@ -240,6 +287,7 @@ function App() {
     material?: string
   }): Promise<void> {
     if (!activeCharacter) return
+    const activeId = activeCharacter.id
     setTranslateStatus({ kind: 'loading', spellIndex: args.spellIndex })
     try {
       const material = args.material?.trim() || ''
@@ -253,7 +301,6 @@ function App() {
       const materialPt = material ? (translated[descCount + higherCount] ?? '').trim() : undefined
 
       setAppState((prev) => {
-        const activeId = prev.activeCharacterId
         const prevTranslations = prev.spellTranslations ?? {}
         const prevT = prevTranslations[args.spellIndex]
         const merged: SpellTranslation = {
@@ -303,6 +350,7 @@ function App() {
   async function addSpellToActiveTranslated(spellRef: DndApiRef) {
     if (!activeCharacter) return
     if (activeCharacterSpellsSet.has(spellRef.index)) return
+    const activeId = activeCharacter.id
 
     if (isHomebrewIndex(spellRef.index)) {
       await addSpellToActive(spellRef)
@@ -352,7 +400,6 @@ function App() {
       }
 
       setAppState((prev) => {
-        const activeId = prev.activeCharacterId
         const active = prev.characters.find((c) => c.id === activeId)
         if (!active) return prev
         if (active.spells.some((s) => s.spellIndex === detail.index)) return prev
@@ -562,7 +609,7 @@ function App() {
       const arr = map[idx] ?? (map[idx] = [])
       if (t.namePt?.trim()) arr.push(t.namePt.trim())
     }
-    for (const c of characters) {
+    for (const c of visibleCharacters) {
       for (const s of c.spells) {
         const namePt = s.displayNamePt?.trim()
         if (!namePt) continue
@@ -571,7 +618,7 @@ function App() {
       }
     }
     return map
-  }, [availableSpellRefs, characters, spellTranslations])
+  }, [availableSpellRefs, spellTranslations, visibleCharacters])
 
   const cloneEffects = useCallback((effects: SpellEffect[] | undefined): SpellEffect[] | undefined => {
     if (!effects) return undefined
@@ -693,6 +740,110 @@ function App() {
     return filtered.slice(0, 30)
   }, [homebrewLibrary, spellCache, unaddedCandidates, unaddedClassFilter, unaddedLevelFilter, unaddedSchoolFilter])
 
+  function setInitiativeState(nextOrder: InitiativeResult[], nextCurrentTurnIndex?: number) {
+    setAppState((prev) => ({
+      ...prev,
+      initiativeOrder: nextOrder,
+      currentTurnIndex:
+        typeof nextCurrentTurnIndex === 'number'
+          ? nextCurrentTurnIndex
+          : nextOrder.length === 0
+            ? 0
+            : Math.min(prev.currentTurnIndex ?? 0, nextOrder.length - 1),
+    }))
+  }
+
+  function addToInitiative(character: Character, rolledValue: number) {
+    const initiative = calcCharacterInitiative(character, rolledValue)
+    const nextOrder = [...initiativeOrder, { character, rolledValue, initiative, effects: [] }].sort(
+      (a, b) => b.initiative - a.initiative,
+    )
+    setInitiativeState(nextOrder)
+  }
+
+  function applyInitiativeEffect(characterId: string, effectLabel: string) {
+    if (!canEditInitiative) return
+    // effectLabel may be sent as "label|||turns" from the view. Parse if present.
+    let label = effectLabel.trim()
+    let turns = 1
+    if (label.includes('|||')) {
+      const parts = label.split('|||')
+      label = parts[0].trim()
+      const parsed = Number.parseInt(parts[1] ?? '1', 10)
+      turns = Number.isFinite(parsed) && parsed > 0 ? parsed : 1
+    }
+    if (!label) return
+
+    const nextOrder = initiativeOrder.map((entry) => {
+      if (entry.character.id !== characterId) return entry
+
+      const exists = entry.effects.some((effect) => effect.label.toLowerCase() === label.toLowerCase())
+      if (exists) return entry
+
+      const nextEffect: InitiativeEffect = {
+        id: crypto.randomUUID(),
+        label,
+        turnsRemaining: turns,
+        defer: true,
+      }
+
+      return {
+        ...entry,
+        effects: [...entry.effects, nextEffect],
+      }
+    })
+
+    setInitiativeState(nextOrder)
+  }
+
+  function removeInitiativeEffect(characterId: string, effectId: string) {
+    if (!canEditInitiative) return
+
+    const nextOrder = initiativeOrder.map((entry) => {
+      if (entry.character.id !== characterId) return entry
+
+      return {
+        ...entry,
+        effects: entry.effects.filter((effect) => effect.id !== effectId),
+      }
+    })
+
+    setInitiativeState(nextOrder)
+  }
+
+  function removeFromInitiative(characterId: string) {
+    if (!canEditInitiative) return
+
+    const nextOrder = initiativeOrder.filter((entry) => entry.character.id !== characterId)
+    const nextIndex = nextOrder.length === 0 ? 0 : Math.min(currentTurnIndex, nextOrder.length - 1)
+    setInitiativeState(nextOrder, nextIndex)
+  }
+
+  function clearInitiative() {
+    if (!canEditInitiative) return
+    setInitiativeState([], 0)
+  }
+
+  function nextTurn() {
+    if (!canEditInitiative) return
+    if (initiativeOrder.length === 0) return
+
+    const nextIndex = (currentTurnIndex + 1) % initiativeOrder.length
+
+    const nextOrder = initiativeOrder.map((entry, idx) => {
+      if (idx !== nextIndex) return entry
+
+      return {
+        ...entry,
+        effects: entry.effects
+          .map((effect) => decrementInitiativeEffect(effect))
+          .filter((effect): effect is InitiativeEffect => effect !== null),
+      }
+    })
+
+    setInitiativeState(nextOrder, nextIndex)
+  }
+
   function updateCharacter(characterId: string, updater: (c: Character) => Character) {
     setAppState((prev) => {
       const prevPresets = prev.effectPresets ?? {}
@@ -782,22 +933,20 @@ function App() {
 
   function addCharacter() {
     const c = newCharacter(`Personagem ${characters.length + 1}`)
+    c.ownerKey = userKey.trim()
     setAppState((prev) => ({
       ...prev,
       characters: [...prev.characters.map(normalizeCharacter), c],
-      activeCharacterId: c.id,
     }))
+    setSelectedCharacterId(c.id)
   }
 
   function deleteCharacter(characterId: string) {
     setAppState((prev) => {
       const nextCharacters = prev.characters.filter((c) => c.id !== characterId)
-      const nextActiveId =
-        prev.activeCharacterId === characterId
-          ? (nextCharacters[0]?.id ?? '')
-          : prev.activeCharacterId
-      return { ...prev, characters: nextCharacters, activeCharacterId: nextActiveId }
+      return { ...prev, characters: nextCharacters }
     })
+    setSelectedCharacterId((current) => (current === characterId ? '' : current))
   }
 
   function addClassToActive(classIndex: string) {
@@ -816,13 +965,13 @@ function App() {
   async function addSpellToActive(spellRef: DndApiRef) {
     if (!activeCharacter) return
     if (activeCharacterSpellsSet.has(spellRef.index)) return
+    const activeId = activeCharacter.id
 
     if (isHomebrewIndex(spellRef.index)) {
       const hb = homebrewLibrary[spellRef.index]
       if (!hb) return
 
       setAppState((prev) => {
-        const activeId = prev.activeCharacterId
         const active = prev.characters.find((c) => c.id === activeId)
         if (!active) return prev
         if (active.spells.some((s) => s.spellIndex === spellRef.index)) return prev
@@ -896,7 +1045,6 @@ function App() {
     }
 
     setAppState((prev) => {
-      const activeId = prev.activeCharacterId
       const active = prev.characters.find((c) => c.id === activeId)
       if (!active) return prev
       if (active.spells.some((s) => s.spellIndex === detail.index)) return prev
@@ -1089,20 +1237,44 @@ function App() {
 
   if (!activeCharacter) {
     return (
-      <div className="min-h-svh bg-bg text-text">
-        <div className="mx-auto max-w-2xl px-4 py-10">
-          <Card>
-            <CardHeader>
-              <div className="font-heading text-xl text-textH">Gerenciador de Magias (D&amp;D)</div>
-              <div className="mt-1 text-sm text-text">Nenhum personagem ainda.</div>
-            </CardHeader>
-            <CardContent>
-              <Button variant="primary" onClick={addCharacter}>
-                Adicionar personagem
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+      <div className="min-h-svh bg-[color:var(--social-bg)] text-text">
+        <header className="border-b border-accentBorder bg-accentBg">
+          <div className="flex w-full flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="font-heading text-xl text-textH">Gerenciador de Magias (D&amp;D)</h1>
+              <p className="text-xs text-text">Sync • Ficha • Magias • Iniciativa </p>
+            </div>
+          </div>
+        </header>
+
+        <main className="mx-auto w-full max-w-2xl px-4 py-6">
+          <SyncView
+            syncKey={syncKey}
+            setSyncKey={setSyncKey}
+            userRole={userRole}
+            setUserRole={setUserRole}
+            userKey={userKey}
+            setUserKey={setUserKey}
+            canSync={canSync}
+            pullFromServer={pullFromServer}
+            syncStatus={syncStatus}
+            footer={
+              <Card>
+                <CardHeader>
+                  <div className="text-sm font-semibold text-textH">Nenhum personagem visível</div>
+                  <div className="mt-1 text-xs text-text">
+                    Se você estiver como player, só verá personagens marcados como Player.
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Button variant="primary" onClick={addCharacter}>
+                    Adicionar personagem
+                  </Button>
+                </CardContent>
+              </Card>
+            }
+          />
+        </main>
       </div>
     )
   }
@@ -1187,6 +1359,10 @@ function App() {
             <SyncView
               syncKey={syncKey}
               setSyncKey={setSyncKey}
+              userRole={userRole}
+              setUserRole={setUserRole}
+              userKey={userKey}
+              setUserKey={setUserKey}
               canSync={canSync}
               pullFromServer={pullFromServer}
               syncStatus={syncStatus}
@@ -1196,12 +1372,12 @@ function App() {
           {/* View 2: Character sheet */}
           <div className="basis-full shrink-0 px-4 py-6">
             <CharacterView
-              characters={characters}
+              characters={visibleCharacters}
               activeCharacter={activeCharacter}
-              setActiveCharacterId={(id) => setAppState((s) => ({ ...s, activeCharacterId: id }))}
+              setActiveCharacterId={setSelectedCharacterId}
               addCharacter={addCharacter}
               deleteActiveCharacter={() => deleteCharacter(activeCharacter.id)}
-              disableDelete={characters.length <= 1}
+              disableDelete={visibleCharacters.length <= 1}
               abilityShort={abilityShort}
               updateCharacter={updateCharacter}
               addClassToActive={addClassToActive}
@@ -1330,6 +1506,16 @@ function App() {
           <div className="basis-full shrink-0 px-4 py-6">
             <InitiativeView
               characters={characters}
+              initiativeOrder={initiativeOrder}
+              currentTurnIndex={currentTurnIndex}
+              canSeeCharacterDetails={canSeeCharacterDetails}
+              canEditInitiative={canEditInitiative}
+              onAdd={addToInitiative}
+              onNextTurn={nextTurn}
+              onClear={clearInitiative}
+              onRemove={removeFromInitiative}
+              onApplyEffect={applyInitiativeEffect}
+              onRemoveEffect={removeInitiativeEffect}
             />
           </div>
         </div>

@@ -90,6 +90,44 @@ export function CharacterInfo({ character, updateCharacter }: Props) {
         </div>
       </div>
 
+      <div className="w-full md:w-[320px]">
+        <label className="text-xs text-text">
+          Visibilidade
+        </label>
+
+        <Select
+          className="mt-1"
+          value={character.visibilityRole ?? 'player'}
+          onChange={(e) =>
+            updateCharacter(character.id, (c) => ({
+              ...c,
+              visibilityRole: e.target.value as 'master' | 'player',
+            }))
+          }
+        >
+          <option value="player">Player</option>
+          <option value="master">Master</option>
+        </Select>
+      </div>
+
+      <div className="w-full md:w-[320px]">
+        <label className="text-xs text-text">
+          Senha do jogador
+        </label>
+
+        <Input
+          className="mt-1"
+          value={character.ownerKey ?? ''}
+          onChange={(e) =>
+            updateCharacter(character.id, (c) => ({
+              ...c,
+              ownerKey: e.target.value,
+            }))
+          }
+          placeholder="identificador pessoal"
+        />
+      </div>
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
         <div>
           <label className="text-xs text-text">

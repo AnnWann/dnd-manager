@@ -8,6 +8,8 @@ export type RestResetKind = 'longRest' | 'shortRest'
 
 export type PrimaryRollDisplayMode = 'auto' | 'custom' | 'save' | 'attack' | 'damage'
 
+export type UserRole = 'master' | 'player'
+
 export type MagicCircleLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 
 export type SpellCastTimeKind = 'action' | 'bonus' | 'reaction'
@@ -218,6 +220,8 @@ export interface Character {
   id: string
   name: string
   type: CharacterTypes
+  visibilityRole?: UserRole
+  ownerKey?: string
   maxHp: number
   currentHp: number
   temporaryHp: number

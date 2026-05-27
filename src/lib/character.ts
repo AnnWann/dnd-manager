@@ -9,6 +9,8 @@ export function newCharacter(name = 'Novo personagem'): Character {
     id: crypto.randomUUID(),
     name,
     type: 'pc',
+    visibilityRole: 'player',
+    ownerKey: '',
     maxHp: 0,
     currentHp: 0,
     temporaryHp: 0,

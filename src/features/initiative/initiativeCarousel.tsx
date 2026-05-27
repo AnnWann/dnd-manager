@@ -4,7 +4,9 @@ import { InitiativeCard } from "./initiativeCard"
 type Props = {
   order: InitiativeResult[]
   currentTurnIndex: number
-  onRemove: (characterId: string) => void
+  canSeeCharacterDetails: (character: InitiativeResult['character']) => boolean
+  onRemove?: (characterId: string) => void
+  onRemoveEffect?: (characterId: string, effectId: string) => void
 }
 
 function circularOffset(index: number, centerIndex: number, length: number) {
@@ -16,13 +18,13 @@ function circularOffset(index: number, centerIndex: number, length: number) {
   return offset
 }
 
-export function InitiativeCarousel({ order, currentTurnIndex, onRemove }: Props) {
+export function InitiativeCarousel({ order, currentTurnIndex, canSeeCharacterDetails, onRemove, onRemoveEffect }: Props) {
   if (order.length === 0) {
     return <p className="text-sm text-text">Nenhum personagem na iniciativa.</p>
   }
 
   return (
-    <div className="relative mt-8 h-[190px] w-full overflow-hidden">
+    <div className="relative mt-4 h-[190px] w-full overflow-hidden">
       {order.map((entry, index) => {
         const offset = circularOffset(index, currentTurnIndex, order.length)
         const isCurrentTurn = index === currentTurnIndex
@@ -30,7 +32,7 @@ export function InitiativeCarousel({ order, currentTurnIndex, onRemove }: Props)
         return (
           <div
             key={entry.character.id}
-            className="absolute left-1/2 top-4 w-[320px] transition-all duration-300 ease-out"
+            className="absolute left-1/2 top-2 w-[320px] transition-all duration-300 ease-out"
             style={{
               transform: `
                 translateX(calc(-50% + ${offset * 360}px))
@@ -43,7 +45,9 @@ export function InitiativeCarousel({ order, currentTurnIndex, onRemove }: Props)
             <InitiativeCard
               entry={entry}
               isCurrentTurn={isCurrentTurn}
+              showCharacterDetails={canSeeCharacterDetails(entry.character)}
               onRemove={onRemove}
+              onRemoveEffect={onRemoveEffect}
             />
           </div>
         )
