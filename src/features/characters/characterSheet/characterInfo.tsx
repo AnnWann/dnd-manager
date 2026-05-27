@@ -208,7 +208,7 @@ export function CharacterInfo({ character, updateCharacter }: Props) {
               <div
                 className="
                   mb-1 grid
-                  grid-cols-[56px_56px_56px_16px_56px_32px]
+                  grid-cols-[56px_56px_56px_16px_72px_32px]
                   gap-2 px-1
                   text-[10px] uppercase tracking-wide text-text
                 "
@@ -226,7 +226,7 @@ export function CharacterInfo({ character, updateCharacter }: Props) {
                   key={index}
                   className="
                     grid
-                    grid-cols-[56px_56px_56px_16px_56px_32px]
+                    grid-cols-[56px_56px_56px_16px_72px_32px]
                     items-center gap-2
                   "
                 >
