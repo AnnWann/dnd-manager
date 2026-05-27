@@ -38,6 +38,7 @@ import { translateTexts } from './features/spells/translateApi'
 import { clampInt, clampStep, formatPtNumber } from './lib/numberFormat'
 import { effectsEqual } from './lib/spellEffects'
 import { InitiativeView } from './views/InitiativeView'
+import { normalizeCharacter } from './lib/normaliseCharacter'
 
 function App() {
   const { abilityShort } = useI18n()
@@ -783,7 +784,7 @@ function App() {
     const c = newCharacter(`Personagem ${characters.length + 1}`)
     setAppState((prev) => ({
       ...prev,
-      characters: [...prev.characters, c],
+      characters: prev.characters.map(normalizeCharacter),
       activeCharacterId: c.id,
     }))
   }
@@ -1326,7 +1327,7 @@ function App() {
           </div>
 
           {/* View 4: Initiative tracker */}
-          < div className="basis-full shrink-0 px-4 py-6">
+          <div className="basis-full shrink-0 px-4 py-6">
             <InitiativeView
               characters={characters}
             />
