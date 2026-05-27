@@ -414,7 +414,7 @@ function App() {
     }
   }
 
-  const { calcClassId, setCalcClassId, activeCharacterTotalLevel, effectiveCalcClassId, atk, dc } =
+  const { setCalcClassId, activeCharacterTotalLevel, effectiveCalcClassId, atk, dc } =
     useCastingCalc(activeCharacter)
 
   const activeCharacterSpellsSet = useMemo(() => {
