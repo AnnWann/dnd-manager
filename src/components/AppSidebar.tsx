@@ -91,6 +91,17 @@ export function IconInitiative() {
   )
 }
 
+export function IconActions() {
+  return (
+    <IconBase>
+      <path d="M6 18 18 6" />
+      <path d="M9 6h9v9" />
+      <path d="M8 16h4" />
+      <path d="M16 8v4" />
+    </IconBase>
+  )
+}
+
 export function IconBackpack() {
   return (
     <IconBase>

@@ -14,6 +14,9 @@ export function SlotsResources(props: {
   sorceryPointsRemaining: number
   sorceryPointsUsedClamped: number
   updateCharacter: (characterId: string, updater: (c: Character) => Character) => void
+  onShortRest?: () => void
+  onLongRest?: () => void
+  disabled?: boolean
 }) {
   const {
     activeCharacter,
@@ -24,6 +27,9 @@ export function SlotsResources(props: {
     sorceryPointsRemaining,
     sorceryPointsUsedClamped,
     updateCharacter,
+    onShortRest,
+    onLongRest,
+    disabled = false,
   } = props
 
   const resetFreeUsesForRest = (spells: Character['spells'], kind: RestResetKind): Character['spells'] => {
@@ -72,7 +78,7 @@ export function SlotsResources(props: {
                     variant="secondary"
                     className="h-7 w-7 px-0"
                     title="Recuperar 1"
-                    disabled={used <= 0}
+                      disabled={disabled || used <= 0}
                     onClick={() => {
                       updateCharacter(activeCharacter.id, (c) => {
                         const prev = c.slotUsage ?? {}
@@ -90,7 +96,7 @@ export function SlotsResources(props: {
                     variant="secondary"
                     className="h-7 w-7 px-0"
                     title="Gastar 1"
-                    disabled={remaining <= 0}
+                      disabled={disabled || remaining <= 0}
                     onClick={() => {
                       updateCharacter(activeCharacter.id, (c) => {
                         const prev = c.slotUsage ?? {}
@@ -123,7 +129,7 @@ export function SlotsResources(props: {
                       variant="secondary"
                       className="h-7 w-7 px-0"
                       title="Recuperar 1 (curto)"
-                      disabled={used <= 0}
+                      disabled={disabled || used <= 0}
                       onClick={() => {
                         updateCharacter(activeCharacter.id, (c) => {
                           const prev = c.slotUsage ?? {}
@@ -139,7 +145,7 @@ export function SlotsResources(props: {
                       variant="secondary"
                       className="h-7 w-7 px-0"
                       title="Gastar 1 (curto)"
-                      disabled={remaining <= 0}
+                      disabled={disabled || remaining <= 0}
                       onClick={() => {
                         updateCharacter(activeCharacter.id, (c) => {
                           const prev = c.slotUsage ?? {}
@@ -166,7 +172,7 @@ export function SlotsResources(props: {
                   variant="secondary"
                   className="h-7 w-7 px-0"
                   title="Recuperar 1 (pontos de feitiçaria)"
-                  disabled={sorceryPointsUsedClamped <= 0}
+                  disabled={disabled || sorceryPointsUsedClamped <= 0}
                   onClick={() => {
                     updateCharacter(activeCharacter.id, (c) => {
                       const max = c.classes.reduce(
@@ -199,7 +205,7 @@ export function SlotsResources(props: {
                   variant="secondary"
                   className="h-7 w-7 px-0"
                   title="Gastar 1 (pontos de feitiçaria)"
-                  disabled={sorceryPointsRemaining <= 0}
+                  disabled={disabled || sorceryPointsRemaining <= 0}
                   onClick={() => {
                     updateCharacter(activeCharacter.id, (c) => {
                       const max = c.classes.reduce(
@@ -239,6 +245,7 @@ export function SlotsResources(props: {
           variant="secondary"
           className="h-9 flex-1"
           title="Reset (descanso curto)"
+          disabled={disabled}
           onClick={() => {
             updateCharacter(activeCharacter.id, (c) => {
               const prev = c.slotUsage ?? {}
@@ -249,6 +256,7 @@ export function SlotsResources(props: {
                 slotUsage: { ...prev, pactUsed: 0 },
               }
             })
+            onShortRest?.()
           }}
         >
           Descanso curto
@@ -259,6 +267,7 @@ export function SlotsResources(props: {
           variant="secondary"
           className="h-9 flex-1"
           title="Reset (descanso longo)"
+          disabled={disabled}
           onClick={() => {
             updateCharacter(activeCharacter.id, (c) => {
               const prev = c.slotUsage ?? {}
@@ -275,6 +284,7 @@ export function SlotsResources(props: {
                 slotUsage: { ...prev, pactUsed: 0, usedByLevel: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
               }
             })
+            onLongRest?.()
           }}
         >
           Descanso longo

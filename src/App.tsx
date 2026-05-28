@@ -37,6 +37,7 @@ import { PersonalInventoryView } from './views/PersonalInventoryView'
 import { CampInventoryView } from './views/CampInventoryView'
 import { NotesView } from './views/NotesView'
 import { DeathSavesView } from './views/DeathSavesView'
+import { ActionsView } from './views/ActionsView'
 
 import { useSwipeViews } from './hooks/useSwipeViews'
 import { useSpellDb } from './features/spells/useSpellDb'
@@ -47,13 +48,13 @@ import { effectsEqual } from './lib/spellEffects'
 import { decrementInitiativeEffect, buildInitiativeInstance, type InitiativeEffect, type InitiativeResult } from './features/initiative/initiative'
 import { InitiativeView } from './views/InitiativeView'
 import { normalizeCharacter } from './lib/normaliseCharacter'
-import { AppSidebar, IconBackpack, IconCamp, IconCharacter, IconDeathSaves, IconEquipment, IconInitiative, IconNotes, IconSpells, IconSync } from './components/AppSidebar'
+import { AppSidebar, IconActions, IconBackpack, IconCamp, IconCharacter, IconDeathSaves, IconEquipment, IconInitiative, IconNotes, IconSpells, IconSync } from './components/AppSidebar'
 
 function App() {
   const { abilityShort } = useI18n()
 
-  const swipe = useSwipeViews({ viewCount: 9, initialIndex: 1 })
-  type ViewsCount = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+  const swipe = useSwipeViews({ viewCount: 10, initialIndex: 1 })
+  type ViewsCount = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
   const viewIndex = swipe.viewIndex as ViewsCount
 
   const {
@@ -939,7 +940,33 @@ function App() {
       }
     })
 
-    setInitiativeState(nextOrder, nextIndex)
+    const activeTurnCharacterId = nextOrder[nextIndex]?.sourceCharacterId
+
+    setAppState((prev) => ({
+      ...prev,
+      initiativeOrder: nextOrder,
+      currentTurnIndex: nextIndex,
+      characters: activeTurnCharacterId
+        ? prev.characters.map((character) => {
+            if (character.id !== activeTurnCharacterId) return character
+
+            return {
+              ...character,
+              customAbilities: (character.customAbilities ?? []).map((ability) =>
+                ability.usage?.reset === 'turn'
+                  ? {
+                      ...ability,
+                      usage: {
+                        ...ability.usage,
+                        used: 0,
+                      },
+                    }
+                  : ability,
+              ),
+            }
+          })
+        : prev.characters,
+    }))
   }
 
   function updateCharacter(characterId: string, updater: (c: Character) => Character) {
@@ -1458,8 +1485,8 @@ function App() {
     { label: 'Inventário do acampamento', icon: <IconCamp />, active: viewIndex === 5, onClick: () => setView(5) },
     { label: 'Anotações', icon: <IconNotes />, active: viewIndex === 6, onClick: () => setView(6) },
     { label: 'Iniciativa', icon: <IconInitiative />, active: viewIndex === 7, onClick: () => setView(7) },
-    { label: 'Salvaguardas de Morte', icon: <IconDeathSaves />, active: viewIndex === 8, onClick: () => setView(8) },
-
+    { label: 'Ações', icon: <IconActions />, active: viewIndex === 8, onClick: () => setView(8) },
+    { label: 'Salvaguardas de Morte', icon: <IconDeathSaves />, active: viewIndex === 9, onClick: () => setView(9) },
   ]
 
   return (
@@ -1726,6 +1753,20 @@ function App() {
               />
             </div>
             
+            <div className="w-full flex-none px-4 py-6">
+              <ActionsView
+                characters={visibleCharacters}
+                activeCharacter={activeCharacter}
+                setActiveCharacterId={setSelectedCharacterId}
+                addCharacter={addCharacter}
+                deleteActiveCharacter={() => deleteCharacter(activeCharacter.id)}
+                disableDelete={visibleCharacters.length <= 1}
+                showOwnerBadge={canAssignOwners}
+                updateCharacter={updateCharacter}
+                canEditActions={canEditActiveCharacterData}
+              />
+            </div>
+
             <div className="w-full flex-none px-4 py-6">
               <DeathSavesView
                 characters={visibleCharacters}

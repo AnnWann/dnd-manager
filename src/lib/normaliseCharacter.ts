@@ -1,4 +1,4 @@
-import type { Character } from "../types";
+import type { Character, CustomAbility } from "../types";
 import type { AppStateV1 } from "./remoteState";
 import { defaultEquipment, weaponSlotsFromLimbCount } from "./character";
 import { normalizeDeathSaves, normalizeInventoryItems } from './inventory'
@@ -81,6 +81,33 @@ export function normalizeCharacter(character: any): Character {
     pocket: Array.from({ length: 8 }, (_, idx) => normalizeSlot((equipmentBase.pocket ?? [])[idx])),
   }
 
+  const customAbilities: CustomAbility[] = (character.customAbilities ?? []).map((item: any) => {
+    if (typeof item === 'string') {
+      return { id: crypto.randomUUID(), name: String(item), usage: undefined }
+    }
+
+    const name = String(item?.name ?? item?.label ?? '')
+    const usage = item?.usage
+    if (!usage || typeof usage !== 'object') {
+      return { id: String(item?.id ?? crypto.randomUUID()), name, usage: undefined }
+    }
+
+    const reset = usage.reset === 'turn' || usage.reset === 'shortRest' || usage.reset === 'longRest' ? usage.reset : undefined
+    const max = Number(usage.max ?? usage.maxUses ?? 0)
+    const used = Number(usage.used ?? 0)
+    return {
+      id: String(item?.id ?? crypto.randomUUID()),
+      name,
+      usage: reset && Number.isFinite(max) && max > 0
+        ? {
+            max: Math.max(0, Math.trunc(max)),
+            used: Math.max(0, Math.trunc(used)),
+            reset,
+          }
+        : undefined,
+    }
+  }).filter((ability: CustomAbility) => ability.name.trim().length > 0)
+
   return {
     ...character,
     attributes,
@@ -97,7 +124,7 @@ export function normalizeCharacter(character: any): Character {
     currentHp: Math.min(character.currentHp ?? 0, character.maxHp ?? 0),
     temporaryHp: character.temporaryHp ?? 0,
     hitDice: character.hitDice ?? [],
-    customAbilities: (character.customAbilities ?? []).map((item: unknown) => String(item ?? '')),
+    customAbilities,
     equipment,
     notes: String(character.notes ?? ''),
     initiativeMode: character.type === 'pc' ? 'unique' : (character.initiativeMode ?? 'general'),

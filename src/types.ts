@@ -5,6 +5,7 @@ export type Attribute = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'
 export type ProficiencyMode = 'totalLevel' | 'classLevel'
 
 export type RestResetKind = 'longRest' | 'shortRest'
+export type AbilityUsageResetKind = 'turn' | 'shortRest' | 'longRest'
 
 export type PrimaryRollDisplayMode = 'auto' | 'custom' | 'save' | 'attack' | 'damage'
 
@@ -144,6 +145,18 @@ export interface HomebrewSpell {
   desc?: string
   /** "At Higher Levels" text (free-form, typically PT-BR) */
   higherLevel?: string
+}
+
+export interface AbilityUsage {
+  max: number
+  used: number
+  reset: AbilityUsageResetKind
+}
+
+export interface CustomAbility {
+  id: string
+  name: string
+  usage?: AbilityUsage
 }
 
 export interface CharacterClass {
@@ -286,7 +299,7 @@ export interface Character {
   metamagics?: string[]
 
   /** Optional: free-form list of character abilities/features. */
-  customAbilities?: string[]
+  customAbilities?: CustomAbility[]
 
   /** Optional: equipment and quick-access inventory. */
   equipment?: CharacterEquipment
