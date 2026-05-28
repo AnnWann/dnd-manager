@@ -2,11 +2,11 @@ import { Fragment, useEffect, useMemo, useRef, useState, type Dispatch, type Set
 import type { Character, DndApiRef, DndSpell, HomebrewSpell, MagicCircleLevel, SpellTranslation } from '../../types'
 import { magicCircleOptions } from '../../lib/rules'
 import { CLASS_NAME_BY_INDEX, CLASS_OPTIONS, classDisplayName, SCHOOL_NAME_PT, schoolLabel } from '../../lib/spellLabels'
-import { Button } from '../ui/Button'
-import { Card, CardContent, CardHeader } from '../ui/Card'
-import { Input } from '../ui/Input'
-import { Select } from '../ui/Select'
-import { InlineMarkdown } from '../InlineMarkdown'
+import { Button } from '../../components/ui/Button'
+import { Card, CardContent, CardHeader } from '../../components/ui/Card'
+import { Input } from '../../components/ui/Input'
+import { Select } from '../../components/ui/Select'
+import { InlineMarkdown } from '../../components/InlineMarkdown'
 
 type TranslateStatus =
   | { kind: 'idle' }

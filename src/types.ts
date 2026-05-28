@@ -372,3 +372,10 @@ export interface SpellListResponse {
   count: number
   results: DndApiRef[]
 }
+
+export type SpellMeta = {
+  index: string
+  level?: number
+  school?: string
+  classes?: string[]
+}

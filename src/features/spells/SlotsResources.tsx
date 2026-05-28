@@ -1,5 +1,5 @@
 import type { Character } from '../../types'
-import { Button } from '../ui/Button'
+import { Button } from '../../components/ui/Button'
 import { multiclassSpellSlots } from '../../lib/spellSlots'
 import type { RestResetKind } from '../../types'
 

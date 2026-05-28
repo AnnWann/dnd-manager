@@ -13,6 +13,7 @@ import type {
   SpellEffect,
   SpellCastTimeKind,
   SpellTranslation,
+  SpellMeta,
 } from './types'
 
 import { newCharacter } from './lib/character'
@@ -43,7 +44,7 @@ import { useCastingCalc } from './features/characters/useCastingCalc'
 import { translateTexts } from './features/spells/translateApi'
 import { clampInt, clampStep, formatPtNumber } from './lib/numberFormat'
 import { effectsEqual } from './lib/spellEffects'
-import { calcCharacterInitiative, decrementInitiativeEffect, type InitiativeEffect, type InitiativeResult } from './features/initiative/initiative'
+import { decrementInitiativeEffect, buildInitiativeInstance, type InitiativeEffect, type InitiativeResult } from './features/initiative/initiative'
 import { InitiativeView } from './views/InitiativeView'
 import { normalizeCharacter } from './lib/normaliseCharacter'
 import { AppSidebar, IconBackpack, IconCamp, IconCharacter, IconDeathSaves, IconEquipment, IconInitiative, IconNotes, IconSpells, IconSync } from './components/AppSidebar'
@@ -727,6 +728,33 @@ function App() {
   const needsUnaddedDetails =
     unaddedLevelFilter !== 'any' || unaddedSchoolFilter !== 'any' || unaddedClassFilter !== 'any'
 
+
+  const spellMetaByIndex = useMemo(() => {
+    const map: Record<string, SpellMeta> = {}
+
+    for (const [index, spell] of Object.entries(spellDetails)) {
+      if (!spell) continue
+
+      map[index] = {
+        index,
+        level: spell.level,
+        school: spell.school?.name,
+        classes: spell.classes?.map((c) => c.index) ?? [],
+      }
+    }
+
+    for (const [index, hb] of Object.entries(homebrewLibrary)) {
+      map[index] = {
+        index,
+        level: hb.level,
+        school: hb.school,
+        classes: hb.classes ?? [],
+      }
+    }
+
+    return map
+  }, [spellDetails, homebrewLibrary])
+
   useEffect(() => {
     // Intentionally disabled: filtering unadded spells by level/school/class would
     // require fetching many spell details. We avoid mass API calls to prevent rate limiting.
@@ -740,16 +768,16 @@ function App() {
     const filtered = unaddedCandidates.filter((s) => {
       const isHb = isHomebrewIndex(s.index)
       const hb = isHb ? homebrewLibrary[s.index] : undefined
-      const detail = !isHb ? spellCache[s.index] : undefined
+      const meta = spellMetaByIndex[s.index]
 
       if (unaddedLevelFilter !== 'any') {
-        const lvl = (hb?.level ?? detail?.level) as number | undefined
+        const lvl = (hb?.level ?? meta?.level) as number | undefined
         if (typeof lvl !== 'number') return false
         if (lvl !== unaddedLevelFilter) return false
       }
 
       if (unaddedSchoolFilter !== 'any') {
-        const school = hb?.school ?? detail?.school?.name
+        const school = hb?.school ?? meta?.school
         if (!school) return false
         if (school !== unaddedSchoolFilter) return false
       }
@@ -758,8 +786,8 @@ function App() {
         if (hb) {
           if (!hb.classes?.includes(unaddedClassFilter)) return false
         } else {
-          const classes = detail?.classes
-          if (!classes || !classes.some((c) => c.index === unaddedClassFilter)) return false
+          const classes = meta?.classes
+          if (!classes || !classes.some((c) => c === unaddedClassFilter)) return false
         }
       }
 
@@ -767,7 +795,14 @@ function App() {
     })
 
     return filtered.slice(0, 30)
-  }, [homebrewLibrary, spellCache, unaddedCandidates, unaddedClassFilter, unaddedLevelFilter, unaddedSchoolFilter])
+  }, [homebrewLibrary,
+  spellMetaByIndex,
+  unaddedCandidates,
+  unaddedClassFilter,
+  unaddedLevelFilter,
+  unaddedSchoolFilter,
+])
+
 
   function setInitiativeState(nextOrder: InitiativeResult[], nextCurrentTurnIndex?: number) {
     setAppState((prev) => ({
@@ -784,27 +819,16 @@ function App() {
 
   function addToInitiative(character: Character, rolledValue: number) {
     if (!canEditInitiative) return
+    // Prevent adding duplicates for unique characters
+    const alreadyAdded = initiativeOrder.some((entry) => entry.sourceCharacterId === character.id)
+    if (character.initiativeMode !== 'general' && alreadyAdded) return
 
-    const initiative = calcCharacterInitiative(character, rolledValue)
+    // Count existing instances of this source character to determine instance number
+    const instanceCount = initiativeOrder.filter((entry) => entry.sourceCharacterId === character.id).length
 
-    const nextEntry: InitiativeResult = {
-      id: crypto.randomUUID(),
-      sourceCharacterId: character.id,
-      displayName: character.name,
-      currentHp: character.currentHp,
-      maxHp: character.maxHp,
-      temporaryHp: character.temporaryHp,
-      armorClass: character.armorClass,
-      rolledValue,
-      ownerKey: character.ownerKey,
-      visibilityRole: character.visibilityRole,
-      initiative: initiative,
-      effects: [],
-    }
+    const nextEntry = buildInitiativeInstance(character, instanceCount, rolledValue)
 
-    const nextOrder = [...initiativeOrder, nextEntry].sort(
-      (a, b) => b.initiative - a.initiative,
-    )
+    const nextOrder = [...initiativeOrder, nextEntry].sort((a, b) => b.initiative - a.initiative)
 
     setInitiativeState(nextOrder)
   }
@@ -869,7 +893,33 @@ function App() {
 
   function clearInitiative() {
     if (!canEditInitiative) return
-    setInitiativeState([], 0)
+
+    setAppState((prev) => {
+      const prevOrder = prev.initiativeOrder ?? []
+
+      const updatedCharacters = prev.characters.map((ch) => {
+        const entries = prevOrder.filter((entry) => entry.sourceCharacterId === ch.id)
+        if (!entries.length) return ch
+
+        // Only update characters that are unique
+        if (ch.initiativeMode === 'general') return ch
+
+        const entry = entries[0]
+
+        return {
+          ...ch,
+          currentHp: Math.max(0, Math.min(ch.maxHp || 0, Math.trunc(entry.currentHp) || 0)),
+          temporaryHp: typeof entry.temporaryHp === 'number' ? Math.max(0, Math.trunc(entry.temporaryHp)) : ch.temporaryHp,
+        }
+      })
+
+      return {
+        ...prev,
+        characters: updatedCharacters,
+        initiativeOrder: [],
+        currentTurnIndex: 0,
+      }
+    })
   }
 
   function nextTurn() {
@@ -1303,11 +1353,44 @@ function App() {
     }))
   }
 
-  function updateCurrentHp(characterId: string, currentHp: number) {
-    updateCharacter(characterId, (c) => ({
-      ...c,
-      currentHp: Math.max(0, Math.min(c.maxHp || 0, Math.trunc(currentHp) || 0)),
-    }))
+  function updateCurrentHp(characterId: string, currentHp: number, temporaryHp?: number) {
+    setAppState((prev) => {
+      const prevOrder = prev.initiativeOrder ?? []
+
+      // If the id matches an initiative entry, update that entry instead
+      if (prevOrder.some((entry) => entry.id === characterId)) {
+        const nextOrder = prevOrder.map((entry) =>
+          entry.id === characterId
+            ? {
+                ...entry,
+                currentHp: Math.max(0, Math.min(entry.maxHp || 0, Math.trunc(currentHp) || 0)),
+                temporaryHp: typeof temporaryHp === 'number' ? Math.max(0, Math.trunc(temporaryHp)) : entry.temporaryHp,
+              }
+            : entry,
+        )
+
+        return {
+          ...prev,
+          initiativeOrder: nextOrder,
+        }
+      }
+
+      // Otherwise treat as a character id and update the character ficha
+      const nextCharacters = (prev.characters ?? []).map((c) =>
+        c.id === characterId
+          ? {
+              ...c,
+              currentHp: Math.max(0, Math.min(c.maxHp || 0, Math.trunc(currentHp) || 0)),
+              temporaryHp: typeof temporaryHp === 'number' ? Math.max(0, Math.trunc(temporaryHp)) : c.temporaryHp,
+            }
+          : c,
+      )
+
+      return {
+        ...prev,
+        characters: nextCharacters,
+      }
+    })
   }
 
   function updateCampInventory(updater: (items: InventoryItem[]) => InventoryItem[]) {

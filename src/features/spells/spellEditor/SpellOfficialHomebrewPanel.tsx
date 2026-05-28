@@ -2,12 +2,12 @@ import type { Attribute, AddedSpell, Character, HomebrewSpellMechanic, MagicCirc
 import { magicCircleOptions } from '../../../lib/rules'
 import { apiClassLabel, SCHOOL_NAME_PT, schoolLabel } from '../../../lib/spellLabels'
 import { useI18n } from '../../../i18n/I18nContext'
-import { InlineMarkdown } from '../../InlineMarkdown'
-import { Button } from '../../ui/Button'
-import { Input } from '../../ui/Input'
-import { Select } from '../../ui/Select'
-import { Textarea } from '../../ui/Textarea'
-import { ABILITY_KEYS } from '../abilityKeys'
+import { InlineMarkdown } from '../../../components/InlineMarkdown'
+import { Button } from '../../../components/ui/Button'
+import { Input } from '../../../components/ui/Input'
+import { Select } from '../../../components/ui/Select'
+import { Textarea } from '../../../components/ui/Textarea'
+import { ATTRIBUTE_KEYS } from '../addedSpells/abilityKeys'
 
 export function SpellOfficialHomebrewPanel(props: {
   activeCharacter: Character
@@ -338,7 +338,7 @@ export function SpellOfficialHomebrewPanel(props: {
                     value={hb.saveAbility ?? 'dex'}
                     onChange={(e) => setHb({ ...hb, saveAbility: e.target.value as Attribute })}
                   >
-                    {ABILITY_KEYS.map((key) => (
+                    {ATTRIBUTE_KEYS.map((key) => (
                       <option key={key} value={key}>
                         {abilityShort(key)}
                       </option>

@@ -1,6 +1,6 @@
 import type { AddedSpell, DndSpell, SpellTranslation } from '../../../types'
-import { Button } from '../../ui/Button'
-import { InlineMarkdown } from '../../InlineMarkdown'
+import { Button } from '../../../components/ui/Button'
+import { InlineMarkdown } from '../../../components/InlineMarkdown'
 
 type TranslateStatus =
   | { kind: 'idle' }

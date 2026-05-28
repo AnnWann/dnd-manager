@@ -46,7 +46,14 @@ export function buildInitiativeInstance(
   rolledValue: number,
 ): InitiativeResult {
   const instanceNumber = instanceCount + 1
-  const displayName = instanceNumber === 1 ? sourceCharacter.name : `${sourceCharacter.name} ${instanceNumber}`
+  // For 'general' characters always append the instance number starting at 1
+  // For 'unique' characters keep the name without number on the first instance
+  const displayName =
+    sourceCharacter.initiativeMode === 'general'
+      ? `${sourceCharacter.name} ${instanceNumber}`
+      : instanceNumber === 1
+      ? sourceCharacter.name
+      : `${sourceCharacter.name} ${instanceNumber}`
   return {
     id: crypto.randomUUID(),
     sourceCharacterId: sourceCharacter.id,

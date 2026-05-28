@@ -9,10 +9,10 @@ import type {
   SpellEffectTarget,
 } from '../../../types'
 import { useI18n } from '../../../i18n/I18nContext'
-import { ABILITY_KEYS } from '../abilityKeys'
-import { Button } from '../../ui/Button'
-import { Input } from '../../ui/Input'
-import { Select } from '../../ui/Select'
+import { ATTRIBUTE_KEYS } from '../addedSpells/abilityKeys'
+import { Button } from '../../../components/ui/Button'
+import { Input } from '../../../components/ui/Input'
+import { Select } from '../../../components/ui/Select'
 
 export function SpellModifiersTab(props: {
   activeCharacter: Character
@@ -410,7 +410,7 @@ export function SpellModifiersTab(props: {
                             </option>
                           ))
                         ) : (
-                          ABILITY_KEYS.map((a) => (
+                          ATTRIBUTE_KEYS.map((a) => (
                             <option key={a} value={a}>
                               {abilityShort(a)}
                             </option>

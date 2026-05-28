@@ -1,7 +1,7 @@
 import type { InitiativeResult } from "./initiative"
 import { Button } from "../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../components/ui/Card"
-import { badge } from "../../components/addedSpells/badge"
+import { badge } from "../spells/addedSpells/badge"
 import { InitiativeHpEditor } from './InitiativeHpEditor'
 
 type Props = {
@@ -9,7 +9,7 @@ type Props = {
   isCurrentTurn: boolean
   showCharacterDetails: boolean
   canEditHp: boolean
-  onUpdateCurrentHp: (characterId: string, currentHp: number) => void
+  onUpdateCurrentHp: (characterId: string, currentHp: number, temporaryHp?: number) => void
   onRemove?: (characterId: string) => void
   onRemoveEffect?: (characterId: string, effectId: string) => void
 }

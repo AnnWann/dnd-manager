@@ -17,8 +17,8 @@ import { Card, CardContent, CardHeader } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { Textarea } from '../components/ui/Textarea'
-import { AddedSpellsCard } from '../components/addedSpells/AddedSpellsCard'
-import { AddSpellsCard } from '../components/addedSpells/AddSpellsCard'
+import { AddedSpellsCard } from '../features/spells/AddedSpellsCard'
+import { AddSpellsCard } from '../features/spells/AddSpellsCard'
 import { CharacterSelector } from '../features/characters/characterSelector'
 
 export type TranslateStatus =

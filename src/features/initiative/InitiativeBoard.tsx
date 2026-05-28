@@ -6,7 +6,7 @@ import type { InitiativeResult } from './initiative'
 import { InitiativeForm } from './initiativeForm'
 import { InitiativeCarousel } from './initiativeCarousel'
 import { InitiativeHpEditor } from './InitiativeHpEditor'
-import { badge } from '../../components/addedSpells/badge'
+import { badge } from '../spells/addedSpells/badge'
 
 type Props = {
   characters: Character[]
@@ -21,7 +21,7 @@ type Props = {
   onApplyEffect: (characterId: string, effectLabel: string) => void
   onNextTurn: () => void
   onClear: () => void
-  onUpdateCurrentHp: (characterId: string, currentHp: number) => void
+  onUpdateCurrentHp: (characterId: string, currentHp: number, temporaryHp?: number) => void
 }
 
 export function InitiativeBoard({
@@ -61,12 +61,12 @@ export function InitiativeBoard({
         />
       ) : null}
 
-      <InitiativeCarousel
+        <InitiativeCarousel
         order={initiativeOrder}
         currentTurnIndex={currentTurnIndex}
         canSeeCharacterDetails={canSeeCharacterDetails}
         canEditCharacterHp={canEditCharacterHp}
-        onUpdateCurrentHp={onUpdateCurrentHp}
+          onUpdateCurrentHp={onUpdateCurrentHp}
         onRemove={canEditInitiative ? onRemove : undefined}
         onRemoveEffect={canEditInitiative ? onRemoveEffect : undefined}
       />

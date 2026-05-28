@@ -15,7 +15,7 @@ type Props = {
   onApplyEffect: (characterId: string, effectLabel: string) => void
   onNextTurn: () => void
   onClear: () => void
-  onUpdateCurrentHp: (characterId: string, currentHp: number) => void
+  onUpdateCurrentHp: (characterId: string, currentHp: number, temporaryHp?: number) => void
 }
 
 export function InitiativeView({

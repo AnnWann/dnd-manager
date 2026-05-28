@@ -3,7 +3,7 @@ import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { equipmentBonuses } from "../../../lib/character"
 import { abilityModifier, formatSigned } from "../../../lib/rules"
-import type { Character, CharacterTypes } from "../../../types"
+import type { Character, CharacterTypes, InitiativeMode } from "../../../types"
 
 export const CHARACTER_TYPES: CharacterTypes[] = [
   "pc",
@@ -174,6 +174,26 @@ export function CharacterInfo({
             }
             placeholder="Ou digite um novo nome de jogador"
           />
+        </div>
+      ) : null}
+
+      {canAssignOwners ? (
+        <div className="w-full md:w-[320px]">
+          <label className="text-xs text-text">Modo de Iniciativa</label>
+
+          <Select
+            className="mt-1"
+            value={character.initiativeMode ?? (character.type === 'pc' ? 'unique' : 'general')}
+            onChange={(e) =>
+              updateCharacter(character.id, (c) => ({
+                ...c,
+                initiativeMode: e.target.value as InitiativeMode,
+              }))
+            }
+          >
+            <option value="unique">Único</option>
+            <option value="general">Geral</option>
+          </Select>
         </div>
       ) : null}
 

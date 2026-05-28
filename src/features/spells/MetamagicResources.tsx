@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Character } from '../../types'
 import { loadMetamagicDb, metamagicDisplayName, type MetamagicOption } from '../../lib/metamagicDb'
-import { Button } from '../ui/Button'
-import { Select } from '../ui/Select'
+import { Button } from '../../components/ui/Button'
+import { Select } from '../../components/ui/Select'
 
 export function MetamagicResources(props: {
   activeCharacter: Character

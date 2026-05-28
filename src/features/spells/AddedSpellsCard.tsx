@@ -32,11 +32,11 @@ import {
   classLabel,
   schoolLabel,
 } from '../../lib/spellLabels'
-import { Button } from '../ui/Button'
-import { Card, CardContent, CardHeader } from '../ui/Card'
-import { Input } from '../ui/Input'
-import { Select } from '../ui/Select'
-import { Textarea } from '../ui/Textarea'
+import { Button } from '../../components/ui/Button'
+import { Card, CardContent, CardHeader } from '../../components/ui/Card'
+import { Input } from '../../components/ui/Input'
+import { Select } from '../../components/ui/Select'
+import { Textarea } from '../../components/ui/Textarea'
 import { useI18n } from '../../i18n/I18nContext'
 import { SpellQuickDetailsModalRow } from './SpellQuickDetailsModalRow'
 import { SpellEditorModal } from './spellEditor/SpellEditorModal'

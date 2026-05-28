@@ -7,7 +7,7 @@ type Props = {
   currentTurnIndex: number
   canSeeCharacterDetails: (character: Character | InitiativeResult) => boolean
   canEditCharacterHp: (character: Character | InitiativeResult ) => boolean
-  onUpdateCurrentHp: (characterId: string, currentHp: number) => void
+  onUpdateCurrentHp: (characterId: string, currentHp: number, temporaryHp?: number) => void
   onRemove?: (characterId: string) => void
   onRemoveEffect?: (characterId: string, effectId: string) => void
 }

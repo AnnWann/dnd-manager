@@ -1,5 +1,5 @@
 import type { AddedSpell, Character } from '../../../types'
-import { Textarea } from '../../ui/Textarea'
+import { Textarea } from '../../../components/ui/Textarea'
 
 export function SpellHeadcanonTab(props: {
   activeCharacter: Character

@@ -1,9 +1,9 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import type { AddedSpell, Character, MagicCircleLevel, PrimaryRollDisplayMode } from '../../types'
-import { Button } from '../ui/Button'
-import { Input } from '../ui/Input'
-import { Select } from '../ui/Select'
+import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
+import { Select } from '../../components/ui/Select'
 
 export function SpellQuickDetailsModalRow(props: {
   isOpen: boolean
