@@ -1,27 +1,28 @@
 import { useMemo, useState } from "react"
 import type { Character } from "../../types"
 import { Button } from "../../components/ui/Button"
+import type { InitiativeResult } from './initiative'
 
 type Props = {
   characters: Character[]
-  addedCharacterIds: string[]
+  initiativeOrder: InitiativeResult[]
   onAdd: (character: Character, rolledValue: number) => void
 }
 
 export function InitiativeForm({
   characters,
-  addedCharacterIds,
+  initiativeOrder,
   onAdd,
 }: Props) {
   const [characterId, setCharacterId] = useState("")
   const [rolledValue, setRolledValue] = useState("")
 
   const availableCharacters = useMemo(
-    () =>
-      characters.filter(
-        (character) => !addedCharacterIds.includes(character.id),
-      ),
-    [characters, addedCharacterIds],
+    () => characters.filter((character) => {
+      const alreadyAdded = initiativeOrder.some((entry) => entry.sourceCharacterId === character.id)
+      return character.initiativeMode === 'general' || !alreadyAdded
+    }),
+    [characters, initiativeOrder],
   )
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {

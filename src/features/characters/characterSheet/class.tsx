@@ -1,8 +1,9 @@
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
+import { equipmentBonuses } from "../../../lib/character"
 import { clampInt } from "../../../lib/numberFormat"
-import { ABILITIES } from "../../../lib/rules"
+import { ABILITIES, spellAttackBonus, spellSaveDc, totalLevel } from "../../../lib/rules"
 import { CLASS_OPTIONS, classLabel } from "../../../lib/spellLabels"
 import type { Attribute, Character } from "../../../types"
 
@@ -16,6 +17,63 @@ type Props = {
 
 export function Class({ character, updateCharacter, abilityShort, addClassToActive }: Props) {
   if (character.type !== 'pc') return null
+
+  const totalCharacterLevel = Math.max(1, totalLevel(character.classes.map((c) => c.level)))
+  const eqBonuses = equipmentBonuses(character)
+
+  function getAutoCasterClassIndex(classIndex: string): string | null {
+    if (
+      classIndex === 'artificer' ||
+      classIndex === 'bard' ||
+      classIndex === 'cleric' ||
+      classIndex === 'druid' ||
+      classIndex === 'paladin' ||
+      classIndex === 'ranger' ||
+      classIndex === 'sorcerer' ||
+      classIndex === 'warlock' ||
+      classIndex === 'wizard'
+    ) {
+      return classIndex
+    }
+    return null
+  }
+
+  function getCasterClassLabel(classIndex: string, progression?: 'auto' | 'third'): string {
+    if (classIndex === 'fighter') {
+      return progression === 'third' ? 'Cavaleiro Arcano (Mago)' : 'Nenhuma'
+    }
+    if (classIndex === 'rogue') {
+      return progression === 'third' ? 'Trapaceiro Arcano (Mago)' : 'Nenhuma'
+    }
+    const auto = getAutoCasterClassIndex(classIndex)
+    if (!auto) return 'Nenhuma'
+    const opt = CLASS_OPTIONS.find((c) => c.index === auto)
+    return opt?.name ?? auto
+  }
+
+  function isCasterEnabled(classIndex: string, progression?: 'auto' | 'third'): boolean {
+    const auto = getAutoCasterClassIndex(classIndex)
+    if (auto) return true
+    return (classIndex === 'fighter' || classIndex === 'rogue') && progression === 'third'
+  }
+
+  function isCastingAbilityEditable(classIndex: string, progression?: 'auto' | 'third'): boolean {
+    return (classIndex === 'fighter' || classIndex === 'rogue') && progression === 'third'
+  }
+
+  function autoCastingAbility(classIndex: string): Attribute {
+    if (classIndex === 'fighter' || classIndex === 'rogue') return 'int'
+    const opt = CLASS_OPTIONS.find((c) => c.index === classIndex)
+    return (opt?.defaultAbility ?? 'int') as Attribute
+  }
+
+  function resolvedCastingAbility(classIndex: string, progression: 'auto' | 'third' | undefined, stored: Attribute): Attribute {
+    if (classIndex === 'fighter' || classIndex === 'rogue') {
+      if (progression === 'third') return stored || 'int'
+      return 'int'
+    }
+    return autoCastingAbility(classIndex)
+  }
 
   return (
     <div className="mt-5">
@@ -49,7 +107,7 @@ export function Class({ character, updateCharacter, abilityShort, addClassToActi
           {character.classes.map((cls) => (
             <div
               key={cls.id}
-              className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 md:grid-cols-[1fr_100px_160px_44px]"
+              className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 md:grid-cols-[1fr_100px_220px_220px_44px]"
             >
               <div className="min-w-0">
                 <div className="text-xs text-text">Classe</div>
@@ -73,10 +131,46 @@ export function Class({ character, updateCharacter, abilityShort, addClassToActi
                 />
               </div>
               <div>
-                <div className="text-xs text-text">Atributo (conjuração)</div>
+                <div className="text-xs text-text">Classe de conjurador</div>
+                {(cls.classIndex === 'fighter' || cls.classIndex === 'rogue') ? (
+                  <Select
+                    className="mt-1 h-9 px-2 py-1"
+                    value={cls.spellcastingProgression ?? 'auto'}
+                    onChange={(e) => {
+                      const v = e.target.value as 'auto' | 'third'
+                      updateCharacter(character.id, (c) => ({
+                        ...c,
+                        classes: c.classes.map((x) =>
+                          x.id === cls.id
+                            ? {
+                                ...x,
+                                spellcastingProgression: v === 'auto' ? undefined : v,
+                                castingAbility: v === 'third' ? 'int' : x.castingAbility,
+                              }
+                            : x,
+                        ),
+                      }))
+                    }}
+                    title="Escolha opcional de conjurador para classes marciais."
+                  >
+                    <option value="auto">Nenhuma</option>
+                    <option value="third">
+                      {cls.classIndex === 'fighter' ? 'Cavaleiro Arcano (Mago)' : 'Trapaceiro Arcano (Mago)'}
+                    </option>
+                  </Select>
+                ) : (
+                  <Input
+                    className="mt-1 h-9"
+                    readOnly
+                    value={getCasterClassLabel(cls.classIndex, cls.spellcastingProgression)}
+                  />
+                )}
+
+                <div className="mt-2 text-xs text-text">Atributo de conjuração</div>
                 <Select
                   className="mt-1 h-9 px-2 py-1"
-                  value={cls.castingAbility}
+                  value={resolvedCastingAbility(cls.classIndex, cls.spellcastingProgression, cls.castingAbility)}
+                  disabled={!isCastingAbilityEditable(cls.classIndex, cls.spellcastingProgression)}
                   onChange={(e) => {
                     const castingAbility = e.target.value as Attribute
                     updateCharacter(character.id, (c) => ({
@@ -91,31 +185,34 @@ export function Class({ character, updateCharacter, abilityShort, addClassToActi
                     </option>
                   ))}
                 </Select>
-
-                {(cls.classIndex === 'fighter' || cls.classIndex === 'rogue') ? (
-                  <div className="mt-2">
-                    <div className="text-xs text-text">Slots (multiclasse)</div>
-                    <Select
-                      className="mt-1 h-9 px-2 py-1"
-                      value={cls.spellcastingProgression ?? 'auto'}
-                      onChange={(e) => {
-                        const v = e.target.value as 'auto' | 'third'
-                        updateCharacter(character.id, (c) => ({
-                          ...c,
-                          classes: c.classes.map((x) =>
-                            x.id === cls.id
-                              ? { ...x, spellcastingProgression: v === 'auto' ? undefined : v }
-                              : x,
-                          ),
-                        }))
-                      }}
-                      title="Fighter/Rogue só contam como 1/3 conjurador se forem Cavaleiro Arcano / Trapaceiro Arcano."
-                    >
-                      <option value="auto">Padrão (sem slots)</option>
-                      <option value="third">1/3 conjurador (EK/AT)</option>
-                    </Select>
+              </div>
+              <div>
+                <div className="text-xs text-text">Bônus de conjuração</div>
+                {isCasterEnabled(cls.classIndex, cls.spellcastingProgression) ? (
+                  <div className="mt-1 rounded-md border border-border px-2 py-2 text-xs text-textH">
+                    {(() => {
+                      const abilityKey = resolvedCastingAbility(cls.classIndex, cls.spellcastingProgression, cls.castingAbility)
+                      const abilityScore = character.attributes[abilityKey]
+                      const atkBase = spellAttackBonus({
+                        proficiencyMode: character.proficiencyMode,
+                        totalCharacterLevel,
+                        classLevel: cls.level,
+                        abilityScore,
+                      })
+                      const atk = atkBase + eqBonuses.attackBonus
+                      const dc = spellSaveDc({
+                        proficiencyMode: character.proficiencyMode,
+                        totalCharacterLevel,
+                        classLevel: cls.level,
+                        abilityScore,
+                      })
+                      const atkLabel = atk >= 0 ? `+${atk}` : `${atk}`
+                      return `ATK ${atkLabel} • TR ${dc}`
+                    })()}
                   </div>
-                ) : null}
+                ) : (
+                  <div className="mt-1 rounded-md border border-border px-2 py-2 text-xs text-text">Sem conjuração</div>
+                )}
               </div>
               <div className="flex items-end">
                 <Button
@@ -138,6 +235,7 @@ export function Class({ character, updateCharacter, abilityShort, addClassToActi
           ))}
         </div>
       )}
+
     </div>
   )
 }

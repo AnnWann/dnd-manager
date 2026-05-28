@@ -10,9 +10,20 @@ type Props = {
   updateCharacter: (characterId: string, updater: (c: Character) => Character) => void
   abilityShort: (ability: Attribute) => string
   addClassToActive: (classIndex: string) => void
+  canAssignOwners: boolean
+  canEditCharacterType: boolean
+  playerKeys: string[]
 }
 
-export function CharacterSheet({ character, updateCharacter, abilityShort, addClassToActive }: Props) {
+export function CharacterSheet({
+  character,
+  updateCharacter,
+  abilityShort,
+  addClassToActive,
+  canAssignOwners,
+  canEditCharacterType,
+  playerKeys,
+}: Props) {
   return (
     <Card>
       <CardHeader>
@@ -24,6 +35,9 @@ export function CharacterSheet({ character, updateCharacter, abilityShort, addCl
         <CharacterInfo
           character={character}
           updateCharacter={updateCharacter}
+          canAssignOwners={canAssignOwners}
+          canEditCharacterType={canEditCharacterType}
+          playerKeys={playerKeys}
          />
 
         <Attributes

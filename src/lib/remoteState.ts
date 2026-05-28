@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Character, DndSpell, HomebrewSpell, SpellEffect, SpellTranslation } from '../types'
+import type { Character, DndSpell, HomebrewSpell, InventoryItem, SpellEffect, SpellTranslation } from '../types'
 import type { InitiativeResult } from '../features/initiative/initiative'
 import { readLocalStorageJson, writeLocalStorageJson } from './storage'
 import { normalizeAppState } from './normaliseCharacter'
@@ -24,6 +24,10 @@ export type AppStateV1 = {
   /** Optional: shared initiative tracker (synced across devices). */
   initiativeOrder?: InitiativeResult[]
   currentTurnIndex?: number
+
+  /** Optional: shared camp inventory. */
+  campInventory?: InventoryItem[]
+
 }
 
 const LOCAL_STATE_KEY = 'dndmm.appState.v1'
@@ -49,6 +53,7 @@ function defaultState(): AppStateV1 {
     spellTranslations: {},
     initiativeOrder: [],
     currentTurnIndex: 0,
+    campInventory: [],
   }
 }
 

@@ -9,6 +9,7 @@ import type {
   MagicCircleLevel,
   HomebrewSpell,
   HomebrewSpellMechanic,
+  InventoryItem,
   SpellEffect,
   SpellCastTimeKind,
   SpellTranslation,
@@ -16,7 +17,7 @@ import type {
 
 import { newCharacter } from './lib/character'
 import { preparedLimitForClass } from './lib/prepared'
-import { spellListClassIndex } from './lib/spellAccess'
+import { spellListClassIndexForClass } from './lib/spellAccess'
 import { homebrewToDndSpell, isHomebrewIndex } from './lib/homebrew'
 import { castTimeKindFromText } from './lib/castTime'
 import {
@@ -30,6 +31,11 @@ import { useI18n } from './i18n/I18nContext'
 import { SyncView } from './views/SyncView'
 import { CharacterView } from './views/CharacterView'
 import { SpellsView } from './views/SpellsView'
+import { EquipmentView } from './views/EquipmentView'
+import { PersonalInventoryView } from './views/PersonalInventoryView'
+import { CampInventoryView } from './views/CampInventoryView'
+import { NotesView } from './views/NotesView'
+import { DeathSavesView } from './views/DeathSavesView'
 
 import { useSwipeViews } from './hooks/useSwipeViews'
 import { useSpellDb } from './features/spells/useSpellDb'
@@ -40,12 +46,13 @@ import { effectsEqual } from './lib/spellEffects'
 import { calcCharacterInitiative, decrementInitiativeEffect, type InitiativeEffect, type InitiativeResult } from './features/initiative/initiative'
 import { InitiativeView } from './views/InitiativeView'
 import { normalizeCharacter } from './lib/normaliseCharacter'
+import { AppSidebar, IconBackpack, IconCamp, IconCharacter, IconDeathSaves, IconEquipment, IconInitiative, IconNotes, IconSpells, IconSync } from './components/AppSidebar'
 
 function App() {
   const { abilityShort } = useI18n()
 
-  const swipe = useSwipeViews({ viewCount: 4, initialIndex: 1 })
-  type ViewsCount = 0 | 1 | 2 | 3
+  const swipe = useSwipeViews({ viewCount: 9, initialIndex: 1 })
+  type ViewsCount = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
   const viewIndex = swipe.viewIndex as ViewsCount
 
   const {
@@ -71,7 +78,21 @@ function App() {
   const spellTranslations = appState.spellTranslations ?? {}
   const initiativeOrder = appState.initiativeOrder ?? []
   const currentTurnIndex = appState.currentTurnIndex ?? 0
+  const campInventory = appState.campInventory ?? []
   const canEditInitiative = userRole === 'master'
+  const canAssignOwners = userRole === 'master'
+  const canEditCharacterType = userRole === 'master'
+
+  const knownPlayerKeys = useMemo(() => {
+    const keys = new Set<string>()
+    for (const character of characters) {
+      const key = (character.ownerKey ?? '').trim()
+      if (key) keys.add(key)
+    }
+    const currentUserKey = userKey.trim()
+    if (currentUserKey) keys.add(currentUserKey)
+    return Array.from(keys).sort((a, b) => a.localeCompare(b))
+  }, [characters, userKey])
 
   const visibleCharacters = useMemo(() => {
     if (userRole === 'master') return characters
@@ -81,10 +102,15 @@ function App() {
   }, [characters, userKey, userRole])
 
   const canSeeCharacterDetails = useCallback(
-    (character: Character) => {
+    (character: Character | InitiativeResult) => {
       if (userRole === 'master') return true
       return (character.ownerKey ?? '').trim() === userKey.trim() && character.visibilityRole !== 'master'
     },
+    [userKey, userRole],
+  )
+
+  const canEditCharacterHp = useCallback(
+    (character: Character | InitiativeResult) => userRole === 'master' || (character.ownerKey ?? '').trim() === userKey.trim(),
     [userKey, userRole],
   )
 
@@ -95,6 +121,9 @@ function App() {
       visibleCharacters[0],
     [appState.activeCharacterId, selectedCharacterId, visibleCharacters],
   )
+
+  const canEditActiveCharacterData = activeCharacter ? canEditCharacterHp(activeCharacter) : false
+  const canEditCampInventory = true
 
   useEffect(() => {
     if (visibleCharacters.length === 0) {
@@ -371,7 +400,7 @@ function App() {
       const characterClasses = activeCharacter.classes
       const eligible = characterClasses.length
         ? characterClasses.filter((c) =>
-            detail.classes.some((x) => x.index === spellListClassIndex(c.classIndex)),
+            detail.classes.some((x) => x.index === spellListClassIndexForClass(c)),
           )
         : []
       const sourceClassId = eligible[0]?.id ?? characterClasses[0]?.id
@@ -754,10 +783,29 @@ function App() {
   }
 
   function addToInitiative(character: Character, rolledValue: number) {
+    if (!canEditInitiative) return
+
     const initiative = calcCharacterInitiative(character, rolledValue)
-    const nextOrder = [...initiativeOrder, { character, rolledValue, initiative, effects: [] }].sort(
+
+    const nextEntry: InitiativeResult = {
+      id: crypto.randomUUID(),
+      sourceCharacterId: character.id,
+      displayName: character.name,
+      currentHp: character.currentHp,
+      maxHp: character.maxHp,
+      temporaryHp: character.temporaryHp,
+      armorClass: character.armorClass,
+      rolledValue,
+      ownerKey: character.ownerKey,
+      visibilityRole: character.visibilityRole,
+      initiative: initiative,
+      effects: [],
+    }
+
+    const nextOrder = [...initiativeOrder, nextEntry].sort(
       (a, b) => b.initiative - a.initiative,
     )
+
     setInitiativeState(nextOrder)
   }
 
@@ -775,7 +823,7 @@ function App() {
     if (!label) return
 
     const nextOrder = initiativeOrder.map((entry) => {
-      if (entry.character.id !== characterId) return entry
+      if (entry.id !== characterId) return entry
 
       const exists = entry.effects.some((effect) => effect.label.toLowerCase() === label.toLowerCase())
       if (exists) return entry
@@ -800,7 +848,7 @@ function App() {
     if (!canEditInitiative) return
 
     const nextOrder = initiativeOrder.map((entry) => {
-      if (entry.character.id !== characterId) return entry
+      if (entry.id !== characterId) return entry
 
       return {
         ...entry,
@@ -814,7 +862,7 @@ function App() {
   function removeFromInitiative(characterId: string) {
     if (!canEditInitiative) return
 
-    const nextOrder = initiativeOrder.filter((entry) => entry.character.id !== characterId)
+    const nextOrder = initiativeOrder.filter((entry) => entry.id !== characterId)
     const nextIndex = nextOrder.length === 0 ? 0 : Math.min(currentTurnIndex, nextOrder.length - 1)
     setInitiativeState(nextOrder, nextIndex)
   }
@@ -858,9 +906,18 @@ function App() {
       let nextTranslations = prevTranslations
       let changedTranslations = false
 
+      let nextInitiativeOrder = prev.initiativeOrder ?? []
+      let changedInitiativeOrder = false
+
       const nextCharacters = prev.characters.map((c) => {
         if (c.id !== characterId) return c
-        const nextC = updater(c)
+        const nextCUnrestricted = updater(c)
+        const nextC = canEditCharacterType
+          ? nextCUnrestricted
+          : {
+              ...nextCUnrestricted,
+              type: c.type,
+            }
 
         const prevByIndex = new Map(c.spells.map((s) => [s.spellIndex, s]))
         for (const nextSpell of nextC.spells) {
@@ -918,6 +975,16 @@ function App() {
           }
         }
 
+        if (nextInitiativeOrder.some((entry) => entry.id === characterId)) {
+          if (!changedInitiativeOrder) {
+            nextInitiativeOrder = [...nextInitiativeOrder]
+            changedInitiativeOrder = true
+          }
+          nextInitiativeOrder = nextInitiativeOrder.map((entry) =>
+            entry.id === characterId ? { ...entry, character: nextC } : entry,
+          )
+        }
+
         return nextC
       })
 
@@ -927,6 +994,7 @@ function App() {
         effectPresets: changedPresets ? nextPresets : prev.effectPresets,
         homebrewLibrary: changedHomebrew ? nextHomebrew : prev.homebrewLibrary,
         spellTranslations: changedTranslations ? nextTranslations : prev.spellTranslations,
+        initiativeOrder: changedInitiativeOrder ? nextInitiativeOrder : prev.initiativeOrder,
       }
     })
   }
@@ -978,7 +1046,7 @@ function App() {
 
         const characterClasses = active.classes
         const eligible = characterClasses.length
-          ? characterClasses.filter((c) => (hb.classes ?? []).includes(spellListClassIndex(c.classIndex)))
+          ? characterClasses.filter((c) => (hb.classes ?? []).includes(spellListClassIndexForClass(c)))
           : []
         const sourceClassId = eligible[0]?.id ?? characterClasses[0]?.id
 
@@ -1028,7 +1096,7 @@ function App() {
     const characterClasses = activeCharacter.classes
     const eligible = characterClasses.length
       ? characterClasses.filter((c) =>
-          detail.classes.some((x) => x.index === spellListClassIndex(c.classIndex)),
+          detail.classes.some((x) => x.index === spellListClassIndexForClass(c)),
         )
       : []
     const sourceClassId = eligible[0]?.id ?? characterClasses[0]?.id
@@ -1235,6 +1303,20 @@ function App() {
     }))
   }
 
+  function updateCurrentHp(characterId: string, currentHp: number) {
+    updateCharacter(characterId, (c) => ({
+      ...c,
+      currentHp: Math.max(0, Math.min(c.maxHp || 0, Math.trunc(currentHp) || 0)),
+    }))
+  }
+
+  function updateCampInventory(updater: (items: InventoryItem[]) => InventoryItem[]) {
+    setAppState((prev) => ({
+      ...prev,
+      campInventory: updater(prev.campInventory ?? []),
+    }))
+  }
+
   if (!activeCharacter) {
     return (
       <div className="min-h-svh bg-[color:var(--social-bg)] text-text">
@@ -1242,7 +1324,7 @@ function App() {
           <div className="flex w-full flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="font-heading text-xl text-textH">Gerenciador de Magias (D&amp;D)</h1>
-              <p className="text-xs text-text">Sync • Ficha • Magias • Iniciativa </p>
+              <p className="text-xs text-text">Sync • Ficha • Magias • Equipamento • Iniciativa </p>
             </div>
           </div>
         </header>
@@ -1284,6 +1366,18 @@ function App() {
   }
 
   const innerTransform = swipe.innerTransform
+  const sidebarItems = [
+    { label: 'Sync', icon: <IconSync />, active: viewIndex === 0, onClick: () => setView(0) },
+    { label: 'Ficha', icon: <IconCharacter />, active: viewIndex === 1, onClick: () => setView(1) },
+    { label: 'Magias', icon: <IconSpells />, active: viewIndex === 2, onClick: () => setView(2) },
+    { label: 'Equipamento', icon: <IconEquipment />, active: viewIndex === 3, onClick: () => setView(3) },
+    { label: 'Inventário pessoal', icon: <IconBackpack />, active: viewIndex === 4, onClick: () => setView(4) },
+    { label: 'Inventário do acampamento', icon: <IconCamp />, active: viewIndex === 5, onClick: () => setView(5) },
+    { label: 'Anotações', icon: <IconNotes />, active: viewIndex === 6, onClick: () => setView(6) },
+    { label: 'Iniciativa', icon: <IconInitiative />, active: viewIndex === 7, onClick: () => setView(7) },
+    { label: 'Salvaguardas de Morte', icon: <IconDeathSaves />, active: viewIndex === 8, onClick: () => setView(8) },
+
+  ]
 
   return (
     <div className="min-h-svh bg-[color:var(--social-bg)] text-text">
@@ -1291,235 +1385,280 @@ function App() {
         <div className="flex w-full flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="font-heading text-xl text-textH">Gerenciador de Magias (D&amp;D)</h1>
-            <p className="text-xs text-text">Sync • Ficha • Magias • Iniciativa </p>
+            <p className="text-xs text-text">Sync • Ficha • Magias • Equipamento • Iniciativa • Inventário • Anotações</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant={viewIndex === 0 ? 'primary' : 'secondary'}
-                onClick={() => setView(0)}
-              >
-                Sync
-              </Button>
-              <Button
-                size="sm"
-                variant={viewIndex === 1 ? 'primary' : 'secondary'}
-                onClick={() => setView(1)}
-              >
-                Ficha
-              </Button>
-              <Button
-                size="sm"
-                variant={viewIndex === 2 ? 'primary' : 'secondary'}
-                onClick={() => setView(2)}
-              >
-                Magias
-              </Button>
-
-              <Button
-                size="sm"
-                variant={viewIndex === 3 ? 'primary' : 'secondary'}
-                onClick={() => setView(3)}
-              >
-                Iniciativa
-              </Button>
-                
-            </div>
-
-            <a
-              className="text-xs font-medium text-accent underline decoration-accentBorder underline-offset-2 opacity-90 hover:opacity-100"
-              href="https://www.dnd5eapi.co/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              DnD 5e API
-            </a>
-          </div>
+          <a
+            className="text-xs font-medium text-accent underline decoration-accentBorder underline-offset-2 opacity-90 hover:opacity-100"
+            href="https://www.dnd5eapi.co/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            DnD 5e API
+          </a>
         </div>
       </header>
 
-      <main
-        ref={swipe.swipeRootRef}
-        className="mmSwipeRoot w-full overflow-hidden"
-        onPointerDown={swipe.onPointerDown}
-        onPointerMove={swipe.onPointerMove}
-        onPointerUp={swipe.onPointerUpOrCancel}
-        onPointerCancel={swipe.onPointerUpOrCancel}
-      >
-        <div
-          className="mmSwipeInner flex"
-          style={{
-            transform: innerTransform,
-            transition: swipe.isDragging ? 'none' : 'transform 220ms ease',
-          }}
+      <div className="flex min-h-[calc(100svh-73px)]">
+        <AppSidebar items={sidebarItems} />
+
+        <main
+          ref={swipe.swipeRootRef}
+          className="mmSwipeRoot min-w-0 flex-1 overflow-hidden"
+          onPointerDown={swipe.onPointerDown}
+          onPointerMove={swipe.onPointerMove}
+          onPointerUp={swipe.onPointerUpOrCancel}
+          onPointerCancel={swipe.onPointerUpOrCancel}
         >
-          {/* View 1: Sync */}
-          <div className="basis-full shrink-0 px-4 py-6">
-            <SyncView
-              syncKey={syncKey}
-              setSyncKey={setSyncKey}
-              userRole={userRole}
-              setUserRole={setUserRole}
-              userKey={userKey}
-              setUserKey={setUserKey}
-              canSync={canSync}
-              pullFromServer={pullFromServer}
-              syncStatus={syncStatus}
-            />
-          </div>
+          <div
+            className="mmSwipeInner flex h-full"
+            style={{
+              transform: innerTransform,
+              transition: swipe.isDragging ? 'none' : 'transform 220ms ease',
+            }}
+          >
+            <div className="w-full flex-none px-4 py-6">
+              <SyncView
+                syncKey={syncKey}
+                setSyncKey={setSyncKey}
+                userRole={userRole}
+                setUserRole={setUserRole}
+                userKey={userKey}
+                setUserKey={setUserKey}
+                canSync={canSync}
+                pullFromServer={pullFromServer}
+                syncStatus={syncStatus}
+              />
+            </div>
 
-          {/* View 2: Character sheet */}
-          <div className="basis-full shrink-0 px-4 py-6">
-            <CharacterView
-              characters={visibleCharacters}
-              activeCharacter={activeCharacter}
-              setActiveCharacterId={setSelectedCharacterId}
-              addCharacter={addCharacter}
-              deleteActiveCharacter={() => deleteCharacter(activeCharacter.id)}
-              disableDelete={visibleCharacters.length <= 1}
-              abilityShort={abilityShort}
-              updateCharacter={updateCharacter}
-              addClassToActive={addClassToActive}
-              effectiveCalcClassId={effectiveCalcClassId}
-              setCalcClassId={setCalcClassId}
-              disableCalcClassSelect={activeCharacter.classes.length === 0}
-              activeCharacterTotalLevel={activeCharacterTotalLevel}
-              atk={atk}
-              dc={dc}
-            />
-          </div>
+            <div className="w-full flex-none px-4 py-6">
+              <CharacterView
+                characters={visibleCharacters}
+                activeCharacter={activeCharacter}
+                setActiveCharacterId={setSelectedCharacterId}
+                addCharacter={addCharacter}
+                deleteActiveCharacter={() => deleteCharacter(activeCharacter.id)}
+                disableDelete={visibleCharacters.length <= 1}
+                abilityShort={abilityShort}
+                updateCharacter={updateCharacter}
+                addClassToActive={addClassToActive}
+                effectiveCalcClassId={effectiveCalcClassId}
+                setCalcClassId={setCalcClassId}
+                disableCalcClassSelect={activeCharacter.classes.length === 0}
+                activeCharacterTotalLevel={activeCharacterTotalLevel}
+                atk={atk}
+                dc={dc}
+                canAssignOwners={canAssignOwners}
+                canEditCharacterType={canEditCharacterType}
+                playerKeys={knownPlayerKeys}
+              />
+            </div>
 
-          {/* View 3: Spell listing */}
-          <div className="basis-full shrink-0 px-4 py-6">
-            <SpellsView
-              abilityShort={abilityShort}
-              hbName={hbName}
-              setHbName={setHbName}
-              hbLevel={hbLevel}
-              setHbLevel={setHbLevel}
-              hbSchool={hbSchool}
-              setHbSchool={setHbSchool}
-              hbMechanic={hbMechanic}
-              setHbMechanic={setHbMechanic}
-              hbSaveAbility={hbSaveAbility}
-              setHbSaveAbility={setHbSaveAbility}
-              hbDesc={hbDesc}
-              setHbDesc={setHbDesc}
-              hbHigher={hbHigher}
-              setHbHigher={setHbHigher}
-              hbRangeKind={hbRangeKind}
-              setHbRangeKind={setHbRangeKind}
-              hbRangeValue={hbRangeValue}
-              setHbRangeValue={setHbRangeValue}
-              hbAreaShape={hbAreaShape}
-              setHbAreaShape={setHbAreaShape}
-              hbAreaSize={hbAreaSize}
-              setHbAreaSize={setHbAreaSize}
-              hbAreaUnit={hbAreaUnit}
-              setHbAreaUnit={setHbAreaUnit}
-              hbDurationKind={hbDurationKind}
-              setHbDurationKind={setHbDurationKind}
-              hbDurationValue={hbDurationValue}
-              setHbDurationValue={setHbDurationValue}
-              hbDamageKind={hbDamageKind}
-              setHbDamageKind={setHbDamageKind}
-              hbDamageCount={hbDamageCount}
-              setHbDamageCount={setHbDamageCount}
-              hbDamageDie={hbDamageDie}
-              setHbDamageDie={setHbDamageDie}
-              hbDamageBonus={hbDamageBonus}
-              setHbDamageBonus={setHbDamageBonus}
-              hbCastTimeKind={hbCastTimeKind}
-              setHbCastTimeKind={setHbCastTimeKind}
-              hbReactionWhen={hbReactionWhen}
-              setHbReactionWhen={setHbReactionWhen}
-              hbConcentration={hbConcentration}
-              setHbConcentration={setHbConcentration}
-              hbRitual={hbRitual}
-              setHbRitual={setHbRitual}
-              hbComponents={hbComponents}
-              setHbComponents={setHbComponents}
-              hbMaterial={hbMaterial}
-              setHbMaterial={setHbMaterial}
-              hbSourceType={hbSourceType}
-              setHbSourceType={setHbSourceType}
-              hbSourceClassId={hbSourceClassId}
-              setHbSourceClassId={setHbSourceClassId}
-              hbFeatName={hbFeatName}
-              setHbFeatName={setHbFeatName}
-              hbFeatAbility={hbFeatAbility}
-              setHbFeatAbility={setHbFeatAbility}
-              hbBaseClasses={hbBaseClasses}
-              setHbBaseClasses={setHbBaseClasses}
-              effectiveCalcClassId={effectiveCalcClassId}
-              addHomebrewToActive={addHomebrewToActive}
-              activeCharacter={activeCharacter}
-              activeCharacterSchools={activeCharacterSchools}
-              activeCharacterTotalLevel={activeCharacterTotalLevel}
-              filteredAddedSpells={filteredAddedSpells}
-              spellDetails={spellDetails}
-              spellDetailsError={spellDetailsError}
-              ensureSpellDetailsLoaded={ensureSpellDetailsLoaded}
-              preparedMeta={preparedMeta}
-              spellTranslations={spellTranslations}
-              addedNameFilter={addedNameFilter}
-              setAddedNameFilter={setAddedNameFilter}
-              addedLevelFilter={addedLevelFilter}
-              setAddedLevelFilter={setAddedLevelFilter}
-              addedSchoolFilter={addedSchoolFilter}
-              setAddedSchoolFilter={setAddedSchoolFilter}
-              addedPreparedFilter={addedPreparedFilter}
-              setAddedPreparedFilter={setAddedPreparedFilter}
-              addedClassFilter={addedClassFilter}
-              setAddedClassFilter={setAddedClassFilter}
-              hideUa={hideUa}
-              setHideUa={setHideUa}
-              openSpellIndex={openSpellIndex}
-              setOpenSpellIndex={setOpenSpellIndex}
-              openSpellTab={openSpellTab}
-              setOpenSpellTab={setOpenSpellTab}
-              translateStatus={translateStatus}
-              translateOfficialToPt={translateOfficialToPt}
-              updateCharacter={updateCharacter}
-              removeSpellFromActive={removeSpellFromActive}
-              availableSpellRefs={availableSpellRefs}
-              spellListError={spellListError}
-              unaddedSearch={unaddedSearch}
-              setUnaddedSearch={setUnaddedSearch}
-              unaddedLevelFilter={unaddedLevelFilter}
-              setUnaddedLevelFilter={setUnaddedLevelFilter}
-              unaddedSchoolFilter={unaddedSchoolFilter}
-              setUnaddedSchoolFilter={setUnaddedSchoolFilter}
-              unaddedClassFilter={unaddedClassFilter}
-              setUnaddedClassFilter={setUnaddedClassFilter}
-              unaddedResults={unaddedResults}
-              activeCharacterSpellsSet={activeCharacterSpellsSet}
-              addSpellToActive={addSpellToActive}
-              addSpellToActiveTranslated={addSpellToActiveTranslated}
-              getSpellDetailsLocal={getSpellDetailsLocal}
-              homebrewLibrary={homebrewLibrary}
-            />
-          </div>
+            <div className="w-full flex-none px-4 py-6">
+              <SpellsView
+                abilityShort={abilityShort}
+                characters={visibleCharacters}
+                setActiveCharacterId={setSelectedCharacterId}
+                addCharacter={addCharacter}
+                deleteActiveCharacter={() => deleteCharacter(activeCharacter.id)}
+                disableDelete={visibleCharacters.length <= 1}
+                showOwnerBadge={canAssignOwners}
+                hbName={hbName}
+                setHbName={setHbName}
+                hbLevel={hbLevel}
+                setHbLevel={setHbLevel}
+                hbSchool={hbSchool}
+                setHbSchool={setHbSchool}
+                hbMechanic={hbMechanic}
+                setHbMechanic={setHbMechanic}
+                hbSaveAbility={hbSaveAbility}
+                setHbSaveAbility={setHbSaveAbility}
+                hbDesc={hbDesc}
+                setHbDesc={setHbDesc}
+                hbHigher={hbHigher}
+                setHbHigher={setHbHigher}
+                hbRangeKind={hbRangeKind}
+                setHbRangeKind={setHbRangeKind}
+                hbRangeValue={hbRangeValue}
+                setHbRangeValue={setHbRangeValue}
+                hbAreaShape={hbAreaShape}
+                setHbAreaShape={setHbAreaShape}
+                hbAreaSize={hbAreaSize}
+                setHbAreaSize={setHbAreaSize}
+                hbAreaUnit={hbAreaUnit}
+                setHbAreaUnit={setHbAreaUnit}
+                hbDurationKind={hbDurationKind}
+                setHbDurationKind={setHbDurationKind}
+                hbDurationValue={hbDurationValue}
+                setHbDurationValue={setHbDurationValue}
+                hbDamageKind={hbDamageKind}
+                setHbDamageKind={setHbDamageKind}
+                hbDamageCount={hbDamageCount}
+                setHbDamageCount={setHbDamageCount}
+                hbDamageDie={hbDamageDie}
+                setHbDamageDie={setHbDamageDie}
+                hbDamageBonus={hbDamageBonus}
+                setHbDamageBonus={setHbDamageBonus}
+                hbCastTimeKind={hbCastTimeKind}
+                setHbCastTimeKind={setHbCastTimeKind}
+                hbReactionWhen={hbReactionWhen}
+                setHbReactionWhen={setHbReactionWhen}
+                hbConcentration={hbConcentration}
+                setHbConcentration={setHbConcentration}
+                hbRitual={hbRitual}
+                setHbRitual={setHbRitual}
+                hbComponents={hbComponents}
+                setHbComponents={setHbComponents}
+                hbMaterial={hbMaterial}
+                setHbMaterial={setHbMaterial}
+                hbSourceType={hbSourceType}
+                setHbSourceType={setHbSourceType}
+                hbSourceClassId={hbSourceClassId}
+                setHbSourceClassId={setHbSourceClassId}
+                hbFeatName={hbFeatName}
+                setHbFeatName={setHbFeatName}
+                hbFeatAbility={hbFeatAbility}
+                setHbFeatAbility={setHbFeatAbility}
+                hbBaseClasses={hbBaseClasses}
+                setHbBaseClasses={setHbBaseClasses}
+                effectiveCalcClassId={effectiveCalcClassId}
+                addHomebrewToActive={addHomebrewToActive}
+                activeCharacter={activeCharacter}
+                activeCharacterSchools={activeCharacterSchools}
+                activeCharacterTotalLevel={activeCharacterTotalLevel}
+                filteredAddedSpells={filteredAddedSpells}
+                spellDetails={spellDetails}
+                spellDetailsError={spellDetailsError}
+                ensureSpellDetailsLoaded={ensureSpellDetailsLoaded}
+                preparedMeta={preparedMeta}
+                spellTranslations={spellTranslations}
+                addedNameFilter={addedNameFilter}
+                setAddedNameFilter={setAddedNameFilter}
+                addedLevelFilter={addedLevelFilter}
+                setAddedLevelFilter={setAddedLevelFilter}
+                addedSchoolFilter={addedSchoolFilter}
+                setAddedSchoolFilter={setAddedSchoolFilter}
+                addedPreparedFilter={addedPreparedFilter}
+                setAddedPreparedFilter={setAddedPreparedFilter}
+                addedClassFilter={addedClassFilter}
+                setAddedClassFilter={setAddedClassFilter}
+                hideUa={hideUa}
+                setHideUa={setHideUa}
+                openSpellIndex={openSpellIndex}
+                setOpenSpellIndex={setOpenSpellIndex}
+                openSpellTab={openSpellTab}
+                setOpenSpellTab={setOpenSpellTab}
+                translateStatus={translateStatus}
+                translateOfficialToPt={translateOfficialToPt}
+                updateCharacter={updateCharacter}
+                removeSpellFromActive={removeSpellFromActive}
+                availableSpellRefs={availableSpellRefs}
+                spellListError={spellListError}
+                unaddedSearch={unaddedSearch}
+                setUnaddedSearch={setUnaddedSearch}
+                unaddedLevelFilter={unaddedLevelFilter}
+                setUnaddedLevelFilter={setUnaddedLevelFilter}
+                unaddedSchoolFilter={unaddedSchoolFilter}
+                setUnaddedSchoolFilter={setUnaddedSchoolFilter}
+                unaddedClassFilter={unaddedClassFilter}
+                setUnaddedClassFilter={setUnaddedClassFilter}
+                unaddedResults={unaddedResults}
+                activeCharacterSpellsSet={activeCharacterSpellsSet}
+                addSpellToActive={addSpellToActive}
+                addSpellToActiveTranslated={addSpellToActiveTranslated}
+                getSpellDetailsLocal={getSpellDetailsLocal}
+                homebrewLibrary={homebrewLibrary}
+              />
+            </div>
 
-          {/* View 4: Initiative tracker */}
-          <div className="basis-full shrink-0 px-4 py-6">
-            <InitiativeView
-              characters={characters}
-              initiativeOrder={initiativeOrder}
-              currentTurnIndex={currentTurnIndex}
-              canSeeCharacterDetails={canSeeCharacterDetails}
-              canEditInitiative={canEditInitiative}
-              onAdd={addToInitiative}
-              onNextTurn={nextTurn}
-              onClear={clearInitiative}
-              onRemove={removeFromInitiative}
-              onApplyEffect={applyInitiativeEffect}
-              onRemoveEffect={removeInitiativeEffect}
-            />
+            <div className="w-full flex-none px-4 py-6">
+              <EquipmentView
+                characters={visibleCharacters}
+                activeCharacter={activeCharacter}
+                setActiveCharacterId={setSelectedCharacterId}
+                addCharacter={addCharacter}
+                deleteActiveCharacter={() => deleteCharacter(activeCharacter.id)}
+                disableDelete={visibleCharacters.length <= 1}
+                showOwnerBadge={canAssignOwners}
+                updateCharacter={updateCharacter}
+              />
+            </div>
+
+            <div className="w-full flex-none px-4 py-6">
+              <PersonalInventoryView
+                characters={visibleCharacters}
+                activeCharacter={activeCharacter}
+                setActiveCharacterId={setSelectedCharacterId}
+                addCharacter={addCharacter}
+                deleteActiveCharacter={() => deleteCharacter(activeCharacter.id)}
+                disableDelete={visibleCharacters.length <= 1}
+                showOwnerBadge={canAssignOwners}
+                canEditInventory={canEditActiveCharacterData}
+                updateCharacter={updateCharacter}
+              />
+            </div>
+
+            <div className="w-full flex-none px-4 py-6">
+              <CampInventoryView
+                items={campInventory}
+                canEditInventory={canEditCampInventory}
+                updateItems={updateCampInventory}
+              />
+            </div>
+
+            <div className="w-full flex-none px-4 py-6">
+              <NotesView
+                characters={visibleCharacters}
+                activeCharacter={activeCharacter}
+                setActiveCharacterId={setSelectedCharacterId}
+                addCharacter={addCharacter}
+                deleteActiveCharacter={() => deleteCharacter(activeCharacter.id)}
+                disableDelete={visibleCharacters.length <= 1}
+                showOwnerBadge={canAssignOwners}
+                notes={activeCharacter.notes ?? ''}
+                canEditNotes={canEditActiveCharacterData}
+                setNotes={(characterId, value) =>
+                  updateCharacter(characterId, (c) => ({
+                    ...c,
+                    notes: value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="w-full flex-none px-4 py-6">
+              <InitiativeView
+                characters={characters}
+                initiativeOrder={initiativeOrder}
+                currentTurnIndex={currentTurnIndex}
+                canSeeCharacterDetails={canSeeCharacterDetails}
+                canEditInitiative={canEditInitiative}
+                canEditCharacterHp={canEditCharacterHp}
+                onAdd={addToInitiative}
+                onNextTurn={nextTurn}
+                onClear={clearInitiative}
+                onRemove={removeFromInitiative}
+                onApplyEffect={applyInitiativeEffect}
+                onRemoveEffect={removeInitiativeEffect}
+                onUpdateCurrentHp={updateCurrentHp}
+              />
+            </div>
+            
+            <div className="w-full flex-none px-4 py-6">
+              <DeathSavesView
+                characters={visibleCharacters}
+                activeCharacter={activeCharacter}
+                setActiveCharacterId={setSelectedCharacterId}
+                addCharacter={addCharacter}
+                deleteActiveCharacter={() => deleteCharacter(activeCharacter.id)}
+                disableDelete={visibleCharacters.length <= 1}
+                showOwnerBadge={canAssignOwners}
+                canEditDeathSaves={canEditActiveCharacterData}
+                updateCharacter={updateCharacter}
+              />
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   )
 }

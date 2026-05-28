@@ -2,16 +2,19 @@ import type { InitiativeResult } from "./initiative"
 import { Button } from "../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../components/ui/Card"
 import { badge } from "../../components/addedSpells/badge"
+import { InitiativeHpEditor } from './InitiativeHpEditor'
 
 type Props = {
   entry: InitiativeResult
   isCurrentTurn: boolean
   showCharacterDetails: boolean
+  canEditHp: boolean
+  onUpdateCurrentHp: (characterId: string, currentHp: number) => void
   onRemove?: (characterId: string) => void
   onRemoveEffect?: (characterId: string, effectId: string) => void
 }
 
-export function InitiativeCard({ entry, isCurrentTurn, showCharacterDetails, onRemove, onRemoveEffect }: Props) {
+export function InitiativeCard({ entry, isCurrentTurn, showCharacterDetails, canEditHp, onUpdateCurrentHp, onRemove, onRemoveEffect }: Props) {
   return (
     <Card
       className={
@@ -24,7 +27,7 @@ export function InitiativeCard({ entry, isCurrentTurn, showCharacterDetails, onR
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="font-heading text-lg leading-none text-textH">
-              {entry.character.name}
+              {entry.displayName}
             </h3>
             <p className="mt-2 text-sm text-text">
               Iniciativa: <strong>{entry.initiative}</strong>
@@ -42,7 +45,7 @@ export function InitiativeCard({ entry, isCurrentTurn, showCharacterDetails, onR
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() => onRemove(entry.character.id)}
+                onClick={() => onRemove(entry.id)}
               >
                 Remover
               </Button>
@@ -54,8 +57,13 @@ export function InitiativeCard({ entry, isCurrentTurn, showCharacterDetails, onR
       <CardContent className="pt-3">
         <div className="flex flex-col gap-3">
           {showCharacterDetails ? (
-            <div className="text-xs text-text">
-              HP {entry.character.currentHp}/{entry.character.maxHp} • CA {entry.character.armorClass}
+            <div className="flex flex-col gap-1 text-xs text-text">
+              <InitiativeHpEditor
+                target={entry}
+                canEditHp={canEditHp}
+                onUpdateCurrentHp={onUpdateCurrentHp}
+              />
+              <span>CA {entry.armorClass}</span>
             </div>
           ) : null}
 
@@ -67,7 +75,7 @@ export function InitiativeCard({ entry, isCurrentTurn, showCharacterDetails, onR
                     key={effect.id}
                     type="button"
                     className="cursor-pointer text-left transition hover:opacity-75"
-                    onClick={() => onRemoveEffect(entry.character.id, effect.id)}
+                    onClick={() => onRemoveEffect(entry.id, effect.id)}
                     title={`Clique para remover — ${effect.label} (${effect.turnsRemaining})`}
                   >
                     <span className="inline-flex items-center gap-2">

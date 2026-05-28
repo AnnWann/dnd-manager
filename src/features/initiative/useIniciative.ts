@@ -7,14 +7,25 @@ export function useInitiative() {
   const [currentTurnIndex, setCurrentTurnIndex] = useState(0)
 
   function addToInitiative(character: Character, rolledValue: number) {
-    const initiative = calcCharacterInitiative(character, rolledValue)
+  const initiative = calcCharacterInitiative(character, rolledValue)
 
-    setInitiativeOrder((prev) =>
-      [...prev, { character, rolledValue, initiative, effects: [] }].sort(
-        (a, b) => b.initiative - a.initiative,
-      ),
-    )
+  const entry: InitiativeResult = {
+    id: crypto.randomUUID(),
+    sourceCharacterId: character.id,
+    displayName: character.name,
+    rolledValue,
+    initiative,
+    currentHp: character.currentHp ?? character.maxHp ?? 0,
+    maxHp: character.maxHp ?? 0,
+    temporaryHp: character.temporaryHp ?? 0,
+    armorClass: character.armorClass ?? 0,
+    effects: []
   }
+
+  setInitiativeOrder((prev) =>
+    [...prev, entry].sort((a, b) => b.initiative - a.initiative),
+  )
+}
 
   function applyEffect(characterId: string, effectLabel: string) {
     const label = effectLabel.trim()
@@ -22,7 +33,7 @@ export function useInitiative() {
 
     setInitiativeOrder((prev) =>
       prev.map((entry) => {
-        if (entry.character.id !== characterId) return entry
+        if (entry.id !== characterId) return entry
 
         const exists = entry.effects.some(
           (effect) => effect.label.toLowerCase() === label.toLowerCase(),
@@ -47,7 +58,7 @@ export function useInitiative() {
   function removeEffect(characterId: string, effectId: string) {
     setInitiativeOrder((prev) =>
       prev.map((entry) => {
-        if (entry.character.id !== characterId) return entry
+        if (entry.id !== characterId) return entry
 
         return {
           ...entry,
@@ -59,7 +70,7 @@ export function useInitiative() {
 
   function removeFromInitiative(characterId: string) {
     setInitiativeOrder((prev) => {
-      const next = prev.filter((entry) => entry.character.id !== characterId)
+      const next = prev.filter((entry) => entry.id !== characterId)
 
       setCurrentTurnIndex((index) =>
         next.length === 0 ? 0 : Math.min(index, next.length - 1),

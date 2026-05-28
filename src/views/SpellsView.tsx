@@ -19,6 +19,7 @@ import { Select } from '../components/ui/Select'
 import { Textarea } from '../components/ui/Textarea'
 import { AddedSpellsCard } from '../components/addedSpells/AddedSpellsCard'
 import { AddSpellsCard } from '../components/addedSpells/AddSpellsCard'
+import { CharacterSelector } from '../features/characters/characterSelector'
 
 export type TranslateStatus =
   | { kind: 'idle' }
@@ -28,6 +29,12 @@ export type TranslateStatus =
   
 export function SpellsView(props: {
   abilityShort: (ability: Attribute) => string
+  characters: Character[]
+  setActiveCharacterId: (id: string) => void
+  addCharacter: () => void
+  deleteActiveCharacter: () => void
+  disableDelete: boolean
+  showOwnerBadge: boolean
 
   // Homebrew creator state
   hbName: string
@@ -161,6 +168,12 @@ export function SpellsView(props: {
 }) {
   const {
     abilityShort,
+    characters,
+    setActiveCharacterId,
+    addCharacter,
+    deleteActiveCharacter,
+    disableDelete,
+    showOwnerBadge,
     hbName,
     setHbName,
     hbLevel,
@@ -272,6 +285,16 @@ export function SpellsView(props: {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-4">
+      <CharacterSelector
+        characters={characters}
+        activeCharacter={activeCharacter}
+        addCharacter={addCharacter}
+        setActiveCharacterId={setActiveCharacterId}
+        deleteActiveCharacter={deleteActiveCharacter}
+        disableDelete={disableDelete}
+        showOwnerBadge={showOwnerBadge}
+      />
+
       <Card>
         <CardHeader>
           <div className="text-sm font-semibold text-textH">Criar magia (Homebrew)</div>

@@ -12,6 +12,7 @@ type Props = {
   setActiveCharacterId: (id: string) => void
   deleteActiveCharacter: () => void
   disableDelete: boolean
+  showOwnerBadge: boolean
 }
 
 export function CharacterSelector({
@@ -20,7 +21,8 @@ export function CharacterSelector({
   addCharacter,
   setActiveCharacterId,
   deleteActiveCharacter,
-  disableDelete
+  disableDelete,
+  showOwnerBadge,
 }: Props) {
   return (
     <Card>
@@ -51,7 +53,9 @@ export function CharacterSelector({
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      {badge(c.visibilityRole === 'master' ? 'Master' : `Player: ${c.ownerKey?.trim() || 'sem nome'}`)}
+                      {showOwnerBadge
+                        ? badge(c.visibilityRole === 'master' ? 'Master' : `Player: ${c.ownerKey?.trim() || 'sem nome'}`)
+                        : null}
                       {c.id === activeCharacter.id ? badge('Ativo') : null}
                     </div>
                   </button>

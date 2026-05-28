@@ -1,6 +1,7 @@
 import type { Attribute, Character } from '../types'
 import { CharacterSelector } from '../features/characters/characterSelector'
 import { CharacterSheet } from '../features/characters/characterSheet/characterSheet'
+import { CharacterAbilities } from '../features/characters/CharacterAbilities'
 
 
 export function CharacterView(props: {
@@ -23,6 +24,9 @@ export function CharacterView(props: {
   activeCharacterTotalLevel: number
   atk: number
   dc: number
+  canAssignOwners: boolean
+  canEditCharacterType: boolean
+  playerKeys: string[]
 }) {
   const {
     characters,
@@ -34,6 +38,9 @@ export function CharacterView(props: {
     abilityShort,
     updateCharacter,
     addClassToActive,
+    canAssignOwners,
+    canEditCharacterType,
+    playerKeys,
   } = props
 
   return (
@@ -47,6 +54,7 @@ export function CharacterView(props: {
         setActiveCharacterId={setActiveCharacterId}
         deleteActiveCharacter={deleteActiveCharacter}
         disableDelete={disableDelete}
+        showOwnerBadge={canAssignOwners}
       />
        
       <CharacterSheet
@@ -54,6 +62,14 @@ export function CharacterView(props: {
         abilityShort={abilityShort}
         updateCharacter={updateCharacter}
         addClassToActive={addClassToActive}
+        canAssignOwners={canAssignOwners}
+        canEditCharacterType={canEditCharacterType}
+        playerKeys={playerKeys}
+      />
+
+      <CharacterAbilities
+        character={activeCharacter}
+        updateCharacter={updateCharacter}
       />
 
     </div>

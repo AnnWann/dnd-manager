@@ -1,14 +1,16 @@
 import type { Attribute, CharacterClass, DndApiRef } from '../types'
 
 export const CLASS_OPTIONS: Array<{ index: string; name: string; defaultAbility: Attribute }> = [
+  { index: 'barbarian', name: 'Bárbaro', defaultAbility: 'cha' },
+  { index: 'fighter', name: 'Guerreiro', defaultAbility: 'int' },
+  { index: 'monk', name: 'Monge', defaultAbility: 'wis' },
+  { index: 'rogue', name: 'Ladino', defaultAbility: 'int' },
   { index: 'artificer', name: 'Artífice', defaultAbility: 'int' },
   { index: 'bard', name: 'Bardo', defaultAbility: 'cha' },
   { index: 'cleric', name: 'Clérigo', defaultAbility: 'wis' },
   { index: 'druid', name: 'Druida', defaultAbility: 'wis' },
-  { index: 'eldritch_knight', name: 'Cavaleiro Arcano', defaultAbility: 'int' },
   { index: 'paladin', name: 'Paladino', defaultAbility: 'cha' },
   { index: 'ranger', name: 'Patrulheiro', defaultAbility: 'wis' },
-  { index: 'arcane_trickster', name: 'Trapaceiro Arcano', defaultAbility: 'int' },
   { index: 'sorcerer', name: 'Feiticeiro', defaultAbility: 'cha' },
   { index: 'warlock', name: 'Bruxo', defaultAbility: 'cha' },
   { index: 'wizard', name: 'Mago', defaultAbility: 'int' },

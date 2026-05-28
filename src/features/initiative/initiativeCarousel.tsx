@@ -1,10 +1,13 @@
+import type { Character } from "../../types"
 import type { InitiativeResult } from "./initiative"
 import { InitiativeCard } from "./initiativeCard"
 
 type Props = {
   order: InitiativeResult[]
   currentTurnIndex: number
-  canSeeCharacterDetails: (character: InitiativeResult['character']) => boolean
+  canSeeCharacterDetails: (character: Character | InitiativeResult) => boolean
+  canEditCharacterHp: (character: Character | InitiativeResult ) => boolean
+  onUpdateCurrentHp: (characterId: string, currentHp: number) => void
   onRemove?: (characterId: string) => void
   onRemoveEffect?: (characterId: string, effectId: string) => void
 }
@@ -18,7 +21,7 @@ function circularOffset(index: number, centerIndex: number, length: number) {
   return offset
 }
 
-export function InitiativeCarousel({ order, currentTurnIndex, canSeeCharacterDetails, onRemove, onRemoveEffect }: Props) {
+export function InitiativeCarousel({ order, currentTurnIndex, canSeeCharacterDetails, canEditCharacterHp, onUpdateCurrentHp, onRemove, onRemoveEffect }: Props) {
   if (order.length === 0) {
     return <p className="text-sm text-text">Nenhum personagem na iniciativa.</p>
   }
@@ -31,7 +34,7 @@ export function InitiativeCarousel({ order, currentTurnIndex, canSeeCharacterDet
 
         return (
           <div
-            key={entry.character.id}
+            key={entry.id}
             className="absolute left-1/2 top-2 w-[320px] transition-all duration-300 ease-out"
             style={{
               transform: `
@@ -45,7 +48,9 @@ export function InitiativeCarousel({ order, currentTurnIndex, canSeeCharacterDet
             <InitiativeCard
               entry={entry}
               isCurrentTurn={isCurrentTurn}
-              showCharacterDetails={canSeeCharacterDetails(entry.character)}
+              showCharacterDetails={canSeeCharacterDetails(entry.sourceCharacterId as any)}
+              canEditHp={canEditCharacterHp(entry.sourceCharacterId as any)}
+              onUpdateCurrentHp={onUpdateCurrentHp}
               onRemove={onRemove}
               onRemoveEffect={onRemoveEffect}
             />

@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
+import { equipmentBonuses } from "../../../lib/character"
 import { abilityModifier, formatSigned } from "../../../lib/rules"
 import type { Character, CharacterTypes } from "../../../types"
 
@@ -28,13 +29,21 @@ type Props = {
     characterId: string,
     updater: (c: Character) => Character
   ) => void
+  canAssignOwners: boolean
+  canEditCharacterType: boolean
+  playerKeys: string[]
 }
 
-export function CharacterInfo({ character, updateCharacter }: Props) {
+export function CharacterInfo({
+  character,
+  updateCharacter,
+  canAssignOwners,
+  canEditCharacterType,
+  playerKeys,
+}: Props) {
   const [hitDiceOpen, setHitDiceOpen] = useState(false)
 
   const dexMod = abilityModifier(character.attributes.dex)
-  const initiative = dexMod + (character.initiativeBonus ?? 0)
 
   const perceptionProficiency =
   character.skills?.perception ?? "none"
@@ -45,6 +54,20 @@ export function CharacterInfo({ character, updateCharacter }: Props) {
     (perceptionProficiency === "expertise" ? 4 : 0)
 
   const passivePerception = 10 + perceptionBonus
+  const eqBonuses = equipmentBonuses(character)
+
+  const displayedArmorClass = (character.armorClass ?? 10) + eqBonuses.armorClass
+  const displayedInitiativeBonus = (character.initiativeBonus ?? 0) + eqBonuses.initiativeBonus
+  const displayedInitiative = dexMod + displayedInitiativeBonus + eqBonuses.initiative
+  const displayedMaxHp = (character.maxHp ?? 0) + eqBonuses.maxHp
+  const displayedCurrentHp = (character.currentHp ?? 0) + eqBonuses.currentHp
+  const displayedTemporaryHp = (character.temporaryHp ?? 0) + eqBonuses.temporaryHp
+  const displayedPassivePerception = passivePerception + eqBonuses.passivePerception
+  const displayedMobility = (character.mobility ?? 9) + eqBonuses.mobility
+
+  function saveBaseValue(totalValue: number, equipmentValue: number) {
+    return totalValue - equipmentValue
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -74,14 +97,18 @@ export function CharacterInfo({ character, updateCharacter }: Props) {
           <Select
             className="mt-1"
             value={character.type}
+            disabled={!canEditCharacterType}
             onChange={(e) =>
+              canEditCharacterType
+                ?
               updateCharacter(character.id, (c) => ({
                 ...c,
                 type: e.target.value as CharacterTypes,
               }))
+                : undefined
             }
           >
-            {CHARACTER_TYPES.map((t) => (
+            {(canEditCharacterType ? CHARACTER_TYPES : [character.type]).map((t) => (
               <option key={t} value={t}>
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </option>
@@ -90,43 +117,65 @@ export function CharacterInfo({ character, updateCharacter }: Props) {
         </div>
       </div>
 
-      <div className="w-full md:w-[320px]">
-        <label className="text-xs text-text">
-          Visibilidade
-        </label>
+      {canAssignOwners ? (
+        <div className="w-full md:w-[320px]">
+          <label className="text-xs text-text">
+            Visibilidade
+          </label>
 
-        <Select
-          className="mt-1"
-          value={character.visibilityRole ?? 'player'}
-          onChange={(e) =>
-            updateCharacter(character.id, (c) => ({
-              ...c,
-              visibilityRole: e.target.value as 'master' | 'player',
-            }))
-          }
-        >
-          <option value="player">Player</option>
-          <option value="master">Master</option>
-        </Select>
-      </div>
+          <Select
+            className="mt-1"
+            value={character.visibilityRole ?? 'player'}
+            onChange={(e) =>
+              updateCharacter(character.id, (c) => ({
+                ...c,
+                visibilityRole: e.target.value as 'master' | 'player',
+              }))
+            }
+          >
+            <option value="player">Player</option>
+            <option value="master">Master</option>
+          </Select>
+        </div>
+      ) : null}
 
-      <div className="w-full md:w-[320px]">
-        <label className="text-xs text-text">
-          Senha do jogador
-        </label>
+      {canAssignOwners ? (
+        <div className="w-full md:w-[320px]">
+          <label className="text-xs text-text">
+            Jogador atribuído
+          </label>
 
-        <Input
-          className="mt-1"
-          value={character.ownerKey ?? ''}
-          onChange={(e) =>
-            updateCharacter(character.id, (c) => ({
-              ...c,
-              ownerKey: e.target.value,
-            }))
-          }
-          placeholder="identificador pessoal"
-        />
-      </div>
+          <Select
+            className="mt-1"
+            value={character.ownerKey ?? ''}
+            onChange={(e) =>
+              updateCharacter(character.id, (c) => ({
+                ...c,
+                ownerKey: e.target.value,
+              }))
+            }
+          >
+            <option value="">Sem jogador</option>
+            {playerKeys.map((key) => (
+              <option key={key} value={key}>
+                {key}
+              </option>
+            ))}
+          </Select>
+
+          <Input
+            className="mt-2"
+            value={character.ownerKey ?? ''}
+            onChange={(e) =>
+              updateCharacter(character.id, (c) => ({
+                ...c,
+                ownerKey: e.target.value,
+              }))
+            }
+            placeholder="Ou digite um novo nome de jogador"
+          />
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
         <div>
@@ -137,11 +186,11 @@ export function CharacterInfo({ character, updateCharacter }: Props) {
           <Input
             type="number"
             className="mt-1"
-            value={character.armorClass ?? 10}
+            value={displayedArmorClass}
             onChange={(e) =>
               updateCharacter(character.id, (c) => ({
                 ...c,
-                armorClass: Number(e.target.value),
+                armorClass: saveBaseValue(Number(e.target.value), eqBonuses.armorClass),
               }))
             }
           />
@@ -154,7 +203,7 @@ export function CharacterInfo({ character, updateCharacter }: Props) {
 
           <Input
             className="mt-1"
-            value={formatSigned(initiative)}
+            value={formatSigned(displayedInitiative)}
             readOnly
           />
         </div>
@@ -167,11 +216,11 @@ export function CharacterInfo({ character, updateCharacter }: Props) {
           <Input
             type="number"
             className="mt-1"
-            value={character.initiativeBonus ?? 0}
+            value={displayedInitiativeBonus}
             onChange={(e) =>
               updateCharacter(character.id, (c) => ({
                 ...c,
-                initiativeBonus: Number(e.target.value),
+                initiativeBonus: saveBaseValue(Number(e.target.value), eqBonuses.initiativeBonus),
               }))
             }
           />
@@ -185,11 +234,11 @@ export function CharacterInfo({ character, updateCharacter }: Props) {
           <Input
             type="number"
             className="mt-1"
-            value={character.maxHp ?? 0}
+            value={displayedMaxHp}
             onChange={(e) =>
               updateCharacter(character.id, (c) => ({
                 ...c,
-                maxHp: Number(e.target.value),
+                maxHp: saveBaseValue(Number(e.target.value), eqBonuses.maxHp),
               }))
             }
           />
@@ -203,14 +252,14 @@ export function CharacterInfo({ character, updateCharacter }: Props) {
           <Input
             type="number"
             className="mt-1"
-            value={character.currentHp ?? 0}
+            value={displayedCurrentHp}
             onChange={(e) =>
               updateCharacter(character.id, (c) => ({
                 ...c,
                 currentHp: Math.max(
                   0,
                   Math.min(
-                    Number(e.target.value),
+                    saveBaseValue(Number(e.target.value), eqBonuses.currentHp),
                     c.maxHp ?? 0,
                   ),
                 ),
@@ -227,11 +276,11 @@ export function CharacterInfo({ character, updateCharacter }: Props) {
           <Input
             type="number"
             className="mt-1"
-            value={character.temporaryHp ?? 0}
+            value={displayedTemporaryHp}
             onChange={(e) =>
               updateCharacter(character.id, (c) => ({
                 ...c,
-                temporaryHp: Number(e.target.value),
+                temporaryHp: saveBaseValue(Number(e.target.value), eqBonuses.temporaryHp),
               }))
             }
           />
@@ -244,8 +293,26 @@ export function CharacterInfo({ character, updateCharacter }: Props) {
 
           <Input
             className="mt-1"
-            value={passivePerception}
+            value={displayedPassivePerception}
             readOnly
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-text">
+            Mobilidade
+          </label>
+
+          <Input
+            type="number"
+            className="mt-1"
+            value={displayedMobility}
+            onChange={(e) =>
+              updateCharacter(character.id, (c) => ({
+                ...c,
+                mobility: saveBaseValue(Number(e.target.value), eqBonuses.mobility),
+              }))
+            }
           />
         </div>
 

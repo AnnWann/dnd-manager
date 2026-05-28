@@ -21,7 +21,7 @@ import {
 } from '../../lib/rules'
 import { homebrewToDndSpell } from '../../lib/homebrew'
 import { estimateSpellDamageDice, upcastRuleLabel } from '../../lib/spellDamage'
-import { isAllowedSchoolForClass } from '../../lib/spellAccess'
+import { isAllowedSchoolForCharacterClass } from '../../lib/spellAccess'
 import { spellMeta } from '../../lib/spellMeta'
 import { loadMetamagicDb, metamagicDisplayName, type MetamagicOption } from '../../lib/metamagicDb'
 import { multiclassSpellSlots } from '../../lib/spellSlots'
@@ -1250,7 +1250,7 @@ export function AddedSpellsCard(props: {
                       : activeCharacter.classes.find((c) => c.id === entry.sourceClassId)
                   const allowedSchool =
                     castAs && sourceType !== 'feat'
-                      ? isAllowedSchoolForClass(castAs.classIndex, detail)
+                      ? isAllowedSchoolForCharacterClass(castAs, detail)
                       : true
 
                   const castingAbility: Attribute | undefined =

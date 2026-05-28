@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { Character } from '../../types'
+import { equipmentBonuses } from '../../lib/character'
 import { spellAttackBonus, spellSaveDc, totalLevel } from '../../lib/rules'
 
 export function useCastingCalc(activeCharacter: Character | undefined) {
@@ -23,13 +24,15 @@ export function useCastingCalc(activeCharacter: Character | undefined) {
       ? activeCharacter.attributes[selectedCalcClass.castingAbility]
       : activeCharacter.attributes.int
     const calcClassLevel = selectedCalcClass?.level ?? activeCharacterTotalLevel
+    const eqBonuses = equipmentBonuses(activeCharacter)
 
-    const atk = spellAttackBonus({
+    const atkBase = spellAttackBonus({
       proficiencyMode: activeCharacter.proficiencyMode,
       totalCharacterLevel: activeCharacterTotalLevel,
       classLevel: calcClassLevel,
       abilityScore: calcAbilityScore,
     })
+    const atk = atkBase + eqBonuses.attackBonus
 
     const dc = spellSaveDc({
       proficiencyMode: activeCharacter.proficiencyMode,

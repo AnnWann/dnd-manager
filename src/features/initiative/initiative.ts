@@ -1,4 +1,4 @@
-import type { Character } from "../../types"
+import type { Character, InitiativeResult as InitiativeEntry } from "../../types"
 
 export type InitiativeEffect = {
   id: string
@@ -15,12 +15,7 @@ export function calcCharacterInitiative(character: Character, rolledValue: numbe
   return rolledValue + dexMod + (character.initiativeBonus || 0)
 }
 
-export type InitiativeResult = {
-  character: Character
-  rolledValue: number
-  initiative: number
-  effects: InitiativeEffect[]
-}
+export type InitiativeResult = InitiativeEntry
 
 export function decrementInitiativeEffect(effect: InitiativeEffect): InitiativeEffect | null {
   // If effect is newly applied and marked to defer, consume the defer flag
@@ -43,4 +38,27 @@ export function decrementInitiativeEffect(effect: InitiativeEffect): InitiativeE
 export type InitiativeState = {
   initiativeOrder: InitiativeResult[],
   currentTurnIndex: number
+}
+
+export function buildInitiativeInstance(
+  sourceCharacter: Character,
+  instanceCount: number,
+  rolledValue: number,
+): InitiativeResult {
+  const instanceNumber = instanceCount + 1
+  const displayName = instanceNumber === 1 ? sourceCharacter.name : `${sourceCharacter.name} ${instanceNumber}`
+  return {
+    id: crypto.randomUUID(),
+    sourceCharacterId: sourceCharacter.id,
+    displayName,
+    currentHp: sourceCharacter.currentHp,
+    maxHp: sourceCharacter.maxHp,
+    temporaryHp: sourceCharacter.temporaryHp,
+    armorClass: sourceCharacter.armorClass,
+    rolledValue,
+    ownerKey: sourceCharacter.ownerKey,
+    visibilityRole: sourceCharacter.visibilityRole,
+    initiative: calcCharacterInitiative(sourceCharacter, rolledValue),
+    effects: [],
+  }
 }

@@ -9,6 +9,19 @@ export type RestResetKind = 'longRest' | 'shortRest'
 export type PrimaryRollDisplayMode = 'auto' | 'custom' | 'save' | 'attack' | 'damage'
 
 export type UserRole = 'master' | 'player'
+export type InitiativeMode = 'unique' | 'general'
+
+export interface InventoryItem {
+  id: string
+  name: string
+  quantity: number
+  notes?: string
+}
+
+export interface DeathSaveState {
+  successes: number
+  failures: number
+}
 
 export type MagicCircleLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 
@@ -144,6 +157,34 @@ export interface CharacterClass {
   spellcastingProgression?: 'auto' | 'third'
 }
 
+export interface EquipmentSlot {
+  name: string
+  bonuses?: {
+    armorClass?: number
+    initiative?: number
+    initiativeBonus?: number
+    maxHp?: number
+    currentHp?: number
+    temporaryHp?: number
+    passivePerception?: number
+    attackBonus?: number
+    mobility?: number
+  }
+  twoHanded?: boolean
+  notes?: string
+}
+
+export interface CharacterEquipment {
+  armor: EquipmentSlot
+  boots: EquipmentSlot
+  helmet: EquipmentSlot
+  gloves: EquipmentSlot
+  rings: EquipmentSlot[]
+  limbCount: number
+  weaponSlots: EquipmentSlot[]
+  pocket: EquipmentSlot[]
+}
+
 export interface SpellSlotUsage {
   /** Used slots by spell level. Index 1..9 are used; index 0 is ignored. */
   usedByLevel?: number[]
@@ -225,6 +266,7 @@ export interface Character {
   maxHp: number
   currentHp: number
   temporaryHp: number
+  mobility?: number
   initiativeBonus?: number
   hitDice: HitDice
   armorClass: number
@@ -242,6 +284,24 @@ export interface Character {
 
   /** Optional: selected metamagic option IDs for Sorcerer characters. */
   metamagics?: string[]
+
+  /** Optional: free-form list of character abilities/features. */
+  customAbilities?: string[]
+
+  /** Optional: equipment and quick-access inventory. */
+  equipment?: CharacterEquipment
+
+  /** Optional: free-form notes for the character. */
+  notes?: string
+
+  /** Optional: controls whether the character can be added once or many times to initiative. */
+  initiativeMode?: InitiativeMode
+
+  /** Optional: personal inventory tracked per character. */
+  personalInventory?: InventoryItem[]
+
+  /** Optional: current death saving throw state. */
+  deathSaves?: DeathSaveState
 }
 
 export interface DndApiRef {
@@ -280,6 +340,21 @@ export interface DndSpell extends DndApiRef {
   // Present for spells that use spell attacks in the 5e API
   attack_type?: string
   damage?: unknown
+}
+
+export interface InitiativeResult {
+  id: string
+  sourceCharacterId: string
+  displayName: string
+  currentHp: number
+  maxHp: number
+  temporaryHp: number
+  armorClass: number
+  rolledValue: number
+  initiative: number
+  ownerKey?: string
+  visibilityRole?: UserRole
+  effects: import('./features/initiative/initiative').InitiativeEffect[]
 }
 
 export interface SpellTranslation {
