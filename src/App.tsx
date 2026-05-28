@@ -946,26 +946,35 @@ function App() {
       ...prev,
       initiativeOrder: nextOrder,
       currentTurnIndex: nextIndex,
-      characters: activeTurnCharacterId
-        ? prev.characters.map((character) => {
-            if (character.id !== activeTurnCharacterId) return character
+      // For the active character only: reset per-turn usages and decrement cooldowns measured in turns
+      characters: prev.characters.map((character) => {
+        const isActive = character.id === activeTurnCharacterId
+        if (!isActive) return character
 
-            return {
-              ...character,
-              customAbilities: (character.customAbilities ?? []).map((ability) =>
-                ability.usage?.reset === 'turn'
-                  ? {
-                      ...ability,
-                      usage: {
-                        ...ability.usage,
-                        used: 0,
-                      },
-                    }
-                  : ability,
-              ),
+        const nextAbilities = (character.customAbilities ?? []).map((ability) => {
+          const usage = ability.usage
+          if (!usage) return ability
+
+          // reset abilities that refresh every turn for the active character
+          if (usage.reset === 'turn') {
+            return { ...ability, usage: { ...usage, used: 0 } }
+          }
+
+          // handle cooldowns measured in turns: decrement remaining and clear when expired
+          if (usage.reset === 'cooldown' && usage.cooldownUnit === 'turns' && typeof usage.cooldownRemaining === 'number') {
+            const nextRemaining = Math.max(0, Math.trunc(usage.cooldownRemaining) - 1)
+            if (nextRemaining <= 0) {
+              const { cooldownRemaining, ...rest } = usage
+              return { ...ability, usage: { ...rest, used: 0 } }
             }
-          })
-        : prev.characters,
+            return { ...ability, usage: { ...usage, cooldownRemaining: nextRemaining } }
+          }
+
+          return ability
+        })
+
+        return { ...character, customAbilities: nextAbilities }
+      }),
     }))
   }
 

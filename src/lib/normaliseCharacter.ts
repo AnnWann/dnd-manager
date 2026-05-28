@@ -87,22 +87,30 @@ export function normalizeCharacter(character: any): Character {
     }
 
     const name = String(item?.name ?? item?.label ?? '')
+    const description = String(item?.description ?? item?.desc ?? '').trim()
     const usage = item?.usage
     if (!usage || typeof usage !== 'object') {
-      return { id: String(item?.id ?? crypto.randomUUID()), name, usage: undefined }
+      return { id: String(item?.id ?? crypto.randomUUID()), name, description: description || undefined, usage: undefined }
     }
 
-    const reset = usage.reset === 'turn' || usage.reset === 'shortRest' || usage.reset === 'longRest' ? usage.reset : undefined
+    const reset = usage.reset === 'turn' || usage.reset === 'cooldown' || usage.reset === 'shortRest' || usage.reset === 'longRest' ? usage.reset : undefined
     const max = Number(usage.max ?? usage.maxUses ?? 0)
     const used = Number(usage.used ?? 0)
+    const cooldownAmount = Number(usage.cooldownAmount ?? usage.cooldown ?? 1)
+    const cooldownUnit = usage.cooldownUnit === 'turns' || usage.cooldownUnit === 'minutes' || usage.cooldownUnit === 'hours' || usage.cooldownUnit === 'days' || usage.cooldownUnit === 'tenDays'
+      ? usage.cooldownUnit
+      : 'turns'
     return {
       id: String(item?.id ?? crypto.randomUUID()),
       name,
+      description: description || undefined,
       usage: reset && Number.isFinite(max) && max > 0
         ? {
             max: Math.max(0, Math.trunc(max)),
             used: Math.max(0, Math.trunc(used)),
             reset,
+            cooldownAmount: reset === 'cooldown' ? Math.max(1, Math.trunc(cooldownAmount) || 1) : undefined,
+            cooldownUnit: reset === 'cooldown' ? cooldownUnit : undefined,
           }
         : undefined,
     }

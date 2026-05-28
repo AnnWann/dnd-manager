@@ -5,7 +5,8 @@ export type Attribute = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'
 export type ProficiencyMode = 'totalLevel' | 'classLevel'
 
 export type RestResetKind = 'longRest' | 'shortRest'
-export type AbilityUsageResetKind = 'turn' | 'shortRest' | 'longRest'
+export type AbilityUsageResetKind = 'turn' | 'cooldown' | 'shortRest' | 'longRest'
+export type AbilityUsageCooldownUnit = 'turns' | 'minutes' | 'hours' | 'days' | 'tenDays'
 
 export type PrimaryRollDisplayMode = 'auto' | 'custom' | 'save' | 'attack' | 'damage'
 
@@ -151,11 +152,15 @@ export interface AbilityUsage {
   max: number
   used: number
   reset: AbilityUsageResetKind
+  cooldownAmount?: number
+  cooldownUnit?: AbilityUsageCooldownUnit
+  cooldownRemaining?: number
 }
 
 export interface CustomAbility {
   id: string
   name: string
+  description?: string
   usage?: AbilityUsage
 }
 

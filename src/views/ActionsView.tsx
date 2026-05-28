@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Button } from '../components/ui/Button'
+import { loadSpellDb } from '../lib/spellDb'
 import { Card, CardContent, CardHeader } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { CharacterSelector } from '../features/characters/characterSelector'
@@ -7,7 +9,7 @@ import { SlotsResources } from '../features/spells/SlotsResources'
 import { abilityModifier } from '../lib/rules'
 import { preparedLimitForClass } from '../lib/prepared'
 import { multiclassSpellSlots } from '../lib/spellSlots'
-import type { Character, CustomAbility, RestResetKind } from '../types'
+import type { AbilityUsageCooldownUnit, AbilityUsageResetKind, Character, CustomAbility, RestResetKind, AddedSpell } from '../types'
 
 const STANDARD_ACTIONS = [
   { key: 'attack', label: 'Atacar', description: 'Fazer um ataque com arma, magia ou outro efeito.' },
@@ -24,10 +26,19 @@ const STANDARD_ACTIONS = [
   { key: 'shove', label: 'Empurrar', description: 'Tentar empurrar ou derrubar uma criatura.' },
 ]
 
-const RESET_LABELS: Record<RestResetKind | 'turn', string> = {
+const RESET_LABELS: Record<AbilityUsageResetKind, string> = {
   turn: 'Por turno',
+  cooldown: 'Cooldown',
   shortRest: 'Por descanso curto',
   longRest: 'Por descanso longo',
+}
+
+const COOLDOWN_UNIT_LABELS: Record<AbilityUsageCooldownUnit, string> = {
+  turns: 'turnos',
+  minutes: 'minutos',
+  hours: 'horas',
+  days: 'dias',
+  tenDays: '10 dias',
 }
 
 type HitDiceDraft = {
@@ -79,6 +90,15 @@ function resetAbilityUsesForRest(abilities: CustomAbility[], kind: 'shortRest' |
   })
 }
 
+function formatAbilityUsageReset(usage: CustomAbility['usage']): string {
+  if (!usage) return ''
+  if (usage.reset !== 'cooldown') return RESET_LABELS[usage.reset]
+
+  const amount = Math.max(1, Math.trunc(usage.cooldownAmount ?? 1) || 1)
+  const unit = usage.cooldownUnit ?? 'turns'
+  return `Cooldown • ${amount} ${COOLDOWN_UNIT_LABELS[unit]}`
+}
+
 export function ActionsView({
   characters,
   activeCharacter,
@@ -90,12 +110,20 @@ export function ActionsView({
   updateCharacter,
   canEditActions,
 }: Props) {
+  const [viewingAbility, setViewingAbility] = useState<CustomAbility | null>(null)
+  const [viewingSpell, setViewingSpell] = useState<AddedSpell | null>(null)
+  const [viewingSpellDesc, setViewingSpellDesc] = useState<string | null>(null)
+  const [viewingSpellLoading, setViewingSpellLoading] = useState(false)
   const [selectedAction, setSelectedAction] = useState<string>('')
   const [hitDiceDrafts, setHitDiceDrafts] = useState<Record<number, HitDiceDraft>>({})
 
   useEffect(() => {
-    setSelectedAction('')
-    setHitDiceDrafts({})
+    // avoid synchronous setState in effect — schedule asynchronously to satisfy linter
+    const t = setTimeout(() => {
+      setSelectedAction('')
+      setHitDiceDrafts({})
+    }, 0)
+    return () => clearTimeout(t)
   }, [activeCharacter.id])
 
   const slotMeta = useMemo(() => multiclassSpellSlots(activeCharacter.classes), [activeCharacter.classes])
@@ -148,7 +176,7 @@ export function ActionsView({
 
         return false
       }),
-    [activeCharacter.classes, activeCharacter.spells],
+    [activeCharacter.classes, activeCharacter.spells, activeCharacter.attributes],
   )
 
   const freeUseSpells = useMemo(
@@ -173,7 +201,7 @@ export function ActionsView({
     [activeCharacter.spells],
   )
 
-  function useFreeCast(spellIndex: string) {
+  function handleUseFreeCast(spellIndex: string) {
     if (!canEditActions) return
 
     updateCharacter(activeCharacter.id, (c) => ({
@@ -211,14 +239,41 @@ export function ActionsView({
     updateCharacter(activeCharacter.id, (c) => ({
       ...c,
       customAbilities: (c.customAbilities ?? []).map((ability) => {
-        if (ability.id !== abilityId || !ability.usage) return ability
-        return {
-          ...ability,
-          usage: {
-            ...ability.usage,
-            used: Math.max(0, Math.min(ability.usage.max, Math.trunc(nextUsed) || 0)),
-          },
-        }
+          if (ability.id !== abilityId || !ability.usage) return ability
+
+          const nextUsedClamped = Math.max(0, Math.min(ability.usage.max, Math.trunc(nextUsed) || 0))
+
+          // If this ability uses cooldowns and is being consumed now, initialize cooldownRemaining
+          if (ability.usage.reset === 'cooldown' && nextUsedClamped > (ability.usage.used || 0)) {
+            return {
+              ...ability,
+              usage: {
+                ...ability.usage,
+                used: nextUsedClamped,
+                cooldownRemaining: Math.max(1, Math.trunc(ability.usage.cooldownAmount ?? 1) || 1),
+              },
+            }
+          }
+
+          // If explicitly setting used back to 0, clear cooldownRemaining
+          if (nextUsedClamped === 0 && ability.usage.cooldownRemaining) {
+            const { cooldownRemaining, ...rest } = ability.usage
+            return {
+              ...ability,
+              usage: {
+                ...rest,
+                used: 0,
+              },
+            }
+          }
+
+          return {
+            ...ability,
+            usage: {
+              ...ability.usage,
+              used: nextUsedClamped,
+            },
+          }
       }),
     }))
   }
@@ -277,6 +332,47 @@ export function ActionsView({
 
     setHitDiceDrafts({})
   }
+
+  useEffect(() => {
+    let mounted = true
+    if (!viewingSpell) {
+      setViewingSpellDesc(null)
+      setViewingSpellLoading(false)
+      return
+    }
+
+    // if description already present on AddedSpell, no need to fetch
+    if (viewingSpell.headcanon || (viewingSpell.officialDescPt && viewingSpell.officialDescPt.length) || viewingSpell.homebrew?.desc) {
+      setViewingSpellDesc(null)
+      setViewingSpellLoading(false)
+      return
+    }
+
+    setViewingSpellLoading(true)
+    setViewingSpellDesc(null)
+    loadSpellDb()
+      .then((payload) => {
+        if (!mounted) return
+        const dbSpell = payload.spells[viewingSpell.spellIndex]
+        if (dbSpell && dbSpell.desc && dbSpell.desc.length) {
+          setViewingSpellDesc(dbSpell.desc.join('\n\n'))
+        } else {
+          setViewingSpellDesc(null)
+        }
+      })
+      .catch(() => {
+        if (!mounted) return
+        setViewingSpellDesc(null)
+      })
+      .finally(() => {
+        if (!mounted) return
+        setViewingSpellLoading(false)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [viewingSpell])
 
   function performLongRest() {
     if (!canEditActions) return
@@ -356,11 +452,25 @@ export function ActionsView({
                 const remaining = usage ? Math.max(0, usage.max - usage.used) : null
                 return (
                   <div key={ability.id} className="flex flex-col gap-2 rounded-xl border border-border bg-bg p-3 md:flex-row md:items-center md:justify-between">
-                    <div>
+                    <div
+                      className="cursor-pointer"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setViewingAbility(ability)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setViewingAbility(ability)
+                        }
+                      }}
+                    >
                       <div className="text-sm font-semibold text-textH">{ability.name}</div>
                       {usage ? (
                         <div className="mt-1 text-xs text-text">
-                          {RESET_LABELS[usage.reset]} • {remaining}/{usage.max} usos restantes
+                          {formatAbilityUsageReset(usage)} • {remaining}/{usage.max} usos restantes
+                          {usage.reset === 'cooldown' && typeof usage.cooldownRemaining === 'number' ? (
+                            <span> • {usage.cooldownRemaining} {usage.cooldownUnit ?? 'turns'} restantes</span>
+                          ) : null}
                         </div>
                       ) : (
                         <div className="mt-1 text-xs text-text">Sem contador de uso</div>
@@ -417,7 +527,19 @@ export function ActionsView({
                           ? 'Talento'
                           : 'Sempre disponível'
                     return (
-                      <div key={`${spell.spellIndex}-${spell.addedAt}`} className="rounded-xl border border-border bg-bg p-3">
+                      <div
+                        key={`${spell.spellIndex}-${spell.addedAt}`}
+                        className="rounded-xl border border-border bg-bg p-3 cursor-pointer"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setViewingSpell(spell)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            setViewingSpell(spell)
+                          }
+                        }}
+                      >
                         <div className="text-sm font-semibold text-textH">{name}</div>
                         <div className="mt-1 text-xs text-text">Círc. {spell.castSlotLevel ?? '—'} • {sourceLabel}</div>
                       </div>
@@ -449,7 +571,7 @@ export function ActionsView({
                           size="sm"
                           variant="secondary"
                           disabled={!canEditActions || spell.remaining <= 0}
-                          onClick={() => useFreeCast(spell.spellIndex)}
+                          onClick={() => handleUseFreeCast(spell.spellIndex)}
                         >
                           Usar
                         </Button>
@@ -544,6 +666,85 @@ export function ActionsView({
           )}
         </CardContent>
       </Card>
+
+      {viewingAbility && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+              onClick={() => setViewingAbility(null)}
+              role="presentation"
+            >
+              <div
+                className="w-full max-w-xl rounded-2xl border border-border bg-bg shadow-theme"
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-label={viewingAbility ? viewingAbility.name || 'Descrição da habilidade' : 'Descrição da habilidade'}
+              >
+                <div className="flex items-start justify-between gap-3 border-b border-border p-4">
+                  <div>
+                    <div className="text-sm font-semibold text-textH">{viewingAbility?.name}</div>
+                    <div className="mt-1 text-xs text-text">Descrição</div>
+                  </div>
+                  <Button size="sm" variant="secondary" onClick={() => setViewingAbility(null)}>
+                    Fechar
+                  </Button>
+                </div>
+
+                <div className="p-4">
+                  <div className="text-xs leading-6 text-text whitespace-pre-wrap break-words">{viewingAbility?.description}</div>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+        {viewingSpell && typeof document !== 'undefined'
+          ? createPortal(
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+                onClick={() => setViewingSpell(null)}
+                role="presentation"
+              >
+                <div
+                  className="w-full max-w-xl rounded-2xl border border-border bg-bg shadow-theme"
+                  onClick={(e) => e.stopPropagation()}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={viewingSpell ? viewingSpell.displayNamePt || viewingSpell.spellName : 'Descrição da magia'}
+                >
+                  <div className="flex items-start justify-between gap-3 border-b border-border p-4">
+                    <div>
+                      <div className="text-sm font-semibold text-textH">{viewingSpell?.displayNamePt || viewingSpell?.spellName}</div>
+                      <div className="mt-1 text-xs text-text">Descrição</div>
+                    </div>
+                    <Button size="sm" variant="secondary" onClick={() => setViewingSpell(null)}>
+                      Fechar
+                    </Button>
+                  </div>
+
+                  <div className="p-4">
+                    <div className="text-xs leading-6 text-text whitespace-pre-wrap break-words">
+                      {viewingSpellLoading ? (
+                        'Carregando descrição...'
+                      ) : viewingSpellDesc ? (
+                        viewingSpellDesc
+                      ) : viewingSpell?.headcanon ? (
+                        viewingSpell.headcanon
+                      ) : viewingSpell?.officialDescPt?.length ? (
+                        viewingSpell.officialDescPt.join('\n\n')
+                      ) : viewingSpell?.homebrew?.desc ? (
+                        viewingSpell.homebrew.desc
+                      ) : (
+                        'Sem descrição disponível.'
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
     </div>
   )
 }

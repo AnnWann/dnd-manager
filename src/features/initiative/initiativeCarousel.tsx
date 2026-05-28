@@ -27,7 +27,7 @@ export function InitiativeCarousel({ order, currentTurnIndex, canSeeCharacterDet
   }
 
   return (
-    <div className="relative mt-4 h-[190px] w-full overflow-hidden">
+    <div className="relative mt-4 h-[280px] w-full overflow-hidden">
       {order.map((entry, index) => {
         const offset = circularOffset(index, currentTurnIndex, order.length)
         const isCurrentTurn = index === currentTurnIndex
