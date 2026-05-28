@@ -10,9 +10,6 @@ type SidebarItem = {
 export function AppSidebar({ items }: { items: SidebarItem[] }) {
   return (
     <aside className="sticky top-0 flex h-full w-16 shrink-0 flex-col border-r border-accentBorder bg-accentBg/70 px-2 py-4 backdrop-blur md:w-20">
-      <div className="mb-4 flex h-10 items-center justify-center rounded-xl border border-accentBorder bg-bg text-[11px] font-bold uppercase tracking-[0.24em] text-textH">
-        DM
-      </div>
 
       <nav className="flex flex-1 flex-col gap-2">
         {items.map((item) => (
