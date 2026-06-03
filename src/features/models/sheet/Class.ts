@@ -1,38 +1,146 @@
 import type { Attribute } from "./Attribute"
 
-export interface CharacterClass {
-  id: string
+export interface CharacterClassInterface {
   className: ClassName
   level: ClassLevel
-  castingAbility?: Attribute
+  castingAttribute?: Attribute
 
   /** Optional: override for multiclass spell slot progression (used for special cases like EK/AT). */
-  spellcastingProgression?: 'auto' | 'third'
+  spellcastingProgression?: 'full' | 'half' | 'third'
 }
 
-export class Barbarian implements CharacterClass {
-  id: string
+export class CharacterClass implements CharacterClassInterface {
   className: ClassName
   level: ClassLevel
+  castingAttribute?: Attribute
+  spellcastingProgression?: 'full' | 'half' | 'third'
 
-  constructor() {
-    this.id = crypto.randomUUID()
-    this.className = 'barbarian'
-    this.level = 1
+  constructor(
+    className: ClassName, 
+    classLevel: ClassLevel, 
+    castingAttribute: Attribute | undefined = undefined, 
+    spellcastingProgression: 'full' | 'half' | 'third' | undefined = undefined
+  ) {
+    this.className = className
+    this.level = classLevel
+    this.castingAttribute = castingAttribute
+    this.spellcastingProgression = spellcastingProgression
   }
 }
 
-export class Barbarian implements CharacterClass {
-  id: string
-  className: ClassName
-  level: ClassLevel
+export class CharacterClassBuilder {
 
-  constructor() {
-    this.id = crypto.randomUUID()
-    this.className = 'barbarian'
-    this.level = 1
+  barbarian() {
+    return new CharacterClass(
+      'barbarian',
+      1,
+    )
   }
+
+  bard() {
+    return new CharacterClass(
+      'bard',
+      1,
+      'cha',
+      'full'
+    )
+  }
+
+  cleric() {
+    return new CharacterClass(
+      'cleric',
+      1,
+      'wis',
+      'full'
+    )
+  }
+
+  druid() {
+    return new CharacterClass(
+      'druid',
+      1,
+      'wis',
+      'full'
+    )
+  }
+
+  fighter() {
+    return new CharacterClass(
+      'fighter',
+      1
+    )
+  }
+
+  monk() {
+    return new CharacterClass(
+      'monk',
+      1
+    )
+  }
+
+  paladin() {
+    return new CharacterClass(
+      'paladin',
+      1,
+      'cha',
+      'half'
+    )
+  }
+
+  ranger() {
+    return new CharacterClass(
+      'ranger',
+      1,
+      'wis',
+      'half'
+    )
+  }
+
+  rogue() {
+    return new CharacterClass(
+      'rogue',
+      1
+    )
+  }
+
+  sorcerer() {
+    return new CharacterClass(
+      'sorcerer',
+      1,
+      'cha',
+      'full'
+    )
+  }
+
+  warlock() {
+    return new CharacterClass(
+      'warlock',
+      1,
+      'cha',
+      'full'
+    )
+  }
+
+  wizard() {
+    return new CharacterClass(
+      'wizard',
+      1,
+      'int',
+      'full'
+    )
+  }
+
+  artificer() {
+    return new CharacterClass(
+      'artificer',
+      1,
+      'int',
+      'half'
+    )
+  }
+
 }
+
 
 export type ClassName = 
   | 'barbarian'
