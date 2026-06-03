@@ -1,4 +1,4 @@
-import type { EquipmentSlot } from '../../types'
+import type { EquipmentSlot } from '../models/types'
 
 export function normalizeSlot(slot?: EquipmentSlot): EquipmentSlot {
   return {
@@ -14,6 +14,8 @@ export function normalizeSlot(slot?: EquipmentSlot): EquipmentSlot {
       attackBonus: Number(slot?.bonuses?.attackBonus ?? 0),
       mobility: Number(slot?.bonuses?.mobility ?? 0),
     },
+    armorType: slot?.armorType === 'light' || slot?.armorType === 'medium' || slot?.armorType === 'heavy' ? slot.armorType : 'none',
+    armorClassMode: slot?.armorClassMode === 'base' ? 'base' : 'bonus',
     twoHanded: Boolean(slot?.twoHanded),
     notes: slot?.notes ?? '',
   }
@@ -44,5 +46,10 @@ export function enforceWeaponCapacity(slots: EquipmentSlot[], limbCount: number)
 
 export function slotBonusSummary(slot: EquipmentSlot): string {
   const b = slot.bonuses
-  return `CA ${b?.armorClass ?? 0} • Atk ${b?.attackBonus ?? 0} • Mob ${b?.mobility ?? 0}`
+  const isArmorSlot = slot.armorClassMode === 'base' || slot.armorType === 'light' || slot.armorType === 'medium' || slot.armorType === 'heavy'
+  if (!isArmorSlot) return `CA ${b?.armorClass ?? 0} • Atk ${b?.attackBonus ?? 0} • Mob ${b?.mobility ?? 0}`
+
+  const armorMode = slot.armorClassMode === 'base' ? 'Base' : 'Bônus'
+  const armorType = slot.armorType === 'light' ? 'Leve' : slot.armorType === 'medium' ? 'Média' : slot.armorType === 'heavy' ? 'Pesada' : 'Sem armadura'
+  return `CA ${armorMode} ${b?.armorClass ?? 0} • ${armorType} • Atk ${b?.attackBonus ?? 0} • Mob ${b?.mobility ?? 0}`
 }

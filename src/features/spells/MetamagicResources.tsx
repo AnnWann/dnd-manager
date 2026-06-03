@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Character } from '../../types'
+import type { Character } from '../models/types'
 import { loadMetamagicDb, metamagicDisplayName, type MetamagicOption } from '../../lib/metamagicDb'
 import { Button } from '../../components/ui/Button'
 import { Select } from '../../components/ui/Select'

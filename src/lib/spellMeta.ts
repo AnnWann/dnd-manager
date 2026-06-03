@@ -1,4 +1,4 @@
-import type { DndSpell, HomebrewSpell } from '../types'
+import type { DndSpell, HomebrewSpell } from '../features/models/types'
 
 function normalizeSpace(text: string): string {
   return text.replace(/\s+/g, ' ').trim()
@@ -96,6 +96,31 @@ function translateDurationText(raw: string): string {
   t = t.replace(/^until\s+/i, 'Até ')
 
   return t
+}
+
+export function durationTurnsFromText(raw?: string): number | null {
+  const text = normalizeSpace(raw ?? '')
+  if (!text) return null
+
+  const lower = text.toLowerCase()
+  if (lower.includes('instant') || lower.includes('instantânea')) return 0
+  if (lower.includes('until dispelled') || lower.includes('até ser dissipada') || lower.includes('special') || lower.includes('especial')) {
+    return null
+  }
+
+  const roundMatch = /(?:^|\b)(\d+)\s*(?:rounds?|rodadas?)(?:\b|$)/i.exec(lower)
+  if (roundMatch) return Math.max(0, Math.trunc(Number(roundMatch[1]) || 0))
+
+  const minuteMatch = /(?:^|\b)(\d+)\s*(?:minutes?|minutos?)(?:\b|$)/i.exec(lower)
+  if (minuteMatch) return Math.max(0, Math.trunc(Number(minuteMatch[1]) || 0)) * 10
+
+  const hourMatch = /(?:^|\b)(\d+)\s*(?:hours?|horas?)(?:\b|$)/i.exec(lower)
+  if (hourMatch) return Math.max(0, Math.trunc(Number(hourMatch[1]) || 0)) * 600
+
+  const dayMatch = /(?:^|\b)(\d+)\s*(?:days?|dias?)(?:\b|$)/i.exec(lower)
+  if (dayMatch) return Math.max(0, Math.trunc(Number(dayMatch[1]) || 0)) * 14400
+
+  return null
 }
 
 export function isConcentration(spell?: DndSpell, hb?: HomebrewSpell): boolean {

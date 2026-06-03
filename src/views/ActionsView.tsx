@@ -9,7 +9,9 @@ import { SlotsResources } from '../features/spells/SlotsResources'
 import { abilityModifier } from '../lib/rules'
 import { preparedLimitForClass } from '../lib/prepared'
 import { multiclassSpellSlots } from '../lib/spellSlots'
-import type { AbilityUsageCooldownUnit, AbilityUsageResetKind, Character, CustomAbility, RestResetKind, AddedSpell } from '../types'
+import { durationTurnsFromText } from '../lib/spellMeta'
+import type { AbilityUsageCooldownUnit, AbilityUsageResetKind, Character, CustomAbility, RestResetKind, AddedSpell } from '../features/models/types'
+import type { InitiativeResult } from '../features/initiative/initiative'
 
 const STANDARD_ACTIONS = [
   { key: 'attack', label: 'Atacar', description: 'Fazer um ataque com arma, magia ou outro efeito.' },
@@ -24,6 +26,7 @@ const STANDARD_ACTIONS = [
   { key: 'object', label: 'Interagir', description: 'Manipular um objeto ou elemento do cenário.' },
   { key: 'grapple', label: 'Agarrar', description: 'Tentar agarrar uma criatura.' },
   { key: 'shove', label: 'Empurrar', description: 'Tentar empurrar ou derrubar uma criatura.' },
+  { key: 'opportunityAttack', label: 'Ataque de oportunidade', description: 'Fazer um ataque contra uma criatura que saiu do seu alcance.' },
 ]
 
 const RESET_LABELS: Record<AbilityUsageResetKind, string> = {
@@ -46,9 +49,21 @@ type HitDiceDraft = {
   rolls: string[]
 }
 
+type turnUsed = {
+  action: number
+  bonusAction: number
+  reaction: number
+  legendaryAction: number
+  legendaryReaction: number
+  legendaryResistance: number
+  interaction: number
+  concentration: number
+}
+
 type Props = {
+  initiativeEntries: InitiativeResult[]
   characters: Character[]
-  activeCharacter: Character
+  activeCharacter: InitiativeResult
   setActiveCharacterId: (id: string) => void
   addCharacter: () => void
   deleteActiveCharacter: () => void
@@ -56,6 +71,8 @@ type Props = {
   showOwnerBadge: boolean
   updateCharacter: (characterId: string, updater: (c: Character) => Character) => void
   canEditActions: boolean
+  turnUsed: turnUsed
+  spendAction: (kind: keyof turnUsed) => void
 }
 
 function resetSpellUsesForRest(spells: Character['spells'], kind: RestResetKind): Character['spells'] {
@@ -99,8 +116,73 @@ function formatAbilityUsageReset(usage: CustomAbility['usage']): string {
   return `Cooldown • ${amount} ${COOLDOWN_UNIT_LABELS[unit]}`
 }
 
+function badgeClassName(kind: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' = 'neutral') {
+  const base = 'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap'
+  if (kind === 'accent') return `${base} border-accentBorder bg-accentBg text-textH`
+  if (kind === 'success') return `${base} border-emerald-400/40 bg-emerald-400/10 text-emerald-700`
+  if (kind === 'warning') return `${base} border-amber-400/40 bg-amber-400/10 text-amber-700`
+  if (kind === 'danger') return `${base} border-red-400/40 bg-red-400/10 text-red-700`
+  return `${base} border-border bg-bg text-text`
+}
+
+function durationLabelFromTurns(turns: number | null | undefined): string {
+  if (typeof turns !== 'number' || !Number.isFinite(turns) || turns <= 0) return '—'
+  return `${turns} ${turns === 1 ? 'turno' : 'turnos'}`
+}
+
+function abilityActionLabel(kind: CustomAbility['actionKind']): string {
+  if (kind === 'bonusAction') return 'Ação bônus'
+  if (kind === 'reaction') return 'Reação'
+  if (kind === 'legendaryAction') return 'Ação lendária'
+  if (kind === 'legendaryReaction') return 'Reação lendária'
+  if (kind === 'legendaryResistance') return 'Resistência lendária'
+  if (kind === 'free') return 'Livre'
+  return 'Ação'
+}
+
+function abilityTriggerLabel(trigger: CustomAbility['trigger']): string {
+  if (trigger === 'startTurn') return 'No início do turno'
+  if (trigger === 'endTurn') return 'No fim do turno'
+  if (trigger === 'startRound') return 'No início da rodada'
+  if (trigger === 'endRound') return 'No fim da rodada'
+  if (trigger === 'onInitiative') return 'Na iniciativa'
+  if (trigger === 'onAttack') return 'Ao atacar'
+  if (trigger === 'onHit') return 'Ao acertar'
+  if (trigger === 'onCrit') return 'Ao critar'
+  if (trigger === 'onMiss') return 'Ao errar'
+  if (trigger === 'whenHit') return 'Quando for atingido'
+  if (trigger === 'whenDamaged') return 'Quando sofrer dano'
+  if (trigger === 'whenHealed') return 'Quando for curado'
+  if (trigger === 'whenTargeted') return 'Quando for alvo'
+  if (trigger === 'whenConcentrating') return 'Enquanto concentrando'
+  if (trigger === 'whenConcentrationEnds') return 'Quando a concentração acabar'
+  if (trigger === 'onSpellCast') return 'Ao conjurar magia'
+  if (trigger === 'onSpellHit') return 'Ao magia acertar'
+  if (trigger === 'onSpellMiss') return 'Ao magia errar'
+  if (trigger === 'onSave') return 'Ao salvar'
+  if (trigger === 'onFailedSave') return 'Ao falhar no teste'
+  if (trigger === 'onSuccessfulSave') return 'Ao passar no teste'
+  if (trigger === 'onSkillCheck') return 'Em teste de perícia'
+  if (trigger === 'onDodge') return 'Ao esquivar'
+  if (trigger === 'onDropToZeroHp') return 'Ao cair a 0 PV'
+  if (trigger === 'onDeathSave') return 'Em teste de morte'
+  if (trigger === 'onAllyFalls') return 'Quando aliado cair'
+  if (trigger === 'onEnemyApproaches') return 'Quando inimigo se aproximar'
+  if (trigger === 'onCreatureEntersReach') return 'Quando criatura entrar no alcance'
+  if (trigger === 'onCreatureLeavesReach') return 'Quando criatura sair do alcance'
+  if (trigger === 'onShortRest') return 'No descanso curto'
+  if (trigger === 'onLongRest') return 'No descanso longo'
+  if (trigger === 'whenBloodied') return 'Quando estiver sangrando'
+  if (trigger === 'whileMounted') return 'Enquanto montado'
+  if (trigger === 'whileHidden') return 'Enquanto oculto'
+  if (trigger === 'whileProne') return 'Enquanto caído'
+  if (trigger === 'whileGrappled') return 'Enquanto agarrado'
+  if (trigger === 'whileSurprised') return 'Enquanto surpreso'
+  return 'Sempre'
+}
+
 export function ActionsView({
-  characters,
+  initiativeEntries: characters,
   activeCharacter,
   setActiveCharacterId,
   addCharacter,
@@ -109,18 +191,18 @@ export function ActionsView({
   showOwnerBadge,
   updateCharacter,
   canEditActions,
+  turnUsed,
+  spendAction,
 }: Props) {
   const [viewingAbility, setViewingAbility] = useState<CustomAbility | null>(null)
   const [viewingSpell, setViewingSpell] = useState<AddedSpell | null>(null)
   const [viewingSpellDesc, setViewingSpellDesc] = useState<string | null>(null)
   const [viewingSpellLoading, setViewingSpellLoading] = useState(false)
-  const [selectedAction, setSelectedAction] = useState<string>('')
   const [hitDiceDrafts, setHitDiceDrafts] = useState<Record<number, HitDiceDraft>>({})
 
   useEffect(() => {
     // avoid synchronous setState in effect — schedule asynchronously to satisfy linter
     const t = setTimeout(() => {
-      setSelectedAction('')
       setHitDiceDrafts({})
     }, 0)
     return () => clearTimeout(t)
@@ -154,6 +236,52 @@ export function ActionsView({
   const sorceryPointsUsedClamped = sorceryPointsMax > 0 ? Math.min(sorceryPointsUsed, sorceryPointsMax) : 0
   const sorceryPointsRemaining = sorceryPointsMax > 0 ? Math.max(0, sorceryPointsMax - sorceryPointsUsedClamped) : 0
   const hasSpells = activeCharacter.spells.length > 0
+  const actionsPerTurn = Math.max(0, Math.trunc(activeCharacter.actionsPerTurn ?? 1))
+  const bonusActionsPerTurn = Math.max(0, Math.trunc(activeCharacter.bonusActionsPerTurn ?? 1))
+  const reactionsPerTurn = Math.max(0, Math.trunc(activeCharacter.reactionsPerTurn ?? 1))
+  const legendaryActions = Math.max(0, Math.trunc(activeCharacter.legendaryActions ?? 0))
+  const legendaryReactions = Math.max(0, Math.trunc(activeCharacter.legendaryReactions ?? 0))
+  const legendaryResistances = Math.max(0, Math.trunc(activeCharacter.legendaryResistances ?? 0))
+  const interaction = 0
+
+  function toggleConcentration(spellIndex: string) {
+    if (!canEditActions) return
+
+    updateCharacter(activeCharacter.id, (c) => ({
+      ...c,
+      spells: c.spells.map((spell) => {
+        if (spell.spellIndex !== spellIndex) {
+          if (spell.combatStatus !== 'concentrando') return spell
+          return { ...spell, combatStatus: undefined, combatTurnsRemaining: undefined }
+        }
+
+        const currentlyConcentrating = spell.combatStatus === 'concentrando'
+        if (currentlyConcentrating) {
+          return { ...spell, combatStatus: undefined, combatTurnsRemaining: undefined }
+        }
+
+        const turnsFromText = durationTurnsFromText(spell.durationText)
+        const combatTurnsRemaining = Math.max(1, turnsFromText ?? 10)
+        return {
+          ...spell,
+          combatStatus: 'concentrando',
+          combatTurnsRemaining,
+        }
+      }),
+    }))
+  }
+
+  function castSpell(spell: AddedSpell) {
+    if (!canEditActions) return
+
+    if (spell.castTimeKind === 'reaction') spendAction('reaction')
+    else if (spell.castTimeKind === 'bonus') spendAction('bonusAction')
+    else spendAction('action')
+
+    if (spell.requiresConcentration) {
+      toggleConcentration(spell.spellIndex)
+    }
+  }
 
   const preparedSpells = useMemo(
     () =>
@@ -341,8 +469,14 @@ export function ActionsView({
       return
     }
 
+    if (viewingSpell.homebrew) {
+      setViewingSpellDesc(null)
+      setViewingSpellLoading(false)
+      return
+    }
+
     // if description already present on AddedSpell, no need to fetch
-    if (viewingSpell.headcanon || (viewingSpell.officialDescPt && viewingSpell.officialDescPt.length) || viewingSpell.homebrew?.desc) {
+    if (viewingSpell.headcanon || (viewingSpell.officialDescPt && viewingSpell.officialDescPt.length)) {
       setViewingSpellDesc(null)
       setViewingSpellLoading(false)
       return
@@ -414,6 +548,41 @@ export function ActionsView({
       />
 
       <Card>
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className={badgeClassName('accent')}>
+              Ações {Math.max(0, actionsPerTurn - turnUsed.action)}/{actionsPerTurn}
+            </span>
+            <span className={badgeClassName('accent')}>
+              Bônus {Math.max(0, bonusActionsPerTurn - turnUsed.bonusAction)}/{bonusActionsPerTurn}
+            </span>
+            <span className={badgeClassName('accent')}>
+              Reações {Math.max(0, reactionsPerTurn - turnUsed.reaction)}/{reactionsPerTurn}
+            </span>
+            <span className={badgeClassName('neutral')}>
+              Interações {Math.max(0, interaction - turnUsed.interaction)}/1
+            </span>
+            {activeCharacter.spells
+            .filter((spell) => spell.combatStatus === 'concentrando')
+            .map((spell) => (
+              <span key={spell.spellIndex} className={badgeClassName('warning')}>
+                Concentrando: {spell.displayNamePt || spell.spellName} • {durationLabelFromTurns(spell.combatTurnsRemaining)}
+              </span>
+            ))}
+            <span className={badgeClassName('neutral')}>
+              Lendárias {Math.max(0, legendaryActions - turnUsed.legendaryAction)}/{legendaryActions}
+            </span>
+            <span className={badgeClassName('neutral')}>
+              Reações lendárias {Math.max(0, legendaryReactions - turnUsed.legendaryReaction)}/{legendaryReactions}
+            </span>
+            <span className={badgeClassName('neutral')}>
+              Resistências lendárias {Math.max(0, legendaryResistances - turnUsed.legendaryResistance)}/{legendaryResistances}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader>
           <div className="text-sm font-semibold text-textH">Ações básicas</div>
           <div className="mt-1 text-xs text-text">Ações padrão de D&D, úteis como referência rápida em combate.</div>
@@ -424,12 +593,16 @@ export function ActionsView({
               <button
                 key={action.key}
                 type="button"
-                onClick={() => setSelectedAction(action.key)}
-                className={
-                  selectedAction === action.key
-                    ? 'rounded-xl border border-accentBorder bg-accentBg/30 p-3 text-left transition'
-                    : 'rounded-xl border border-border bg-bg p-3 text-left transition hover:border-accentBorder'
-                }
+                onClick={() => {
+                  if (action.key === 'object') {
+                    if (turnUsed.interaction > 0) spendAction('action')
+                    else spendAction('interaction')
+                  }
+                  if (action.key === 'jump') spendAction('bonusAction')
+                  if (action.key === 'opportunityAttack') spendAction('reaction')
+                  spendAction('action')
+                }}
+                className="rounded-xl border border-border bg-bg p-3 text-left transition hover:border-accentBorder cursor-pointer"
               >
                 <div className="text-sm font-semibold text-textH">{action.label}</div>
                 <div className="mt-1 text-xs text-text">{action.description}</div>
@@ -442,7 +615,7 @@ export function ActionsView({
       <Card>
         <CardHeader>
           <div className="text-sm font-semibold text-textH">Habilidades</div>
-          <div className="mt-1 text-xs text-text">Use aqui habilidades com usos por turno, descanso curto ou descanso longo.</div>
+          <div className="mt-1 text-xs text-text">Use aqui suas habilidades de personagem.</div>
         </CardHeader>
         <CardContent>
           {activeCharacter.customAbilities?.length ? (
@@ -450,21 +623,21 @@ export function ActionsView({
               {activeCharacter.customAbilities.map((ability) => {
                 const usage = ability.usage
                 const remaining = usage ? Math.max(0, usage.max - usage.used) : null
+                const kindLabel = ability.kind === 'passive' ? 'Passiva' : 'Ativa'
                 return (
-                  <div key={ability.id} className="flex flex-col gap-2 rounded-xl border border-border bg-bg p-3 md:flex-row md:items-center md:justify-between">
+                  <div
+                    key={ability.id}
+                    className={`flex flex-col gap-2 rounded-xl border border-border bg-bg p-3 md:flex-row md:items-center md:justify-between ${ability.kind === 'passive' ? 'border-dashed' : ''}`}
+                  >
                     <div
-                      className="cursor-pointer"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setViewingAbility(ability)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          setViewingAbility(ability)
-                        }
-                      }}
                     >
-                      <div className="text-sm font-semibold text-textH">{ability.name}</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-semibold text-textH">{ability.name}</div>
+                        <span className={badgeClassName(ability.kind === 'passive' ? 'warning' : 'accent')}>{kindLabel}</span>
+                        <span className={badgeClassName('neutral')}>
+                          {ability.kind === 'passive' ? abilityTriggerLabel(ability.trigger ?? 'always') : abilityActionLabel(ability.actionKind ?? 'action')}
+                        </span>
+                      </div>
                       {usage ? (
                         <div className="mt-1 text-xs text-text">
                           {formatAbilityUsageReset(usage)} • {remaining}/{usage.max} usos restantes
@@ -477,13 +650,26 @@ export function ActionsView({
                       )}
                     </div>
 
-                    {usage ? (
+                    {ability.kind === 'active' ? (
                       <div className="flex items-center gap-2">
                         <Button
                           size="sm"
                           variant="secondary"
-                          disabled={!canEditActions || (remaining ?? 0) <= 0}
-                          onClick={() => updateAbilityUsage(ability.id, usage.used + 1)}
+                          disabled={!canEditActions || (usage ? usage.used >= usage.max : false)}
+                          onClick={() => {
+                            if (!usage) return
+                            if (ability.kind === 'passive') return
+
+                            updateAbilityUsage(ability.id, usage.used + 1)
+
+                            const actionKind = ability.actionKind ?? 'action'
+                            if (actionKind === 'bonusAction') spendAction('bonusAction')
+                            else if (actionKind === 'reaction') spendAction('reaction')
+                            else if (actionKind === 'legendaryAction') spendAction('legendaryAction')
+                            else if (actionKind === 'legendaryReaction') spendAction('legendaryReaction')
+                            else if (actionKind === 'legendaryResistance') spendAction('legendaryResistance')
+                            else if (actionKind !== 'free') spendAction('action')
+                        }}
                         >
                           Usar
                         </Button>
@@ -491,13 +677,22 @@ export function ActionsView({
                           className="h-9 w-20"
                           type="number"
                           min={0}
-                          max={usage.max}
+                          max={usage?.max != null ? usage.max : undefined}
                           disabled={!canEditActions}
-                          value={usage.used}
+                          value={usage?.used ?? 0}
                           onChange={(e) => updateAbilityUsage(ability.id, Number.parseInt(e.target.value, 10) || 0)}
                         />
                       </div>
                     ) : null}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setViewingAbility(ability)}
+                      >
+                        Detalhes
+                      </Button>
+                    </div>
                   </div>
                 )
               })}
@@ -526,13 +721,19 @@ export function ActionsView({
                         : spell.sourceType === 'feat'
                           ? 'Talento'
                           : 'Sempre disponível'
+                    const isConcentrating = spell.combatStatus === 'concentrando'
+                    const requiresConcentration = Boolean(spell.requiresConcentration)
+                    const concentrationTurns = spell.combatTurnsRemaining ?? durationTurnsFromText(spell.durationText)
+                    const castLabel =
+                      spell.castTimeKind === 'reaction'
+                        ? `Reação${spell.reactionWhen ? ` • ${spell.reactionWhen}` : ''}`
+                        : spell.castTimeKind === 'bonus'
+                          ? 'Ação bônus'
+                          : 'Ação'
                     return (
                       <div
                         key={`${spell.spellIndex}-${spell.addedAt}`}
-                        className="rounded-xl border border-border bg-bg p-3 cursor-pointer"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setViewingSpell(spell)}
+                        className="rounded-xl border border-border bg-bg p-3"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault()
@@ -541,7 +742,31 @@ export function ActionsView({
                         }}
                       >
                         <div className="text-sm font-semibold text-textH">{name}</div>
-                        <div className="mt-1 text-xs text-text">Círc. {spell.castSlotLevel ?? '—'} • {sourceLabel}</div>
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          <span className={badgeClassName('accent')}>{castLabel}</span>
+                          <span className={badgeClassName(requiresConcentration ? 'warning' : 'neutral')}>
+                            {isConcentrating ? `Concentrando • ${durationLabelFromTurns(concentrationTurns)}` : requiresConcentration ? 'Concentração' : 'Sem concentração'}
+                          </span>
+                          <span className={badgeClassName('neutral')}>Círc. {spell.castSlotLevel ?? '—'}</span>
+                          <span className={badgeClassName('neutral')}>{sourceLabel}</span>
+                          {spell.durationText ? <span className={badgeClassName('neutral')}>{spell.durationText}</span> : null}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Button className="cursor-pointer" size="sm" variant="secondary" onClick={() => setViewingSpell(spell)}>
+                            Detalhes
+                          </Button>
+                          <Button
+                            className="cursor-pointer"
+                            size="sm"
+                            variant="primary"
+                            disabled={!canEditActions}
+                            onClick={() => {
+                              castSpell(spell)
+                            }}
+                          >
+                            Conjurar
+                          </Button>
+                        </div>
                       </div>
                     )
                   })}
@@ -729,10 +954,10 @@ export function ActionsView({
                         'Carregando descrição...'
                       ) : viewingSpellDesc ? (
                         viewingSpellDesc
-                      ) : viewingSpell?.headcanon ? (
-                        viewingSpell.headcanon
                       ) : viewingSpell?.officialDescPt?.length ? (
                         viewingSpell.officialDescPt.join('\n\n')
+                      ) : viewingSpell?.headcanon ? (
+                        viewingSpell.headcanon
                       ) : viewingSpell?.homebrew?.desc ? (
                         viewingSpell.homebrew.desc
                       ) : (

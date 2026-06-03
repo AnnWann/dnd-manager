@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Character, DndSpell, HomebrewSpell, InventoryItem, SpellEffect, SpellTranslation } from '../types'
+import type { Character, DndSpell, HomebrewSpell, InventoryItem, SpellEffect, SpellTranslation } from '../features/models/types'
 import type { InitiativeResult } from '../features/initiative/initiative'
 import { readLocalStorageJson, writeLocalStorageJson } from './storage'
 import { normalizeAppState } from './normaliseCharacter'

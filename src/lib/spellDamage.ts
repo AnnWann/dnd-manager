@@ -1,4 +1,4 @@
-import type { DndSpell, MagicCircleLevel } from '../types'
+import type { DndSpell, MagicCircleLevel } from '../features/models/types'
 import { cantripDiceMultiplier } from './rules'
 
 type Dice = { count: number; size: number }

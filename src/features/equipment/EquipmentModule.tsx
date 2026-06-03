@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { Input } from '../../components/ui/Input'
+import { Select } from '../../components/ui/Select'
 import { defaultEquipment, weaponSlotsFromLimbCount } from '../../lib/character'
-import type { Character, CharacterEquipment, EquipmentSlot } from '../../types'
+import type { Character, CharacterEquipment, EquipmentSlot } from '../models/types'
 import { enforceWeaponCapacity, normalizeSlot, slotBonusSummary, weaponCost } from './equipmentModel'
 import { EquipmentMainSection } from './EquipmentMainSection'
 import { EquipmentWeaponsSection } from './EquipmentWeaponsSection'
@@ -101,6 +102,7 @@ export function EquipmentModule({ activeCharacter, updateCharacter }: Props) {
             {(() => {
               const slot = getSlotByPath(editingPath)
               const isWeaponSlot = editingPath.startsWith('weaponSlots:')
+              const isArmorSlot = editingPath === 'armor'
               return (
                 <div className="grid gap-3">
                   <div>
@@ -123,9 +125,40 @@ export function EquipmentModule({ activeCharacter, updateCharacter }: Props) {
                     </label>
                   ) : null}
 
+                  {isArmorSlot ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-xs text-text">Modo de CA</label>
+                          <Select
+                            className="mt-1 h-9"
+                            value={slot.armorClassMode ?? 'bonus'}
+                            onChange={(e) => updateEquipmentSlot(editingPath, (s) => ({ ...s, armorClassMode: e.target.value as 'bonus' | 'base' }))}
+                          >
+                            <option value="bonus">Bônus</option>
+                            <option value="base">Base</option>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-text">Tipo de armadura</label>
+                          <Select
+                            className="mt-1 h-9"
+                            value={slot.armorType ?? 'none'}
+                            onChange={(e) => updateEquipmentSlot(editingPath, (s) => ({ ...s, armorType: e.target.value as 'none' | 'light' | 'medium' | 'heavy' }))}
+                          >
+                            <option value="none">Sem armadura</option>
+                            <option value="light">Leve</option>
+                            <option value="medium">Média</option>
+                            <option value="heavy">Pesada</option>
+                          </Select>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+
                   <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <label className="text-xs text-text">Bônus CA</label>
+                      <label className="text-xs text-text">{isArmorSlot && (slot.armorClassMode ?? 'bonus') === 'base' ? 'CA base' : 'Bônus CA'}</label>
                       <Input
                         type="number"
                         className="mt-1 h-9"

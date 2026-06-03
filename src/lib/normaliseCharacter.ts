@@ -1,4 +1,4 @@
-import type { Character, CustomAbility } from "../types";
+import type { Character, CustomAbility } from "../features/models/types";
 import type { AppStateV1 } from "./remoteState";
 import { defaultEquipment, weaponSlotsFromLimbCount } from "./character";
 import { normalizeDeathSaves, normalizeInventoryItems } from './inventory'
@@ -65,6 +65,8 @@ export function normalizeCharacter(character: any): Character {
       attackBonus: Number(slot?.bonuses?.attackBonus ?? 0),
       mobility: Number(slot?.bonuses?.mobility ?? 0),
     },
+    armorType: slot?.armorType === 'light' || slot?.armorType === 'medium' || slot?.armorType === 'heavy' ? slot.armorType : 'none',
+    armorClassMode: slot?.armorClassMode === 'base' ? 'base' : 'bonus',
     twoHanded: Boolean(slot?.twoHanded),
     notes: String(slot?.notes ?? ''),
   })
@@ -90,7 +92,17 @@ export function normalizeCharacter(character: any): Character {
     const description = String(item?.description ?? item?.desc ?? '').trim()
     const usage = item?.usage
     if (!usage || typeof usage !== 'object') {
-      return { id: String(item?.id ?? crypto.randomUUID()), name, description: description || undefined, usage: undefined }
+      return {
+        id: String(item?.id ?? crypto.randomUUID()),
+        name,
+        description: description || undefined,
+        usage: undefined,
+        kind: item?.kind === 'passive' ? 'passive' : 'active',
+        actionKind: item?.actionKind === 'bonusAction' || item?.actionKind === 'reaction' || item?.actionKind === 'legendaryAction' || item?.actionKind === 'legendaryReaction' || item?.actionKind === 'legendaryResistance' || item?.actionKind === 'free'
+          ? item.actionKind
+          : 'action',
+        trigger: typeof item?.trigger === 'string' ? item.trigger : undefined,
+      }
     }
 
     const reset = usage.reset === 'turn' || usage.reset === 'cooldown' || usage.reset === 'shortRest' || usage.reset === 'longRest' ? usage.reset : undefined
@@ -104,6 +116,11 @@ export function normalizeCharacter(character: any): Character {
       id: String(item?.id ?? crypto.randomUUID()),
       name,
       description: description || undefined,
+      kind: item?.kind === 'passive' ? 'passive' : 'active',
+      actionKind: item?.actionKind === 'bonusAction' || item?.actionKind === 'reaction' || item?.actionKind === 'legendaryAction' || item?.actionKind === 'legendaryReaction' || item?.actionKind === 'legendaryResistance' || item?.actionKind === 'free'
+        ? item.actionKind
+        : 'action',
+      trigger: typeof item?.trigger === 'string' ? item.trigger : undefined,
       usage: reset && Number.isFinite(max) && max > 0
         ? {
             max: Math.max(0, Math.trunc(max)),
@@ -124,8 +141,20 @@ export function normalizeCharacter(character: any): Character {
     ownerKey: character.ownerKey ?? '',
     skills: character.skills ?? {},
     classes,
-    spells: character.spells ?? [],
+    spells: (character.spells ?? []).map((spell: any) => ({
+      ...spell,
+      durationText: typeof spell?.durationText === 'string' ? spell.durationText : spell?.homebrew?.duration ? String(spell.homebrew.duration) : undefined,
+      requiresConcentration: Boolean(spell?.requiresConcentration ?? spell?.homebrew?.concentration),
+      combatStatus: spell?.combatStatus === 'concentrando' ? 'concentrando' : undefined,
+      combatTurnsRemaining: Number.isFinite(Number(spell?.combatTurnsRemaining)) ? Math.max(0, Math.trunc(Number(spell.combatTurnsRemaining))) : undefined,
+    })),
     armorClass: character.armorClass ?? 10,
+    actionsPerTurn: Number.isFinite(Number(character.actionsPerTurn)) ? Math.max(0, Math.trunc(Number(character.actionsPerTurn))) : 1,
+    bonusActionsPerTurn: Number.isFinite(Number(character.bonusActionsPerTurn)) ? Math.max(0, Math.trunc(Number(character.bonusActionsPerTurn))) : 1,
+    reactionsPerTurn: Number.isFinite(Number(character.reactionsPerTurn)) ? Math.max(0, Math.trunc(Number(character.reactionsPerTurn))) : 1,
+    legendaryActions: Number.isFinite(Number(character.legendaryActions)) ? Math.max(0, Math.trunc(Number(character.legendaryActions))) : 0,
+    legendaryReactions: Number.isFinite(Number(character.legendaryReactions)) ? Math.max(0, Math.trunc(Number(character.legendaryReactions))) : 0,
+    legendaryResistances: Number.isFinite(Number(character.legendaryResistances)) ? Math.max(0, Math.trunc(Number(character.legendaryResistances))) : 0,
     mobility: Number(character.mobility ?? 9),
     initiativeBonus: character.initiativeBonus ?? 0,
     maxHp: character.maxHp ?? 0,

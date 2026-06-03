@@ -1,0 +1,1 @@
+export type RollType = "attack" | "save" | "skill"

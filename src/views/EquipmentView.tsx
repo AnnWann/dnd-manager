@@ -1,6 +1,6 @@
 import { CharacterSelector } from '../features/characters/characterSelector'
 import { EquipmentModule } from '../features/equipment/EquipmentModule'
-import type { Character } from '../types'
+import type { Character } from '../features/models/types'
 
 type Props = {
   characters: Character[]

@@ -9,7 +9,7 @@ import type {
   HomebrewSpellMechanic,
   SpellCastTimeKind,
   SpellTranslation,
-} from '../types'
+} from '../features/models/types'
 import { ABILITIES, magicCircleOptions } from '../lib/rules'
 import { SCHOOL_NAME_PT, apiClassLabel, classDisplayName, schoolLabel } from '../lib/spellLabels'
 import { Button } from '../components/ui/Button'

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import type { SpellTranslation } from '../../types'
+import type { SpellTranslation } from '../models/types'
 import type { AppStateV1 } from '../../lib/remoteState'
 import { translateTexts } from './translateApi'
 

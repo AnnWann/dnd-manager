@@ -1,4 +1,4 @@
-import type { Attribute, Character } from "../../../types"
+import type { Attribute, Character } from "../../models/types"
 import { abilityModifier, formatSigned } from "../../../lib/rules"
 import type { Skill, SkillProficiency } from "./character.types"
 import { useState } from "react"

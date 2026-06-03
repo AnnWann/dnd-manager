@@ -1,4 +1,5 @@
-import type { Attribute, Character, CharacterEquipment, EquipmentSlot } from '../types'
+import type { Attribute, Character, CharacterEquipment, EquipmentSlot } from '../features/models/types'
+import { abilityModifier } from './rules'
 
 export function defaultAbilities(): Record<Attribute, number> {
   return { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }
@@ -18,6 +19,8 @@ function emptySlot(): EquipmentSlot {
       attackBonus: 0,
       mobility: 0,
     },
+    armorType: 'none',
+    armorClassMode: 'bonus',
     twoHanded: false,
     notes: '',
   }
@@ -77,6 +80,32 @@ export function equipmentBonuses(character: Character): {
   )
 }
 
+export function armorDexContribution(character: Character): number {
+  const armor = character.equipment?.armor
+  const dexMod = abilityModifier(character.attributes.dex)
+  const armorType = armor?.armorType ?? 'none'
+
+  if (armorType === 'heavy') return 0
+  if (armorType === 'medium') return Math.min(dexMod, 2)
+  return dexMod
+}
+
+export function characterArmorClass(character: Character): number {
+  const armor = character.equipment?.armor
+  const armorBonus = Number(armor?.bonuses?.armorClass ?? 0)
+  const equipmentArmorClass = equipmentBonuses(character).armorClass
+
+  if (armor?.armorClassMode === 'base') {
+    return equipmentArmorClass + armorDexContribution(character)
+  }
+
+  return (character.armorClass ?? 10) + equipmentArmorClass + armorDexContribution(character)
+}
+
+export function characterArmorClassAdjustment(character: Character): number {
+  return characterArmorClass(character) - (character.armorClass ?? 10)
+}
+
 export function defaultEquipment(limbCount = 2): CharacterEquipment {
   const normalizedLimbCount = Math.max(0, Math.trunc(limbCount))
   const weaponSlotsCount = weaponSlotsFromLimbCount(normalizedLimbCount)
@@ -104,6 +133,12 @@ export function newCharacter(name = 'Novo personagem'): Character {
     temporaryHp: 0,
     mobility: 9,
     initiativeBonus: 0,
+    actionsPerTurn: 1,
+    bonusActionsPerTurn: 1,
+    reactionsPerTurn: 1,
+    legendaryActions: 0,
+    legendaryReactions: 0,
+    legendaryResistances: 0,
     hitDice: [{ dice: 0, diceValue: 1, max: 0, current: 0 }],
     armorClass: 10,
     attributes: defaultAbilities(),

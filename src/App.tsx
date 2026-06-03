@@ -14,7 +14,7 @@ import type {
   SpellCastTimeKind,
   SpellTranslation,
   SpellMeta,
-} from './types'
+} from './features/models/types'
 
 import { newCharacter } from './lib/character'
 import { preparedLimitForClass } from './lib/prepared'
@@ -923,6 +923,30 @@ function App() {
     })
   }
 
+  const [turnUsed, setTurnUsed] = useState({
+    action: 0,
+    bonusAction: 0,
+    reaction: 0,
+    legendaryAction: 0,
+    legendaryReaction: 0,
+    legendaryResistance: 0,
+    interaction: 0,
+    concentration: 0,
+  })
+
+  function spendAction(kind: keyof typeof turnUsed) {
+    if (!canEditActiveCharacterData) return
+
+    setTurnUsed((prev) => ({
+      ...prev,
+      [kind]: prev[kind] + 1,
+    }))
+  }
+
+  
+
+
+
   function nextTurn() {
     if (!canEditInitiative) return
     if (initiativeOrder.length === 0) return
@@ -1764,7 +1788,7 @@ function App() {
             
             <div className="w-full flex-none px-4 py-6">
               <ActionsView
-                characters={visibleCharacters}
+                initiativeEntries={visibleCharacters}
                 activeCharacter={activeCharacter}
                 setActiveCharacterId={setSelectedCharacterId}
                 addCharacter={addCharacter}
@@ -1773,6 +1797,8 @@ function App() {
                 showOwnerBadge={canAssignOwners}
                 updateCharacter={updateCharacter}
                 canEditActions={canEditActiveCharacterData}
+                turnUsed={turnUsed}
+                spendAction={spendAction}
               />
             </div>
 

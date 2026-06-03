@@ -1,4 +1,4 @@
-import type { Character } from "../../types"
+import type { Character } from "../models/types"
 import type { InitiativeResult } from "./initiative"
 import { InitiativeCard } from "./initiativeCard"
 

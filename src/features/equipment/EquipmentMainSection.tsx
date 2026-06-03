@@ -1,5 +1,5 @@
 import { Input } from '../../components/ui/Input'
-import type { CharacterEquipment } from '../../types'
+import type { CharacterEquipment } from '../models/types'
 import { normalizeSlot, slotBonusSummary } from './equipmentModel'
 
 type Props = {

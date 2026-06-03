@@ -6,7 +6,7 @@ import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
 import { Textarea } from '../../components/ui/Textarea'
 import { cn } from '../../lib/cn'
-import type { AbilityUsageCooldownUnit, AbilityUsageResetKind, Character, CustomAbility } from '../../types'
+import type { AbilityActionKind, AbilityKind, AbilityTrigger, AbilityUsageCooldownUnit, AbilityUsageResetKind, Character, CustomAbility } from '../models/types'
 
 const USAGE_OPTIONS: Array<{ value: AbilityUsageResetKind; label: string }> = [
   { value: 'turn', label: 'Por turno' },
@@ -23,10 +23,69 @@ const COOLDOWN_UNIT_OPTIONS: Array<{ value: AbilityUsageCooldownUnit; label: str
   { value: 'tenDays', label: '10 dias' },
 ]
 
+const ABILITY_KIND_OPTIONS: Array<{ value: AbilityKind; label: string }> = [
+  { value: 'active', label: 'Ativa' },
+  { value: 'passive', label: 'Passiva' },
+]
+
+const ABILITY_ACTION_OPTIONS: Array<{ value: AbilityActionKind; label: string }> = [
+  { value: 'action', label: 'Ação' },
+  { value: 'bonusAction', label: 'Ação bônus' },
+  { value: 'reaction', label: 'Reação' },
+  { value: 'legendaryAction', label: 'Ação lendária' },
+  { value: 'legendaryReaction', label: 'Reação lendária' },
+  { value: 'legendaryResistance', label: 'Resistência lendária' },
+  { value: 'free', label: 'Livre' },
+]
+
+const ABILITY_TRIGGER_OPTIONS: Array<{ value: AbilityTrigger; label: string }> = [
+  { value: 'always', label: 'Sempre' },
+  { value: 'startTurn', label: 'No início do turno' },
+  { value: 'endTurn', label: 'No fim do turno' },
+  { value: 'startRound', label: 'No início da rodada' },
+  { value: 'endRound', label: 'No fim da rodada' },
+  { value: 'onInitiative', label: 'Na iniciativa' },
+  { value: 'onAttack', label: 'Ao atacar' },
+  { value: 'onHit', label: 'Ao acertar' },
+  { value: 'onCrit', label: 'Ao critar' },
+  { value: 'onMiss', label: 'Ao errar' },
+  { value: 'whenHit', label: 'Quando for atingido' },
+  { value: 'whenDamaged', label: 'Quando sofrer dano' },
+  { value: 'whenHealed', label: 'Quando for curado' },
+  { value: 'whenTargeted', label: 'Quando for alvo' },
+  { value: 'whenConcentrating', label: 'Enquanto concentrando' },
+  { value: 'whenConcentrationEnds', label: 'Quando a concentração acabar' },
+  { value: 'onSpellCast', label: 'Ao conjurar magia' },
+  { value: 'onSpellHit', label: 'Ao magia acertar' },
+  { value: 'onSpellMiss', label: 'Ao magia errar' },
+  { value: 'onSave', label: 'Ao salvar' },
+  { value: 'onFailedSave', label: 'Ao falhar no teste' },
+  { value: 'onSuccessfulSave', label: 'Ao passar no teste' },
+  { value: 'onSkillCheck', label: 'Em teste de perícia' },
+  { value: 'onDodge', label: 'Ao esquivar' },
+  { value: 'onDropToZeroHp', label: 'Ao cair a 0 PV' },
+  { value: 'onDeathSave', label: 'Em teste de morte' },
+  { value: 'onAllyFalls', label: 'Quando aliado cair' },
+  { value: 'onEnemyApproaches', label: 'Quando inimigo se aproximar' },
+  { value: 'onCreatureEntersReach', label: 'Quando criatura entrar no alcance' },
+  { value: 'onCreatureLeavesReach', label: 'Quando criatura sair do alcance' },
+  { value: 'onShortRest', label: 'No descanso curto' },
+  { value: 'onLongRest', label: 'No descanso longo' },
+  { value: 'whenBloodied', label: 'Quando estiver sangrando' },
+  { value: 'whileMounted', label: 'Enquanto montado' },
+  { value: 'whileHidden', label: 'Enquanto oculto' },
+  { value: 'whileProne', label: 'Enquanto caído' },
+  { value: 'whileGrappled', label: 'Enquanto agarrado' },
+  { value: 'whileSurprised', label: 'Enquanto surpreso' },
+]
+
 type AbilityDraft = {
   id: string
   name: string
   description: string
+  kind: AbilityKind
+  actionKind: AbilityActionKind
+  trigger: AbilityTrigger
   usageEnabled: boolean
   usageReset: AbilityUsageResetKind
   usageMax: string
@@ -39,6 +98,9 @@ const EMPTY_DRAFT: AbilityDraft = {
   id: '',
   name: '',
   description: '',
+  kind: 'active',
+  actionKind: 'action',
+  trigger: 'always',
   usageEnabled: false,
   usageReset: 'longRest',
   usageMax: '1',
@@ -70,6 +132,9 @@ export function CharacterAbilities({ character, updateCharacter }: Props) {
       id: ability.id,
       name: ability.name,
       description: ability.description ?? '',
+      kind: ability.kind ?? 'active',
+      actionKind: ability.actionKind ?? 'action',
+      trigger: ability.trigger ?? 'always',
       usageEnabled: Boolean(ability.usage),
       usageReset: ability.usage?.reset ?? 'longRest',
       usageMax: String(ability.usage?.max ?? 1),
@@ -102,13 +167,18 @@ export function CharacterAbilities({ character, updateCharacter }: Props) {
     if (editingAbilityId === '__new__') {
       updateCharacter(character.id, (c) => ({
         ...c,
-        customAbilities: [...(c.customAbilities ?? []), { id: crypto.randomUUID(), name, description: description || undefined, usage }],
+        customAbilities: [
+          ...(c.customAbilities ?? []),
+          { id: crypto.randomUUID(), name, description: description || undefined, usage, kind: draft.kind, actionKind: draft.actionKind, trigger: draft.trigger },
+        ],
       }))
     } else if (editingAbilityId) {
       updateCharacter(character.id, (c) => ({
         ...c,
         customAbilities: (c.customAbilities ?? []).map((ability) =>
-          ability.id === editingAbilityId ? { ...ability, name, description: description || undefined, usage } : ability,
+          ability.id === editingAbilityId
+            ? { ...ability, name, description: description || undefined, usage, kind: draft.kind, actionKind: draft.actionKind, trigger: draft.trigger }
+            : ability,
         ),
       }))
     }
@@ -165,6 +235,70 @@ export function CharacterAbilities({ character, updateCharacter }: Props) {
                       onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))}
                       placeholder="Explique o que a habilidade faz, quando ela é usada e quaisquer detalhes importantes."
                     />
+                  </div>
+
+                  <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-[color:color-mix(in_srgb,var(--social-bg)_70%,transparent)] p-4">
+                    <div>
+                      <div className="text-xs font-semibold text-textH">Tipo</div>
+                      <Select
+                        className="mt-2 h-9"
+                        value={draft.kind}
+                        onChange={(e) =>
+                          setDraft((prev) => ({
+                            ...prev,
+                            kind: e.target.value as AbilityKind,
+                          }))
+                        }
+                      >
+                        {ABILITY_KIND_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    {draft.kind === 'active' ? (
+                      <div>
+                        <div className="text-xs font-semibold text-textH">Ação</div>
+                        <Select
+                          className="mt-2 h-9"
+                          value={draft.actionKind}
+                          onChange={(e) =>
+                            setDraft((prev) => ({
+                              ...prev,
+                              actionKind: e.target.value as AbilityActionKind,
+                            }))
+                          }
+                        >
+                          {ABILITY_ACTION_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="text-xs font-semibold text-textH">Gatilho</div>
+                        <Select
+                          className="mt-2 h-9"
+                          value={draft.trigger}
+                          onChange={(e) =>
+                            setDraft((prev) => ({
+                              ...prev,
+                              trigger: e.target.value as AbilityTrigger,
+                            }))
+                          }
+                        >
+                          {ABILITY_TRIGGER_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-4 grid gap-3 rounded-2xl border border-border bg-[color:color-mix(in_srgb,var(--social-bg)_70%,transparent)] p-4">
@@ -300,6 +434,11 @@ export function CharacterAbilities({ character, updateCharacter }: Props) {
                           : USAGE_OPTIONS.find((option) => option.value === draft.usageReset)?.label ?? 'Sem uso'
                         : 'Sem contador de uso'}
                     </div>
+                    <div className="mt-1 text-xs text-text">
+                      {draft.kind === 'active'
+                        ? `Ativa • ${ABILITY_ACTION_OPTIONS.find((option) => option.value === draft.actionKind)?.label ?? 'Ação'}`
+                        : `Passiva • ${ABILITY_TRIGGER_OPTIONS.find((option) => option.value === draft.trigger)?.label ?? 'Sempre'}`}
+                    </div>
                     {draft.usageEnabled ? (
                       <div className="mt-2 text-xs text-text">
                         Max {draft.usageMax || '1'} • Usados {draft.usageUsed || '0'}
@@ -325,13 +464,18 @@ export function CharacterAbilities({ character, updateCharacter }: Props) {
 
   const summaryLabel = (ability: CustomAbility) => {
     const usage = ability.usage
-    if (!usage) return 'Sem contador de uso'
+    const kindLabel = ability.kind === 'passive' ? 'Passiva' : 'Ativa'
+    if (!usage) {
+      return ability.kind === 'passive'
+        ? `${kindLabel} • ${ABILITY_TRIGGER_OPTIONS.find((option) => option.value === (ability.trigger ?? 'always'))?.label ?? 'Sempre'}`
+        : `${kindLabel} • ${ABILITY_ACTION_OPTIONS.find((option) => option.value === (ability.actionKind ?? 'action'))?.label ?? 'Ação'}`
+    }
     if (usage.reset === 'cooldown') {
       const amount = Math.max(1, Math.trunc(usage.cooldownAmount ?? 1) || 1)
       const unit = COOLDOWN_UNIT_OPTIONS.find((option) => option.value === (usage.cooldownUnit ?? 'turns'))?.label ?? 'Turnos'
-      return `Cooldown • ${amount} ${unit.toLowerCase()}`
+      return `${kindLabel} • Cooldown • ${amount} ${unit.toLowerCase()}`
     }
-    return USAGE_OPTIONS.find((option) => option.value === usage.reset)?.label ?? 'Sem uso'
+    return `${kindLabel} • ${USAGE_OPTIONS.find((option) => option.value === usage.reset)?.label ?? 'Sem uso'}`
   }
 
   const sortedAbilities = [...abilities].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
@@ -364,6 +508,7 @@ export function CharacterAbilities({ character, updateCharacter }: Props) {
                     key={ability.id}
                     className={cn(
                       'rounded-2xl border border-border bg-bg p-4 transition-shadow hover:shadow-theme',
+                      ability.kind === 'passive' ? 'border-dashed' : '',
                       usage ? 'grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]' : 'flex items-center justify-between gap-4',
                     )}
                   >
@@ -419,6 +564,11 @@ export function CharacterAbilities({ character, updateCharacter }: Props) {
                       <Button size="sm" variant="secondary" onClick={() => openEditAbility(ability)}>
                         Editar
                       </Button>
+                      {ability.kind === 'active' && usage ? (
+                        <Button size="sm" variant="secondary" disabled={remaining !== null && remaining <= 0}>
+                          Usar
+                        </Button>
+                      ) : null}
                       <Button
                         size="sm"
                         variant="ghost"

@@ -1,4 +1,4 @@
-import type { InventoryItem } from '../types'
+import type { InventoryItem } from '../features/models/types'
 import { InventoryEditor } from '../features/inventory/InventoryEditor'
 import { newInventoryItem } from '../lib/inventory'
 

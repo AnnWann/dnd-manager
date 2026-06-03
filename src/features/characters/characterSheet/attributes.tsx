@@ -1,7 +1,7 @@
 import { Input } from "../../../components/ui/Input"
 import { clampInt } from "../../../lib/numberFormat"
 import { ABILITIES as ATTRIBUTES, abilityModifier, formatSigned } from "../../../lib/rules"
-import type { Attribute, Character } from "../../../types"
+import type { Attribute, Character } from "../../models/types"
 
 
 type Props = {

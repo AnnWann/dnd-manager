@@ -1,4 +1,4 @@
-import type { CharacterSkills, HitDice } from "./features/characters/characterSheet/character.types"
+import type { CharacterSkills, HitDice } from "../characters/characterSheet/character.types"
 
 export type Attribute = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'
 
@@ -7,6 +7,49 @@ export type ProficiencyMode = 'totalLevel' | 'classLevel'
 export type RestResetKind = 'longRest' | 'shortRest'
 export type AbilityUsageResetKind = 'turn' | 'cooldown' | 'shortRest' | 'longRest'
 export type AbilityUsageCooldownUnit = 'turns' | 'minutes' | 'hours' | 'days' | 'tenDays'
+export type AbilityKind = 'active' | 'passive'
+export type AbilityActionKind = 'action' | 'bonusAction' | 'reaction' | 'legendaryAction' | 'legendaryReaction' | 'legendaryResistance' | 'free'
+export type AbilityTrigger =
+  | 'startTurn'
+  | 'endTurn'
+  | 'startRound'
+  | 'endRound'
+  | 'onAttack'
+  | 'onHit'
+  | 'onCrit'
+  | 'onMiss'
+  | 'whenHit'
+  | 'whenDamaged'
+  | 'whenHealed'
+  | 'whenTargeted'
+  | 'whenConcentrating'
+  | 'whenConcentrationEnds'
+  | 'onSpellCast'
+  | 'onSpellHit'
+  | 'onSpellMiss'
+  | 'onSave'
+  | 'onFailedSave'
+  | 'onSuccessfulSave'
+  | 'onSkillCheck'
+  | 'onInitiative'
+  | 'onShortRest'
+  | 'onLongRest'
+  | 'onDodge'
+  | 'onDropToZeroHp'
+  | 'onDeathSave'
+  | 'onAllyFalls'
+  | 'onEnemyApproaches'
+  | 'onCreatureEntersReach'
+  | 'onCreatureLeavesReach'
+  | 'whenBloodied'
+  | 'whileMounted'
+  | 'whileHidden'
+  | 'whileProne'
+  | 'whileGrappled'
+  | 'whileSurprised'
+  | 'always'
+export type ArmorType = 'none' | 'light' | 'medium' | 'heavy'
+export type ArmorClassMode = 'bonus' | 'base'
 
 export type PrimaryRollDisplayMode = 'auto' | 'custom' | 'save' | 'attack' | 'damage'
 
@@ -162,6 +205,9 @@ export interface CustomAbility {
   name: string
   description?: string
   usage?: AbilityUsage
+  kind?: AbilityKind
+  actionKind?: AbilityActionKind
+  trigger?: AbilityTrigger
 }
 
 export interface CharacterClass {
@@ -188,6 +234,8 @@ export interface EquipmentSlot {
     attackBonus?: number
     mobility?: number
   }
+  armorType?: ArmorType
+  armorClassMode?: ArmorClassMode
   twoHanded?: boolean
   notes?: string
 }
@@ -239,6 +287,16 @@ export interface AddedSpell {
   /** Optional: how this spell is cast in combat (action economy) */
   castTimeKind?: SpellCastTimeKind
 
+  /** Optional: cached raw duration text, used for concentration tracking. */
+  durationText?: string
+
+  /** Optional: whether the spell requires concentration. */
+  requiresConcentration?: boolean
+
+  /** Optional: combat state for this spell instance. */
+  combatStatus?: 'concentrando'
+  combatTurnsRemaining?: number
+
   /** Optional: when castTimeKind resolves to 'reaction', describes when the reaction can be taken. */
   reactionWhen?: string
 
@@ -288,6 +346,12 @@ export interface Character {
   initiativeBonus?: number
   hitDice: HitDice
   armorClass: number
+  actionsPerTurn: number
+  bonusActionsPerTurn: number
+  reactionsPerTurn: number
+  legendaryActions: number
+  legendaryReactions: number
+  legendaryResistances: number
   attributes: Record<Attribute, number>
   skills: CharacterSkills
   classes: CharacterClass[]
@@ -372,7 +436,7 @@ export interface InitiativeResult {
   initiative: number
   ownerKey?: string
   visibilityRole?: UserRole
-  effects: import('./features/initiative/initiative').InitiativeEffect[]
+  effects: import('../initiative/initiative').InitiativeEffect[]
 }
 
 export interface SpellTranslation {

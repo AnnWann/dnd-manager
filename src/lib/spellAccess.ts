@@ -1,4 +1,4 @@
-import type { CharacterClass, DndSpell } from '../types'
+import type { CharacterClass, DndSpell } from '../features/models/types'
 
 export function spellListClassIndex(classIndex: string): string {
   if (classIndex === 'eldritch_knight') return 'wizard'

@@ -1,9 +1,9 @@
 import { useState } from "react"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
-import { equipmentBonuses } from "../../../lib/character"
+import { characterArmorClass, characterArmorClassAdjustment, equipmentBonuses } from "../../../lib/character"
 import { abilityModifier, formatSigned } from "../../../lib/rules"
-import type { Character, CharacterTypes, InitiativeMode } from "../../../types"
+import type { Character, CharacterTypes, InitiativeMode } from "../../models/types"
 
 export const CHARACTER_TYPES: CharacterTypes[] = [
   "pc",
@@ -57,6 +57,7 @@ export function CharacterInfo({
   const eqBonuses = equipmentBonuses(character)
 
   const displayedArmorClass = (character.armorClass ?? 10) + eqBonuses.armorClass
+  const totalArmorClass = characterArmorClass(character)
   const displayedInitiativeBonus = (character.initiativeBonus ?? 0) + eqBonuses.initiativeBonus
   const displayedInitiative = dexMod + displayedInitiativeBonus + eqBonuses.initiative
   const displayedMaxHp = (character.maxHp ?? 0) + eqBonuses.maxHp
@@ -197,6 +198,93 @@ export function CharacterInfo({
         </div>
       ) : null}
 
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <div>
+          <label className="text-xs text-text">Ações</label>
+          <Input
+            type="number"
+            className="mt-1"
+            value={character.actionsPerTurn ?? 1}
+            onChange={(e) =>
+              updateCharacter(character.id, (c) => ({
+                ...c,
+                actionsPerTurn: Math.max(0, Math.trunc(Number(e.target.value) || 0)),
+              }))
+            }
+          />
+        </div>
+        <div>
+          <label className="text-xs text-text">Ações bônus</label>
+          <Input
+            type="number"
+            className="mt-1"
+            value={character.bonusActionsPerTurn ?? 1}
+            onChange={(e) =>
+              updateCharacter(character.id, (c) => ({
+                ...c,
+                bonusActionsPerTurn: Math.max(0, Math.trunc(Number(e.target.value) || 0)),
+              }))
+            }
+          />
+        </div>
+        <div>
+          <label className="text-xs text-text">Reações</label>
+          <Input
+            type="number"
+            className="mt-1"
+            value={character.reactionsPerTurn ?? 1}
+            onChange={(e) =>
+              updateCharacter(character.id, (c) => ({
+                ...c,
+                reactionsPerTurn: Math.max(0, Math.trunc(Number(e.target.value) || 0)),
+              }))
+            }
+          />
+        </div>
+        <div>
+          <label className="text-xs text-text">Ações lendárias</label>
+          <Input
+            type="number"
+            className="mt-1"
+            value={character.legendaryActions ?? 0}
+            onChange={(e) =>
+              updateCharacter(character.id, (c) => ({
+                ...c,
+                legendaryActions: Math.max(0, Math.trunc(Number(e.target.value) || 0)),
+              }))
+            }
+          />
+        </div>
+        <div>
+          <label className="text-xs text-text">Reações lendárias</label>
+          <Input
+            type="number"
+            className="mt-1"
+            value={character.legendaryReactions ?? 0}
+            onChange={(e) =>
+              updateCharacter(character.id, (c) => ({
+                ...c,
+                legendaryReactions: Math.max(0, Math.trunc(Number(e.target.value) || 0)),
+              }))
+            }
+          />
+        </div>
+        <div>
+          <label className="text-xs text-text">Resistências lendárias</label>
+          <Input
+            type="number"
+            className="mt-1"
+            value={character.legendaryResistances ?? 0}
+            onChange={(e) =>
+              updateCharacter(character.id, (c) => ({
+                ...c,
+                legendaryResistances: Math.max(0, Math.trunc(Number(e.target.value) || 0)),
+              }))
+            }
+          />
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
         <div>
           <label className="text-xs text-text">
@@ -206,11 +294,11 @@ export function CharacterInfo({
           <Input
             type="number"
             className="mt-1"
-            value={displayedArmorClass}
+            value={totalArmorClass}
             onChange={(e) =>
               updateCharacter(character.id, (c) => ({
                 ...c,
-                armorClass: saveBaseValue(Number(e.target.value), eqBonuses.armorClass),
+                armorClass: saveBaseValue(Number(e.target.value), characterArmorClassAdjustment(c)),
               }))
             }
           />
