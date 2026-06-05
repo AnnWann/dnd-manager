@@ -1,3 +1,5 @@
+import type { CharacterType } from "../characters/CharacterType"
+import type { CharacterRace } from "../races/CharacterRace"
 import type { CharacterAttribute } from "./CharacterAttribute"
 import type { CharacterSkills } from "./CharacterSkills"
 import type { CharacterClassInterface } from "./Class"
@@ -10,6 +12,11 @@ export type Sheet = {
   mobility: number
   attributes: CharacterAttribute
   skills: CharacterSkills
+
   classes?: CharacterClassInterface
+  race: CharacterRace
+  type: CharacterType
+
   arms: number
+
 }

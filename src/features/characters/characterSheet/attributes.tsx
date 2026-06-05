@@ -1,14 +1,13 @@
 import { Input } from "../../../components/ui/Input"
 import { clampInt } from "../../../lib/numberFormat"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import { ATTRIBUTE_KEYS } from "../../../models/sheet/Attribute"
-import type { Attribute, Character } from "../../../models/types"
+import { ATTRIBUTE_KEYS, type Attribute } from "../../../models/sheet/Attribute"
 import { calcAttributeModifier } from "../../../rules/attribute/calcAttributeModifier"
 
 
 type Props = {
   character: CharacterTemplate
-  updateCharacter: (characterId: string, updater: (c: Character) => Character) => void
+  updateCharacter: (characterId: string, updater: (c: CharacterTemplate) => CharacterTemplate) => void
 }
 
 
@@ -29,7 +28,7 @@ export function Attributes({ character, updateCharacter }: Props) {
                 const score = clampInt(Number(e.target.value), 1, 30)
                 updateCharacter(character.id, (c) => ({
                   ...c,
-                  attributes: { ...c.attributes, [attr]: score },
+                  attributes: { ...c.sheet.attributes, [attr]: score },
                 }))
               }}
             />

@@ -1,37 +1,29 @@
 import { useState } from "react"
-import { Input } from "../../../components/ui/Input"
-import { Select } from "../../../components/ui/Select"
-import { characterArmorClass, characterArmorClassAdjustment, equipmentBonuses } from "../../../lib/character"
-import { abilityModifier, formatSigned } from "../../../lib/rules"
-import type { Character, CharacterTypes, InitiativeMode } from "../../../models/types"
-
-export const CHARACTER_TYPES: CharacterTypes[] = [
-  "pc",
-  "npc",
-  "besta",
-  "humanoide",
-  "monstruosidade",
-  "morto-vivo",
-  "constructo",
-  "elemental",
-  "féerico",
-  "corruptor",
-  "gigante",
-  "dragão",
-  "celestial",
-  "aberração",
-  "gosma",
-]
+import { Input } from "../../../../components/ui/Input"
+import { Select } from "../../../../components/ui/Select"
+import { characterArmorClass, characterArmorClassAdjustment, equipmentBonuses } from "../../../../lib/character"
+import { abilityModifier, formatSigned } from "../../../../lib/rules"
+import type { CharacterTypes, InitiativeMode } from "../../../../models/types"
+import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
+import { CHARACTER_TYPES, type CharacterType } from "../../../../models/characters/CharacterType"
+import { SelectCharacterUniqueness } from "./components/selectCharacterUniqueness"
+import { SelectCharacterVisibility } from "./components/selectCharacterVisibility"
+import { SelectCharacterType } from "./components/selectCharacterType"
+import { SelectCharacterOwner } from "./components/selectCharacterOwner"
+import type { Player } from "../../../../models/player/Player"
+import { SelectActions } from "./components/actions/selectActions"
 
 type Props = {
-  character: Character
+  character: CharacterTemplate
   updateCharacter: (
     characterId: string,
-    updater: (c: Character) => Character
+    updater: (c: CharacterTemplate) => CharacterTemplate
   ) => void
   canAssignOwners: boolean
   canEditCharacterType: boolean
   playerKeys: string[]
+  getOwner: (ownerId: string) => Player
+  createOwner: (ownerName: string) => Player
 }
 
 export function CharacterInfo({
@@ -40,6 +32,8 @@ export function CharacterInfo({
   canAssignOwners,
   canEditCharacterType,
   playerKeys,
+  getOwner,
+  createOwner
 }: Props) {
   const [hitDiceOpen, setHitDiceOpen] = useState(false)
 
@@ -90,199 +84,42 @@ export function CharacterInfo({
           />
         </div>
 
-        <div className="w-full md:w-[320px]">
-          <label className="text-xs text-text">
-            Tipo
-          </label>
-
-          <Select
-            className="mt-1"
-            value={character.type}
-            disabled={!canEditCharacterType}
-            onChange={(e) =>
-              canEditCharacterType
-                ?
-              updateCharacter(character.id, (c) => ({
-                ...c,
-                type: e.target.value as CharacterTypes,
-              }))
-                : undefined
-            }
-          >
-            {(canEditCharacterType ? CHARACTER_TYPES : [character.type]).map((t) => (
-              <option key={t} value={t}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </option>
-            ))}
-          </Select>
-        </div>
+        <SelectCharacterType
+          character={character}
+          updateCharacter={updateCharacter}
+          canEditCharacterType={canEditCharacterType}
+        />
       </div>
 
       {canAssignOwners ? (
-        <div className="w-full md:w-[320px]">
-          <label className="text-xs text-text">
-            Visibilidade
-          </label>
-
-          <Select
-            className="mt-1"
-            value={character.visibilityRole ?? 'player'}
-            onChange={(e) =>
-              updateCharacter(character.id, (c) => ({
-                ...c,
-                visibilityRole: e.target.value as 'master' | 'player',
-              }))
-            }
-          >
-            <option value="player">Player</option>
-            <option value="master">Master</option>
-          </Select>
-        </div>
+        <SelectCharacterVisibility 
+          character={character}
+          updateCharacter={updateCharacter}
+        />
       ) : null}
 
       {canAssignOwners ? (
-        <div className="w-full md:w-[320px]">
-          <label className="text-xs text-text">
-            Jogador atribuído
-          </label>
-
-          <Select
-            className="mt-1"
-            value={character.ownerKey ?? ''}
-            onChange={(e) =>
-              updateCharacter(character.id, (c) => ({
-                ...c,
-                ownerKey: e.target.value,
-              }))
-            }
-          >
-            <option value="">Sem jogador</option>
-            {playerKeys.map((key) => (
-              <option key={key} value={key}>
-                {key}
-              </option>
-            ))}
-          </Select>
-
-          <Input
-            className="mt-2"
-            value={character.ownerKey ?? ''}
-            onChange={(e) =>
-              updateCharacter(character.id, (c) => ({
-                ...c,
-                ownerKey: e.target.value,
-              }))
-            }
-            placeholder="Ou digite um novo nome de jogador"
-          />
-        </div>
+        <SelectCharacterOwner
+          character={character}
+          updateCharacter={updateCharacter}
+          playerKeys={playerKeys}
+          getOwner={getOwner}
+          createOwner={createOwner}
+        />
       ) : null}
 
       {canAssignOwners ? (
-        <div className="w-full md:w-[320px]">
-          <label className="text-xs text-text">Modo de Iniciativa</label>
-
-          <Select
-            className="mt-1"
-            value={character.initiativeMode ?? (character.type === 'pc' ? 'unique' : 'general')}
-            onChange={(e) =>
-              updateCharacter(character.id, (c) => ({
-                ...c,
-                initiativeMode: e.target.value as InitiativeMode,
-              }))
-            }
-          >
-            <option value="unique">Único</option>
-            <option value="general">Geral</option>
-          </Select>
-        </div>
+        <SelectCharacterUniqueness 
+          character={character}
+          updateCharacter={updateCharacter}
+        />
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <div>
-          <label className="text-xs text-text">Ações</label>
-          <Input
-            type="number"
-            className="mt-1"
-            value={character.actionsPerTurn ?? 1}
-            onChange={(e) =>
-              updateCharacter(character.id, (c) => ({
-                ...c,
-                actionsPerTurn: Math.max(0, Math.trunc(Number(e.target.value) || 0)),
-              }))
-            }
-          />
-        </div>
-        <div>
-          <label className="text-xs text-text">Ações bônus</label>
-          <Input
-            type="number"
-            className="mt-1"
-            value={character.bonusActionsPerTurn ?? 1}
-            onChange={(e) =>
-              updateCharacter(character.id, (c) => ({
-                ...c,
-                bonusActionsPerTurn: Math.max(0, Math.trunc(Number(e.target.value) || 0)),
-              }))
-            }
-          />
-        </div>
-        <div>
-          <label className="text-xs text-text">Reações</label>
-          <Input
-            type="number"
-            className="mt-1"
-            value={character.reactionsPerTurn ?? 1}
-            onChange={(e) =>
-              updateCharacter(character.id, (c) => ({
-                ...c,
-                reactionsPerTurn: Math.max(0, Math.trunc(Number(e.target.value) || 0)),
-              }))
-            }
-          />
-        </div>
-        <div>
-          <label className="text-xs text-text">Ações lendárias</label>
-          <Input
-            type="number"
-            className="mt-1"
-            value={character.legendaryActions ?? 0}
-            onChange={(e) =>
-              updateCharacter(character.id, (c) => ({
-                ...c,
-                legendaryActions: Math.max(0, Math.trunc(Number(e.target.value) || 0)),
-              }))
-            }
-          />
-        </div>
-        <div>
-          <label className="text-xs text-text">Reações lendárias</label>
-          <Input
-            type="number"
-            className="mt-1"
-            value={character.legendaryReactions ?? 0}
-            onChange={(e) =>
-              updateCharacter(character.id, (c) => ({
-                ...c,
-                legendaryReactions: Math.max(0, Math.trunc(Number(e.target.value) || 0)),
-              }))
-            }
-          />
-        </div>
-        <div>
-          <label className="text-xs text-text">Resistências lendárias</label>
-          <Input
-            type="number"
-            className="mt-1"
-            value={character.legendaryResistances ?? 0}
-            onChange={(e) =>
-              updateCharacter(character.id, (c) => ({
-                ...c,
-                legendaryResistances: Math.max(0, Math.trunc(Number(e.target.value) || 0)),
-              }))
-            }
-          />
-        </div>
+        <SelectActions
+          character={character}
+          updateCharacter={updateCharacter}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">

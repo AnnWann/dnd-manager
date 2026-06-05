@@ -1,4 +1,4 @@
-import type { Ability } from "../abilities.ts/Ability"
+import type { Ability } from "../abilities/Ability"
 import type { ActionsPerTurn } from "../actions/Actions"
 import type { CharacterEquipment } from "../items/equipment/Equipment"
 import type { Itemmable } from "../items/item"

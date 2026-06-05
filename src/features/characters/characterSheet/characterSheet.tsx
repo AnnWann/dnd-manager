@@ -1,14 +1,14 @@
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
-import type { Attribute, Character } from "../../../models/types"
 import { Attributes } from "./attributes"
 import { Class } from "./class"
-import { CharacterInfo } from "./characterInfo"
+import { CharacterInfo } from "./character_info/characterInfo"
 import { Skills } from "./skills"
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import type { Attribute } from "../../../models/sheet/Attribute"
 
 type Props = {
-  character: Character
-  updateCharacter: (characterId: string, updater: (c: Character) => Character) => void
-  abilityShort: (ability: Attribute) => string
+  character: CharacterTemplate
+  updateCharacter: (characterId: string, updater: (c: CharacterTemplate) => CharacterTemplate) => void
   addClassToActive: (classIndex: string) => void
   canAssignOwners: boolean
   canEditCharacterType: boolean
@@ -18,7 +18,6 @@ type Props = {
 export function CharacterSheet({
   character,
   updateCharacter,
-  abilityShort,
   addClassToActive,
   canAssignOwners,
   canEditCharacterType,
@@ -43,7 +42,6 @@ export function CharacterSheet({
         <Attributes
           character={character}
           updateCharacter={updateCharacter}
-          attributeShort={abilityShort}
           />
 
         <Skills
