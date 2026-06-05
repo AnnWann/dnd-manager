@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
-import type { Attribute } from '../features/models/types'
+import type { Attribute } from '../models/types'
 
 export type Locale = 'pt-BR' | 'en'
 

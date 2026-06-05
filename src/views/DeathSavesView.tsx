@@ -1,4 +1,4 @@
-import type { Character } from '../features/models/types'
+import type { Character } from '../models/types'
 import { CharacterSelector } from '../features/characters/characterSelector'
 import { DeathSavesPanel } from '../features/deathSaves/DeathSavesPanel'
 

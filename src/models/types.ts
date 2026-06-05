@@ -1,4 +1,4 @@
-import type { CharacterSkills, HitDice } from "../characters/characterSheet/character.types"
+import type { CharacterSkills, HitDice } from "../features/characters/characterSheet/character.types"
 
 export type Attribute = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha'
 
@@ -56,7 +56,7 @@ export type PrimaryRollDisplayMode = 'auto' | 'custom' | 'save' | 'attack' | 'da
 export type UserRole = 'master' | 'player'
 export type InitiativeMode = 'unique' | 'general'
 
-export interface InventoryItem {
+export interface  InventoryItem {
   id: string
   name: string
   quantity: number
@@ -436,7 +436,7 @@ export interface InitiativeResult {
   initiative: number
   ownerKey?: string
   visibilityRole?: UserRole
-  effects: import('../initiative/initiative').InitiativeEffect[]
+  effects: import('../features/initiative/initiative').InitiativeEffect[]
 }
 
 export interface SpellTranslation {

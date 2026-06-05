@@ -1,4 +1,4 @@
-import type { Attribute, Character, CharacterEquipment, EquipmentSlot } from '../features/models/types'
+import type { Attribute, Character, CharacterEquipment, EquipmentSlot } from '../models/types'
 import { abilityModifier } from './rules'
 
 export function defaultAbilities(): Record<Attribute, number> {

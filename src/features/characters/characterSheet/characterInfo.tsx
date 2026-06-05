@@ -3,7 +3,7 @@ import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { characterArmorClass, characterArmorClassAdjustment, equipmentBonuses } from "../../../lib/character"
 import { abilityModifier, formatSigned } from "../../../lib/rules"
-import type { Character, CharacterTypes, InitiativeMode } from "../../models/types"
+import type { Character, CharacterTypes, InitiativeMode } from "../../../models/types"
 
 export const CHARACTER_TYPES: CharacterTypes[] = [
   "pc",

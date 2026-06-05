@@ -6,7 +6,7 @@ import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
 import { Textarea } from '../../components/ui/Textarea'
 import { cn } from '../../lib/cn'
-import type { AbilityActionKind, AbilityKind, AbilityTrigger, AbilityUsageCooldownUnit, AbilityUsageResetKind, Character, CustomAbility } from '../models/types'
+import type { AbilityActionKind, AbilityKind, AbilityTrigger, AbilityUsageCooldownUnit, AbilityUsageResetKind, Character, CustomAbility } from '../../models/types'
 
 const USAGE_OPTIONS: Array<{ value: AbilityUsageResetKind; label: string }> = [
   { value: 'turn', label: 'Por turno' },

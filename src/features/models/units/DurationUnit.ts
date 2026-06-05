@@ -1,1 +1,0 @@
-export type DurationUnit = 'turn' | 'minute' | 'hour' | 'day' | 'short rest' | 'long rest' | 'permanent'

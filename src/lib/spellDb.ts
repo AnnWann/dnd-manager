@@ -1,4 +1,4 @@
-import type { DndApiRef, DndSpell } from '../features/models/types'
+import type { DndApiRef, DndSpell } from '../models/types'
 
 export type SpellDbPayloadV1 = {
   version: 1

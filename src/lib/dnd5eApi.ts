@@ -1,4 +1,4 @@
-import type { DndApiRef, DndSpell, SpellListResponse } from '../features/models/types'
+import type { DndApiRef, DndSpell, SpellListResponse } from '../models/types'
 import { readCachedLocalStorage, writeCachedLocalStorage } from './storage'
 
 const API_BASE = 'https://www.dnd5eapi.co'

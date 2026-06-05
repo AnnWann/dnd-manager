@@ -1,4 +1,4 @@
-import type { SpellEffect } from '../features/models/types'
+import type { SpellEffect } from '../models/types'
 
 export function effectsEqual(a: SpellEffect[] | undefined, b: SpellEffect[] | undefined): boolean {
   const aa = a ?? []

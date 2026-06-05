@@ -2,7 +2,7 @@ import { badge } from "../spells/addedSpells/badge"
 import { Button } from "../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../components/ui/Card"
 import { totalLevel } from "../../lib/rules"
-import type { Character, InitiativeResult } from "../models/types"
+import type { Character, InitiativeResult } from "../../models/types"
 
 
 type Props = {

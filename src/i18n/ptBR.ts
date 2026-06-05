@@ -1,4 +1,4 @@
-import type { Attribute } from '../features/models/types'
+import type { Attribute } from '../models/types'
 
 export const ABILITY_ORDER: Attribute[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 

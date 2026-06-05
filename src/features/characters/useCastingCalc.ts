@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import type { Character } from '../models/types'
+import type { Character } from '../../models/types'
 import { equipmentBonuses } from '../../lib/character'
 import { spellAttackBonus, spellSaveDc, totalLevel } from '../../lib/rules'
 

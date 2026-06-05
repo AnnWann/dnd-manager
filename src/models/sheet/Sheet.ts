@@ -11,4 +11,5 @@ export type Sheet = {
   attributes: CharacterAttribute
   skills: CharacterSkills
   classes?: CharacterClassInterface
+  arms: number
 }

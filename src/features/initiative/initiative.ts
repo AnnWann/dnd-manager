@@ -1,4 +1,4 @@
-import type { Character, InitiativeResult as InitiativeEntry } from "../models/types"
+import type { Character, InitiativeResult as InitiativeEntry } from "../../models/types"
 
 export type InitiativeEffect = {
   id: string

@@ -5,7 +5,7 @@ import type {
   DndSpell,
   HomebrewSpell,
   HomebrewSpellMechanic,
-} from '../features/models/types'
+} from '../models/types'
 
 export function isHomebrewIndex(index: string): boolean {
   return index.startsWith('hb:')

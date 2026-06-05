@@ -2,7 +2,7 @@ import { Button } from '../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { Input } from '../../components/ui/Input'
 import { Textarea } from '../../components/ui/Textarea'
-import type { InventoryItem } from '../models/types'
+import type { InventoryItem } from '../../models/types'
 
 type Props = {
   title: string

@@ -1,6 +1,6 @@
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
-import type { Character } from '../models/types'
+import type { Character } from '../../models/types'
 
 type Props = {
   character: Character

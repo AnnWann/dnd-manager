@@ -1,4 +1,4 @@
-import type { Attribute, Character } from '../features/models/types'
+import type { Attribute, Character } from '../models/types'
 import { CharacterSelector } from '../features/characters/characterSelector'
 import { CharacterSheet } from '../features/characters/characterSheet/characterSheet'
 import { CharacterAbilities } from '../features/characters/CharacterAbilities'

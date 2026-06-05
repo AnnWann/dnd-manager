@@ -1,4 +1,4 @@
-import type { AddedSpell, DndSpell, SpellTranslation } from '../../models/types'
+import type { AddedSpell, DndSpell, SpellTranslation } from '../../../models/types'
 import { Button } from '../../../components/ui/Button'
 import { InlineMarkdown } from '../../../components/InlineMarkdown'
 

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { Character } from "../models/types"
+import type { Character } from "../../models/types"
 import { calcCharacterInitiative, type InitiativeEffect, type InitiativeResult } from "./initiative"
 
 export function useInitiative() {

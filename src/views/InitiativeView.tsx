@@ -1,4 +1,4 @@
-import type { Character } from '../features/models/types'
+import type { Character } from '../models/types'
 import type { InitiativeResult } from '../features/initiative/initiative'
 import { InitiativeBoard } from '../features/initiative/InitiativeBoard'
 

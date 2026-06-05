@@ -1,4 +1,4 @@
-import type { AddedSpell, Character, DndSpell, SpellTranslation } from '../../models/types'
+import type { AddedSpell, Character, DndSpell, SpellTranslation } from '../../../models/types'
 import { SpellOfficialHomebrewPanel } from './SpellOfficialHomebrewPanel'
 import { SpellOfficialApiPanel } from './SpellOfficialApiPanel'
 

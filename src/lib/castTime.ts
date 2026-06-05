@@ -1,4 +1,4 @@
-import type { SpellCastTimeKind } from '../features/models/types'
+import type { SpellCastTimeKind } from '../models/types'
 
 export function castTimeKindFromText(castingTime?: string | null): SpellCastTimeKind | undefined {
   const raw = (castingTime ?? '').trim().toLowerCase()

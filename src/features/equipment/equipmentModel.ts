@@ -1,4 +1,4 @@
-import type { EquipmentSlot } from '../models/types'
+import type { EquipmentSlot } from '../../models/types'
 
 export function normalizeSlot(slot?: EquipmentSlot): EquipmentSlot {
   return {

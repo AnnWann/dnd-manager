@@ -14,7 +14,7 @@ import type {
   SpellCastTimeKind,
   SpellTranslation,
   SpellMeta,
-} from './features/models/types'
+} from './models/types'
 
 import { newCharacter } from './lib/character'
 import { preparedLimitForClass } from './lib/prepared'

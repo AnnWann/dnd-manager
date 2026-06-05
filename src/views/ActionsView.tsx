@@ -10,7 +10,7 @@ import { abilityModifier } from '../lib/rules'
 import { preparedLimitForClass } from '../lib/prepared'
 import { multiclassSpellSlots } from '../lib/spellSlots'
 import { durationTurnsFromText } from '../lib/spellMeta'
-import type { AbilityUsageCooldownUnit, AbilityUsageResetKind, Character, CustomAbility, RestResetKind, AddedSpell } from '../features/models/types'
+import type { AbilityUsageCooldownUnit, AbilityUsageResetKind, Character, CustomAbility, RestResetKind, AddedSpell } from '../models/types'
 import type { InitiativeResult } from '../features/initiative/initiative'
 
 const STANDARD_ACTIONS = [

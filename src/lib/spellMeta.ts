@@ -1,4 +1,4 @@
-import type { DndSpell, HomebrewSpell } from '../features/models/types'
+import type { DndSpell, HomebrewSpell } from '../models/types'
 
 function normalizeSpace(text: string): string {
   return text.replace(/\s+/g, ' ').trim()

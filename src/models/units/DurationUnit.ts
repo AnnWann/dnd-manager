@@ -1,0 +1,1 @@
+export type DurationUnit = 'instantaneous' | 'turn' | 'minute' | 'hour' | 'day' | 'short rest' | 'long rest' | 'permanent'

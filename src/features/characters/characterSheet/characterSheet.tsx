@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
-import type { Attribute, Character } from "../../models/types"
+import type { Attribute, Character } from "../../../models/types"
 import { Attributes } from "./attributes"
 import { Class } from "./class"
 import { CharacterInfo } from "./characterInfo"

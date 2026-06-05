@@ -5,7 +5,7 @@ import { equipmentBonuses } from "../../../lib/character"
 import { clampInt } from "../../../lib/numberFormat"
 import { ABILITIES, spellAttackBonus, spellSaveDc, totalLevel } from "../../../lib/rules"
 import { CLASS_OPTIONS, classLabel } from "../../../lib/spellLabels"
-import type { Attribute, Character } from "../../models/types"
+import type { Attribute, Character } from "../../../models/types"
 
 
 type Props = {

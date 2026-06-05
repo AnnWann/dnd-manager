@@ -1,4 +1,4 @@
-import type { Character, CustomAbility } from "../features/models/types";
+import type { Character, CustomAbility } from "../models/types";
 import type { AppStateV1 } from "./remoteState";
 import { defaultEquipment, weaponSlotsFromLimbCount } from "./character";
 import { normalizeDeathSaves, normalizeInventoryItems } from './inventory'

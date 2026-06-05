@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import type { Character } from "../models/types"
+import type { Character } from "../../models/types"
 import { Button } from "../../components/ui/Button"
 import type { InitiativeResult } from './initiative'
 

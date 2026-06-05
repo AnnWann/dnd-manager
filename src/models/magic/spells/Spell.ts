@@ -1,10 +1,14 @@
-import type { Attribute } from "../../sheet/Attribute"
 import type { DurationUnit } from "../../units/DurationUnit"
 import type { Effect } from "../../Effects/Effect"
 import type { ActionType } from "../../actions/Actions"
 import type { RollType } from "../../dice/RollType"
 import type { ClassName } from "../../sheet/Class"
 import type { Die } from "../../dice/Die"
+import type { MagicCircleLevel, MagicSchool } from "./spellDefinitions"
+import type { SpellSource } from "./SpellSource"
+import type { Attribute } from "../../sheet/Attribute"
+
+
 
 export type Spell = {
   index: string
@@ -26,11 +30,6 @@ export type Spell = {
   reactionWhen?: string
 
   range: string
-  area: {
-    self: boolean
-    shape?: 'square' | 'circle' | 'cone' | 'line'
-    size?: number
-  }
   duration: {
     value: number 
     unit: DurationUnit
@@ -43,27 +42,22 @@ export type Spell = {
   components: ('V' | 'S' | 'M')[]
   material?: string
 
-  higherLevel: {
-    mode: 'dice' | 'quantity' | 'none'
-    dicePerLevel?: number
-    quantityPerLevel?: number
-    higherLevelText: string
-  }
- 
+  targeting: SpellTargeting 
   effects: Effect
 }
 
-export type SpellSource = {
-  type: SpellSourceType
-  name: string
-  attribute: Attribute
-  sourceId: string
+export type SpellTargeting = {
+  kind: 'self' | 'single-creature' | 'multiple-creatures' | 'area' | 'object' | 'special'
+  targetsSelf: boolean
+
+  targetCount?: number
+  canTargetMoreAtHigherLevels?: boolean
+
+  hasAttackRoll: boolean
+  hasSavingThrow: boolean
+  savingThrowAttribute?: Attribute
+
+  affectsArea: boolean
+  areaShape?: 'square' | 'circle' | 'cone' | 'line'
+  areaSize?: number
 }
-
-export type SpellSourceType = 'class' | 'feat' | 'ability'
-
-export type MagicCircleLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
-
-export type MagicSchool = 
-  | ''
-  | ''
