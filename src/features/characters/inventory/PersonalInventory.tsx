@@ -26,7 +26,6 @@ function newInventoryItem(): Itemmable {
 export function CharacterInventory({
   character,
   updateCharacter,
-  canEditInventory,
 }: Props) {
   const items = character.get("inventory") ?? []
 

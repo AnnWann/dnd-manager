@@ -8,7 +8,6 @@ import type { Player } from "../../../../models/player/Player"
 import { GroupActions } from "./components/actions/GroupActions"
 import { GroupStats } from "./components/stats/GroupStats"
 import { GroupHP } from "./components/hp/GroupHP"
-import { GroupHitDice } from "./components/hitdice/groupHitDice"
 
 type Props = {
   character: CharacterTemplate

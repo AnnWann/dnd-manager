@@ -39,8 +39,8 @@ export function HitDiceRow({
               [side]: {
                 ...current,
                 current: {
-                  ...current.current,
-                  quantity: Math.max(0, current.current.quantity - 1),
+                  ...current?.current,
+                  quantity: Math.max(0, (current?.current.quantity ?? 0) - 1),
                 },
               },
             })
@@ -63,10 +63,10 @@ export function HitDiceRow({
               [side]: {
                 ...current,
                 current: {
-                  ...current.current,
+                  ...current?.current,
                   quantity: Math.min(
-                    current.max.quantity,
-                    current.current.quantity + 1,
+                    (current?.max.quantity ?? 0),
+                    (current?.current.quantity ?? 0) + 1,
                   ),
                 },
               },
