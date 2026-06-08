@@ -1,6 +1,7 @@
 import { Button } from "../../../components/ui/Button"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Armor } from "../../../models/items/equipment/Armor"
+import type { Bonus } from "../../../models/items/equipment/EquipmentSlot"
 
 type Props = {
   character: CharacterTemplate
@@ -16,10 +17,15 @@ function armorTypeLabel(type: Armor["armorType"]) {
   return "Pesada"
 }
 
-function bonusTypeLabel(type: "add" | "sub" | "flat") {
+function bonusTypeLabel(type: Bonus["type"]) {
   if (type === "add") return "+"
   if (type === "sub") return "-"
   return "fixo"
+}
+
+function formatBonusValue(bonus: Bonus) {
+  if (bonus.type === "flat") return `${bonus.value}`
+  return `${bonusTypeLabel(bonus.type)}${bonus.value}`
 }
 
 export function EquipmentArmorSection({
@@ -86,7 +92,14 @@ function EquipmentBonusList({ bonuses }: EquipmentBonusListProps) {
   const rows: string[] = []
 
   const normalBonusLabels: Array<{
-    key: keyof NonNullable<Armor["bonuses"]>
+    key:
+      | "armorClass"
+      | "initiative"
+      | "maxHp"
+      | "temporaryHp"
+      | "passivePerception"
+      | "attackBonus"
+      | "speed"
     label: string
   }> = [
     { key: "armorClass", label: "CA" },
@@ -99,24 +112,29 @@ function EquipmentBonusList({ bonuses }: EquipmentBonusListProps) {
   ]
 
   for (const field of normalBonusLabels) {
-    if (field.key === "attribute") continue
-
     const value = bonuses[field.key]
+
     if (!Array.isArray(value)) continue
 
     for (const bonus of value) {
-      rows.push(`${field.label}: ${bonusTypeLabel(bonus.type)} ${bonus.value}`)
+      rows.push(`${field.label}: ${formatBonusValue(bonus)}`)
     }
   }
 
-  if (bonuses.attribute) {
-    for (const bonus of bonuses.attribute.Bonus) {
-      rows.push(
-        `Atributo ${bonuses.attribute.Attribute.toUpperCase()}: ${bonusTypeLabel(
-          bonus.type,
-        )} ${bonus.value}`,
-      )
-    }
+  for (const entry of bonuses.attribute ?? []) {
+    rows.push(
+      `Atributo ${entry.attribute.toUpperCase()}: ${formatBonusValue(
+        entry.bonus,
+      )}`,
+    )
+  }
+
+  for (const entry of bonuses.attributeModifier ?? []) {
+    rows.push(
+      `Mod. ${entry.attribute.toUpperCase()}: ${formatBonusValue(
+        entry.bonus,
+      )}`,
+    )
   }
 
   if (rows.length === 0) {

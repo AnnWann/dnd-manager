@@ -1,7 +1,13 @@
+import { useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { cn } from "../../../lib/cn"
 import type { Ability } from "../../../models/abilities/Ability"
-import { ABILITY_ACTION_OPTIONS, ABILITY_TRIGGER_OPTIONS, COOLDOWN_UNIT_OPTIONS, USAGE_OPTIONS } from "./abilityOptions"
+import {
+  ABILITY_ACTION_OPTIONS,
+  ABILITY_TRIGGER_OPTIONS,
+  COOLDOWN_UNIT_OPTIONS,
+  USAGE_OPTIONS,
+} from "./abilityOptions"
 
 type Props = {
   ability: Ability
@@ -22,7 +28,9 @@ function summaryLabel(ability: Ability) {
 
   if (usage.reset === "cooldown") {
     const amount = Math.max(1, Math.trunc(usage.cooldownAmount ?? 1) || 1)
-    const unit = COOLDOWN_UNIT_OPTIONS.find((o) => o.value === (usage.cooldownUnit ?? "turns"))?.label ?? "Turnos"
+    const unit =
+      COOLDOWN_UNIT_OPTIONS.find((o) => o.value === (usage.cooldownUnit ?? "turns"))?.label ??
+      "Turnos"
 
     return `${kindLabel} • Cooldown • ${amount} ${unit.toLowerCase()}`
   }
@@ -31,20 +39,25 @@ function summaryLabel(ability: Ability) {
 }
 
 export function AbilityCard({ ability, onEdit, onRemove, onUse }: Props) {
+  const [expanded, setExpanded] = useState(false)
+
   const usage = ability.usage
   const remaining = usage ? Math.max(0, usage.max - usage.used) : null
+  const description = ability.description?.trim() ?? ""
 
   return (
     <div
       className={cn(
         "rounded-2xl border border-border bg-bg p-4 transition-shadow hover:shadow-theme",
         ability.kind === "passive" ? "border-dashed" : "",
-        usage ? "grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]" : "flex items-center justify-between gap-4",
+        usage
+          ? "grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]"
+          : "flex flex-col gap-4 md:flex-row md:items-center md:justify-between",
       )}
     >
-      <div className="min-w-0">
+      <div className="min-w-0 overflow-hidden">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="text-sm font-semibold text-textH">
+          <div className="break-words text-sm font-semibold text-textH">
             {ability.name || "Habilidade sem nome"}
           </div>
 
@@ -53,16 +66,36 @@ export function AbilityCard({ ability, onEdit, onRemove, onUse }: Props) {
           </span>
         </div>
 
-        {ability.description ? (
-          <div className="mt-2 line-clamp-2 text-xs leading-5 text-text">
-            {ability.description}
+        {description ? (
+          <div className="mt-2 min-w-0">
+            <p
+              className={cn(
+                "max-w-full whitespace-pre-wrap text-xs leading-5 text-text",
+                "[overflow-wrap:anywhere] [word-break:break-word]",
+                !expanded ? "line-clamp-3" : "",
+              )}
+            >
+              {description}
+            </p>
+
+            {description.length > 120 ? (
+              <button
+                type="button"
+                className="mt-1 text-xs font-medium text-textH hover:opacity-80"
+                onClick={() => setExpanded((v) => !v)}
+              >
+                {expanded ? "Ver menos" : "Ver mais"}
+              </button>
+            ) : null}
           </div>
         ) : null}
 
         <div className="mt-2 text-xs text-text">
           {usage ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span>{remaining}/{usage.max} usos restantes</span>
+              <span>
+                {remaining}/{usage.max} usos restantes
+              </span>
               <span>Gastos {usage.used}</span>
             </div>
           ) : (

@@ -36,6 +36,7 @@ export function GroupStats({
           <SelectStatModule
             name="CA"
             statKey="armorClass"
+            getValue={(c) => c.getEffectiveArmorClass()}
             character={character}
             updateCharacter={updateCharacter}
             fallback={10}
@@ -44,14 +45,16 @@ export function GroupStats({
           <SelectStatModule
             name="Iniciativa"
             statKey="initiative"
+            getValue={(c) => c.getEffectiveInitiative()}
             character={character}
             updateCharacter={updateCharacter}
             fallback={0}
-          />
+          />  
 
           <SelectStatModule
             name="Mobilidade"
             statKey="mobility"
+            getValue={(c) => c.getEffectiveMobility()}
             character={character}
             updateCharacter={updateCharacter}
             fallback={9}
@@ -60,6 +63,7 @@ export function GroupStats({
           <SelectStatModule
             name="Percepção Passiva"
             statKey="passive_perception"
+            getValue={(c) => c.getEffectivePassivePerception()}
             character={character}
             updateCharacter={updateCharacter}
             fallback={10}

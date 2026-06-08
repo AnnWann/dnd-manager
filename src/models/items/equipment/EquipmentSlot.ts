@@ -1,3 +1,4 @@
+import type { Trigger } from "../../abilities/Ability"
 import type { Attribute } from "../../sheet/Attribute"
 import type { Item } from "../item"
 
@@ -11,8 +12,22 @@ export type Equipment = Item & {
     attackBonus?: Bonus[]
     speed?: Bonus[]
     attribute?: {
-      Attribute: Attribute
-      Bonus: Bonus[]
+      attribute: Attribute
+      bonus: Bonus
+    }[]
+    attributeModifier?: {
+      attribute: Attribute
+      bonus: Bonus
+    }[]
+    attack?: {
+      type: 'always' | 'equipment' | 'conditional'
+      condition?: Trigger | string
+      bonus: Bonus
+    }
+    damage?: {
+      type: 'always' | 'equipment' | 'conditional'
+      condition?: Trigger | string
+      bonus: Bonus
     }
   }
 }

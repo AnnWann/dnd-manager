@@ -1,4 +1,4 @@
-import type { AbilityActionKind, AbilityKind, AbilityTrigger, AbilityUsageCooldownUnit, AbilityUsageResetKind } from "../../../models/abilities/Ability";
+import type { AbilityActionKind, AbilityKind, Trigger, AbilityUsageCooldownUnit, AbilityUsageResetKind } from "../../../models/abilities/Ability";
 
 
 export const USAGE_OPTIONS: Array<{ value: AbilityUsageResetKind; label: string }> = [
@@ -31,7 +31,7 @@ export const ABILITY_ACTION_OPTIONS: Array<{ value: AbilityActionKind; label: st
   { value: "free", label: "Livre" },
 ]
 
-export const ABILITY_TRIGGER_OPTIONS: Array<{ value: AbilityTrigger; label: string }> = [
+export const ABILITY_TRIGGER_OPTIONS: Array<{ value: Trigger; label: string }> = [
   { value: "always", label: "Sempre" },
   { value: "startTurn", label: "No início do turno" },
   { value: "endTurn", label: "No fim do turno" },

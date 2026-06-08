@@ -2,7 +2,7 @@ import type { Ability } from "../abilities/Ability"
 import type { ActionsPerTurn, ActionType } from "../actions/Actions"
 import type { Die } from "../dice/Die"
 import type { CharacterEquipment } from "../items/equipment/Equipment"
-import type { Equipment } from "../items/equipment/EquipmentSlot"
+import type { Bonus, Equipment } from "../items/equipment/EquipmentSlot"
 import type { Weapon } from "../items/equipment/Weapon"
 import type { Itemmable } from "../items/item"
 import type { Magic } from "../magic/Magic"
@@ -43,6 +43,57 @@ export class CharacterTemplate {
 
   get<K extends keyof CharacterTemplateProps>(key: K): CharacterTemplateProps[K] {
     return this.props[key]
+  }
+
+  private withPatch(patch: Partial<CharacterTemplateProps>): CharacterTemplate {
+    return new CharacterTemplate({
+      ...this.props,
+      ...patch
+    })
+  }
+
+  private getEquippedItems(): Equipment[] {
+    const equipment = this.props.equipment
+
+    return [
+      equipment.armor,
+      equipment.helmet,
+      equipment.gloves,
+      equipment.boots,
+      ...equipment.rings,
+      ...equipment.weapons,
+    ].filter((item): item is Equipment => item !== undefined)
+  }
+  private applyBonus(base: number, bonus: Bonus): number {
+    if (bonus.type === "add") return base + bonus.value
+    if (bonus.type === "sub") return base - bonus.value
+    return bonus.value
+  }
+
+  private applyBonuses(base: number, bonuses: Bonus[]): number {
+    const flat = bonuses.find((bonus) => bonus.type === "flat")
+
+    if (flat) return flat.value
+
+    return bonuses.reduce(
+      (total, bonus) => this.applyBonus(total, bonus),
+      base,
+    )
+  }
+
+  private getEquipmentBonuses(
+    key:
+      | "armorClass"
+      | "initiative"
+      | "maxHp"
+      | "temporaryHp"
+      | "passivePerception"
+      | "attackBonus"
+      | "speed",
+  ): Bonus[] {
+    return this.getEquippedItems().flatMap((item) =>
+      item.bonuses?.[key] ?? [],
+    )
   }
 
   static fromJSON(props: Partial<CharacterTemplateProps>): CharacterTemplate {
@@ -150,6 +201,18 @@ export class CharacterTemplate {
 
     return inventory_weight + equipment_weight
   }
+  
+  getCarryingCapacity(): number {
+    return this.getEffectiveAttribute("str") * 15
+  }
+
+  getEncumbranceLimit(): number {
+    return this.getEffectiveAttribute("str") * 5
+  }
+
+  getHeavyEncumbranceLimit(): number {
+    return this.getEffectiveAttribute("str") * 10
+  }
 
   getProficiencyBonus(): number {
     const totalLevel = this.props.sheet.classes?.reduce((prev, curr) => prev + curr.level, 0) ?? 1
@@ -160,12 +223,7 @@ export class CharacterTemplate {
     return Math.floor((this.props.sheet.attributes[attribute] - 10) / 2)
   }
 
-  private withPatch(patch: Partial<CharacterTemplateProps>): CharacterTemplate {
-    return new CharacterTemplate({
-      ...this.props,
-      ...patch
-    })
-  }
+  
 
   with<K extends keyof CharacterTemplateProps>(key: K, value: CharacterTemplateProps[K]): CharacterTemplate {
     return this.withPatch({ [key]: value } as Pick<CharacterTemplateProps, K>)
@@ -333,20 +391,31 @@ export class CharacterTemplate {
     })
   }
 
+  pocketInventoryItem(itemId: string): CharacterTemplate {
+    const item = this.props.inventory.find((i) => i.id === itemId)
+
+    if (!item) return this
+
+    return this.addToPocketItem(item)
+  }
+
   addToPocketItem(item: Itemmable): CharacterTemplate {
-    if (!item.pockatable) {
-      throw new Error ('Item is not pockatable')
+    if (!item.pocketable) {
+      throw new Error("Item is not pocketable")
     }
 
     const usedPockets = this.props.equipment.pockets.length
 
     if (usedPockets >= 8) {
-      throw new Error ('All pockets are occupied')
+      throw new Error("All pockets are occupied")
     }
 
-    return this.with('equipment', {
-      ...this.props.equipment,
-      pockets: [...this.props.equipment.pockets, item]
+    return this.withPatch({
+      inventory: this.props.inventory.filter((i) => i.id !== item.id),
+      equipment: {
+        ...this.props.equipment,
+        pockets: [...this.props.equipment.pockets, item],
+      },
     })
   }
 
@@ -372,6 +441,75 @@ export class CharacterTemplate {
     })
   }
 
+  wieldPocketWeapon(index: number): CharacterTemplate {
+    const item = this.props.equipment.pockets[index]
+
+    if (!item || item.kind !== "equipment" || item.equipSlot !== "weapon") {
+      return this
+    }
+
+    const weapon = this.toWeapon(item)
+
+    const pocketsWithoutItem = this.props.equipment.pockets.filter(
+      (_, i) => i !== index,
+    )
+
+    const neededArms = weapon.twoHanded ? 2 : 1
+    const currentWeapons = [...this.props.equipment.weapons]
+    const returnedToInventory: Itemmable[] = []
+
+    let usedArms = currentWeapons.reduce(
+      (total, currentWeapon) => total + (currentWeapon.twoHanded ? 2 : 1),
+      0,
+    )
+
+    while (
+      usedArms + neededArms > this.props.sheet.arms &&
+      currentWeapons.length > 0
+    ) {
+      const removed = currentWeapons.shift()
+      if (!removed) break
+
+      returnedToInventory.push(removed)
+      usedArms -= removed.twoHanded ? 2 : 1
+    }
+
+    return this.withPatch({
+      inventory: [...this.props.inventory, ...returnedToInventory],
+      equipment: {
+        ...this.props.equipment,
+        pockets: pocketsWithoutItem,
+        weapons: [...currentWeapons, weapon],
+      },
+    })
+  }
+
+  private toWeapon(item: Itemmable): Weapon {
+    return {
+      ...item,
+      kind: "equipment",
+      equippable: true,
+      equipSlot: "weapon",
+      properties: "properties" in item ? item.properties ?? [] : [],
+      twoHanded: "twoHanded" in item ? item.twoHanded ?? false : false,
+      damage:
+        "damage" in item && item.damage
+          ? item.damage
+          : {
+              quantity: 1,
+              sides: "d6",
+            },
+      modifierAttribute:
+        "modifierAttribute" in item && item.modifierAttribute
+          ? item.modifierAttribute
+          : "str",
+      proficient:
+        "proficient" in item
+          ? item.proficient ?? false
+          : false,
+    }
+  }
+
   equipInventoryItem(itemId: string): CharacterTemplate {
     const item = this.props.inventory.find((i) => i.id === itemId)
 
@@ -379,15 +517,37 @@ export class CharacterTemplate {
       return this
     }
 
-    const inventoryWithoutItem = this.props.inventory.filter((i) => i.id !== itemId)
+    const inventoryWithoutItem = this.props.inventory.filter(
+      (i) => i.id !== itemId,
+    )
+
     const equipment = this.props.equipment
 
     if (item.equipSlot === "weapon") {
+      const nextWeapon = this.toWeapon(item)
+      const neededArms = nextWeapon.twoHanded ? 2 : 1
+
+      const currentWeapons = [...equipment.weapons]
+      const returnedToInventory: Itemmable[] = []
+
+      let usedArms = currentWeapons.reduce(
+        (total, weapon) => total + (weapon.twoHanded ? 2 : 1),
+        0,
+      )
+
+      while (usedArms + neededArms > this.props.sheet.arms && currentWeapons.length > 0) {
+        const removed = currentWeapons.shift()
+        if (!removed) break
+
+        returnedToInventory.push(removed)
+        usedArms -= removed.twoHanded ? 2 : 1
+      }
+
       return this.withPatch({
-        inventory: inventoryWithoutItem,
+        inventory: [...inventoryWithoutItem, ...returnedToInventory],
         equipment: {
           ...equipment,
-          weapons: [...equipment.weapons, item as Weapon],
+          weapons: [...currentWeapons, nextWeapon],
         },
       })
     }
@@ -402,17 +562,8 @@ export class CharacterTemplate {
       })
     }
 
-    if (item.equipSlot === "pocket") {
-      return this.withPatch({
-        inventory: inventoryWithoutItem,
-        equipment: {
-          ...equipment,
-          pockets: [...equipment.pockets, item],
-        },
-      })
-    }
-
     const slot = item.equipSlot
+
     const previous = equipment[slot]
 
     return this.withPatch({
@@ -455,6 +606,46 @@ export class CharacterTemplate {
       },
     })
   }
+  
+  usePocketItem(index: number): CharacterTemplate {
+    const item = this.props.equipment.pockets[index]
+
+    if (!item) return this
+
+    if (item.kind !== "consumable" && item.kind !== "throwable") {
+      return this
+    }
+
+    const nextQuantity = Math.max(0, (item.quantity ?? 1) - 1)
+
+    const nextItem = {
+      ...item,
+      quantity: nextQuantity,
+    }
+
+    const pocketsWithoutItem = this.props.equipment.pockets.filter(
+      (_, i) => i !== index,
+    )
+
+    if (nextQuantity <= 0) {
+      return this.withPatch({
+        inventory: [...this.props.inventory, nextItem],
+        equipment: {
+          ...this.props.equipment,
+          pockets: pocketsWithoutItem,
+        },
+      })
+    }
+
+    return this.withPatch({
+      equipment: {
+        ...this.props.equipment,
+        pockets: this.props.equipment.pockets.map((pocketItem, i) =>
+          i === index ? nextItem : pocketItem,
+        ),
+      },
+    })
+  }
 
   unequipPocketItem(index: number): CharacterTemplate {
     const item = this.props.equipment.pockets[index]
@@ -485,6 +676,22 @@ export class CharacterTemplate {
       },
     })
   }
+
+  unequipRing(index: number): CharacterTemplate {
+    const ring = this.props.equipment.rings[index]
+
+    if (!ring) return this
+
+    return this.withPatch({
+      inventory: [...this.props.inventory, ring],
+      equipment: {
+        ...this.props.equipment,
+        rings: this.props.equipment.rings.filter((_, i) => i !== index),
+      },
+    })
+  }
+
+
   addAbility(ability: Ability): CharacterTemplate {
     return this.with("abilities", [
       ...(this.props.abilities ?? []),
@@ -550,7 +757,125 @@ export class CharacterTemplate {
       }),
     )
   }
-  
+
+  getEffectiveArmorClass(): number {
+    return this.applyBonuses(
+      this.props.sheet.stats.armorClass,
+      this.getEquipmentBonuses("armorClass"),
+    )
+  }
+
+  getEffectiveInitiative(): number {
+    return this.applyBonuses(
+      this.props.sheet.stats.initiative,
+      this.getEquipmentBonuses("initiative"),
+    )
+  }
+
+  getEffectiveMaxHp(): number {
+    return this.applyBonuses(
+      this.props.sheet.HP.max,
+      this.getEquipmentBonuses("maxHp"),
+    )
+  }
+
+  getEffectiveTemporaryHp(): number {
+    return this.applyBonuses(
+      this.props.sheet.HP.temporary,
+      this.getEquipmentBonuses("temporaryHp"),
+    )
+  }
+
+  getEffectivePassivePerception(): number {
+    return this.applyBonuses(
+      this.props.sheet.stats.passive_perception,
+      this.getEquipmentBonuses("passivePerception"),
+    )
+  }
+
+  getEffectiveMobility(): number {
+    return this.applyBonuses(
+      this.props.sheet.stats.mobility,
+      this.getEquipmentBonuses("speed"),
+    )
+  }
+
+  getAttributeBonuses(attribute: Attribute): Bonus[] {
+    return this.getEquippedItems().flatMap((item) =>
+      item.bonuses?.attribute
+        ?.filter((entry) => entry.attribute === attribute)
+        .map((entry) => entry.bonus) ?? [],
+    )
+  }
+
+  getAttributeModifierBonuses(attribute: Attribute): Bonus[] {
+    return this.getEquippedItems().flatMap((item) =>
+      item.bonuses?.attributeModifier
+        ?.filter((entry) => entry.attribute === attribute)
+        .map((entry) => entry.bonus) ?? [],
+    )
+  }
+
+  getEffectiveAttribute(attribute: Attribute): number {
+    return this.applyBonuses(
+      this.props.sheet.attributes[attribute],
+      this.getAttributeBonuses(attribute),
+    )
+  }
+
+  getEffectiveAttributeModifier(attribute: Attribute): number {
+    const baseModifier = Math.floor(
+      (this.getEffectiveAttribute(attribute) - 10) / 2,
+    )
+
+    return this.applyBonuses(
+      baseModifier,
+      this.getAttributeModifierBonuses(attribute),
+    )
+  }
+
+  private getWeaponAttackBonuses(weapon: Weapon): Bonus[] {
+  const attack = weapon.bonuses?.attack
+
+  if (!attack) return []
+
+  if (attack.type === "always") return [attack.bonus]
+  if (attack.type === "equipment") return [attack.bonus]
+
+  return []
+  }
+
+  private getWeaponDamageBonuses(weapon: Weapon): Bonus[] {
+    const damage = weapon.bonuses?.damage
+
+    if (!damage) return []
+
+    if (damage.type === "always") return [damage.bonus]
+    if (damage.type === "equipment") return [damage.bonus]
+
+    return []
+  }
+
+  getEffectiveWeaponAttackBonus(
+    weapon: Weapon,
+    baseAttackBonus = 0,
+  ): number {
+    return this.applyBonuses(
+      baseAttackBonus,
+      this.getWeaponAttackBonuses(weapon),
+    )
+  }
+
+  getEffectiveWeaponDamageBonus(
+    weapon: Weapon,
+    baseDamageBonus = 0,
+  ): number {
+    return this.applyBonuses(
+      baseDamageBonus,
+      this.getWeaponDamageBonuses(weapon),
+    )
+  }
+    
   
 }
 

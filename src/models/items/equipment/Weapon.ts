@@ -1,8 +1,13 @@
+import type { Die } from "../../dice/Die";
+import type { Attribute } from "../../types";
 import type { Equipment } from "./EquipmentSlot";
 
 export type Weapon = Equipment & {
   twoHanded?: boolean
   properties: WeaponProperty[]
+  damage: Die
+  modifierAttribute: Attribute
+  proficient: boolean
 }
 
 export type WeaponProperty = {

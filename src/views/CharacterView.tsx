@@ -4,10 +4,9 @@ import { CharacterSelector } from "../features/characters/characterSelector"
 import { CharacterSheet } from "../features/characters/characterSheet/characterSheet"
 import type { CharacterTemplate } from "../models/characters/CharacterTemplate"
 import type { Player } from "../models/player/Player"
-import { EquipmentModule } from "../features/characters/equipment/EquipmentModule"
-import { CharacterInventory } from "../features/characters/inventory/PersonalInventory"
-
-type CharacterTab = "sheet" | "abilities" | "equipment" | "inventory"
+import { CharacterEquipment } from "../features/characters/equipment/EquipmentModule"
+import { CharacterInventory } from "../features/characters/inventory/characterInventory"
+import { CharacterViewTabs, type CharacterTab } from "../features/characters/characterViewTabs"
 
 type Props = {
   characters: CharacterTemplate[]
@@ -55,55 +54,10 @@ export function CharacterView({
         showOwnerBadge={canAssignOwners}
       />
 
-      <div className="flex gap-2 rounded-lg border border-border bg-bg p-1">
-        <button
-          type="button"
-          onClick={() => setActiveTab("sheet")}
-          className={
-            activeTab === "sheet"
-              ? "flex-1 rounded-md bg-accentBg px-3 py-2 text-xs font-medium text-textH"
-              : "flex-1 rounded-md px-3 py-2 text-xs text-text hover:bg-[color:var(--social-bg)]"
-          }
-        >
-          Ficha
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("abilities")}
-          className={
-            activeTab === "abilities"
-              ? "flex-1 rounded-md bg-accentBg px-3 py-2 text-xs font-medium text-textH"
-              : "flex-1 rounded-md px-3 py-2 text-xs text-text hover:bg-[color:var(--social-bg)]"
-          }
-        >
-          Habilidades
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("equipment")}
-          className={
-            activeTab === "equipment"
-              ? "flex-1 rounded-md bg-accentBg px-3 py-2 text-xs font-medium text-textH"
-              : "flex-1 rounded-md px-3 py-2 text-xs text-text hover:bg-[color:var(--social-bg)]"
-          }
-        >
-          Equipamento
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("inventory")}
-          className={
-            activeTab === "inventory"
-              ? "flex-1 rounded-md bg-accentBg px-3 py-2 text-xs font-medium text-textH"
-              : "flex-1 rounded-md px-3 py-2 text-xs text-text hover:bg-[color:var(--social-bg)]"
-          }
-        >
-          Inventário
-        </button>
-      </div>
+      <CharacterViewTabs
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+      />
 
       {activeTab === "sheet" && (
         <CharacterSheet
@@ -125,7 +79,7 @@ export function CharacterView({
       )}
 
       {activeTab === "equipment" && (
-        <EquipmentModule
+        <CharacterEquipment
           character={activeCharacter}
           updateCharacter={updateCharacter}
         />

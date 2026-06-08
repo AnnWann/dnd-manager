@@ -6,7 +6,7 @@ import type {
   Ability,
   AbilityActionKind,
   AbilityKind,
-  AbilityTrigger,
+  Trigger,
   AbilityUsageCooldownUnit,
   AbilityUsageResetKind,
 } from "../../../models/abilities/Ability"
@@ -142,7 +142,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
               onChange={(e) =>
                 setDraft({
                   ...draft,
-                  trigger: e.target.value as AbilityTrigger,
+                  trigger: e.target.value as Trigger,
                 })
               }
             >

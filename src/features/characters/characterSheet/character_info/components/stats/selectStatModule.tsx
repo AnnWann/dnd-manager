@@ -2,12 +2,12 @@ import { Input } from "../../../../../../components/ui/Input"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
 import type { Sheet } from "../../../../../../models/sheet/Sheet"
 
-
-export type StatKey = keyof Sheet['stats']
+type StatKey = keyof Sheet["stats"]
 
 type Props = {
   name: string
   statKey: StatKey
+  getValue: (character: CharacterTemplate) => number
   character: CharacterTemplate
   updateCharacter: (
     characterId: string,
@@ -17,15 +17,16 @@ type Props = {
   readOnly?: boolean
 }
 
-export function SelectStatModule ({
+export function SelectStatModule({
   name,
   statKey,
+  getValue,
   character,
   updateCharacter,
   fallback = 0,
   readOnly = false,
 }: Props) {
-  const value = character.get('sheet').stats[statKey]
+  const value = getValue(character)
 
   return (
     <div>
@@ -34,12 +35,14 @@ export function SelectStatModule ({
       <Input
         type="number"
         className="mt-1"
-        value={typeof value === 'number' ? value : fallback}
+        value={Number.isFinite(value) ? value : fallback}
         readOnly={readOnly}
         onChange={(e) => {
           const nextValue = Number(e.target.value) || fallback
 
-          updateCharacter(character.get('id'), (c) => c.withStat(statKey, nextValue))
+          updateCharacter(character.get("id"), (c) =>
+            c.withStat(statKey, nextValue),
+          )
         }}
       />
     </div>

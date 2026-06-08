@@ -5,7 +5,7 @@ export interface Ability {
   usage?: AbilityUsage
   kind?: AbilityKind
   actionKind?: AbilityActionKind
-  trigger?: AbilityTrigger
+  trigger?: Trigger
 }
 
 export interface AbilityUsage {
@@ -25,7 +25,7 @@ export type AbilityKind = 'active' | 'passive'
 
 export type AbilityActionKind = 'action' | 'bonusAction' | 'reaction' | 'legendaryAction' | 'legendaryReaction' | 'legendaryResistance' | 'free'
 
-export type AbilityTrigger =
+export type Trigger =
   | 'startTurn'
   | 'endTurn'
   | 'startRound'

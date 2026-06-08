@@ -1,5 +1,12 @@
 import { Button } from "../../../components/ui/Button"
+import { attributeShort } from "../../../lib/attributeShorts"
+import { formatSigned } from "../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import type {
+  Itemmable,
+} from "../../../models/items/item"
+import type { Weapon } from "../../../models/items/equipment/Weapon"
+import type { ConsumableItem, ThrowableItem } from "../../../models/items/equipment/PocketItem"
 
 type Props = {
   character: CharacterTemplate
@@ -7,6 +14,36 @@ type Props = {
     characterId: string,
     updater: (c: CharacterTemplate) => CharacterTemplate
   ) => void
+}
+
+function formatDie(die: Partial<Weapon>["damage"] | undefined) {
+  if (!die) return "—"
+  return `${die.quantity}${die.sides}`
+}
+
+function itemTypeLabel(item: Itemmable): string {
+  if (item.kind === "equipment") {
+    if (item.equipSlot === "weapon") return "Arma na bainha"
+    if (item.equipSlot === "ring") return "Anel guardado"
+    return "Equipamento guardado"
+  }
+
+  if (item.kind === "consumable") return "Consumível"
+  if (item.kind === "throwable") return "Arremessável"
+
+  return "Item comum"
+}
+
+function isPocketWeapon(item: Itemmable): item is Weapon {
+  return item.kind === "equipment" && item.equipSlot === "weapon"
+}
+
+function isThrowable(item: Itemmable): item is ThrowableItem {
+  return item.kind === "throwable"
+}
+
+function isConsumable(item: Itemmable): item is ConsumableItem {
+  return item.kind === "consumable"
 }
 
 export function EquipmentPocketsSection({
@@ -19,6 +56,18 @@ export function EquipmentPocketsSection({
     updateCharacter(character.get("id"), (c) =>
       c.unequipPocketItem(index),
     )
+  }
+
+  function wieldPocketWeapon(index: number) {
+    updateCharacter(character.get("id"), (c) =>
+      c.wieldPocketWeapon(index),
+    )
+  }
+
+  function usePocketItem(index: number) {
+  updateCharacter(character.get("id"), (c) =>
+    c.usePocketItem(index),
+  )
   }
 
   return (
@@ -51,17 +100,60 @@ export function EquipmentPocketsSection({
                   </div>
 
                   <div className="mt-1 text-xs text-text">
-                    Qtd: {item.quantity ?? 1} • Peso: {item.weight ?? 0}
+                    {itemTypeLabel(item)} • Qtd: {item.quantity ?? 1} • Peso:{" "}
+                    {item.weight ?? 0}
                   </div>
+
+                  {isPocketWeapon(item) ? (
+                    <WeaponPocketSummary
+                      character={character}
+                      weapon={item}
+                    />
+                  ) : null}
+
+                  {isConsumable(item) && item.useText?.trim() ? (
+                    <div className="mt-1 text-xs text-text">
+                      Uso: {item.useText}
+                    </div>
+                  ) : null}
+
+                  {isThrowable(item) ? (
+                    <div className="mt-1 text-xs text-text">
+                      Dano: {formatDie(item.damage)}{" "}
+                      {item.range ? `• Alcance: ${item.range}` : ""}
+                    </div>
+                  ) : null}
                 </div>
 
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => unequipPocketItem(index)}
-                >
-                  Tirar do bolso
-                </Button>
+                <div className="flex shrink-0 flex-col gap-2">
+                  {isPocketWeapon(item) ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => wieldPocketWeapon(index)}
+                    >
+                      Empunhar
+                    </Button>
+                  ) : null}
+
+                  {isConsumable(item) || isThrowable(item) ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => usePocketItem(index)}
+                    >
+                      Usar
+                    </Button>
+                  ) : null}
+
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => unequipPocketItem(index)}
+                  >
+                    Tirar do bolso
+                  </Button>
+                </div>
               </div>
 
               {item.desc?.trim() ? (
@@ -75,10 +167,78 @@ export function EquipmentPocketsSection({
                   </div>
                 </div>
               ) : null}
+
+              {isPocketWeapon(item) && item.properties?.length ? (
+                <div className="mt-3">
+                  <div className="text-xs font-medium text-textH">
+                    Propriedades
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {item.properties.map((property) => (
+                      <span
+                        key={property.id}
+                        title={property.desc}
+                        className="rounded-md border border-border px-2 py-1 text-xs text-text"
+                      >
+                        {property.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
       )}
     </div>
+  )
+}
+
+function WeaponPocketSummary({
+  character,
+  weapon,
+}: {
+  character: CharacterTemplate
+  weapon: Weapon
+}) {
+  const attribute = weapon.modifierAttribute ?? "str"
+  const attributeMod = character.getEffectiveAttributeModifier(attribute)
+
+  const proficiency = weapon.proficient
+    ? character.getProficiencyBonus()
+    : 0
+
+  const attackBonus = character.getEffectiveWeaponAttackBonus(
+    weapon,
+    attributeMod + proficiency,
+  )
+
+  const damageBonus = character.getEffectiveWeaponDamageBonus(
+    weapon,
+    attributeMod,
+  )
+
+  return (
+    <>
+      <div className="mt-1 text-xs text-text">
+        Dano base: {formatDie(weapon.damage)}
+        {" • "}
+        Atributo: {attributeShort(attribute)}
+        {" • "}
+        {weapon.proficient ? "Proficiente" : "Não proficiente"}
+      </div>
+
+      <div className="mt-1 text-xs text-text">
+        Ataque: {formatSigned(attackBonus)}
+        {" • "}
+        Dano: {formatDie(weapon.damage)}
+        {damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""}
+      </div>
+
+      <div className="mt-1 text-xs text-text">
+        {weapon.twoHanded ? "Duas mãos" : "Uma mão"}
+      </div>
+    </>
   )
 }

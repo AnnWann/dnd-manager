@@ -1,6 +1,6 @@
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Itemmable } from "../../../models/items/item"
-import { InventoryEditor } from "./InventoryEditor"
+import { InventoryEditor } from "./inventoryEditor"
 
 type Props = {
   character: CharacterTemplate
@@ -11,15 +11,16 @@ type Props = {
   canEditInventory: boolean
 }
 
-function newInventoryItem(): Itemmable {
+export function newInventoryItem(): Itemmable {
   return {
     id: crypto.randomUUID(),
     name: "",
     desc: "",
     notes: "",
     quantity: 1,
-    pockatable: false,
     weight: 0,
+    pocketable: false,
+    kind: "common",
   }
 }
 
@@ -28,6 +29,11 @@ export function CharacterInventory({
   updateCharacter,
 }: Props) {
   const items = character.get("inventory") ?? []
+
+  const currentWeight = character.getWeight()
+  const encumbranceLimit = character.getEncumbranceLimit()
+  const heavyEncumbranceLimit = character.getHeavyEncumbranceLimit()
+  const carryingCapacity = character.getCarryingCapacity()
 
   function addItem() {
     updateCharacter(character.get("id"), (c) =>
@@ -64,17 +70,22 @@ export function CharacterInventory({
   return (
     <InventoryEditor
       title={`Inventário pessoal: ${character.get("name")}`}
-      description="Itens e recursos vinculados ao personagem ativo."
+      description={`Peso: ${currentWeight}/${carryingCapacity} • Sobrecarga: ${encumbranceLimit} • Sobrecarga pesada: ${heavyEncumbranceLimit}`}
       items={items}
-      emptyMessage="Nenhum item no inventário pessoal."
+      emptyMessage="Nenhum item encontrado."
       onAddItem={addItem}
       onUpdateItem={updateItem}
       onRemoveItem={removeItem}
       onEquipItem={(itemId) =>
         updateCharacter(character.get("id"), (c) =>
-          c.equipInventoryItem(itemId)
+          c.equipInventoryItem(itemId),
         )
-      } 
+      }
+      onPocketItem={(itemId) =>
+        updateCharacter(character.get("id"), (c) =>
+          c.pocketInventoryItem(itemId),
+        )
+      }
     />
   )
 }

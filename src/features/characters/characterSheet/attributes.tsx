@@ -60,7 +60,7 @@ export function Attributes({ character, updateCharacter }: Props) {
                 />
 
                 <div className="w-10 text-right text-xs text-text">
-                  {formatSigned(character.getAttributeModifier(attr))}
+                  {formatSigned(character.getEffectiveAttributeModifier(attr))}
                 </div>
               </div>
             </div>

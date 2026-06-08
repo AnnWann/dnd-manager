@@ -3,7 +3,7 @@
 import { Button } from "../../../components/ui/Button"
 import { formatBonusName, formatBonusValue } from "../../../lib/formatBonus"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import type { Bonus, Equipment } from "../../../models/items/equipment/EquipmentSlot"
+import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
 
 type SingleSlot =
   | "armor"
@@ -20,6 +20,25 @@ type Props = {
     updater: (c: CharacterTemplate) => CharacterTemplate
   ) => void
 }
+
+type NormalBonusKey =
+  | "armorClass"
+  | "initiative"
+  | "maxHp"
+  | "temporaryHp"
+  | "passivePerception"
+  | "attackBonus"
+  | "speed"
+
+const NORMAL_BONUS_KEYS: NormalBonusKey[] = [
+  "armorClass",
+  "initiative",
+  "maxHp",
+  "temporaryHp",
+  "passivePerception",
+  "attackBonus",
+  "speed",
+]
 
 export function EquipmentSingleSlotSection({
   title,
@@ -50,7 +69,7 @@ export function EquipmentSingleSlotSection({
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="font-medium text-textH">
-                {item.name}
+                {item.name || "Item sem nome"}
               </div>
 
               {item.desc?.trim() ? (
@@ -73,54 +92,69 @@ export function EquipmentSingleSlotSection({
             </Button>
           </div>
 
-          {item.bonuses ? (
-            <div className="mt-3">
-              <div className="mb-2 text-xs font-medium text-textH">
-                Bônus
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(item.bonuses).map(([key, value]) => {
-                  if (!value) return null
-
-                  if (isAttributeBonus(value)) {
-                    return (
-                      <span
-                        key={key}
-                        className="rounded border border-border px-2 py-1 text-xs"
-                      >
-                        Atributo {value.Attribute.toUpperCase()}
-                      </span>
-                    )
-                  }
-
-                  const bonuses = Array.isArray(value) ? value : [value]
-
-                  return bonuses.map((bonus, index) => (
-                    <span
-                      key={`${key}-${index}`}
-                      className="rounded border border-border px-2 py-1 text-xs"
-                    >
-                      {formatBonusName(key)}: {formatBonusValue(bonus)}
-                    </span>
-                  ))
-                })}
-              </div>
-            </div>
-          ) : null}
+          <EquipmentBonusList bonuses={item.bonuses} />
         </div>
       )}
     </div>
   )
 }
 
-function isAttributeBonus(
-  value: unknown,
-): value is { Attribute: string; Bonus: Bonus[] } {
+type EquipmentBonusListProps = {
+  bonuses: Equipment["bonuses"]
+}
+
+function EquipmentBonusList({ bonuses }: EquipmentBonusListProps) {
+  if (!bonuses) {
+    return null
+  }
+
+  const rows: string[] = []
+
+  for (const key of NORMAL_BONUS_KEYS) {
+    const value = bonuses[key]
+    if (!Array.isArray(value)) continue
+
+    for (const bonus of value) {
+      rows.push(`${formatBonusName(key)}: ${formatBonusValue(bonus)}`)
+    }
+  }
+
+  for (const entry of bonuses.attribute ?? []) {
+    rows.push(
+      `Atributo ${entry.attribute.toUpperCase()}: ${formatBonusValue(
+        entry.bonus,
+      )}`,
+    )
+  }
+
+  for (const entry of bonuses.attributeModifier ?? []) {
+    rows.push(
+      `Mod. ${entry.attribute.toUpperCase()}: ${formatBonusValue(
+        entry.bonus,
+      )}`,
+    )
+  }
+
+  if (rows.length === 0) {
+    return null
+  }
+
   return (
-    typeof value === "object" &&
-    value !== null &&
-    "Attribute" in value &&
-    "Bonus" in value
+    <div className="mt-3">
+      <div className="mb-2 text-xs font-medium text-textH">
+        Bônus
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {rows.map((row) => (
+          <span
+            key={row}
+            className="rounded border border-border px-2 py-1 text-xs text-text"
+          >
+            {row}
+          </span>
+        ))}
+      </div>
+    </div>
   )
 }
