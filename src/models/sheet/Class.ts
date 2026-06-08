@@ -1,161 +1,308 @@
 import type { Attribute } from "./Attribute"
 
+export type SpellcastingProgression = "full" | "half" | "third"
+
+export type KnownSpellMode =
+  | "limited"
+  | "spellbook"
+  | "prepared-only"
+
+export type KnownSpellsRule = {
+  baseAtLevel1: number
+  perLevel: number
+  overrides?: Partial<Record<ClassLevel, number>>
+  mode: KnownSpellMode
+}
+
 export interface CharacterClassInterface {
   className: ClassName
   level: ClassLevel
   castingAttribute?: Attribute
 
-  /** Optional: override for multiclass spell slot progression (used for special cases like EK/AT). */
-  spellcastingProgression?: 'full' | 'half' | 'third'
+  /** Optional: override for multiclass spell slot progression. */
+  spellcastingProgression?: SpellcastingProgression
+
+  knownSpells?: KnownSpellsRule
 }
 
 export class CharacterClass implements CharacterClassInterface {
   className: ClassName
   level: ClassLevel
   castingAttribute?: Attribute
-  spellcastingProgression?: 'full' | 'half' | 'third'
+  spellcastingProgression?: SpellcastingProgression
+  knownSpells?: KnownSpellsRule
 
   constructor(
-    className: ClassName, 
-    classLevel: ClassLevel, 
-    castingAttribute: Attribute | undefined = undefined, 
-    spellcastingProgression: 'full' | 'half' | 'third' | undefined = undefined
+    className: ClassName,
+    classLevel: ClassLevel,
+    castingAttribute: Attribute | undefined = undefined,
+    spellcastingProgression: SpellcastingProgression | undefined = undefined,
+    knownSpells: KnownSpellsRule | undefined = undefined,
   ) {
     this.className = className
     this.level = classLevel
     this.castingAttribute = castingAttribute
     this.spellcastingProgression = spellcastingProgression
+    this.knownSpells = knownSpells
+  }
+
+  getKnownSpellLimit(): number | undefined {
+    if (!this.knownSpells) return undefined
+
+    const override = this.knownSpells.overrides?.[this.level]
+    if (override !== undefined) return override
+
+    return (
+      this.knownSpells.baseAtLevel1 +
+      Math.max(0, this.level - 1) * this.knownSpells.perLevel
+    )
+  }
+
+  getKnownSpellMode(): KnownSpellMode | undefined {
+    return this.knownSpells?.mode
+  }
+
+  hasLimitedKnownSpells(): boolean {
+    return this.knownSpells?.mode === "limited"
+  }
+
+  hasSpellbookKnownSpells(): boolean {
+    return this.knownSpells?.mode === "spellbook"
+  }
+
+  isPreparedOnlyCaster(): boolean {
+    return this.knownSpells?.mode === "prepared-only"
   }
 }
 
-export class CharacterClassBuilder {
+const BARD_KNOWN_SPELLS: KnownSpellsRule = {
+  mode: "limited",
+  baseAtLevel1: 4,
+  perLevel: 1,
+  overrides: {
+    10: 14,
+    11: 15,
+    12: 15,
+    13: 16,
+    14: 18,
+    15: 19,
+    16: 19,
+    17: 20,
+    18: 22,
+    19: 22,
+    20: 22,
+  },
+}
 
+const SORCERER_KNOWN_SPELLS: KnownSpellsRule = {
+  mode: "limited",
+  baseAtLevel1: 2,
+  perLevel: 1,
+  overrides: {
+    12: 12,
+    14: 13,
+    16: 14,
+    18: 15,
+    19: 15,
+    20: 15,
+  },
+}
+
+const WARLOCK_KNOWN_SPELLS: KnownSpellsRule = {
+  mode: "limited",
+  baseAtLevel1: 2,
+  perLevel: 1,
+  overrides: {
+    10: 10,
+    12: 11,
+    14: 12,
+    16: 13,
+    18: 14,
+    20: 15,
+  },
+}
+
+const RANGER_KNOWN_SPELLS: KnownSpellsRule = {
+  mode: "limited",
+  baseAtLevel1: 0,
+  perLevel: 1,
+  overrides: {
+    1: 0,
+    2: 2,
+    3: 3,
+    4: 3,
+    5: 4,
+    6: 4,
+    7: 5,
+    8: 5,
+    9: 6,
+    10: 6,
+    11: 7,
+    12: 7,
+    13: 8,
+    14: 8,
+    15: 9,
+    16: 9,
+    17: 10,
+    18: 10,
+    19: 11,
+    20: 11,
+  },
+}
+
+const WIZARD_KNOWN_SPELLS: KnownSpellsRule = {
+  mode: "spellbook",
+  baseAtLevel1: 6,
+  perLevel: 2,
+}
+
+const PREPARED_ONLY_SPELLS: KnownSpellsRule = {
+  mode: "prepared-only",
+  baseAtLevel1: 0,
+  perLevel: 0,
+}
+
+export class CharacterClassBuilder {
   barbarian() {
-    return new CharacterClass(
-      'barbarian',
-      1,
-    )
+    return new CharacterClass("barbarian", 1)
   }
 
   bard() {
     return new CharacterClass(
-      'bard',
+      "bard",
       1,
-      'cha',
-      'full'
+      "cha",
+      "full",
+      BARD_KNOWN_SPELLS,
     )
   }
 
   cleric() {
     return new CharacterClass(
-      'cleric',
+      "cleric",
       1,
-      'wis',
-      'full'
+      "wis",
+      "full",
+      PREPARED_ONLY_SPELLS,
     )
   }
 
   druid() {
     return new CharacterClass(
-      'druid',
+      "druid",
       1,
-      'wis',
-      'full'
+      "wis",
+      "full",
+      PREPARED_ONLY_SPELLS,
     )
   }
 
   fighter() {
-    return new CharacterClass(
-      'fighter',
-      1
-    )
+    return new CharacterClass("fighter", 1)
   }
 
   monk() {
-    return new CharacterClass(
-      'monk',
-      1
-    )
+    return new CharacterClass("monk", 1)
   }
 
   paladin() {
     return new CharacterClass(
-      'paladin',
+      "paladin",
       1,
-      'cha',
-      'half'
+      "cha",
+      "half",
+      PREPARED_ONLY_SPELLS,
     )
   }
 
   ranger() {
     return new CharacterClass(
-      'ranger',
+      "ranger",
       1,
-      'wis',
-      'half'
+      "wis",
+      "half",
+      RANGER_KNOWN_SPELLS,
     )
   }
 
   rogue() {
-    return new CharacterClass(
-      'rogue',
-      1
-    )
+    return new CharacterClass("rogue", 1)
   }
 
   sorcerer() {
     return new CharacterClass(
-      'sorcerer',
+      "sorcerer",
       1,
-      'cha',
-      'full'
+      "cha",
+      "full",
+      SORCERER_KNOWN_SPELLS,
     )
   }
 
   warlock() {
     return new CharacterClass(
-      'warlock',
+      "warlock",
       1,
-      'cha',
-      'full'
+      "cha",
+      "full",
+      WARLOCK_KNOWN_SPELLS,
     )
   }
 
   wizard() {
     return new CharacterClass(
-      'wizard',
+      "wizard",
       1,
-      'int',
-      'full'
+      "int",
+      "full",
+      WIZARD_KNOWN_SPELLS,
     )
   }
 
   artificer() {
     return new CharacterClass(
-      'artificer',
+      "artificer",
       1,
-      'int',
-      'half'
+      "int",
+      "half",
+      PREPARED_ONLY_SPELLS,
     )
   }
-
 }
 
+export type ClassName =
+  | "artificer"
+  | "barbarian"
+  | "bard"
+  | "cleric"
+  | "druid"
+  | "fighter"
+  | "monk"
+  | "paladin"
+  | "ranger"
+  | "rogue"
+  | "sorcerer"
+  | "warlock"
+  | "wizard"
 
-export type ClassName = 
-  | 'artificer'  
-  | 'barbarian'
-  | 'bard'
-  | 'cleric'
-  | 'druid'  
-  | 'fighter'
-  | 'monk'
-  | 'paladin'
-  | 'ranger'
-  | 'rogue'
-  | 'sorcerer'
-  | 'warlock'
-  | 'wizard'
-  
-
-export type ClassLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20
+export type ClassLevel =
+  | 1
+  | 2
+  | 3
+  | 4
+  | 5
+  | 6
+  | 7
+  | 8
+  | 9
+  | 10
+  | 11
+  | 12
+  | 13
+  | 14
+  | 15
+  | 16
+  | 17
+  | 18
+  | 19
+  | 20

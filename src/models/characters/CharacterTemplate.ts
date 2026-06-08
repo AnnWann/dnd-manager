@@ -1,16 +1,104 @@
 import type { Ability } from "../abilities/Ability"
 import type { ActionsPerTurn, ActionType } from "../actions/Actions"
-import type { Die } from "../dice/Die"
+import type { Die, DieSides } from "../dice/Die"
 import type { CharacterEquipment } from "../items/equipment/Equipment"
 import type { Bonus, Equipment } from "../items/equipment/EquipmentSlot"
 import type { Weapon } from "../items/equipment/Weapon"
 import type { Itemmable } from "../items/item"
 import type { Magic } from "../magic/Magic"
+import type { CharacterSpells } from "../magic/spells/CharacterSpells"
+import type { Slot } from "../magic/spells/LeveledSlots"
+import type { Spell } from "../magic/spells/Spell"
 import type { Player } from "../player/Player"
 import type { Attribute } from "../sheet/Attribute"
 import type { HP } from "../sheet/HP"
 import type { Sheet } from "../sheet/Sheet"
-
+import type { MagicCircleLevel } from "../magic/spells/spellDefinitions"
+import { addAbility, removeAbility, resetAbility, saveAbility, updateAbility, useAbility } from "./characterAbilities"
+import { 
+  addToPocketItem, 
+  equipInventoryItem, 
+  getCarryingCapacity, 
+  getEncumbranceLimit, 
+  getHeavyEncumbranceLimit, 
+  getTotalFingers, 
+  getUsedArms, 
+  getUsedFingers, 
+  getWeight, 
+  pocketInventoryItem, 
+  removePocketItem, 
+  removeRing, 
+  removeWeapon, 
+  unequip, 
+  unequipArmor, 
+  unequipPocketItem, 
+  unequipRing, 
+  unequipWeapon, 
+  updatePocketItem, 
+  updateRing, 
+  updateWeapon, 
+  usePocketItem, 
+  useRing, 
+  useWeapon, 
+  wear, 
+  wieldPocketWeapon 
+} from "./characterEquipment"
+import { addInventoryItem, removeInventoryItem, updateInventoryItem } from "./characterInventory"
+import {
+  addSpell,
+  ensureMagic,
+  getDerivedPactSlots,
+  getDerivedSpellSlots,
+  getOrCreateMagic,
+  getPactSlots,
+  getSpellSlots,
+  getSpells,
+  removeSpell,
+  restorePactSlot,
+  restoreSpellSlot,
+  setSpellPrepared,
+  spendPactSlot,
+  spendSpellSlot,
+  syncMagicWithClasses,
+  updateSpell,
+} from "./characterMagic"
+import {
+  applyBonus,
+  applyBonuses,
+  getAttributeModifier,
+  getEffectiveArmorClass,
+  getEffectiveAttribute,
+  getEffectiveAttributeModifier,
+  getEffectiveInitiative,
+  getEffectiveMobility,
+  getEffectivePassivePerception,
+  getEffectiveStat,
+  getEffectiveWeaponAttackBonus,
+  getEffectiveWeaponDamageBonus,
+  getEquipmentBonuses,
+  getEquippedItems,
+  getProficiencyBonus,
+  type StatBonusKey,
+} from "./characterStats"
+import {
+  addDeathSaveFailure,
+  addDeathSaveSuccess,
+  addDice,
+  addTemporaryHp,
+  getEffectiveMaxHp,
+  getEffectiveTemporaryHp,
+  heal,
+  longRestHp,
+  resetDeathSaves,
+  restoreAllHitDice,
+  restoreHitDie,
+  setCurrentHp,
+  setMaxHp,
+  setTemporaryHp,
+  spendHitDie,
+  takeDamage,
+  withHp,
+} from "./characterHp"
 
 export type CharacterTemplateProps = {
   id: string,
@@ -45,55 +133,11 @@ export class CharacterTemplate {
     return this.props[key]
   }
 
-  private withPatch(patch: Partial<CharacterTemplateProps>): CharacterTemplate {
+  withPatch(patch: Partial<CharacterTemplateProps>): CharacterTemplate {
     return new CharacterTemplate({
       ...this.props,
       ...patch
     })
-  }
-
-  private getEquippedItems(): Equipment[] {
-    const equipment = this.props.equipment
-
-    return [
-      equipment.armor,
-      equipment.helmet,
-      equipment.gloves,
-      equipment.boots,
-      ...equipment.rings,
-      ...equipment.weapons,
-    ].filter((item): item is Equipment => item !== undefined)
-  }
-  private applyBonus(base: number, bonus: Bonus): number {
-    if (bonus.type === "add") return base + bonus.value
-    if (bonus.type === "sub") return base - bonus.value
-    return bonus.value
-  }
-
-  private applyBonuses(base: number, bonuses: Bonus[]): number {
-    const flat = bonuses.find((bonus) => bonus.type === "flat")
-
-    if (flat) return flat.value
-
-    return bonuses.reduce(
-      (total, bonus) => this.applyBonus(total, bonus),
-      base,
-    )
-  }
-
-  private getEquipmentBonuses(
-    key:
-      | "armorClass"
-      | "initiative"
-      | "maxHp"
-      | "temporaryHp"
-      | "passivePerception"
-      | "attackBonus"
-      | "speed",
-  ): Bonus[] {
-    return this.getEquippedItems().flatMap((item) =>
-      item.bonuses?.[key] ?? [],
-    )
   }
 
   static fromJSON(props: Partial<CharacterTemplateProps>): CharacterTemplate {
@@ -180,51 +224,6 @@ export class CharacterTemplate {
     return this.props
   }
 
-  getWeight(): number {
-    const equipment = this.props.equipment
-    const rings_weight = equipment.rings.reduce((prev, curr) => prev + (curr.weight ?? 0), 0) ?? 0
-    const weapons_weight = equipment.weapons.reduce((prev, curr) => prev + (curr.weight ?? 0), 0) ?? 0
-    const pocket_weight = equipment.pockets.reduce((prev, curr) => prev + (curr.weight ?? 0), 0) ?? 0
-
-    const equipment_weight =
-    (equipment.armor?.weight ?? 0) +
-    (equipment.boots?.weight ?? 0) +
-    (equipment.gloves?.weight ?? 0) +
-    (equipment.helmet?.weight ?? 0) +
-    rings_weight +
-    weapons_weight +
-    pocket_weight
-
-    const inventory = this.props.inventory
-
-    const inventory_weight = inventory.reduce((prev, curr) => prev + (curr.weight ?? 0), 0) ?? 0
-
-    return inventory_weight + equipment_weight
-  }
-  
-  getCarryingCapacity(): number {
-    return this.getEffectiveAttribute("str") * 15
-  }
-
-  getEncumbranceLimit(): number {
-    return this.getEffectiveAttribute("str") * 5
-  }
-
-  getHeavyEncumbranceLimit(): number {
-    return this.getEffectiveAttribute("str") * 10
-  }
-
-  getProficiencyBonus(): number {
-    const totalLevel = this.props.sheet.classes?.reduce((prev, curr) => prev + curr.level, 0) ?? 1
-    return Math.ceil(totalLevel / 4) + 1
-  }
-
-  getAttributeModifier(attribute: Attribute): number {
-    return Math.floor((this.props.sheet.attributes[attribute] - 10) / 2)
-  }
-
-  
-
   with<K extends keyof CharacterTemplateProps>(key: K, value: CharacterTemplateProps[K]): CharacterTemplate {
     return this.withPatch({ [key]: value } as Pick<CharacterTemplateProps, K>)
   }
@@ -264,542 +263,6 @@ export class CharacterTemplate {
     })
   }
 
-  withHp<K extends keyof HP>(
-  key: K,
-  value: HP[K],
-  ): CharacterTemplate {
-    return this.withPatch({
-      sheet: {
-        ...this.props.sheet,
-        HP: {
-          ...this.props.sheet.HP,
-          [key]: value,
-        },
-    }})
-  }
-
-  addDice(die: Die): CharacterTemplate {
-    const currentHitDice = this.props.sheet.HP.hitDice
-    const existing = currentHitDice[die.sides]
-
-    return this.withHp("hitDice", {
-      ...currentHitDice,
-      [die.sides]: {
-        max: {
-          quantity: (existing?.max.quantity ?? 0) + die.quantity,
-          sides: die.sides,
-        },
-        current: {
-          quantity: (existing?.current.quantity ?? 0) + die.quantity,
-          sides: die.sides,
-        },
-      },
-    })
-  }
-
-  wear<K extends Exclude<keyof CharacterEquipment, 'weapons' | 'rings' | 'pockets'>>(
-   slot: K,
-   item: CharacterEquipment[K]
-  ): CharacterTemplate {
-    return this.with('equipment', {
-      ...this.props.equipment,
-      [slot]: item,
-      })
-  }
-
-
-  getUsedArms (): number {
-    return this.props.equipment.weapons?.reduce((total, weapon) => total + (weapon.twoHanded ? 2 : 1), 0) ?? 0
-  }
-  useWeapon(weapon: Weapon): CharacterTemplate {
-    const usedArms = this.getUsedArms()
-    const neededArms = weapon.twoHanded ? 2 : 1
-
-    if (usedArms + neededArms > this.props.sheet.arms) {
-      throw new Error("All hands are occupied")
-    }
-
-    return this.with("equipment", {
-      ...this.props.equipment,
-      weapons: [...this.props.equipment.weapons, weapon],
-    })
-  }
-
-  updateWeapon(index: number, weapon: Weapon): CharacterTemplate {
-    const weapons = [...this.props.equipment.weapons]
-
-    if (!weapons[index]) {
-      throw new Error("Weapon not found")
-    }
-
-    weapons[index] = weapon
-
-    return this.with("equipment", {
-      ...this.props.equipment,
-      weapons,
-    })
-  }
-
-  removeWeapon(index: number): CharacterTemplate {
-    return this.with("equipment", {
-      ...this.props.equipment,
-      weapons: this.props.equipment.weapons.filter((_, i) => i !== index),
-    })
-  }
-
-  getUsedFingers(): number {
-  return this.props.equipment.rings.length
-  }
-
-  getTotalFingers(): number {
-    return this.props.sheet.arms * 4
-  } 
-
-  useRing(ring: Equipment): CharacterTemplate {
-    const usedFingers = this.props.equipment.rings?.reduce((total, _) => total + 1, 0) ?? 0
-    const totalFingers = this.props.sheet.arms * 4
-
-    if (usedFingers >= totalFingers) {
-      throw new Error ('All fingers are occupied')
-    }
-
-    return this.with('equipment', {
-      ...this.props.equipment,
-      rings: [...this.props.equipment.rings, ring]
-    })
-  }
-
-  updateRing(index: number, ring: Equipment): CharacterTemplate {
-    const rings = [...this.props.equipment.rings]
-
-    if (!rings[index]) {
-      throw new Error("Weapon not found")
-    }
-
-    rings[index] = ring
-
-    return this.with("equipment", {
-      ...this.props.equipment,
-      rings: rings,
-    })
-  }
-
-  removeRing(index: number): CharacterTemplate {
-    return this.with("equipment", {
-      ...this.props.equipment,
-      rings: this.props.equipment.rings.filter((_, i) => i !== index),
-    })
-  }
-
-  pocketInventoryItem(itemId: string): CharacterTemplate {
-    const item = this.props.inventory.find((i) => i.id === itemId)
-
-    if (!item) return this
-
-    return this.addToPocketItem(item)
-  }
-
-  addToPocketItem(item: Itemmable): CharacterTemplate {
-    if (!item.pocketable) {
-      throw new Error("Item is not pocketable")
-    }
-
-    const usedPockets = this.props.equipment.pockets.length
-
-    if (usedPockets >= 8) {
-      throw new Error("All pockets are occupied")
-    }
-
-    return this.withPatch({
-      inventory: this.props.inventory.filter((i) => i.id !== item.id),
-      equipment: {
-        ...this.props.equipment,
-        pockets: [...this.props.equipment.pockets, item],
-      },
-    })
-  }
-
-  updatePocketItem(index: number, pocket: Itemmable): CharacterTemplate {
-    const pockets = [...this.props.equipment.pockets]
-
-    if (!pockets[index]) {
-      throw new Error("Weapon not found")
-    }
-
-    pockets[index] = pocket
-
-    return this.with("equipment", {
-      ...this.props.equipment,
-      pockets,
-    })
-  }
-
-  removePocketItem(index: number): CharacterTemplate {
-    return this.with("equipment", {
-      ...this.props.equipment,
-      pockets: this.props.equipment.pockets.filter((_, i) => i !== index),
-    })
-  }
-
-  wieldPocketWeapon(index: number): CharacterTemplate {
-    const item = this.props.equipment.pockets[index]
-
-    if (!item || item.kind !== "equipment" || item.equipSlot !== "weapon") {
-      return this
-    }
-
-    const weapon = this.toWeapon(item)
-
-    const pocketsWithoutItem = this.props.equipment.pockets.filter(
-      (_, i) => i !== index,
-    )
-
-    const neededArms = weapon.twoHanded ? 2 : 1
-    const currentWeapons = [...this.props.equipment.weapons]
-    const returnedToInventory: Itemmable[] = []
-
-    let usedArms = currentWeapons.reduce(
-      (total, currentWeapon) => total + (currentWeapon.twoHanded ? 2 : 1),
-      0,
-    )
-
-    while (
-      usedArms + neededArms > this.props.sheet.arms &&
-      currentWeapons.length > 0
-    ) {
-      const removed = currentWeapons.shift()
-      if (!removed) break
-
-      returnedToInventory.push(removed)
-      usedArms -= removed.twoHanded ? 2 : 1
-    }
-
-    return this.withPatch({
-      inventory: [...this.props.inventory, ...returnedToInventory],
-      equipment: {
-        ...this.props.equipment,
-        pockets: pocketsWithoutItem,
-        weapons: [...currentWeapons, weapon],
-      },
-    })
-  }
-
-  private toWeapon(item: Itemmable): Weapon {
-    return {
-      ...item,
-      kind: "equipment",
-      equippable: true,
-      equipSlot: "weapon",
-      properties: "properties" in item ? item.properties ?? [] : [],
-      twoHanded: "twoHanded" in item ? item.twoHanded ?? false : false,
-      damage:
-        "damage" in item && item.damage
-          ? item.damage
-          : {
-              quantity: 1,
-              sides: "d6",
-            },
-      modifierAttribute:
-        "modifierAttribute" in item && item.modifierAttribute
-          ? item.modifierAttribute
-          : "str",
-      proficient:
-        "proficient" in item
-          ? item.proficient ?? false
-          : false,
-    }
-  }
-
-  equipInventoryItem(itemId: string): CharacterTemplate {
-    const item = this.props.inventory.find((i) => i.id === itemId)
-
-    if (!item || !item.equippable || !item.equipSlot) {
-      return this
-    }
-
-    const inventoryWithoutItem = this.props.inventory.filter(
-      (i) => i.id !== itemId,
-    )
-
-    const equipment = this.props.equipment
-
-    if (item.equipSlot === "weapon") {
-      const nextWeapon = this.toWeapon(item)
-      const neededArms = nextWeapon.twoHanded ? 2 : 1
-
-      const currentWeapons = [...equipment.weapons]
-      const returnedToInventory: Itemmable[] = []
-
-      let usedArms = currentWeapons.reduce(
-        (total, weapon) => total + (weapon.twoHanded ? 2 : 1),
-        0,
-      )
-
-      while (usedArms + neededArms > this.props.sheet.arms && currentWeapons.length > 0) {
-        const removed = currentWeapons.shift()
-        if (!removed) break
-
-        returnedToInventory.push(removed)
-        usedArms -= removed.twoHanded ? 2 : 1
-      }
-
-      return this.withPatch({
-        inventory: [...inventoryWithoutItem, ...returnedToInventory],
-        equipment: {
-          ...equipment,
-          weapons: [...currentWeapons, nextWeapon],
-        },
-      })
-    }
-
-    if (item.equipSlot === "ring") {
-      return this.withPatch({
-        inventory: inventoryWithoutItem,
-        equipment: {
-          ...equipment,
-          rings: [...equipment.rings, item as Equipment],
-        },
-      })
-    }
-
-    const slot = item.equipSlot
-
-    const previous = equipment[slot]
-
-    return this.withPatch({
-      inventory: previous
-        ? [...inventoryWithoutItem, previous]
-        : inventoryWithoutItem,
-      equipment: {
-        ...equipment,
-        [slot]: item,
-      },
-    })
-  }
-
-  unequipArmor(): CharacterTemplate {
-    const armor = this.props.equipment.armor
-
-    if (!armor) return this
-
-    return this.withPatch({
-      inventory: [...this.props.inventory, armor],
-      equipment: {
-        ...this.props.equipment,
-        armor: undefined,
-      },
-    })
-  }
-
-  unequipWeapon(index: number): CharacterTemplate {
-    const weapon = this.props.equipment.weapons[index]
-
-    if (!weapon) return this
-
-    return this.withPatch({
-      inventory: [...this.props.inventory, weapon],
-      equipment: {
-        ...this.props.equipment,
-        weapons: this.props.equipment.weapons.filter(
-          (_, i) => i !== index,
-        ),
-      },
-    })
-  }
-  
-  usePocketItem(index: number): CharacterTemplate {
-    const item = this.props.equipment.pockets[index]
-
-    if (!item) return this
-
-    if (item.kind !== "consumable" && item.kind !== "throwable") {
-      return this
-    }
-
-    const nextQuantity = Math.max(0, (item.quantity ?? 1) - 1)
-
-    const nextItem = {
-      ...item,
-      quantity: nextQuantity,
-    }
-
-    const pocketsWithoutItem = this.props.equipment.pockets.filter(
-      (_, i) => i !== index,
-    )
-
-    if (nextQuantity <= 0) {
-      return this.withPatch({
-        inventory: [...this.props.inventory, nextItem],
-        equipment: {
-          ...this.props.equipment,
-          pockets: pocketsWithoutItem,
-        },
-      })
-    }
-
-    return this.withPatch({
-      equipment: {
-        ...this.props.equipment,
-        pockets: this.props.equipment.pockets.map((pocketItem, i) =>
-          i === index ? nextItem : pocketItem,
-        ),
-      },
-    })
-  }
-
-  unequipPocketItem(index: number): CharacterTemplate {
-    const item = this.props.equipment.pockets[index]
-
-    if (!item) return this
-
-    return this.withPatch({
-      inventory: [...this.props.inventory, item],
-      equipment: {
-        ...this.props.equipment,
-        pockets: this.props.equipment.pockets.filter((_, i) => i !== index),
-      },
-    })
-  }
-
-  unequip<K extends "helmet" | "gloves" | "boots" | "armor">(
-    slot: K,
-  ): CharacterTemplate {
-    const item = this.props.equipment[slot]
-
-    if (!item) return this
-
-    return this.withPatch({
-      inventory: [...this.props.inventory, item],
-      equipment: {
-        ...this.props.equipment,
-        [slot]: undefined,
-      },
-    })
-  }
-
-  unequipRing(index: number): CharacterTemplate {
-    const ring = this.props.equipment.rings[index]
-
-    if (!ring) return this
-
-    return this.withPatch({
-      inventory: [...this.props.inventory, ring],
-      equipment: {
-        ...this.props.equipment,
-        rings: this.props.equipment.rings.filter((_, i) => i !== index),
-      },
-    })
-  }
-
-
-  addAbility(ability: Ability): CharacterTemplate {
-    return this.with("abilities", [
-      ...(this.props.abilities ?? []),
-      ability,
-    ])
-  }
-
-  updateAbility(ability: Ability): CharacterTemplate {
-    return this.with(
-      "abilities",
-      (this.props.abilities ?? []).map((a) =>
-        a.id === ability.id ? ability : a
-      ),
-    )
-  }
-
-  removeAbility(abilityId: string): CharacterTemplate {
-    return this.with(
-      "abilities",
-      (this.props.abilities ?? []).filter((a) => a.id !== abilityId),
-    )
-  }
-
-  saveAbility(ability: Ability): CharacterTemplate {
-    const exists = (this.props.abilities ?? []).some((a) => a.id === ability.id)
-
-    return exists
-      ? this.updateAbility(ability)
-      : this.addAbility(ability)
-  }
-
-  useAbility(abilityId: string): CharacterTemplate {
-    return this.with(
-      "abilities",
-      (this.props.abilities ?? []).map((a) => {
-        if (a.id !== abilityId || !a.usage) return a
-
-        return {
-          ...a,
-          usage: {
-            ...a.usage,
-            used: Math.min(a.usage.max, a.usage.used + 1),
-          },
-        }
-      }),
-    )
-  }
-
-  resetAbility(abilityId: string): CharacterTemplate {
-    return this.with(
-      "abilities",
-      (this.props.abilities ?? []).map((a) => {
-        if (a.id !== abilityId || !a.usage) return a
-
-        return {
-          ...a,
-          usage: {
-            ...a.usage,
-            used: 0,
-            cooldownRemaining: undefined,
-          },
-        }
-      }),
-    )
-  }
-
-  getEffectiveArmorClass(): number {
-    return this.applyBonuses(
-      this.props.sheet.stats.armorClass,
-      this.getEquipmentBonuses("armorClass"),
-    )
-  }
-
-  getEffectiveInitiative(): number {
-    return this.applyBonuses(
-      this.props.sheet.stats.initiative,
-      this.getEquipmentBonuses("initiative"),
-    )
-  }
-
-  getEffectiveMaxHp(): number {
-    return this.applyBonuses(
-      this.props.sheet.HP.max,
-      this.getEquipmentBonuses("maxHp"),
-    )
-  }
-
-  getEffectiveTemporaryHp(): number {
-    return this.applyBonuses(
-      this.props.sheet.HP.temporary,
-      this.getEquipmentBonuses("temporaryHp"),
-    )
-  }
-
-  getEffectivePassivePerception(): number {
-    return this.applyBonuses(
-      this.props.sheet.stats.passive_perception,
-      this.getEquipmentBonuses("passivePerception"),
-    )
-  }
-
-  getEffectiveMobility(): number {
-    return this.applyBonuses(
-      this.props.sheet.stats.mobility,
-      this.getEquipmentBonuses("speed"),
-    )
-  }
-
   getAttributeBonuses(attribute: Attribute): Bonus[] {
     return this.getEquippedItems().flatMap((item) =>
       item.bonuses?.attribute
@@ -815,68 +278,120 @@ export class CharacterTemplate {
         .map((entry) => entry.bonus) ?? [],
     )
   }
-
-  getEffectiveAttribute(attribute: Attribute): number {
-    return this.applyBonuses(
-      this.props.sheet.attributes[attribute],
-      this.getAttributeBonuses(attribute),
-    )
-  }
-
-  getEffectiveAttributeModifier(attribute: Attribute): number {
-    const baseModifier = Math.floor(
-      (this.getEffectiveAttribute(attribute) - 10) / 2,
-    )
-
-    return this.applyBonuses(
-      baseModifier,
-      this.getAttributeModifierBonuses(attribute),
-    )
-  }
-
-  private getWeaponAttackBonuses(weapon: Weapon): Bonus[] {
-  const attack = weapon.bonuses?.attack
-
-  if (!attack) return []
-
-  if (attack.type === "always") return [attack.bonus]
-  if (attack.type === "equipment") return [attack.bonus]
-
-  return []
-  }
-
-  private getWeaponDamageBonuses(weapon: Weapon): Bonus[] {
-    const damage = weapon.bonuses?.damage
-
-    if (!damage) return []
-
-    if (damage.type === "always") return [damage.bonus]
-    if (damage.type === "equipment") return [damage.bonus]
-
-    return []
-  }
-
-  getEffectiveWeaponAttackBonus(
-    weapon: Weapon,
-    baseAttackBonus = 0,
-  ): number {
-    return this.applyBonuses(
-      baseAttackBonus,
-      this.getWeaponAttackBonuses(weapon),
-    )
-  }
-
-  getEffectiveWeaponDamageBonus(
-    weapon: Weapon,
-    baseDamageBonus = 0,
-  ): number {
-    return this.applyBonuses(
-      baseDamageBonus,
-      this.getWeaponDamageBonuses(weapon),
-    )
-  }
-    
   
+  /**
+   * 
+   * CHARACTER ABILITIES
+   * 
+   */
+  addAbility(ability: Ability): CharacterTemplate {return addAbility(this, ability)}
+  updateAbility(ability: Ability): CharacterTemplate {return updateAbility(this, ability)}
+  removeAbility(abilityId: string): CharacterTemplate {return removeAbility(this, abilityId)}
+  saveAbility(ability: Ability): CharacterTemplate {return saveAbility(this, ability)}
+  useAbility(abilityId: string): CharacterTemplate {return useAbility(this, abilityId)}
+  resetAbility(abilityId: string): CharacterTemplate {return resetAbility(this, abilityId)}
+  /*
+  *
+  * Equipment
+  *
+  */
+  getWeight(): number {return getWeight(this)}
+  getCarryingCapacity(): number {return getCarryingCapacity(this)}
+  getEncumbranceLimit(): number {return getEncumbranceLimit(this)}
+  getHeavyEncumbranceLimit(): number {return getHeavyEncumbranceLimit(this)}
+  wear<K extends Exclude<keyof CharacterEquipment, "weapons" | "rings" | "pockets">>(slot: K,item: CharacterEquipment[K],): CharacterTemplate {return wear(this, slot, item)}
+  unequip(slot: Exclude<keyof CharacterEquipment, "weapons" | "rings" | "pockets">,): CharacterTemplate {return unequip(this, slot)}
+  unequipArmor(): CharacterTemplate {return unequipArmor(this)}
+  getUsedArms(): number {return getUsedArms(this)}
+  useWeapon(weapon: Weapon): CharacterTemplate {return useWeapon(this, weapon)}
+  updateWeapon(index: number, weapon: Weapon): CharacterTemplate {return updateWeapon(this, index, weapon)}
+  removeWeapon(index: number): CharacterTemplate {return removeWeapon(this, index)}
+  unequipWeapon(index: number): CharacterTemplate {return unequipWeapon(this, index)}
+  getUsedFingers(): number {return getUsedFingers(this)}
+  getTotalFingers(): number {return getTotalFingers(this)}
+  useRing(ring: Equipment): CharacterTemplate {return useRing(this, ring)}
+  updateRing(index: number, ring: Equipment): CharacterTemplate {return updateRing(this, index, ring)}
+  removeRing(index: number): CharacterTemplate {return removeRing(this, index)}
+  unequipRing(index: number): CharacterTemplate {return unequipRing(this, index)}
+  addToPocketItem(item: Itemmable): CharacterTemplate {return addToPocketItem(this, item)}
+  pocketInventoryItem(itemId: string): CharacterTemplate {return pocketInventoryItem(this, itemId)}
+  updatePocketItem(index: number, item: Itemmable): CharacterTemplate {return updatePocketItem(this, index, item)}
+  removePocketItem(index: number): CharacterTemplate {return removePocketItem(this, index)}
+  unequipPocketItem(index: number): CharacterTemplate {return unequipPocketItem(this, index)}
+  wieldPocketWeapon(index: number): CharacterTemplate {return wieldPocketWeapon(this, index)}
+  usePocketItem(index: number): CharacterTemplate {return usePocketItem(this, index)}
+  equipInventoryItem(itemId: string): CharacterTemplate {return equipInventoryItem(this, itemId)}
+  /**
+   * 
+   * INVENTORY
+   *  
+   */
+  addInventoryItem(item: Itemmable): CharacterTemplate {return addInventoryItem(this, item)}
+  updateInventoryItem(itemId: string,updater: (item: Itemmable) => Itemmable,): CharacterTemplate {return updateInventoryItem(this, itemId, updater)}
+  removeInventoryItem(itemId: string): CharacterTemplate {return removeInventoryItem(this, itemId)}
+  /**
+   * 
+   * MAGIC
+   *  
+   */
+  getOrCreateMagic(): Magic {return getOrCreateMagic(this)}
+  ensureMagic(): CharacterTemplate {return ensureMagic(this)}
+  getSpells(): Spell[] {return getSpells(this)}
+  addSpell(spell: Spell): CharacterTemplate {return addSpell(this, spell)}
+  updateSpell(spell: Spell): CharacterTemplate {return updateSpell(this, spell)}
+  removeSpell(spellIndex: string): CharacterTemplate {return removeSpell(this, spellIndex)}
+  setSpellPrepared(spellIndex: string,prepared: boolean,): CharacterTemplate {return setSpellPrepared(this, spellIndex, prepared)}
+  getDerivedSpellSlots(): Partial<Record<MagicCircleLevel, Slot>> {return getDerivedSpellSlots(this)}
+  getDerivedPactSlots(): Slot | undefined {return getDerivedPactSlots(this)}
+  getSpellSlots(): Partial<Record<MagicCircleLevel, Slot>> {return getSpellSlots(this)}
+  getPactSlots(): Slot | undefined {return getPactSlots(this)}
+  syncMagicWithClasses(): CharacterTemplate {return syncMagicWithClasses(this)}
+  spendSpellSlot(level: MagicCircleLevel): CharacterTemplate {return spendSpellSlot(this, level)}
+  restoreSpellSlot(level: MagicCircleLevel): CharacterTemplate {return restoreSpellSlot(this, level)}
+  spendPactSlot(): CharacterTemplate {return spendPactSlot(this)}
+  restorePactSlot(): CharacterTemplate {return restorePactSlot(this)}
+  /**
+   * 
+   * STATS
+   *  
+   */
+  getProficiencyBonus(): number {return getProficiencyBonus(this)}
+  getAttributeModifier(attribute: Attribute): number {return getAttributeModifier(this, attribute)}
+  getEffectiveAttribute(attribute: Attribute): number {return getEffectiveAttribute(this, attribute)}
+  getEffectiveAttributeModifier(attribute: Attribute): number {return getEffectiveAttributeModifier(this, attribute)}
+  getEffectiveStat<K extends keyof Sheet["stats"]>(stat: K,): Sheet["stats"][K] {return getEffectiveStat(this, stat)}
+  getEffectiveWeaponAttackBonus(weapon: Weapon,baseValue: number,): number {return getEffectiveWeaponAttackBonus(this, weapon, baseValue)}
+  getEffectiveWeaponDamageBonus(weapon: Weapon,baseValue: number,): number {return getEffectiveWeaponDamageBonus(this, weapon, baseValue)}
+  getEquippedItems(): Equipment[] {return getEquippedItems(this)}
+  getEquipmentBonuses(key: StatBonusKey): Bonus[] {return getEquipmentBonuses(this, key)}
+  getEffectiveArmorClass(): number {return getEffectiveArmorClass(this)}
+  getEffectiveInitiative(): number {return getEffectiveInitiative(this)}
+  getEffectivePassivePerception(): number {return getEffectivePassivePerception(this)}
+  getEffectiveMobility(): number {return getEffectiveMobility(this)}
+  applyBonus(baseValue: number, bonus: Bonus): number {return applyBonus(baseValue, bonus)}
+  applyBonuses(baseValue: number, bonuses: Bonus[]): number {return applyBonuses(baseValue, bonuses)}
+  /**
+   *
+   * HP
+   *
+   */
+  withHp<K extends keyof HP>(key: K, value: HP[K]): CharacterTemplate {return withHp(this, key, value)}
+  getEffectiveMaxHp(): number {return getEffectiveMaxHp(this)}
+  getEffectiveTemporaryHp(): number {return getEffectiveTemporaryHp(this)}
+  setCurrentHp(value: number): CharacterTemplate {return setCurrentHp(this, value)}
+  setTemporaryHp(value: number): CharacterTemplate {return setTemporaryHp(this, value)}
+  setMaxHp(value: number): CharacterTemplate {return setMaxHp(this, value)}
+  takeDamage(damage: number): CharacterTemplate {return takeDamage(this, damage)}
+  heal(amount: number): CharacterTemplate {return heal(this, amount)}
+  addTemporaryHp(amount: number): CharacterTemplate {return addTemporaryHp(this, amount)}
+  addDice(die: Die): CharacterTemplate {return addDice(this, die)}
+  spendHitDie(side: DieSides): CharacterTemplate {return spendHitDie(this, side)}
+  restoreHitDie(side: DieSides): CharacterTemplate {return restoreHitDie(this, side)}
+  restoreAllHitDice(): CharacterTemplate {return restoreAllHitDice(this)}
+  addDeathSaveSuccess(): CharacterTemplate {return addDeathSaveSuccess(this)}
+  addDeathSaveFailure(): CharacterTemplate {return addDeathSaveFailure(this)}
+  resetDeathSaves(): CharacterTemplate {return resetDeathSaves(this)}
+  longRestHp(): CharacterTemplate {return longRestHp(this)}
 }
 
 

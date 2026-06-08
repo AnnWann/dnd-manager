@@ -4,6 +4,6 @@ import type { MagicCircleLevel } from "./spellDefinitions"
 
 export type CharacterSpells = {
   knownSpells: Spell[]
-  slots: Record<MagicCircleLevel, LeveledSlots>
+  slots: Partial<Record<MagicCircleLevel, LeveledSlots>>
   pactSlots: LeveledSlots
 }

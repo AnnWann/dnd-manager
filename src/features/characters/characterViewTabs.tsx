@@ -4,6 +4,7 @@ import {
   Sparkles,
   Shield,
   Backpack,
+  WandSparkles
 } from "lucide-react"
 
 export type CharacterTab =
@@ -11,7 +12,7 @@ export type CharacterTab =
   | "abilities"
   | "equipment"
   | "inventory"
-
+  | "spellsList"
 type Props = {
   activeTab: CharacterTab
   setActiveTab: (tab: CharacterTab) => void
@@ -26,6 +27,7 @@ const TABS: Array<{
   { key: "abilities", label: "Habilidades", icon: Sparkles },
   { key: "equipment", label: "Equipamento", icon: Shield },
   { key: "inventory", label: "Inventário", icon: Backpack },
+  { key: "spellsList", label: "Magias Conhecidas", icon: WandSparkles }
 ]
 
 export function CharacterViewTabs({

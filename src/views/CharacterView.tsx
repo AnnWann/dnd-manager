@@ -7,6 +7,7 @@ import type { Player } from "../models/player/Player"
 import { CharacterEquipment } from "../features/characters/equipment/EquipmentModule"
 import { CharacterInventory } from "../features/characters/inventory/characterInventory"
 import { CharacterViewTabs, type CharacterTab } from "../features/characters/characterViewTabs"
+import { CharacterSpellsModule } from "../features/characters/spells/characterSpellsModule"
 
 type Props = {
   characters: CharacterTemplate[]
@@ -92,6 +93,16 @@ export function CharacterView({
           canEditInventory={canEditCharacterType}
         />
       )}
+
+      {activeTab === "spellsList" && (
+        <CharacterSpellsModule
+          character={activeCharacter}
+          updateCharacter={updateCharacter}
+        />
+      )}
+    
     </div>
+
+    
   )
 }

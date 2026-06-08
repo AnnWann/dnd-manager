@@ -491,19 +491,9 @@ function EquipmentFields({
                   : "rounded-md border border-border px-2 py-2 text-xs text-text hover:bg-[color:var(--social-bg)]"
               }
               onClick={() =>
-                onUpdate((current) => ({
-                  ...current,
-                  equippable: true,
-                  equipSlot: value as EquipSlot,
-                  pocketable: value === "weapon" || value === "ring",
-
-                  ...(value === "weapon" ? withWeaponDefaults(current) : {}),
-
-                  armorType:
-                    value === "armor"
-                      ? ((current as Partial<Armor>).armorType ?? "light")
-                      : undefined,
-                }))
+                onUpdate((current) =>
+                  withEquipmentDefaults(current, value as EquipSlot),
+                )
               }
             >
               {label}
@@ -769,7 +759,10 @@ function inventoryItemTypeLabel(item: Itemmable): string {
 }
 
 
-function withEquipmentDefaults(item: Itemmable, equipSlot: EquipSlot): Itemmable {
+function withEquipmentDefaults(
+  item: Itemmable,
+  equipSlot: EquipSlot,
+): Itemmable {
   const base = {
     ...item,
     kind: "equipment" as const,
@@ -789,7 +782,10 @@ function withEquipmentDefaults(item: Itemmable, equipSlot: EquipSlot): Itemmable
     }
   }
 
-  return base
+  return {
+    ...base,
+    armorType: undefined,
+  }
 }
 
 function withWeaponDefaults(item: Itemmable): Itemmable {

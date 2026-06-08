@@ -46,24 +46,34 @@ export function SelectClassModule({
   const canEditCasting =
     classData.className === "fighter" || classData.className === "rogue"
 
+  function updateCharacterClasses(
+    updater: (classes: CharacterClassInterface[]) => CharacterClassInterface[],
+    ) {
+      updateCharacter(character.get("id"), (c) => {
+        const sheet = c.get("sheet")
+        const nextClasses = updater(sheet.classes ?? [])
+
+        return c
+          .withSheet("classes", nextClasses)
+          .ensureMagic()
+          .syncMagicWithClasses()
+      })
+  }
+
   function updateClass(nextClass: CharacterClassInterface) {
-    updateCharacter(character.get("id"), (c) => {
-      const sheet = c.get("sheet")
-      const classes = [...(sheet.classes ?? [])]
+    updateCharacterClasses((classes) => {
+      const nextClasses = [...classes]
 
-      classes[classIndex] = nextClass
+      nextClasses[classIndex] = nextClass
 
-      return c.withSheet("classes", classes)
+      return nextClasses
     })
   }
 
   function removeClass() {
-    updateCharacter(character.get("id"), (c) => {
-      const sheet = c.get("sheet")
-      const classes = (sheet.classes ?? []).filter((_, i) => i !== classIndex)
-
-      return c.withSheet("classes", classes)
-    })
+    updateCharacterClasses((classes) =>
+      classes.filter((_, i) => i !== classIndex),
+    )
   }
 
   return (
@@ -154,3 +164,4 @@ export function SelectClassModule({
     </div>
   )
 }
+
