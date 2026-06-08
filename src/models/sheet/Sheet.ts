@@ -7,13 +7,17 @@ import type { HP } from "./HP"
 
 
 export type Sheet = {
+  stats: {
+    armorClass: number
+    mobility: number
+    initiative: number
+    passive_perception: number
+  }
   HP: HP
-  armorClass: number
-  mobility: number
   attributes: CharacterAttribute
   skills: CharacterSkills
 
-  classes?: CharacterClassInterface
+  classes?: CharacterClassInterface[]
   race: CharacterRace
   type: CharacterType
 

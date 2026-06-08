@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Character, DndSpell, HomebrewSpell, InventoryItem, SpellEffect, SpellTranslation } from '../models/types'
+import type { DndSpell, HomebrewSpell, InventoryItem, SpellEffect, SpellTranslation } from '../models/types'
 import type { InitiativeResult } from '../features/initiative/initiative'
 import { readLocalStorageJson, writeLocalStorageJson } from './storage'
 import { normalizeAppState } from './normaliseCharacter'
+import type { CharacterTemplateProps } from '../models/characters/CharacterTemplate'
 
 export type AppStateV1 = {
   version: 1
-  characters: Character[]
+  characters: CharacterTemplateProps[]
   activeCharacterId: string
 
   /** Optional: cached official spell details synced across devices. */

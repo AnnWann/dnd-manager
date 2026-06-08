@@ -1,5 +1,5 @@
 import type { InventoryItem } from '../models/types'
-import { InventoryEditor } from '../features/inventory/InventoryEditor'
+import { InventoryEditor } from '../features/characters/inventory/InventoryEditor'
 import { newInventoryItem } from '../lib/inventory'
 
 type Props = {

@@ -2,7 +2,7 @@ import type { Equipment } from "./EquipmentSlot";
 
 export type Weapon = Equipment & {
   twoHanded?: boolean
-  properties: WeaponProperty
+  properties: WeaponProperty[]
 }
 
 export type WeaponProperty = {

@@ -22,15 +22,9 @@ export function SelectActionModule ({
       <Input
         type="number"
         className="mt-1"
-        value={character.actionsPerTurn[action] ?? 0}
+        value={character.get('actionsPerTurn')[action] ?? 0}
         onChange={(e) =>
-          updateCharacter(character.id, (c) => ({
-            ...c,
-           actionsPerTurn: { 
-              ...c.actionsPerTurn,
-              [action]: Math.max(0, Math.trunc(Number(e.target.value) || 0)),
-           }
-          }))
+          updateCharacter(character.get('id'), (c) => c.withAction(action, (Math.max(0, Math.trunc(Number(e.target.value) || 0)))))
         }
       />
     </div>

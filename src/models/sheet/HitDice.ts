@@ -1,6 +1,6 @@
-export type HitDice = Array<{
-  dice: number
-  diceValue: number
-  max: number
-  current: number
-}>
+import type { Die } from "../dice/Die"
+
+export type HitDice = {
+  max: Die
+  current: Die
+}

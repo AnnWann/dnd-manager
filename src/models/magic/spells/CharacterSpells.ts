@@ -3,7 +3,7 @@ import type { Spell } from "./Spell"
 import type { MagicCircleLevel } from "./spellDefinitions"
 
 export type CharacterSpells = {
-  Spells: Spell[]
-  Slots: Record<MagicCircleLevel, LeveledSlots>
-  PactSlots: LeveledSlots
+  knownSpells: Spell[]
+  slots: Record<MagicCircleLevel, LeveledSlots>
+  pactSlots: LeveledSlots
 }

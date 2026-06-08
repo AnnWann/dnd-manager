@@ -11,5 +11,5 @@ export type CharacterEquipment = {
   gloves?: Equipment
   rings: Equipment[]
   weapons: Weapon[]
-  pockets: Itemmable
+  pockets: Itemmable[]
 }

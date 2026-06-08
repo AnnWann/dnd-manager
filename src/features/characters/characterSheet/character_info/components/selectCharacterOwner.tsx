@@ -11,7 +11,7 @@ type Props = {
     updater: (c: CharacterTemplate) => CharacterTemplate
   ) => void
   playerKeys: string[]
-  getOwner: (ownerId: string) => Player
+  getOwner: (ownerName: string) => Player
   createOwner: (ownerName: string) => Player
 }
 
@@ -22,6 +22,9 @@ export function SelectCharacterOwner ({
   getOwner,
   createOwner
 }: Props) {
+
+  const owner = character.get('owner')
+
   return (
      <div className="w-full md:w-[320px]">
         <label className="text-xs text-text">
@@ -30,12 +33,9 @@ export function SelectCharacterOwner ({
 
         <Select
           className="mt-1"
-          value={character.owner.name ?? ''}
+          value={owner.name ?? ''}
           onChange={(e) =>
-            updateCharacter(character.id, (c) => ({
-              ...c,
-              owner: getOwner(e.target.value),
-            }))
+            updateCharacter(character.get('id'), (c) => c.with('owner', getOwner(e.target.value)))
           }
         >
           <option value="">Sem jogador</option>
@@ -48,12 +48,9 @@ export function SelectCharacterOwner ({
 
         <Input
           className="mt-2"
-          value={character.owner.name ?? ''}
+          value={owner.name ?? ''}
           onChange={(e) =>
-            updateCharacter(character.id, (c) => ({
-              ...c,
-              owner: createOwner(e.target.value),
-            }))
+            updateCharacter(character.get('id'), (c) => c.with('owner', createOwner(e.target.value)))
           }
           placeholder="Ou digite um novo nome de jogador"
         />

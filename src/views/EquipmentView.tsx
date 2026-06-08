@@ -1,16 +1,16 @@
 import { CharacterSelector } from '../features/characters/characterSelector'
-import { EquipmentModule } from '../features/equipment/EquipmentModule'
-import type { Character } from '../models/types'
+import { EquipmentModule } from '../features/characters/equipment/EquipmentModule'
+import type { CharacterTemplate } from '../models/characters/CharacterTemplate'
 
 type Props = {
-  characters: Character[]
-  activeCharacter: Character
+  characters: CharacterTemplate[]
+  activeCharacter: CharacterTemplate
   setActiveCharacterId: (id: string) => void
   addCharacter: () => void
   deleteActiveCharacter: () => void
   disableDelete: boolean
   showOwnerBadge: boolean
-  updateCharacter: (characterId: string, updater: (c: Character) => Character) => void
+  updateCharacter: (characterId: string, updater: (c: CharacterTemplate) => CharacterTemplate) => void
 }
 
 export function EquipmentView({
@@ -24,7 +24,7 @@ export function EquipmentView({
   updateCharacter,
 }: Props) {
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-4">
+    <div className="mx-auto w-full max-w-5xl gap-4">
       <CharacterSelector
         characters={characters}
         activeCharacter={activeCharacter}
@@ -36,7 +36,7 @@ export function EquipmentView({
       />
 
       <EquipmentModule
-        activeCharacter={activeCharacter}
+        character={activeCharacter}
         updateCharacter={updateCharacter}
       />
     </div>

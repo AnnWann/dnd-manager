@@ -22,12 +22,9 @@ export function SelectCharacterVisibility({
 
       <Select
         className="mt-1"
-        value={character.visibility ?? 'private'}
+        value={character.get('visibility') ?? 'Privado'}
         onChange={(e) =>
-          updateCharacter(character.id, (c) => ({
-            ...c,
-            visibility: e.target.value as 'private' | 'party' | 'master',
-          }))
+          updateCharacter(character.get('id'), (c) => c.with('visibility', stringToVisibility(e.target.value)))
         }
       >
         <option value="player">Privado</option>
@@ -36,4 +33,12 @@ export function SelectCharacterVisibility({
       </Select>
     </div>
   )
+}
+
+function stringToVisibility(s: string): 'private' | 'party' | 'master' {
+  switch(s){
+    case 'Equipe': return 'party'
+    case 'Mestre': return 'master'
+    default: return 'private'
+  }
 }

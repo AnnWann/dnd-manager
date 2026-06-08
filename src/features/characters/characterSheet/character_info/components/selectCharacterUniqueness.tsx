@@ -18,12 +18,9 @@ export function SelectCharacterUniqueness ({
       <label className="flex items-center gap-2">
         <input
           type="checkbox"
-          checked={character.unique}
+          checked={character.get('unique')}
           onChange={(e) =>
-            updateCharacter(character.id, (c) => ({
-              ...c,
-              unique: e.target.checked,
-            }))
+            updateCharacter(character.get('id'), (c) => c.with('unique', e.target.checked))
           }
         />
 

@@ -16,6 +16,7 @@ export function SelectCharacterType ({
   updateCharacter,
   canEditCharacterType  
 }: Props) {
+  const type = character.get('sheet').type
   return (
     <div className="w-full md:w-[320px]">
       <label className="text-xs text-text">
@@ -24,19 +25,15 @@ export function SelectCharacterType ({
 
       <Select
         className="mt-1"
-        value={character.sheet.type}
+        value={type}
         disabled={!canEditCharacterType}
         onChange={(e) =>
           canEditCharacterType
             ?
-          updateCharacter(character.id, (c) => ({
-            ...c,
-            type: e.target.value as CharacterType,
-          }))
-            : undefined
-        }
+          updateCharacter(character.get('id'), (c) => c.withSheet('type', e.target.value as CharacterType)) : undefined
+        } 
       >
-        {(canEditCharacterType ? CHARACTER_TYPES : [character.sheet.type]).map((t) => (
+        {(canEditCharacterType ? CHARACTER_TYPES : [type]).map((t) => (
           <option key={t} value={t}>
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </option>

@@ -1,27 +1,29 @@
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
-import { Attributes } from "./attributes"
-import { Class } from "./class"
-import { CharacterInfo } from "./character_info/characterInfo"
-import { Skills } from "./skills"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import type { Attribute } from "../../../models/sheet/Attribute"
+import type { Player } from "../../../models/player/Player"
+import { Attributes } from "./attributes"
+import { CharacterInfo } from "./character_info/characterInfo"
+import { Classes } from "./classes/class"
+import { Skills } from "./skills/skills"
 
 type Props = {
   character: CharacterTemplate
   updateCharacter: (characterId: string, updater: (c: CharacterTemplate) => CharacterTemplate) => void
-  addClassToActive: (classIndex: string) => void
   canAssignOwners: boolean
   canEditCharacterType: boolean
   playerKeys: string[]
+  getOwner: (ownerId: string) => Player
+  createOwner: (ownerName: string) => Player
 }
 
 export function CharacterSheet({
   character,
   updateCharacter,
-  addClassToActive,
   canAssignOwners,
   canEditCharacterType,
   playerKeys,
+  getOwner,
+  createOwner
 }: Props) {
   return (
     <Card>
@@ -37,28 +39,28 @@ export function CharacterSheet({
           canAssignOwners={canAssignOwners}
           canEditCharacterType={canEditCharacterType}
           playerKeys={playerKeys}
-         />
+          getOwner={getOwner}
+          createOwner={createOwner}
+
+        />
 
         <Attributes
           character={character}
           updateCharacter={updateCharacter}
-          />
+        />
 
         <Skills
           character={character}
           updateCharacter={updateCharacter}
-          abilityShort={abilityShort}
-         />
-
+        />
       </CardContent>
 
-      
-      <Class
-        character={character}
-        updateCharacter={updateCharacter}
-        abilityShort={abilityShort}
-        addClassToActive={addClassToActive}
-      />
+      {character.get("sheet").type === "pc" && (
+        <Classes
+          character={character}
+          updateCharacter={updateCharacter}
+        />
+      )}
       
     </Card>
   )

@@ -4,7 +4,7 @@ import type { Race } from "./Race"
 
 export type CharacterRace = {
   race: Race
-  subrace: Subrace
+  subrace: string
   naturalAbilities: Ability[]
   attributeBonus: Record<Attribute, number>
   proficiencies: string[]
