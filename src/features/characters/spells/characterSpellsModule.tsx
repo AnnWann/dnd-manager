@@ -1,6 +1,6 @@
 // features/characters/spells/CharacterSpellsModule.tsx
 
-import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
+import { Card, CardHeader } from "../../../components/ui/Card"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { KnownSpellsList } from "./knownSpellsList"
 import { SpellSlotsEditor } from "./slots"
