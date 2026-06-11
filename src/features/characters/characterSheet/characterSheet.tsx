@@ -28,7 +28,7 @@ export function CharacterSheet({
   return (
     <Card>
       <CardHeader>
-        <div className="text-sm font-semibold text-textH">Ficha rápida</div>
+        <div className="text-sm font-semibold text-textH">Ficha de Personagem</div>
         <div className="mt-1 text-xs text-text">Nome, atributos e regra de proficiência.</div>
       </CardHeader>
       <CardContent>

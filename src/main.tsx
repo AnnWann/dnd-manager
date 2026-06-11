@@ -3,11 +3,14 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { I18nProvider } from './i18n/I18nContext'
+import { BrowserRouter } from 'react-router-dom'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <I18nProvider locale="pt-BR">
-      <App />
-    </I18nProvider>
+    <BrowserRouter>
+      <I18nProvider locale="pt-BR">
+        <App />
+      </I18nProvider>
+    </BrowserRouter>
   </StrictMode>,
 )

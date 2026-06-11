@@ -2,46 +2,36 @@ import { useState } from "react"
 import { CharacterAbilities } from "../features/characters/abilities/characterAbilities"
 import { CharacterSelector } from "../features/characters/characterSelector"
 import { CharacterSheet } from "../features/characters/characterSheet/characterSheet"
-import type { CharacterTemplate } from "../models/characters/CharacterTemplate"
-import type { Player } from "../models/player/Player"
 import { CharacterEquipment } from "../features/characters/equipment/EquipmentModule"
 import { CharacterInventory } from "../features/characters/inventory/characterInventory"
 import { CharacterViewTabs, type CharacterTab } from "../features/characters/characterViewTabs"
 import { CharacterSpellsModule } from "../features/characters/spells/characterSpellsModule"
+import { useCharacterContext } from "../contexts/characterContext"
 
-type Props = {
-  characters: CharacterTemplate[]
-  activeCharacter: CharacterTemplate
-  setActiveCharacterId: (id: string) => void
-  addCharacter: () => void
-  deleteActiveCharacter: () => void
-  disableDelete: boolean
-  updateCharacter: (
-    characterId: string,
-    updater: (c: CharacterTemplate) => CharacterTemplate
-  ) => void
-  getOwner: (ownerId: string) => Player
-  createOwner: (ownerName: string) => Player
-  canAssignOwners: boolean
-  canEditCharacterType: boolean
-  playerKeys: string[]
-}
+export function CharacterView() {
+  const {
+    visibleCharacters: characters,
+    activeCharacter,
+    setSelectedCharacterId,
+    addCharacter,
+    deleteCharacter,
+    updateCharacter,
+    canAssignOwners,
+    canEditCharacterType,
+    knownPlayerKeys: playerKeys,
+    getOwner,
+    createOwner,
+  } = useCharacterContext()
 
-export function CharacterView({
-  characters,
-  activeCharacter,
-  setActiveCharacterId,
-  addCharacter,
-  deleteActiveCharacter,
-  disableDelete,
-  updateCharacter,
-  canAssignOwners,
-  canEditCharacterType,
-  playerKeys,
-  getOwner,
-  createOwner,
-}: Props) {
   const [activeTab, setActiveTab] = useState<CharacterTab>("sheet")
+
+  if (!activeCharacter) {
+    return <div className="text-sm text-text">Nenhum personagem visível.</div>
+  }
+
+  const deleteActiveCharacter = () => {
+    deleteCharacter(activeCharacter.get("id"))
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -49,16 +39,13 @@ export function CharacterView({
         characters={characters}
         activeCharacter={activeCharacter}
         addCharacter={addCharacter}
-        setActiveCharacterId={setActiveCharacterId}
+        setActiveCharacterId={setSelectedCharacterId}
         deleteActiveCharacter={deleteActiveCharacter}
-        disableDelete={disableDelete}
+        disableDelete={characters.length <= 1}
         showOwnerBadge={canAssignOwners}
       />
 
-      <CharacterViewTabs
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-      />
+      <CharacterViewTabs activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {activeTab === "sheet" && (
         <CharacterSheet
@@ -85,7 +72,7 @@ export function CharacterView({
           updateCharacter={updateCharacter}
         />
       )}
-      
+
       {activeTab === "inventory" && (
         <CharacterInventory
           character={activeCharacter}
@@ -100,9 +87,6 @@ export function CharacterView({
           updateCharacter={updateCharacter}
         />
       )}
-    
     </div>
-
-    
   )
 }

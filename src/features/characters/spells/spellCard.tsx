@@ -25,7 +25,7 @@ export function SpellCard({
           <div className="mt-1 flex flex-wrap gap-2 text-xs text-text">
             <span>Nível {spell.slotLevel}</span>
             <span>{spell.school}</span>
-            <span>{spell.actionType}</span>
+            <span>{spell.castingTime}</span>
             <span>{spell.range}</span>
             {spell.concentration ? <span>Concentração</span> : null}
             {spell.prepared ? <span>Preparada</span> : <span>Não preparada</span>}

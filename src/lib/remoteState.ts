@@ -35,7 +35,7 @@ const SYNC_KEY_STORAGE = 'dndmm.syncKey.v1'
 const USER_ROLE_STORAGE = 'dndmm.userRole.v1'
 const USER_KEY_STORAGE = 'dndmm.userKey.v1'
 
-type SyncStatus =
+export type SyncStatus =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'synced'; at: number }

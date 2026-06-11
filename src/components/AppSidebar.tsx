@@ -123,7 +123,7 @@ export function IconSync() {
   return (<IconBase> <path d="M20 12a8 8 0 0 0-13.3-5.9L4 8" /> <path d="M4 4v4h4" /> <path d="M4 12a8 8 0 0 0 13.3 5.9L20 16" /> <path d="M20 20v-4h-4" /> </IconBase>)
 } 
 export function IconCharacter() { return (<IconBase> <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" /> <path d="M4 20a8 8 0 0 1 16 0" /> </IconBase>) } 
-export function IconSpells() { return (<IconBase> <path d="M12 2 4 8l8 6 8-6-8-6Z" /> <path d="M4 14l8 6 8-6" /> </IconBase>) } 
+export function IconMagic() { return (<IconBase> <path d="M12 2 4 8l8 6 8-6-8-6Z" /> <path d="M4 14l8 6 8-6" /> </IconBase>) } 
 export function IconEquipment() { return (<IconBase> <path d="M6 4h12l2 4-8 12L4 8l2-4Z" /> <path d="M9 4v4" /> <path d="M15 4v4" /> </IconBase>) } 
 export function IconInitiative() { return (<IconBase> <path d="M4 17h16" /> <path d="M7 13h2" /> <path d="M11 9h2" /> <path d="M15 5h2" /> </IconBase>) } 
 export function IconActions() { return (<IconBase> <path d="M6 18 18 6" /> <path d="M9 6h9v9" /> <path d="M8 16h4" /> <path d="M16 8v4" /> </IconBase>) } 

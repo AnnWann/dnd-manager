@@ -15,21 +15,32 @@ export type Spell = {
   name: string
   description: string
   higherLevelText: string
-  source: SpellSource
+  source?: SpellSource
   
   displayName?: string
   headcanon?: string
   homebrew: boolean
 
   slotLevel: MagicCircleLevel
-  school: MagicSchool
-  classes: ClassName
+  school: MagicSchool | string
+  classes: ClassName[]
 
   rollMode: RollType[]
-  actionType: ActionType
-  reactionWhen?: string
+  castingTime: {
+    value: number
+    type: Exclude<ActionType, 'legendaryAction' | 'legendaryReaction' | 'legendaryResistance' | 'interaction' | 'free'> | 'minute' | 'hour' | 'special'
+    reactionWhen?: string
+    special?: string
+  }
 
-  range: string
+  range: {
+    origin: 'self' | 'touch' | 'point' | 'target' | 'ally' | 'enemy'
+    distance: number
+    area?: {
+      shape: 'circle' | 'square' | 'cone' | 'line',
+      size: number
+    }
+  }
   duration: {
     value: number 
     unit: DurationUnit
@@ -38,12 +49,13 @@ export type Spell = {
 
   damageDice?: Die
   concentration: boolean
+  ritual: boolean
   prepared: boolean
   components: ('V' | 'S' | 'M')[]
   material?: string
 
   targeting: SpellTargeting 
-  effects: Effect
+  effects: Effect[]
 }
 
 export type SpellTargeting = {

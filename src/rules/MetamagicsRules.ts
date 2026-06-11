@@ -49,7 +49,7 @@ export const metamagicRules: Record<
     timing: 'on-cast',
     canCombineWithOtherMetamagic: false,
     isAvailableForSpell: (spell) =>
-      spell.actionType === 'action',
+      spell.castingTime === 'action',
   },
 
   'seeking-spell': {
