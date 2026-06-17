@@ -1,32 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Character, DndSpell, HomebrewSpell, InventoryItem, SpellEffect, SpellTranslation } from '../types'
-import type { InitiativeResult } from '../features/initiative/initiative'
 import { readLocalStorageJson, writeLocalStorageJson } from './storage'
-import { normalizeAppState } from './normaliseCharacter'
+import type { CharacterTemplateProps } from '../models/characters/CharacterTemplate'
+import type { Spell } from '../models/magic/spells/Spell'
 
 export type AppStateV1 = {
   version: 1
-  characters: Character[]
+  characters: CharacterTemplateProps[]
   activeCharacterId: string
 
-  /** Optional: cached official spell details synced across devices. */
-  spellCache?: Record<string, DndSpell>
-
-  /** Optional: reusable modifier presets by spellIndex (synced across devices). */
-  effectPresets?: Record<string, SpellEffect[]>
-
   /** Optional: reusable homebrew spell definitions keyed by hb:... index (synced across devices). */
-  homebrewLibrary?: Record<string, HomebrewSpell>
+  spells?: Spell[]
 
-  /** Optional: cached translations for official spells (synced across devices). */
-  spellTranslations?: Record<string, SpellTranslation>
-
-  /** Optional: shared initiative tracker (synced across devices). */
-  initiativeOrder?: InitiativeResult[]
-  currentTurnIndex?: number
-
-  /** Optional: shared camp inventory. */
-  campInventory?: InventoryItem[]
 
 }
 
@@ -35,7 +19,7 @@ const SYNC_KEY_STORAGE = 'dndmm.syncKey.v1'
 const USER_ROLE_STORAGE = 'dndmm.userRole.v1'
 const USER_KEY_STORAGE = 'dndmm.userKey.v1'
 
-type SyncStatus =
+export type SyncStatus =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'synced'; at: number }
@@ -47,13 +31,7 @@ function defaultState(): AppStateV1 {
     version: 1,
     characters: [],
     activeCharacterId: '',
-    spellCache: {},
-    effectPresets: {},
-    homebrewLibrary: {},
-    spellTranslations: {},
-    initiativeOrder: [],
-    currentTurnIndex: 0,
-    campInventory: [],
+    spells:[],
   }
 }
 
@@ -146,7 +124,7 @@ export function useRemoteAppState() {
   const [userKey, setUserKey] = useState<string>(() => readUserKey())
   const [state, setState] = useState<AppStateV1>(() => {
     const local = readLocalStorageJson<AppStateV1>(LOCAL_STATE_KEY)
-    return local ? normalizeAppState(local) : defaultState()
+    return normalizeState(local)
   })
   const [status, setStatus] = useState<SyncStatus>({ kind: 'idle' })
 
@@ -187,11 +165,11 @@ export function useRemoteAppState() {
       const data = await apiGetState(syncKey)
       hydratedFromRemote.current = true
       if (data.state) {
-        setState(normalizeAppState(data.state))
+        setState(normalizeState(data.state))
       } else {
         // Bootstrap: if the key has no remote state yet, persist the current local state
         // so subsequent pulls work across devices without requiring an extra local change.
-        await apiPutState(syncKey, normalizeAppState(stateRef.current))
+        await apiPutState(syncKey, normalizeState(stateRef.current))
       }
       setStatus({ kind: 'synced', at: Date.now() })
     } catch (err: unknown) {
@@ -215,7 +193,7 @@ export function useRemoteAppState() {
     setStatus({ kind: 'saving' })
 
     saveTimer.current = window.setTimeout(() => {
-      apiPutState(syncKey, normalizeAppState(state))
+      apiPutState(syncKey, (state))
         .then(() => {
           setStatus({ kind: 'synced', at: Date.now() })
         })
@@ -244,5 +222,27 @@ export function useRemoteAppState() {
     setState,
     status,
     pullFromServer,
+  }
+}
+
+function normalizeState(state: unknown): AppStateV1 {
+  try {
+    if (!state || typeof state !== "object") {
+      return defaultState()
+    }
+
+    const raw = state as Partial<AppStateV1>
+
+    return {
+      version: 1,
+      characters: Array.isArray(raw.characters) ? raw.characters : [],
+      activeCharacterId:
+        typeof raw.activeCharacterId === "string"
+          ? raw.activeCharacterId
+          : "",
+      spells: Array.isArray(raw.spells) ? raw.spells : [],
+    }
+  } catch {
+    return defaultState()
   }
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
-import type { Character } from '../../types'
+import type { Character } from '../../models/types'
 import type { InitiativeResult } from './initiative'
 import { InitiativeForm } from './initiativeForm'
 import { InitiativeCarousel } from './initiativeCarousel'

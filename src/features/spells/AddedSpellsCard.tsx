@@ -11,7 +11,7 @@ import type {
   RestResetKind,
   SpellEffect,
   SpellTranslation,
-} from '../../types'
+} from '../../models/types'
 import {
   cantripDiceMultiplier,
   formatSigned,

@@ -1,4 +1,4 @@
-import type { CharacterClass } from '../types'
+import type { CharacterClass } from '../models/types'
 
 export type SpellSlotsByLevel = number[] // index 0..9, where 1..9 are spell levels
 

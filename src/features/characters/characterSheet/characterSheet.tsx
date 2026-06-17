@@ -1,33 +1,34 @@
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
-import type { Attribute, Character } from "../../../types"
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import type { Player } from "../../../models/player/Player"
 import { Attributes } from "./attributes"
-import { Class } from "./class"
-import { CharacterInfo } from "./characterInfo"
-import { Skills } from "./skills"
+import { CharacterInfo } from "./character_info/characterInfo"
+import { Classes } from "./classes/class"
+import { Skills } from "./skills/skills"
 
 type Props = {
-  character: Character
-  updateCharacter: (characterId: string, updater: (c: Character) => Character) => void
-  abilityShort: (ability: Attribute) => string
-  addClassToActive: (classIndex: string) => void
+  character: CharacterTemplate
+  updateCharacter: (characterId: string, updater: (c: CharacterTemplate) => CharacterTemplate) => void
   canAssignOwners: boolean
   canEditCharacterType: boolean
   playerKeys: string[]
+  getOwner: (ownerId: string) => Player
+  createOwner: (ownerName: string) => Player
 }
 
 export function CharacterSheet({
   character,
   updateCharacter,
-  abilityShort,
-  addClassToActive,
   canAssignOwners,
   canEditCharacterType,
   playerKeys,
+  getOwner,
+  createOwner
 }: Props) {
   return (
     <Card>
       <CardHeader>
-        <div className="text-sm font-semibold text-textH">Ficha rápida</div>
+        <div className="text-sm font-semibold text-textH">Ficha de Personagem</div>
         <div className="mt-1 text-xs text-text">Nome, atributos e regra de proficiência.</div>
       </CardHeader>
       <CardContent>
@@ -38,29 +39,28 @@ export function CharacterSheet({
           canAssignOwners={canAssignOwners}
           canEditCharacterType={canEditCharacterType}
           playerKeys={playerKeys}
-         />
+          getOwner={getOwner}
+          createOwner={createOwner}
+
+        />
 
         <Attributes
           character={character}
           updateCharacter={updateCharacter}
-          attributeShort={abilityShort}
-          />
+        />
 
         <Skills
           character={character}
           updateCharacter={updateCharacter}
-          abilityShort={abilityShort}
-         />
-
+        />
       </CardContent>
 
-      
-      <Class
-        character={character}
-        updateCharacter={updateCharacter}
-        abilityShort={abilityShort}
-        addClassToActive={addClassToActive}
-      />
+      {character.get("sheet").type === "pc" && (
+        <Classes
+          character={character}
+          updateCharacter={updateCharacter}
+        />
+      )}
       
     </Card>
   )

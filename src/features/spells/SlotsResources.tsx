@@ -1,7 +1,7 @@
-import type { Character } from '../../types'
+import type { Character } from '../../models/types'
 import { Button } from '../../components/ui/Button'
 import { multiclassSpellSlots } from '../../lib/spellSlots'
-import type { RestResetKind } from '../../types'
+import type { RestResetKind } from '../../models/types'
 
 export type SlotMeta = ReturnType<typeof multiclassSpellSlots>
 

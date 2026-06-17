@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Character, RestResetKind } from '../../types'
+import type { Character, RestResetKind } from '../../models/types'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'

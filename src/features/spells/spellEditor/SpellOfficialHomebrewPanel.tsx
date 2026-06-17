@@ -1,4 +1,4 @@
-import type { Attribute, AddedSpell, Character, HomebrewSpellMechanic, MagicCircleLevel } from '../../../types'
+import type { Attribute, AddedSpell, Character, HomebrewSpellMechanic, MagicCircleLevel } from '../../../models/types'
 import { magicCircleOptions } from '../../../lib/rules'
 import { apiClassLabel, SCHOOL_NAME_PT, schoolLabel } from '../../../lib/spellLabels'
 import { useI18n } from '../../../i18n/I18nContext'

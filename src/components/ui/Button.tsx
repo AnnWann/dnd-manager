@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { cn } from '../../lib/cn'
 
-type Variant = 'primary' | 'secondary' | 'ghost'
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
 type Size = 'sm' | 'md'
 
@@ -25,6 +25,7 @@ export function Button({
     secondary:
       'border-border bg-bg text-textH hover:bg-[color:var(--social-bg)]',
     ghost: 'border-transparent bg-transparent text-textH hover:bg-[color:var(--social-bg)]',
+    danger: 'rounded-md border border-red-500 px-2 py-1 text-xs text-red-500'
   }
 
   const sizes: Record<Size, string> = {

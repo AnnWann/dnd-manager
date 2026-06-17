@@ -1,4 +1,4 @@
-import type { AddedSpell, Character, DndSpell, SpellTranslation } from '../../../types'
+import type { AddedSpell, Character, DndSpell, SpellTranslation } from '../../../models/types'
 import { castTimeKindFromText, castTimeReactionWhenFromApi } from '../../../lib/castTime'
 import { createPortal } from 'react-dom'
 import { Button } from '../../../components/ui/Button'

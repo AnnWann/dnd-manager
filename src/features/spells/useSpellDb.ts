@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { DndApiRef, DndSpell } from '../../types'
+import type { DndApiRef, DndSpell } from '../../models/types'
 import { loadSpellDb, spellDbToList } from '../../lib/spellDb'
 import { isHomebrewIndex } from '../../lib/homebrew'
 

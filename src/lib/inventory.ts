@@ -1,4 +1,4 @@
-import type { DeathSaveState, InventoryItem } from '../types'
+import type { DeathSaveState, InventoryItem } from '../models/types'
 
 export function normalizeInventoryItem(item: any): InventoryItem {
   return {

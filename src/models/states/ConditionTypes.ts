@@ -1,0 +1,10 @@
+export type ConditionType = 
+  | 'blinded'
+  | 'deafened'
+  | 'frightened'
+  | 'poisoned'
+  | 'prone'
+  | 'restrained'
+  | 'stunned'
+  | 'paralyzed'
+  | 'charmed'

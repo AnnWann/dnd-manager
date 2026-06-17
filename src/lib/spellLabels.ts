@@ -1,4 +1,4 @@
-import type { Attribute, CharacterClass, DndApiRef } from '../types'
+import type { Attribute, CharacterClass, DndApiRef } from '../models/types'
 
 export const CLASS_OPTIONS: Array<{ index: string; name: string; defaultAbility: Attribute }> = [
   { index: 'barbarian', name: 'Bárbaro', defaultAbility: 'cha' },

@@ -7,7 +7,7 @@ import type {
   SpellEffect,
   SpellEffectMode,
   SpellEffectTarget,
-} from '../../../types'
+} from '../../../models/types'
 import { useI18n } from '../../../i18n/I18nContext'
 import { ATTRIBUTE_KEYS } from '../addedSpells/abilityKeys'
 import { Button } from '../../../components/ui/Button'
