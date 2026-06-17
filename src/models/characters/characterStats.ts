@@ -5,6 +5,7 @@ import type { Bonus, Equipment } from "../items/equipment/EquipmentSlot"
 import type { Weapon } from "../items/equipment/Weapon"
 import type { Attribute } from "../sheet/Attribute"
 import type { Sheet } from "../sheet/Sheet"
+import type { Armor } from "../items/equipment/Armor"
 
 export type StatBonusKey =
   | "armorClass"
@@ -102,21 +103,51 @@ export function getEffectiveStat<K extends keyof Sheet["stats"]>(
 }
 
 export function getEffectiveArmorClass(character: CharacterTemplate): number {
-  return getEffectiveStat(character, "armorClass") as number
+  const armor = getEquippedArmor(character)
+
+  const baseArmorClass =
+    armor?.bonuses?.armorClass?.find((bonus) => bonus.type === "flat")?.value ??
+    character.get("sheet").stats.armorClass ??
+    10
+
+  const nonFlatArmorBonuses =
+    getEquipmentBonuses(character, "armorClass").filter(
+      (bonus) => bonus.type !== "flat",
+    )
+
+  return applyBonuses(
+    baseArmorClass + getArmorDexBonus(character),
+    nonFlatArmorBonuses,
+  )
 }
 
 export function getEffectiveInitiative(character: CharacterTemplate): number {
-  return getEffectiveStat(character, "initiative") as number
+  const dexModifier = getEffectiveAttributeModifier(character, "dex")
+
+  return applyBonuses(
+    dexModifier,
+    getEquipmentBonuses(character, "initiative"),
+  )
 }
 
 export function getEffectivePassivePerception(
   character: CharacterTemplate,
 ): number {
-  return getEffectiveStat(character, "passive_perception") as number
+  const wisdomModifier = getEffectiveAttributeModifier(character, "wis")
+
+  return applyBonuses(
+    10 + wisdomModifier,
+    getEquipmentBonuses(character, "passivePerception"),
+  )
 }
 
 export function getEffectiveMobility(character: CharacterTemplate): number {
-  return getEffectiveStat(character, "mobility") as number
+  const baseSpeed = character.get("sheet").stats.mobility ?? 9
+
+  return applyBonuses(
+    baseSpeed,
+    getEquipmentBonuses(character, "speed"),
+  )
 }
 
 export function getEffectiveWeaponAttackBonus(
@@ -174,4 +205,21 @@ function statToBonusKey(
   if (stat === "mobility") return "speed"
 
   return undefined
+}
+
+function getEquippedArmor(character: CharacterTemplate): Armor | undefined {
+  return character.get("equipment").armor as Armor | undefined
+}
+
+function getArmorDexBonus(character: CharacterTemplate): number {
+  const armor = getEquippedArmor(character)
+  const dex = getEffectiveAttributeModifier(character, "dex")
+
+  if (!armor) return dex
+
+  if (armor.armorType === "light") return dex
+  if (armor.armorType === "medium") return Math.min(dex, 2)
+  if (armor.armorType === "heavy") return 0
+
+  return dex
 }
