@@ -7,7 +7,8 @@ import type {
   MagicSchool,
 } from "../../../models/magic/spells/spellDefinitions"
 import type { Spell } from "../../../models/magic/spells/Spell"
-import { MAGIC_SCHOOLS } from "../../../contexts/consts"
+import { MAGIC_SCHOOLS, SPELL_CLASS_OPTIONS } from "../../../contexts/consts"
+import type { ClassName } from "../../../models/sheet/Class"
 
 type SpellSchoolInput = MagicSchool | "other"
 
@@ -231,6 +232,12 @@ export function SpellCreatorModule({
     setSchoolMode(nextSpell.school as MagicSchool)
   }
 
+  function toggleClass(spell: Spell, className: ClassName): ClassName[] {
+    return spell.classes.includes(className)
+      ? spell.classes.filter((entry) => entry !== className)
+      : [...spell.classes, className]
+  }
+
   return (
     <Card>
 
@@ -302,6 +309,27 @@ export function SpellCreatorModule({
                 />
               )}
             </label>
+          </div>
+
+          <div className="rounded-xl border border-accentBorder bg-bg p-3">
+            <div className="text-xs font-medium text-textH">
+              Classes
+            </div>
+
+            <div className="mt-2 flex flex-wrap gap-3 text-xs text-text">
+              {SPELL_CLASS_OPTIONS.map((className) => (
+                <label key={className.value} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={spell.classes.includes(className.value)}
+                    onChange={() =>
+                      updateSpell("classes", toggleClass(spell, className.value))
+                    }
+                  />
+                  {className.label}
+                </label>
+              ))}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

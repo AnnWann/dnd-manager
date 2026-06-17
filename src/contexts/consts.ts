@@ -40,6 +40,19 @@ export const CLASS_OPTIONS: Array<{ value: ClassName; label: string }> = [
   { value: "wizard", label: "Mago" },
 ]
 
+export const SPELL_CLASS_OPTIONS:  Array<{ value: ClassName; label: string }> = [
+  { value: "artificer", label: "Artífice" },
+  { value: "bard", label: "Bardo" },
+  { value: "cleric", label: "Clérigo" },
+  { value: "druid", label: "Druida" },
+  { value: "monk", label: "Monge" },
+  { value: "paladin", label: "Paladino" },
+  { value: "ranger", label: "Patrulheiro" },
+  { value: "sorcerer", label: "Feiticeiro" },
+  { value: "warlock", label: "Bruxo" },
+  { value: "wizard", label: "Mago" },
+]
+
 export const CLASS_NAMES: Record<ClassName, string> = {
   artificer: "Artífice",
   barbarian: "Bárbaro",
