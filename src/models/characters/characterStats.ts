@@ -133,7 +133,14 @@ export function getEffectiveInitiative(character: CharacterTemplate): number {
 export function getEffectivePassivePerception(
   character: CharacterTemplate,
 ): number {
-  const wisdomModifier = getEffectiveAttributeModifier(character, "wis")
+  let wisdomModifier = getEffectiveAttributeModifier(character, "wis")
+  const perceptionProficiency = character.get('sheet').skills.perception
+
+  if (perceptionProficiency === 'proficient')
+    wisdomModifier += getProficiencyBonus(character)
+
+  if (perceptionProficiency === 'expertise')
+    wisdomModifier += getProficiencyBonus(character) * 2
 
   return applyBonuses(
     10 + wisdomModifier,
