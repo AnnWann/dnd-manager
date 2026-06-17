@@ -4,6 +4,7 @@ import { Card, CardHeader } from "../../../components/ui/Card"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { KnownSpellsList } from "./knownSpellsList"
 import { SpellSlotsEditor } from "./slots"
+import { MetamagicModule } from "./metamagicModule"
 
 type Props = {
   character: CharacterTemplate
@@ -13,11 +14,13 @@ type Props = {
   ) => void
 }
 
-export function CharacterSpellsModule({
+export function CharacterMagic({
   character,
   updateCharacter,
 }: Props) {
-  const spellCount = character.getSpells().length
+  const hasSorcerer = character
+  .get("sheet")
+  .classes?.some((classData) => classData.className === "sorcerer" && classData.level > 1)
 
   return (
     <div className="flex flex-col gap-4">
@@ -32,25 +35,22 @@ export function CharacterSpellsModule({
           </div>
         </CardHeader>
 
-        <SpellSlotsEditor
-          character={character}
-          updateCharacter={updateCharacter}
-          />
-
-          <div className="rounded-md border border-border p-3">
-            <div className="text-xs text-text">
-              Magias conhecidas
-            </div>
-
-            <div className="mt-1 text-2xl font-semibold text-textH">
-              {spellCount}
-            </div>
-          </div>
-
-          <KnownSpellsList
+        {hasSorcerer ? (
+          <MetamagicModule
             character={character}
             updateCharacter={updateCharacter}
           />
+        ) : null}
+
+        <SpellSlotsEditor
+          character={character}
+          updateCharacter={updateCharacter}
+        />
+
+        <KnownSpellsList
+          character={character}
+          updateCharacter={updateCharacter}
+        />
       </Card>
 
 

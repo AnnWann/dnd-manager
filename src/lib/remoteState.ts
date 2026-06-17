@@ -1,32 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { DndSpell, HomebrewSpell, InventoryItem, SpellEffect, SpellTranslation } from '../models/types'
-import type { InitiativeResult } from '../features/initiative/initiative'
 import { readLocalStorageJson, writeLocalStorageJson } from './storage'
 import type { CharacterTemplateProps } from '../models/characters/CharacterTemplate'
+import type { Spell } from '../models/magic/spells/Spell'
 
 export type AppStateV1 = {
   version: 1
   characters: CharacterTemplateProps[]
   activeCharacterId: string
 
-  /** Optional: cached official spell details synced across devices. */
-  spellCache?: Record<string, DndSpell>
-
-  /** Optional: reusable modifier presets by spellIndex (synced across devices). */
-  effectPresets?: Record<string, SpellEffect[]>
-
   /** Optional: reusable homebrew spell definitions keyed by hb:... index (synced across devices). */
-  homebrewLibrary?: Record<string, HomebrewSpell>
+  spells?: Spell[]
 
-  /** Optional: cached translations for official spells (synced across devices). */
-  spellTranslations?: Record<string, SpellTranslation>
-
-  /** Optional: shared initiative tracker (synced across devices). */
-  initiativeOrder?: InitiativeResult[]
-  currentTurnIndex?: number
-
-  /** Optional: shared camp inventory. */
-  campInventory?: InventoryItem[]
 
 }
 
@@ -47,13 +31,7 @@ function defaultState(): AppStateV1 {
     version: 1,
     characters: [],
     activeCharacterId: '',
-    spellCache: {},
-    effectPresets: {},
-    homebrewLibrary: {},
-    spellTranslations: {},
-    initiativeOrder: [],
-    currentTurnIndex: 0,
-    campInventory: [],
+    spells:[],
   }
 }
 
@@ -146,7 +124,7 @@ export function useRemoteAppState() {
   const [userKey, setUserKey] = useState<string>(() => readUserKey())
   const [state, setState] = useState<AppStateV1>(() => {
     const local = readLocalStorageJson<AppStateV1>(LOCAL_STATE_KEY)
-    return local ? (local) : defaultState()
+    return normalizeState(local)
   })
   const [status, setStatus] = useState<SyncStatus>({ kind: 'idle' })
 
@@ -187,11 +165,11 @@ export function useRemoteAppState() {
       const data = await apiGetState(syncKey)
       hydratedFromRemote.current = true
       if (data.state) {
-        setState((data.state))
+        setState(normalizeState(data.state))
       } else {
         // Bootstrap: if the key has no remote state yet, persist the current local state
         // so subsequent pulls work across devices without requiring an extra local change.
-        await apiPutState(syncKey, (stateRef.current))
+        await apiPutState(syncKey, normalizeState(stateRef.current))
       }
       setStatus({ kind: 'synced', at: Date.now() })
     } catch (err: unknown) {
@@ -244,5 +222,27 @@ export function useRemoteAppState() {
     setState,
     status,
     pullFromServer,
+  }
+}
+
+function normalizeState(state: unknown): AppStateV1 {
+  try {
+    if (!state || typeof state !== "object") {
+      return defaultState()
+    }
+
+    const raw = state as Partial<AppStateV1>
+
+    return {
+      version: 1,
+      characters: Array.isArray(raw.characters) ? raw.characters : [],
+      activeCharacterId:
+        typeof raw.activeCharacterId === "string"
+          ? raw.activeCharacterId
+          : "",
+      spells: Array.isArray(raw.spells) ? raw.spells : [],
+    }
+  } catch {
+    return defaultState()
   }
 }

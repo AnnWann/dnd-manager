@@ -9,6 +9,7 @@ export type CharacterEquipment = {
   boots?: Equipment
   helmet?: Equipment
   gloves?: Equipment
+  cape?: Equipment
   rings: Equipment[]
 
   // armas realmente empunhadas

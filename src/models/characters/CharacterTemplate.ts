@@ -7,7 +7,6 @@ import type { Weapon } from "../items/equipment/Weapon"
 import type { Itemmable } from "../items/item"
 import type { Magic } from "../magic/Magic"
 import type { Slot } from "../magic/spells/LeveledSlots"
-import type { Spell } from "../magic/spells/Spell"
 import type { Player } from "../player/Player"
 import type { Attribute } from "../sheet/Attribute"
 import type { HP } from "../sheet/HP"
@@ -60,6 +59,12 @@ import {
   spendSpellSlot,
   syncMagicWithClasses,
   updateSpell,
+  addMetamagic,
+  removeMetamagic,
+  setSorceryPoints,
+  getSorceryPoints,
+  spendSorceryPoint,
+  restoreSorceryPoint,
 } from "./characterMagic"
 import {
   applyBonus,
@@ -98,6 +103,9 @@ import {
   takeDamage,
   withHp,
 } from "./characterHp"
+import type { ClassName } from "../sheet/Class"
+import type { CharacterSpells } from "../magic/spells/CharacterSpells"
+import type { MetamagicId } from "../magic/metamagic/Metamagic"
 
 export type CharacterTemplateProps = {
   id: string,
@@ -335,9 +343,9 @@ export class CharacterTemplate {
    */
   getOrCreateMagic(): Magic {return getOrCreateMagic(this)}
   ensureMagic(): CharacterTemplate {return ensureMagic(this)}
-  getSpells(): Spell[] {return getSpells(this)}
-  addSpell(spell: Spell): CharacterTemplate {return addSpell(this, spell)}
-  updateSpell(spell: Spell): CharacterTemplate {return updateSpell(this, spell)}
+  ggetSpells(): CharacterSpells["knownSpells"] {return getSpells(this)}
+  addSpell(spellEntry: CharacterSpells["knownSpells"][number]): CharacterTemplate {return addSpell(this, spellEntry)}
+  updateSpell(spellEntry: CharacterSpells["knownSpells"][number]): CharacterTemplate {return updateSpell(this, spellEntry)}
   removeSpell(spellIndex: string): CharacterTemplate {return removeSpell(this, spellIndex)}
   setSpellPrepared(spellIndex: string,prepared: boolean,): CharacterTemplate {return setSpellPrepared(this, spellIndex, prepared)}
   getDerivedSpellSlots(): Partial<Record<MagicCircleLevel, Slot>> {return getDerivedSpellSlots(this)}
@@ -349,6 +357,12 @@ export class CharacterTemplate {
   restoreSpellSlot(level: MagicCircleLevel): CharacterTemplate {return restoreSpellSlot(this, level)}
   spendPactSlot(): CharacterTemplate {return spendPactSlot(this)}
   restorePactSlot(): CharacterTemplate {return restorePactSlot(this)}
+  addMetamagic(metamagicId: MetamagicId): CharacterTemplate {return addMetamagic(this, metamagicId)}
+  removeMetamagic(metamagicId: MetamagicId): CharacterTemplate {return removeMetamagic(this, metamagicId)}
+  setSorceryPoints(current: number): CharacterTemplate {return setSorceryPoints(this, current)}
+  getSorceryPoints() {return getSorceryPoints(this)}
+  spendSorceryPoint(): CharacterTemplate {return spendSorceryPoint(this)}
+  restoreSorceryPoint(): CharacterTemplate {return restoreSorceryPoint(this)}
   /**
    * 
    * STATS
@@ -391,6 +405,16 @@ export class CharacterTemplate {
   addDeathSaveFailure(): CharacterTemplate {return addDeathSaveFailure(this)}
   resetDeathSaves(): CharacterTemplate {return resetDeathSaves(this)}
   longRestHp(): CharacterTemplate {return longRestHp(this)}
+
+  getClassLevel(className: ClassName): number {
+    return (
+      this
+        .get("sheet")
+        .classes
+        ?.find((classData) => classData.className === className)
+        ?.level ?? 0
+    )
+  }
 }
 
 

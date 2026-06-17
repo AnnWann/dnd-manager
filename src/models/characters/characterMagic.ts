@@ -3,12 +3,14 @@
 import type { CharacterTemplate } from "./CharacterTemplate"
 import type { Magic } from "../magic/Magic"
 import type { Slot } from "../magic/spells/LeveledSlots"
-import type { Spell } from "../magic/spells/Spell"
+import type { CharacterSpells } from "../magic/spells/CharacterSpells"
 import type { MagicCircleLevel } from "../magic/spells/spellDefinitions"
-import {
-  deriveLeveledSlotsFromClasses,
-} from "../magic/spells/SpellSlotProgression"
+import { deriveLeveledSlotsFromClasses } from "../magic/spells/SpellSlotProgression"
 import { derivePactSlotsFromClasses } from "../magic/spells/WarlockSpellSlotProgression"
+import type { MetamagicId } from "../magic/metamagic/Metamagic"
+import type { CharacterMetamagics } from "../magic/metamagic/CharacterMetamagics"
+
+type KnownSpellEntry = CharacterSpells["knownSpells"][number]
 
 function createEmptyMagic(): Magic {
   return {
@@ -21,38 +23,43 @@ function createEmptyMagic(): Magic {
         current: 0,
       },
     },
-    metamagic: [],
   }
 }
 
-export function getOrCreateMagic(
-  character: CharacterTemplate,
-): Magic {
+export function getOrCreateMagic(character: CharacterTemplate): Magic {
   return character.get("magic") ?? createEmptyMagic()
 }
 
-export function ensureMagic(
-  character: CharacterTemplate,
-): CharacterTemplate {
+function getOrCreateMetamagic(character: CharacterTemplate): CharacterMetamagics {
+  const metamagic = getOrCreateMagic(character).metamagic
+
+  return {
+    metamagics: metamagic?.metamagics ?? [],
+    sorceryPoints: metamagic?.sorceryPoints ?? {
+      max: 0,
+      current: 0,
+    },
+  }
+}
+
+export function ensureMagic(character: CharacterTemplate): CharacterTemplate {
   if (character.get("magic")) return character
 
   return character.with("magic", createEmptyMagic())
 }
 
-export function getSpells(
-  character: CharacterTemplate,
-): Spell[] {
+export function getSpells(character: CharacterTemplate): KnownSpellEntry[] {
   return character.get("magic")?.spells.knownSpells ?? []
 }
 
 export function addSpell(
   character: CharacterTemplate,
-  spell: Spell,
+  spellEntry: KnownSpellEntry,
 ): CharacterTemplate {
   const currentMagic = getOrCreateMagic(character)
 
   const alreadyExists = currentMagic.spells.knownSpells.some(
-    (s) => s.index === spell.index,
+    (entry) => entry.spells.id === spellEntry.spells.id,
   )
 
   if (alreadyExists) return character
@@ -63,7 +70,7 @@ export function addSpell(
       ...currentMagic.spells,
       knownSpells: [
         ...currentMagic.spells.knownSpells,
-        spell,
+        spellEntry,
       ],
     },
   })
@@ -71,24 +78,24 @@ export function addSpell(
 
 export function updateSpell(
   character: CharacterTemplate,
-  spell: Spell,
+  spellEntry: KnownSpellEntry,
 ): CharacterTemplate {
   const currentMagic = getOrCreateMagic(character)
 
   const exists = currentMagic.spells.knownSpells.some(
-    (s) => s.index === spell.index,
+    (entry) => entry.spells.id === spellEntry.spells.id,
   )
 
   if (!exists) {
-    return addSpell(character, spell)
+    return addSpell(character, spellEntry)
   }
 
   return character.with("magic", {
     ...currentMagic,
     spells: {
       ...currentMagic.spells,
-      knownSpells: currentMagic.spells.knownSpells.map((s) =>
-        s.index === spell.index ? spell : s,
+      knownSpells: currentMagic.spells.knownSpells.map((entry) =>
+        entry.spells.id === spellEntry.spells.id ? spellEntry : entry,
       ),
     },
   })
@@ -105,7 +112,7 @@ export function removeSpell(
     spells: {
       ...currentMagic.spells,
       knownSpells: currentMagic.spells.knownSpells.filter(
-        (spell) => spell.index !== spellIndex,
+        (entry) => entry.spells.id !== spellIndex,
       ),
     },
   })
@@ -122,13 +129,16 @@ export function setSpellPrepared(
     ...currentMagic,
     spells: {
       ...currentMagic.spells,
-      knownSpells: currentMagic.spells.knownSpells.map((spell) =>
-        spell.index === spellIndex
+      knownSpells: currentMagic.spells.knownSpells.map((entry) =>
+        entry.spells.id === spellIndex
           ? {
-              ...spell,
-              prepared,
+              ...entry,
+              spells: {
+                ...entry.spells,
+                prepared,
+              },
             }
-          : spell,
+          : entry,
       ),
     },
   })
@@ -137,17 +147,13 @@ export function setSpellPrepared(
 export function getDerivedSpellSlots(
   character: CharacterTemplate,
 ): Partial<Record<MagicCircleLevel, Slot>> {
-  return deriveLeveledSlotsFromClasses(
-    character.get("sheet").classes ?? [],
-  )
+  return deriveLeveledSlotsFromClasses(character.get("sheet").classes ?? [])
 }
 
 export function getDerivedPactSlots(
   character: CharacterTemplate,
 ): Slot | undefined {
-  return derivePactSlotsFromClasses(
-    character.get("sheet").classes ?? [],
-  )
+  return derivePactSlotsFromClasses(character.get("sheet").classes ?? [])
 }
 
 export function getSpellSlots(
@@ -181,9 +187,7 @@ export function getSpellSlots(
   return nextSlots
 }
 
-export function getPactSlots(
-  character: CharacterTemplate,
-): Slot | undefined {
+export function getPactSlots(character: CharacterTemplate): Slot | undefined {
   const derivedPactSlots = getDerivedPactSlots(character)
   const savedPactSlots = character.get("magic")?.spells.pactSlots
 
@@ -208,6 +212,8 @@ export function syncMagicWithClasses(
   character: CharacterTemplate,
 ): CharacterTemplate {
   const currentMagic = getOrCreateMagic(character)
+  const currentMetamagic = getOrCreateMetamagic(character)
+  const derivedSorceryPoints = getDerivedSorceryPoints(character)
 
   return character.with("magic", {
     ...currentMagic,
@@ -220,7 +226,32 @@ export function syncMagicWithClasses(
         current: 0,
       },
     },
+    metamagic: {
+      ...currentMetamagic,
+      sorceryPoints: {
+        max: derivedSorceryPoints.max,
+        current: Math.min(
+          currentMetamagic.sorceryPoints.current || derivedSorceryPoints.max,
+          derivedSorceryPoints.max,
+        ),
+      },
+    },
   })
+}
+
+function getDerivedSorceryPoints(character: CharacterTemplate) {
+  const sorcererLevel = character.getClassLevel("sorcerer")
+
+  if (sorcererLevel < 2) 
+    return {
+      max: 0,
+      current: 0
+    }
+
+  return {
+    max: sorcererLevel,
+    current: sorcererLevel,
+  }
 }
 
 export function spendSpellSlot(
@@ -273,9 +304,7 @@ export function restoreSpellSlot(
   })
 }
 
-export function spendPactSlot(
-  character: CharacterTemplate,
-): CharacterTemplate {
+export function spendPactSlot(character: CharacterTemplate): CharacterTemplate {
   const currentMagic = getOrCreateMagic(character)
   const pactSlots = getPactSlots(character)
 
@@ -293,9 +322,7 @@ export function spendPactSlot(
   })
 }
 
-export function restorePactSlot(
-  character: CharacterTemplate,
-): CharacterTemplate {
+export function restorePactSlot(character: CharacterTemplate): CharacterTemplate {
   const currentMagic = getOrCreateMagic(character)
   const pactSlots = getPactSlots(character)
 
@@ -308,6 +335,121 @@ export function restorePactSlot(
       pactSlots: {
         ...pactSlots,
         current: Math.min(pactSlots.max, pactSlots.current + 1),
+      },
+    },
+  })
+}
+
+export function addMetamagic(
+  character: CharacterTemplate,
+  metamagicId: MetamagicId,
+): CharacterTemplate {
+  const currentMagic = getOrCreateMagic(character)
+  const currentMetamagic = getOrCreateMetamagic(character)
+
+  if (currentMetamagic.metamagics.includes(metamagicId)) {
+    return character
+  }
+
+  return character.with("magic", {
+    ...currentMagic,
+    metamagic: {
+      ...currentMetamagic,
+      metamagics: [...currentMetamagic.metamagics, metamagicId],
+    },
+  })
+}
+
+export function removeMetamagic(
+  character: CharacterTemplate,
+  metamagicId: MetamagicId,
+): CharacterTemplate {
+  const currentMagic = getOrCreateMagic(character)
+  const currentMetamagic = getOrCreateMetamagic(character)
+
+  return character.with("magic", {
+    ...currentMagic,
+    metamagic: {
+      ...currentMetamagic,
+      metamagics: currentMetamagic.metamagics.filter(
+        (id) => id !== metamagicId,
+      ),
+    },
+  })
+}
+
+export function setSorceryPoints(
+  character: CharacterTemplate,
+  current: number,
+): CharacterTemplate {
+  const currentMagic = getOrCreateMagic(character)
+ const currentMetamagic = getOrCreateMetamagic(character)
+
+  return character.with("magic", {
+    ...currentMagic,
+    metamagic: {
+      ...currentMetamagic,
+      sorceryPoints: {
+        ...currentMetamagic.sorceryPoints,
+        current: Math.max(
+          0,
+          Math.min(current, currentMetamagic.sorceryPoints.max),
+        ),
+      },
+    },
+  })
+}
+
+export function getSorceryPoints(character: CharacterTemplate) {
+  const currentMagic = getOrCreateMagic(character)
+  const sorceryPoints = currentMagic.metamagic?.sorceryPoints
+
+  return sorceryPoints ?? {
+    max: 0,
+    current: 0,
+  }
+}
+
+export function spendSorceryPoint(
+  character: CharacterTemplate,
+): CharacterTemplate {
+  const currentMagic = getOrCreateMagic(character)
+  const currentMetamagic = getOrCreateMetamagic(character)
+
+  if (currentMetamagic.sorceryPoints.current <= 0) return character
+
+  return character.with("magic", {
+    ...currentMagic,
+    metamagic: {
+      ...currentMetamagic,
+      sorceryPoints: {
+        ...currentMetamagic.sorceryPoints,
+        current: currentMetamagic.sorceryPoints.current - 1,
+      },
+    },
+  })
+}
+
+export function restoreSorceryPoint(
+  character: CharacterTemplate,
+): CharacterTemplate {
+  const currentMagic = getOrCreateMagic(character)
+  const currentMetamagic = getOrCreateMetamagic(character)
+
+  if (
+    currentMetamagic.sorceryPoints.current >=
+    currentMetamagic.sorceryPoints.max
+  ) {
+    return character
+  }
+
+  return character.with("magic", {
+    ...currentMagic,
+    metamagic: {
+      ...currentMetamagic,
+      sorceryPoints: {
+        ...currentMetamagic.sorceryPoints,
+        current: currentMetamagic.sorceryPoints.current + 1,
       },
     },
   })

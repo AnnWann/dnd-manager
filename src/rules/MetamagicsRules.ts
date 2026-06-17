@@ -17,7 +17,7 @@ export const metamagicRules: Record<
     timing: 'on-cast',
     canCombineWithOtherMetamagic: false,
     isAvailableForSpell: (spell) =>
-      spell.range !== 'self',
+      spell.range.origin !== 'self',
   },
 
   'empowered-spell': {
@@ -49,7 +49,7 @@ export const metamagicRules: Record<
     timing: 'on-cast',
     canCombineWithOtherMetamagic: false,
     isAvailableForSpell: (spell) =>
-      spell.castingTime === 'action',
+      spell.castingTime.type === 'action',
   },
 
   'seeking-spell': {
@@ -84,6 +84,13 @@ export const metamagicRules: Record<
       spell.targeting.kind === 'single-creature' &&
       spell.targeting.targetCount === 1 &&
       !spell.targeting.canTargetMoreAtHigherLevels &&
-      spell.range !== 'self',
+      spell.range.origin !== 'self',
   },
+}
+
+export function getMetamagicLimit(sorcererLevel: number): number {
+  if (sorcererLevel < 3) return 0
+  if (sorcererLevel < 10) return 2
+  if (sorcererLevel < 17) return 3
+  return 4
 }

@@ -12,6 +12,7 @@ import { CharacterProvider } from "./contexts/characterContext"
 import { SyncProvider } from "./contexts/syncContext"
 import { useRemoteAppState } from "./lib/remoteState"
 import { TopBar } from "./components/AppTopBar"
+import { MagicProvider } from "./contexts/magicContext"
 
 function App() {
   const navigate = useNavigate()
@@ -72,6 +73,10 @@ function App() {
         userRole={userRole}
         userKey={userKey}
       >
+        <MagicProvider
+          spells={appState.spells ?? []}
+          setAppState={setAppState}
+        >
         <div className="min-h-svh bg-[color:var(--social-bg)] text-text">
           <TopBar />
 
@@ -85,6 +90,7 @@ function App() {
             </main>
           </div>
         </div>
+        </MagicProvider>
       </CharacterProvider>
     </SyncProvider>
   )

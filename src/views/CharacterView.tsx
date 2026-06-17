@@ -2,10 +2,10 @@ import { useState } from "react"
 import { CharacterAbilities } from "../features/characters/abilities/characterAbilities"
 import { CharacterSelector } from "../features/characters/characterSelector"
 import { CharacterSheet } from "../features/characters/characterSheet/characterSheet"
-import { CharacterEquipment } from "../features/characters/equipment/EquipmentModule"
+import { CharacterEquipment } from "../features/characters/equipment/characterEquipment"
 import { CharacterInventory } from "../features/characters/inventory/characterInventory"
 import { CharacterViewTabs, type CharacterTab } from "../features/characters/characterViewTabs"
-import { CharacterSpellsModule } from "../features/characters/spells/characterSpellsModule"
+import { CharacterMagic } from "../features/characters/magic/characterMagicModule"
 import { useCharacterContext } from "../contexts/characterContext"
 
 export function CharacterView() {
@@ -26,7 +26,25 @@ export function CharacterView() {
   const [activeTab, setActiveTab] = useState<CharacterTab>("sheet")
 
   if (!activeCharacter) {
-    return <div className="text-sm text-text">Nenhum personagem visível.</div>
+    return (
+      <div className="mx-auto w-full max-w-xl rounded-xl border border-accentBorder bg-bg p-4">
+        <div className="text-sm font-semibold text-textH">
+          Nenhum personagem visível
+        </div>
+
+        <div className="mt-1 text-xs text-text">
+          Você ainda não tem um personagem associado a este jogador.
+        </div>
+
+        <button
+          type="button"
+          className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accentText"
+          onClick={addCharacter}
+        >
+          Criar personagem
+        </button>
+      </div>
+    )
   }
 
   const deleteActiveCharacter = () => {
@@ -82,7 +100,7 @@ export function CharacterView() {
       )}
 
       {activeTab === "spellsList" && (
-        <CharacterSpellsModule
+        <CharacterMagic
           character={activeCharacter}
           updateCharacter={updateCharacter}
         />

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
@@ -7,17 +7,7 @@ import type {
   MagicSchool,
 } from "../../../models/magic/spells/spellDefinitions"
 import type { Spell } from "../../../models/magic/spells/Spell"
-
-const MAGIC_SCHOOLS: { value: MagicSchool; label: string }[] = [
-  { value: "abjuration", label: "Abjuração" },
-  { value: "conjuration", label: "Conjuração" },
-  { value: "divination", label: "Adivinhação" },
-  { value: "enchantment", label: "Encantamento" },
-  { value: "evocation", label: "Evocação" },
-  { value: "illusion", label: "Ilusão" },
-  { value: "necromancy", label: "Necromancia" },
-  { value: "transmutation", label: "Transmutação" },
-]
+import { MAGIC_SCHOOLS } from "../../../contexts/consts"
 
 type SpellSchoolInput = MagicSchool | "other"
 
@@ -52,7 +42,6 @@ function newSpell(): Spell {
 
     concentration: false,
     ritual: false,
-    prepared: false,
     components: [],
 
     targeting: {
@@ -67,9 +56,34 @@ function newSpell(): Spell {
   }
 }
 
-export function SpellCreatorModule() {
-  const [spell, setSpell] = useState<Spell>(() => newSpell())
-  const [schoolMode, setSchoolMode] = useState<SpellSchoolInput>("evocation")
+type Props = {
+  saveSpell: (spell: Spell) => void
+  editingSpell?: Spell | null
+}
+
+export function SpellCreatorModule({
+  saveSpell,
+  editingSpell = null
+}: Props
+) {
+  const [spell, setSpell] = useState<Spell>(() => editingSpell ?? newSpell())
+
+  function isKnownSchool(school: unknown): school is MagicSchool {
+  return MAGIC_SCHOOLS.some((entry) => entry.value === school)
+  }
+
+  const [schoolMode, setSchoolMode] = useState<SpellSchoolInput>(
+    isKnownSchool(editingSpell?.school) ? editingSpell.school : "evocation",
+  )
+
+  useEffect(() => {
+    const nextSpell = editingSpell ?? newSpell()
+
+    setSpell(nextSpell)
+    setSchoolMode(
+      isKnownSchool(nextSpell.school) ? nextSpell.school : "other",
+    )
+  }, [editingSpell])
 
   const hasDistance =
     spell.range.origin !== "self" && spell.range.origin !== "touch"
@@ -219,12 +233,6 @@ export function SpellCreatorModule() {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="text-sm font-semibold text-textH">Criar magia</div>
-        <div className="mt-1 text-xs text-text">
-          Crie uma magia homebrew para usar na mesa.
-        </div>
-      </CardHeader>
 
       <CardContent>
         <div className="grid gap-3">
@@ -610,8 +618,11 @@ export function SpellCreatorModule() {
               Limpar
             </Button>
 
-            <Button variant="primary" onClick={() => console.log(spell)}>
-              Salvar magia
+            <Button variant="primary" onClick={() => {
+              saveSpell(spell);
+              resetSpell()
+            }}>
+              {editingSpell ? "Salvar alterações" : "Salvar magia"}
             </Button>
           </div>
         </div>

@@ -10,6 +10,7 @@ type SingleSlot =
   | "helmet"
   | "gloves"
   | "boots"
+  | "cape"
 
 type Props = {
   title: string

@@ -1,3 +1,4 @@
+import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import type { Attribute } from "./Attribute"
 
 export type SpellcastingProgression = "full" | "half" | "third"
@@ -12,6 +13,7 @@ export type KnownSpellsRule = {
   perLevel: number
   overrides?: Partial<Record<ClassLevel, number>>
   mode: KnownSpellMode
+  canPrepare?: (character: CharacterTemplate) => number
 }
 
 export interface CharacterClassInterface {
@@ -162,6 +164,55 @@ const PREPARED_ONLY_SPELLS: KnownSpellsRule = {
   perLevel: 0,
 }
 
+function minimumOne(value: number): number {
+  return Math.max(1, value)
+}
+
+const ARTIFICER_PREPARED_SPELLS: KnownSpellsRule = {
+  ...PREPARED_ONLY_SPELLS,
+  canPrepare: (character) =>
+    minimumOne(
+      Math.floor(character.getClassLevel("artificer") / 2) +
+        character.getAttributeModifier('int'),
+    ),
+}
+
+const CLERIC_PREPARED_SPELLS: KnownSpellsRule = {
+  ...PREPARED_ONLY_SPELLS,
+  canPrepare: (character) =>
+    minimumOne(
+      character.getClassLevel("cleric") +
+        character.getAttributeModifier("wis")
+    ),
+}
+
+const DRUID_PREPARED_SPELLS: KnownSpellsRule = {
+  ...PREPARED_ONLY_SPELLS,
+  canPrepare: (character) =>
+    minimumOne(
+     character.getClassLevel("druid") +
+        character.getAttributeModifier("wis")
+    ),
+}
+
+const PALADIN_PREPARED_SPELLS: KnownSpellsRule = {
+  ...PREPARED_ONLY_SPELLS,
+  canPrepare: (character) =>
+    minimumOne(
+      Math.floor(character.getClassLevel("paladin") / 2) +
+        character.getAttributeModifier("cha"),
+    ),
+}
+
+const WIZARD_PREPARED_SPELLS: KnownSpellsRule = {
+  ...WIZARD_KNOWN_SPELLS,
+  canPrepare: (character) =>
+    minimumOne(
+      character.getClassLevel("wizard") +
+        character.getAttributeModifier("int"),
+    ),
+}
+
 export class CharacterClassBuilder {
   barbarian() {
     return new CharacterClass("barbarian", 1)
@@ -183,7 +234,7 @@ export class CharacterClassBuilder {
       1,
       "wis",
       "full",
-      PREPARED_ONLY_SPELLS,
+      CLERIC_PREPARED_SPELLS,
     )
   }
 
@@ -193,7 +244,7 @@ export class CharacterClassBuilder {
       1,
       "wis",
       "full",
-      PREPARED_ONLY_SPELLS,
+      DRUID_PREPARED_SPELLS,
     )
   }
 
@@ -211,7 +262,7 @@ export class CharacterClassBuilder {
       1,
       "cha",
       "half",
-      PREPARED_ONLY_SPELLS,
+      PALADIN_PREPARED_SPELLS,
     )
   }
 
@@ -255,7 +306,7 @@ export class CharacterClassBuilder {
       1,
       "int",
       "full",
-      WIZARD_KNOWN_SPELLS,
+      WIZARD_PREPARED_SPELLS,
     )
   }
 
@@ -265,7 +316,7 @@ export class CharacterClassBuilder {
       1,
       "int",
       "half",
-      PREPARED_ONLY_SPELLS,
+      ARTIFICER_PREPARED_SPELLS,
     )
   }
 }

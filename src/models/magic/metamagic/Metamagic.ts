@@ -24,6 +24,6 @@ export type Metamagic = {
 
   canCombineWithOtherMetamagic: boolean
 
-  isAvailableForSpell: (spell: Spell, castLevel: MagicCircleLevel) => boolean
+  isAvailableForSpell?: (spell: Spell, castLevel: MagicCircleLevel) => boolean
 }
 

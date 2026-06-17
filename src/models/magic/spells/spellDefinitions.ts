@@ -11,3 +11,6 @@ export type MagicSchool =
   | "illusion"
   | "necromancy"
   | "transmutation"
+
+
+  

@@ -56,6 +56,13 @@ export function CharacterEquipment({ character, updateCharacter }: Props) {
         updateCharacter={updateCharacter}
       />
 
+      <EquipmentSingleSlotSection
+        title="Capa"
+        slot="cape"
+        character={character}
+        updateCharacter={updateCharacter}
+      />
+
       <EquipmentWeaponsSection
         character={character}
         updateCharacter={updateCharacter}

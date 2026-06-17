@@ -3,5 +3,5 @@ import type { CharacterSpells } from "./spells/CharacterSpells"
 
 export interface Magic {
   spells: CharacterSpells
-  metamagic?: CharacterMetamagics[]
+  metamagic?: CharacterMetamagics
 }

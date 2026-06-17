@@ -1,9 +1,15 @@
 import type { Slot as LeveledSlots } from "./LeveledSlots"
-import type { Spell } from "./Spell"
 import type { MagicCircleLevel } from "./spellDefinitions"
+import type { SpellSource } from "./SpellSource"
 
 export type CharacterSpells = {
-  knownSpells: Spell[]
+  knownSpells: {
+    source: SpellSource,
+    spells: {
+      id: string,
+      prepared: boolean
+    }
+  }[]
   slots: Partial<Record<MagicCircleLevel, LeveledSlots>>
   pactSlots: LeveledSlots
 }

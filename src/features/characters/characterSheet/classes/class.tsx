@@ -1,4 +1,5 @@
 import { Select } from "../../../../components/ui/Select"
+import { CLASS_OPTIONS } from "../../../../contexts/consts"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
 import { CharacterClassBuilder, type ClassName } from "../../../../models/sheet/Class"
 import { SelectClassModule } from "./selectClassModule"
@@ -11,21 +12,6 @@ type Props = {
   ) => void
 }
 
-const CLASS_OPTIONS: Array<{ value: ClassName; label: string }> = [
-  { value: "artificer", label: "Artífice" },
-  { value: "barbarian", label: "Bárbaro" },
-  { value: "bard", label: "Bardo" },
-  { value: "cleric", label: "Clérigo" },
-  { value: "druid", label: "Druida" },
-  { value: "fighter", label: "Guerreiro" },
-  { value: "monk", label: "Monge" },
-  { value: "paladin", label: "Paladino" },
-  { value: "ranger", label: "Patrulheiro" },
-  { value: "rogue", label: "Ladino" },
-  { value: "sorcerer", label: "Feiticeiro" },
-  { value: "warlock", label: "Bruxo" },
-  { value: "wizard", label: "Mago" },
-]
 
 const builder = new CharacterClassBuilder()
 

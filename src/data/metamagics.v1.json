@@ -1,0 +1,107 @@
+{
+  "careful-spell": {
+    "id": "careful-spell",
+    "name": "Feitiço Cuidadoso",
+    "desc": [
+      "Gaste 1 ponto ao conjurar magia com TR: escolha até seu mod. Carisma (mín. 1).",
+      "As criaturas escolhidas passam automaticamente no TR."
+    ],
+    "sorceryPointCost": 1,
+    "timing": "on-cast",
+    "canCombineWithOtherMetamagic": false
+  },
+  "distant-spell": {
+    "id": "distant-spell",
+    "name": "Feitiço Distante",
+    "desc": [
+      "Gaste 1 ponto: dobre o alcance de uma magia (>= 1,5 m).",
+      "Ou transforme alcance de toque em 9 m."
+    ],
+    "sorceryPointCost": 1,
+    "timing": "on-cast",
+    "canCombineWithOtherMetamagic": false
+  },
+  "empowered-spell": {
+    "id": "empowered-spell",
+    "name": "Feitiço Potencializado",
+    "desc": [
+      "Gaste 1 ponto ao rolar dano: rerrole até mod. Carisma (mín. 1) dados de dano e use os novos.",
+      "Pode combinar com outra Metamagia na mesma conjuração."
+    ],
+    "sorceryPointCost": 1,
+    "timing": "on-damage-roll",
+    "canCombineWithOtherMetamagic": false
+  },
+  "extended-spell": {
+    "id": "extended-spell",
+    "name": "Feitiço Estendido",
+    "desc": [
+      "Gaste 1 ponto: dobre a duração de uma magia (>= 1 minuto), até 24h."
+    ],
+    "sorceryPointCost": 1,
+    "timing": "on-cast",
+    "canCombineWithOtherMetamagic": false
+  },
+  "heightened-spell": {
+    "id": "heightened-spell",
+    "name": "Feitiço Intensificado",
+    "desc": [
+      "Gaste 3 pontos: 1 alvo tem desvantagem no primeiro TR contra a magia."
+    ],
+    "sorceryPointCost": 3,
+    "timing": "on-cast",
+    "canCombineWithOtherMetamagic": false
+  },
+  "quickened-spell": {
+    "id": "quickened-spell",
+    "name": "Feitiço Acelerado",
+    "desc": [
+      "Gaste 2 pontos: conjuração de 1 ação vira ação bônus (para essa magia)."
+    ],
+    "sorceryPointCost": 2,
+    "timing": "on-cast",
+    "canCombineWithOtherMetamagic": false
+  },
+  "seeking-spell": {
+    "id": "seeking-spell",
+      "name": "Feitiço Buscador",
+    "desc": [
+      "Se errar um ataque de magia, gaste 2 pontos para rerrolar o d20 e usar o novo resultado.",
+      "Pode combinar com outra Metamagia na mesma conjuração."
+    ],
+    "sorceryPointCost": 2,
+    "timing": "on-miss",
+    "canCombineWithOtherMetamagic": true
+  },
+  "subtle-spell": {
+    "id": "subtle-spell",
+    "name": "Feitiço Sutil",
+    "desc": [
+      "Gaste 1 ponto: conjure sem componentes verbais e somáticos."
+    ],
+    "sorceryPointCost": 1,
+    "timing": "on-cast",
+    "canCombineWithOtherMetamagic": false
+  },
+  "transmuted-spell": {
+    "id": "transmuted-spell",
+    "name": "Feitiço Transmutado",
+    "desc": [
+      "Gaste 1 ponto: troque o tipo de dano entre ácido, frio, fogo, relâmpago, veneno e trovão."
+    ],
+    "sorceryPointCost": 1,
+    "timing": "on-cast",
+    "canCombineWithOtherMetamagic": false
+  },
+  "twinned-spell": {
+    "id": "twinned-spell",
+    "name": "Feitiço Duplicado",
+    "desc": [
+      "Gaste pontos iguais ao nível da magia (truque = 1) para afetar 2 alvos com a mesma magia.",
+      "Só vale para magias que miram 1 criatura (não “self”) e não podem mirar mais de 1 no nível atual."
+    ],
+    "sorceryPointCost": "spell-level",
+    "timing": "on-cast",
+    "canCombineWithOtherMetamagic": false
+  }
+}

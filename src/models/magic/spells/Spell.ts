@@ -5,7 +5,6 @@ import type { RollType } from "../../dice/RollType"
 import type { ClassName } from "../../sheet/Class"
 import type { Die } from "../../dice/Die"
 import type { MagicCircleLevel, MagicSchool } from "./spellDefinitions"
-import type { SpellSource } from "./SpellSource"
 import type { Attribute } from "../../sheet/Attribute"
 
 
@@ -15,7 +14,6 @@ export type Spell = {
   name: string
   description: string
   higherLevelText: string
-  source?: SpellSource
   
   displayName?: string
   headcanon?: string
@@ -50,7 +48,6 @@ export type Spell = {
   damageDice?: Die
   concentration: boolean
   ritual: boolean
-  prepared: boolean
   components: ('V' | 'S' | 'M')[]
   material?: string
 

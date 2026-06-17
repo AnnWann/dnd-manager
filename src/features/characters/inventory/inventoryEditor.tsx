@@ -481,6 +481,7 @@ function EquipmentFields({
             ["boots", "Botas"],
             ["weapon", "Arma"],
             ["ring", "Anel"],
+            ["cape", "Capa"]
           ].map(([value, label]) => (
             <button
               key={value}
