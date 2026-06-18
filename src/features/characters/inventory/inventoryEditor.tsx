@@ -25,6 +25,7 @@ type Props = {
   onRemoveItem: (itemId: string) => void
   onEquipItem: (itemId: string) => void
   onPocketItem?: (itemId: string) => void
+  onToggleBagOfHolding?: (itemId: string) => void
 }
 
 type InventoryFilter =
@@ -38,7 +39,8 @@ type InventoryFilter =
   | "boots"
   | "ring"
   | "consumable"
-  | "throwable"
+  | "throwable" 
+  | "bagOfHolding"
 
 const INVENTORY_FILTERS: Array<{ value: InventoryFilter; label: string }> = [
   { value: "all", label: "Todos" },
@@ -52,6 +54,7 @@ const INVENTORY_FILTERS: Array<{ value: InventoryFilter; label: string }> = [
   { value: "ring", label: "Anéis" },
   { value: "consumable", label: "Consumíveis" },
   { value: "throwable", label: "Arremessáveis" },
+  { value: "bagOfHolding", label: "Bolsa Mágica" },
 ]
 
 function matchesInventoryFilter(item: Itemmable, filter: InventoryFilter) {
@@ -60,6 +63,8 @@ function matchesInventoryFilter(item: Itemmable, filter: InventoryFilter) {
   if (filter === "equipment") return item.kind === "equipment"
   if (filter === "consumable") return item.kind === "consumable"
   if (filter === "throwable") return item.kind === "throwable"
+  if (filter === "bagOfHolding") {return item.insideBagOfHolding === true}
+
 
   return item.kind === "equipment" && item.equipSlot === filter
 }
@@ -95,6 +100,7 @@ export function InventoryEditor({
   onRemoveItem,
   onEquipItem,
   onPocketItem,
+  onToggleBagOfHolding,
 }: Props) {
   const [editingEquipment, setEditingEquipment] = useState<Itemmable | null>(null)
   const [openItemKey, setOpenItemKey] = useState<string | null>(null)
@@ -169,6 +175,7 @@ export function InventoryEditor({
                         <span>Tipo: {inventoryItemTypeLabel(item)}</span>
                         <span>Qtd. {item.quantity ?? 1}</span>
                         <span>Peso {item.weight ?? 0}</span>
+                      
 
                         {item.kind === "equipment" ? (
                           <span
@@ -202,6 +209,28 @@ export function InventoryEditor({
                             Enviar ao bolso
                           </span>
                         ) : null}
+
+                        {onToggleBagOfHolding ? (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className={[
+                              "rounded-md border px-2 py-1 text-xs",
+                              item.insideBagOfHolding
+                                ? "border-accentBorder text-accent"
+                                : "border-border text-text",
+                            ].join(" ")}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onToggleBagOfHolding(item.id)
+                            }}
+                          >
+                            {item.insideBagOfHolding
+                              ? "Retirar da bolsa mágica"
+                              : "Enviar à bolsa mágica"}
+                          </span>
+                        ) : null}
+                        
                       </div>
                     </div>
 
@@ -355,6 +384,22 @@ export function InventoryEditor({
                             >
                               Colocar no bolso
                             </Button>
+                          ) : null}
+
+                          {onToggleBagOfHolding ? (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              className="rounded-md border border-border px-2 py-1 text-xs text-text"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onToggleBagOfHolding(item.id)
+                              }}
+                            >
+                              {item.insideBagOfHolding
+                                ? "Retirar da bolsa"
+                                : "Enviar à bolsa"}
+                            </span>
                           ) : null}
 
                           <Button

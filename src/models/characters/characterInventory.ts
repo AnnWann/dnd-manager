@@ -35,3 +35,33 @@ export function removeInventoryItem(
     ),
   )
 }
+
+export function sendInventoryItemToBagOfHolding(
+  character: CharacterTemplate,
+  itemId: string,
+): CharacterTemplate {
+  return updateInventoryItem(character, itemId, (item) => ({
+    ...item,
+    insideBagOfHolding: true,
+  }))
+}
+
+export function removeInventoryItemFromBagOfHolding(
+  character: CharacterTemplate,
+  itemId: string,
+): CharacterTemplate {
+  return updateInventoryItem(character, itemId, (item) => ({
+    ...item,
+    insideBagOfHolding: false,
+  }))
+}
+
+export function toggleInventoryItemBagOfHolding(
+  character: CharacterTemplate,
+  itemId: string,
+): CharacterTemplate {
+  return updateInventoryItem(character, itemId, (item) => ({
+    ...item,
+    insideBagOfHolding: !item.insideBagOfHolding,
+  }))
+}

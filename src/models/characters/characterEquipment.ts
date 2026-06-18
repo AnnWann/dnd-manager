@@ -60,10 +60,16 @@ export function getWeight(character: CharacterTemplate): number {
 
   const inventoryWeight = character
     .get("inventory")
-    .reduce(
-      (total, item) => total + (item.weight ?? 0) * (item.quantity ?? 1),
-      0,
-    )
+    .reduce((total, item) => {
+      if (item.insideBagOfHolding) {
+        return total
+      }
+
+      return (
+        total +
+        (item.weight ?? 0) * (item.quantity ?? 1)
+      )
+    }, 0)
 
   return inventoryWeight + equipmentWeight
 }

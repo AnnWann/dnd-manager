@@ -12,7 +12,14 @@ import type { Attribute } from "../sheet/Attribute"
 import type { HP } from "../sheet/HP"
 import type { Sheet } from "../sheet/Sheet"
 import type { MagicCircleLevel } from "../magic/spells/spellDefinitions"
-import { addAbility, removeAbility, resetAbility, saveAbility, updateAbility, useAbility } from "./characterAbilities"
+import { 
+  addAbility, 
+  removeAbility, 
+  resetAbility, 
+  saveAbility, 
+  updateAbility, 
+  useAbility 
+} from "./characterAbilities"
 import { 
   addToPocketItem, 
   equipInventoryItem, 
@@ -41,7 +48,14 @@ import {
   wear, 
   wieldPocketWeapon 
 } from "./characterEquipment"
-import { addInventoryItem, removeInventoryItem, updateInventoryItem } from "./characterInventory"
+import { 
+  addInventoryItem, 
+  removeInventoryItem, 
+  removeInventoryItemFromBagOfHolding,
+  sendInventoryItemToBagOfHolding, 
+  toggleInventoryItemBagOfHolding, 
+  updateInventoryItem 
+} from "./characterInventory"
 import {
   addSpell,
   ensureMagic,
@@ -338,6 +352,9 @@ export class CharacterTemplate {
   addInventoryItem(item: Itemmable): CharacterTemplate {return addInventoryItem(this, item)}
   updateInventoryItem(itemId: string,updater: (item: Itemmable) => Itemmable,): CharacterTemplate {return updateInventoryItem(this, itemId, updater)}
   removeInventoryItem(itemId: string): CharacterTemplate {return removeInventoryItem(this, itemId)}
+  sendInventoryItemToBagOfHolding(itemId: string): CharacterTemplate {return sendInventoryItemToBagOfHolding(this, itemId)}
+  removeInventoryItemFromBagOfHolding(itemId: string): CharacterTemplate {return removeInventoryItemFromBagOfHolding(this, itemId)}
+  toggleInventoryItemBagOfHolding(itemId: string): CharacterTemplate { return toggleInventoryItemBagOfHolding(this, itemId)}
   /**
    * 
    * MAGIC

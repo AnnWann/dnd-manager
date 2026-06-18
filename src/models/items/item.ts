@@ -30,6 +30,8 @@ export type Item = {
 
   equippable?: boolean
   equipSlot?: EquipSlot
+
+  insideBagOfHolding?: boolean
 }
 
 export type Itemmable =
