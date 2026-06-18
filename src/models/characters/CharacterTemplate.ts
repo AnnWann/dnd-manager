@@ -65,6 +65,7 @@ import {
   getSorceryPoints,
   spendSorceryPoint,
   restoreSorceryPoint,
+  getSpellSource,
 } from "./characterMagic"
 import {
   applyBonus,
@@ -106,6 +107,7 @@ import {
 import type { ClassName } from "../sheet/Class"
 import type { CharacterSpells } from "../magic/spells/CharacterSpells"
 import type { MetamagicId } from "../magic/metamagic/Metamagic"
+import type { SpellSource } from "../magic/spells/SpellSource"
 
 export type CharacterTemplateProps = {
   id: string,
@@ -363,6 +365,7 @@ export class CharacterTemplate {
   getSorceryPoints() {return getSorceryPoints(this)}
   spendSorceryPoint(): CharacterTemplate {return spendSorceryPoint(this)}
   restoreSorceryPoint(): CharacterTemplate {return restoreSorceryPoint(this)}
+  getSpellSource(spellId: string): SpellSource | undefined {return getSpellSource(this, spellId)}
   /**
    * 
    * STATS

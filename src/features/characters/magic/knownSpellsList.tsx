@@ -194,6 +194,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
                 key={spell.index}
                 spell={spell}
                 prepared={prepared}
+                source={character.getSpellSource(spell.index)}
                 onTogglePrepared={() =>
                   togglePrepared(spell.index, prepared)
                 }

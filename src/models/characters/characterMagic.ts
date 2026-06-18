@@ -9,6 +9,7 @@ import { deriveLeveledSlotsFromClasses } from "../magic/spells/SpellSlotProgress
 import { derivePactSlotsFromClasses } from "../magic/spells/WarlockSpellSlotProgression"
 import type { MetamagicId } from "../magic/metamagic/Metamagic"
 import type { CharacterMetamagics } from "../magic/metamagic/CharacterMetamagics"
+import type { SpellSource } from "../magic/spells/SpellSource"
 
 type KnownSpellEntry = CharacterSpells["knownSpells"][number]
 
@@ -453,4 +454,15 @@ export function restoreSorceryPoint(
       },
     },
   })
+}
+
+export function getSpellSource(
+  character: CharacterTemplate,
+  spellId: string,
+): SpellSource | undefined {
+  return character
+    .get("magic")
+    ?.spells.knownSpells.find(
+      (entry) => entry.spells.id === spellId,
+    )?.source
 }
