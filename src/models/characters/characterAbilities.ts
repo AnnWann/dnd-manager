@@ -1,6 +1,7 @@
 // models/characters/characterAbilities.ts
 
 import type { Ability } from "../abilities/Ability"
+import { getEquipmentAbilities, getEquippedItems } from "./characterEquipment"
 import type { CharacterTemplate } from "./CharacterTemplate"
 
 export function addAbility(
@@ -83,6 +84,36 @@ export function resetAbility(
           ...a.usage,
           used: 0,
           cooldownRemaining: undefined,
+        },
+      }
+    }),
+  )
+}
+
+export function getCharacterAbilities(
+  character: CharacterTemplate,
+): Ability[] {
+  const characterAbilities = character.get("abilities") ?? []
+  const equipmentAbilities = getEquipmentAbilities(character)
+
+  return [...characterAbilities, ...equipmentAbilities]
+}
+
+
+export function restoreAbility(
+  character: CharacterTemplate,
+  abilityId: string,
+): CharacterTemplate {
+  return character.with(
+    "abilities",
+    (character.get("abilities") ?? []).map((a) => {
+      if (a.id !== abilityId || !a.usage) return a
+
+      return {
+        ...a,
+        usage: {
+          ...a.usage,
+          used: Math.max(0, a.usage.used - 1),
         },
       }
     }),

@@ -11,9 +11,10 @@ import {
 
 type Props = {
   ability: Ability
-  onEdit: () => void
-  onRemove: () => void
-  onUse: () => void
+  onEdit?: () => void
+  onRemove?: () => void
+  onUse?: () => void
+  onRestore?: () => void
 }
 
 function summaryLabel(ability: Ability) {
@@ -38,7 +39,13 @@ function summaryLabel(ability: Ability) {
   return `${kindLabel} • ${USAGE_OPTIONS.find((o) => o.value === usage.reset)?.label ?? "Sem uso"}`
 }
 
-export function AbilityCard({ ability, onEdit, onRemove, onUse }: Props) {
+export function AbilityCard({
+  ability,
+  onEdit,
+  onRemove,
+  onUse,
+  onRestore,
+}: Props) {
   const [expanded, setExpanded] = useState(false)
 
   const usage = ability.usage
@@ -105,11 +112,13 @@ export function AbilityCard({ ability, onEdit, onRemove, onUse }: Props) {
       </div>
 
       <div className="flex flex-wrap gap-2 md:justify-end">
-        <Button size="sm" variant="secondary" onClick={onEdit}>
-          Editar
-        </Button>
+        {onEdit ? (
+          <Button size="sm" variant="secondary" onClick={onEdit}>
+            Editar
+          </Button>
+        ) : null}
 
-        {ability.kind === "active" && usage ? (
+        {ability.kind === "active" && usage && onUse ? (
           <Button
             size="sm"
             variant="secondary"
@@ -120,9 +129,25 @@ export function AbilityCard({ ability, onEdit, onRemove, onUse }: Props) {
           </Button>
         ) : null}
 
-        <Button size="sm" variant="ghost" onClick={onRemove}>
-          Remover
-        </Button>
+        {usage &&
+        usage.reset !== "limited" &&
+        usage.reset !== "spellSlot" &&
+        onRestore ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={usage.used <= 0}
+            onClick={onRestore}
+          >
+            Restaurar
+          </Button>
+        ) : null}
+
+        {onRemove ? (
+          <Button size="sm" variant="ghost" onClick={onRemove}>
+            Remover
+          </Button>
+        ) : null}
       </div>
     </div>
   )

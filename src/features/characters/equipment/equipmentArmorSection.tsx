@@ -2,6 +2,7 @@ import { Button } from "../../../components/ui/Button"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Armor } from "../../../models/items/equipment/Armor"
 import type { Bonus } from "../../../models/items/equipment/EquipmentSlot"
+import { EquipmentFeaturesList } from "./equipmentFeaturesList"
 
 type Props = {
   character: CharacterTemplate
@@ -74,6 +75,18 @@ export function EquipmentArmorSection({
           ) : null}
 
           <EquipmentBonusList bonuses={armor.bonuses} />
+
+          <EquipmentFeaturesList
+            equipment={armor}
+            onUpdate={(updater) =>
+              updateCharacter(character.get("id"), (c) =>
+                c.with("equipment", {
+                  ...c.get("equipment"),
+                  armor: updater(c.get("equipment").armor!),
+                }),
+              )
+            }
+          />
         </div>
       )}
     </div>

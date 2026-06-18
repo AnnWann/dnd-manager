@@ -1,8 +1,8 @@
 import type { ActionType } from "../models/actions/Actions";
 import type { DieSides } from "../models/dice/Die";
 import type { MagicSchool } from "../models/magic/spells/spellDefinitions";
+import type { Attribute } from "../models/sheet/Attribute";
 import type { ClassName } from "../models/sheet/Class";
-import type { Attribute } from "../models/types";
 
 export const MAGIC_SCHOOLS: { value: MagicSchool; label: string }[] = [
   { value: "abjuration", label: "Abjuração" },

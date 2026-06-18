@@ -1,7 +1,6 @@
-import { badge } from "../spells/addedSpells/badge"
+import { Spline } from "lucide-react"
 import { Button } from "../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../components/ui/Card"
-import { totalLevel } from "../../lib/rules"
 import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
 
 type Props = {
@@ -45,7 +44,10 @@ export function CharacterSelector({
             const owner = c.get("owner")
             const isActive = id === activeCharacter.get('id')
             const classes = sheet.classes ?? []
-            const level = totalLevel(classes.map((x) => x.level)) || 0
+            const level = classes.reduce(
+              (total, entry) => total + (entry.level ?? 0),
+              0,
+            ) 
             const spellCount = magic?.spells.knownSpells.length ?? 0
 
             return (
@@ -64,7 +66,7 @@ export function CharacterSelector({
                   </div>
 
                   <div className="text-xs text-text">
-                    {spellCount} magias • {level} nv
+                    {spellCount > 0 ? `${spellCount} magias •` : ''} {level} nv
                   </div>
                 </div>
 
@@ -101,5 +103,13 @@ export function CharacterSelector({
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function badge(label: string) {
+  return (
+    <span className="rounded-md border border-border px-2 py-1 text-xs text-text">
+      {label}
+    </span>
   )
 }

@@ -2,6 +2,7 @@ import { Button } from "../../../components/ui/Button"
 import { formatBonusName, formatBonusValue } from "../../../lib/formatBonus"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
+import { EquipmentFeaturesList } from "./equipmentFeaturesList"
 
 type Props = {
   character: CharacterTemplate
@@ -92,6 +93,23 @@ export function EquipmentRingsSection({
               </div>
 
               <EquipmentBonusList bonuses={ring.bonuses} />
+
+              <EquipmentFeaturesList
+                equipment={ring}
+                onUpdate={(updater) =>
+                  updateCharacter(character.get("id"), (c) => {
+                    const equipment = c.get("equipment")
+                    const rings = [...equipment.rings]
+
+                    rings[index] = updater(rings[index])
+
+                    return c.with("equipment", {
+                      ...equipment,
+                      rings,
+                    })
+                  })
+                }
+              />
             </div>
           ))}
         </div>

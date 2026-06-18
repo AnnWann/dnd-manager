@@ -10,6 +10,7 @@ import { EquipmentFields, withEquipmentDefaults } from "./equipmentFields"
 import { ConsumableFields, withConsumableDefaults } from "./consumableFields"
 import { ThrowableFields, withThrowableDefaults } from "./throwableFields"
 import { newInventoryItem } from "./characterInventory"
+import { ItemDropdownDetails } from "./itemDropdownDetails"
 
 type Props = {
   title: string
@@ -156,61 +157,6 @@ export function InventoryEditor({
                         <span>Tipo: {inventoryItemTypeLabel(item)}</span>
                         <span>Qtd. {item.quantity ?? 1}</span>
                         <span>Peso {item.weight ?? 0}</span>
-                      
-
-                        {item.kind === "equipment" ? (
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            className="rounded-md border border-border px-2 py-1 text-xs text-text"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onEquipItem(item.id)
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key !== "Enter" && e.key !== " ") return
-                              e.stopPropagation()
-                              onEquipItem(item.id)
-                            }}
-                          >
-                            Equipar
-                          </span>
-                        ) : null}
-
-                        {canGoToPocket(item) && onPocketItem ? (
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            className="rounded-md border border-border px-2 py-1 text-xs text-text"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onPocketItem(item.id)
-                            }}
-                          >
-                            Enviar ao bolso
-                          </span>
-                        ) : null}
-
-                        {onToggleBagOfHolding ? (
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            className={[
-                              "rounded-md border px-2 py-1 text-xs",
-                              item.insideBagOfHolding
-                                ? "border-accentBorder text-accent"
-                                : "border-border text-text",
-                            ].join(" ")}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onToggleBagOfHolding(item.id)
-                            }}
-                          >
-                            {item.insideBagOfHolding
-                              ? "Retirar da bolsa mágica"
-                              : "Enviar à bolsa mágica"}
-                          </span>
-                        ) : null}
                         
                       </div>
                     </div>
@@ -252,10 +198,9 @@ export function InventoryEditor({
                           ) : null}
 
                           {onToggleBagOfHolding ? (
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              className="rounded-md border border-border px-2 py-1 text-xs text-text"
+                            <Button
+                              size="sm"
+                              variant="secondary"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 onToggleBagOfHolding(item.id)
@@ -264,7 +209,7 @@ export function InventoryEditor({
                               {item.insideBagOfHolding
                                 ? "Retirar da bolsa"
                                 : "Enviar à bolsa"}
-                            </span>
+                            </Button>
                           ) : null}
 
                         <Button
@@ -276,11 +221,10 @@ export function InventoryEditor({
                         </Button>
                       </div>
 
-                      {item.desc ? (
-                        <p className="mt-3 text-sm text-text">
-                          {item.desc}
-                        </p>
-                      ) : null}
+                      <ItemDropdownDetails
+                        item={item}
+                        onUpdate={(updater) => onUpdateItem(item.id, updater)}
+                      />
                     </div>
                   ) : null}
                 </div>

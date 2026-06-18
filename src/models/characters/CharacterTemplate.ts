@@ -14,8 +14,10 @@ import type { Sheet } from "../sheet/Sheet"
 import type { MagicCircleLevel } from "../magic/spells/spellDefinitions"
 import { 
   addAbility, 
+  getCharacterAbilities, 
   removeAbility, 
   resetAbility, 
+  restoreAbility, 
   saveAbility, 
   updateAbility, 
   useAbility 
@@ -40,6 +42,7 @@ import {
   removePocketItem, 
   removeRing, 
   removeWeapon, 
+  restoreEquipmentAbility, 
   unequip, 
   unequipArmor, 
   unequipPocketItem, 
@@ -50,6 +53,7 @@ import {
   updatePocketItem, 
   updateRing, 
   updateWeapon, 
+  useEquipmentAbility, 
   usePocketItem, 
   useRing, 
   useWeapon, 
@@ -320,7 +324,9 @@ export class CharacterTemplate {
   removeAbility(abilityId: string): CharacterTemplate {return removeAbility(this, abilityId)}
   saveAbility(ability: Ability): CharacterTemplate {return saveAbility(this, ability)}
   useAbility(abilityId: string): CharacterTemplate {return useAbility(this, abilityId)}
+  restoreAbility(abilityId: string): CharacterTemplate {return restoreAbility(this, abilityId)}
   resetAbility(abilityId: string): CharacterTemplate {return resetAbility(this, abilityId)}
+  getCharacterAbilities(): Ability[] {return getCharacterAbilities(this)}
   /*
   *
   * Equipment
@@ -361,6 +367,8 @@ export class CharacterTemplate {
   addSpellToEquipment(itemId: string,spell: { index: string; usage: Usage }): CharacterTemplate {return addSpellToEquipment(this, itemId, spell)}
   updateEquipmentSpell(itemId: string,spell: { index: string; usage: Usage }): CharacterTemplate {return updateEquipmentSpell(this, itemId, spell)}
   removeEquipmentSpell(itemId: string,spellIndex: string): CharacterTemplate {return removeEquipmentSpell(this, itemId, spellIndex)}
+  useEquipmentAbility(itemId: string, abilityId: string): CharacterTemplate {return useEquipmentAbility(this, itemId, abilityId)}
+  restoreEquipmentAbility(itemId: string, abilityId: string): CharacterTemplate {return restoreEquipmentAbility(this, itemId, abilityId)}
   /**
    * 
    * INVENTORY

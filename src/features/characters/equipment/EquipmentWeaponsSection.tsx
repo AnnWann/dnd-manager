@@ -4,6 +4,7 @@ import { formatBonusName, formatBonusValue } from "../../../lib/formatBonus"
 import { formatSigned } from "../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Weapon } from "../../../models/items/equipment/Weapon"
+import { EquipmentFeaturesList } from "./equipmentFeaturesList"
 
 type Props = {
   character: CharacterTemplate
@@ -178,7 +179,27 @@ export function EquipmentWeaponsSection({
                 ) : null}
 
                 <WeaponBonusList weapon={weapon} />
+                
+                <EquipmentFeaturesList
+                  equipment={weapon}
+                  onUpdate={(updater) =>
+                    updateCharacter(character.get("id"), (c) => {
+                      const equipment = c.get("equipment")
+                      const weapons = [...equipment.weapons]
+
+                      weapons[index] = updater(weapons[index])
+
+                      return c.with("equipment", {
+                        ...equipment,
+                        weapons,
+                      })
+                    })
+                  }
+                />
+
               </div>
+
+              
             )
           })}
         </div>

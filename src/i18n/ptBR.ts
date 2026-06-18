@@ -1,4 +1,4 @@
-import type { Attribute } from '../models/types'
+import type { Attribute } from "../models/sheet/Attribute";
 
 export const ABILITY_ORDER: Attribute[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 
