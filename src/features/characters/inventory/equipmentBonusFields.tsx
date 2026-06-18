@@ -1,9 +1,21 @@
-import type { Attribute } from "../../../models/sheet/Attribute"
+import { Button } from "../../../components/ui/Button"
+import { Input } from "../../../components/ui/Input"
+import { Select } from "../../../components/ui/Select"
 import type { Bonus, Equipment } from "../../../models/items/equipment/EquipmentSlot"
-import { Input } from "../../../components/ui/Input";
-import { Select } from "../../../components/ui/Select";
-import { Button } from "../../../components/ui/Button";
-import type { Itemmable } from "../../../models/items/item";
+import type { Itemmable } from "../../../models/items/item"
+import type { Attribute } from "../../../models/sheet/Attribute"
+
+type EquipmentBonuses = NonNullable<Equipment["bonuses"]>
+
+type BonusArrayKey =
+  | "armorClass"
+  | "initiative"
+  | "maxHp"
+  | "temporaryHp"
+  | "passivePerception"
+  | "attackBonus"
+  | "damageBonus"
+  | "speed"
 
 const ATTRIBUTES: Array<{ value: Attribute; label: string }> = [
   { value: "str", label: "FOR" },
@@ -14,15 +26,16 @@ const ATTRIBUTES: Array<{ value: Attribute; label: string }> = [
   { value: "cha", label: "CAR" },
 ]
 
-const BONUS_FIELDS = [
-  ["armorClass", "CA"],
-  ["initiative", "Iniciativa"],
-  ["maxHp", "HP Máx."],
-  ["temporaryHp", "HP Temp."],
-  ["passivePerception", "Percepção Passiva"],
-  ["attackBonus", "Ataque"],
-  ["speed", "Velocidade"],
-] as const
+const BONUS_FIELDS: Array<{ key: BonusArrayKey; label: string }> = [
+  { key: "armorClass", label: "CA" },
+  { key: "initiative", label: "Iniciativa" },
+  { key: "maxHp", label: "HP Máx." },
+  { key: "temporaryHp", label: "HP Temp." },
+  { key: "passivePerception", label: "Percepção Passiva" },
+  { key: "attackBonus", label: "Ataque" },
+  { key: "damageBonus", label: "Dano" },
+  { key: "speed", label: "Velocidade" },
+]
 
 function newBonus(): Bonus {
   return {
@@ -41,9 +54,7 @@ export function EquipmentBonusesFields({
   const equipment = item as Equipment
   const bonuses = equipment.bonuses ?? {}
 
-  function patchBonuses(
-    updater: (bonuses: NonNullable<Equipment["bonuses"]>) => NonNullable<Equipment["bonuses"]>,
-  ) {
+  function patchBonuses(updater: (bonuses: EquipmentBonuses) => EquipmentBonuses) {
     onUpdate((current) => {
       const currentEquipment = current as Equipment
 
@@ -59,7 +70,7 @@ export function EquipmentBonusesFields({
       <div className="text-xs font-medium text-textH">Modificadores</div>
 
       <div className="grid gap-3">
-        {BONUS_FIELDS.map(([key, label]) => (
+        {BONUS_FIELDS.map(({ key, label }) => (
           <BonusArrayEditor
             key={key}
             label={label}
@@ -104,8 +115,9 @@ export function EquipmentBonusesFields({
           onUpdate={(index, entry) =>
             patchBonuses((current) => ({
               ...current,
-              attribute: (current.attribute ?? []).map((currentEntry, currentIndex) =>
-                currentIndex === index ? entry : currentEntry,
+              attribute: (current.attribute ?? []).map(
+                (currentEntry, currentIndex) =>
+                  currentIndex === index ? entry : currentEntry,
               ),
             }))
           }

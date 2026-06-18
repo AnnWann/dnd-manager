@@ -10,6 +10,7 @@ export type Equipment = Item & {
     temporaryHp?: Bonus[]
     passivePerception?: Bonus[]
     attackBonus?: Bonus[]
+    damageBonus?: Bonus[]
     speed?: Bonus[]
     attribute?: {
       attribute: Attribute
