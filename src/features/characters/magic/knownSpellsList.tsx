@@ -189,17 +189,27 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
           </p>
         ) : (
           <div className="grid gap-3">
-            {filteredSpells.map(({ spell, prepared }) => (
-              <SpellCard
-                key={spell.index}
-                spell={spell}
-                prepared={prepared}
-                source={character.getSpellSource(spell.index)}
-                onTogglePrepared={() =>
-                  togglePrepared(spell.index, prepared)
-                }
-                onRemove={() => removeSpell(spell.index)}
-              />
+            {filteredSpells
+              .toSorted((a, b) => {
+                const levelDiff = a.spell.slotLevel - b.spell.slotLevel
+                if (levelDiff !== 0) return levelDiff
+
+                return (a.spell.displayName || a.spell.name).localeCompare(
+                  b.spell.displayName || b.spell.name,
+                  "pt-BR",
+                )
+              })
+              .map(({ spell, prepared }) => (
+                <SpellCard
+                  key={spell.index}
+                  spell={spell}
+                  prepared={prepared}
+                  source={character.getSpellSource(spell.index)}
+                  onTogglePrepared={() =>
+                    togglePrepared(spell.index, prepared)
+                  }
+                  onRemove={() => removeSpell(spell.index)}
+                />
             ))}
           </div>
         )}
