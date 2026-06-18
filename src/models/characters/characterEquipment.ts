@@ -421,66 +421,26 @@ export function equipInventoryItem(
   character: CharacterTemplate,
   itemId: string,
 ): CharacterTemplate {
-  const item = character.get("inventory").find((i) => i.id === itemId)
+  const item = character
+    .get("inventory")
+    .find((entry) => entry.id === itemId)
 
-  if (!item || !item.equippable || !item.equipSlot) {
-    return character
+  if (!item || item.kind !== "equipment") return character
+
+  const itemToEquip = {
+    ...item,
+    insideBagOfHolding: false,
   }
 
-  const inventoryWithoutItem = character.get("inventory").filter(
-    (i) => i.id !== itemId,
-  )
+  let nextCharacter = character
 
-  const equipment = character.get("equipment")
-
-  if (item.equipSlot === "weapon") {
-    const nextWeapon = toWeapon(item)
-    const neededArms = nextWeapon.twoHanded ? 2 : 1
-
-    const currentWeapons = [...equipment.weapons]
-    const returnedToInventory: Itemmable[] = []
-
-    let usedArms = currentWeapons.reduce(
-      (total, weapon) => total + (weapon.twoHanded ? 2 : 1),
-      0,
-    )
-
-    while (
-      usedArms + neededArms > character.get("sheet").arms &&
-      currentWeapons.length > 0
-    ) {
-      const removed = currentWeapons.shift()
-      if (!removed) break
-
-      returnedToInventory.push(removed)
-      usedArms -= removed.twoHanded ? 2 : 1
-    }
-
-    return character.with("inventory", [
-      ...inventoryWithoutItem,
-      ...returnedToInventory,
-    ]).with("equipment", {
-      ...equipment,
-      weapons: [...currentWeapons, nextWeapon],
-    })
+  if (itemToEquip.equipSlot === "weapon") {
+    nextCharacter = nextCharacter.useWeapon(toWeapon(itemToEquip))
+  } else if (itemToEquip.equipSlot === "ring") {
+    nextCharacter = nextCharacter.useRing(itemToEquip)
+  } else if (itemToEquip.equipSlot) {
+    nextCharacter = nextCharacter.wear(itemToEquip.equipSlot, itemToEquip)
   }
 
-  if (item.equipSlot === "ring") {
-    return character.with("inventory", inventoryWithoutItem)
-      .with("equipment", {
-        ...equipment,
-        rings: [...equipment.rings, item as Equipment],
-      })
-  }
-
-  const slot = item.equipSlot
-  const previous = equipment[slot]
-
-  return character.with("inventory", previous
-    ? [...inventoryWithoutItem, previous]
-    : inventoryWithoutItem,
-  ).with("equipment", {
-    ...equipment,
-    [slot]: item as Armor | Equipment,
-  })
+  return nextCharacter.removeInventoryItem(itemId)
 }
