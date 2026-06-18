@@ -175,11 +175,15 @@ export function getEffectiveWeaponDamageBonus(
   weapon: Weapon,
   baseValue: number,
 ): number {
-  const weaponBonus = weapon.bonuses?.damage?.bonus
+  const weaponDamageBonus = weapon.bonuses?.damage?.bonus
+  const generalDamageBonuses = weapon.bonuses?.damageBonus ?? []
 
   return applyBonuses(
     baseValue,
-    weaponBonus ? [weaponBonus] : [],
+    [
+      ...generalDamageBonuses,
+      ...(weaponDamageBonus ? [weaponDamageBonus] : []),
+    ],
   )
 }
 
