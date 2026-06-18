@@ -1,4 +1,4 @@
-import type { Trigger } from "../../abilities/Ability"
+import type { Ability, Trigger, Usage } from "../../abilities/Ability"
 import type { Attribute } from "../../sheet/Attribute"
 import type { Item } from "../item"
 
@@ -30,6 +30,10 @@ export type Equipment = Item & {
       bonus: Bonus
     }
   }
+
+  abilities?: Ability[]
+
+  spells?: {index: string, usage: Usage}[]
 }
 
 export type Bonus = {

@@ -1,4 +1,4 @@
-import type { Ability } from "../abilities/Ability"
+import type { Ability, Usage } from "../abilities/Ability"
 import type { ActionsPerTurn, ActionType } from "../actions/Actions"
 import type { Die, DieSides } from "../dice/Die"
 import type { CharacterEquipment } from "../items/equipment/Equipment"
@@ -21,16 +21,22 @@ import {
   useAbility 
 } from "./characterAbilities"
 import { 
+  addAbilityToEquipment,
+  addSpellToEquipment,
   addToPocketItem, 
   equipInventoryItem, 
   getCarryingCapacity, 
   getEncumbranceLimit, 
+  getEquipmentAbilities, 
+  getEquipmentSpells, 
   getHeavyEncumbranceLimit, 
   getTotalFingers, 
   getUsedArms, 
   getUsedFingers, 
   getWeight, 
   pocketInventoryItem, 
+  removeEquipmentAbility, 
+  removeEquipmentSpell, 
   removePocketItem, 
   removeRing, 
   removeWeapon, 
@@ -39,6 +45,8 @@ import {
   unequipPocketItem, 
   unequipRing, 
   unequipWeapon, 
+  updateEquipmentAbility, 
+  updateEquipmentSpell, 
   updatePocketItem, 
   updateRing, 
   updateWeapon, 
@@ -323,6 +331,7 @@ export class CharacterTemplate {
   getEncumbranceLimit(): number {return getEncumbranceLimit(this)}
   getHeavyEncumbranceLimit(): number {return getHeavyEncumbranceLimit(this)}
   wear<K extends Exclude<keyof CharacterEquipment, "weapons" | "rings" | "pockets">>(slot: K,item: CharacterEquipment[K],): CharacterTemplate {return wear(this, slot, item)}
+  equipInventoryItem(itemId: string): CharacterTemplate {return equipInventoryItem(this, itemId)}
   unequip(slot: Exclude<keyof CharacterEquipment, "weapons" | "rings" | "pockets">,): CharacterTemplate {return unequip(this, slot)}
   unequipArmor(): CharacterTemplate {return unequipArmor(this)}
   getUsedArms(): number {return getUsedArms(this)}
@@ -338,12 +347,20 @@ export class CharacterTemplate {
   unequipRing(index: number): CharacterTemplate {return unequipRing(this, index)}
   addToPocketItem(item: Itemmable): CharacterTemplate {return addToPocketItem(this, item)}
   pocketInventoryItem(itemId: string): CharacterTemplate {return pocketInventoryItem(this, itemId)}
+  usePocketItem(index: number): CharacterTemplate {return usePocketItem(this, index)}
   updatePocketItem(index: number, item: Itemmable): CharacterTemplate {return updatePocketItem(this, index, item)}
   removePocketItem(index: number): CharacterTemplate {return removePocketItem(this, index)}
   unequipPocketItem(index: number): CharacterTemplate {return unequipPocketItem(this, index)}
   wieldPocketWeapon(index: number): CharacterTemplate {return wieldPocketWeapon(this, index)}
-  usePocketItem(index: number): CharacterTemplate {return usePocketItem(this, index)}
-  equipInventoryItem(itemId: string): CharacterTemplate {return equipInventoryItem(this, itemId)}
+  getEquippedItems(): Equipment[] {return getEquippedItems(this)}
+  getEquipmentAbilities(): Ability[] {return getEquipmentAbilities(this)}
+  getEquipmentSpells(): {index: string, usage: Usage, sourceItemId: string, sourceItemName: string}[] {return getEquipmentSpells(this)}
+  addAbilityToEquipment(itemId: string, ability: Ability): CharacterTemplate {return addAbilityToEquipment(this, itemId, ability)}
+  updateEquipmentAbility( itemId: string, ability: Ability): CharacterTemplate {return updateEquipmentAbility(this, itemId, ability)}
+  removeEquipmentAbility(itemId: string,abilityId: string): CharacterTemplate {return removeEquipmentAbility(this, itemId, abilityId)}
+  addSpellToEquipment(itemId: string,spell: { index: string; usage: Usage }): CharacterTemplate {return addSpellToEquipment(this, itemId, spell)}
+  updateEquipmentSpell(itemId: string,spell: { index: string; usage: Usage }): CharacterTemplate {return updateEquipmentSpell(this, itemId, spell)}
+  removeEquipmentSpell(itemId: string,spellIndex: string): CharacterTemplate {return removeEquipmentSpell(this, itemId, spellIndex)}
   /**
    * 
    * INVENTORY
@@ -395,7 +412,6 @@ export class CharacterTemplate {
   getEffectiveStat<K extends keyof Sheet["stats"]>(stat: K,): Sheet["stats"][K] {return getEffectiveStat(this, stat)}
   getEffectiveWeaponAttackBonus(weapon: Weapon,baseValue: number,): number {return getEffectiveWeaponAttackBonus(this, weapon, baseValue)}
   getEffectiveWeaponDamageBonus(weapon: Weapon,baseValue: number,): number {return getEffectiveWeaponDamageBonus(this, weapon, baseValue)}
-  getEquippedItems(): Equipment[] {return getEquippedItems(this)}
   getEquipmentBonuses(key: StatBonusKey): Bonus[] {return getEquipmentBonuses(this, key)}
   getEffectiveArmorClass(): number {return getEffectiveArmorClass(this)}
   getEffectiveInitiative(): number {return getEffectiveInitiative(this)}

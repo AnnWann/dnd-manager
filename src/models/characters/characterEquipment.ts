@@ -2,10 +2,11 @@
 
 import type { CharacterTemplate } from "./CharacterTemplate"
 import type { CharacterEquipment } from "../items/equipment/Equipment"
-import type { Equipment } from "../items/equipment/EquipmentSlot"
+import type { Bonus, Equipment } from "../items/equipment/EquipmentSlot"
 import type { Weapon } from "../items/equipment/Weapon"
 import type { Itemmable } from "../items/item"
 import type { Armor } from "../items/equipment/Armor"
+import type { Ability, Usage } from "../abilities/Ability"
 
 type SingleSlot = Exclude<
   keyof CharacterEquipment,
@@ -433,7 +434,9 @@ export function equipInventoryItem(
     .get("inventory")
     .find((entry) => entry.id === itemId)
 
-  if (!item || item.kind !== "equipment") return character
+  if (!item || !item.equippable || !item.equipSlot) {
+    return character
+  }
 
   const itemToEquip = {
     ...item,
@@ -442,13 +445,247 @@ export function equipInventoryItem(
 
   let nextCharacter = character
 
-  if (itemToEquip.equipSlot === "weapon") {
-    nextCharacter = nextCharacter.useWeapon(toWeapon(itemToEquip))
-  } else if (itemToEquip.equipSlot === "ring") {
-    nextCharacter = nextCharacter.useRing(itemToEquip)
-  } else if (itemToEquip.equipSlot) {
-    nextCharacter = nextCharacter.wear(itemToEquip.equipSlot, itemToEquip)
+  return [
+    equipment.armor,
+    equipment.boots,
+    equipment.gloves,
+    equipment.helmet,
+    ...equipment.rings,
+    ...equipment.weapons,
+    ...equipment.pockets.filter((item) => item.kind === "equipment"),
+  ].filter(Boolean) as Equipment[]
+}
+
+export function getEquipmentAbilities(character: CharacterTemplate): Ability[] {
+  return getEquippedItems(character).flatMap((item) =>
+    item.abilities?.map((ability) => ({
+      ...ability,
+      id: `${item.id}:${ability.id}`,
+      name: `${ability.name}`,
+    })) ?? [],
+  )
+}
+
+export function getEquipmentSpells(character: CharacterTemplate) {
+  return getEquippedItems(character).flatMap((item) =>
+    item.spells?.map((spell) => ({
+      ...spell,
+      sourceItemId: item.id,
+      sourceItemName: item.name,
+    })) ?? [],
+  ) 
+}
+
+export function getEquipmentBonuses<K extends keyof NonNullable<Equipment["bonuses"]>>(
+  character: CharacterTemplate,
+  key: K,
+): NonNullable<Equipment["bonuses"]>[K][] {
+  return getEquippedItems(character)
+    .map((item) => item.bonuses?.[key])
+    .filter(Boolean) as NonNullable<Equipment["bonuses"]>[K][]
+}
+
+export function getFlatEquipmentBonuses(
+  character: CharacterTemplate,
+  key: "armorClass" | "initiative" | "maxHp" | "temporaryHp" | "passivePerception" | "attackBonus" | "speed",
+): Bonus[] {
+  return getEquippedItems(character).flatMap(
+    (item) => item.bonuses?.[key] ?? [],
+  )
+}
+
+function updateEquipmentById(
+  character: CharacterTemplate,
+  itemId: string,
+  updater: (equipment: Equipment) => Equipment,
+): CharacterTemplate {
+  const equipment = character.get("equipment")
+  const inventory = character.get("inventory")
+
+  const updateItem = <T extends Itemmable | undefined>(item: T): T => {
+    if (!item || item.id !== itemId || item.kind !== "equipment") return item
+    return updater(item as Equipment) as T
   }
 
-  return nextCharacter.removeInventoryItem(itemId)
+  return character.withPatch({
+    equipment: {
+      ...equipment,
+      weapons: [...currentWeapons, nextWeapon],
+    })
+  }
+
+  if (item.equipSlot === "ring") {
+    return character.with("inventory", inventoryWithoutItem)
+      .with("equipment", {
+        ...equipment,
+        rings: [...equipment.rings, item as Equipment],
+      })
+  }
+
+  const slot = item.equipSlot
+  const previous = equipment[slot]
+
+  return character.with("inventory", previous
+    ? [...inventoryWithoutItem, previous]
+    : inventoryWithoutItem,
+  ).with("equipment", {
+    ...equipment,
+    spells: (equipment.spells ?? []).filter(
+      (spell) => spell.index !== spellIndex,
+    ),
+  }))
+}
+
+export function getEquippedItems(character: CharacterTemplate): Equipment[] {
+  const equipment = character.get("equipment")
+
+  return [
+    equipment.armor,
+    equipment.boots,
+    equipment.gloves,
+    equipment.helmet,
+    ...equipment.rings,
+    ...equipment.weapons,
+    ...equipment.pockets.filter((item) => item.kind === "equipment"),
+  ].filter(Boolean) as Equipment[]
+}
+
+export function getEquipmentAbilities(character: CharacterTemplate): Ability[] {
+  return getEquippedItems(character).flatMap((item) =>
+    item.abilities?.map((ability) => ({
+      ...ability,
+      id: `${item.id}:${ability.id}`,
+      name: `${ability.name}`,
+    })) ?? [],
+  )
+}
+
+export function getEquipmentSpells(character: CharacterTemplate) {
+  return getEquippedItems(character).flatMap((item) =>
+    item.spells?.map((spell) => ({
+      ...spell,
+      sourceItemId: item.id,
+      sourceItemName: item.name,
+    })) ?? [],
+  ) 
+}
+
+export function getEquipmentBonuses<K extends keyof NonNullable<Equipment["bonuses"]>>(
+  character: CharacterTemplate,
+  key: K,
+): NonNullable<Equipment["bonuses"]>[K][] {
+  return getEquippedItems(character)
+    .map((item) => item.bonuses?.[key])
+    .filter(Boolean) as NonNullable<Equipment["bonuses"]>[K][]
+}
+
+export function getFlatEquipmentBonuses(
+  character: CharacterTemplate,
+  key: "armorClass" | "initiative" | "maxHp" | "temporaryHp" | "passivePerception" | "attackBonus" | "speed",
+): Bonus[] {
+  return getEquippedItems(character).flatMap(
+    (item) => item.bonuses?.[key] ?? [],
+  )
+}
+
+function updateEquipmentById(
+  character: CharacterTemplate,
+  itemId: string,
+  updater: (equipment: Equipment) => Equipment,
+): CharacterTemplate {
+  const equipment = character.get("equipment")
+  const inventory = character.get("inventory")
+
+  const updateItem = <T extends Itemmable | undefined>(item: T): T => {
+    if (!item || item.id !== itemId || item.kind !== "equipment") return item
+    return updater(item as Equipment) as T
+  }
+
+  return character.withPatch({
+    equipment: {
+      ...equipment,
+      armor: updateItem(equipment.armor),
+      helmet: updateItem(equipment.helmet),
+      gloves: updateItem(equipment.gloves),
+      boots: updateItem(equipment.boots),
+      weapons: equipment.weapons.map(updateItem),
+      rings: equipment.rings.map(updateItem),
+      pockets: equipment.pockets.map(updateItem),
+    },
+    inventory: inventory.map(updateItem),
+  })
+}
+
+export function addAbilityToEquipment(
+  character: CharacterTemplate,
+  itemId: string,
+  ability: Ability,
+): CharacterTemplate {
+  return updateEquipmentById(character, itemId, (equipment) => ({
+    ...equipment,
+    abilities: [...(equipment.abilities ?? []), ability],
+  }))
+}
+
+export function updateEquipmentAbility(
+  character: CharacterTemplate,
+  itemId: string,
+  ability: Ability,
+): CharacterTemplate {
+  return updateEquipmentById(character, itemId, (equipment) => ({
+    ...equipment,
+    abilities: (equipment.abilities ?? []).map((current) =>
+      current.id === ability.id ? ability : current,
+    ),
+  }))
+}
+
+export function removeEquipmentAbility(
+  character: CharacterTemplate,
+  itemId: string,
+  abilityId: string,
+): CharacterTemplate {
+  return updateEquipmentById(character, itemId, (equipment) => ({
+    ...equipment,
+    abilities: (equipment.abilities ?? []).filter(
+      (ability) => ability.id !== abilityId,
+    ),
+  }))
+}
+
+export function addSpellToEquipment(
+  character: CharacterTemplate,
+  itemId: string,
+  spell: { index: string; usage: Usage },
+): CharacterTemplate {
+  return updateEquipmentById(character, itemId, (equipment) => ({
+    ...equipment,
+    spells: [...(equipment.spells ?? []), spell],
+  }))
+}
+
+export function updateEquipmentSpell(
+  character: CharacterTemplate,
+  itemId: string,
+  spell: { index: string; usage: Usage },
+): CharacterTemplate {
+  return updateEquipmentById(character, itemId, (equipment) => ({
+    ...equipment,
+    spells: (equipment.spells ?? []).map((current) =>
+      current.index === spell.index ? spell : current,
+    ),
+  }))
+}
+
+export function removeEquipmentSpell(
+  character: CharacterTemplate,
+  itemId: string,
+  spellIndex: string,
+): CharacterTemplate {
+  return updateEquipmentById(character, itemId, (equipment) => ({
+    ...equipment,
+    spells: (equipment.spells ?? []).filter(
+      (spell) => spell.index !== spellIndex,
+    ),
+  }))
 }

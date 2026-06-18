@@ -2,13 +2,13 @@ export interface Ability {
   id: string
   name: string
   description?: string
-  usage?: AbilityUsage
+  usage?: Usage
   kind?: AbilityKind
   actionKind?: AbilityActionKind
   trigger?: Trigger
 }
 
-export interface AbilityUsage {
+export interface Usage {
   max: number
   used: number
   reset: AbilityUsageResetKind
@@ -17,7 +17,7 @@ export interface AbilityUsage {
   cooldownRemaining?: number
 }
 
-export type AbilityUsageResetKind = 'turn' | 'cooldown' | 'shortRest' | 'longRest'
+export type AbilityUsageResetKind = 'turn' | 'cooldown' | 'shortRest' | 'longRest' | 'limited' | 'spellSlot'
 
 export type AbilityUsageCooldownUnit = 'turns' | 'minutes' | 'hours' | 'days' | 'tenDays'
 

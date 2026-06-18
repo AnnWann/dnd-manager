@@ -35,12 +35,9 @@ export function CharacterInventory({
   const heavyEncumbranceLimit = character.getHeavyEncumbranceLimit()
   const carryingCapacity = character.getCarryingCapacity()
 
-  function addItem() {
+  function addItem(item: Itemmable) {
     updateCharacter(character.get("id"), (c) =>
-      c.with("inventory", [
-        ...(c.get("inventory") ?? []),
-        newInventoryItem(),
-      ]),
+      c.with("inventory", [...(c.get("inventory") ?? []), item]),
     )
   }
 
