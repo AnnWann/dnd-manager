@@ -221,6 +221,7 @@ function getSpellClassLimits(
 
       const known = spells.filter(
         (entry) =>
+          entry.spell.slotLevel > 0 &&
           entry.source.type === "class" &&
           entry.source.name === classData.className,
       ).length
