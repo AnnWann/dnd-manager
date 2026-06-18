@@ -68,7 +68,7 @@ export function CharacterInventory({
   }
 
   return (
-    <InventoryEditor
+   <InventoryEditor
       title={`Inventário pessoal: ${character.get("name")}`}
       description={`Peso: ${currentWeight}/${carryingCapacity} • Sobrecarga: ${encumbranceLimit} • Sobrecarga pesada: ${heavyEncumbranceLimit}`}
       items={items}
@@ -84,6 +84,11 @@ export function CharacterInventory({
       onPocketItem={(itemId) =>
         updateCharacter(character.get("id"), (c) =>
           c.pocketInventoryItem(itemId),
+        )
+      }
+      onToggleBagOfHolding={(itemId) =>
+        updateCharacter(character.get("id"), (c) =>
+          c.toggleInventoryItemBagOfHolding(itemId),
         )
       }
     />
