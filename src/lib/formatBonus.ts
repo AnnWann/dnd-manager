@@ -16,6 +16,8 @@ export function formatBonusName(key: string): string {
       return "Ataque"
     case "speed":
       return "Velocidade"
+    case "damageBonus": 
+      return "Dano"
     default:
       return key
   }

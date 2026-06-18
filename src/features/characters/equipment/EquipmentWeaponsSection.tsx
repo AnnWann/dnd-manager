@@ -22,6 +22,7 @@ type NormalBonusKey =
   | "passivePerception"
   | "attackBonus"
   | "speed"
+  | "damageBonus"
 
 const NORMAL_BONUS_KEYS: NormalBonusKey[] = [
   "armorClass",
@@ -30,6 +31,7 @@ const NORMAL_BONUS_KEYS: NormalBonusKey[] = [
   "temporaryHp",
   "passivePerception",
   "attackBonus",
+  "damageBonus",
   "speed",
 ]
 
