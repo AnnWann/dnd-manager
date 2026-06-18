@@ -11,6 +11,7 @@ import type { Weapon } from "../../../models/items/equipment/Weapon"
 import type { EquipSlot, Itemmable } from "../../../models/items/item"
 import type { Ability, AbilityActionKind, AbilityKind, AbilityUsageResetKind, Trigger } from "../../../models/abilities/Ability"
 import type { Attribute } from "../../../models/sheet/Attribute"
+import { EquipmentBonusesFields } from "./equipmentBonusFields"
 
 export function EquipmentFields({
   item,
@@ -90,6 +91,9 @@ export function EquipmentFields({
       {item.equipSlot === "weapon" ? (
         <WeaponFields item={item} onUpdate={onUpdate} />
       ) : null}
+
+      <EquipmentBonusesFields item={item} onUpdate={onUpdate} />
+
 
       <EquipmentAbilitiesFields item={item} onUpdate={onUpdate} />
       <EquipmentSpellsFields item={item} onUpdate={onUpdate} />
