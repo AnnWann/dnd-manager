@@ -44,6 +44,7 @@ export function SpellCard({
               <span>{MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}</span>
               <span>{formatCastingTime(spell)}</span>
               <span>{formatRange(spell)}</span>
+              {formatAreaTiles(spell) ? <span>{formatAreaTiles(spell)}</span> : null}
               <span>{formatSpellOrigin(source)}</span>
               {spell.concentration ? <span>Concentração</span> : null}
               {alwaysPrepared ? (
@@ -216,4 +217,24 @@ function formatSpellOrigin(source?: SpellSource): string {
   }
 
   return "Origem não definida"
+}
+
+function formatAreaTiles(spell: Spell): string | null {
+  const area = spell.range.area
+  if (!area) return null
+
+  const tileSizeM = 1.5
+  const sizeInTiles = area.size / tileSizeM
+
+  if (area.shape === "circle") {
+    const tiles = Math.round(Math.PI * sizeInTiles * sizeInTiles)
+    return `Ocupa aproximadamente ${tiles} quadrados de 1,5 m`
+  }
+
+  if (area.shape === "square") {
+    const tiles = Math.round(sizeInTiles * sizeInTiles)
+    return `Ocupa aproximadamente ${tiles} quadrados de 1,5 m`
+  }
+
+  return null
 }
