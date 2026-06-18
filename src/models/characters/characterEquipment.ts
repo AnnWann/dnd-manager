@@ -278,18 +278,26 @@ export function pocketInventoryItem(
   character: CharacterTemplate,
   itemId: string,
 ): CharacterTemplate {
-  const item = character.get("inventory").find((i) => i.id === itemId)
+  const item = character
+    .get("inventory")
+    .find((entry) => entry.id === itemId)
 
   if (!item || !item.pocketable) return character
 
-  return character.with("inventory", character.get("inventory").filter((i) => i.id !== itemId))
+  const itemToPocket = {
+    ...item,
+    insideBagOfHolding: false,
+  }
+
+  return character
     .with("equipment", {
       ...character.get("equipment"),
       pockets: [
         ...character.get("equipment").pockets,
-        item,
+        itemToPocket,
       ],
     })
+    .removeInventoryItem(itemId)
 }
 
 export function updatePocketItem(
