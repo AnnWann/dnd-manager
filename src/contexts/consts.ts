@@ -1,5 +1,7 @@
 import type { ActionType } from "../models/actions/Actions";
+import type { DieSides } from "../models/dice/Die";
 import type { MagicSchool } from "../models/magic/spells/spellDefinitions";
+import type { Attribute } from "../models/sheet/Attribute";
 import type { ClassName } from "../models/sheet/Class";
 
 export const MAGIC_SCHOOLS: { value: MagicSchool; label: string }[] = [
@@ -90,3 +92,24 @@ export const CASTING_TIME_NAMES: Record<castingTime, string> = {
   hour: "Hora",
   special: "Especial",
 }
+
+export const DIE_SIDES: DieSides[] = [
+  "d2",
+  "d3",
+  "d4",
+  "d6",
+  "d8",
+  "d10",
+  "d12",
+  "d20",
+  "d100",
+]
+
+export const ATTRIBUTES: Array<{ value: Attribute; label: string }> = [
+  { value: "str", label: "FOR" },
+  { value: "dex", label: "DES" },
+  { value: "con", label: "CON" },
+  { value: "int", label: "INT" },
+  { value: "wis", label: "SAB" },
+  { value: "cha", label: "CAR" },
+]

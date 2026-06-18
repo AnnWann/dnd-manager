@@ -1,5 +1,5 @@
 import type { Die } from "../../dice/Die";
-import type { Attribute } from "../../types";
+import type { Attribute } from "../../sheet/Attribute";
 import type { Equipment } from "./EquipmentSlot";
 
 export type Weapon = Equipment & {

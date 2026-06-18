@@ -1,5 +1,5 @@
-import type { MagicCircleLevel } from "../../types"
 import type { Spell } from "../spells/Spell"
+import type { MagicCircleLevel } from "../spells/spellDefinitions"
 
 export type MetamagicId = 
   | 'careful-spell'

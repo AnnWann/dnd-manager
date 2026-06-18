@@ -4,6 +4,7 @@ import { Button } from "../../../components/ui/Button"
 import { formatBonusName, formatBonusValue } from "../../../lib/formatBonus"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
+import { EquipmentFeaturesList } from "./equipmentFeaturesList"
 
 type SingleSlot =
   | "armor"
@@ -94,6 +95,20 @@ export function EquipmentSingleSlotSection({
           </div>
 
           <EquipmentBonusList bonuses={item.bonuses} />
+
+          <EquipmentFeaturesList
+            equipment={item}
+            onUpdate={(updater) =>
+              updateCharacter(character.get("id"), (c) => {
+                const equipment = c.get("equipment")
+
+                return c.with("equipment", {
+                  ...equipment,
+                  [slot]: updater(equipment[slot]!),
+                })
+              })
+            }
+          />
         </div>
       )}
     </div>

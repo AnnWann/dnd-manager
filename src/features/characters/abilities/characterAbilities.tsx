@@ -15,7 +15,7 @@ type Props = {
 }
 
 export function CharacterAbilities({ character, updateCharacter }: Props) {
-  const abilities = character.get("abilities") ?? []
+  const abilities = character.getCharacterAbilities() ?? []
   const [editingAbility, setEditingAbility] = useState<Ability | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -39,9 +39,33 @@ export function CharacterAbilities({ character, updateCharacter }: Props) {
   } 
 
   function useAbility(id: string) {
-    updateCharacter(character.get("id"), (c) =>
-      c.useAbility(id)
-    )
+    updateCharacter(character.get("id"), (c) => {
+      const ability = abilities.find((a) => a.id === id)
+
+      if (ability && isEquipmentAbility(ability)) {
+        return c.useEquipmentAbility(
+          ability.sourceItemId,
+          ability.originalAbilityId,
+        )
+      }
+
+      return c.useAbility(id)
+    })
+  }
+
+  function restoreAbility(id: string) {
+    updateCharacter(character.get("id"), (c) => {
+      const ability = abilities.find((a) => a.id === id)
+
+      if (ability && isEquipmentAbility(ability)) {
+        return c.restoreEquipmentAbility(
+          ability.sourceItemId,
+          ability.originalAbilityId,
+        )
+      }
+
+      return c.restoreAbility(id)
+    })
   }
 
   const dialogOpen = creating || editingAbility !== null
@@ -73,9 +97,18 @@ export function CharacterAbilities({ character, updateCharacter }: Props) {
                 <AbilityCard
                   key={ability.id}
                   ability={ability}
-                  onEdit={() => setEditingAbility(ability)}
-                  onRemove={() => removeAbility(ability.id)}
+                  onEdit={
+                    isEquipmentAbility(ability)
+                      ? undefined
+                      : () => setEditingAbility(ability)
+                  }
+                  onRemove={
+                    isEquipmentAbility(ability)
+                      ? undefined
+                      : () => removeAbility(ability.id)
+                  }
                   onUse={() => useAbility(ability.id)}
+                  onRestore={() => restoreAbility(ability.id)}
                 />
               ))}
             </div>
@@ -95,4 +128,15 @@ export function CharacterAbilities({ character, updateCharacter }: Props) {
       />
     </>
   )
+}
+
+type EquipmentAbility = Ability & {
+  source: "equipment"
+  sourceItemId: string
+  sourceItemName: string
+  originalAbilityId: string
+}
+
+function isEquipmentAbility(ability: Ability): ability is EquipmentAbility {
+  return "source" in ability && ability.source === "equipment"
 }
