@@ -77,10 +77,10 @@ function App() {
           spells={appState.spells ?? []}
           setAppState={setAppState}
         >
-        <div className="min-h-svh bg-[color:var(--social-bg)] text-text">
-          <AppHeader />
+        <div className="flex h-svh flex-col overflow-hidden bg-[color:var(--surface-app)] text-text">
+            <AppHeader />
 
-          <div className="flex min-h-[calc(100svh-73px)]">
+            <div className="flex min-h-0 flex-1">
             <AppSidebar items={sidebarItems} />
 
             <main className="min-w-0 flex-1 overflow-auto">

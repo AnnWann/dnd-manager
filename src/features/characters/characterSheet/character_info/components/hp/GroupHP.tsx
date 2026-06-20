@@ -15,52 +15,47 @@ export function GroupHP({
   character,
   updateCharacter,
 }: Props) {
-  const [open, setOpen] = useState(false)
-
   return (
-    <div className="mt-5">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="
-          flex items-center gap-2
-          text-sm font-medium text-textH
-          transition-opacity hover:opacity-80
-        "
-      >
-        <span>{open ? "▼" : "▶"}</span>
-        <span>Pontos de Vida</span>
-      </button>
+    <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-textH">
+          Pontos de Vida
+        </h2>
 
-      {open && (
-        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3">
-          <SelectHpModule
-            name="Vida Máxima"
-            hpKey="max"
-            character={character}
-            updateCharacter={updateCharacter}
-          />
+        <span className="text-xs text-textMuted">
+          Combate
+        </span>
+      </div>
 
-          <SelectHpModule
-            name="Vida Atual"
-            hpKey="current"
-            character={character}
-            updateCharacter={updateCharacter}
-          />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <SelectHpModule
+          name="Vida Atual"
+          hpKey="current"
+          character={character}
+          updateCharacter={updateCharacter}
+        />
 
-          <SelectHpModule
-            name="Vida Temporária"
-            hpKey="temporary"
-            character={character}
-            updateCharacter={updateCharacter}
-          />
+        <SelectHpModule
+          name="Vida Máxima"
+          hpKey="max"
+          character={character}
+          updateCharacter={updateCharacter}
+        />
 
-          <GroupHitDice
-            character={character}
-            updateCharacter={updateCharacter}
-          />
-        </div>
-      )}
-    </div>
+        <SelectHpModule
+          name="Vida Temporária"
+          hpKey="temporary"
+          character={character}
+          updateCharacter={updateCharacter}
+        />
+      </div>
+
+      <div className="mt-4 border-t border-border pt-3">
+        <GroupHitDice
+          character={character}
+          updateCharacter={updateCharacter}
+        />
+      </div>
+    </section>
   )
 }

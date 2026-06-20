@@ -28,21 +28,10 @@ export function GroupActions({
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="mt-5">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="
-          flex items-center gap-2
-          text-sm font-medium text-textH
-          transition-opacity hover:opacity-80
-        "
-      >
-        <span>{open ? "▼" : "▶"}</span>
-        <span>Ações por turno</span>
-      </button>
-
-      {open && (
+    <details className="rounded-xl border border-border bg-bg">
+      <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-textH">
+        Regras de ações
+      </summary>
         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
           {ACTIONS.map((action) => (
             <SelectActionModule
@@ -53,7 +42,6 @@ export function GroupActions({
             />
           ))}
         </div>
-      )}
-    </div>
+    </details>
   )
 }

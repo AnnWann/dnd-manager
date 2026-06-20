@@ -52,7 +52,7 @@ export function CharacterView() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <CharacterSelector
         characters={characters}
         activeCharacter={activeCharacter}
@@ -63,19 +63,25 @@ export function CharacterView() {
         showOwnerBadge={canAssignOwners}
       />
 
-      <CharacterViewTabs activeTab={activeTab} setActiveTab={setActiveTab} />
-
-      {activeTab === "sheet" && (
-        <CharacterSheet
-          character={activeCharacter}
-          updateCharacter={updateCharacter}
-          canAssignOwners={canAssignOwners}
-          canEditCharacterType={canEditCharacterType}
-          playerKeys={playerKeys}
-          getOwner={getOwner}
-          createOwner={createOwner}
+      <div className="sticky top-0 z-20 bg-[color:var(--surface-app)] py-2">
+        <CharacterViewTabs
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
         />
-      )}
+      </div>
+
+      <div className="min-w-0">
+        {activeTab === "sheet" && (
+          <CharacterSheet
+            character={activeCharacter}
+            updateCharacter={updateCharacter}
+            canAssignOwners={canAssignOwners}
+            canEditCharacterType={canEditCharacterType}
+            playerKeys={playerKeys}
+            getOwner={getOwner}
+            createOwner={createOwner}
+          />
+        )}
 
       {activeTab === "abilities" && (
         <CharacterAbilities
@@ -106,5 +112,6 @@ export function CharacterView() {
         />
       )}
     </div>
+  </div>
   )
 }

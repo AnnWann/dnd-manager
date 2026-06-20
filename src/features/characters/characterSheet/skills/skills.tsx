@@ -43,31 +43,30 @@ export function Skills({
   const profBonus = character.getProficiencyBonus()
 
   return (
-    <div className="mt-5">
-      <button
-        type="button"
-        onClick={() => setIsOpen((v) => !v)}
-        className="flex items-center gap-2 text-sm font-medium text-textH transition-opacity hover:opacity-80"
-      >
-        <span>{isOpen ? "▼" : "▶"}</span>
-        <span>Perícias</span>
-      </button>
+    <section className="rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-textH">
+          Perícias
+        </h2>
 
-      {isOpen && (
-        <div className="mt-3 grid gap-2 md:grid-cols-2">
-          {SKILLS.map((skill) => (
-            <SelectSkillModule
-              key={skill.key}
-              character={character}
-              updateCharacter={updateCharacter}
-              skillKey={skill.key}
-              label={skill.label}
-              ability={skill.ability}
-              profBonus={profBonus}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+        <span className="text-xs text-textMuted">
+          Proficiência +{profBonus}
+        </span>
+      </div>
+
+      <div className="grid gap-1">
+        {SKILLS.map((skill) => (
+          <SelectSkillModule
+            key={skill.key}
+            character={character}
+            updateCharacter={updateCharacter}
+            skillKey={skill.key}
+            label={skill.label}
+            ability={skill.ability}
+            profBonus={profBonus}
+          />
+        ))}
+      </div>
+    </section>
   )
 }
