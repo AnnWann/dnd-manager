@@ -4,7 +4,7 @@ import type { CharacterAttribute } from "./CharacterAttribute"
 import type { CharacterSkills } from "./CharacterSkills"
 import type { CharacterClassInterface } from "./Class"
 import type { HP } from "./HP"
-
+import type { SavingThrowProficiencies } from "./SavingThrows"
 
 export type Sheet = {
   stats: {
@@ -13,14 +13,16 @@ export type Sheet = {
     initiative: number
     passive_perception: number
   }
+
   HP: HP
+
   attributes: CharacterAttribute
   skills: CharacterSkills
+  savingThrowProficiencies: SavingThrowProficiencies
 
   classes?: CharacterClassInterface[]
   race: CharacterRace
   type: CharacterType
 
   arms: number
-
 }

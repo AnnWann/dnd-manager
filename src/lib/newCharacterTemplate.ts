@@ -26,6 +26,7 @@ export function newCharacterTemplate(name: string, owner: Player): CharacterTemp
         wis: 10,
         cha: 10,
       },
+      savingThrowProficiencies: {},
       skills: {},
       race: {
         race: 'human',

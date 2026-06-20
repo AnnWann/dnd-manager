@@ -234,3 +234,42 @@ function getArmorDexBonus(character: CharacterTemplate): number {
 
   return dex
 }
+
+export function isSavingThrowProficient(
+  character: CharacterTemplate,
+  attribute: Attribute,
+): boolean {
+  return (
+    character
+      .get("sheet")
+      .savingThrowProficiencies?.[attribute] ?? false
+  )
+}
+
+export function getSavingThrowBonus(
+  character: CharacterTemplate,
+  attribute: Attribute,
+): number {
+  const attributeModifier =
+    getEffectiveAttributeModifier(character, attribute)
+
+  if (!isSavingThrowProficient(character, attribute)) {
+    return attributeModifier
+  }
+
+  return attributeModifier + getProficiencyBonus(character)
+}
+
+export function setSavingThrowProficiency(
+  character: CharacterTemplate,
+  attribute: Attribute,
+  proficient: boolean,
+): CharacterTemplate {
+  const current =
+    character.get("sheet").savingThrowProficiencies ?? {}
+
+  return character.withSheet("savingThrowProficiencies", {
+    ...current,
+    [attribute]: proficient,
+  })
+}

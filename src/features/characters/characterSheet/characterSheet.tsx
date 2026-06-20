@@ -8,6 +8,8 @@ import { CharacterIdentity } from "./character_info/characterIdentity"
 import { GroupActions } from "./character_info/components/actions/GroupActions"
 import { GroupHP } from "./character_info/components/hp/GroupHP"
 import { GroupStats } from "./character_info/components/stats/GroupStats"
+import { AttributeCalculators } from "./attributeCalculators"
+import { SavingThrows } from "./savingThrows"
 
 type Props = {
   character: CharacterTemplate
@@ -54,6 +56,11 @@ export function CharacterSheet({
             character={character}
             updateCharacter={updateCharacter}
           />
+
+          <SavingThrows
+            character={character}
+            updateCharacter={updateCharacter}
+          />
         </div>
 
         <div className="grid gap-4">
@@ -61,6 +68,8 @@ export function CharacterSheet({
             character={character}
             updateCharacter={updateCharacter}
           />
+
+          <AttributeCalculators character={character} />
         </div>
 
         <div className="grid gap-4">

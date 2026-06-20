@@ -109,6 +109,9 @@ import {
   getEquipmentBonuses,
   getEquippedItems,
   getProficiencyBonus,
+  getSavingThrowBonus,
+  isSavingThrowProficient,
+  setSavingThrowProficiency,
   type StatBonusKey,
 } from "./characterStats"
 import {
@@ -201,6 +204,8 @@ export class CharacterTemplate {
           wis: 10,
           cha: 10,
         },
+        savingThrowProficiencies:
+          props.sheet?.savingThrowProficiencies ?? {},
         skills: props.sheet?.skills ?? {},
         race: props.sheet?.race ?? {
           race: "human",
@@ -427,6 +432,9 @@ export class CharacterTemplate {
   getEffectiveMobility(): number {return getEffectiveMobility(this)}
   applyBonus(baseValue: number, bonus: Bonus): number {return applyBonus(baseValue, bonus)}
   applyBonuses(baseValue: number, bonuses: Bonus[]): number {return applyBonuses(baseValue, bonuses)}
+  isSavingThrowProficient(attribute: Attribute): boolean {return isSavingThrowProficient(this, attribute)}
+  getSavingThrowBonus(attribute: Attribute): number {return getSavingThrowBonus(this, attribute)}
+  setSavingThrowProficiency(attribute: Attribute,proficient: boolean): CharacterTemplate {return setSavingThrowProficiency(this,attribute,proficient)}
   /**
    *
    * HP
