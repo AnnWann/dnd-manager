@@ -391,7 +391,7 @@ function AbilityEditPopup({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="grid max-h-[90vh] w-full max-w-2xl gap-4 overflow-auto rounded-xl border border-border bg-background p-4 shadow-xl">
+      <div className="grid max-h-[90vh] w-full max-w-2xl gap-4 overflow-auto rounded-xl border border-border bg-bg-elevated p-4 shadow-xl">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-textH">
             Editar habilidade

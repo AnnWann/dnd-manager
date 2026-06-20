@@ -385,7 +385,7 @@ function ItemEditPopup({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="grid max-h-[90vh] w-full max-w-3xl gap-4 overflow-auto rounded-xl border border-border bg-background p-4 shadow-xl">
+      <div className="grid max-h-[90vh] w-full max-w-3xl gap-4 overflow-auto rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-textH">{title}</h2>
 

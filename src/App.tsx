@@ -11,7 +11,7 @@ import { AppRouter } from "./Router"
 import { CharacterProvider } from "./contexts/characterContext"
 import { SyncProvider } from "./contexts/syncContext"
 import { useRemoteAppState } from "./lib/remoteState"
-import { TopBar } from "./components/AppTopBar"
+import { AppHeader } from "./components/AppTopBar"
 import { MagicProvider } from "./contexts/magicContext"
 
 function App() {
@@ -78,7 +78,7 @@ function App() {
           setAppState={setAppState}
         >
         <div className="min-h-svh bg-[color:var(--social-bg)] text-text">
-          <TopBar />
+          <AppHeader />
 
           <div className="flex min-h-[calc(100svh-73px)]">
             <AppSidebar items={sidebarItems} />

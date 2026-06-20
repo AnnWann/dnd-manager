@@ -1,62 +1,398 @@
 @import "tailwindcss";
 
-/* Tailwind v4: explicitly declare where to scan for class names */
+/* Arquivos nos quais o Tailwind deve procurar classes. */
 @source "../index.html";
 @source "./**/*.{ts,tsx}";
 
+/*
+ * ============================================================
+ * TAILWIND THEME
+ * ============================================================
+ *
+ * Mantém compatibilidade com as classes já usadas no projeto:
+ *
+ * bg-bg
+ * text-text
+ * text-textH
+ * border-border
+ * bg-accentBg
+ * border-accentBorder
+ * shadow-theme
+ * font-heading
+ */
+@theme inline {
+  --color-bg: var(--surface-primary);
+  --color-bg-subtle: var(--surface-secondary);
+  --color-bg-elevated: var(--surface-elevated);
+
+  --color-text: var(--text-secondary);
+  --color-textH: var(--text-primary);
+  --color-textMuted: var(--text-muted);
+
+  --color-border: var(--border-subtle);
+  --color-borderStrong: var(--border-strong);
+
+  --color-accent: var(--accent);
+  --color-accentHover: var(--accent-hover);
+  --color-accentBg: var(--accent-surface);
+  --color-accentBorder: var(--accent-border);
+
+  --color-success: var(--success);
+  --color-successBg: var(--success-surface);
+
+  --color-warning: var(--warning);
+  --color-warningBg: var(--warning-surface);
+
+  --color-danger: var(--danger);
+  --color-dangerBg: var(--danger-surface);
+
+  /*
+   * Compatibilidade com os componentes atuais que usam:
+   * bg-[color:var(--social-bg)]
+   */
+  --color-social-bg: var(--surface-hover);
+
+  --font-sans: var(--font-interface);
+  --font-heading: var(--font-heading-family);
+  --font-mono: var(--font-code);
+
+  --shadow-theme: var(--shadow-md);
+  --shadow-theme-sm: var(--shadow-sm);
+  --shadow-theme-lg: var(--shadow-lg);
+
+  --radius-theme-sm: var(--radius-sm);
+  --radius-theme: var(--radius-md);
+  --radius-theme-lg: var(--radius-lg);
+}
+
+/*
+ * ============================================================
+ * LIGHT THEME
+ * ============================================================
+ */
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.18);
-  --accent-border: rgba(170, 59, 255, 0.65);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  /*
+   * Superfícies
+   *
+   * O fundo geral é levemente frio.
+   * Cards continuam claros e bem legíveis.
+   */
+  --surface-app: #f5f3f7;
+  --surface-primary: #ffffff;
+  --surface-secondary: #f8f6fa;
+  --surface-elevated: #ffffff;
+  --surface-hover: #f1edf5;
+  --surface-active: #ebe3f2;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  /*
+   * Texto
+   *
+   * O texto secundário anterior estava um pouco claro demais
+   * para conteúdos densos como ficha, inventário e magias.
+   */
+  --text-primary: #211b27;
+  --text-secondary: #625a6b;
+  --text-muted: #89808f;
+  --text-on-accent: #ffffff;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
+  /*
+   * Bordas
+   */
+  --border-subtle: #e6e0e9;
+  --border-strong: #d3c8d9;
+
+  /*
+   * Cor principal
+   *
+   * Mantém a identidade roxa atual, mas com menos saturação
+   * nas superfícies e mais contraste nos controles.
+   */
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
+  --accent-pressed: #5b21b6;
+  --accent-surface: #f0e7ff;
+  --accent-surface-hover: #e7d8ff;
+  --accent-border: #c4a4f5;
+
+  /*
+   * Estados semânticos
+   */
+  --success: #15803d;
+  --success-surface: #eaf8ef;
+
+  --warning: #b45309;
+  --warning-surface: #fff5df;
+
+  --danger: #c93636;
+  --danger-hover: #ac2929;
+  --danger-surface: #fff0f0;
+
+  /*
+   * Sombras
+   *
+   * Mais leves do que a sombra anterior.
+   * Cards não precisam parecer flutuando muito acima da tela.
+   */
+  --shadow-sm:
+    0 1px 2px rgb(31 24 38 / 0.06),
+    0 1px 3px rgb(31 24 38 / 0.04);
+
+  --shadow-md:
+    0 8px 24px rgb(31 24 38 / 0.08),
+    0 2px 6px rgb(31 24 38 / 0.05);
+
+  --shadow-lg:
+    0 18px 48px rgb(31 24 38 / 0.14),
+    0 6px 16px rgb(31 24 38 / 0.08);
+
+  /*
+   * Formatos
+   */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+
+  /*
+   * Tipografia
+   *
+   * Por enquanto, apenas fontes locais do sistema.
+   * Isso evita introduzir uma dependência externa no rework.
+   */
+  --font-interface:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  --font-heading-family:
+    ui-serif,
+    Georgia,
+    Cambria,
+    "Times New Roman",
+    serif;
+
+  --font-code:
+    "Cascadia Code",
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+
+  /*
+   * Compatibilidade temporária
+   *
+   * Estes aliases permitem que CSS antigo continue funcionando
+   * durante a migração.
+   */
+  --text: var(--text-secondary);
+  --text-h: var(--text-primary);
+  --bg: var(--surface-primary);
+  --border: var(--border-subtle);
+  --code-bg: var(--surface-secondary);
+
+  --accent-bg: var(--accent-surface);
+  --social-bg: var(--surface-hover);
+
+  --shadow: var(--shadow-md);
+
+  color-scheme: light;
+
+  font-family: var(--font-interface);
+  font-size: 16px;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+
+  color: var(--text-secondary);
+  background: var(--surface-app);
+
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
+/*
+ * ============================================================
+ * DARK THEME
+ * ============================================================
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-app: #111015;
+    --surface-primary: #19171e;
+    --surface-secondary: #211e27;
+    --surface-elevated: #25212c;
+    --surface-hover: #2b2732;
+    --surface-active: #352e40;
+
+    --text-primary: #f5f0f7;
+    --text-secondary: #c3bac9;
+    --text-muted: #918798;
+    --text-on-accent: #ffffff;
+
+    --border-subtle: #312d37;
+    --border-strong: #49414f;
+
+    --accent: #a875f5;
+    --accent-hover: #b98df8;
+    --accent-pressed: #9161db;
+    --accent-surface: #2d2140;
+    --accent-surface-hover: #39284f;
+    --accent-border: #654b83;
+
+    --success: #62c980;
+    --success-surface: #183322;
+
+    --warning: #e4aa55;
+    --warning-surface: #392b17;
+
+    --danger: #ef7171;
+    --danger-hover: #f18b8b;
+    --danger-surface: #3a1d20;
+
+    --shadow-sm:
+      0 1px 3px rgb(0 0 0 / 0.25);
+
+    --shadow-md:
+      0 10px 30px rgb(0 0 0 / 0.3),
+      0 2px 8px rgb(0 0 0 / 0.2);
+
+    --shadow-lg:
+      0 22px 56px rgb(0 0 0 / 0.42),
+      0 8px 18px rgb(0 0 0 / 0.28);
+
+    color-scheme: dark;
   }
 }
 
+/*
+ * ============================================================
+ * BASE
+ * ============================================================
+ */
 @layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
   html {
-    font-family: var(--sans);
+    min-width: 320px;
+    min-height: 100%;
+    background: var(--surface-app);
+    font-family: var(--font-interface);
+    scroll-behavior: smooth;
   }
 
-  h1,
-  h2,
-  h3 {
-    font-family: var(--heading);
-    color: var(--text-h);
+  body {
+    min-width: 320px;
+    min-height: 100svh;
+    margin: 0;
+
+    background:
+      radial-gradient(
+        circle at top left,
+        color-mix(in srgb, var(--accent) 6%, transparent),
+        transparent 30rem
+      ),
+      var(--surface-app);
+
+    color: var(--text-secondary);
   }
 
-  h1 {
-    font-size: 1.25rem;
-    line-height: 1.4;
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button,
+  select {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    cursor: not-allowed;
   }
 
   input,
   select,
-  button {
-    font: inherit;
+  textarea {
+    color: var(--text-primary);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-muted);
+    opacity: 1;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    margin: 0;
+    color: var(--text-primary);
+    font-family: var(--font-heading-family);
+    font-weight: 650;
+    line-height: 1.2;
+    text-wrap: balance;
+  }
+
+  h1 {
+    font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+  }
+
+  h2 {
+    font-size: clamp(1.25rem, 1.1rem + 0.5vw, 1.5rem);
+  }
+
+  h3 {
+    font-size: 1.125rem;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--accent-hover);
+  }
+
+  code,
+  pre,
+  kbd {
+    font-family: var(--font-code);
+  }
+
+  code {
+    border-radius: var(--radius-sm);
+    background: var(--surface-secondary);
+    padding: 0.1em 0.35em;
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  ::selection {
+    background: var(--accent-surface-hover);
+    color: var(--text-primary);
   }
 
   :focus-visible {
@@ -65,36 +401,44 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.22);
-    --accent-border: rgba(192, 132, 252, 0.65);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+/*
+ * ============================================================
+ * SCROLLBAR
+ * ============================================================
+ */
+@media (pointer: fine) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
   }
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: var(--border-strong);
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+    background-clip: padding-box;
   }
 }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-}
-
-* {
-  box-sizing: border-box;
-}
-
+/*
+ * ============================================================
+ * APPLICATION
+ * ============================================================
+ */
 #root {
   min-height: 100svh;
 }
@@ -105,4 +449,18 @@ body {
 
 .mmSwipeInner {
   will-change: transform;
+}
+
+/*
+ * Reduz animações para usuários que pedem menos movimento.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
