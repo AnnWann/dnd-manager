@@ -204,10 +204,10 @@ export function PartyInventoryView() {
             <span className="min-w-0 break-words">Autonomia de suprimentos</span>
           </div>
           <p className="mt-1 max-w-full break-words text-xs leading-5 text-textMuted">
-            Uma ração individual vale {STANDARD_PORTIONS_PER_RATION} porção
-            padrão. Um barril vale {STANDARD_PORTIONS_PER_BARREL} porções, ou
+            Uma ração individual vale {STANDARD_PORTIONS_PER_RATION} porção de
+            comida. Um barril vale {STANDARD_PORTIONS_PER_BARREL} porções, ou
             40 humanoide-descansos para um consumidor padrão. Suprimentos
-            mistos contam como uma porção de comida e uma de bebida.
+            mistos também adicionam porções de comida.
           </p>
         </CardHeader>
 
@@ -216,7 +216,12 @@ export function PartyInventoryView() {
             <SupplyMetric
               label="Porções de comida"
               value={formatNumber(supplyCalculation.foodPortions)}
-              detail={`${formatNumber(supplyCalculation.foodPerLongRest)} consumidas por descanso`}
+              detail="barris, rações e suprimentos mistos convertidos"
+            />
+            <SupplyMetric
+              label="Consumo por descanso"
+              value={formatNumber(supplyCalculation.foodPerLongRest)}
+              detail="porções de comida para todo o grupo"
             />
             <SupplyMetric
               label="Comida restante"
@@ -224,26 +229,18 @@ export function PartyInventoryView() {
                 supplyCalculation.foodLongRests,
                 supplyCalculation.consumers.length,
               )}
-              detail="descansos equivalentes"
+              detail="descansos equivalentes antes do arredondamento"
             />
             <SupplyMetric
               label="Porções de bebida"
               value={formatNumber(supplyCalculation.drinkPortions)}
-              detail={`${formatNumber(supplyCalculation.drinkPerLongRest)} consumidas por descanso`}
-            />
-            <SupplyMetric
-              label="Bebida restante"
-              value={formatLongRestEstimate(
-                supplyCalculation.drinkLongRests,
-                supplyCalculation.consumers.length,
-              )}
-              detail="descansos equivalentes"
+              detail="registradas, mas ainda não limitam os descansos"
             />
           </div>
 
           <div className="rounded-xl border border-accentBorder bg-accentBg p-4">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-              Descansos longos sustentados pelo estoque atual
+              Descansos longos sustentados pela comida atual
             </div>
             <div className="mt-1 text-2xl font-bold text-textH">
               {formatSupportedLongRests(
@@ -252,9 +249,11 @@ export function PartyInventoryView() {
               )}
             </div>
             <p className="mt-1 text-xs leading-5 text-textMuted">
-              O menor valor entre comida e bebida limita o grupo. O cálculo é
-              atualizado automaticamente, mas os suprimentos ainda não são
-              consumidos ao apertar o botão de descanso longo.
+              O valor é a quantidade inteira de descansos que a comida consegue
+              sustentar. Bebidas continuam registradas, mas não reduzem este
+              número até que uma regra própria de consumo seja definida. Os
+              suprimentos ainda não são consumidos automaticamente pelo botão de
+              descanso longo.
             </p>
           </div>
 
@@ -277,13 +276,8 @@ export function PartyInventoryView() {
                     <div className="mt-1 text-[11px] text-textMuted">
                       {formatRaceName(consumer.race)}
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-text">
-                      <span>
-                        Comida: {formatNumber(consumer.foodPerLongRest)}
-                      </span>
-                      <span>
-                        Bebida: {formatNumber(consumer.drinkPerLongRest)}
-                      </span>
+                    <div className="mt-2 text-xs text-text">
+                      Comida por descanso: {formatNumber(consumer.foodPerLongRest)}
                     </div>
                   </div>
                 ))}
@@ -298,8 +292,8 @@ export function PartyInventoryView() {
 
           <p className="text-[11px] leading-4 text-textMuted">
             Estoque registrado em {supplyItemCount} tipos de suprimento. Golias
-            e meio-gigantes consomem 2 porções por descanso; halflings e gnomos
-            consomem 0,5; as demais raças usam 1 porção por padrão.
+            e meio-gigantes consomem 2 porções de comida por descanso; halflings
+            e gnomos consomem 0,5; as demais raças usam 1 porção por padrão.
           </p>
         </CardContent>
       </Card>
