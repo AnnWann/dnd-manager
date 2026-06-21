@@ -16,11 +16,13 @@ export function CharacterView() {
   const {
     visibleCharacters: characters,
     activeCharacter,
+    partyInventory,
     setSelectedCharacterId,
     addCharacter,
     importCharacter,
     deleteCharacter,
     updateCharacter,
+    completeLongRest,
     canAssignOwners,
     canEditCharacterType,
     knownPlayerKeys: playerKeys,
@@ -69,7 +71,9 @@ export function CharacterView() {
 
       <CharacterRestControls
         character={activeCharacter}
+        partyInventory={partyInventory}
         updateCharacter={updateCharacter}
+        completeLongRest={completeLongRest}
       />
 
       <div className="sticky top-0 z-20 bg-[color:var(--surface-app)] py-2">
