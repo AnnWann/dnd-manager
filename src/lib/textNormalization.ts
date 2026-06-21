@@ -51,8 +51,8 @@ export function normalizeItemText<T extends Itemmable>(item: T): T {
   return {
     ...item,
     name: trimSingleLine(item.name),
-    desc: trimOptionalMultiline(item.desc),
-    notes: trimOptionalMultiline(item.notes),
+    desc: trimMultiline(item.desc ?? ""),
+    notes: trimMultiline(item.notes ?? ""),
     ...(resourceItem.abilities
       ? {
           abilities: resourceItem.abilities.map(normalizeAbilityText),
@@ -78,10 +78,7 @@ export function normalizeSpellText(spell: Spell): Spell {
     headcanon: trimOptionalMultiline(spell.headcanon),
     description: trimMultiline(spell.description),
     higherLevelText: trimMultiline(spell.higherLevelText),
-    school:
-      typeof spell.school === "string"
-        ? trimSingleLine(spell.school)
-        : spell.school,
+    school: trimSingleLine(spell.school),
     material: trimOptionalMultiline(spell.material),
     castingTime: {
       ...spell.castingTime,
