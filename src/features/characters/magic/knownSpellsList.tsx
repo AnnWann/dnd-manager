@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useState } from "react"
 
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { CLASS_NAMES } from "../../../contexts/consts"
@@ -42,71 +42,75 @@ type DisplaySpellEntry = {
 
 export function KnownSpellsList({ character, updateCharacter }: Props) {
   const { getSpellByIndex } = useMagicContext()
-  const knownSpellEntries = character.get("magic")?.spells.knownSpells ?? []
+  const [preparedFilter, setPreparedFilter] =
+    useState<PreparedFilter>("all")
+  const [classFilter, setClassFilter] = useState<ClassFilter>("all")
 
-  const regularSpells: DisplaySpellEntry[] = knownSpellEntries
-    .map((entry) => {
-      const spell = getSpellByIndex(entry.spells.id)
-      if (!spell) return null
+  const regularSpells = (
+    character.get("magic")?.spells.knownSpells ?? []
+  ).flatMap<DisplaySpellEntry>((entry) => {
+    const spell = getSpellByIndex(entry.spells.id)
+    if (!spell) return []
 
-      return {
+    return [
+      {
         key: `known:${entry.source.type}:${entry.source.sourceId}:${spell.index}`,
         spell,
         source: entry.source,
         prepared: entry.spells.prepared,
         alwaysPrepared: false,
         removable: true,
-      }
-    })
-    .filter((entry): entry is DisplaySpellEntry => Boolean(entry))
+      },
+    ]
+  })
 
-  const grantedSpells: DisplaySpellEntry[] = getCharacterGrantedSpells(character)
-    .map((entry) => {
+  const grantedSpells = getCharacterGrantedSpells(character).flatMap<DisplaySpellEntry>(
+    (entry) => {
       const spell = getSpellByIndex(entry.index)
-      if (!spell) return null
+      if (!spell) return []
 
       const remaining = entry.usage
         ? Math.max(0, entry.usage.max - entry.usage.used)
         : undefined
 
-      return {
-        key: entry.key,
-        spell,
-        source: entry.source,
-        prepared: true,
-        alwaysPrepared: true,
-        removable: false,
-        accessLabel:
-          entry.castingMode === "known"
-            ? "Usa espaços normais"
-            : entry.usage
-              ? `Pela origem: ${remaining}/${entry.usage.max} usos`
-              : "Apenas pela origem",
-      }
-    })
-    .filter((entry): entry is DisplaySpellEntry => Boolean(entry))
+      return [
+        {
+          key: entry.key,
+          spell,
+          source: entry.source,
+          prepared: true,
+          alwaysPrepared: true,
+          removable: false,
+          accessLabel:
+            entry.castingMode === "known"
+              ? "Usa espaços normais"
+              : entry.usage
+                ? `Pela origem: ${remaining}/${entry.usage.max} usos`
+                : "Apenas pela origem",
+        },
+      ]
+    },
+  )
 
-  const spells = [...regularSpells, ...grantedSpells]
+  const spells: DisplaySpellEntry[] = [
+    ...regularSpells,
+    ...grantedSpells,
+  ]
   const classes = character.get("sheet").classes ?? []
-  const [preparedFilter, setPreparedFilter] =
-    useState<PreparedFilter>("all")
-  const [classFilter, setClassFilter] = useState<ClassFilter>("all")
   const spellLimits = getSpellClassLimits(character, regularSpells)
 
-  const filteredSpells = useMemo(() => {
-    return spells.filter(({ prepared, source }) => {
-      const matchesPrepared =
-        preparedFilter === "all" ||
-        (preparedFilter === "prepared" && prepared) ||
-        (preparedFilter === "not-prepared" && !prepared)
+  const filteredSpells = spells.filter(({ prepared, source }) => {
+    const matchesPrepared =
+      preparedFilter === "all" ||
+      (preparedFilter === "prepared" && prepared) ||
+      (preparedFilter === "not-prepared" && !prepared)
 
-      const matchesClass =
-        classFilter === "all" ||
-        (source.type === "class" && source.name === classFilter)
+    const matchesClass =
+      classFilter === "all" ||
+      (source.type === "class" && source.name === classFilter)
 
-      return matchesPrepared && matchesClass
-    })
-  }, [spells, preparedFilter, classFilter])
+    return matchesPrepared && matchesClass
+  })
 
   function canPrepareSpell(entry: DisplaySpellEntry): boolean {
     if (entry.alwaysPrepared || entry.prepared) return true
