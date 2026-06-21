@@ -190,7 +190,7 @@ export function EquipmentBonusList({
   if (rows.length === 0) return null
 
   return (
-    <div className={childrenNeedsSpacing(bonuses) ? "mt-4" : ""}>
+    <div>
       <div className="text-[11px] font-semibold uppercase tracking-wide text-textMuted">
         Bônus
       </div>
@@ -207,10 +207,4 @@ export function EquipmentBonusList({
       </div>
     </div>
   )
-}
-
-function childrenNeedsSpacing(
-  _bonuses: Equipment["bonuses"],
-): boolean {
-  return false
 }
