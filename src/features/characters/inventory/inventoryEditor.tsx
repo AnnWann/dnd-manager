@@ -1,16 +1,19 @@
 import { useEffect, useState } from "react"
+
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
 import { Textarea } from "../../../components/ui/Textarea"
-import { EquipmentEditDialog } from "../equipment/equipmentEditDialog"
-import type { Itemmable, ItemKind } from "../../../models/items/item"
+import { normalizeItemText } from "../../../lib/textNormalization"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
-import { EquipmentFields, withEquipmentDefaults } from "./equipmentFields"
-import { ConsumableFields, withConsumableDefaults } from "./consumableFields"
-import { ThrowableFields, withThrowableDefaults } from "./throwableFields"
+import type { ItemKind, Itemmable } from "../../../models/items/item"
+import type { SupplyItem } from "../../../models/items/SupplyItem"
 import { newInventoryItem } from "./characterInventory"
+import { ConsumableFields, withConsumableDefaults } from "./consumableFields"
+import { EquipmentFields, withEquipmentDefaults } from "./equipmentFields"
 import { ItemDropdownDetails } from "./itemDropdownDetails"
+import { SupplyFields, withSupplyDefaults } from "./supplyFields"
+import { ThrowableFields, withThrowableDefaults } from "./throwableFields"
 
 type Props = {
   title: string
@@ -18,11 +21,16 @@ type Props = {
   items: Itemmable[]
   emptyMessage: string
   onAddItem: (item: Itemmable) => void
-  onUpdateItem: (itemId: string, updater: (item: Itemmable) => Itemmable) => void
+  onUpdateItem: (
+    itemId: string,
+    updater: (item: Itemmable) => Itemmable,
+  ) => void
   onRemoveItem: (itemId: string) => void
-  onEquipItem: (itemId: string) => void
+  onEquipItem?: (itemId: string) => void
   onPocketItem?: (itemId: string) => void
   onToggleBagOfHolding?: (itemId: string) => void
+  onTransferItem?: (item: Itemmable) => void
+  transferLabel?: string
 }
 
 type InventoryFilter =
@@ -36,12 +44,17 @@ type InventoryFilter =
   | "boots"
   | "ring"
   | "consumable"
-  | "throwable" 
+  | "throwable"
+  | "supply"
   | "bagOfHolding"
 
-const INVENTORY_FILTERS: Array<{ value: InventoryFilter; label: string }> = [
+const INVENTORY_FILTERS: Array<{
+  value: InventoryFilter
+  label: string
+}> = [
   { value: "all", label: "Todos" },
   { value: "common", label: "Comum" },
+  { value: "supply", label: "Suprimentos" },
   { value: "equipment", label: "Equipamentos" },
   { value: "weapon", label: "Armas" },
   { value: "armor", label: "Armaduras" },
@@ -54,14 +67,17 @@ const INVENTORY_FILTERS: Array<{ value: InventoryFilter; label: string }> = [
   { value: "bagOfHolding", label: "Bolsa Mágica" },
 ]
 
-function matchesInventoryFilter(item: Itemmable, filter: InventoryFilter) {
+function matchesInventoryFilter(
+  item: Itemmable,
+  filter: InventoryFilter,
+): boolean {
   if (filter === "all") return true
+  if (filter === "bagOfHolding") return item.insideBagOfHolding === true
   if (filter === "common") return item.kind === "common"
   if (filter === "equipment") return item.kind === "equipment"
   if (filter === "consumable") return item.kind === "consumable"
   if (filter === "throwable") return item.kind === "throwable"
-  if (filter === "bagOfHolding") {return item.insideBagOfHolding === true}
-
+  if (filter === "supply") return item.kind === "supply"
 
   return item.kind === "equipment" && item.equipSlot === filter
 }
@@ -77,8 +93,9 @@ export function InventoryEditor({
   onEquipItem,
   onPocketItem,
   onToggleBagOfHolding,
+  onTransferItem,
+  transferLabel = "Transferir",
 }: Props) {
-  const [editingEquipment, setEditingEquipment] = useState<Itemmable | null>(null)
   const [openItemKey, setOpenItemKey] = useState<string | null>(null)
   const [filter, setFilter] = useState<InventoryFilter>("all")
   const [creatingItem, setCreatingItem] = useState(false)
@@ -88,20 +105,17 @@ export function InventoryEditor({
     matchesInventoryFilter(item, filter),
   )
 
-  function toggleItem(itemKey: string) {
-    setOpenItemKey((current) => (current === itemKey ? null : itemKey))
-  }
-
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="text-sm font-semibold text-textH">{title}</div>
-            <div className="mt-1 text-xs text-text">{description}</div>
+            <div className="mt-1 text-xs leading-5 text-text">{description}</div>
           </div>
 
           <Button
+            className="w-full sm:w-auto"
             size="sm"
             variant="primary"
             onClick={() => setCreatingItem(true)}
@@ -112,15 +126,15 @@ export function InventoryEditor({
       </CardHeader>
 
       <CardContent>
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div className="mb-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {INVENTORY_FILTERS.map((option) => (
             <button
               key={option.value}
               type="button"
               className={
                 filter === option.value
-                  ? "rounded-md border border-accentBorder bg-textH px-2 py-1 text-xs font-medium text-background"
-                  : "rounded-md border border-border px-2 py-1 text-xs text-text hover:bg-[color:var(--social-bg)]"
+                  ? "shrink-0 rounded-full border border-accentBorder bg-accentBg px-3 py-1.5 text-xs font-medium text-textH"
+                  : "shrink-0 rounded-full border border-border px-3 py-1.5 text-xs text-text hover:bg-[color:var(--social-bg)]"
               }
               onClick={() => {
                 setFilter(option.value)
@@ -139,13 +153,17 @@ export function InventoryEditor({
               const isOpen = openItemKey === itemKey
 
               return (
-                <div
+                <article
                   key={itemKey}
-                  className="rounded-xl border border-border bg-[color:var(--social-bg)]"
+                  className="overflow-hidden rounded-xl border border-border bg-[color:var(--social-bg)]"
                 >
                   <button
                     type="button"
-                    onClick={() => toggleItem(itemKey)}
+                    onClick={() =>
+                      setOpenItemKey((current) =>
+                        current === itemKey ? null : itemKey,
+                      )
+                    }
                     className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
                   >
                     <div className="min-w-0">
@@ -153,11 +171,13 @@ export function InventoryEditor({
                         {item.name || "Item sem nome"}
                       </div>
 
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text">
-                        <span>Tipo: {inventoryItemTypeLabel(item)}</span>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text">
+                        <span>{inventoryItemTypeLabel(item)}</span>
                         <span>Qtd. {item.quantity ?? 1}</span>
                         <span>Peso {item.weight ?? 0}</span>
-                        
+                        {item.kind === "supply" ? (
+                          <span>{formatSupplySummary(item as SupplyItem)}</span>
+                        ) : null}
                       </div>
                     </div>
 
@@ -177,7 +197,7 @@ export function InventoryEditor({
                           Editar
                         </Button>
 
-                        {item.kind === "equipment" ? (
+                        {item.kind === "equipment" && onEquipItem ? (
                           <Button
                             size="sm"
                             variant="secondary"
@@ -187,34 +207,41 @@ export function InventoryEditor({
                           </Button>
                         ) : null}
 
-                          {canGoToPocket(item) && onPocketItem ? (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => onPocketItem(item.id)}
-                            >
-                              Colocar no bolso
-                            </Button>
-                          ) : null}
+                        {canGoToPocket(item) && onPocketItem ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => onPocketItem(item.id)}
+                          >
+                            Colocar no bolso
+                          </Button>
+                        ) : null}
 
-                          {onToggleBagOfHolding ? (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                onToggleBagOfHolding(item.id)
-                              }}
-                            >
-                              {item.insideBagOfHolding
-                                ? "Retirar da bolsa"
-                                : "Enviar à bolsa"}
-                            </Button>
-                          ) : null}
+                        {onToggleBagOfHolding ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => onToggleBagOfHolding(item.id)}
+                          >
+                            {item.insideBagOfHolding
+                              ? "Retirar da bolsa"
+                              : "Enviar à bolsa"}
+                          </Button>
+                        ) : null}
+
+                        {onTransferItem ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => onTransferItem(item)}
+                          >
+                            {transferLabel}
+                          </Button>
+                        ) : null}
 
                         <Button
                           size="sm"
-                          variant="secondary"
+                          variant="ghost"
                           onClick={() => onRemoveItem(item.id)}
                         >
                           Remover
@@ -223,11 +250,13 @@ export function InventoryEditor({
 
                       <ItemDropdownDetails
                         item={item}
-                        onUpdate={(updater) => onUpdateItem(item.id, updater)}
+                        onUpdate={(updater) =>
+                          onUpdateItem(item.id, updater)
+                        }
                       />
                     </div>
                   ) : null}
-                </div>
+                </article>
               )
             })}
           </div>
@@ -240,23 +269,13 @@ export function InventoryEditor({
         )}
       </CardContent>
 
-      <EquipmentEditDialog
-        open={editingEquipment !== null}
-        equipment={editingEquipment as Equipment | null}
-        onClose={() => setEditingEquipment(null)}
-        onSave={(nextEquipment) => {
-          onUpdateItem(nextEquipment.id, () => nextEquipment)
-          setEditingEquipment(null)
-        }}
-      />
-
       <ItemEditPopup
         open={creatingItem}
         title="Criar item"
         item={newInventoryItem()}
         onClose={() => setCreatingItem(false)}
         onSave={(item) => {
-          onAddItem(item)
+          onAddItem(normalizeItemText(item))
           setCreatingItem(false)
         }}
       />
@@ -267,10 +286,10 @@ export function InventoryEditor({
         item={editingItem}
         onClose={() => setEditingItem(null)}
         onSave={(item) => {
-          onUpdateItem(item.id, () => item)
+          onUpdateItem(item.id, () => normalizeItemText(item))
           setEditingItem(null)
         }}
-/>
+      />
     </Card>
   )
 }
@@ -279,14 +298,9 @@ function updateItemKind(item: Itemmable, kind: ItemKind): Itemmable {
   if (kind === "equipment") {
     return withEquipmentDefaults(item, item.equipSlot ?? "weapon")
   }
-
-  if (kind === "consumable") {
-    return withConsumableDefaults(item)
-  }
-
-  if (kind === "throwable") {
-    return withThrowableDefaults(item)
-  }
+  if (kind === "consumable") return withConsumableDefaults(item)
+  if (kind === "throwable") return withThrowableDefaults(item)
+  if (kind === "supply") return withSupplyDefaults(item)
 
   return {
     ...item,
@@ -294,6 +308,7 @@ function updateItemKind(item: Itemmable, kind: ItemKind): Itemmable {
     equippable: false,
     equipSlot: undefined,
     pocketable: false,
+    insideBagOfHolding: false,
   }
 }
 
@@ -301,11 +316,12 @@ function itemKindLabel(kind: ItemKind): string {
   if (kind === "equipment") return "Equipamento"
   if (kind === "consumable") return "Consumível"
   if (kind === "throwable") return "Arremessável"
+  if (kind === "supply") return "Suprimento"
   return "Comum"
 }
 
 function canGoToPocket(item: Itemmable): boolean {
-  return item.pocketable === true
+  return item.kind !== "supply" && item.pocketable === true
 }
 
 function ItemKindButtons({
@@ -317,20 +333,21 @@ function ItemKindButtons({
 }) {
   const options: Array<{ value: ItemKind; label: string }> = [
     { value: "common", label: "Comum" },
+    { value: "supply", label: "Suprimento" },
     { value: "equipment", label: "Equipamento" },
     { value: "consumable", label: "Consumível" },
     { value: "throwable", label: "Arremessável" },
   ]
 
   return (
-    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
           className={
             value === option.value
-              ? "rounded-md border border-accentBorder bg-textH px-2 py-2 text-xs font-medium text-background"
+              ? "rounded-md border border-accentBorder bg-accentBg px-2 py-2 text-xs font-medium text-textH"
               : "rounded-md border border-border px-2 py-2 text-xs text-text hover:bg-[color:var(--social-bg)]"
           }
           onClick={() => onChange(option.value)}
@@ -350,11 +367,15 @@ function inventoryItemTypeLabel(item: Itemmable): string {
     if (item.equipSlot === "boots") return "Botas"
     if (item.equipSlot === "weapon") return "Arma"
     if (item.equipSlot === "ring") return "Anel"
-
-    return "Equipamento"
   }
 
   return itemKindLabel(item.kind ?? "common")
+}
+
+function formatSupplySummary(item: SupplyItem): string {
+  const units = Math.max(0, item.supplyUnitsPerItem ?? 0)
+  const label = item.supplyUnitLabel?.trim() || "unidades"
+  return `${units} ${label}/item`
 }
 
 function ItemEditPopup({
@@ -384,111 +405,132 @@ function ItemEditPopup({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm">
       <div className="grid max-h-[90vh] w-full max-w-3xl gap-4 overflow-auto rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-textH">{title}</h2>
-
           <Button size="sm" variant="secondary" onClick={onClose}>
             Fechar
           </Button>
         </div>
 
         <div className="grid gap-3 md:grid-cols-[1fr_90px_110px]">
-          <div className="grid gap-2">
-            <label className="text-xs text-text">Item</label>
+          <label className="grid gap-2">
+            <span className="text-xs text-text">Item</span>
             <Input
               value={draft.name}
-              onChange={(e) =>
-                patch((item) => ({ ...item, name: e.target.value }))
+              onChange={(event) =>
+                patch((current) => ({
+                  ...current,
+                  name: event.target.value,
+                }))
               }
               placeholder="Nome do item"
             />
-          </div>
+          </label>
 
-          <div className="grid gap-2">
-            <label className="text-xs text-text">Qtd.</label>
+          <label className="grid gap-2">
+            <span className="text-xs text-text">Qtd.</span>
             <Input
               type="number"
               min={0}
+              step="any"
               value={draft.quantity}
-              onChange={(e) =>
-                patch((item) => ({
-                  ...item,
-                  quantity: Number(e.target.value) || 0,
+              onChange={(event) =>
+                patch((current) => ({
+                  ...current,
+                  quantity: Math.max(
+                    0,
+                    Number(event.target.value) || 0,
+                  ),
                 }))
               }
             />
-          </div>
+          </label>
 
-          <div className="grid gap-2">
-            <label className="text-xs text-text">Peso</label>
+          <label className="grid gap-2">
+            <span className="text-xs text-text">Peso</span>
             <Input
               type="number"
               min={0}
+              step="any"
               value={draft.weight ?? 0}
-              onChange={(e) =>
-                patch((item) => ({
-                  ...item,
-                  weight: Number(e.target.value) || 0,
+              onChange={(event) =>
+                patch((current) => ({
+                  ...current,
+                  weight: Math.max(
+                    0,
+                    Number(event.target.value) || 0,
+                  ),
                 }))
               }
             />
-          </div>
+          </label>
 
           <div className="grid gap-2 md:col-span-3">
-            <label className="text-xs text-text">Tipo</label>
+            <span className="text-xs text-text">Tipo</span>
             <ItemKindButtons
               value={draft.kind ?? "common"}
               onChange={(kind) =>
-                patch((item) => updateItemKind(item, kind))
+                patch((current) => updateItemKind(current, kind))
               }
             />
           </div>
 
-          <div className="grid gap-2 md:col-span-3">
-            <label className="text-xs text-text">Descrição</label>
+          <label className="grid gap-2 md:col-span-3">
+            <span className="text-xs text-text">Descrição</span>
             <Textarea
               rows={2}
               value={draft.desc ?? ""}
-              onChange={(e) =>
-                patch((item) => ({ ...item, desc: e.target.value }))
+              onChange={(event) =>
+                patch((current) => ({
+                  ...current,
+                  desc: event.target.value,
+                }))
               }
               placeholder="Descrição do item..."
             />
-          </div>
+          </label>
 
-          <div className="grid gap-2 md:col-span-3">
-            <label className="text-xs text-text">Notas</label>
+          <label className="grid gap-2 md:col-span-3">
+            <span className="text-xs text-text">Notas</span>
             <Textarea
               rows={2}
               value={draft.notes ?? ""}
-              onChange={(e) =>
-                patch((item) => ({ ...item, notes: e.target.value }))
+              onChange={(event) =>
+                patch((current) => ({
+                  ...current,
+                  notes: event.target.value,
+                }))
               }
               placeholder="Detalhes, condições, localização..."
             />
-          </div>
+          </label>
 
           {draft.kind === "equipment" ? (
             <EquipmentFields item={draft} onUpdate={patch} />
           ) : null}
-
           {draft.kind === "consumable" ? (
             <ConsumableFields item={draft} onUpdate={patch} />
           ) : null}
-
           {draft.kind === "throwable" ? (
             <ThrowableFields item={draft} onUpdate={patch} />
           ) : null}
+          {draft.kind === "supply" ? (
+            <SupplyFields item={draft} onUpdate={patch} />
+          ) : null}
         </div>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button size="sm" variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
-
-          <Button size="sm" variant="primary" onClick={() => onSave(draft)}>
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={!draft.name.trim()}
+            onClick={() => onSave(draft)}
+          >
             Salvar
           </Button>
         </div>
