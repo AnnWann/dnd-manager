@@ -103,31 +103,31 @@ export function TransferItemDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[10000] flex max-w-full items-center justify-center overflow-x-hidden bg-black/70 p-2 backdrop-blur-sm sm:p-4"
       onMouseDown={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-md rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg"
+        className="w-full min-w-0 max-w-md overflow-hidden rounded-xl border border-border bg-bg-elevated p-3 shadow-theme-lg sm:p-4"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="border-b border-border pb-4">
-          <h2 className="text-base font-semibold text-textH">
+        <div className="min-w-0 border-b border-border pb-4">
+          <h2 className="break-words text-base font-semibold text-textH">
             Transferir item
           </h2>
-          <p className="mt-1 break-words text-xs text-textMuted">
+          <p className="mt-1 max-w-full break-words text-xs text-textMuted">
             {currentItem.name || "Item sem nome"} • disponível: {maxQuantity}
           </p>
         </div>
 
         {destinations.length === 0 ? (
-          <div className="py-6 text-center text-sm text-textMuted">
+          <div className="max-w-full break-words py-6 text-center text-sm text-textMuted">
             Nenhum destino disponível para este item.
           </div>
         ) : (
-          <div className="grid gap-4 py-4">
-            <label className="grid gap-1.5">
+          <div className="grid min-w-0 max-w-full gap-4 py-4">
+            <label className="grid min-w-0 gap-1.5">
               <span className="text-xs font-medium text-textH">
                 Destino
               </span>
@@ -145,7 +145,7 @@ export function TransferItemDialog({
               </Select>
             </label>
 
-            <label className="grid gap-1.5">
+            <label className="grid min-w-0 gap-1.5">
               <span className="text-xs font-medium text-textH">
                 Quantidade
               </span>
@@ -162,11 +162,12 @@ export function TransferItemDialog({
           </div>
         )}
 
-        <div className="flex justify-end gap-2 border-t border-border pt-4">
-          <Button variant="secondary" onClick={onClose}>
+        <div className="flex min-w-0 flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end">
+          <Button className="w-full sm:w-auto" variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
           <Button
+            className="w-full sm:w-auto"
             variant="primary"
             disabled={!destination}
             onClick={submit}
