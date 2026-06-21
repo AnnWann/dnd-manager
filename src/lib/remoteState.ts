@@ -9,6 +9,8 @@ export type AppStateV1 = {
   characters: CharacterTemplateProps[]
   activeCharacterId: string
   partyInventory?: Itemmable[]
+  /** Carrying capacity of the party vehicle, including carriage and draft animals. */
+  partyCarryCapacity?: number
 
   /** Optional: reusable homebrew spell definitions keyed by hb:... index (synced across devices). */
   spells?: Spell[]
@@ -32,6 +34,7 @@ function defaultState(): AppStateV1 {
     characters: [],
     activeCharacterId: '',
     partyInventory: [],
+    partyCarryCapacity: 0,
     spells: [],
   }
 }
@@ -230,6 +233,7 @@ function normalizeState(state: unknown): AppStateV1 {
     }
 
     const raw = state as Partial<AppStateV1>
+    const parsedCapacity = Number(raw.partyCarryCapacity)
 
     return {
       version: 1,
@@ -241,6 +245,10 @@ function normalizeState(state: unknown): AppStateV1 {
       partyInventory: Array.isArray(raw.partyInventory)
         ? raw.partyInventory
         : [],
+      partyCarryCapacity:
+        Number.isFinite(parsedCapacity) && parsedCapacity >= 0
+          ? parsedCapacity
+          : 0,
       spells: Array.isArray(raw.spells) ? raw.spells : [],
     }
   } catch {
