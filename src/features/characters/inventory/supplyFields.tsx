@@ -7,6 +7,7 @@ import type {
 } from "../../../models/items/SupplyItem"
 import {
   getSupplyPackageDefaults,
+  getTotalSupplyPortions,
   STANDARD_PORTIONS_PER_BARREL,
   STANDARD_PORTIONS_PER_RATION,
   type SupplyPackageKind,
@@ -35,6 +36,7 @@ export function withSupplyDefaults(item: Itemmable): SupplyItem {
   const current = item as Partial<SupplyItem>
   const supplyPackage = inferSupplyPackage(current)
   const packageDefaults = getSupplyPackageDefaults(supplyPackage)
+  const parsedRemaining = Number(current.remainingSupplyUnits)
 
   return {
     ...item,
@@ -49,6 +51,11 @@ export function withSupplyDefaults(item: Itemmable): SupplyItem {
       0,
       current.supplyUnitsPerItem ?? packageDefaults.portions,
     ),
+    remainingSupplyUnits:
+      current.remainingSupplyUnits !== undefined &&
+      Number.isFinite(parsedRemaining)
+        ? Math.max(0, parsedRemaining)
+        : undefined,
     supplyUnitLabel:
       current.supplyUnitLabel ?? packageDefaults.label,
   } as SupplyItem
@@ -76,7 +83,7 @@ export function SupplyFields({
         </p>
       </div>
 
-      <div className="grid min-w-0 gap-3 md:grid-cols-3">
+      <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <label className="grid min-w-0 gap-1">
           <span className="text-xs text-textMuted">Categoria</span>
           <Select
@@ -111,6 +118,7 @@ export function SupplyFields({
                   nextPackage === "custom"
                     ? withSupplyDefaults(current).supplyUnitsPerItem
                     : defaults.portions,
+                remainingSupplyUnits: undefined,
                 supplyUnitLabel: defaults.label,
               }))
             }}
@@ -141,6 +149,28 @@ export function SupplyFields({
                   0,
                   Number(event.target.value) || 0,
                 ),
+                remainingSupplyUnits: undefined,
+              }))
+            }
+          />
+        </label>
+
+        <label className="grid min-w-0 gap-1">
+          <span className="text-xs text-textMuted">
+            Porções restantes no estoque
+          </span>
+          <Input
+            type="number"
+            min={0}
+            step="any"
+            value={getTotalSupplyPortions(supply)}
+            onChange={(event) =>
+              onUpdate((current) => ({
+                ...withSupplyDefaults(current),
+                remainingSupplyUnits: Math.max(
+                  0,
+                  Number(event.target.value) || 0,
+                ),
               }))
             }
           />
@@ -148,8 +178,9 @@ export function SupplyFields({
       </div>
 
       <p className="text-[11px] leading-4 text-textMuted">
-        A quantidade geral do item representa quantas rações, barris ou
-        embalagens desse tipo existem no inventário.
+        A quantidade geral representa quantas embalagens físicas existem. As
+        porções restantes diminuem quando um personagem conclui um descanso
+        longo e podem ser ajustadas manualmente pelo mestre.
       </p>
     </section>
   )
