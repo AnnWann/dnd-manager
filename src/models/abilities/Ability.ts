@@ -1,3 +1,5 @@
+import type { SpellGrant } from "../magic/spells/SpellGrant"
+
 export interface Ability {
   id: string
   name: string
@@ -6,6 +8,7 @@ export interface Ability {
   kind?: AbilityKind
   actionKind?: AbilityActionKind
   trigger?: Trigger
+  grantedSpells?: SpellGrant[]
 }
 
 export interface Usage {
