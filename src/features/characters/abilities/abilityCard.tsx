@@ -1,5 +1,7 @@
 import { useState } from "react"
+
 import { Button } from "../../../components/ui/Button"
+import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
 import type { Ability } from "../../../models/abilities/Ability"
 import {
@@ -24,20 +26,21 @@ function summaryLabel(ability: Ability) {
 
   if (!usage) {
     return ability.kind === "passive"
-      ? `${kindLabel} • ${ABILITY_TRIGGER_OPTIONS.find((o) => o.value === (ability.trigger ?? "always"))?.label ?? "Sempre"}`
-      : `${kindLabel} • ${ABILITY_ACTION_OPTIONS.find((o) => o.value === (ability.actionKind ?? "action"))?.label ?? "Ação"}`
+      ? `${kindLabel} • ${ABILITY_TRIGGER_OPTIONS.find((option) => option.value === (ability.trigger ?? "always"))?.label ?? "Sempre"}`
+      : `${kindLabel} • ${ABILITY_ACTION_OPTIONS.find((option) => option.value === (ability.actionKind ?? "action"))?.label ?? "Ação"}`
   }
 
   if (usage.reset === "cooldown") {
     const amount = Math.max(1, Math.trunc(usage.cooldownAmount ?? 1) || 1)
     const unit =
-      COOLDOWN_UNIT_OPTIONS.find((o) => o.value === (usage.cooldownUnit ?? "turns"))?.label ??
-      "Turnos"
+      COOLDOWN_UNIT_OPTIONS.find(
+        (option) => option.value === (usage.cooldownUnit ?? "turns"),
+      )?.label ?? "Turnos"
 
     return `${kindLabel} • Cooldown • ${amount} ${unit.toLowerCase()}`
   }
 
-  return `${kindLabel} • ${USAGE_OPTIONS.find((o) => o.value === usage.reset)?.label ?? "Sem uso"}`
+  return `${kindLabel} • ${USAGE_OPTIONS.find((option) => option.value === usage.reset)?.label ?? "Sem uso"}`
 }
 
 export function AbilityCard({
@@ -48,11 +51,15 @@ export function AbilityCard({
   onUse,
   onRestore,
 }: Props) {
+  const { getSpellByIndex } = useMagicContext()
   const [expanded, setExpanded] = useState(false)
-
   const usage = ability.usage
   const remaining = usage ? Math.max(0, usage.max - usage.used) : null
   const description = ability.description?.trim() ?? ""
+  const grantedSpells = (ability.grantedSpells ?? []).map((grant) => ({
+    grant,
+    spell: getSpellByIndex(grant.index),
+  }))
 
   return (
     <div
@@ -97,11 +104,32 @@ export function AbilityCard({
               <button
                 type="button"
                 className="mt-1 text-xs font-medium text-textH hover:opacity-80"
-                onClick={() => setExpanded((v) => !v)}
+                onClick={() => setExpanded((current) => !current)}
               >
                 {expanded ? "Ver menos" : "Ver mais"}
               </button>
             ) : null}
+          </div>
+        ) : null}
+
+        {grantedSpells.length > 0 ? (
+          <div className="mt-3">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+              Magias concedidas
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {grantedSpells.map(({ grant, spell }) => (
+                <span
+                  key={grant.index}
+                  className="rounded-full bg-accentBg px-2.5 py-1 text-[11px] font-medium text-textH"
+                >
+                  {spell?.displayName || spell?.name || grant.index}
+                  {grant.castingMode === "known"
+                    ? " • espaços normais"
+                    : " • pela habilidade"}
+                </span>
+              ))}
+            </div>
           </div>
         ) : null}
 
