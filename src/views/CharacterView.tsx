@@ -18,6 +18,7 @@ export function CharacterView() {
     activeCharacter,
     setSelectedCharacterId,
     addCharacter,
+    importCharacter,
     deleteCharacter,
     updateCharacter,
     canAssignOwners,
@@ -35,11 +36,9 @@ export function CharacterView() {
         <div className="text-sm font-semibold text-textH">
           Nenhum personagem visível
         </div>
-
         <div className="mt-1 text-xs text-text">
           Você ainda não tem um personagem associado a este jogador.
         </div>
-
         <button
           type="button"
           className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accentText"
@@ -61,6 +60,7 @@ export function CharacterView() {
         characters={characters}
         activeCharacter={activeCharacter}
         addCharacter={addCharacter}
+        importCharacter={importCharacter}
         setActiveCharacterId={setSelectedCharacterId}
         deleteActiveCharacter={deleteActiveCharacter}
         disableDelete={characters.length <= 1}
@@ -73,10 +73,7 @@ export function CharacterView() {
       />
 
       <div className="sticky top-0 z-20 bg-[color:var(--surface-app)] py-2">
-        <CharacterViewTabs
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-        />
+        <CharacterViewTabs activeTab={activeTab} setActiveTab={setActiveTab} />
       </div>
 
       <div className="min-w-0">
@@ -93,31 +90,19 @@ export function CharacterView() {
         )}
 
         {activeTab === "race" && (
-          <CharacterRaceTab
-            character={activeCharacter}
-            updateCharacter={updateCharacter}
-          />
+          <CharacterRaceTab character={activeCharacter} updateCharacter={updateCharacter} />
         )}
 
         {activeTab === "profile" && (
-          <CharacterProfileTab
-            character={activeCharacter}
-            updateCharacter={updateCharacter}
-          />
+          <CharacterProfileTab character={activeCharacter} updateCharacter={updateCharacter} />
         )}
 
         {activeTab === "abilities" && (
-          <CharacterAbilitiesTab
-            character={activeCharacter}
-            updateCharacter={updateCharacter}
-          />
+          <CharacterAbilitiesTab character={activeCharacter} updateCharacter={updateCharacter} />
         )}
 
         {activeTab === "equipment" && (
-          <CharacterEquipmentTab
-            character={activeCharacter}
-            updateCharacter={updateCharacter}
-          />
+          <CharacterEquipmentTab character={activeCharacter} updateCharacter={updateCharacter} />
         )}
 
         {activeTab === "inventory" && (
@@ -129,17 +114,11 @@ export function CharacterView() {
         )}
 
         {activeTab === "spellsList" && (
-          <CharacterMagicTab
-            character={activeCharacter}
-            updateCharacter={updateCharacter}
-          />
+          <CharacterMagicTab character={activeCharacter} updateCharacter={updateCharacter} />
         )}
 
         {activeTab === "proficiencies" && (
-          <CharacterProficienciesTab
-            character={activeCharacter}
-            updateCharacter={updateCharacter}
-          />
+          <CharacterProficienciesTab character={activeCharacter} updateCharacter={updateCharacter} />
         )}
       </div>
     </div>
