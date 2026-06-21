@@ -31,6 +31,13 @@ export type PartySupplyCalculation = {
   supportedLongRests: number
 }
 
+export type SupplyConsumptionResult = {
+  items: Itemmable[]
+  requestedPortions: number
+  consumedPortions: number
+  missingPortions: number
+}
+
 export function getDefaultRaceSupplyConsumption(
   race: Race,
   subrace = "",
@@ -161,10 +168,85 @@ export function calculatePartySupplies(
 }
 
 export function getTotalSupplyPortions(item: SupplyItem): number {
+  const remaining = Number(item.remainingSupplyUnits)
+
+  if (item.remainingSupplyUnits !== undefined && Number.isFinite(remaining)) {
+    return Math.max(0, remaining)
+  }
+
   return (
     Math.max(0, Number(item.quantity) || 0) *
     Math.max(0, Number(item.supplyUnitsPerItem) || 0)
   )
+}
+
+export function getAvailableFoodPortions(items: Itemmable[]): number {
+  return items.reduce((total, item) => {
+    if (item.kind !== "supply") return total
+    if (
+      item.supplyCategory !== "food" &&
+      item.supplyCategory !== "mixed"
+    ) {
+      return total
+    }
+
+    return total + getTotalSupplyPortions(item)
+  }, 0)
+}
+
+export function consumeFoodPortions(
+  items: Itemmable[],
+  requestedPortions: number,
+): SupplyConsumptionResult {
+  const requested = roundPortions(
+    Math.max(0, Number(requestedPortions) || 0),
+  )
+
+  if (requested <= 0) {
+    return {
+      items,
+      requestedPortions: requested,
+      consumedPortions: 0,
+      missingPortions: 0,
+    }
+  }
+
+  const nextItems = [...items]
+  let remainingToConsume = requested
+
+  for (const category of ["food", "mixed"] as const) {
+    for (let index = 0; index < nextItems.length; index += 1) {
+      if (remainingToConsume <= 0) break
+
+      const item = nextItems[index]
+      if (item.kind !== "supply" || item.supplyCategory !== category) {
+        continue
+      }
+
+      const available = getTotalSupplyPortions(item)
+      if (available <= 0) continue
+
+      const consumedFromItem = Math.min(available, remainingToConsume)
+      const remainingInItem = roundPortions(available - consumedFromItem)
+
+      nextItems[index] = {
+        ...item,
+        remainingSupplyUnits: remainingInItem,
+      }
+      remainingToConsume = roundPortions(
+        remainingToConsume - consumedFromItem,
+      )
+    }
+  }
+
+  const consumed = roundPortions(requested - remainingToConsume)
+
+  return {
+    items: nextItems,
+    requestedPortions: requested,
+    consumedPortions: consumed,
+    missingPortions: roundPortions(remainingToConsume),
+  }
 }
 
 function isPartySupplyConsumer(character: CharacterTemplate): boolean {
@@ -190,6 +272,10 @@ function sanitizeConsumption(
 function divideSupply(portions: number, consumption: number): number {
   if (consumption <= 0) return Number.POSITIVE_INFINITY
   return portions / consumption
+}
+
+function roundPortions(value: number): number {
+  return Math.round((value + Number.EPSILON) * 1_000_000) / 1_000_000
 }
 
 function normalizeName(value: string): string {
