@@ -2,6 +2,7 @@ import type { Player } from "../../../../models/player/Player"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
 
 import { Input } from "../../../../components/ui/Input"
+import { trimSingleLine } from "../../../../lib/textNormalization"
 import { SelectCharacterOwner } from "./components/selectCharacterOwner"
 import { SelectCharacterType } from "./components/selectCharacterType"
 import { SelectCharacterUniqueness } from "./components/selectCharacterUniqueness"
@@ -31,12 +32,10 @@ export function CharacterIdentity({
   createOwner,
 }: Props) {
   const classes = character.get("sheet").classes ?? []
-
   const totalLevel = classes.reduce(
     (total, characterClass) => total + characterClass.level,
     0,
   )
-
   const classDescription =
     classes.length > 0
       ? classes
@@ -63,6 +62,11 @@ export function CharacterIdentity({
                 current.with("name", event.target.value),
               )
             }
+            onBlur={(event) =>
+              updateCharacter(character.get("id"), (current) =>
+                current.with("name", trimSingleLine(event.target.value)),
+              )
+            }
           />
         </label>
 
@@ -71,7 +75,6 @@ export function CharacterIdentity({
             <div className="text-xs uppercase tracking-wide text-textMuted">
               Classe
             </div>
-
             <div className="mt-1 truncate text-sm font-semibold text-textH">
               {classDescription}
             </div>
@@ -81,10 +84,7 @@ export function CharacterIdentity({
             <span className="text-xs uppercase tracking-wide text-textMuted">
               Nível
             </span>
-
-            <strong className="text-xl text-textH">
-              {totalLevel}
-            </strong>
+            <strong className="text-xl text-textH">{totalLevel}</strong>
           </div>
         </div>
       </div>
@@ -108,7 +108,6 @@ export function CharacterIdentity({
                   character={character}
                   updateCharacter={updateCharacter}
                 />
-
                 <SelectCharacterOwner
                   character={character}
                   updateCharacter={updateCharacter}
@@ -116,7 +115,6 @@ export function CharacterIdentity({
                   getOwner={getOwner}
                   createOwner={createOwner}
                 />
-
                 <SelectCharacterUniqueness
                   character={character}
                   updateCharacter={updateCharacter}
