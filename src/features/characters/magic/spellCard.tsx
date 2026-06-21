@@ -1,4 +1,5 @@
 import { useState } from "react"
+
 import { Button } from "../../../components/ui/Button"
 import {
   CASTING_TIME_NAMES,
@@ -14,6 +15,7 @@ type Props = {
   prepared?: boolean
   source?: SpellSource
   alwaysPrepared?: boolean
+  accessLabel?: string
   onEdit?: () => void
   onRemove?: () => void
   onTogglePrepared?: () => void
@@ -24,6 +26,7 @@ export function SpellCard({
   prepared = false,
   source,
   alwaysPrepared = false,
+  accessLabel,
   onEdit,
   onRemove,
   onTogglePrepared,
@@ -46,9 +49,12 @@ export function SpellCard({
               <span>{formatRange(spell)}</span>
               {formatAreaTiles(spell) ? <span>{formatAreaTiles(spell)}</span> : null}
               <span>{formatSpellOrigin(source)}</span>
+              {accessLabel ? (
+                <span className="font-semibold text-accent">{accessLabel}</span>
+              ) : null}
               {spell.concentration ? <span>Concentração</span> : null}
               {alwaysPrepared ? (
-                <span>Sempre preparada</span>
+                <span>Sempre disponível</span>
               ) : prepared ? (
                 <span>Preparada</span>
               ) : (
@@ -108,6 +114,7 @@ export function SpellCard({
                   <span>{formatCastingTime(spell)}</span>
                   <span>{formatRange(spell)}</span>
                   <span>{formatSpellOrigin(source)}</span>
+                  {accessLabel ? <span>{accessLabel}</span> : null}
                   {spell.concentration ? <span>Concentração</span> : null}
                   {spell.ritual ? <span>Ritual</span> : null}
                 </div>
@@ -124,10 +131,7 @@ export function SpellCard({
 
             <div className="grid gap-4 p-4 text-sm text-text">
               <section>
-                <h3 className="text-sm font-semibold text-textH">
-                  Descrição
-                </h3>
-
+                <h3 className="text-sm font-semibold text-textH">Descrição</h3>
                 <div className="mt-2 whitespace-pre-wrap break-words leading-6">
                   {spell.description?.trim() || "Sem descrição."}
                 </div>
@@ -137,7 +141,6 @@ export function SpellCard({
                 <h3 className="text-sm font-semibold text-textH">
                   Próximos níveis
                 </h3>
-
                 <div className="mt-2 whitespace-pre-wrap break-words leading-6">
                   {spell.higherLevelText?.trim() ||
                     "Sem efeito adicional em níveis superiores."}
@@ -153,88 +156,66 @@ export function SpellCard({
 
 function formatCastingTime(spell: Spell): string {
   const castingTime = spell.castingTime
-
-  if (castingTime.type === "special") {
-    return castingTime.special || "Especial"
-  }
-
+  if (castingTime.type === "special") return castingTime.special || "Especial"
   if (castingTime.type === "reaction") {
     return castingTime.reactionWhen
       ? `Reação: ${castingTime.reactionWhen}`
       : "Reação"
   }
-
-  if (castingTime.value === 1) {
-    return `1 ${CASTING_TIME_NAMES[castingTime.type]}`
-  }
-
+  if (castingTime.value === 1) return `1 ${CASTING_TIME_NAMES[castingTime.type]}`
   return `${castingTime.value} ${CASTING_TIME_NAMES[castingTime.type]}s`
 }
 
 function formatRange(spell: Spell): string {
   const { range } = spell
-
   if (range.origin === "self") return "Pessoal"
   if (range.origin === "touch") return "Toque"
-
   const base = `${range.distance} m`
-
   if (!range.area) return base
-
   return `${base}, ${formatAreaShape(range.area.shape)} de ${range.area.size} m`
 }
 
 function formatAreaShape(shape: NonNullable<Spell["range"]["area"]>["shape"]) {
-  switch (shape) {
-    case "circle":
-      return "círculo"
-    case "square":
-      return "quadrado"
-    case "cone":
-      return "cone"
-    case "line":
-      return "linha"
-    default:
-      return shape
+  const names = {
+    circle: "círculo",
+    square: "quadrado",
+    cone: "cone",
+    line: "linha",
   }
+  return names[shape] ?? shape
 }
 
 function formatSpellOrigin(source?: SpellSource): string {
   if (!source) return "Origem não definida"
-
   if (source.type === "class") {
     return `Origem: ${CLASS_NAMES[source.name as ClassName] ?? source.name}`
   }
-
   if (source.type === "feat") {
     return source.name ? `Origem: Talento (${source.name})` : "Origem: Talento"
   }
-
   if (source.type === "ability") {
-    return source.name
-      ? `Origem: Habilidade (${source.name})`
-      : "Origem: Habilidade"
+    return source.name ? `Origem: Habilidade (${source.name})` : "Origem: Habilidade"
   }
-
+  if (source.type === "race") {
+    return source.name ? `Origem: Raça (${source.name})` : "Origem: Raça"
+  }
+  if (source.type === "equipment") {
+    return source.name
+      ? `Origem: Equipamento (${source.name})`
+      : "Origem: Equipamento"
+  }
   return "Origem não definida"
 }
 
 function formatAreaTiles(spell: Spell): string | null {
   const area = spell.range.area
   if (!area) return null
-
-  const tileSizeM = 1.5
-  const sizeInTiles = area.size / tileSizeM
-
+  const sizeInTiles = area.size / 1.5
   if (area.shape === "circle") {
-    const tiles = Math.round(Math.PI * sizeInTiles * sizeInTiles)
-    return `Ocupa aproximadamente ${tiles} quadrados de 1,5 m`
+    return `Ocupa aproximadamente ${Math.round(Math.PI * sizeInTiles * sizeInTiles)} quadrados de 1,5 m`
   }
-
   if (area.shape === "square") {
-    const tiles = Math.round(sizeInTiles * sizeInTiles)
-    return `Ocupa aproximadamente ${tiles} quadrados de 1,5 m`
+    return `Ocupa aproximadamente ${Math.round(sizeInTiles * sizeInTiles)} quadrados de 1,5 m`
   }
-
   return null
 }
