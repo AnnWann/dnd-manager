@@ -14,8 +14,33 @@ type Props = {
   ) => void
 }
 
+type EquipmentAbility = Ability & {
+  source: "equipment"
+  sourceItemId: string
+  sourceItemName: string
+  originalAbilityId: string
+}
+
+type RaceAbility = Ability & {
+  source: "race"
+  originalAbilityId: string
+}
+
 export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
-  const abilities = character.getCharacterAbilities() ?? []
+  const raceAbilities: RaceAbility[] = (
+    character.get("sheet").race.naturalAbilities ?? []
+  ).map((ability) => ({
+    ...ability,
+    id: `race:${ability.id}`,
+    source: "race",
+    originalAbilityId: ability.id,
+  }))
+
+  const abilities = [
+    ...(character.getCharacterAbilities() ?? []),
+    ...raceAbilities,
+  ]
+
   const [editingAbility, setEditingAbility] = useState<Ability | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -36,7 +61,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
     updateCharacter(character.get("id"), (c) =>
       c.removeAbility(id)
     )
-  } 
+  }
 
   function useAbility(id: string) {
     updateCharacter(character.get("id"), (c) => {
@@ -47,6 +72,10 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
           ability.sourceItemId,
           ability.originalAbilityId,
         )
+      }
+
+      if (ability && isRaceAbility(ability)) {
+        return updateRaceAbilityUsage(c, ability.originalAbilityId, 1)
       }
 
       return c.useAbility(id)
@@ -64,6 +93,10 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
         )
       }
 
+      if (ability && isRaceAbility(ability)) {
+        return updateRaceAbilityUsage(c, ability.originalAbilityId, -1)
+      }
+
       return c.restoreAbility(id)
     })
   }
@@ -78,11 +111,15 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
             <div>
               <div className="text-sm font-semibold text-textH">Habilidades</div>
               <div className="mt-1 text-xs text-text">
-                Gerencie habilidades e seus usos.
+                Gerencie habilidades próprias e acompanhe habilidades raciais e de equipamentos.
               </div>
             </div>
 
-            <Button size="sm" variant="secondary" onClick={() => {console.log('clicado'); setCreating(true)}}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setCreating(true)}
+            >
               + Adicionar habilidade
             </Button>
           </div>
@@ -90,32 +127,46 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
 
         <CardContent>
           {sortedAbilities.length === 0 ? (
-            <p className="text-xs text-text">Adicione habilidades livres da ficha.</p>
+            <p className="text-xs text-text">
+              Adicione habilidades livres, raciais ou concedidas por equipamentos.
+            </p>
           ) : (
             <div className="grid gap-3">
-              {sortedAbilities.map((ability) => (
-                <AbilityCard
-                  key={ability.id}
-                  ability={ability}
-                  onEdit={
-                    isEquipmentAbility(ability)
-                      ? undefined
-                      : () => setEditingAbility(ability)
-                  }
-                  onRemove={
-                    isEquipmentAbility(ability)
-                      ? undefined
-                      : () => removeAbility(ability.id)
-                  }
-                  onUse={() => useAbility(ability.id)}
-                  onRestore={() => restoreAbility(ability.id)}
-                />
-              ))}
+              {sortedAbilities.map((ability) => {
+                const equipmentAbility = isEquipmentAbility(ability)
+                const raceAbility = isRaceAbility(ability)
+                const grantedAbility = equipmentAbility || raceAbility
+
+                return (
+                  <AbilityCard
+                    key={ability.id}
+                    ability={ability}
+                    sourceLabel={
+                      equipmentAbility
+                        ? `Equipamento: ${ability.sourceItemName}`
+                        : raceAbility
+                          ? "Raça"
+                          : undefined
+                    }
+                    onEdit={
+                      grantedAbility
+                        ? undefined
+                        : () => setEditingAbility(ability)
+                    }
+                    onRemove={
+                      grantedAbility
+                        ? undefined
+                        : () => removeAbility(ability.id)
+                    }
+                    onUse={() => useAbility(ability.id)}
+                    onRestore={() => restoreAbility(ability.id)}
+                  />
+                )
+              })}
             </div>
           )}
         </CardContent>
       </Card>
-
 
       <AbilityDialog
         open={dialogOpen}
@@ -130,13 +181,37 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   )
 }
 
-type EquipmentAbility = Ability & {
-  source: "equipment"
-  sourceItemId: string
-  sourceItemName: string
-  originalAbilityId: string
+function updateRaceAbilityUsage(
+  character: CharacterTemplate,
+  abilityId: string,
+  delta: 1 | -1,
+): CharacterTemplate {
+  const race = character.get("sheet").race
+
+  return character.withSheet("race", {
+    ...race,
+    naturalAbilities: (race.naturalAbilities ?? []).map((ability) => {
+      if (ability.id !== abilityId || !ability.usage) return ability
+      if (ability.usage.reset === "spellSlot") return ability
+
+      return {
+        ...ability,
+        usage: {
+          ...ability.usage,
+          used: Math.min(
+            ability.usage.max,
+            Math.max(0, ability.usage.used + delta),
+          ),
+        },
+      }
+    }),
+  })
 }
 
 function isEquipmentAbility(ability: Ability): ability is EquipmentAbility {
   return "source" in ability && ability.source === "equipment"
+}
+
+function isRaceAbility(ability: Ability): ability is RaceAbility {
+  return "source" in ability && ability.source === "race"
 }
