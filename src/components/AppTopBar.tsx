@@ -10,6 +10,10 @@ const PAGE_METADATA: Record<string, PageMetadata> = {
     title: "Personagens",
     description: "Ficha, habilidades, equipamentos, inventário e magias.",
   },
+  "/party-inventory": {
+    title: "Inventário do Grupo",
+    description: "Itens compartilhados, transferências e suprimentos da equipe.",
+  },
   "/magic": {
     title: "Biblioteca de Magias",
     description: "Pesquise, consulte e gerencie magias.",
@@ -27,7 +31,6 @@ const DEFAULT_PAGE: PageMetadata = {
 
 export function AppHeader() {
   const location = useLocation()
-
   const page = PAGE_METADATA[location.pathname] ?? DEFAULT_PAGE
 
   return (
