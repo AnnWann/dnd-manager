@@ -25,8 +25,14 @@ export function Attributes({
 
       <div className="grid grid-cols-2 gap-2 xl:grid-cols-1">
         {ATTRIBUTE_KEYS.map((attribute) => {
-          const score =
+          const baseScore =
             character.get("sheet").attributes[attribute]
+
+          const racialBonus =
+            character.get("sheet").race.attributeBonus?.[attribute] ?? 0
+
+          const effectiveScore =
+            character.getEffectiveAttribute(attribute)
 
           const modifier =
             character.getEffectiveAttributeModifier(attribute)
@@ -34,38 +40,60 @@ export function Attributes({
           return (
             <div
               key={attribute}
-              className="grid grid-cols-[52px_1fr_54px] items-center gap-2 rounded-lg border border-border bg-bg-subtle p-2"
+              className="grid grid-cols-[52px_minmax(0,1fr)_72px] items-center gap-2 rounded-lg border border-border bg-bg-subtle p-2"
             >
               <div className="text-xs font-bold uppercase tracking-wide text-textH">
                 {attributeShort(attribute)}
               </div>
 
-              <div className="text-center text-2xl font-bold text-textH">
-                {formatSigned(modifier)}
+              <div className="min-w-0 text-center">
+                <div className="text-[10px] uppercase tracking-wide text-textMuted">
+                  Total
+                </div>
+
+                <div className="text-2xl font-bold leading-none text-textH">
+                  {effectiveScore}
+                </div>
+
+                <div className="mt-1 text-[11px] font-semibold text-text">
+                  Mod. {formatSigned(modifier)}
+                </div>
               </div>
 
-              <Input
-                type="number"
-                aria-label={`Valor de ${attributeShort(attribute)}`}
-                className="h-8 px-1 text-center text-xs"
-                value={score}
-                min={1}
-                max={30}
-                onChange={(event) => {
-                  const nextScore = clampInt(
-                    Number(event.target.value),
-                    1,
-                    30,
-                  )
+              <label className="grid min-w-0 gap-1 text-center">
+                <span className="text-[10px] uppercase tracking-wide text-textMuted">
+                  Base
+                </span>
 
-                  updateCharacter(character.get("id"), (current) =>
-                    current.withSheet("attributes", {
-                      ...current.get("sheet").attributes,
-                      [attribute]: nextScore,
-                    }),
-                  )
-                }}
-              />
+                <Input
+                  type="number"
+                  aria-label={`Valor base de ${attributeShort(attribute)}`}
+                  className="h-8 px-1 text-center text-xs"
+                  value={baseScore}
+                  min={1}
+                  max={30}
+                  onChange={(event) => {
+                    const nextScore = clampInt(
+                      Number(event.target.value),
+                      1,
+                      30,
+                    )
+
+                    updateCharacter(character.get("id"), (current) =>
+                      current.withSheet("attributes", {
+                        ...current.get("sheet").attributes,
+                        [attribute]: nextScore,
+                      }),
+                    )
+                  }}
+                />
+
+                {racialBonus !== 0 ? (
+                  <span className="truncate text-[10px] font-semibold text-accent">
+                    Raça {formatSigned(racialBonus)}
+                  </span>
+                ) : null}
+              </label>
             </div>
           )
         })}
