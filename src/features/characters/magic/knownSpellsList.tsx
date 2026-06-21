@@ -45,6 +45,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
   const [preparedFilter, setPreparedFilter] =
     useState<PreparedFilter>("all")
   const [classFilter, setClassFilter] = useState<ClassFilter>("all")
+  const classes = character.get("sheet").classes ?? []
 
   const regularSpells = (
     character.get("magic")?.spells.knownSpells ?? []
@@ -52,13 +53,19 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     const spell = getSpellByIndex(entry.spells.id)
     if (!spell) return []
 
+    const alwaysPrepared = isAlwaysAvailableSpell(
+      spell,
+      entry.source,
+      classes,
+    )
+
     return [
       {
         key: `known:${entry.source.type}:${entry.source.sourceId}:${spell.index}`,
         spell,
         source: entry.source,
-        prepared: entry.spells.prepared,
-        alwaysPrepared: false,
+        prepared: alwaysPrepared || entry.spells.prepared,
+        alwaysPrepared,
         removable: true,
       },
     ]
@@ -96,7 +103,6 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     ...regularSpells,
     ...grantedSpells,
   ]
-  const classes = character.get("sheet").classes ?? []
   const spellLimits = getSpellClassLimits(character, regularSpells)
 
   const filteredSpells = spells.filter(({ prepared, source }) => {
@@ -126,6 +132,8 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
 
     const preparedCount = regularSpells.filter(
       (knownSpell) =>
+        knownSpell.spell.slotLevel > 0 &&
+        !knownSpell.alwaysPrepared &&
         knownSpell.prepared &&
         knownSpell.source.type === "class" &&
         knownSpell.source.name === entry.source.name,
@@ -173,7 +181,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
 
         <div className="mt-3 grid gap-2 md:grid-cols-2">
           <select
-            className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
+            className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
             value={preparedFilter}
             onChange={(event) =>
               setPreparedFilter(event.target.value as PreparedFilter)
@@ -185,7 +193,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
           </select>
 
           <select
-            className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
+            className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
             value={classFilter}
             onChange={(event) =>
               setClassFilter(event.target.value as ClassFilter)
@@ -247,6 +255,22 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
   )
 }
 
+function isAlwaysAvailableSpell(
+  spell: Spell,
+  source: SpellSource,
+  classes: CharacterClassInterface[],
+): boolean {
+  if (spell.slotLevel === 0) return true
+  if (source.type !== "class") return true
+
+  const classData = classes.find(
+    (entry) => entry.className === source.name,
+  )
+
+  if (!classData?.knownSpells) return true
+  return classData.knownSpells.mode === "limited"
+}
+
 function getSpellClassLimits(
   character: CharacterTemplate,
   spells: DisplaySpellEntry[],
@@ -265,6 +289,8 @@ function getSpellClassLimits(
       const preparedLimit = getPreparedSpellLimit(character, classData)
       const prepared = spells.filter(
         (entry) =>
+          entry.spell.slotLevel > 0 &&
+          !entry.alwaysPrepared &&
           entry.prepared &&
           entry.source.type === "class" &&
           entry.source.name === classData.className,
