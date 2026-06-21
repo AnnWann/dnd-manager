@@ -6,6 +6,7 @@ export interface Ability {
   description?: string
   usage?: Usage
   kind?: AbilityKind
+  category?: AbilityCategory
   actionKind?: AbilityActionKind
   trigger?: Trigger
   grantedSpells?: SpellGrant[]
@@ -19,6 +20,8 @@ export interface Usage {
   cooldownUnit?: AbilityUsageCooldownUnit
   cooldownRemaining?: number
 }
+
+export type AbilityCategory = 'general' | 'invocation' | 'feat'
 
 export type AbilityUsageResetKind = 'turn' | 'cooldown' | 'shortRest' | 'longRest' | 'limited' | 'spellSlot'
 
