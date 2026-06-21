@@ -5,7 +5,6 @@ import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
-import { cn } from "../../../lib/cn"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type {
   Proficiency,
@@ -29,6 +28,13 @@ type CategoryOption = {
   value: ManagedProficiencyCategory
   label: string
   description: string
+}
+
+type DisplayProficiency = {
+  proficiency: Proficiency & {
+    category: ManagedProficiencyCategory
+  }
+  source: "character" | "race"
 }
 
 const CATEGORY_OPTIONS: CategoryOption[] = [
@@ -95,51 +101,54 @@ export function CharacterProficienciesTab({
     useState<ManagedProficiencyCategory | "all">("all")
   const [search, setSearch] = useState("")
 
-  const proficiencies =
-    character.get("sheet").proficiencies ?? []
-
-  const managedProficiencies = proficiencies.filter(
-    (proficiency): proficiency is Proficiency & {
-      category: ManagedProficiencyCategory
-    } =>
-      proficiency.category !== "skill" &&
-      proficiency.category !== "saving-throw",
+  const characterProficiencies = toManagedProficiencies(
+    character.get("sheet").proficiencies ?? [],
   )
+  const racialProficiencies = toManagedProficiencies(
+    character.get("sheet").race.proficiencies ?? [],
+  )
+
+  const displayedProficiencies: DisplayProficiency[] = [
+    ...characterProficiencies.map((proficiency) => ({
+      proficiency,
+      source: "character" as const,
+    })),
+    ...racialProficiencies.map((proficiency) => ({
+      proficiency,
+      source: "race" as const,
+    })),
+  ]
 
   const filteredProficiencies = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase()
 
-    return managedProficiencies.filter((proficiency) => {
+    return displayedProficiencies.filter(({ proficiency }) => {
       const matchesCategory =
         activeCategory === "all" ||
         proficiency.category === activeCategory
 
       const matchesSearch =
         normalizedSearch.length === 0 ||
-        proficiency.name
-          .toLocaleLowerCase()
-          .includes(normalizedSearch) ||
-        proficiency.notes
-          ?.toLocaleLowerCase()
-          .includes(normalizedSearch)
+        proficiency.name.toLocaleLowerCase().includes(normalizedSearch) ||
+        proficiency.notes?.toLocaleLowerCase().includes(normalizedSearch)
 
       return matchesCategory && matchesSearch
     })
-  }, [activeCategory, managedProficiencies, search])
+  }, [activeCategory, displayedProficiencies, search])
 
-  const groupedProficiencies = useMemo(() => {
-    return CATEGORY_OPTIONS.map((category) => ({
-      category,
-      entries: filteredProficiencies.filter(
-        (proficiency) =>
-          proficiency.category === category.value,
-      ),
-    })).filter((group) => group.entries.length > 0)
-  }, [filteredProficiencies])
+  const groupedProficiencies = useMemo(
+    () =>
+      CATEGORY_OPTIONS.map((category) => ({
+        category,
+        entries: filteredProficiencies.filter(
+          ({ proficiency }) =>
+            proficiency.category === category.value,
+        ),
+      })).filter((group) => group.entries.length > 0),
+    [filteredProficiencies],
+  )
 
-  function addProficiency(
-    proficiency: Omit<Proficiency, "id">,
-  ) {
+  function addProficiency(proficiency: Omit<Proficiency, "id">) {
     const nextProficiency: Proficiency = {
       id: crypto.randomUUID(),
       ...proficiency,
@@ -174,8 +183,7 @@ export function CharacterProficienciesTab({
             </h2>
 
             <p className="mt-1 text-xs text-textMuted">
-              Registre treinamentos com armas, armaduras, ferramentas,
-              idiomas, montarias e veículos.
+              Proficiências próprias e concedidas pela raça do personagem.
             </p>
           </div>
 
@@ -203,10 +211,7 @@ export function CharacterProficienciesTab({
             <option value="all">Todas as categorias</option>
 
             {CATEGORY_OPTIONS.map((category) => (
-              <option
-                key={category.value}
-                value={category.value}
-              >
+              <option key={category.value} value={category.value}>
                 {category.label}
               </option>
             ))}
@@ -219,9 +224,7 @@ export function CharacterProficienciesTab({
               className="pl-9"
               value={search}
               placeholder="Buscar proficiência..."
-              onChange={(event) =>
-                setSearch(event.target.value)
-              }
+              onChange={(event) => setSearch(event.target.value)}
             />
           </div>
         </div>
@@ -242,15 +245,17 @@ export function CharacterProficienciesTab({
         <EmptyState
           onAdd={() => setModalOpen(true)}
           hasFilters={
-            search.trim().length > 0 ||
-            activeCategory !== "all"
+            search.trim().length > 0 || activeCategory !== "all"
           }
         />
       )}
 
       <AddProficiencyModal
         open={modalOpen}
-        existingProficiencies={managedProficiencies}
+        existingProficiencies={[
+          ...characterProficiencies,
+          ...racialProficiencies,
+        ]}
         onClose={() => setModalOpen(false)}
         onSave={(proficiency) => {
           addProficiency(proficiency)
@@ -267,7 +272,7 @@ function ProficiencyGroup({
   onRemove,
 }: {
   category: CategoryOption
-  entries: Proficiency[]
+  entries: DisplayProficiency[]
   onRemove: (proficiencyId: string) => void
 }) {
   return (
@@ -283,14 +288,22 @@ function ProficiencyGroup({
       </div>
 
       <div className="grid gap-2">
-        {entries.map((proficiency) => (
+        {entries.map(({ proficiency, source }) => (
           <div
-            key={proficiency.id}
+            key={`${source}:${proficiency.id}`}
             className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-border bg-bg-subtle px-3 py-2.5"
           >
             <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-textH">
-                {proficiency.name}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="truncate text-sm font-medium text-textH">
+                  {proficiency.name}
+                </div>
+
+                {source === "race" ? (
+                  <span className="rounded-full bg-accentBg px-2 py-0.5 text-[10px] font-semibold text-accent">
+                    Raça
+                  </span>
+                ) : null}
               </div>
 
               {proficiency.notes ? (
@@ -300,15 +313,21 @@ function ProficiencyGroup({
               ) : null}
             </div>
 
-            <button
-              type="button"
-              title="Remover proficiência"
-              aria-label={`Remover ${proficiency.name}`}
-              onClick={() => onRemove(proficiency.id)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-textMuted transition-colors hover:border-danger hover:bg-dangerBg hover:text-danger"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+            {source === "character" ? (
+              <button
+                type="button"
+                title="Remover proficiência"
+                aria-label={`Remover ${proficiency.name}`}
+                onClick={() => onRemove(proficiency.id)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-textMuted transition-colors hover:border-danger hover:bg-dangerBg hover:text-danger"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            ) : (
+              <span className="text-[10px] font-medium text-textMuted">
+                Gerenciada em Raça
+              </span>
+            )}
           </div>
         ))}
       </div>
@@ -466,10 +485,7 @@ function AddProficiencyModal({
               }}
             >
               {CATEGORY_OPTIONS.map((option) => (
-                <option
-                  key={option.value}
-                  value={option.value}
-                >
+                <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
@@ -511,9 +527,7 @@ function AddProficiencyModal({
               className="min-h-20"
               value={notes}
               placeholder="Ex: concedido pela origem, por treinamento, por item mágico..."
-              onChange={(event) =>
-                setNotes(event.target.value)
-              }
+              onChange={(event) => setNotes(event.target.value)}
             />
           </label>
 
@@ -533,16 +547,30 @@ function AddProficiencyModal({
             Cancelar
           </Button>
 
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={save}
-          >
+          <Button size="sm" variant="primary" onClick={save}>
             <Plus className="h-4 w-4" />
             Adicionar
           </Button>
         </div>
       </div>
     </div>
+  )
+}
+
+function toManagedProficiencies(
+  proficiencies: Proficiency[],
+): Array<
+  Proficiency & {
+    category: ManagedProficiencyCategory
+  }
+> {
+  return proficiencies.filter(
+    (
+      proficiency,
+    ): proficiency is Proficiency & {
+      category: ManagedProficiencyCategory
+    } =>
+      proficiency.category !== "skill" &&
+      proficiency.category !== "saving-throw",
   )
 }
