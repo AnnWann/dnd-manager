@@ -35,11 +35,24 @@ export type PartySupplyCalculation = {
   supportedLongRests: number
 }
 
-export type SupplyConsumptionResult = {
+export type LongRestSupplySelection = {
+  itemId: string
+  portions: number
+}
+
+export type SupplySelectionTotals = {
+  selectedPortions: number
+  food: number
+  drink: number
+}
+
+export type SelectedSupplyConsumptionResult = {
   items: Itemmable[]
-  requestedPortions: number
-  consumedPortions: number
-  missingPortions: number
+  valid: boolean
+  selectedFood: number
+  selectedDrink: number
+  missingFood: number
+  missingDrink: number
 }
 
 export function getDefaultRaceSupplyConsumption(
@@ -165,7 +178,7 @@ export function calculatePartySupplies(
     drinkPerLongRest,
     foodLongRests,
     drinkLongRests,
-    supportedLongRests: foodLongRests,
+    supportedLongRests: Math.min(foodLongRests, drinkLongRests),
   }
 }
 
@@ -183,72 +196,254 @@ export function getTotalSupplyPortions(item: SupplyItem): number {
 }
 
 export function getAvailableFoodPortions(items: Itemmable[]): number {
-  return items.reduce((total, item) => {
-    if (!isSupplyItem(item)) return total
-    if (
-      item.supplyCategory !== "food" &&
-      item.supplyCategory !== "mixed"
-    ) {
-      return total
-    }
-
-    return total + getTotalSupplyPortions(item)
-  }, 0)
+  return getAvailableSupplyPortions(items, "food")
 }
 
-export function consumeFoodPortions(
+export function getAvailableDrinkPortions(items: Itemmable[]): number {
+  return getAvailableSupplyPortions(items, "drink")
+}
+
+export function getSupplySelectionTotals(
   items: Itemmable[],
-  requestedPortions: number,
-): SupplyConsumptionResult {
-  const requested = roundPortions(
-    Math.max(0, Number(requestedPortions) || 0),
+  selection: LongRestSupplySelection[],
+): SupplySelectionTotals {
+  const selectedById = normalizeSelection(selection)
+  let selectedPortions = 0
+  let food = 0
+  let drink = 0
+
+  for (const item of items) {
+    if (!isSupplyItem(item)) continue
+
+    const requested = selectedById.get(item.id) ?? 0
+    const selected = Math.min(
+      getTotalSupplyPortions(item),
+      Math.max(0, requested),
+    )
+
+    if (selected <= 0) continue
+
+    selectedPortions = roundPortions(selectedPortions + selected)
+
+    if (item.supplyCategory === "food") {
+      food = roundPortions(food + selected)
+    } else if (item.supplyCategory === "drink") {
+      drink = roundPortions(drink + selected)
+    } else if (item.supplyCategory === "mixed") {
+      food = roundPortions(food + selected)
+      drink = roundPortions(drink + selected)
+    }
+  }
+
+  return { selectedPortions, food, drink }
+}
+
+export function createAutomaticLongRestSelection(
+  items: Itemmable[],
+  requiredFood: number,
+  requiredDrink: number,
+): LongRestSupplySelection[] {
+  const selected = new Map<string, number>()
+  let foodMissing = roundPortions(Math.max(0, requiredFood))
+  let drinkMissing = roundPortions(Math.max(0, requiredDrink))
+
+  const supplies = items.filter(isSupplyItem)
+  const mixed = supplies.filter(
+    (item) =>
+      item.supplyCategory === "mixed" &&
+      getTotalSupplyPortions(item) > 0,
   )
 
-  if (requested <= 0) {
+  takeFromSupplies(
+    mixed,
+    Math.min(foodMissing, drinkMissing),
+    selected,
+    (amount) => {
+      foodMissing = roundPortions(foodMissing - amount)
+      drinkMissing = roundPortions(drinkMissing - amount)
+    },
+  )
+
+  takeFromSupplies(
+    supplies.filter((item) => item.supplyCategory === "food"),
+    foodMissing,
+    selected,
+    (amount) => {
+      foodMissing = roundPortions(foodMissing - amount)
+    },
+  )
+
+  takeFromSupplies(
+    supplies.filter((item) => item.supplyCategory === "drink"),
+    drinkMissing,
+    selected,
+    (amount) => {
+      drinkMissing = roundPortions(drinkMissing - amount)
+    },
+  )
+
+  if (foodMissing > 0 || drinkMissing > 0) {
+    takeFromSupplies(
+      mixed,
+      Math.max(foodMissing, drinkMissing),
+      selected,
+      (amount) => {
+        foodMissing = roundPortions(Math.max(0, foodMissing - amount))
+        drinkMissing = roundPortions(Math.max(0, drinkMissing - amount))
+      },
+    )
+  }
+
+  return Array.from(selected.entries())
+    .filter(([, portions]) => portions > 0)
+    .map(([itemId, portions]) => ({ itemId, portions }))
+}
+
+export function consumeSelectedSupplies(
+  items: Itemmable[],
+  selection: LongRestSupplySelection[],
+  requiredFood: number,
+  requiredDrink: number,
+): SelectedSupplyConsumptionResult {
+  const selectedById = normalizeSelection(selection)
+  const totals = getSupplySelectionTotals(items, selection)
+  const missingFood = roundPortions(
+    Math.max(0, requiredFood - totals.food),
+  )
+  const missingDrink = roundPortions(
+    Math.max(0, requiredDrink - totals.drink),
+  )
+
+  const selectionIsValid = Array.from(selectedById.entries()).every(
+    ([itemId, portions]) => {
+      const item = items.find(
+        (candidate) => candidate.id === itemId && isSupplyItem(candidate),
+      )
+
+      return Boolean(
+        item &&
+          portions >= 0 &&
+          portions <= getTotalSupplyPortions(item as SupplyItem),
+      )
+    },
+  )
+  const valid =
+    selectionIsValid && missingFood <= 0 && missingDrink <= 0
+
+  if (!valid) {
     return {
       items,
-      requestedPortions: requested,
-      consumedPortions: 0,
-      missingPortions: 0,
+      valid: false,
+      selectedFood: totals.food,
+      selectedDrink: totals.drink,
+      missingFood,
+      missingDrink,
     }
   }
 
-  const nextItems = [...items]
-  let remainingToConsume = requested
+  const nextItems: Itemmable[] = []
 
-  for (const category of ["food", "mixed"] as const) {
-    for (let index = 0; index < nextItems.length; index += 1) {
-      if (remainingToConsume <= 0) break
-
-      const item = nextItems[index]
-      if (!isSupplyItem(item) || item.supplyCategory !== category) {
-        continue
-      }
-
-      const available = getTotalSupplyPortions(item)
-      if (available <= 0) continue
-
-      const consumedFromItem = Math.min(available, remainingToConsume)
-      const remainingInItem = roundPortions(available - consumedFromItem)
-
-      nextItems[index] = {
-        ...item,
-        remainingSupplyUnits: remainingInItem,
-      }
-      remainingToConsume = roundPortions(
-        remainingToConsume - consumedFromItem,
-      )
+  for (const item of items) {
+    if (!isSupplyItem(item)) {
+      nextItems.push(item)
+      continue
     }
-  }
 
-  const consumed = roundPortions(requested - remainingToConsume)
+    const selectedPortions = selectedById.get(item.id) ?? 0
+    if (selectedPortions <= 0) {
+      nextItems.push(item)
+      continue
+    }
+
+    const remaining = roundPortions(
+      getTotalSupplyPortions(item) - selectedPortions,
+    )
+
+    if (remaining <= 0) continue
+
+    const portionsPerItem = Math.max(
+      0,
+      Number(item.supplyUnitsPerItem) || 0,
+    )
+    const nextQuantity =
+      portionsPerItem > 0
+        ? Math.max(1, Math.ceil(remaining / portionsPerItem))
+        : Math.max(1, item.quantity ?? 1)
+
+    nextItems.push({
+      ...item,
+      quantity: nextQuantity,
+      remainingSupplyUnits: remaining,
+    })
+  }
 
   return {
     items: nextItems,
-    requestedPortions: requested,
-    consumedPortions: consumed,
-    missingPortions: roundPortions(remainingToConsume),
+    valid: true,
+    selectedFood: totals.food,
+    selectedDrink: totals.drink,
+    missingFood: 0,
+    missingDrink: 0,
   }
+}
+
+function getAvailableSupplyPortions(
+  items: Itemmable[],
+  resource: "food" | "drink",
+): number {
+  return items.reduce((total, item) => {
+    if (!isSupplyItem(item)) return total
+
+    const contributes =
+      item.supplyCategory === resource ||
+      item.supplyCategory === "mixed"
+
+    return contributes
+      ? roundPortions(total + getTotalSupplyPortions(item))
+      : total
+  }, 0)
+}
+
+function takeFromSupplies(
+  supplies: SupplyItem[],
+  requested: number,
+  selected: Map<string, number>,
+  onTake: (amount: number) => void,
+) {
+  let remaining = roundPortions(Math.max(0, requested))
+
+  for (const item of supplies) {
+    if (remaining <= 0) break
+
+    const alreadySelected = selected.get(item.id) ?? 0
+    const available = roundPortions(
+      getTotalSupplyPortions(item) - alreadySelected,
+    )
+    if (available <= 0) continue
+
+    const amount = Math.min(available, remaining)
+    selected.set(item.id, roundPortions(alreadySelected + amount))
+    onTake(amount)
+    remaining = roundPortions(remaining - amount)
+  }
+}
+
+function normalizeSelection(
+  selection: LongRestSupplySelection[],
+): Map<string, number> {
+  const selectedById = new Map<string, number>()
+
+  for (const entry of selection) {
+    const amount = roundPortions(
+      Math.max(0, Number(entry.portions) || 0),
+    )
+    selectedById.set(
+      entry.itemId,
+      roundPortions((selectedById.get(entry.itemId) ?? 0) + amount),
+    )
+  }
+
+  return selectedById
 }
 
 function isPartySupplyConsumer(character: CharacterTemplate): boolean {
