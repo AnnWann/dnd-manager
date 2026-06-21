@@ -13,8 +13,8 @@ import { useCharacterContext } from "../contexts/characterContext"
 import { usePartyInventorySettings } from "../contexts/partyInventorySettingsContext"
 import { InventoryEditor } from "../features/characters/inventory/inventoryEditor"
 import { TransferItemDialog } from "../features/characters/inventory/transferItemDialog"
+import { formatRaceName } from "../lib/raceNames"
 import type { Itemmable } from "../models/items/item"
-import type { Race } from "../models/races/Race"
 import {
   calculatePartySupplies,
   STANDARD_PORTIONS_PER_BARREL,
@@ -401,19 +401,6 @@ function formatLongRestEstimate(
   if (consumerCount === 0) return "Sem membros"
   if (!Number.isFinite(value)) return "Não é consumida"
   return formatNumber(Math.max(0, value))
-}
-
-function formatRaceName(race: Race): string {
-  const labels: Partial<Record<Race, string>> = {
-    "deep-gnome": "Gnomo das Profundezas",
-    gnome: "Gnomo",
-    goliath: "Golias",
-    "half-giant": "Meio-gigante",
-    halfling: "Halfling",
-    human: "Humano",
-  }
-
-  return labels[race] ?? race.replace(/-/g, " ")
 }
 
 function formatNumber(value: number): string {
