@@ -58,7 +58,6 @@ export function getEffectiveAttribute(
   character: CharacterTemplate,
   attribute: Attribute,
 ): number {
-
   const racialBonus =
     character.get("sheet").race.attributeBonus?.[attribute] ?? 0
 
@@ -139,12 +138,12 @@ export function getEffectivePassivePerception(
   character: CharacterTemplate,
 ): number {
   let wisdomModifier = getEffectiveAttributeModifier(character, "wis")
-  const perceptionProficiency = character.get('sheet').skills.perception
+  const perceptionProficiency = character.get("sheet").skills.perception
 
-  if (perceptionProficiency === 'proficient')
+  if (perceptionProficiency === "proficient")
     wisdomModifier += getProficiencyBonus(character)
 
-  if (perceptionProficiency === 'expertise')
+  if (perceptionProficiency === "expertise")
     wisdomModifier += getProficiencyBonus(character) * 2
 
   return applyBonuses(
@@ -155,7 +154,7 @@ export function getEffectivePassivePerception(
 
 export function getEffectiveMobility(character: CharacterTemplate): number {
   const raceSpeedBonus =
-  character.get("sheet").race.speedBonus ?? 0
+    character.get("sheet").race.speedBonus ?? 0
 
   const baseSpeed =
     (character.get("sheet").stats.mobility ?? 9) + raceSpeedBonus
@@ -171,11 +170,15 @@ export function getEffectiveWeaponAttackBonus(
   weapon: Weapon,
   baseValue: number,
 ): number {
-  const weaponBonus = weapon.bonuses?.attack?.bonus
+  const weaponAttackBonus = weapon.bonuses?.attack?.bonus
+  const generalAttackBonuses = weapon.bonuses?.attackBonus ?? []
 
   return applyBonuses(
     baseValue,
-    weaponBonus ? [weaponBonus] : [],
+    [
+      ...generalAttackBonuses,
+      ...(weaponAttackBonus ? [weaponAttackBonus] : []),
+    ],
   )
 }
 
@@ -236,7 +239,6 @@ function getArmorDexBonus(character: CharacterTemplate): number {
   const dex = getEffectiveAttributeModifier(character, "dex")
 
   if (!armor) return dex
-
   if (armor.armorType === "light") return dex
   if (armor.armorType === "medium") return Math.min(dex, 2)
   if (armor.armorType === "heavy") return 0
