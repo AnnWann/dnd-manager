@@ -47,11 +47,11 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
   const [classFilter, setClassFilter] = useState<ClassFilter>("all")
   const classes = character.get("sheet").classes ?? []
 
-  const regularSpells = (
-    character.get("magic")?.spells.knownSpells ?? []
-  ).flatMap<DisplaySpellEntry>((entry) => {
+  const regularSpells: DisplaySpellEntry[] = []
+
+  for (const entry of character.get("magic")?.spells.knownSpells ?? []) {
     const spell = getSpellByIndex(entry.spells.id)
-    if (!spell) return []
+    if (!spell) continue
 
     const alwaysPrepared = isAlwaysAvailableSpell(
       spell,
@@ -59,45 +59,41 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       classes,
     )
 
-    return [
-      {
-        key: `known:${entry.source.type}:${entry.source.sourceId}:${spell.index}`,
-        spell,
-        source: entry.source,
-        prepared: alwaysPrepared || entry.spells.prepared,
-        alwaysPrepared,
-        removable: true,
-      },
-    ]
-  })
+    regularSpells.push({
+      key: `known:${entry.source.type}:${entry.source.sourceId}:${spell.index}`,
+      spell,
+      source: entry.source,
+      prepared: alwaysPrepared || entry.spells.prepared,
+      alwaysPrepared,
+      removable: true,
+    })
+  }
 
-  const grantedSpells = getCharacterGrantedSpells(character).flatMap<DisplaySpellEntry>(
-    (entry) => {
-      const spell = getSpellByIndex(entry.index)
-      if (!spell) return []
+  const grantedSpells: DisplaySpellEntry[] = []
 
-      const remaining = entry.usage
-        ? Math.max(0, entry.usage.max - entry.usage.used)
-        : undefined
+  for (const entry of getCharacterGrantedSpells(character)) {
+    const spell = getSpellByIndex(entry.index)
+    if (!spell) continue
 
-      return [
-        {
-          key: entry.key,
-          spell,
-          source: entry.source,
-          prepared: true,
-          alwaysPrepared: true,
-          removable: false,
-          accessLabel:
-            entry.castingMode === "known"
-              ? "Usa espaços normais"
-              : entry.usage
-                ? `Pela origem: ${remaining}/${entry.usage.max} usos`
-                : "Apenas pela origem",
-        },
-      ]
-    },
-  )
+    const remaining = entry.usage
+      ? Math.max(0, entry.usage.max - entry.usage.used)
+      : undefined
+
+    grantedSpells.push({
+      key: entry.key,
+      spell,
+      source: entry.source,
+      prepared: true,
+      alwaysPrepared: true,
+      removable: false,
+      accessLabel:
+        entry.castingMode === "known"
+          ? "Usa espaços normais"
+          : entry.usage
+            ? `Pela origem: ${remaining}/${entry.usage.max} usos`
+            : "Apenas pela origem",
+    })
+  }
 
   const spells: DisplaySpellEntry[] = [
     ...regularSpells,
