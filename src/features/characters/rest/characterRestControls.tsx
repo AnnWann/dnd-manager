@@ -5,11 +5,15 @@ import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
-  takeLongRest,
   takeShortRest,
   type HitDiceConsumption,
 } from "../../../models/characters/characterRest"
 import type { DieSides } from "../../../models/dice/Die"
+import type { Itemmable } from "../../../models/items/item"
+import {
+  getAvailableFoodPortions,
+  getEffectiveRaceSupplyConsumption,
+} from "../../../models/supplies/partySupply"
 
 const DIE_ORDER: DieSides[] = [
   "d2",
@@ -25,15 +29,19 @@ const DIE_ORDER: DieSides[] = [
 
 type Props = {
   character: CharacterTemplate
+  partyInventory: Itemmable[]
   updateCharacter: (
     characterId: string,
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) => void
+  completeLongRest: (characterId: string) => void
 }
 
 export function CharacterRestControls({
   character,
+  partyInventory,
   updateCharacter,
+  completeLongRest,
 }: Props) {
   const [shortRestOpen, setShortRestOpen] = useState(false)
   const [longRestOpen, setLongRestOpen] = useState(false)
@@ -48,10 +56,8 @@ export function CharacterRestControls({
     setShortRestOpen(false)
   }
 
-  function completeLongRest() {
-    updateCharacter(character.get("id"), (current) =>
-      takeLongRest(current),
-    )
+  function confirmLongRest() {
+    completeLongRest(character.get("id"))
     setLongRestOpen(false)
   }
 
@@ -98,8 +104,10 @@ export function CharacterRestControls({
 
       <LongRestDialog
         open={longRestOpen}
+        character={character}
+        partyInventory={partyInventory}
         onClose={() => setLongRestOpen(false)}
-        onConfirm={completeLongRest}
+        onConfirm={confirmLongRest}
       />
     </>
   )
@@ -279,14 +287,24 @@ function ShortRestDialog({
 
 function LongRestDialog({
   open,
+  character,
+  partyInventory,
   onClose,
   onConfirm,
 }: {
   open: boolean
+  character: CharacterTemplate
+  partyInventory: Itemmable[]
   onClose: () => void
   onConfirm: () => void
 }) {
   if (!open) return null
+
+  const foodCost = getEffectiveRaceSupplyConsumption(
+    character.get("sheet").race,
+  ).food
+  const availableFood = getAvailableFoodPortions(partyInventory)
+  const missingFood = Math.max(0, foodCost - availableFood)
 
   return (
     <div
@@ -307,7 +325,43 @@ function LongRestDialog({
           onClose={onClose}
         />
 
-        <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
+        <div className="grid gap-3 py-4">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl border border-border bg-bg-subtle p-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+                Consumo deste personagem
+              </div>
+              <div className="mt-1 text-lg font-bold text-textH">
+                {formatPortions(foodCost)}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-bg-subtle p-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+                Comida disponível
+              </div>
+              <div className="mt-1 text-lg font-bold text-textH">
+                {formatPortions(availableFood)}
+              </div>
+            </div>
+          </div>
+
+          <p className="text-xs leading-5 text-textMuted">
+            Ao concluir, essa quantidade será retirada das porções de comida do
+            inventário compartilhado. Rações soltas, barris e suprimentos
+            personalizados são consumidos pelo mesmo valor equivalente.
+          </p>
+
+          {missingFood > 0 ? (
+            <div className="rounded-xl border border-danger bg-dangerBg p-3 text-xs leading-5 text-danger">
+              O grupo não possui comida suficiente. Faltam {formatPortions(missingFood)}.
+              O descanso ainda será concluído, mas apenas o estoque disponível
+              poderá ser removido.
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-border pt-4">
           <Button size="sm" variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
@@ -354,4 +408,12 @@ function DialogHeader({
       </button>
     </div>
   )
+}
+
+function formatPortions(value: number): string {
+  const formatted = Number.isInteger(value)
+    ? String(value)
+    : value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })
+
+  return `${formatted} ${value === 1 ? "porção" : "porções"}`
 }
