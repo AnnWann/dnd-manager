@@ -16,8 +16,13 @@ import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from "../models/characters/CharacterTemplate"
+import { takeLongRest } from "../models/characters/characterRest"
 import type { Itemmable } from "../models/items/item"
 import type { Player } from "../models/player/Player"
+import {
+  consumeFoodPortions,
+  getEffectiveRaceSupplyConsumption,
+} from "../models/supplies/partySupply"
 
 export type InventoryLocation =
   | { type: "party" }
@@ -39,6 +44,7 @@ export type CharacterContextValue = {
     characterId: string,
     updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
+  completeLongRest: (characterId: string) => void
   addCharacter: () => void
   importCharacter: (rawCharacter: unknown) => CharacterTemplate
   deleteCharacter: (id: string) => void
@@ -211,6 +217,45 @@ export function CharacterProvider({
         return updater(character).toJSON()
       }),
     }))
+  }
+
+  function completeLongRest(characterId: string) {
+    setAppState((previous) => {
+      let restedCharacter: CharacterTemplate | undefined
+
+      const nextCharacters = previous.characters.map((rawCharacter) => {
+        const character = CharacterTemplate.fromJSON(rawCharacter)
+
+        if (character.get("id") !== characterId) {
+          return character.toJSON()
+        }
+
+        const canRest =
+          userRole === "master" ||
+          character.get("owner")?.id?.trim() === normalizedUserKey
+
+        if (!canRest) return character.toJSON()
+
+        restedCharacter = character
+        return takeLongRest(character).toJSON()
+      })
+
+      if (!restedCharacter) return previous
+
+      const foodCost = getEffectiveRaceSupplyConsumption(
+        restedCharacter.get("sheet").race,
+      ).food
+      const consumption = consumeFoodPortions(
+        previous.partyInventory ?? [],
+        foodCost,
+      )
+
+      return {
+        ...previous,
+        characters: nextCharacters,
+        partyInventory: consumption.items,
+      }
+    })
   }
 
   function addCharacter() {
@@ -432,6 +477,7 @@ export function CharacterProvider({
         transferCharacters,
         partyInventory: appState.partyInventory ?? [],
         updateCharacter,
+        completeLongRest,
         addCharacter,
         importCharacter,
         deleteCharacter,
