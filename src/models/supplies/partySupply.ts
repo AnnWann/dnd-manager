@@ -147,7 +147,6 @@ export function calculatePartySupplies(
 
   const foodLongRests = divideSupply(foodPortions, foodPerLongRest)
   const drinkLongRests = divideSupply(drinkPortions, drinkPerLongRest)
-  const supportedLongRests = Math.min(foodLongRests, drinkLongRests)
 
   return {
     consumers,
@@ -157,7 +156,7 @@ export function calculatePartySupplies(
     drinkPerLongRest,
     foodLongRests,
     drinkLongRests,
-    supportedLongRests,
+    supportedLongRests: foodLongRests,
   }
 }
 
