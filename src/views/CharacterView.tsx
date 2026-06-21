@@ -10,6 +10,7 @@ import { useCharacterContext } from "../contexts/characterContext"
 import { CharacterProficienciesTab } from "../features/characters/proficiencies/characterProficiencies"
 import { CharacterRaceTab } from "../features/characters/race/characterRace"
 import { CharacterProfileTab } from "../features/characters/profile/characterProfile"
+import { CharacterRestControls } from "../features/characters/rest/characterRestControls"
 
 export function CharacterView() {
   const {
@@ -64,6 +65,11 @@ export function CharacterView() {
         deleteActiveCharacter={deleteActiveCharacter}
         disableDelete={characters.length <= 1}
         showOwnerBadge={canAssignOwners}
+      />
+
+      <CharacterRestControls
+        character={activeCharacter}
+        updateCharacter={updateCharacter}
       />
 
       <div className="sticky top-0 z-20 bg-[color:var(--surface-app)] py-2">
