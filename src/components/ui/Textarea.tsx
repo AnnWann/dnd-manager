@@ -29,7 +29,7 @@ export const Textarea = React.forwardRef<
         aria-invalid={invalid || undefined}
         className={cn(
           [
-            "min-h-24 w-full resize-y rounded-lg border px-3 py-2",
+            "min-h-24 w-full min-w-0 max-w-full resize-y rounded-lg border px-3 py-2",
             "bg-bg text-sm text-textH",
             "placeholder:text-textMuted",
             "shadow-theme-sm",
