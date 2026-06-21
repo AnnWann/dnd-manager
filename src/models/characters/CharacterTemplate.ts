@@ -218,7 +218,9 @@ export class CharacterTemplate {
         },
         savingThrowProficiencies:
           props.sheet?.savingThrowProficiencies ?? {},
-        proficiencies: [],
+        proficiencies: Array.isArray(props.sheet?.proficiencies)
+          ? props.sheet.proficiencies
+          : [],
         skills: props.sheet?.skills ?? {},
         race: {
           race: props.sheet?.race?.race ?? "human",
