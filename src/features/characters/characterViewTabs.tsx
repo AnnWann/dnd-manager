@@ -1,4 +1,4 @@
-import { useEffect, useRef, type LucideIcon } from "react"
+import { useEffect, useRef } from "react"
 import {
   BadgeCheck,
   ScrollText,
@@ -8,6 +8,7 @@ import {
   WandSparkles,
   Leaf,
   UserRound,
+  type LucideIcon,
 } from "lucide-react"
 
 export type CharacterTab =
