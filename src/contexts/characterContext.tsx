@@ -1,5 +1,3 @@
-// src/contexts/characterContext.tsx
-
 import {
   createContext,
   useContext,
@@ -9,28 +7,28 @@ import {
   type ReactNode,
 } from "react"
 
-import { CharacterTemplate } from "../models/characters/CharacterTemplate"
-import type { Player } from "../models/player/Player"
 import { newCharacterTemplate } from "../lib/newCharacterTemplate"
 import type { AppStateV1 } from "../lib/remoteState"
+import {
+  CharacterTemplate,
+  type CharacterTemplateProps,
+} from "../models/characters/CharacterTemplate"
+import type { Player } from "../models/player/Player"
 
 export type CharacterContextValue = {
   activeCharacter?: CharacterTemplate
   visibleCharacters: CharacterTemplate[]
-
   updateCharacter: (
     characterId: string,
     updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
-
   addCharacter: () => void
+  importCharacter: (rawCharacter: unknown) => CharacterTemplate
   deleteCharacter: (id: string) => void
   setSelectedCharacterId: (id: string) => void
-
   canAssignOwners: boolean
   canEditCharacterType: boolean
   knownPlayerKeys: string[]
-
   getOwner: (ownerId: string) => Player
   createOwner: (ownerName: string) => Player
 }
@@ -56,10 +54,10 @@ export function CharacterProvider({
 
   const characters = useMemo(
     () =>
-      appState.characters.map((c: any) =>
-        c instanceof CharacterTemplate
-          ? c
-          : CharacterTemplate.fromJSON(c),
+      appState.characters.map((character: any) =>
+        character instanceof CharacterTemplate
+          ? character
+          : CharacterTemplate.fromJSON(character),
       ),
     [appState.characters],
   )
@@ -69,12 +67,10 @@ export function CharacterProvider({
 
   const playersById = useMemo(() => {
     const map = new Map<string, Player>()
-
     for (const character of characters) {
       const owner = character.get("owner")
       if (owner?.id) map.set(owner.id, owner)
     }
-
     return map
   }, [characters])
 
@@ -82,7 +78,7 @@ export function CharacterProvider({
     return playersById.get(ownerId) ?? {
       id: ownerId,
       name: ownerId,
-      role: 'player'
+      role: "player",
     }
   }
 
@@ -90,30 +86,25 @@ export function CharacterProvider({
     return {
       id: ownerName.trim() || crypto.randomUUID(),
       name: ownerName.trim() || "Novo jogador",
-      role: 'player'
+      role: "player",
     }
   }
 
   const knownPlayerKeys = useMemo(() => {
     const keys = new Set<string>()
-
     for (const character of characters) {
       const ownerId = character.get("owner")?.id?.trim()
       if (ownerId) keys.add(ownerId)
     }
-
     const currentUserKey = userKey.trim()
     if (currentUserKey) keys.add(currentUserKey)
-
-    return Array.from(keys).sort((a, b) => a.localeCompare(b))
+    return Array.from(keys).sort((left, right) => left.localeCompare(right))
   }, [characters, userKey])
 
   const visibleCharacters = useMemo(() => {
     if (userRole === "master") return characters
-
     const key = userKey.trim()
     if (!key) return []
-
     return characters.filter(
       (character) => character.get("owner")?.id?.trim() === key,
     )
@@ -121,8 +112,13 @@ export function CharacterProvider({
 
   const activeCharacter = useMemo(
     () =>
-      visibleCharacters.find((c) => c.get("id") === selectedCharacterId) ??
-      visibleCharacters.find((c) => c.get("id") === appState.activeCharacterId) ??
+      visibleCharacters.find(
+        (character) => character.get("id") === selectedCharacterId,
+      ) ??
+      visibleCharacters.find(
+        (character) =>
+          character.get("id") === appState.activeCharacterId,
+      ) ??
       visibleCharacters[0],
     [appState.activeCharacterId, selectedCharacterId, visibleCharacters],
   )
@@ -134,8 +130,13 @@ export function CharacterProvider({
     }
 
     const resolved =
-      visibleCharacters.find((c) => c.get("id") === selectedCharacterId) ??
-      visibleCharacters.find((c) => c.get("id") === appState.activeCharacterId) ??
+      visibleCharacters.find(
+        (character) => character.get("id") === selectedCharacterId,
+      ) ??
+      visibleCharacters.find(
+        (character) =>
+          character.get("id") === appState.activeCharacterId,
+      ) ??
       visibleCharacters[0]
 
     if (resolved && resolved.get("id") !== selectedCharacterId) {
@@ -146,14 +147,16 @@ export function CharacterProvider({
   useEffect(() => {
     if (characters.length > 0) return
 
-    const character = newCharacterTemplate("Meu personagem", getOwner(userKey))
+    const character = newCharacterTemplate(
+      "Meu personagem",
+      getOwner(userKey),
+    )
 
-    setAppState((prev: any) => ({
-      ...prev,
+    setAppState((previous: any) => ({
+      ...previous,
       characters: [character.toJSON()],
       activeCharacterId: character.get("id"),
     }))
-
     setSelectedCharacterId(character.get("id"))
   }, [characters.length, setAppState, userKey])
 
@@ -161,9 +164,9 @@ export function CharacterProvider({
     characterId: string,
     updater: (c: CharacterTemplate) => CharacterTemplate,
   ) {
-    setAppState((prev: AppStateV1) => ({
-      ...prev,
-      characters: prev.characters.map((rawCharacter) => {
+    setAppState((previous: AppStateV1) => ({
+      ...previous,
+      characters: previous.characters.map((rawCharacter) => {
         const character =
           rawCharacter instanceof CharacterTemplate
             ? rawCharacter
@@ -173,9 +176,7 @@ export function CharacterProvider({
           return character.toJSON()
         }
 
-        const nextCharacter = updater(character)
-
-        return nextCharacter.toJSON()
+        return updater(character).toJSON()
       }),
     }))
   }
@@ -186,24 +187,52 @@ export function CharacterProvider({
       getOwner(userKey),
     )
 
-    setAppState((prev: any) => ({
-      ...prev,
-      characters: [...prev.characters, character.toJSON()],
+    setAppState((previous: any) => ({
+      ...previous,
+      characters: [...previous.characters, character.toJSON()],
       activeCharacterId: character.get("id"),
     }))
-
     setSelectedCharacterId(character.get("id"))
   }
 
+  function importCharacter(rawCharacter: unknown): CharacterTemplate {
+    if (
+      !rawCharacter ||
+      typeof rawCharacter !== "object" ||
+      Array.isArray(rawCharacter)
+    ) {
+      throw new Error("O arquivo não contém um personagem válido.")
+    }
+
+    const restored = CharacterTemplate.fromJSON(
+      rawCharacter as Partial<CharacterTemplateProps>,
+    )
+    const importedOwner =
+      userRole === "master"
+        ? restored.get("owner")
+        : getOwner(userKey)
+    const imported = restored.withPatch({
+      id: crypto.randomUUID(),
+      owner: importedOwner,
+    })
+
+    setAppState((previous: AppStateV1) => ({
+      ...previous,
+      characters: [...previous.characters, imported.toJSON()],
+      activeCharacterId: imported.get("id"),
+    }))
+    setSelectedCharacterId(imported.get("id"))
+    return imported
+  }
+
   function deleteCharacter(characterId: string) {
-    setAppState((prev: AppStateV1) => ({
-      ...prev,
-      characters: prev.characters.filter((rawCharacter) => {
+    setAppState((previous: AppStateV1) => ({
+      ...previous,
+      characters: previous.characters.filter((rawCharacter) => {
         const character =
           rawCharacter instanceof CharacterTemplate
             ? rawCharacter
             : CharacterTemplate.fromJSON(rawCharacter)
-
         return character.get("id") !== characterId
       }),
     }))
@@ -220,6 +249,7 @@ export function CharacterProvider({
         visibleCharacters,
         updateCharacter,
         addCharacter,
+        importCharacter,
         deleteCharacter,
         setSelectedCharacterId,
         canAssignOwners,
@@ -235,13 +265,9 @@ export function CharacterProvider({
 }
 
 export function useCharacterContext() {
-  const ctx = useContext(CharacterContext)
-
-  if (!ctx) {
-    throw new Error(
-      "useCharacterContext must be used inside CharacterProvider",
-    )
+  const context = useContext(CharacterContext)
+  if (!context) {
+    throw new Error("useCharacterContext must be used inside CharacterProvider")
   }
-
-  return ctx
+  return context
 }
