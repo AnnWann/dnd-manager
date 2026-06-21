@@ -32,39 +32,45 @@ export function SpellCard({
   onTogglePrepared,
 }: Props) {
   const [isViewOpen, setIsViewOpen] = useState(false)
+  const canTogglePrepared = Boolean(onTogglePrepared) && !alwaysPrepared
 
   return (
     <>
-      <div className="rounded-2xl border border-border bg-bg p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-textH">
+      <article className="rounded-2xl border border-border bg-bg p-4">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <h3 className="break-words text-base font-semibold leading-snug text-textH sm:text-sm">
               {spell.displayName || spell.name}
-            </div>
+            </h3>
 
-            <div className="mt-1 flex flex-wrap gap-2 text-xs text-text">
-              <span>Nível {spell.slotLevel}</span>
-              <span>{MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}</span>
-              <span>{formatCastingTime(spell)}</span>
-              <span>{formatRange(spell)}</span>
-              {formatAreaTiles(spell) ? <span>{formatAreaTiles(spell)}</span> : null}
-              <span>{formatSpellOrigin(source)}</span>
-              {accessLabel ? (
-                <span className="font-semibold text-accent">{accessLabel}</span>
+            <div className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1.5 text-xs leading-5 text-text">
+              <SpellMeta>{spell.slotLevel === 0 ? "Truque" : `Nível ${spell.slotLevel}`}</SpellMeta>
+              <SpellMeta>{MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}</SpellMeta>
+              <SpellMeta>{formatCastingTime(spell)}</SpellMeta>
+              <SpellMeta>{formatRange(spell)}</SpellMeta>
+              {formatAreaTiles(spell) ? (
+                <SpellMeta>{formatAreaTiles(spell)}</SpellMeta>
               ) : null}
-              {spell.concentration ? <span>Concentração</span> : null}
+              <SpellMeta>{formatSpellOrigin(source)}</SpellMeta>
+              {accessLabel ? (
+                <SpellMeta className="font-semibold text-accent">
+                  {accessLabel}
+                </SpellMeta>
+              ) : null}
+              {spell.concentration ? <SpellMeta>Concentração</SpellMeta> : null}
               {alwaysPrepared ? (
-                <span>Sempre disponível</span>
+                <SpellMeta>Sempre disponível</SpellMeta>
               ) : prepared ? (
-                <span>Preparada</span>
+                <SpellMeta>Preparada</SpellMeta>
               ) : (
-                <span>Não preparada</span>
+                <SpellMeta>Não preparada</SpellMeta>
               )}
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-wrap gap-2">
+          <div className="flex w-full flex-wrap gap-2 border-t border-border pt-3 sm:w-auto sm:shrink-0 sm:border-0 sm:pt-0 sm:justify-end">
             <Button
+              className="flex-1 sm:flex-none"
               size="sm"
               variant="secondary"
               onClick={() => setIsViewOpen(true)}
@@ -72,20 +78,35 @@ export function SpellCard({
               Visualizar
             </Button>
 
-            {onTogglePrepared && !alwaysPrepared ? (
-              <Button size="sm" variant="secondary" onClick={onTogglePrepared}>
+            {canTogglePrepared ? (
+              <Button
+                className="flex-1 sm:flex-none"
+                size="sm"
+                variant="secondary"
+                onClick={onTogglePrepared}
+              >
                 {prepared ? "Despreparar" : "Preparar"}
               </Button>
             ) : null}
 
             {onEdit ? (
-              <Button size="sm" variant="secondary" onClick={onEdit}>
+              <Button
+                className="flex-1 sm:flex-none"
+                size="sm"
+                variant="secondary"
+                onClick={onEdit}
+              >
                 Editar
               </Button>
             ) : null}
 
             {onRemove ? (
-              <Button size="sm" variant="ghost" onClick={onRemove}>
+              <Button
+                className="flex-1 sm:flex-none"
+                size="sm"
+                variant="ghost"
+                onClick={onRemove}
+              >
                 Remover
               </Button>
             ) : null}
@@ -93,34 +114,35 @@ export function SpellCard({
         </div>
 
         {spell.description?.trim() ? (
-          <div className="mt-3 line-clamp-3 whitespace-pre-wrap break-words text-xs leading-5 text-text">
+          <p className="mt-3 line-clamp-3 whitespace-pre-wrap break-words text-xs leading-5 text-text">
             {spell.description}
-          </div>
+          </p>
         ) : null}
-      </div>
+      </article>
 
       {isViewOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-4">
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-bg shadow-xl">
-            <div className="flex items-center justify-between border-b border-accentBorder p-4">
-              <div>
-                <h2 className="font-heading text-lg text-textH">
+            <div className="flex flex-col gap-3 border-b border-accentBorder p-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h2 className="break-words font-heading text-lg text-textH">
                   {spell.displayName || spell.name}
                 </h2>
 
-                <div className="mt-1 flex flex-wrap gap-2 text-xs text-text">
-                  <span>Nível {spell.slotLevel}</span>
-                  <span>{MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}</span>
-                  <span>{formatCastingTime(spell)}</span>
-                  <span>{formatRange(spell)}</span>
-                  <span>{formatSpellOrigin(source)}</span>
-                  {accessLabel ? <span>{accessLabel}</span> : null}
-                  {spell.concentration ? <span>Concentração</span> : null}
-                  {spell.ritual ? <span>Ritual</span> : null}
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-xs leading-5 text-text">
+                  <SpellMeta>{spell.slotLevel === 0 ? "Truque" : `Nível ${spell.slotLevel}`}</SpellMeta>
+                  <SpellMeta>{MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}</SpellMeta>
+                  <SpellMeta>{formatCastingTime(spell)}</SpellMeta>
+                  <SpellMeta>{formatRange(spell)}</SpellMeta>
+                  <SpellMeta>{formatSpellOrigin(source)}</SpellMeta>
+                  {accessLabel ? <SpellMeta>{accessLabel}</SpellMeta> : null}
+                  {spell.concentration ? <SpellMeta>Concentração</SpellMeta> : null}
+                  {spell.ritual ? <SpellMeta>Ritual</SpellMeta> : null}
                 </div>
               </div>
 
               <Button
+                className="w-full sm:w-auto"
                 variant="secondary"
                 size="sm"
                 onClick={() => setIsViewOpen(false)}
@@ -151,6 +173,20 @@ export function SpellCard({
         </div>
       ) : null}
     </>
+  )
+}
+
+function SpellMeta({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <span className={`min-w-0 break-words ${className}`}>
+      {children}
+    </span>
   )
 }
 
