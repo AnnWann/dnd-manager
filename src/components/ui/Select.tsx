@@ -20,14 +20,14 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     ref,
   ) => {
     return (
-      <div className="relative w-full">
+      <div className="relative w-full min-w-0 max-w-full">
         <select
           ref={ref}
           disabled={disabled}
           aria-invalid={invalid || undefined}
           className={cn(
             [
-              "h-10 w-full appearance-none rounded-lg border px-3 pr-10",
+              "h-10 w-full min-w-0 max-w-full appearance-none rounded-lg border px-3 pr-10",
               "bg-bg text-sm text-textH",
               "shadow-theme-sm",
               "transition-[background-color,border-color,box-shadow]",
