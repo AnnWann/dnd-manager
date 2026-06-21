@@ -1,3 +1,4 @@
+import type { BonusCollection } from "../bonuses/Bonus"
 import type { SpellGrant } from "../magic/spells/SpellGrant"
 
 export interface Ability {
@@ -10,6 +11,7 @@ export interface Ability {
   actionKind?: AbilityActionKind
   trigger?: Trigger
   grantedSpells?: SpellGrant[]
+  bonuses?: BonusCollection
 }
 
 export interface Usage {
