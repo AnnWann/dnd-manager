@@ -1,6 +1,9 @@
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import type { Itemmable } from "../items/item"
-import type { SupplyItem } from "../items/SupplyItem"
+import {
+  isSupplyItem,
+  type SupplyItem,
+} from "../items/SupplyItem"
 import type {
   CharacterRace,
   RaceSupplyConsumption,
@@ -101,9 +104,7 @@ export function calculatePartySupplies(
   items: Itemmable[],
   characters: CharacterTemplate[],
 ): PartySupplyCalculation {
-  const supplies = items.filter(
-    (item): item is SupplyItem => item.kind === "supply",
-  )
+  const supplies = items.filter(isSupplyItem)
 
   const foodPortions = supplies.reduce((total, supply) => {
     if (
@@ -182,7 +183,7 @@ export function getTotalSupplyPortions(item: SupplyItem): number {
 
 export function getAvailableFoodPortions(items: Itemmable[]): number {
   return items.reduce((total, item) => {
-    if (item.kind !== "supply") return total
+    if (!isSupplyItem(item)) return total
     if (
       item.supplyCategory !== "food" &&
       item.supplyCategory !== "mixed"
@@ -219,7 +220,7 @@ export function consumeFoodPortions(
       if (remainingToConsume <= 0) break
 
       const item = nextItems[index]
-      if (item.kind !== "supply" || item.supplyCategory !== category) {
+      if (!isSupplyItem(item) || item.supplyCategory !== category) {
         continue
       }
 
