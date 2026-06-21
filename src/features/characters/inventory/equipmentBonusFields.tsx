@@ -6,27 +6,12 @@ import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import type {
   Bonus,
-  Equipment,
-} from "../../../models/items/equipment/EquipmentSlot"
+  BonusCollection,
+  BonusTarget,
+} from "../../../models/bonuses/Bonus"
+import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
 import type { Itemmable } from "../../../models/items/item"
 import type { Attribute } from "../../../models/sheet/Attribute"
-
-type EquipmentBonuses = NonNullable<Equipment["bonuses"]>
-
-type NormalBonusKey =
-  | "armorClass"
-  | "initiative"
-  | "maxHp"
-  | "temporaryHp"
-  | "passivePerception"
-  | "attackBonus"
-  | "damageBonus"
-  | "speed"
-
-type BonusTarget =
-  | NormalBonusKey
-  | "attribute"
-  | "attributeModifier"
 
 const ATTRIBUTES: Array<{ value: Attribute; label: string }> = [
   { value: "str", label: "FOR" },
@@ -58,46 +43,51 @@ export function EquipmentBonusesFields({
   onUpdate: (updater: (item: Itemmable) => Itemmable) => void
 }) {
   const equipment = item as Equipment
-  const bonuses = equipment.bonuses ?? {}
-  const [dialogOpen, setDialogOpen] = useState(false)
 
-  function patchBonuses(
-    updater: (bonuses: EquipmentBonuses) => EquipmentBonuses,
-  ) {
-    onUpdate((current) => {
-      const currentEquipment = current as Equipment
-
-      return {
-        ...currentEquipment,
-        bonuses: updater(currentEquipment.bonuses ?? {}),
+  return (
+    <BonusesFields
+      bonuses={equipment.bonuses ?? {}}
+      description="Bônus aplicados enquanto o item estiver equipado."
+      onChange={(bonuses) =>
+        onUpdate((current) => ({
+          ...(current as Equipment),
+          bonuses,
+        }))
       }
-    })
-  }
+    />
+  )
+}
 
+export function BonusesFields({
+  bonuses,
+  onChange,
+  description = "Bônus aplicados enquanto esta habilidade estiver disponível.",
+}: {
+  bonuses: BonusCollection
+  onChange: (bonuses: BonusCollection) => void
+  description?: string
+}) {
+  const [dialogOpen, setDialogOpen] = useState(false)
   const entries = flattenBonuses(bonuses)
 
   return (
-    <div className="grid gap-3 md:col-span-3">
+    <section className="grid gap-3 rounded-xl border border-border bg-bg-subtle p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-medium text-textH">Modificadores</div>
-          <div className="mt-0.5 text-[11px] text-textMuted">
-            Bônus aplicados enquanto o item estiver equipado.
+          <div className="text-xs font-semibold text-textH">Modificadores</div>
+          <div className="mt-0.5 text-[11px] leading-4 text-textMuted">
+            {description}
           </div>
         </div>
 
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => setDialogOpen(true)}
-        >
+        <Button size="sm" variant="secondary" onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4" />
-          Adicionar bônus
+          Bônus
         </Button>
       </div>
 
       {entries.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-bg-subtle px-3 py-4 text-center text-xs text-textMuted">
+        <div className="rounded-lg border border-dashed border-border bg-bg px-3 py-4 text-center text-xs text-textMuted">
           Nenhum bônus configurado.
         </div>
       ) : (
@@ -105,13 +95,13 @@ export function EquipmentBonusesFields({
           {entries.map((entry) => (
             <div
               key={entry.id}
-              className="flex items-center gap-2 rounded-full border border-border bg-bg-subtle py-1 pl-3 pr-1 text-xs text-textH"
+              className="flex items-center gap-2 rounded-full border border-border bg-bg py-1 pl-3 pr-1 text-xs text-textH"
             >
               <span>{entry.label}</span>
               <button
                 type="button"
                 aria-label={`Remover ${entry.label}`}
-                onClick={() => patchBonuses(entry.remove)}
+                onClick={() => onChange(entry.remove(bonuses))}
                 className="flex h-6 w-6 items-center justify-center rounded-full text-textMuted hover:bg-dangerBg hover:text-danger"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -125,45 +115,41 @@ export function EquipmentBonusesFields({
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         onAdd={({ target, attribute, bonus }) => {
-          patchBonuses((current) => {
-            if (target === "attribute" || target === "attributeModifier") {
-              return {
-                ...current,
-                [target]: [
-                  ...(current[target] ?? []),
-                  {
-                    attribute,
-                    bonus,
-                  },
-                ],
-              }
-            }
-
-            return {
-              ...current,
-              [target]: [...(current[target] ?? []), bonus],
-            }
-          })
+          if (target === "attribute" || target === "attributeModifier") {
+            onChange({
+              ...bonuses,
+              [target]: [
+                ...(bonuses[target] ?? []),
+                { attribute, bonus },
+              ],
+            })
+          } else {
+            onChange({
+              ...bonuses,
+              [target]: [...(bonuses[target] ?? []), bonus],
+            })
+          }
           setDialogOpen(false)
         }}
       />
-    </div>
+    </section>
   )
 }
 
 type FlatBonusEntry = {
   id: string
   label: string
-  remove: (bonuses: EquipmentBonuses) => EquipmentBonuses
+  remove: (bonuses: BonusCollection) => BonusCollection
 }
 
-function flattenBonuses(bonuses: EquipmentBonuses): FlatBonusEntry[] {
+export function flattenBonuses(
+  bonuses: BonusCollection,
+): FlatBonusEntry[] {
   const entries: FlatBonusEntry[] = []
 
   for (const option of TARGET_OPTIONS) {
     if (option.value === "attribute" || option.value === "attributeModifier") {
       const values = bonuses[option.value] ?? []
-
       values.forEach((entry, index) => {
         entries.push({
           id: `${option.value}-${index}`,
@@ -247,14 +233,11 @@ function AddBonusDialog({
       >
         <div className="flex items-start justify-between gap-3 border-b border-border pb-4">
           <div>
-            <h2 className="text-base font-semibold text-textH">
-              Adicionar bônus
-            </h2>
+            <h2 className="text-base font-semibold text-textH">Adicionar bônus</h2>
             <p className="mt-1 text-xs text-textMuted">
               Escolha o valor afetado e como o modificador será aplicado.
             </p>
           </div>
-
           <button
             type="button"
             aria-label="Fechar"
@@ -268,35 +251,19 @@ function AddBonusDialog({
         <div className="grid gap-3 py-4">
           <label className="grid gap-1">
             <span className="text-xs font-medium text-textH">Afeta</span>
-            <Select
-              value={target}
-              onChange={(event) =>
-                setTarget(event.target.value as BonusTarget)
-              }
-            >
+            <Select value={target} onChange={(event) => setTarget(event.target.value as BonusTarget)}>
               {TARGET_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
+                <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </Select>
           </label>
 
           {needsAttribute ? (
             <label className="grid gap-1">
-              <span className="text-xs font-medium text-textH">
-                Atributo
-              </span>
-              <Select
-                value={attribute}
-                onChange={(event) =>
-                  setAttribute(event.target.value as Attribute)
-                }
-              >
+              <span className="text-xs font-medium text-textH">Atributo</span>
+              <Select value={attribute} onChange={(event) => setAttribute(event.target.value as Attribute)}>
                 {ATTRIBUTES.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
+                  <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </Select>
             </label>
@@ -304,50 +271,29 @@ function AddBonusDialog({
 
           <div className="grid grid-cols-[1fr_120px] gap-2">
             <label className="grid gap-1">
-              <span className="text-xs font-medium text-textH">
-                Operação
-              </span>
-              <Select
-                value={type}
-                onChange={(event) =>
-                  setType(event.target.value as Bonus["type"])
-                }
-              >
+              <span className="text-xs font-medium text-textH">Operação</span>
+              <Select value={type} onChange={(event) => setType(event.target.value as Bonus["type"])}>
                 <option value="add">Somar</option>
                 <option value="sub">Subtrair</option>
                 <option value="flat">Definir valor fixo</option>
               </Select>
             </label>
-
             <label className="grid gap-1">
               <span className="text-xs font-medium text-textH">Valor</span>
-              <Input
-                type="number"
-                value={value}
-                onChange={(event) =>
-                  setValue(Number(event.target.value) || 0)
-                }
-              />
+              <Input type="number" value={value} onChange={(event) => setValue(Number(event.target.value) || 0)} />
             </label>
           </div>
         </div>
 
         <div className="flex justify-end gap-2 border-t border-border pt-4">
-          <Button variant="secondary" onClick={close}>
-            Cancelar
-          </Button>
+          <Button variant="secondary" onClick={close}>Cancelar</Button>
           <Button
             variant="primary"
-            onClick={() =>
-              onAdd({
-                target,
-                attribute,
-                bonus: {
-                  type,
-                  value: Math.abs(value),
-                },
-              })
-            }
+            onClick={() => onAdd({
+              target,
+              attribute,
+              bonus: { type, value: Math.abs(value) },
+            })}
           >
             Adicionar
           </Button>
