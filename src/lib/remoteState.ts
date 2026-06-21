@@ -2,16 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { readLocalStorageJson, writeLocalStorageJson } from './storage'
 import type { CharacterTemplateProps } from '../models/characters/CharacterTemplate'
 import type { Spell } from '../models/magic/spells/Spell'
+import type { Itemmable } from '../models/items/item'
 
 export type AppStateV1 = {
   version: 1
   characters: CharacterTemplateProps[]
   activeCharacterId: string
+  partyInventory?: Itemmable[]
 
   /** Optional: reusable homebrew spell definitions keyed by hb:... index (synced across devices). */
   spells?: Spell[]
-
-
 }
 
 const LOCAL_STATE_KEY = 'dndmm.appState.v1'
@@ -31,7 +31,8 @@ function defaultState(): AppStateV1 {
     version: 1,
     characters: [],
     activeCharacterId: '',
-    spells:[],
+    partyInventory: [],
+    spells: [],
   }
 }
 
@@ -129,7 +130,6 @@ export function useRemoteAppState() {
   const [status, setStatus] = useState<SyncStatus>({ kind: 'idle' })
 
   const stateRef = useRef<AppStateV1>(state)
-
   const hydratedFromRemote = useRef(false)
   const saveTimer = useRef<number | null>(null)
 
@@ -167,8 +167,6 @@ export function useRemoteAppState() {
       if (data.state) {
         setState(normalizeState(data.state))
       } else {
-        // Bootstrap: if the key has no remote state yet, persist the current local state
-        // so subsequent pulls work across devices without requiring an extra local change.
         await apiPutState(syncKey, normalizeState(stateRef.current))
       }
       setStatus({ kind: 'synced', at: Date.now() })
@@ -193,7 +191,7 @@ export function useRemoteAppState() {
     setStatus({ kind: 'saving' })
 
     saveTimer.current = window.setTimeout(() => {
-      apiPutState(syncKey, (state))
+      apiPutState(syncKey, state)
         .then(() => {
           setStatus({ kind: 'synced', at: Date.now() })
         })
@@ -240,6 +238,9 @@ function normalizeState(state: unknown): AppStateV1 {
         typeof raw.activeCharacterId === "string"
           ? raw.activeCharacterId
           : "",
+      partyInventory: Array.isArray(raw.partyInventory)
+        ? raw.partyInventory
+        : [],
       spells: Array.isArray(raw.spells) ? raw.spells : [],
     }
   } catch {
