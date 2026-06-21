@@ -1,3 +1,4 @@
+import { normalizeItemText } from "../../lib/textNormalization"
 import type { CharacterTemplate } from "./CharacterTemplate"
 import type { Itemmable } from "../items/item"
 
@@ -7,7 +8,7 @@ export function addInventoryItem(
 ): CharacterTemplate {
   return character.with("inventory", [
     ...character.get("inventory"),
-    item,
+    normalizeItemText(item),
   ])
 }
 
@@ -19,7 +20,9 @@ export function updateInventoryItem(
   return character.with(
     "inventory",
     character.get("inventory").map((item) =>
-      item.id === itemId ? updater(item) : item,
+      item.id === itemId
+        ? normalizeItemText(updater(item))
+        : item,
     ),
   )
 }
