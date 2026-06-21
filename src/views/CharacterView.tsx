@@ -1,13 +1,15 @@
 import { useState } from "react"
-import { CharacterAbilities } from "../features/characters/abilities/characterAbilities"
+import { CharacterAbilitiesTab } from "../features/characters/abilities/characterAbilities"
 import { CharacterSelector } from "../features/characters/characterSelector"
-import { CharacterSheet } from "../features/characters/characterSheet/characterSheet"
-import { CharacterEquipment } from "../features/characters/equipment/characterEquipment"
-import { CharacterInventory } from "../features/characters/inventory/characterInventory"
+import { CharacterSheetTab } from "../features/characters/characterSheet/characterSheet"
+import { CharacterEquipmentTab } from "../features/characters/equipment/characterEquipment"
+import { CharacterInventoryTab } from "../features/characters/inventory/characterInventory"
 import { CharacterViewTabs, type CharacterTab } from "../features/characters/characterViewTabs"
-import { CharacterMagic } from "../features/characters/magic/characterMagicModule"
+import { CharacterMagicTab } from "../features/characters/magic/characterMagicModule"
 import { useCharacterContext } from "../contexts/characterContext"
-import { CharacterProficiencies } from "../features/characters/proficiencies/characterProficiencies"
+import { CharacterProficienciesTab } from "../features/characters/proficiencies/characterProficiencies"
+import { CharacterRaceTab } from "../features/characters/race/characterRace"
+import { CharacterProfileTab } from "../features/characters/profile/characterProfile"
 
 export function CharacterView() {
   const {
@@ -73,7 +75,7 @@ export function CharacterView() {
 
       <div className="min-w-0">
         {activeTab === "sheet" && (
-          <CharacterSheet
+          <CharacterSheetTab
             character={activeCharacter}
             updateCharacter={updateCharacter}
             canAssignOwners={canAssignOwners}
@@ -84,42 +86,56 @@ export function CharacterView() {
           />
         )}
 
-      {activeTab === "abilities" && (
-        <CharacterAbilities
-          character={activeCharacter}
-          updateCharacter={updateCharacter}
-        />
-      )}
+        {activeTab === "race" && (
+          <CharacterRaceTab
+            character={activeCharacter}
+            updateCharacter={updateCharacter}
+          />
+        )}
 
-      {activeTab === "equipment" && (
-        <CharacterEquipment
-          character={activeCharacter}
-          updateCharacter={updateCharacter}
-        />
-      )}
+        {activeTab === "profile" && (
+          <CharacterProfileTab
+            character={activeCharacter}
+            updateCharacter={updateCharacter}
+          />
+        )}
 
-      {activeTab === "inventory" && (
-        <CharacterInventory
-          character={activeCharacter}
-          updateCharacter={updateCharacter}
-          canEditInventory={canEditCharacterType}
-        />
-      )}
+        {activeTab === "abilities" && (
+          <CharacterAbilitiesTab
+            character={activeCharacter}
+            updateCharacter={updateCharacter}
+          />
+        )}
 
-      {activeTab === "spellsList" && (
-        <CharacterMagic
-          character={activeCharacter}
-          updateCharacter={updateCharacter}
-        />
-      )}
+        {activeTab === "equipment" && (
+          <CharacterEquipmentTab
+            character={activeCharacter}
+            updateCharacter={updateCharacter}
+          />
+        )}
 
-      {activeTab === "proficiencies" && (
-        <CharacterProficiencies
-          character={activeCharacter}
-          updateCharacter={updateCharacter}
-        />
-      )}
+        {activeTab === "inventory" && (
+          <CharacterInventoryTab
+            character={activeCharacter}
+            updateCharacter={updateCharacter}
+            canEditInventory={canEditCharacterType}
+          />
+        )}
+
+        {activeTab === "spellsList" && (
+          <CharacterMagicTab
+            character={activeCharacter}
+            updateCharacter={updateCharacter}
+          />
+        )}
+
+        {activeTab === "proficiencies" && (
+          <CharacterProficienciesTab
+            character={activeCharacter}
+            updateCharacter={updateCharacter}
+          />
+        )}
+      </div>
     </div>
-  </div>
   )
 }

@@ -86,7 +86,7 @@ const CATEGORY_OPTIONS: CategoryOption[] = [
 
 const DEFAULT_CATEGORY: ManagedProficiencyCategory = "weapon"
 
-export function CharacterProficiencies({
+export function CharacterProficienciesTab({
   character,
   updateCharacter,
 }: Props) {

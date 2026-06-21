@@ -16,7 +16,7 @@ type Props = {
   ) => void
 }
 
-export function CharacterEquipment({ character, updateCharacter }: Props) {
+export function CharacterEquipmentTab({ character, updateCharacter }: Props) {
   return (
     <Card>
       <CardHeader>

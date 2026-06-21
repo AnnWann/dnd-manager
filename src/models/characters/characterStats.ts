@@ -58,7 +58,12 @@ export function getEffectiveAttribute(
   character: CharacterTemplate,
   attribute: Attribute,
 ): number {
-  const baseValue = character.get("sheet").attributes[attribute]
+
+  const racialBonus =
+    character.get("sheet").race.attributeBonus?.[attribute] ?? 0
+
+  const baseValue =
+    character.get("sheet").attributes[attribute] + racialBonus
 
   const bonuses = getEquippedItems(character)
     .flatMap((item) => item.bonuses?.attribute ?? [])
@@ -149,7 +154,11 @@ export function getEffectivePassivePerception(
 }
 
 export function getEffectiveMobility(character: CharacterTemplate): number {
-  const baseSpeed = character.get("sheet").stats.mobility ?? 9
+  const raceSpeedBonus =
+  character.get("sheet").race.speedBonus ?? 0
+
+  const baseSpeed =
+    (character.get("sheet").stats.mobility ?? 9) + raceSpeedBonus
 
   return applyBonuses(
     baseSpeed,

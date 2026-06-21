@@ -6,10 +6,14 @@ import {
   Shield,
   Backpack,
   WandSparkles,
+  Leaf,
+  UserRound,
 } from "lucide-react"
 
 export type CharacterTab =
   | "sheet"
+  | "race"
+  | "profile"
   | "abilities"
   | "proficiencies"
   | "equipment"
@@ -27,6 +31,8 @@ const TABS: Array<{
   icon: LucideIcon
 }> = [
   { key: "sheet", label: "Ficha", icon: ScrollText },
+  { key: "race", label: "Raça", icon: Leaf },
+  { key: "profile", label: "Perfil", icon: UserRound },
   { key: "abilities", label: "Habilidades", icon: Sparkles },
   { key: "equipment", label: "Equipamento", icon: Shield },
   { key: "inventory", label: "Inventário", icon: Backpack },

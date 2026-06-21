@@ -14,7 +14,7 @@ type Props = {
   ) => void
 }
 
-export function CharacterMagic({
+export function CharacterMagicTab({
   character,
   updateCharacter,
 }: Props) {

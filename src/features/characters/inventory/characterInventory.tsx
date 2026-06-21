@@ -24,7 +24,7 @@ export function newInventoryItem(): Itemmable {
   }
 }
 
-export function CharacterInventory({
+export function CharacterInventoryTab({
   character,
   updateCharacter,
 }: Props) {

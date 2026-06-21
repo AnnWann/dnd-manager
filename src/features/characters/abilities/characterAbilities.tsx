@@ -14,7 +14,7 @@ type Props = {
   ) => void
 }
 
-export function CharacterAbilities({ character, updateCharacter }: Props) {
+export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   const abilities = character.getCharacterAbilities() ?? []
   const [editingAbility, setEditingAbility] = useState<Ability | null>(null)
   const [creating, setCreating] = useState(false)

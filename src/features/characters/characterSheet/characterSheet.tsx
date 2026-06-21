@@ -24,7 +24,7 @@ type Props = {
   createOwner: (ownerName: string) => Player
 }
 
-export function CharacterSheet({
+export function CharacterSheetTab({
   character,
   updateCharacter,
   canAssignOwners,

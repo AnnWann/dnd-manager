@@ -5,6 +5,12 @@ export function newCharacterTemplate(name: string, owner: Player): CharacterTemp
   return CharacterTemplate.fromJSON({
     id: crypto.randomUUID(),
     name,
+    profile: {
+      traits: "",
+      history: "",
+      physicalAppearance: "",
+      relationships: [],
+    },
     sheet: {
       HP: {
           max: 1,
