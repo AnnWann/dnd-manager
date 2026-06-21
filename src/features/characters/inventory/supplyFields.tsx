@@ -10,6 +10,7 @@ import {
   getTotalSupplyPortions,
   STANDARD_PORTIONS_PER_BARREL,
   STANDARD_PORTIONS_PER_RATION,
+  STANDARD_RATION_WEIGHT_KG,
   type SupplyPackageKind,
 } from "../../../models/supplies/partySupply"
 
@@ -34,9 +35,16 @@ const PACKAGE_OPTIONS: Array<{
 
 export function withSupplyDefaults(item: Itemmable): SupplyItem {
   const current = item as Partial<SupplyItem>
-  const supplyPackage = inferSupplyPackage(current)
+  const hasSupplyData =
+    current.supplyPackage !== undefined ||
+    current.supplyUnitsPerItem !== undefined ||
+    current.supplyCategory !== undefined
+  const supplyPackage = hasSupplyData
+    ? inferSupplyPackage(current)
+    : "ration"
   const packageDefaults = getSupplyPackageDefaults(supplyPackage)
   const parsedRemaining = Number(current.remainingSupplyUnits)
+  const currentWeight = Math.max(0, Number(item.weight) || 0)
 
   return {
     ...item,
@@ -45,6 +53,10 @@ export function withSupplyDefaults(item: Itemmable): SupplyItem {
     equipSlot: undefined,
     pocketable: false,
     insideBagOfHolding: false,
+    weight:
+      !hasSupplyData && supplyPackage === "ration" && currentWeight === 0
+        ? STANDARD_RATION_WEIGHT_KG
+        : currentWeight,
     supplyCategory: current.supplyCategory ?? "food",
     supplyPackage,
     supplyUnitsPerItem: Math.max(
@@ -78,7 +90,7 @@ export function SupplyFields({
         </div>
         <p className="mt-1 max-w-full break-words text-[11px] leading-4 text-textMuted">
           Uma porção sustenta um humanoide Médio por um descanso longo. Uma
-          ração individual vale {STANDARD_PORTIONS_PER_RATION} porção; um barril
+          ração individual vale {STANDARD_PORTIONS_PER_RATION} porção e pesa {STANDARD_RATION_WEIGHT_KG.toLocaleString("pt-BR")} kg; um barril
           vale {STANDARD_PORTIONS_PER_BARREL} porções.
         </p>
       </div>
@@ -118,6 +130,10 @@ export function SupplyFields({
                   nextPackage === "custom"
                     ? withSupplyDefaults(current).supplyUnitsPerItem
                     : defaults.portions,
+                weight:
+                  nextPackage === "ration"
+                    ? STANDARD_RATION_WEIGHT_KG
+                    : withSupplyDefaults(current).weight,
                 remainingSupplyUnits: undefined,
                 supplyUnitLabel: defaults.label,
               }))
