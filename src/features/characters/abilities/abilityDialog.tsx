@@ -15,6 +15,11 @@ import type {
   AbilityUsageCooldownUnit,
   AbilityUsageResetKind,
 } from "../../../models/abilities/Ability"
+import { BonusesFields } from "../inventory/equipmentBonusFields"
+import {
+  GrantedSpellsEditor,
+  type EditableSpellGrant,
+} from "../magic/grantedSpellsEditor"
 import {
   ABILITY_ACTION_OPTIONS,
   ABILITY_KIND_OPTIONS,
@@ -22,10 +27,6 @@ import {
   COOLDOWN_UNIT_OPTIONS,
   USAGE_OPTIONS,
 } from "./abilityOptions"
-import {
-  GrantedSpellsEditor,
-  type EditableSpellGrant,
-} from "../magic/grantedSpellsEditor"
 
 type Props = {
   open: boolean
@@ -44,6 +45,7 @@ function createEmptyAbility(): Ability {
     actionKind: "action",
     trigger: "always",
     grantedSpells: [],
+    bonuses: {},
   }
 }
 
@@ -77,7 +79,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
               {ability ? "Editar habilidade" : "Adicionar habilidade"}
             </h2>
             <p className="mt-1 text-xs text-textMuted">
-              Configure categoria, comportamento, usos e magias concedidas.
+              Configure categoria, comportamento, usos, bônus e magias concedidas.
             </p>
           </div>
           <Button size="sm" variant="ghost" onClick={onClose}>Fechar</Button>
@@ -168,6 +170,11 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
               </div>
             ) : null}
           </section>
+
+          <BonusesFields
+            bonuses={draft.bonuses ?? {}}
+            onChange={(bonuses) => setDraft({ ...draft, bonuses })}
+          />
 
           <GrantedSpellsEditor variant="ability" grants={(draft.grantedSpells ?? []) as EditableSpellGrant[]} abilityHasUsage={hasUsage} onChange={(grantedSpells) => setDraft({ ...draft, grantedSpells })} />
         </div>
