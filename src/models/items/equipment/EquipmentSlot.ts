@@ -1,6 +1,11 @@
 import type { Ability, Trigger, Usage } from "../../abilities/Ability"
+import type { SpellGrant } from "../../magic/spells/SpellGrant"
 import type { Attribute } from "../../sheet/Attribute"
 import type { Item } from "../item"
+
+export type EquipmentSpellGrant = SpellGrant & {
+  usage: Usage
+}
 
 export type Equipment = Item & {
   bonuses?: {
@@ -34,7 +39,7 @@ export type Equipment = Item & {
 
   abilities?: Ability[]
 
-  spells?: {index: string, usage: Usage}[]
+  spells?: EquipmentSpellGrant[]
 }
 
 export type Bonus = {
