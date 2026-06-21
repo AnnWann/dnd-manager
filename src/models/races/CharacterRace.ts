@@ -12,9 +12,9 @@ export type CreatureSize =
   | "gargantuan"
 
 export type RaceSupplyConsumption = {
-  /** Relative food consumption. 1 means the standard amount. */
+  /** Standard food portions consumed per long rest. */
   food: number
-  /** Relative drink consumption. 1 means the standard amount. */
+  /** Standard drink portions consumed per long rest. */
   drink: number
 }
 
@@ -26,8 +26,10 @@ export type CharacterRace = {
   proficiencies: Proficiency[]
   size?: CreatureSize
   speedBonus?: number
-  /** Stored now for future long-rest supply calculations. */
+  /** Effective values saved for export and sync. */
   supplyConsumption?: RaceSupplyConsumption
+  /** False/undefined means the values follow the automatic racial defaults. */
+  supplyConsumptionCustomized?: boolean
 }
 
 export type Subrace = Partial<Record<Race, string[]>>
