@@ -10,6 +10,11 @@ export type SupplyItem = Item & {
   supplyPackage?: SupplyPackageKind
   /** Standard daily portions contained by each inventory quantity. */
   supplyUnitsPerItem: number
+  /**
+   * Remaining portions in the entire stack after consumption.
+   * Undefined means the stack is still full and is calculated from quantity.
+   */
+  remainingSupplyUnits?: number
   /** Human-readable package label retained for display and old imports. */
   supplyUnitLabel?: string
 }
