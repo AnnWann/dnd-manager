@@ -6,7 +6,10 @@ type Props<T extends Equipment> = {
   onUpdate: (updater: (equipment: T) => T) => void
 }
 
-export function EquipmentFeaturesList <T extends Equipment>({ equipment, onUpdate }: Props<T>) {
+export function EquipmentFeaturesList<T extends Equipment>({
+  equipment,
+  onUpdate,
+}: Props<T>) {
   const abilities = equipment.abilities ?? []
   const spells = equipment.spells ?? []
 
@@ -55,133 +58,160 @@ export function EquipmentFeaturesList <T extends Equipment>({ equipment, onUpdat
   }
 
   return (
-    <div className="grid gap-3">
-      {abilities.length ? (
-        <div className="rounded-md border border-border p-3">
-          <div className="text-xs font-medium text-textH">Habilidades</div>
+    <div className="mt-4 border-t border-border pt-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-textH">
+            Recursos do item
+          </div>
+          <div className="mt-0.5 text-[11px] text-textMuted">
+            Habilidades e magias concedidas enquanto o item estiver equipado.
+          </div>
+        </div>
 
-          <div className="mt-2 grid gap-2">
-            {abilities.map((ability) => {
-              const usage = ability.usage
-              const canConsume = usage && usage.reset !== "spellSlot"
-              const canRestore =
-                usage &&
-                usage.reset !== "spellSlot" &&
-                usage.reset !== "limited"
+        <div className="rounded-full border border-border bg-bg px-2 py-1 text-[10px] font-semibold text-textMuted">
+          {abilities.length + spells.length} recurso{abilities.length + spells.length === 1 ? "" : "s"}
+        </div>
+      </div>
 
-              return (
-                <div key={ability.id} className="rounded-md border border-border p-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="text-xs font-medium text-textH">
-                        {ability.name || "Habilidade sem nome"}
-                      </div>
+      <div className="grid gap-2 lg:grid-cols-2">
+        {abilities.map((ability) => {
+          const usage = ability.usage
+          const canConsume = usage && usage.reset !== "spellSlot"
+          const canRestore =
+            usage &&
+            usage.reset !== "spellSlot" &&
+            usage.reset !== "limited"
+          const remaining = usage
+            ? Math.max(0, usage.max - usage.used)
+            : undefined
 
-                      {usage ? (
-                        <div className="mt-1 text-xs text-text">
-                          {usage.reset === "spellSlot"
-                            ? "Usa slot de magia"
-                            : `${usage.max - usage.used}/${usage.max} cargas`}
-                        </div>
-                      ) : null}
+          return (
+            <div
+              key={ability.id}
+              className="rounded-lg bg-bg px-3 py-3 shadow-theme-sm"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-semibold text-textH">
+                      {ability.name || "Habilidade sem nome"}
                     </div>
 
-                    <div className="flex gap-2">
-                      {canConsume ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={usage.used >= usage.max}
-                          onClick={() => updateAbilityCharge(ability.id, 1)}
-                        >
-                          Consumir
-                        </Button>
-                      ) : null}
-
-                      {canRestore ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={usage.used <= 0}
-                          onClick={() => updateAbilityCharge(ability.id, -1)}
-                        >
-                          Regenerar
-                        </Button>
-                      ) : null}
-                    </div>
+                    <span className="rounded-full bg-accentBg px-2 py-0.5 text-[10px] font-semibold text-accent">
+                      Habilidade
+                    </span>
                   </div>
 
-                  {ability.description ? (
-                    <div className="mt-2 whitespace-pre-wrap text-xs text-text">
-                      {ability.description}
+                  {usage ? (
+                    <div className="mt-1 text-xs font-medium text-text">
+                      {usage.reset === "spellSlot"
+                        ? "Usa espaço de magia"
+                        : `${remaining}/${usage.max} cargas disponíveis`}
                     </div>
+                  ) : (
+                    <div className="mt-1 text-xs text-textMuted">
+                      Sem limite de uso
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex shrink-0 gap-2">
+                  {canConsume ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={usage.used >= usage.max}
+                      onClick={() => updateAbilityCharge(ability.id, 1)}
+                    >
+                      Consumir
+                    </Button>
+                  ) : null}
+
+                  {canRestore ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={usage.used <= 0}
+                      onClick={() => updateAbilityCharge(ability.id, -1)}
+                    >
+                      Regenerar
+                    </Button>
                   ) : null}
                 </div>
-              )
-            })}
-          </div>
-        </div>
-      ) : null}
+              </div>
 
-      {spells.length ? (
-        <div className="rounded-md border border-border p-3">
-          <div className="text-xs font-medium text-textH">Magias</div>
+              {ability.description ? (
+                <div className="mt-2 whitespace-pre-wrap text-xs leading-5 text-textMuted">
+                  {ability.description}
+                </div>
+              ) : null}
+            </div>
+          )
+        })}
 
-          <div className="mt-2 grid gap-2">
-            {spells.map((spell, index) => {
-              const canConsume = spell.usage.reset !== "spellSlot"
-              const canRestore =
-                spell.usage.reset !== "spellSlot" &&
-                spell.usage.reset !== "limited"
+        {spells.map((spell, index) => {
+          const canConsume = spell.usage.reset !== "spellSlot"
+          const canRestore =
+            spell.usage.reset !== "spellSlot" &&
+            spell.usage.reset !== "limited"
+          const remaining = Math.max(
+            0,
+            spell.usage.max - spell.usage.used,
+          )
 
-              return (
-                <div
-                  key={`${spell.index}-${index}`}
-                  className="rounded-md border border-border p-2"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <div className="text-xs font-medium text-textH">
-                        {spell.index || "Magia sem index"}
-                      </div>
-
-                      <div className="mt-1 text-xs text-text">
-                        {spell.usage.reset === "spellSlot"
-                          ? "Usa slot de magia"
-                          : `${spell.usage.max - spell.usage.used}/${spell.usage.max} cargas`}
-                      </div>
+          return (
+            <div
+              key={`${spell.index}-${index}`}
+              className="rounded-lg bg-bg px-3 py-3 shadow-theme-sm"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="truncate text-sm font-semibold text-textH">
+                      {spell.index || "Magia sem nome"}
                     </div>
 
-                    <div className="flex gap-2">
-                      {canConsume ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={spell.usage.used >= spell.usage.max}
-                          onClick={() => updateSpellCharge(spell.index, 1)}
-                        >
-                          Consumir
-                        </Button>
-                      ) : null}
+                    <span className="rounded-full bg-accentBg px-2 py-0.5 text-[10px] font-semibold text-accent">
+                      Magia
+                    </span>
+                  </div>
 
-                      {canRestore ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={spell.usage.used <= 0}
-                          onClick={() => updateSpellCharge(spell.index, -1)}
-                        >
-                          Regenerar
-                        </Button>
-                      ) : null}
-                    </div>
+                  <div className="mt-1 text-xs font-medium text-text">
+                    {spell.usage.reset === "spellSlot"
+                      ? "Usa espaço de magia"
+                      : `${remaining}/${spell.usage.max} cargas disponíveis`}
                   </div>
                 </div>
-              )
-            })}
-          </div>
-        </div>
-      ) : null}
+
+                <div className="flex shrink-0 gap-2">
+                  {canConsume ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={spell.usage.used >= spell.usage.max}
+                      onClick={() => updateSpellCharge(spell.index, 1)}
+                    >
+                      Consumir
+                    </Button>
+                  ) : null}
+
+                  {canRestore ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={spell.usage.used <= 0}
+                      onClick={() => updateSpellCharge(spell.index, -1)}
+                    >
+                      Regenerar
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
