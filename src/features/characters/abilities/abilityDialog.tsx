@@ -5,6 +5,7 @@ import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
+import { normalizeAbilityText } from "../../../lib/textNormalization"
 import type {
   Ability,
   AbilityActionKind,
@@ -173,7 +174,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
 
         <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
           <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" disabled={!draft.name.trim()} onClick={() => onSave(draft)}>Salvar</Button>
+          <Button variant="primary" disabled={!draft.name.trim()} onClick={() => onSave(normalizeAbilityText(draft))}>Salvar</Button>
         </div>
       </div>
     </div>,
