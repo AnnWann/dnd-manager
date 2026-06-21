@@ -11,6 +11,7 @@ import {
 
 type Props = {
   ability: Ability
+  sourceLabel?: string
   onEdit?: () => void
   onRemove?: () => void
   onUse?: () => void
@@ -41,6 +42,7 @@ function summaryLabel(ability: Ability) {
 
 export function AbilityCard({
   ability,
+  sourceLabel,
   onEdit,
   onRemove,
   onUse,
@@ -71,6 +73,12 @@ export function AbilityCard({
           <span className="rounded-full border border-border bg-[color:color-mix(in_srgb,var(--social-bg)_70%,transparent)] px-2 py-0.5 text-[11px] font-medium text-text">
             {usage ? summaryLabel(ability) : "Sem contador"}
           </span>
+
+          {sourceLabel ? (
+            <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[11px] font-medium text-textH">
+              {sourceLabel}
+            </span>
+          ) : null}
         </div>
 
         {description ? (
