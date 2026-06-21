@@ -33,8 +33,15 @@ export type PartySupplyCalculation = {
 
 export function getDefaultRaceSupplyConsumption(
   race: Race,
+  subrace = "",
 ): RaceSupplyConsumption {
-  if (race === "goliath" || race === "half-giant") {
+  const normalizedSubrace = normalizeName(subrace)
+  const isHalfGiant =
+    race === "half-giant" ||
+    normalizedSubrace.includes("half giant") ||
+    normalizedSubrace.includes("meio gigante")
+
+  if (race === "goliath" || isHalfGiant) {
     return { food: 2, drink: 2 }
   }
 
@@ -56,7 +63,7 @@ export function getEffectiveRaceSupplyConsumption(
     return sanitizeConsumption(race.supplyConsumption)
   }
 
-  return getDefaultRaceSupplyConsumption(race.race)
+  return getDefaultRaceSupplyConsumption(race.race, race.subrace)
 }
 
 export function getSupplyPackageDefaults(kind: SupplyPackageKind): {
@@ -66,20 +73,20 @@ export function getSupplyPackageDefaults(kind: SupplyPackageKind): {
   if (kind === "barrel") {
     return {
       portions: STANDARD_PORTIONS_PER_BARREL,
-      label: "barril",
+      label: "porções padrão",
     }
   }
 
   if (kind === "ration") {
     return {
       portions: STANDARD_PORTIONS_PER_RATION,
-      label: "ração individual",
+      label: "porção padrão",
     }
   }
 
   return {
     portions: 1,
-    label: "unidade personalizada",
+    label: "porções padrão",
   }
 }
 
@@ -184,4 +191,13 @@ function sanitizeConsumption(
 function divideSupply(portions: number, consumption: number): number {
   if (consumption <= 0) return Number.POSITIVE_INFINITY
   return portions / consumption
+}
+
+function normalizeName(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[-_]+/g, " ")
+    .trim()
+    .toLowerCase()
 }
