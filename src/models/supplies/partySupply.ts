@@ -12,6 +12,7 @@ import type { Race } from "../races/Race"
 
 export const STANDARD_PORTIONS_PER_RATION = 1
 export const STANDARD_PORTIONS_PER_BARREL = 40
+export const STANDARD_RATION_WEIGHT_KG = 0.9
 
 export type SupplyPackageKind = "ration" | "barrel" | "custom"
 
