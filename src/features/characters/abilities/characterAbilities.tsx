@@ -1,8 +1,11 @@
-import { useState } from "react"
-import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import type { Ability } from "../../../models/abilities/Ability"
-import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
+import { useMemo, useState } from "react"
+
 import { Button } from "../../../components/ui/Button"
+import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
+import { Input } from "../../../components/ui/Input"
+import { Select } from "../../../components/ui/Select"
+import type { Ability } from "../../../models/abilities/Ability"
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { AbilityCard } from "./abilityCard"
 import { AbilityDialog } from "./abilityDialog"
 
@@ -10,7 +13,7 @@ type Props = {
   character: CharacterTemplate
   updateCharacter: (
     characterId: string,
-    updater: (c: CharacterTemplate) => CharacterTemplate
+    updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
 }
 
@@ -26,7 +29,25 @@ type RaceAbility = Ability & {
   originalAbilityId: string
 }
 
+type AbilitySourceFilter =
+  | "all"
+  | "character"
+  | "race"
+  | "weapon"
+  | "equipment"
+  | "invocation"
+  | "feat"
+
+type AbilityKindFilter = "all" | "active" | "passive"
+
 export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
+  const [editingAbility, setEditingAbility] = useState<Ability | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [sourceFilter, setSourceFilter] =
+    useState<AbilitySourceFilter>("all")
+  const [kindFilter, setKindFilter] = useState<AbilityKindFilter>("all")
+  const [search, setSearch] = useState("")
+
   const raceAbilities: RaceAbility[] = (
     character.get("sheet").race.naturalAbilities ?? []
   ).map((ability) => ({
@@ -41,77 +62,129 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
     ...raceAbilities,
   ]
 
-  const [editingAbility, setEditingAbility] = useState<Ability | null>(null)
-  const [creating, setCreating] = useState(false)
-
-  const sortedAbilities = [...abilities].sort((a, b) =>
-    a.name.localeCompare(b.name, "pt-BR"),
+  const weaponIds = new Set(
+    character.get("equipment").weapons.map((weapon) => weapon.id),
   )
 
-  function saveAbility(ability: Ability) {
-    updateCharacter(character.get("id"), (c) =>
-      c.saveAbility(ability)
-    )
+  const filteredAbilities = useMemo(() => {
+    const normalizedSearch = search.trim().toLocaleLowerCase()
 
+    return abilities
+      .filter((ability) => {
+        const equipmentAbility = isEquipmentAbility(ability)
+        const raceAbility = isRaceAbility(ability)
+        const isWeaponAbility =
+          equipmentAbility && weaponIds.has(ability.sourceItemId)
+
+        const matchesSource = (() => {
+          switch (sourceFilter) {
+            case "character":
+              return !equipmentAbility && !raceAbility
+            case "race":
+              return raceAbility
+            case "weapon":
+              return isWeaponAbility
+            case "equipment":
+              return equipmentAbility
+            case "invocation":
+              return ability.category === "invocation"
+            case "feat":
+              return ability.category === "feat"
+            default:
+              return true
+          }
+        })()
+
+        const matchesKind =
+          kindFilter === "all" ||
+          (ability.kind ?? "active") === kindFilter
+
+        const matchesSearch =
+          !normalizedSearch ||
+          ability.name.toLocaleLowerCase().includes(normalizedSearch) ||
+          ability.description
+            ?.toLocaleLowerCase()
+            .includes(normalizedSearch)
+
+        return matchesSource && matchesKind && matchesSearch
+      })
+      .sort((left, right) =>
+        left.name.localeCompare(right.name, "pt-BR"),
+      )
+  }, [abilities, kindFilter, search, sourceFilter, weaponIds])
+
+  function saveAbility(ability: Ability) {
+    updateCharacter(character.get("id"), (current) =>
+      current.saveAbility(ability),
+    )
     setCreating(false)
     setEditingAbility(null)
   }
 
   function removeAbility(id: string) {
-    updateCharacter(character.get("id"), (c) =>
-      c.removeAbility(id)
+    updateCharacter(character.get("id"), (current) =>
+      current.removeAbility(id),
     )
   }
 
   function useAbility(id: string) {
-    updateCharacter(character.get("id"), (c) => {
-      const ability = abilities.find((a) => a.id === id)
+    updateCharacter(character.get("id"), (current) => {
+      const ability = abilities.find((entry) => entry.id === id)
 
       if (ability && isEquipmentAbility(ability)) {
-        return c.useEquipmentAbility(
+        return current.useEquipmentAbility(
           ability.sourceItemId,
           ability.originalAbilityId,
         )
       }
 
       if (ability && isRaceAbility(ability)) {
-        return updateRaceAbilityUsage(c, ability.originalAbilityId, 1)
+        return updateRaceAbilityUsage(
+          current,
+          ability.originalAbilityId,
+          1,
+        )
       }
 
-      return c.useAbility(id)
+      return current.useAbility(id)
     })
   }
 
   function restoreAbility(id: string) {
-    updateCharacter(character.get("id"), (c) => {
-      const ability = abilities.find((a) => a.id === id)
+    updateCharacter(character.get("id"), (current) => {
+      const ability = abilities.find((entry) => entry.id === id)
 
       if (ability && isEquipmentAbility(ability)) {
-        return c.restoreEquipmentAbility(
+        return current.restoreEquipmentAbility(
           ability.sourceItemId,
           ability.originalAbilityId,
         )
       }
 
       if (ability && isRaceAbility(ability)) {
-        return updateRaceAbilityUsage(c, ability.originalAbilityId, -1)
+        return updateRaceAbilityUsage(
+          current,
+          ability.originalAbilityId,
+          -1,
+        )
       }
 
-      return c.restoreAbility(id)
+      return current.restoreAbility(id)
     })
   }
-
-  const dialogOpen = creating || editingAbility !== null
 
   return (
     <>
       <Card>
         <CardHeader>
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <div className="text-sm font-semibold text-textH">Habilidades</div>
+              <div className="text-sm font-semibold text-textH">
+                Habilidades
+              </div>
               <div className="mt-1 text-xs text-text">
-                Gerencie habilidades próprias e acompanhe habilidades raciais e de equipamentos.
+                Filtre habilidades próprias, raciais, de armas, equipamentos,
+                evocações e talentos.
               </div>
             </div>
 
@@ -123,19 +196,56 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               + Adicionar habilidade
             </Button>
           </div>
+
+          <div className="mt-4 grid gap-2 md:grid-cols-[1fr_190px_150px]">
+            <Input
+              value={search}
+              placeholder="Buscar habilidade..."
+              onChange={(event) => setSearch(event.target.value)}
+            />
+
+            <Select
+              value={sourceFilter}
+              onChange={(event) =>
+                setSourceFilter(
+                  event.target.value as AbilitySourceFilter,
+                )
+              }
+            >
+              <option value="all">Todas as origens</option>
+              <option value="character">Habilidades próprias</option>
+              <option value="race">Habilidades raciais</option>
+              <option value="weapon">Habilidades de armas</option>
+              <option value="equipment">Todos os equipamentos</option>
+              <option value="invocation">Evocações</option>
+              <option value="feat">Talentos</option>
+            </Select>
+
+            <Select
+              value={kindFilter}
+              onChange={(event) =>
+                setKindFilter(event.target.value as AbilityKindFilter)
+              }
+            >
+              <option value="all">Ativas e passivas</option>
+              <option value="active">Somente ativas</option>
+              <option value="passive">Somente passivas</option>
+            </Select>
+          </div>
         </CardHeader>
 
         <CardContent>
-          {sortedAbilities.length === 0 ? (
+          {filteredAbilities.length === 0 ? (
             <p className="text-xs text-text">
-              Adicione habilidades livres, raciais ou concedidas por equipamentos.
+              Nenhuma habilidade corresponde aos filtros selecionados.
             </p>
           ) : (
             <div className="grid gap-3">
-              {sortedAbilities.map((ability) => {
+              {filteredAbilities.map((ability) => {
                 const equipmentAbility = isEquipmentAbility(ability)
                 const raceAbility = isRaceAbility(ability)
                 const grantedAbility = equipmentAbility || raceAbility
+                const categoryLabel = getCategoryLabel(ability)
 
                 return (
                   <AbilityCard
@@ -143,10 +253,10 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
                     ability={ability}
                     sourceLabel={
                       equipmentAbility
-                        ? `Equipamento: ${ability.sourceItemName}`
+                        ? `${weaponIds.has(ability.sourceItemId) ? "Arma" : "Equipamento"}: ${ability.sourceItemName}`
                         : raceAbility
                           ? "Raça"
-                          : undefined
+                          : categoryLabel
                     }
                     onEdit={
                       grantedAbility
@@ -169,7 +279,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       </Card>
 
       <AbilityDialog
-        open={dialogOpen}
+        open={creating || editingAbility !== null}
         ability={editingAbility}
         onClose={() => {
           setCreating(false)
@@ -179,6 +289,12 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       />
     </>
   )
+}
+
+function getCategoryLabel(ability: Ability): string | undefined {
+  if (ability.category === "invocation") return "Evocação"
+  if (ability.category === "feat") return "Talento"
+  return undefined
 }
 
 function updateRaceAbilityUsage(
@@ -208,7 +324,9 @@ function updateRaceAbilityUsage(
   })
 }
 
-function isEquipmentAbility(ability: Ability): ability is EquipmentAbility {
+function isEquipmentAbility(
+  ability: Ability,
+): ability is EquipmentAbility {
   return "source" in ability && ability.source === "equipment"
 }
 
