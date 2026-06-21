@@ -77,16 +77,20 @@ export function TransferItemDialog({
 
   if (!open || !item) return null
 
+  const currentItem = item
   const destination = destinations.find(
     (option) => option.key === destinationKey,
   )
-  const maxQuantity = Math.max(1, Math.trunc(item.quantity || 1))
+  const maxQuantity = Math.max(
+    1,
+    Math.trunc(currentItem.quantity || 1),
+  )
 
   function submit() {
     if (!destination) return
 
     onTransfer({
-      itemId: item.id,
+      itemId: currentItem.id,
       quantity: Math.max(
         1,
         Math.min(maxQuantity, Math.trunc(quantity || 1)),
@@ -113,7 +117,7 @@ export function TransferItemDialog({
             Transferir item
           </h2>
           <p className="mt-1 break-words text-xs text-textMuted">
-            {item.name || "Item sem nome"} • disponível: {maxQuantity}
+            {currentItem.name || "Item sem nome"} • disponível: {maxQuantity}
           </p>
         </div>
 
