@@ -1,4 +1,3 @@
-import type { Trigger } from "../abilities/Ability"
 import type { Attribute } from "../sheet/Attribute"
 
 export type Bonus = {
@@ -25,12 +24,12 @@ export type BonusCollection = {
   }>
   attack?: {
     type: "always" | "equipment" | "conditional"
-    condition?: Trigger | string
+    condition?: string
     bonus: Bonus
   }
   damage?: {
     type: "always" | "equipment" | "conditional"
-    condition?: Trigger | string
+    condition?: string
     bonus: Bonus
   }
 }
