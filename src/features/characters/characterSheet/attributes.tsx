@@ -24,8 +24,8 @@ export function Attributes({
 
   return (
     <section className="rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h2 className="text-sm font-semibold text-textH">
             Atributos
           </h2>
@@ -38,6 +38,7 @@ export function Attributes({
         </div>
 
         <Button
+          className="w-full shrink-0 sm:w-auto"
           size="sm"
           variant={showRawValues ? "primary" : "secondary"}
           onClick={() => setShowRawValues((current) => !current)}
@@ -94,53 +95,53 @@ export function Attributes({
           return (
             <div
               key={attribute}
-              className="grid grid-cols-[52px_minmax(0,1fr)] items-center gap-2 rounded-lg border border-border bg-bg-subtle p-2"
+              className="grid min-w-0 gap-2 rounded-lg border border-border bg-bg-subtle p-3"
             >
-              <div className="text-xs font-bold uppercase tracking-wide text-textH">
-                {attributeShort(attribute)}
-              </div>
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <div className="text-sm font-bold uppercase tracking-wide text-textH">
+                  {attributeShort(attribute)}
+                </div>
 
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_70px] items-center gap-2">
-                <label className="grid min-w-0 gap-1 text-center">
+                <div className="flex shrink-0 items-baseline gap-1 text-right">
                   <span className="text-[10px] uppercase tracking-wide text-textMuted">
-                    {showRawValues ? "Bruto" : "Final"}
-                  </span>
-
-                  <Input
-                    type="number"
-                    aria-label={`${showRawValues ? "Valor bruto" : "Valor final"} de ${attributeShort(attribute)}`}
-                    className="h-9 px-1 text-center text-base font-bold"
-                    value={displayedScore}
-                    min={1}
-                    max={30}
-                    onChange={(event) =>
-                      updateDisplayedScore(Number(event.target.value))
-                    }
-                  />
-
-                  {!showRawValues ? (
-                    <span className="truncate text-[10px] text-textMuted">
-                      Base {baseScore}
-                      {racialBonus !== 0
-                        ? ` • Raça ${formatSigned(racialBonus)}`
-                        : ""}
-                      {otherBonus !== 0
-                        ? ` • Outros ${formatSigned(otherBonus)}`
-                        : ""}
-                    </span>
-                  ) : null}
-                </label>
-
-                <div className="text-center">
-                  <div className="text-[10px] uppercase tracking-wide text-textMuted">
                     Mod.
-                  </div>
-
-                  <div className="mt-1 text-xl font-bold text-textH">
+                  </span>
+                  <span className="text-xl font-bold text-textH">
                     {formatSigned(displayedModifier)}
-                  </div>
+                  </span>
                 </div>
               </div>
+
+              <label className="grid min-w-0 gap-1 text-center">
+                <span className="text-[10px] uppercase tracking-wide text-textMuted">
+                  {showRawValues ? "Bruto" : "Final"}
+                </span>
+
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  aria-label={`${showRawValues ? "Valor bruto" : "Valor final"} de ${attributeShort(attribute)}`}
+                  className="h-11 w-full min-w-0 px-2 text-center text-xl font-bold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  value={displayedScore}
+                  min={1}
+                  max={30}
+                  onChange={(event) =>
+                    updateDisplayedScore(Number(event.target.value))
+                  }
+                />
+              </label>
+
+              {!showRawValues ? (
+                <div className="min-h-4 break-words text-center text-[10px] leading-4 text-textMuted">
+                  Base {baseScore}
+                  {racialBonus !== 0
+                    ? ` • Raça ${formatSigned(racialBonus)}`
+                    : ""}
+                  {otherBonus !== 0
+                    ? ` • Outros ${formatSigned(otherBonus)}`
+                    : ""}
+                </div>
+              ) : null}
             </div>
           )
         })}
