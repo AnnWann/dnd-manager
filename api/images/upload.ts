@@ -54,6 +54,19 @@ export default async function handler(req: Req, res: Res) {
     return ok(res, { error: "Method not allowed" }, 405)
   }
 
+  const blobToken = process.env.BLOB_READ_WRITE_TOKEN
+
+  if (!blobToken) {
+    return ok(
+      res,
+      {
+        error:
+          "Blob storage não configurado. Defina BLOB_READ_WRITE_TOKEN nas variáveis de ambiente.",
+      },
+      500,
+    )
+  }
+
   const contentType = firstQueryValue(req.headers["content-type"])
 
   if (!contentType.startsWith("image/")) {
@@ -74,22 +87,42 @@ export default async function handler(req: Req, res: Res) {
     return ok(res, { error: "Missing request body" }, 400)
   }
 
+  if (body.length > MAX_IMAGE_SIZE_BYTES) {
+    return ok(res, { error: "Image too large" }, 413)
+  }
+
   const filename =
     firstQueryValue(req.query?.filename) || "character-portrait"
 
   const safeFilename = filename.replace(/[^\w.\-]/g, "_")
 
-  const blob = await put(
-    `character-images/${crypto.randomUUID()}-${safeFilename}`,
-    body,
-    {
-      access: "public",
-      addRandomSuffix: true,
-    },
-  )
+  try {
+    const blob = await put(
+      `character-images/${crypto.randomUUID()}-${safeFilename}`,
+      body,
+      {
+        access: "public",
+        addRandomSuffix: true,
+        token: blobToken,
+      },
+    )
 
-  return ok(res, {
-    url: blob.url,
-    pathname: blob.pathname,
-  })
+    return ok(res, {
+      url: blob.url,
+      pathname: blob.pathname,
+    })
+  } catch (error) {
+    console.error("Failed to upload character image:", error)
+
+    return ok(
+      res,
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to upload image.",
+      },
+      500,
+    )
+  }
 }
