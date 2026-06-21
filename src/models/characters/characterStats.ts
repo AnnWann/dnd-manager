@@ -1,11 +1,11 @@
-// models/characters/characterStats.ts
-
-import type { CharacterTemplate } from "./CharacterTemplate"
-import type { Bonus, Equipment } from "../items/equipment/EquipmentSlot"
+import type { Ability } from "../abilities/Ability"
+import type { Bonus, NormalBonusKey } from "../bonuses/Bonus"
+import type { Armor } from "../items/equipment/Armor"
+import type { Equipment } from "../items/equipment/EquipmentSlot"
 import type { Weapon } from "../items/equipment/Weapon"
 import type { Attribute } from "../sheet/Attribute"
 import type { Sheet } from "../sheet/Sheet"
-import type { Armor } from "../items/equipment/Armor"
+import type { CharacterTemplate } from "./CharacterTemplate"
 
 export type StatBonusKey =
   | "armorClass"
@@ -40,18 +40,53 @@ export function getEquippedItems(character: CharacterTemplate): Equipment[] {
     equipment.boots,
     equipment.helmet,
     equipment.gloves,
+    equipment.cape,
     ...equipment.rings,
     ...equipment.weapons,
+    ...equipment.pockets.filter(
+      (item): item is Equipment => item.kind === "equipment",
+    ),
   ].filter((item): item is Equipment => item !== undefined)
+}
+
+export function getActiveAbilities(
+  character: CharacterTemplate,
+): Ability[] {
+  return [
+    ...(character.get("abilities") ?? []),
+    ...(character.get("sheet").race.naturalAbilities ?? []),
+    ...getEquippedItems(character).flatMap(
+      (item) => item.abilities ?? [],
+    ),
+  ]
 }
 
 export function getEquipmentBonuses(
   character: CharacterTemplate,
-  key: StatBonusKey,
+  key: NormalBonusKey,
 ): Bonus[] {
   return getEquippedItems(character).flatMap(
     (item) => item.bonuses?.[key] ?? [],
   )
+}
+
+export function getAbilityBonuses(
+  character: CharacterTemplate,
+  key: NormalBonusKey,
+): Bonus[] {
+  return getActiveAbilities(character).flatMap(
+    (ability) => ability.bonuses?.[key] ?? [],
+  )
+}
+
+export function getCharacterBonuses(
+  character: CharacterTemplate,
+  key: NormalBonusKey,
+): Bonus[] {
+  return [
+    ...getEquipmentBonuses(character, key),
+    ...getAbilityBonuses(character, key),
+  ]
 }
 
 export function getEffectiveAttribute(
@@ -64,12 +99,20 @@ export function getEffectiveAttribute(
   const baseValue =
     character.get("sheet").attributes[attribute] + racialBonus
 
-  const bonuses = getEquippedItems(character)
+  const equipmentBonuses = getEquippedItems(character)
     .flatMap((item) => item.bonuses?.attribute ?? [])
     .filter((entry) => entry.attribute === attribute)
     .map((entry) => entry.bonus)
 
-  return applyBonuses(baseValue, bonuses)
+  const abilityBonuses = getActiveAbilities(character)
+    .flatMap((ability) => ability.bonuses?.attribute ?? [])
+    .filter((entry) => entry.attribute === attribute)
+    .map((entry) => entry.bonus)
+
+  return applyBonuses(baseValue, [
+    ...equipmentBonuses,
+    ...abilityBonuses,
+  ])
 }
 
 export function getEffectiveAttributeModifier(
@@ -80,12 +123,20 @@ export function getEffectiveAttributeModifier(
     (getEffectiveAttribute(character, attribute) - 10) / 2,
   )
 
-  const bonuses = getEquippedItems(character)
+  const equipmentBonuses = getEquippedItems(character)
     .flatMap((item) => item.bonuses?.attributeModifier ?? [])
     .filter((entry) => entry.attribute === attribute)
     .map((entry) => entry.bonus)
 
-  return applyBonuses(baseModifier, bonuses)
+  const abilityBonuses = getActiveAbilities(character)
+    .flatMap((ability) => ability.bonuses?.attributeModifier ?? [])
+    .filter((entry) => entry.attribute === attribute)
+    .map((entry) => entry.bonus)
+
+  return applyBonuses(baseModifier, [
+    ...equipmentBonuses,
+    ...abilityBonuses,
+  ])
 }
 
 export function getEffectiveStat<K extends keyof Sheet["stats"]>(
@@ -97,31 +148,29 @@ export function getEffectiveStat<K extends keyof Sheet["stats"]>(
   if (typeof baseValue !== "number") return baseValue
 
   const bonusKey = statToBonusKey(stat)
-
   if (!bonusKey) return baseValue
 
   return applyBonuses(
     baseValue,
-    getEquipmentBonuses(character, bonusKey),
+    getCharacterBonuses(character, bonusKey),
   ) as Sheet["stats"][K]
 }
 
 export function getEffectiveArmorClass(character: CharacterTemplate): number {
   const armor = getEquippedArmor(character)
+  const allBonuses = getCharacterBonuses(character, "armorClass")
+  const flatBase =
+    armor?.bonuses?.armorClass?.find(
+      (bonus) => bonus.type === "flat",
+    )?.value ??
+    allBonuses.find((bonus) => bonus.type === "flat")?.value
 
   const baseArmorClass =
-    armor?.bonuses?.armorClass?.find((bonus) => bonus.type === "flat")?.value ??
-    character.get("sheet").stats.armorClass ??
-    10
-
-  const nonFlatArmorBonuses =
-    getEquipmentBonuses(character, "armorClass").filter(
-      (bonus) => bonus.type !== "flat",
-    )
+    flatBase ?? character.get("sheet").stats.armorClass ?? 10
 
   return applyBonuses(
     baseArmorClass + getArmorDexBonus(character),
-    nonFlatArmorBonuses,
+    allBonuses.filter((bonus) => bonus.type !== "flat"),
   )
 }
 
@@ -130,7 +179,7 @@ export function getEffectiveInitiative(character: CharacterTemplate): number {
 
   return applyBonuses(
     dexModifier,
-    getEquipmentBonuses(character, "initiative"),
+    getCharacterBonuses(character, "initiative"),
   )
 }
 
@@ -148,7 +197,7 @@ export function getEffectivePassivePerception(
 
   return applyBonuses(
     10 + wisdomModifier,
-    getEquipmentBonuses(character, "passivePerception"),
+    getCharacterBonuses(character, "passivePerception"),
   )
 }
 
@@ -161,7 +210,7 @@ export function getEffectiveMobility(character: CharacterTemplate): number {
 
   return applyBonuses(
     baseSpeed,
-    getEquipmentBonuses(character, "speed"),
+    getCharacterBonuses(character, "speed"),
   )
 }
 
@@ -171,15 +220,14 @@ export function getEffectiveWeaponAttackBonus(
   baseValue: number,
 ): number {
   const weaponAttackBonus = weapon.bonuses?.attack?.bonus
-  const generalAttackBonuses = weapon.bonuses?.attackBonus ?? []
+  const weaponGeneralBonuses = weapon.bonuses?.attackBonus ?? []
+  const abilityBonuses = getAbilityBonuses(character, "attackBonus")
 
-  return applyBonuses(
-    baseValue,
-    [
-      ...generalAttackBonuses,
-      ...(weaponAttackBonus ? [weaponAttackBonus] : []),
-    ],
-  )
+  return applyBonuses(baseValue, [
+    ...weaponGeneralBonuses,
+    ...abilityBonuses,
+    ...(weaponAttackBonus ? [weaponAttackBonus] : []),
+  ])
 }
 
 export function getEffectiveWeaponDamageBonus(
@@ -188,15 +236,14 @@ export function getEffectiveWeaponDamageBonus(
   baseValue: number,
 ): number {
   const weaponDamageBonus = weapon.bonuses?.damage?.bonus
-  const generalDamageBonuses = weapon.bonuses?.damageBonus ?? []
+  const weaponGeneralBonuses = weapon.bonuses?.damageBonus ?? []
+  const abilityBonuses = getAbilityBonuses(character, "damageBonus")
 
-  return applyBonuses(
-    baseValue,
-    [
-      ...generalDamageBonuses,
-      ...(weaponDamageBonus ? [weaponDamageBonus] : []),
-    ],
-  )
+  return applyBonuses(baseValue, [
+    ...weaponGeneralBonuses,
+    ...abilityBonuses,
+    ...(weaponDamageBonus ? [weaponDamageBonus] : []),
+  ])
 }
 
 export function applyBonus(baseValue: number, bonus: Bonus): number {
