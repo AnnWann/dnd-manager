@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { Plus, Trash2, X } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
@@ -6,17 +6,18 @@ import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
 import { attributeShort } from "../../../lib/attributeShorts"
-import type {
-  Ability,
-  AbilityActionKind,
-  AbilityKind,
-} from "../../../models/abilities/Ability"
+import type { Ability } from "../../../models/abilities/Ability"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import type { Proficiency, ProficiencyCategory } from "../../../models/sheet/Proficiency"
-import type { Attribute } from "../../../models/sheet/Attribute"
-import { ATTRIBUTE_KEYS } from "../../../models/sheet/Attribute"
 import type { CharacterRace, CreatureSize } from "../../../models/races/CharacterRace"
 import type { Race } from "../../../models/races/Race"
+import type { Attribute } from "../../../models/sheet/Attribute"
+import { ATTRIBUTE_KEYS } from "../../../models/sheet/Attribute"
+import type {
+  Proficiency,
+  ProficiencyCategory,
+} from "../../../models/sheet/Proficiency"
+import { AbilityCard } from "../abilities/abilityCard"
+import { AbilityDialog } from "../abilities/abilityDialog"
 
 type Props = {
   character: CharacterTemplate
@@ -105,24 +106,16 @@ const PROFICIENCY_CATEGORIES: Array<{
   { value: "other", label: "Outro" },
 ]
 
-const ABILITY_ACTIONS: Array<{
-  value: AbilityActionKind
-  label: string
-}> = [
-  { value: "action", label: "Ação" },
-  { value: "bonusAction", label: "Ação bônus" },
-  { value: "reaction", label: "Reação" },
-  { value: "free", label: "Livre" },
-]
-
 export function CharacterRaceTab({
   character,
   updateCharacter,
 }: Props) {
-  const [abilityModalOpen, setAbilityModalOpen] = useState(false)
+  const [creatingAbility, setCreatingAbility] = useState(false)
+  const [editingAbility, setEditingAbility] = useState<Ability | null>(null)
   const [proficiencyModalOpen, setProficiencyModalOpen] = useState(false)
 
   const race = character.get("sheet").race
+  const naturalAbilities = race.naturalAbilities ?? []
 
   function updateRace(
     updater: (race: CharacterRace) => CharacterRace,
@@ -142,10 +135,7 @@ export function CharacterRaceTab({
     }))
   }
 
-  function setAttributeBonus(
-    attribute: Attribute,
-    value: number,
-  ) {
+  function setAttributeBonus(attribute: Attribute, value: number) {
     updateRace((currentRace) => ({
       ...currentRace,
       attributeBonus: {
@@ -155,22 +145,56 @@ export function CharacterRaceTab({
     }))
   }
 
-  function addAbility(ability: Ability) {
-    updateRace((currentRace) => ({
-      ...currentRace,
-      naturalAbilities: [
-        ...(currentRace.naturalAbilities ?? []),
-        ability,
-      ],
-    }))
+  function saveAbility(ability: Ability) {
+    updateRace((currentRace) => {
+      const abilities = currentRace.naturalAbilities ?? []
+      const alreadyExists = abilities.some(
+        (currentAbility) => currentAbility.id === ability.id,
+      )
+
+      return {
+        ...currentRace,
+        naturalAbilities: alreadyExists
+          ? abilities.map((currentAbility) =>
+              currentAbility.id === ability.id ? ability : currentAbility,
+            )
+          : [...abilities, ability],
+      }
+    })
+
+    setCreatingAbility(false)
+    setEditingAbility(null)
   }
 
   function removeAbility(abilityId: string) {
     updateRace((currentRace) => ({
       ...currentRace,
-      naturalAbilities: (
-        currentRace.naturalAbilities ?? []
-      ).filter((ability) => ability.id !== abilityId),
+      naturalAbilities: (currentRace.naturalAbilities ?? []).filter(
+        (ability) => ability.id !== abilityId,
+      ),
+    }))
+  }
+
+  function updateAbilityUsage(abilityId: string, delta: 1 | -1) {
+    updateRace((currentRace) => ({
+      ...currentRace,
+      naturalAbilities: (currentRace.naturalAbilities ?? []).map(
+        (ability) => {
+          if (ability.id !== abilityId || !ability.usage) return ability
+          if (ability.usage.reset === "spellSlot") return ability
+
+          return {
+            ...ability,
+            usage: {
+              ...ability.usage,
+              used: Math.min(
+                ability.usage.max,
+                Math.max(0, ability.usage.used + delta),
+              ),
+            },
+          }
+        },
+      ),
     }))
   }
 
@@ -187,11 +211,8 @@ export function CharacterRaceTab({
   function removeProficiency(proficiencyId: string) {
     updateRace((currentRace) => ({
       ...currentRace,
-      proficiencies: (
-        currentRace.proficiencies ?? []
-      ).filter(
-        (proficiency) =>
-          proficiency.id !== proficiencyId,
+      proficiencies: (currentRace.proficiencies ?? []).filter(
+        (proficiency) => proficiency.id !== proficiencyId,
       ),
     }))
   }
@@ -200,22 +221,16 @@ export function CharacterRaceTab({
     <div className="grid gap-4">
       <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
         <div className="mb-4">
-          <h2 className="text-base font-semibold text-textH">
-            Raça
-          </h2>
-
+          <h2 className="text-base font-semibold text-textH">Raça</h2>
           <p className="mt-1 text-xs text-textMuted">
-            Configure identidade racial, tamanho, deslocamento,
-            bônus raciais, habilidades naturais e proficiências.
+            Configure identidade racial, tamanho, deslocamento, bônus raciais,
+            habilidades naturais e proficiências.
           </p>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-4">
           <label className="grid gap-1.5">
-            <span className="text-xs font-medium text-textH">
-              Raça
-            </span>
-
+            <span className="text-xs font-medium text-textH">Raça</span>
             <Select
               value={race.race}
               onChange={(event) =>
@@ -223,10 +238,7 @@ export function CharacterRaceTab({
               }
             >
               {RACE_OPTIONS.map((option) => (
-                <option
-                  key={option.value}
-                  value={option.value}
-                >
+                <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
@@ -234,10 +246,7 @@ export function CharacterRaceTab({
           </label>
 
           <label className="grid gap-1.5">
-            <span className="text-xs font-medium text-textH">
-              Sub-raça
-            </span>
-
+            <span className="text-xs font-medium text-textH">Sub-raça</span>
             <Input
               value={race.subrace ?? ""}
               placeholder="Ex: Alto Elfo"
@@ -248,10 +257,7 @@ export function CharacterRaceTab({
           </label>
 
           <label className="grid gap-1.5">
-            <span className="text-xs font-medium text-textH">
-              Tamanho
-            </span>
-
+            <span className="text-xs font-medium text-textH">Tamanho</span>
             <Select
               value={race.size ?? "medium"}
               onChange={(event) =>
@@ -262,10 +268,7 @@ export function CharacterRaceTab({
               }
             >
               {SIZE_OPTIONS.map((option) => (
-                <option
-                  key={option.value}
-                  value={option.value}
-                >
+                <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
@@ -276,7 +279,6 @@ export function CharacterRaceTab({
             <span className="text-xs font-medium text-textH">
               Bônus de deslocamento
             </span>
-
             <Input
               type="number"
               value={race.speedBonus ?? 0}
@@ -296,7 +298,6 @@ export function CharacterRaceTab({
           <h2 className="text-sm font-semibold text-textH">
             Bônus de atributo
           </h2>
-
           <p className="mt-1 text-xs text-textMuted">
             Esses valores são somados aos atributos base do personagem.
           </p>
@@ -311,7 +312,6 @@ export function CharacterRaceTab({
               <span className="text-center text-xs font-bold uppercase tracking-wide text-textH">
                 {attributeShort(attribute)}
               </span>
-
               <Input
                 type="number"
                 className="text-center"
@@ -334,59 +334,39 @@ export function CharacterRaceTab({
             <h2 className="text-sm font-semibold text-textH">
               Habilidades naturais
             </h2>
-
             <p className="mt-1 text-xs text-textMuted">
-              Traços raciais como visão no escuro, ancestralidade feérica,
-              sopro dracônico, resistência infernal etc.
+              Funcionam como qualquer outra habilidade: podem ter ações,
+              gatilhos, usos, recargas e magias concedidas.
             </p>
           </div>
 
           <Button
             size="sm"
             variant="primary"
-            onClick={() => setAbilityModalOpen(true)}
+            onClick={() => setCreatingAbility(true)}
           >
             <Plus className="h-4 w-4" />
             Habilidade
           </Button>
         </div>
 
-        {(race.naturalAbilities ?? []).length > 0 ? (
-          <div className="grid gap-2 md:grid-cols-2">
-            {(race.naturalAbilities ?? []).map((ability) => (
-              <div
-                key={ability.id}
-                className="grid gap-3 rounded-lg border border-border bg-bg-subtle p-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-textH">
-                      {ability.name}
-                    </div>
-
-                    <div className="mt-1 text-xs text-textMuted">
-                      {formatAbilityMeta(ability)}
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    title="Remover habilidade"
-                    aria-label={`Remover ${ability.name}`}
-                    onClick={() => removeAbility(ability.id)}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-textMuted transition-colors hover:border-danger hover:bg-dangerBg hover:text-danger"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-
-                {ability.description ? (
-                  <p className="text-xs leading-relaxed text-text">
-                    {ability.description}
-                  </p>
-                ) : null}
-              </div>
-            ))}
+        {naturalAbilities.length > 0 ? (
+          <div className="grid gap-3">
+            {[...naturalAbilities]
+              .sort((left, right) =>
+                left.name.localeCompare(right.name, "pt-BR"),
+              )
+              .map((ability) => (
+                <AbilityCard
+                  key={ability.id}
+                  ability={ability}
+                  sourceLabel="Raça"
+                  onEdit={() => setEditingAbility(ability)}
+                  onRemove={() => removeAbility(ability.id)}
+                  onUse={() => updateAbilityUsage(ability.id, 1)}
+                  onRestore={() => updateAbilityUsage(ability.id, -1)}
+                />
+              ))}
           </div>
         ) : (
           <EmptyCard text="Nenhuma habilidade natural cadastrada." />
@@ -399,7 +379,6 @@ export function CharacterRaceTab({
             <h2 className="text-sm font-semibold text-textH">
               Proficiências raciais
             </h2>
-
             <p className="mt-1 text-xs text-textMuted">
               Idiomas, armas, ferramentas ou outros treinamentos recebidos pela raça.
             </p>
@@ -426,11 +405,9 @@ export function CharacterRaceTab({
                   <div className="truncate text-sm font-medium text-textH">
                     {proficiency.name}
                   </div>
-
                   <div className="mt-0.5 text-xs text-textMuted">
                     {formatProficiencyCategory(proficiency.category)}
                   </div>
-
                   {proficiency.notes ? (
                     <p className="mt-1 text-xs text-text">
                       {proficiency.notes}
@@ -455,13 +432,14 @@ export function CharacterRaceTab({
         )}
       </section>
 
-      <AddRaceAbilityModal
-        open={abilityModalOpen}
-        onClose={() => setAbilityModalOpen(false)}
-        onSave={(ability) => {
-          addAbility(ability)
-          setAbilityModalOpen(false)
+      <AbilityDialog
+        open={creatingAbility || editingAbility !== null}
+        ability={editingAbility}
+        onClose={() => {
+          setCreatingAbility(false)
+          setEditingAbility(null)
         }}
+        onSave={saveAbility}
       />
 
       <AddRaceProficiencyModal
@@ -473,151 +451,6 @@ export function CharacterRaceTab({
         }}
       />
     </div>
-  )
-}
-
-function AddRaceAbilityModal({
-  open,
-  onClose,
-  onSave,
-}: {
-  open: boolean
-  onClose: () => void
-  onSave: (ability: Ability) => void
-}) {
-  const [name, setName] = useState("")
-  const [description, setDescription] = useState("")
-  const [kind, setKind] = useState<AbilityKind>("passive")
-  const [actionKind, setActionKind] =
-    useState<AbilityActionKind>("action")
-  const [error, setError] = useState("")
-
-  if (!open) return null
-
-  function reset() {
-    setName("")
-    setDescription("")
-    setKind("passive")
-    setActionKind("action")
-    setError("")
-  }
-
-  function close() {
-    reset()
-    onClose()
-  }
-
-  function save() {
-    const trimmedName = name.trim()
-
-    if (!trimmedName) {
-      setError("Informe o nome da habilidade.")
-      return
-    }
-
-    onSave({
-      id: crypto.randomUUID(),
-      name: trimmedName,
-      description: description.trim() || undefined,
-      kind,
-      actionKind: kind === "active" ? actionKind : undefined,
-    })
-
-    reset()
-  }
-
-  return (
-    <ModalShell
-      title="Adicionar habilidade racial"
-      description="Cadastre uma habilidade natural concedida pela raça."
-      onClose={close}
-    >
-      <div className="grid gap-4">
-        <label className="grid gap-1.5">
-          <span className="text-xs font-medium text-textH">
-            Nome
-          </span>
-
-          <Input
-            value={name}
-            invalid={Boolean(error)}
-            placeholder="Ex: Visão no Escuro"
-            onChange={(event) => {
-              setName(event.target.value)
-              setError("")
-            }}
-          />
-        </label>
-
-        <label className="grid gap-1.5">
-          <span className="text-xs font-medium text-textH">
-            Tipo
-          </span>
-
-          <Select
-            value={kind}
-            onChange={(event) =>
-              setKind(event.target.value as AbilityKind)
-            }
-          >
-            <option value="passive">Passiva</option>
-            <option value="active">Ativa</option>
-          </Select>
-        </label>
-
-        {kind === "active" ? (
-          <label className="grid gap-1.5">
-            <span className="text-xs font-medium text-textH">
-              Ação usada
-            </span>
-
-            <Select
-              value={actionKind}
-              onChange={(event) =>
-                setActionKind(
-                  event.target.value as AbilityActionKind,
-                )
-              }
-            >
-              {ABILITY_ACTIONS.map((action) => (
-                <option
-                  key={action.value}
-                  value={action.value}
-                >
-                  {action.label}
-                </option>
-              ))}
-            </Select>
-          </label>
-        ) : null}
-
-        <label className="grid gap-1.5">
-          <span className="text-xs font-medium text-textH">
-            Descrição
-          </span>
-
-          <Textarea
-            value={description}
-            placeholder="Descreva o efeito da habilidade..."
-            onChange={(event) =>
-              setDescription(event.target.value)
-            }
-          />
-        </label>
-
-        {error ? (
-          <div className="rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">
-            {error}
-          </div>
-        ) : null}
-      </div>
-
-      <ModalActions
-        onCancel={close}
-        onConfirm={save}
-        confirmLabel="Adicionar"
-      />
-    </ModalShell>
   )
 }
 
@@ -676,10 +509,7 @@ function AddRaceProficiencyModal({
     >
       <div className="grid gap-4">
         <label className="grid gap-1.5">
-          <span className="text-xs font-medium text-textH">
-            Categoria
-          </span>
-
+          <span className="text-xs font-medium text-textH">Categoria</span>
           <Select
             value={category}
             onChange={(event) =>
@@ -689,10 +519,7 @@ function AddRaceProficiencyModal({
             }
           >
             {PROFICIENCY_CATEGORIES.map((option) => (
-              <option
-                key={option.value}
-                value={option.value}
-              >
+              <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
@@ -700,10 +527,7 @@ function AddRaceProficiencyModal({
         </label>
 
         <label className="grid gap-1.5">
-          <span className="text-xs font-medium text-textH">
-            Nome
-          </span>
-
+          <span className="text-xs font-medium text-textH">Nome</span>
           <Input
             value={name}
             invalid={Boolean(error)}
@@ -719,13 +543,10 @@ function AddRaceProficiencyModal({
           <span className="text-xs font-medium text-textH">
             Observações
           </span>
-
           <Textarea
             value={notes}
             placeholder="Opcional."
-            onChange={(event) =>
-              setNotes(event.target.value)
-            }
+            onChange={(event) => setNotes(event.target.value)}
           />
         </label>
 
@@ -753,7 +574,7 @@ function ModalShell({
 }: {
   title: string
   description: string
-  children: React.ReactNode
+  children: ReactNode
   onClose: () => void
 }) {
   return (
@@ -769,13 +590,8 @@ function ModalShell({
       >
         <div className="flex items-start justify-between gap-4 border-b border-border pb-4">
           <div>
-            <h2 className="text-base font-semibold text-textH">
-              {title}
-            </h2>
-
-            <p className="mt-1 text-xs text-textMuted">
-              {description}
-            </p>
+            <h2 className="text-base font-semibold text-textH">{title}</h2>
+            <p className="mt-1 text-xs text-textMuted">{description}</p>
           </div>
 
           <button
@@ -788,9 +604,7 @@ function ModalShell({
           </button>
         </div>
 
-        <div className="py-4">
-          {children}
-        </div>
+        <div className="py-4">{children}</div>
       </div>
     </div>
   )
@@ -807,19 +621,10 @@ function ModalActions({
 }) {
   return (
     <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
-      <Button
-        size="sm"
-        variant="secondary"
-        onClick={onCancel}
-      >
+      <Button size="sm" variant="secondary" onClick={onCancel}>
         Cancelar
       </Button>
-
-      <Button
-        size="sm"
-        variant="primary"
-        onClick={onConfirm}
-      >
+      <Button size="sm" variant="primary" onClick={onConfirm}>
         <Plus className="h-4 w-4" />
         {confirmLabel}
       </Button>
@@ -833,23 +638,6 @@ function EmptyCard({ text }: { text: string }) {
       {text}
     </div>
   )
-}
-
-function formatAbilityMeta(ability: Ability): string {
-  const kind = ability.kind === "active" ? "Ativa" : "Passiva"
-
-  if (ability.kind !== "active") return kind
-
-  return `${kind} • ${formatActionKind(ability.actionKind)}`
-}
-
-function formatActionKind(actionKind?: AbilityActionKind): string {
-  if (actionKind === "action") return "Ação"
-  if (actionKind === "bonusAction") return "Ação bônus"
-  if (actionKind === "reaction") return "Reação"
-  if (actionKind === "free") return "Livre"
-
-  return "Ação"
 }
 
 function formatProficiencyCategory(
@@ -866,6 +654,5 @@ function formatProficiencyCategory(
   if (category === "game") return "Jogo"
   if (category === "skill") return "Perícia"
   if (category === "saving-throw") return "Teste de resistência"
-
   return "Outro"
 }
