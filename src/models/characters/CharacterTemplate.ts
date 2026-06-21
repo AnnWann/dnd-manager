@@ -137,6 +137,8 @@ import type { ClassName } from "../sheet/Class"
 import type { CharacterSpells } from "../magic/spells/CharacterSpells"
 import type { MetamagicId } from "../magic/metamagic/Metamagic"
 import type { SpellSource } from "../magic/spells/SpellSource"
+import type { Proficiency, ProficiencyCategory } from "../sheet/Proficiency"
+import { addProficiency, hasProficiency, removeProficiency, updateProficiency } from "./characterProficiencies"
 
 export type CharacterTemplateProps = {
   id: string,
@@ -206,6 +208,7 @@ export class CharacterTemplate {
         },
         savingThrowProficiencies:
           props.sheet?.savingThrowProficiencies ?? {},
+        proficiencies: [],
         skills: props.sheet?.skills ?? {},
         race: props.sheet?.race ?? {
           race: "human",
@@ -457,6 +460,15 @@ export class CharacterTemplate {
   addDeathSaveFailure(): CharacterTemplate {return addDeathSaveFailure(this)}
   resetDeathSaves(): CharacterTemplate {return resetDeathSaves(this)}
   longRestHp(): CharacterTemplate {return longRestHp(this)}
+    /**
+   *
+   * PROFICIENCIES
+   *
+   */
+  addProficiency(proficiency: Proficiency): CharacterTemplate { return addProficiency(this, proficiency)}
+  updateProficiency( proficiency: Proficiency): CharacterTemplate { return updateProficiency(this, proficiency)}
+  removeProficiency(proficiencyId: string): CharacterTemplate {return removeProficiency(this, proficiencyId)}
+  hasProficiency(category: ProficiencyCategory,name: string): boolean {return hasProficiency(this, category, name)}
 
   getClassLevel(className: ClassName): number {
     return (

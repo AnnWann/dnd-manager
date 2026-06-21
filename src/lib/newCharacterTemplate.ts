@@ -28,6 +28,7 @@ export function newCharacterTemplate(name: string, owner: Player): CharacterTemp
       },
       savingThrowProficiencies: {},
       skills: {},
+      proficiencies: [],
       race: {
         race: 'human',
         naturalAbilities: [],

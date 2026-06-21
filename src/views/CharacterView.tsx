@@ -7,6 +7,7 @@ import { CharacterInventory } from "../features/characters/inventory/characterIn
 import { CharacterViewTabs, type CharacterTab } from "../features/characters/characterViewTabs"
 import { CharacterMagic } from "../features/characters/magic/characterMagicModule"
 import { useCharacterContext } from "../contexts/characterContext"
+import { CharacterProficiencies } from "../features/characters/proficiencies/characterProficiencies"
 
 export function CharacterView() {
   const {
@@ -107,6 +108,13 @@ export function CharacterView() {
 
       {activeTab === "spellsList" && (
         <CharacterMagic
+          character={activeCharacter}
+          updateCharacter={updateCharacter}
+        />
+      )}
+
+      {activeTab === "proficiencies" && (
+        <CharacterProficiencies
           character={activeCharacter}
           updateCharacter={updateCharacter}
         />

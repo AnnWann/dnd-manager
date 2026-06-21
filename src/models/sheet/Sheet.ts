@@ -1,4 +1,5 @@
 import type { CharacterType } from "../characters/CharacterType"
+import type { Proficiency } from "./Proficiency"
 import type { CharacterRace } from "../races/CharacterRace"
 import type { CharacterAttribute } from "./CharacterAttribute"
 import type { CharacterSkills } from "./CharacterSkills"
@@ -19,6 +20,7 @@ export type Sheet = {
   attributes: CharacterAttribute
   skills: CharacterSkills
   savingThrowProficiencies: SavingThrowProficiencies
+  proficiencies: Proficiency[]
 
   classes?: CharacterClassInterface[]
   race: CharacterRace
