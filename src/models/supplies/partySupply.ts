@@ -42,7 +42,7 @@ export function getDefaultRaceSupplyConsumption(
     normalizedSubrace.includes("meio gigante")
 
   if (race === "goliath" || isHalfGiant) {
-    return { food: 2, drink: 2 }
+    return { food: 2, drink: 1 }
   }
 
   if (
@@ -50,7 +50,7 @@ export function getDefaultRaceSupplyConsumption(
     race === "gnome" ||
     race === "deep-gnome"
   ) {
-    return { food: 0.5, drink: 0.5 }
+    return { food: 0.5, drink: 1 }
   }
 
   return { food: 1, drink: 1 }
