@@ -27,7 +27,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         aria-invalid={invalid || undefined}
         className={cn(
           [
-            "h-10 w-full rounded-lg border px-3",
+            "h-10 w-full min-w-0 max-w-full rounded-lg border px-3",
             "bg-bg text-sm text-textH",
             "placeholder:text-textMuted",
             "shadow-theme-sm",
