@@ -1,4 +1,5 @@
 import { Button } from "../../../components/ui/Button"
+import { useMagicContext } from "../../../contexts/magicContext"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
 
 type Props<T extends Equipment> = {
@@ -10,6 +11,7 @@ export function EquipmentFeaturesList<T extends Equipment>({
   equipment,
   onUpdate,
 }: Props<T>) {
+  const { getSpellByIndex } = useMagicContext()
   const abilities = equipment.abilities ?? []
   const spells = equipment.spells ?? []
 
@@ -70,7 +72,8 @@ export function EquipmentFeaturesList<T extends Equipment>({
         </div>
 
         <div className="rounded-full border border-border bg-bg px-2 py-1 text-[10px] font-semibold text-textMuted">
-          {abilities.length + spells.length} recurso{abilities.length + spells.length === 1 ? "" : "s"}
+          {abilities.length + spells.length} recurso
+          {abilities.length + spells.length === 1 ? "" : "s"}
         </div>
       </div>
 
@@ -97,7 +100,6 @@ export function EquipmentFeaturesList<T extends Equipment>({
                     <div className="text-sm font-semibold text-textH">
                       {ability.name || "Habilidade sem nome"}
                     </div>
-
                     <span className="rounded-full bg-accentBg px-2 py-0.5 text-[10px] font-semibold text-accent">
                       Habilidade
                     </span>
@@ -114,6 +116,27 @@ export function EquipmentFeaturesList<T extends Equipment>({
                       Sem limite de uso
                     </div>
                   )}
+
+                  {ability.grantedSpells?.length ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {ability.grantedSpells.map((grant) => {
+                        const grantedSpell = getSpellByIndex(grant.index)
+                        return (
+                          <span
+                            key={grant.index}
+                            className="rounded-full border border-border px-2 py-0.5 text-[10px] text-textMuted"
+                          >
+                            {grantedSpell?.displayName ||
+                              grantedSpell?.name ||
+                              grant.index}
+                            {grant.castingMode === "known"
+                              ? " • slots"
+                              : " • habilidade"}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="flex shrink-0 gap-2">
@@ -150,37 +173,40 @@ export function EquipmentFeaturesList<T extends Equipment>({
           )
         })}
 
-        {spells.map((spell, index) => {
-          const canConsume = spell.usage.reset !== "spellSlot"
+        {spells.map((spellGrant, index) => {
+          const spell = getSpellByIndex(spellGrant.index)
+          const canConsume = spellGrant.usage.reset !== "spellSlot"
           const canRestore =
-            spell.usage.reset !== "spellSlot" &&
-            spell.usage.reset !== "limited"
+            spellGrant.usage.reset !== "spellSlot" &&
+            spellGrant.usage.reset !== "limited"
           const remaining = Math.max(
             0,
-            spell.usage.max - spell.usage.used,
+            spellGrant.usage.max - spellGrant.usage.used,
           )
 
           return (
             <div
-              key={`${spell.index}-${index}`}
+              key={`${spellGrant.index}-${index}`}
               className="rounded-lg bg-bg px-3 py-3 shadow-theme-sm"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="truncate text-sm font-semibold text-textH">
-                      {spell.index || "Magia sem nome"}
+                      {spell?.displayName ||
+                        spell?.name ||
+                        spellGrant.index ||
+                        "Magia sem nome"}
                     </div>
-
                     <span className="rounded-full bg-accentBg px-2 py-0.5 text-[10px] font-semibold text-accent">
                       Magia
                     </span>
                   </div>
 
                   <div className="mt-1 text-xs font-medium text-text">
-                    {spell.usage.reset === "spellSlot"
-                      ? "Usa espaço de magia"
-                      : `${remaining}/${spell.usage.max} cargas disponíveis`}
+                    {spellGrant.usage.reset === "spellSlot"
+                      ? "Aprendida pelo item • usa espaços normais"
+                      : `${remaining}/${spellGrant.usage.max} cargas do item`}
                   </div>
                 </div>
 
@@ -189,8 +215,12 @@ export function EquipmentFeaturesList<T extends Equipment>({
                     <Button
                       size="sm"
                       variant="secondary"
-                      disabled={spell.usage.used >= spell.usage.max}
-                      onClick={() => updateSpellCharge(spell.index, 1)}
+                      disabled={
+                        spellGrant.usage.used >= spellGrant.usage.max
+                      }
+                      onClick={() =>
+                        updateSpellCharge(spellGrant.index, 1)
+                      }
                     >
                       Consumir
                     </Button>
@@ -200,8 +230,10 @@ export function EquipmentFeaturesList<T extends Equipment>({
                     <Button
                       size="sm"
                       variant="ghost"
-                      disabled={spell.usage.used <= 0}
-                      onClick={() => updateSpellCharge(spell.index, -1)}
+                      disabled={spellGrant.usage.used <= 0}
+                      onClick={() =>
+                        updateSpellCharge(spellGrant.index, -1)
+                      }
                     >
                       Regenerar
                     </Button>
