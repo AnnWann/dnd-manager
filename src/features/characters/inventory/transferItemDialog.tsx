@@ -15,6 +15,7 @@ type Props = {
   item: Itemmable | null
   from: InventoryLocation
   characters: CharacterTemplate[]
+  canViewCharacterDetails: (characterId: string) => boolean
   onClose: () => void
   onTransfer: (request: TransferItemRequest) => void
 }
@@ -24,6 +25,7 @@ export function TransferItemDialog({
   item,
   from,
   characters,
+  canViewCharacterDetails,
   onClose,
   onTransfer,
 }: Props) {
@@ -50,21 +52,28 @@ export function TransferItemDialog({
         continue
       }
 
-      const owner = character.get("owner")?.name?.trim()
+      const characterId = character.get("id")
+      const canViewDetails = canViewCharacterDetails(characterId)
+      const owner = canViewDetails
+        ? character.get("owner")?.name?.trim()
+        : undefined
+
       options.push({
-        key: `character:${character.get("id")}`,
-        label: owner
-          ? `${character.get("name")} • ${owner}`
-          : character.get("name"),
+        key: `character:${characterId}`,
+        label: canViewDetails
+          ? owner
+            ? `${character.get("name")} • ${owner}`
+            : character.get("name")
+          : `${character.get("name")} • Personagem privado`,
         location: {
           type: "character",
-          characterId: character.get("id"),
+          characterId,
         },
       })
     }
 
     return options
-  }, [characters, from])
+  }, [canViewCharacterDetails, characters, from])
 
   const [destinationKey, setDestinationKey] = useState("")
   const [quantity, setQuantity] = useState(1)
