@@ -26,6 +26,7 @@ export function newCharacterTemplate(
         mobility: 9,
         initiative: 0,
         passive_perception: 10,
+        exhaustion: 0,
       },
       attributes: {
         str: 10,
