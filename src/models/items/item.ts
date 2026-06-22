@@ -18,6 +18,14 @@ export type ItemKind =
   | "consumable"
   | "throwable"
   | "supply"
+  | "ammunition"
+  | "tool"
+  | "focus"
+  | "instrument"
+  | "pack"
+  | "gear"
+  | "currency"
+  | "shield"
 
 export type Item = {
   id: string
