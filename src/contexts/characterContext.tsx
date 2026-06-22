@@ -16,12 +16,15 @@ import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from "../models/characters/CharacterTemplate"
-import { takeLongRest } from "../models/characters/characterRest"
+import {
+  takeLongRest,
+  takePartialLongRest,
+} from "../models/characters/characterRest"
 import type { Itemmable } from "../models/items/item"
 import type { Player } from "../models/player/Player"
 import {
   consumeSelectedSupplies,
-  getEffectiveRaceSupplyConsumption,
+  getRequiredSupplyForRace,
   type LongRestSupplySelection,
 } from "../models/supplies/partySupply"
 
@@ -244,25 +247,32 @@ export function CharacterProvider({
 
       if (!canRest) return previous
 
-      const required = getEffectiveRaceSupplyConsumption(
+      const requiredSupply = getRequiredSupplyForRace(
         restedCharacter.get("sheet").race,
       )
       const consumption = consumeSelectedSupplies(
         previous.partyInventory ?? [],
         selection,
-        required.food,
-        required.drink,
       )
 
       if (!consumption.valid) return previous
 
+      const isPartialRest =
+        consumption.selectedPortions + 0.000001 < requiredSupply
+
       return {
         ...previous,
-        characters: characterObjects.map((character) =>
-          character.get("id") === characterId
-            ? takeLongRest(character).toJSON()
-            : character.toJSON(),
-        ),
+        characters: characterObjects.map((character) => {
+          if (character.get("id") !== characterId) {
+            return character.toJSON()
+          }
+
+          return (
+            isPartialRest
+              ? takePartialLongRest(character)
+              : takeLongRest(character)
+          ).toJSON()
+        }),
         partyInventory: consumption.items,
       }
     })
