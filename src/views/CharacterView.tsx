@@ -11,7 +11,7 @@ import { CharacterProficienciesTab } from "../features/characters/proficiencies/
 import { CharacterRaceTab } from "../features/characters/race/characterRaceV2"
 import { CharacterProfileTab } from "../features/characters/profile/characterProfile"
 import { CharacterRestControls } from "../features/characters/rest/characterRestControls"
-import { CharacterCreationWizard } from "../features/characters/creation/characterCreationWizardV3"
+import { CharacterCreationWizard } from "../features/characters/creation/characterCreationWizardV4"
 
 export function CharacterView() {
   const {
