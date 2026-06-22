@@ -25,6 +25,7 @@ export function PartyInventoryView() {
   const {
     partyInventory,
     transferCharacters,
+    canViewCharacterDetails,
     addPartyItem,
     updatePartyItem,
     removePartyItem,
@@ -258,22 +259,41 @@ export function PartyInventoryView() {
 
             {supplyCalculation.consumers.length > 0 ? (
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {supplyCalculation.consumers.map((consumer) => (
-                  <div
-                    key={consumer.characterId}
-                    className="min-w-0 rounded-xl border border-border bg-bg-subtle p-3"
-                  >
-                    <div className="truncate text-sm font-semibold text-textH">
-                      {consumer.name}
+                {supplyCalculation.consumers.map((consumer) => {
+                  const canViewDetails = canViewCharacterDetails(
+                    consumer.characterId,
+                  )
+
+                  return (
+                    <div
+                      key={consumer.characterId}
+                      className="min-w-0 rounded-xl border border-border bg-bg-subtle p-3"
+                    >
+                      <div className="truncate text-sm font-semibold text-textH">
+                        {consumer.name}
+                      </div>
+                      {canViewDetails ? (
+                        <>
+                          <div className="mt-1 text-[11px] text-textMuted">
+                            {formatRaceName(consumer.race)}
+                          </div>
+                          <div className="mt-2 text-xs text-text">
+                            Suprimento por descanso: {formatNumber(consumer.supplyPerLongRest)}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="mt-1 text-[11px] font-medium text-textMuted">
+                            Personagem privado
+                          </div>
+                          <div className="mt-2 text-xs text-textMuted">
+                            Raça, ficha e consumo individual ocultos.
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <div className="mt-1 text-[11px] text-textMuted">
-                      {formatRaceName(consumer.race)}
-                    </div>
-                    <div className="mt-2 text-xs text-text">
-                      Suprimento por descanso: {formatNumber(consumer.supplyPerLongRest)}
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
               <p className="text-xs leading-5 text-textMuted">
@@ -284,8 +304,9 @@ export function PartyInventoryView() {
           </div>
 
           <p className="text-[11px] leading-4 text-textMuted">
-            Golias e meio-gigantes precisam de 2 porções por descanso; halflings
-            e gnomos precisam de 0,5; as demais raças usam 1 porção por padrão.
+            Personagens privados aparecem pelo nome para permitir organização e
+            transferências, mas seus detalhes continuam visíveis apenas ao dono e
+            ao mestre.
           </p>
         </CardContent>
       </Card>
@@ -313,6 +334,7 @@ export function PartyInventoryView() {
         item={transferringItem}
         from={{ type: "party" }}
         characters={transferCharacters}
+        canViewCharacterDetails={canViewCharacterDetails}
         onClose={() => setTransferringItem(null)}
         onTransfer={transferItem}
       />
