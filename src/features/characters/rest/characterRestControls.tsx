@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState } from "react"
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react"
 import { Coffee, Moon, X } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
@@ -34,7 +39,7 @@ const DIE_ORDER: DieSides[] = [
   "d100",
 ]
 
-const PORTION_STEP = 0.25
+const QUANTITY_STEP = 1
 const PERCENTAGE_STEPS = [0, 25, 50, 75, 100] as const
 const PORTION_EPSILON = 0.000001
 
@@ -129,7 +134,12 @@ export function CharacterRestControls({
   )
 }
 
-type ShortRestDialogProps = {
+function ShortRestDialog({
+  open,
+  character,
+  onClose,
+  onConfirm,
+}: {
   open: boolean
   character: CharacterTemplate
   onClose: () => void
@@ -137,14 +147,7 @@ type ShortRestDialogProps = {
     healing: number,
     hitDiceConsumption: HitDiceConsumption,
   ) => void
-}
-
-function ShortRestDialog({
-  open,
-  character,
-  onClose,
-  onConfirm,
-}: ShortRestDialogProps) {
+}) {
   const [healing, setHealing] = useState(0)
   const [hitDiceConsumption, setHitDiceConsumption] =
     useState<HitDiceConsumption>({})
@@ -185,114 +188,103 @@ function ShortRestDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"
-      onMouseDown={resetAndClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="short-rest-title"
-        className="w-full max-w-lg rounded-xl border border-border bg-bg-elevated p-4 text-text shadow-theme-lg"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <DialogHeader
-          id="short-rest-title"
-          title="Descanso curto"
-          description="Informe a cura recebida e quantos dados de vida serão consumidos. Recursos de descanso curto e espaços de pacto serão restaurados."
-          onClose={resetAndClose}
-        />
+    <ModalShell onClose={resetAndClose} maxWidth="max-w-lg">
+      <DialogHeader
+        id="short-rest-title"
+        title="Descanso curto"
+        description="Informe a cura recebida e quantos dados de vida serão consumidos. Recursos de descanso curto e espaços de pacto serão restaurados."
+        onClose={resetAndClose}
+      />
 
-        <div className="grid gap-4 py-4">
-          <label className="grid gap-1.5">
+      <div className="grid gap-4 py-4">
+        <label className="grid gap-1.5">
+          <span className="text-xs font-medium text-textH">
+            Pontos de vida recuperados
+          </span>
+          <Input
+            type="number"
+            min={0}
+            value={healing}
+            onChange={(event) =>
+              setHealing(
+                Math.max(0, Math.trunc(Number(event.target.value) || 0)),
+              )
+            }
+          />
+        </label>
+
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-xs font-medium text-textH">
-              Pontos de vida recuperados
+              Dados de vida consumidos
             </span>
-            <Input
-              type="number"
-              min={0}
-              value={healing}
-              onChange={(event) =>
-                setHealing(
-                  Math.max(0, Math.trunc(Number(event.target.value) || 0)),
-                )
-              }
-            />
-          </label>
-
-          <div className="grid gap-2">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-medium text-textH">
-                Dados de vida consumidos
-              </span>
-              <span className="text-[11px] font-semibold text-textMuted">
-                Total: {totalDice}
-              </span>
-            </div>
-
-            {availableHitDice.length > 0 ? (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {availableHitDice.map(({ side, data }) => {
-                  if (!data) return null
-                  const currentAmount = hitDiceConsumption[side] ?? 0
-
-                  return (
-                    <label
-                      key={side}
-                      className="grid grid-cols-[1fr_80px] items-center gap-3 rounded-lg border border-border bg-bg-subtle p-3"
-                    >
-                      <span>
-                        <span className="block text-sm font-semibold text-textH">
-                          {side}
-                        </span>
-                        <span className="block text-[11px] text-textMuted">
-                          {data.current.quantity}/{data.max.quantity} disponíveis
-                        </span>
-                      </span>
-
-                      <Input
-                        type="number"
-                        min={0}
-                        max={data.current.quantity}
-                        className="text-center"
-                        value={currentAmount}
-                        onChange={(event) => {
-                          const nextAmount = Math.max(
-                            0,
-                            Math.min(
-                              data.current.quantity,
-                              Math.trunc(Number(event.target.value) || 0),
-                            ),
-                          )
-
-                          setHitDiceConsumption((current) => ({
-                            ...current,
-                            [side]: nextAmount,
-                          }))
-                        }}
-                      />
-                    </label>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="rounded-lg border border-dashed border-border bg-bg-subtle px-3 py-4 text-center text-xs text-textMuted">
-                Nenhum dado de vida disponível. O descanso ainda pode restaurar habilidades e espaços de pacto.
-              </div>
-            )}
+            <span className="text-[11px] font-semibold text-textMuted">
+              Total: {totalDice}
+            </span>
           </div>
-        </div>
 
-        <div className="flex justify-end gap-2 border-t border-border pt-4">
-          <Button size="sm" variant="secondary" onClick={resetAndClose}>
-            Cancelar
-          </Button>
-          <Button size="sm" variant="primary" onClick={confirm}>
-            Concluir descanso
-          </Button>
+          {availableHitDice.length > 0 ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {availableHitDice.map(({ side, data }) => {
+                if (!data) return null
+                const currentAmount = hitDiceConsumption[side] ?? 0
+
+                return (
+                  <label
+                    key={side}
+                    className="grid grid-cols-[1fr_80px] items-center gap-3 rounded-lg border border-border bg-bg-subtle p-3"
+                  >
+                    <span>
+                      <span className="block text-sm font-semibold text-textH">
+                        {side}
+                      </span>
+                      <span className="block text-[11px] text-textMuted">
+                        {data.current.quantity}/{data.max.quantity} disponíveis
+                      </span>
+                    </span>
+
+                    <Input
+                      type="number"
+                      min={0}
+                      max={data.current.quantity}
+                      className="text-center"
+                      value={currentAmount}
+                      onChange={(event) => {
+                        const nextAmount = Math.max(
+                          0,
+                          Math.min(
+                            data.current.quantity,
+                            Math.trunc(Number(event.target.value) || 0),
+                          ),
+                        )
+
+                        setHitDiceConsumption((current) => ({
+                          ...current,
+                          [side]: nextAmount,
+                        }))
+                      }}
+                    />
+                  </label>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-border bg-bg-subtle px-3 py-4 text-center text-xs text-textMuted">
+              Nenhum dado de vida disponível. O descanso ainda pode restaurar habilidades e espaços de pacto.
+            </div>
+          )}
         </div>
       </div>
-    </div>
+
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button size="sm" variant="secondary" onClick={resetAndClose}>
+          Cancelar
+        </Button>
+        <Button size="sm" variant="primary" onClick={confirm}>
+          Concluir descanso
+        </Button>
+      </div>
+    </ModalShell>
   )
 }
 
@@ -329,7 +321,9 @@ function LongRestDialog({
     Record<string, BarrelSelection>
   >({})
 
-  function applyAutomaticSelection() {
+  useEffect(() => {
+    if (!open) return
+
     const automaticSelection = createAutomaticLongRestSelection(
       partyInventory,
       requiredSupply,
@@ -339,11 +333,6 @@ function LongRestDialog({
     setBarrelSelectionByItem(
       selectionToBarrelSelections(automaticSelection, supplies),
     )
-  }
-
-  useEffect(() => {
-    if (!open) return
-    applyAutomaticSelection()
   }, [open, partyInventory, requiredSupply, supplies])
 
   const selection = useMemo<LongRestSupplySelection[]>(
@@ -382,6 +371,7 @@ function LongRestDialog({
         .filter((entry) => entry.portions > 0),
     [barrelSelectionByItem, portionsByItem, supplies],
   )
+
   const totals = useMemo(
     () => getSupplySelectionTotals(partyInventory, selection),
     [partyInventory, selection],
@@ -393,21 +383,23 @@ function LongRestDialog({
   const difference = selectedSupply - requiredSupply
   const isPartial = difference < -PORTION_EPSILON
 
-  function setPortions(item: SupplyItem, value: number) {
-    const available = getTotalSupplyPortions(item)
-    const snapped = Math.round(value / PORTION_STEP) * PORTION_STEP
-    const nextValue = Math.max(0, Math.min(available, snapped))
+  function setDirectQuantity(item: SupplyItem, value: number) {
+    const quantity = clampWholeQuantity(
+      value,
+      getTotalSupplyPortions(item),
+    )
 
     setPortionsByItem((current) => ({
       ...current,
-      [item.id]: nextValue,
+      [item.id]: quantity,
     }))
   }
 
   function setBarrelQuantity(item: SupplyItem, value: number) {
-    const available = getTotalSupplyPortions(item)
-    const snapped = Math.round(value / PORTION_STEP) * PORTION_STEP
-    const quantity = Math.max(0, Math.min(available, snapped))
+    const quantity = clampWholeQuantity(
+      value,
+      getTotalSupplyPortions(item),
+    )
 
     setBarrelSelectionByItem((current) => ({
       ...current,
@@ -434,7 +426,15 @@ function LongRestDialog({
   }
 
   function autoSelect() {
-    applyAutomaticSelection()
+    const automaticSelection = createAutomaticLongRestSelection(
+      partyInventory,
+      requiredSupply,
+    )
+
+    setPortionsByItem(selectionToPortions(automaticSelection))
+    setBarrelSelectionByItem(
+      selectionToBarrelSelections(automaticSelection, supplies),
+    )
   }
 
   function clearSelection() {
@@ -453,235 +453,232 @@ function LongRestDialog({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center overflow-x-hidden bg-black/65 p-2 backdrop-blur-sm sm:p-4"
-      onMouseDown={resetAndClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="long-rest-title"
-        className="grid max-h-[94vh] w-full min-w-0 max-w-2xl overflow-hidden rounded-xl border border-border bg-bg-elevated p-3 text-text shadow-theme-lg sm:p-4"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <DialogHeader
-          id="long-rest-title"
-          title="Preparar descanso longo"
-          description="Nos barris, escolha primeiro quantas rações entram na seleção e depois qual porcentagem dessas rações será consumida."
-          onClose={resetAndClose}
+    <ModalShell onClose={resetAndClose} maxWidth="max-w-2xl">
+      <DialogHeader
+        id="long-rest-title"
+        title="Preparar descanso longo"
+        description="Digite ou ajuste na barra quantas rações serão selecionadas. Nos barris, a porcentagem é aplicada apenas sobre essa quantidade."
+        onClose={resetAndClose}
+      />
+
+      <div className="grid min-h-0 gap-4 overflow-y-auto py-4 pr-1">
+        <SupplyBalanceBar
+          required={requiredSupply}
+          selected={selectedSupply}
         />
 
-        <div className="grid min-h-0 gap-4 overflow-y-auto py-4 pr-1">
-          <SupplyBalanceBar
-            required={requiredSupply}
-            selected={selectedSupply}
-          />
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button
+            className="w-full sm:w-auto"
+            size="sm"
+            variant="secondary"
+            onClick={clearSelection}
+          >
+            Limpar seleção
+          </Button>
+          <Button
+            className="w-full sm:w-auto"
+            size="sm"
+            variant="secondary"
+            onClick={autoSelect}
+          >
+            Seleção automática
+          </Button>
+        </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button
-              className="w-full sm:w-auto"
-              size="sm"
-              variant="secondary"
-              onClick={clearSelection}
-            >
-              Limpar seleção
-            </Button>
-            <Button
-              className="w-full sm:w-auto"
-              size="sm"
-              variant="secondary"
-              onClick={autoSelect}
-            >
-              Seleção automática
-            </Button>
-          </div>
+        {supplies.length > 0 ? (
+          <div className="grid gap-2">
+            {supplies.map((item) => {
+              const available = getTotalSupplyPortions(item)
+              const isBarrel = isBarrelSupply(item)
+              const directQuantity = Math.min(
+                available,
+                Math.max(0, portionsByItem[item.id] ?? 0),
+              )
+              const barrelSelection = barrelSelectionByItem[item.id] ?? {
+                quantity: 0,
+                percentage: 100,
+              }
+              const selectedRations = Math.min(
+                available,
+                Math.max(0, barrelSelection.quantity),
+              )
+              const percentage = barrelSelection.percentage
+              const consumedPortions = isBarrel
+                ? selectedRations * (percentage / 100)
+                : directQuantity
 
-          {supplies.length > 0 ? (
-            <div className="grid gap-2">
-              {supplies.map((item) => {
-                const available = getTotalSupplyPortions(item)
-                const isBarrel = isBarrelSupply(item)
-                const directPortions = Math.min(
-                  available,
-                  Math.max(0, portionsByItem[item.id] ?? 0),
-                )
-                const barrelSelection = barrelSelectionByItem[item.id] ?? {
-                  quantity: 0,
-                  percentage: 100,
-                }
-                const selectedRations = Math.min(
-                  available,
-                  Math.max(0, barrelSelection.quantity),
-                )
-                const percentage = barrelSelection.percentage
-                const consumedPortions = isBarrel
-                  ? selectedRations * (percentage / 100)
-                  : directPortions
-
-                return (
-                  <div
-                    key={item.id}
-                    className="grid min-w-0 gap-4 rounded-xl border border-border bg-bg-subtle p-3"
-                  >
-                    <div className="min-w-0">
-                      <div className="break-words text-sm font-semibold text-textH">
-                        {item.name || "Suprimento sem nome"}
-                      </div>
-                      <div className="mt-1 break-words text-[11px] leading-4 text-textMuted">
-                        {supplyCategoryLabel(item)} • {formatPortions(available)} disponíveis
-                      </div>
+              return (
+                <div
+                  key={item.id}
+                  className="grid min-w-0 gap-4 rounded-xl border border-border bg-bg-subtle p-3"
+                >
+                  <div className="min-w-0">
+                    <div className="break-words text-sm font-semibold text-textH">
+                      {item.name || "Suprimento sem nome"}
                     </div>
+                    <div className="mt-1 break-words text-[11px] leading-4 text-textMuted">
+                      {supplyCategoryLabel(item)} • {formatPortions(available)} disponíveis
+                    </div>
+                  </div>
 
-                    {isBarrel ? (
-                      <>
-                        <label className="grid min-w-0 gap-2">
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                            <span className="font-medium text-textH">
-                              Rações selecionadas
-                            </span>
-                            <span className="rounded-md border border-border bg-bg px-2 py-1 font-semibold text-textH">
-                              {formatPortions(selectedRations)}
-                            </span>
-                          </div>
+                  {isBarrel ? (
+                    <>
+                      <WholeQuantityControl
+                        label="Rações selecionadas"
+                        value={selectedRations}
+                        maximum={available}
+                        onChange={(value) =>
+                          setBarrelQuantity(item, value)
+                        }
+                      />
 
-                          <input
-                            type="range"
-                            min={0}
-                            max={available}
-                            step={PORTION_STEP}
-                            value={selectedRations}
-                            onChange={(event) =>
-                              setBarrelQuantity(
-                                item,
-                                Number(event.target.value),
-                              )
-                            }
-                            className="w-full cursor-pointer"
-                          />
-
-                          <div className="flex justify-between text-[10px] text-textMuted">
-                            <span>0</span>
-                            <span>{formatCompactNumber(available / 2)}</span>
-                            <span>{formatCompactNumber(available)}</span>
-                          </div>
-                        </label>
-
-                        <label className="grid min-w-0 gap-2 border-t border-border pt-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                            <span className="font-medium text-textH">
-                              Percentual das rações selecionadas
-                            </span>
-                            <span className="rounded-md border border-border bg-bg px-2 py-1 font-semibold text-textH">
-                              {formatPercentage(percentage)}
-                            </span>
-                          </div>
-
-                          <input
-                            type="range"
-                            min={0}
-                            max={100}
-                            step={25}
-                            value={percentage}
-                            onChange={(event) =>
-                              setBarrelPercentage(
-                                item,
-                                Number(event.target.value),
-                              )
-                            }
-                            className="w-full cursor-pointer"
-                          />
-
-                          <div className="flex justify-between text-[10px] text-textMuted">
-                            {PERCENTAGE_STEPS.map((step) => (
-                              <span key={step}>{step}%</span>
-                            ))}
-                          </div>
-                        </label>
-
-                        <div className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs text-textH">
-                          Consumo resultante: {formatPortions(consumedPortions)}
-                          <span className="ml-1 text-textMuted">
-                            ({formatCompactNumber(selectedRations)} × {formatPercentage(percentage)})
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <label className="grid min-w-0 gap-2">
+                      <label className="grid min-w-0 gap-2 border-t border-border pt-3">
                         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                           <span className="font-medium text-textH">
-                            Porções a consumir
+                            Percentual das rações selecionadas
                           </span>
                           <span className="rounded-md border border-border bg-bg px-2 py-1 font-semibold text-textH">
-                            {formatPortions(directPortions)}
+                            {formatPercentage(percentage)}
                           </span>
                         </div>
 
                         <input
                           type="range"
                           min={0}
-                          max={available}
-                          step={PORTION_STEP}
-                          value={directPortions}
+                          max={100}
+                          step={25}
+                          value={percentage}
                           onChange={(event) =>
-                            setPortions(item, Number(event.target.value))
+                            setBarrelPercentage(
+                              item,
+                              Number(event.target.value),
+                            )
                           }
                           className="w-full cursor-pointer"
                         />
 
                         <div className="flex justify-between text-[10px] text-textMuted">
-                          <span>0</span>
-                          <span>{formatCompactNumber(available / 2)}</span>
-                          <span>{formatCompactNumber(available)}</span>
+                          {PERCENTAGE_STEPS.map((step) => (
+                            <span key={step}>{step}%</span>
+                          ))}
                         </div>
                       </label>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-border bg-bg-subtle px-3 py-6 text-center text-xs leading-5 text-textMuted">
-              O inventário do grupo não possui suprimentos disponíveis. Ainda é possível fazer um descanso parcial sem consumir nada.
-            </div>
-          )}
 
-          {isPartial ? (
-            <div className="rounded-xl border border-danger bg-dangerBg p-3 text-xs leading-5 text-danger">
-              O suprimento selecionado está abaixo do necessário. O personagem recuperará metade dos recursos e ganhará 1 nível de exaustão.
-            </div>
-          ) : difference > PORTION_EPSILON ? (
-            <div className="rounded-xl border border-accentBorder bg-accentBg p-3 text-xs leading-5 text-textH">
-              Há suprimento acima do necessário. Tudo que foi selecionado será consumido, sem benefício adicional por enquanto.
-            </div>
-          ) : (
-            <div className="rounded-xl border border-accentBorder bg-accentBg p-3 text-xs leading-5 text-textH">
-              A seleção cobre exatamente o necessário para um descanso completo.
-            </div>
-          )}
-        </div>
+                      <div className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs text-textH">
+                        Consumo resultante: {formatPortions(consumedPortions)}
+                        <span className="ml-1 text-textMuted">
+                          ({formatCompactNumber(selectedRations)} × {formatPercentage(percentage)})
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <WholeQuantityControl
+                      label="Rações a consumir"
+                      value={directQuantity}
+                      maximum={available}
+                      onChange={(value) =>
+                        setDirectQuantity(item, value)
+                      }
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-border bg-bg-subtle px-3 py-6 text-center text-xs leading-5 text-textMuted">
+            O inventário do grupo não possui suprimentos disponíveis. Ainda é possível fazer um descanso parcial sem consumir nada.
+          </div>
+        )}
 
-        <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end">
-          <Button
-            className="w-full sm:w-auto"
-            size="sm"
-            variant="secondary"
-            onClick={resetAndClose}
-          >
-            Cancelar
-          </Button>
-          <Button
-            className="w-full sm:w-auto"
-            size="sm"
-            variant="primary"
-            onClick={confirm}
-          >
-            {isPartial
-              ? "Consumir e descansar parcialmente"
-              : "Consumir e descansar"}
-          </Button>
-        </div>
+        {isPartial ? (
+          <div className="rounded-xl border border-danger bg-dangerBg p-3 text-xs leading-5 text-danger">
+            O suprimento selecionado está abaixo do necessário. O personagem recuperará metade dos recursos e ganhará 1 nível de exaustão.
+          </div>
+        ) : difference > PORTION_EPSILON ? (
+          <div className="rounded-xl border border-accentBorder bg-accentBg p-3 text-xs leading-5 text-textH">
+            Há suprimento acima do necessário. Tudo que foi selecionado será consumido, sem benefício adicional por enquanto.
+          </div>
+        ) : (
+          <div className="rounded-xl border border-accentBorder bg-accentBg p-3 text-xs leading-5 text-textH">
+            A seleção cobre exatamente o necessário para um descanso completo.
+          </div>
+        )}
       </div>
-    </div>
+
+      <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end">
+        <Button
+          className="w-full sm:w-auto"
+          size="sm"
+          variant="secondary"
+          onClick={resetAndClose}
+        >
+          Cancelar
+        </Button>
+        <Button
+          className="w-full sm:w-auto"
+          size="sm"
+          variant="primary"
+          onClick={confirm}
+        >
+          {isPartial
+            ? "Consumir e descansar parcialmente"
+            : "Consumir e descansar"}
+        </Button>
+      </div>
+    </ModalShell>
+  )
+}
+
+function WholeQuantityControl({
+  label,
+  value,
+  maximum,
+  onChange,
+}: {
+  label: string
+  value: number
+  maximum: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <label className="grid min-w-0 gap-2">
+      <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_110px] sm:items-end">
+        <div className="min-w-0">
+          <div className="text-xs font-medium text-textH">{label}</div>
+          <div className="mt-1 text-[11px] text-textMuted">
+            Máximo disponível: {formatCompactNumber(maximum)}
+          </div>
+        </div>
+
+        <Input
+          type="number"
+          min={0}
+          max={maximum}
+          step={QUANTITY_STEP}
+          value={value}
+          className="text-center"
+          onChange={(event) => onChange(Number(event.target.value) || 0)}
+        />
+      </div>
+
+      <input
+        type="range"
+        min={0}
+        max={maximum}
+        step={QUANTITY_STEP}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="w-full cursor-pointer"
+      />
+
+      <div className="flex justify-between text-[10px] text-textMuted">
+        <span>0</span>
+        <span>{formatCompactNumber(maximum / 2)}</span>
+        <span>{formatCompactNumber(maximum)}</span>
+      </div>
+    </label>
   )
 }
 
@@ -756,6 +753,32 @@ function SupplyBalanceBar({
   )
 }
 
+function ModalShell({
+  children,
+  onClose,
+  maxWidth,
+}: {
+  children: ReactNode
+  onClose: () => void
+  maxWidth: string
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center overflow-x-hidden bg-black/65 p-2 backdrop-blur-sm sm:p-4"
+      onMouseDown={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className={`grid max-h-[94vh] w-full min-w-0 ${maxWidth} overflow-hidden rounded-xl border border-border bg-bg-elevated p-3 text-text shadow-theme-lg sm:p-4`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
 function selectionToPortions(
   selection: LongRestSupplySelection[],
 ): Record<string, number> {
@@ -782,27 +805,19 @@ function selectionToBarrelSelections(
           Math.max(0, selectedByItem.get(item.id) ?? 0),
         )
 
-        if (
-          selected > 0 &&
-          selected < 1 &&
-          available >= 1 &&
-          PERCENTAGE_STEPS.includes(
-            Math.round(selected * 100) as (typeof PERCENTAGE_STEPS)[number],
+        if (selected > 0 && selected < 1 && available >= 1) {
+          const percentage = Math.max(
+            25,
+            Math.min(100, Math.round(selected * 4) * 25),
           )
-        ) {
-          return [
-            item.id,
-            {
-              quantity: 1,
-              percentage: Math.round(selected * 100),
-            },
-          ]
+
+          return [item.id, { quantity: 1, percentage }]
         }
 
         return [
           item.id,
           {
-            quantity: selected,
+            quantity: Math.round(selected),
             percentage: 100,
           },
         ]
@@ -815,6 +830,11 @@ function isBarrelSupply(item: SupplyItem): boolean {
     item.supplyPackage === "barrel" ||
     item.supplyUnitsPerItem === 40
   )
+}
+
+function clampWholeQuantity(value: number, maximum: number): number {
+  const integerValue = Math.round(Number(value) || 0)
+  return Math.max(0, Math.min(maximum, integerValue))
 }
 
 function supplyCategoryLabel(item: SupplyItem): string {
