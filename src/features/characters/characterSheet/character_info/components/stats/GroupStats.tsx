@@ -1,3 +1,4 @@
+import { Input } from "../../../../../../components/ui/Input"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
 import { SelectStatModule } from "./selectStatModule"
 
@@ -14,9 +15,10 @@ export function GroupStats({
   updateCharacter,
 }: Props) {
   const proficiency = character.getProficiencyBonus()
+  const exhaustion = character.get("sheet").stats.exhaustion ?? 0
 
   return (
-    <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+    <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
       <StatShell label="Classe de Armadura">
         <SelectStatModule
           name="CA"
@@ -61,6 +63,29 @@ export function GroupStats({
           updateCharacter={updateCharacter}
           fallback={10}
         />
+      </StatShell>
+
+      <StatShell label="Exaustão">
+        <label className="text-xs text-text">
+          Nível
+          <Input
+            type="number"
+            min={0}
+            max={6}
+            className="mt-1 text-center"
+            value={exhaustion}
+            onChange={(event) => {
+              const nextExhaustion = Math.max(
+                0,
+                Math.min(6, Math.trunc(Number(event.target.value) || 0)),
+              )
+
+              updateCharacter(character.get("id"), (current) =>
+                current.withStat("exhaustion", nextExhaustion),
+              )
+            }}
+          />
+        </label>
       </StatShell>
 
       <div className="flex min-h-24 flex-col items-center justify-center rounded-xl border border-accentBorder bg-accentBg p-3 text-center shadow-theme-sm">
