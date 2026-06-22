@@ -16,7 +16,7 @@ import {
 } from "../../../models/items/SupplyItem"
 import {
   createAutomaticLongRestSelection,
-  getEffectiveRaceSupplyConsumption,
+  getRequiredSupplyForRace,
   getSupplySelectionTotals,
   getTotalSupplyPortions,
   type LongRestSupplySelection,
@@ -34,6 +34,7 @@ const DIE_ORDER: DieSides[] = [
   "d100",
 ]
 
+const PERCENTAGE_STEPS = [0, 25, 50, 75, 100] as const
 const PORTION_EPSILON = 0.000001
 
 type Props = {
@@ -77,10 +78,7 @@ export function CharacterRestControls({
     <>
       <section className="flex flex-col gap-3 rounded-xl border border-border bg-bg p-3 shadow-theme-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-textH">
-            Descanso
-          </h2>
-
+          <h2 className="text-sm font-semibold text-textH">Descanso</h2>
           <p className="mt-0.5 text-[11px] text-textMuted">
             Recupere vida, dados de vida, habilidades e recursos mágicos.
           </p>
@@ -204,7 +202,6 @@ function ShortRestDialog({
             <span className="text-xs font-medium text-textH">
               Pontos de vida recuperados
             </span>
-
             <Input
               type="number"
               min={0}
@@ -222,7 +219,6 @@ function ShortRestDialog({
               <span className="text-xs font-medium text-textH">
                 Dados de vida consumidos
               </span>
-
               <span className="text-[11px] font-semibold text-textMuted">
                 Total: {totalDice}
               </span>
@@ -232,9 +228,7 @@ function ShortRestDialog({
               <div className="grid gap-2 sm:grid-cols-2">
                 {availableHitDice.map(({ side, data }) => {
                   if (!data) return null
-
-                  const currentAmount =
-                    hitDiceConsumption[side] ?? 0
+                  const currentAmount = hitDiceConsumption[side] ?? 0
 
                   return (
                     <label
@@ -287,7 +281,6 @@ function ShortRestDialog({
           <Button size="sm" variant="secondary" onClick={resetAndClose}>
             Cancelar
           </Button>
-
           <Button size="sm" variant="primary" onClick={confirm}>
             Concluir descanso
           </Button>
@@ -310,11 +303,9 @@ function LongRestDialog({
   onClose: () => void
   onConfirm: (selection: LongRestSupplySelection[]) => void
 }) {
-  const consumption = getEffectiveRaceSupplyConsumption(
+  const requiredSupply = getRequiredSupplyForRace(
     character.get("sheet").race,
   )
-  const foodCost = consumption.food
-  const drinkCost = consumption.drink
   const supplies = useMemo(
     () =>
       partyInventory.filter(
@@ -325,30 +316,33 @@ function LongRestDialog({
       ),
     [partyInventory],
   )
-  const [selectedByItem, setSelectedByItem] = useState<
+  const [percentageByItem, setPercentageByItem] = useState<
     Record<string, number>
   >({})
 
   useEffect(() => {
     if (!open) return
 
-    setSelectedByItem(
-      selectionToRecord(
-        createAutomaticLongRestSelection(
-          partyInventory,
-          foodCost,
-          drinkCost,
-        ),
-      ),
+    const automatic = createAutomaticLongRestSelection(
+      partyInventory,
+      requiredSupply,
     )
-  }, [drinkCost, foodCost, open, partyInventory])
+    setPercentageByItem(selectionToPercentages(automatic, supplies))
+  }, [open, partyInventory, requiredSupply, supplies])
 
   const selection = useMemo<LongRestSupplySelection[]>(
     () =>
-      Object.entries(selectedByItem)
-        .filter(([, portions]) => portions > 0)
-        .map(([itemId, portions]) => ({ itemId, portions })),
-    [selectedByItem],
+      supplies
+        .map((item) => {
+          const percentage = percentageByItem[item.id] ?? 0
+          return {
+            itemId: item.id,
+            portions:
+              getTotalSupplyPortions(item) * (percentage / 100),
+          }
+        })
+        .filter((entry) => entry.portions > 0),
+    [percentageByItem, supplies],
   )
   const totals = useMemo(
     () => getSupplySelectionTotals(partyInventory, selection),
@@ -357,43 +351,42 @@ function LongRestDialog({
 
   if (!open) return null
 
-  const missingFood = Math.max(0, foodCost - totals.food)
-  const missingDrink = Math.max(0, drinkCost - totals.drink)
-  const foodComplete = missingFood <= PORTION_EPSILON
-  const drinkComplete = missingDrink <= PORTION_EPSILON
-  const canConfirm = foodComplete && drinkComplete
+  const selectedSupply = totals.selectedPortions
+  const difference = selectedSupply - requiredSupply
+  const isPartial = difference < -PORTION_EPSILON
 
-  function setSelectedPortions(item: SupplyItem, value: number) {
-    const available = getTotalSupplyPortions(item)
-    const nextValue = Math.max(0, Math.min(available, value || 0))
+  function setPercentage(itemId: string, value: number) {
+    const snapped = Math.max(
+      0,
+      Math.min(100, Math.round(value / 25) * 25),
+    )
 
-    setSelectedByItem((current) => ({
+    setPercentageByItem((current) => ({
       ...current,
-      [item.id]: nextValue,
+      [itemId]: snapped,
     }))
   }
 
   function autoSelect() {
-    setSelectedByItem(
-      selectionToRecord(
+    setPercentageByItem(
+      selectionToPercentages(
         createAutomaticLongRestSelection(
           partyInventory,
-          foodCost,
-          drinkCost,
+          requiredSupply,
         ),
+        supplies,
       ),
     )
   }
 
   function resetAndClose() {
-    setSelectedByItem({})
+    setPercentageByItem({})
     onClose()
   }
 
   function confirm() {
-    if (!canConfirm) return
     onConfirm(selection)
-    setSelectedByItem({})
+    setPercentageByItem({})
   }
 
   return (
@@ -410,41 +403,23 @@ function LongRestDialog({
       >
         <DialogHeader
           id="long-rest-title"
-          title="Descanso longo"
-          description="Escolha os suprimentos que serão consumidos. Você pode dividir comida e bebida entre várias pilhas ou consumir apenas parte de uma embalagem."
+          title="Preparar descanso longo"
+          description="Comida e bebida valem como suprimento. Escolha 0%, 25%, 50%, 75% ou 100% de cada estoque para consumir."
           onClose={resetAndClose}
         />
 
         <div className="grid min-h-0 gap-4 overflow-y-auto py-4 pr-1">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <SupplyRequirement
-              label="Comida necessária"
-              value={foodCost}
-              complete={foodComplete}
-            />
-            <SupplyRequirement
-              label="Comida selecionada"
-              value={totals.food}
-              complete={foodComplete}
-            />
-            <SupplyRequirement
-              label="Bebida necessária"
-              value={drinkCost}
-              complete={drinkComplete}
-            />
-            <SupplyRequirement
-              label="Bebida selecionada"
-              value={totals.drink}
-              complete={drinkComplete}
-            />
-          </div>
+          <SupplyBalanceBar
+            required={requiredSupply}
+            selected={selectedSupply}
+          />
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
               className="w-full sm:w-auto"
               size="sm"
               variant="secondary"
-              onClick={() => setSelectedByItem({})}
+              onClick={() => setPercentageByItem({})}
             >
               Limpar seleção
             </Button>
@@ -462,63 +437,72 @@ function LongRestDialog({
             <div className="grid gap-2">
               {supplies.map((item) => {
                 const available = getTotalSupplyPortions(item)
-                const selected = selectedByItem[item.id] ?? 0
+                const percentage = percentageByItem[item.id] ?? 0
+                const portions = available * (percentage / 100)
 
                 return (
-                  <label
+                  <div
                     key={item.id}
-                    className="grid min-w-0 gap-3 rounded-xl border border-border bg-bg-subtle p-3 sm:grid-cols-[minmax(0,1fr)_130px] sm:items-center"
+                    className="grid min-w-0 gap-3 rounded-xl border border-border bg-bg-subtle p-3"
                   >
-                    <span className="min-w-0">
-                      <span className="block break-words text-sm font-semibold text-textH">
+                    <div className="min-w-0">
+                      <div className="break-words text-sm font-semibold text-textH">
                         {item.name || "Suprimento sem nome"}
-                      </span>
-                      <span className="mt-1 block break-words text-[11px] leading-4 text-textMuted">
+                      </div>
+                      <div className="mt-1 break-words text-[11px] leading-4 text-textMuted">
                         {supplyCategoryLabel(item)} • {formatPortions(available)} disponíveis
-                      </span>
-                    </span>
+                      </div>
+                    </div>
 
-                    <span className="grid min-w-0 gap-1">
-                      <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-                        Porções a consumir
-                      </span>
-                      <Input
-                        type="number"
+                    <label className="grid min-w-0 gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <span className="font-medium text-textH">
+                          Consumir {percentage}%
+                        </span>
+                        <span className="text-textMuted">
+                          {formatPortions(portions)}
+                        </span>
+                      </div>
+
+                      <input
+                        type="range"
                         min={0}
-                        max={available}
-                        step="any"
-                        value={selected}
+                        max={100}
+                        step={25}
+                        value={percentage}
                         onChange={(event) =>
-                          setSelectedPortions(
-                            item,
-                            Number(event.target.value) || 0,
-                          )
+                          setPercentage(item.id, Number(event.target.value))
                         }
+                        className="w-full cursor-pointer"
                       />
-                    </span>
-                  </label>
+
+                      <div className="flex justify-between text-[10px] text-textMuted">
+                        {PERCENTAGE_STEPS.map((step) => (
+                          <span key={step}>{step}%</span>
+                        ))}
+                      </div>
+                    </label>
+                  </div>
                 )
               })}
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-border bg-bg-subtle px-3 py-6 text-center text-xs leading-5 text-textMuted">
-              O inventário do grupo não possui suprimentos de comida ou bebida disponíveis.
+              O inventário do grupo não possui suprimentos disponíveis. Ainda é possível fazer um descanso parcial sem consumir nada.
             </div>
           )}
 
-          {!canConfirm ? (
+          {isPartial ? (
             <div className="rounded-xl border border-danger bg-dangerBg p-3 text-xs leading-5 text-danger">
-              A seleção ainda não sustenta o descanso.
-              {!foodComplete
-                ? ` Faltam ${formatPortions(missingFood)} de comida.`
-                : ""}
-              {!drinkComplete
-                ? ` Faltam ${formatPortions(missingDrink)} de bebida.`
-                : ""}
+              O suprimento selecionado está abaixo do necessário. O personagem recuperará metade dos recursos e ganhará 1 nível de exaustão.
+            </div>
+          ) : difference > PORTION_EPSILON ? (
+            <div className="rounded-xl border border-accentBorder bg-accentBg p-3 text-xs leading-5 text-textH">
+              Há suprimento acima do necessário. Tudo que foi selecionado será consumido, sem benefício adicional por enquanto.
             </div>
           ) : (
             <div className="rounded-xl border border-accentBorder bg-accentBg p-3 text-xs leading-5 text-textH">
-              Suprimentos suficientes. Serão consumidas {formatPortions(totals.selectedPortions)} distribuídas entre os itens selecionados.
+              A seleção cobre exatamente o necessário para um descanso completo.
             </div>
           )}
         </div>
@@ -532,15 +516,15 @@ function LongRestDialog({
           >
             Cancelar
           </Button>
-
           <Button
             className="w-full sm:w-auto"
             size="sm"
             variant="primary"
-            disabled={!canConfirm}
             onClick={confirm}
           >
-            Consumir e descansar
+            {isPartial
+              ? "Consumir e descansar parcialmente"
+              : "Consumir e descansar"}
           </Button>
         </div>
       </div>
@@ -548,48 +532,117 @@ function LongRestDialog({
   )
 }
 
-function SupplyRequirement({
-  label,
-  value,
-  complete,
+function SupplyBalanceBar({
+  required,
+  selected,
 }: {
-  label: string
-  value: number
-  complete: boolean
+  required: number
+  selected: number
 }) {
+  const displayMaximum = Math.max(required * 1.5, selected, 1)
+  const selectedWidth = Math.min(100, (selected / displayMaximum) * 100)
+  const requiredPosition = Math.min(
+    100,
+    (required / displayMaximum) * 100,
+  )
+  const difference = selected - required
+
   return (
-    <div
-      className={
-        complete
-          ? "min-w-0 rounded-xl border border-accentBorder bg-accentBg p-3"
-          : "min-w-0 rounded-xl border border-border bg-bg-subtle p-3"
-      }
-    >
-      <div className="break-words text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-        {label}
+    <section className="grid gap-3 rounded-xl border border-border bg-bg-subtle p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+            Suprimento necessário
+          </div>
+          <div className="mt-1 text-xl font-bold text-textH">
+            {formatPortions(required)}
+          </div>
+        </div>
+
+        <div className="text-right">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+            Selecionado
+          </div>
+          <div className="mt-1 text-xl font-bold text-textH">
+            {formatPortions(selected)}
+          </div>
+        </div>
       </div>
-      <div className="mt-1 break-words text-lg font-bold text-textH">
-        {formatPortions(value)}
+
+      <div className="relative h-4 overflow-hidden rounded-full bg-bg">
+        <div
+          className={
+            difference < -PORTION_EPSILON
+              ? "h-full rounded-full bg-danger"
+              : "h-full rounded-full bg-accent"
+          }
+          style={{ width: `${selectedWidth}%` }}
+        />
+        <div
+          aria-label="Quantidade necessária"
+          className="absolute inset-y-0 w-0.5 bg-danger"
+          style={{ left: `calc(${requiredPosition}% - 1px)` }}
+        />
       </div>
-    </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+        <span className="text-textMuted">
+          A linha vermelha marca o necessário para o descanso completo.
+        </span>
+        <span
+          className={
+            difference < -PORTION_EPSILON
+              ? "font-semibold text-danger"
+              : "font-semibold text-textH"
+          }
+        >
+          {formatSupplyDifference(difference)}
+        </span>
+      </div>
+    </section>
+  )
+}
+
+function selectionToPercentages(
+  selection: LongRestSupplySelection[],
+  supplies: SupplyItem[],
+): Record<string, number> {
+  const portionsById = new Map(
+    selection.map((entry) => [entry.itemId, entry.portions]),
+  )
+
+  return Object.fromEntries(
+    supplies.map((item) => {
+      const available = getTotalSupplyPortions(item)
+      const selected = portionsById.get(item.id) ?? 0
+      const percentage =
+        available > 0
+          ? Math.max(
+              0,
+              Math.min(100, Math.round((selected / available) * 4) * 25),
+            )
+          : 0
+
+      return [item.id, percentage]
+    }),
   )
 }
 
 function supplyCategoryLabel(item: SupplyItem): string {
   if (item.supplyCategory === "food") return "Comida"
   if (item.supplyCategory === "drink") return "Bebida"
-  if (item.supplyCategory === "mixed") {
-    return "Misto — conta como comida e bebida"
-  }
+  if (item.supplyCategory === "mixed") return "Comida e bebida"
   return "Outro"
 }
 
-function selectionToRecord(
-  selection: LongRestSupplySelection[],
-): Record<string, number> {
-  return Object.fromEntries(
-    selection.map((entry) => [entry.itemId, entry.portions]),
-  )
+function formatSupplyDifference(difference: number): string {
+  if (Math.abs(difference) <= PORTION_EPSILON) {
+    return "Quantidade exata"
+  }
+
+  return difference < 0
+    ? `${formatPortions(Math.abs(difference))} abaixo`
+    : `${formatPortions(difference)} acima`
 }
 
 function DialogHeader({
@@ -609,7 +662,6 @@ function DialogHeader({
         <h2 id={id} className="break-words text-base font-semibold text-textH">
           {title}
         </h2>
-
         <p className="mt-1 max-w-full break-words text-xs leading-5 text-textMuted">
           {description}
         </p>
