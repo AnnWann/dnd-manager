@@ -20,8 +20,9 @@ import { takeLongRest } from "../models/characters/characterRest"
 import type { Itemmable } from "../models/items/item"
 import type { Player } from "../models/player/Player"
 import {
-  consumeFoodPortions,
+  consumeSelectedSupplies,
   getEffectiveRaceSupplyConsumption,
+  type LongRestSupplySelection,
 } from "../models/supplies/partySupply"
 
 export type InventoryLocation =
@@ -44,7 +45,10 @@ export type CharacterContextValue = {
     characterId: string,
     updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
-  completeLongRest: (characterId: string) => void
+  completeLongRest: (
+    characterId: string,
+    selection: LongRestSupplySelection[],
+  ) => void
   addCharacter: () => void
   importCharacter: (rawCharacter: unknown) => CharacterTemplate
   deleteCharacter: (id: string) => void
@@ -135,6 +139,7 @@ export function CharacterProvider({
   const visibleCharacters = useMemo(() => {
     if (userRole === "master") return characters
     if (!normalizedUserKey) return []
+
     return characters.filter(
       (character) =>
         character.get("owner")?.id?.trim() === normalizedUserKey,
@@ -219,40 +224,45 @@ export function CharacterProvider({
     }))
   }
 
-  function completeLongRest(characterId: string) {
+  function completeLongRest(
+    characterId: string,
+    selection: LongRestSupplySelection[],
+  ) {
     setAppState((previous) => {
-      let restedCharacter: CharacterTemplate | undefined
-
-      const nextCharacters = previous.characters.map((rawCharacter) => {
-        const character = CharacterTemplate.fromJSON(rawCharacter)
-
-        if (character.get("id") !== characterId) {
-          return character.toJSON()
-        }
-
-        const canRest =
-          userRole === "master" ||
-          character.get("owner")?.id?.trim() === normalizedUserKey
-
-        if (!canRest) return character.toJSON()
-
-        restedCharacter = character
-        return takeLongRest(character).toJSON()
-      })
+      const characterObjects = previous.characters.map((rawCharacter) =>
+        CharacterTemplate.fromJSON(rawCharacter),
+      )
+      const restedCharacter = characterObjects.find(
+        (character) => character.get("id") === characterId,
+      )
 
       if (!restedCharacter) return previous
 
-      const foodCost = getEffectiveRaceSupplyConsumption(
+      const canRest =
+        userRole === "master" ||
+        restedCharacter.get("owner")?.id?.trim() === normalizedUserKey
+
+      if (!canRest) return previous
+
+      const required = getEffectiveRaceSupplyConsumption(
         restedCharacter.get("sheet").race,
-      ).food
-      const consumption = consumeFoodPortions(
-        previous.partyInventory ?? [],
-        foodCost,
       )
+      const consumption = consumeSelectedSupplies(
+        previous.partyInventory ?? [],
+        selection,
+        required.food,
+        required.drink,
+      )
+
+      if (!consumption.valid) return previous
 
       return {
         ...previous,
-        characters: nextCharacters,
+        characters: characterObjects.map((character) =>
+          character.get("id") === characterId
+            ? takeLongRest(character).toJSON()
+            : character.toJSON(),
+        ),
         partyInventory: consumption.items,
       }
     })
