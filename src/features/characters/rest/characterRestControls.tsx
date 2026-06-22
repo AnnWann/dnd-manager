@@ -38,6 +38,11 @@ const PORTION_STEP = 0.25
 const PERCENTAGE_STEPS = [0, 25, 50, 75, 100] as const
 const PORTION_EPSILON = 0.000001
 
+type BarrelSelection = {
+  quantity: number
+  percentage: number
+}
+
 type Props = {
   character: CharacterTemplate
   partyInventory: Itemmable[]
@@ -320,32 +325,62 @@ function LongRestDialog({
   const [portionsByItem, setPortionsByItem] = useState<
     Record<string, number>
   >({})
+  const [barrelSelectionByItem, setBarrelSelectionByItem] = useState<
+    Record<string, BarrelSelection>
+  >({})
+
+  function applyAutomaticSelection() {
+    const automaticSelection = createAutomaticLongRestSelection(
+      partyInventory,
+      requiredSupply,
+    )
+
+    setPortionsByItem(selectionToPortions(automaticSelection))
+    setBarrelSelectionByItem(
+      selectionToBarrelSelections(automaticSelection, supplies),
+    )
+  }
 
   useEffect(() => {
     if (!open) return
-
-    setPortionsByItem(
-      selectionToPortions(
-        createAutomaticLongRestSelection(
-          partyInventory,
-          requiredSupply,
-        ),
-      ),
-    )
-  }, [open, partyInventory, requiredSupply])
+    applyAutomaticSelection()
+  }, [open, partyInventory, requiredSupply, supplies])
 
   const selection = useMemo<LongRestSupplySelection[]>(
     () =>
       supplies
-        .map((item) => ({
-          itemId: item.id,
-          portions: Math.min(
-            getTotalSupplyPortions(item),
-            Math.max(0, portionsByItem[item.id] ?? 0),
-          ),
-        }))
+        .map((item) => {
+          const available = getTotalSupplyPortions(item)
+
+          if (isBarrelSupply(item)) {
+            const barrelSelection = barrelSelectionByItem[item.id] ?? {
+              quantity: 0,
+              percentage: 100,
+            }
+
+            return {
+              itemId: item.id,
+              portions: Math.min(
+                available,
+                Math.max(
+                  0,
+                  barrelSelection.quantity *
+                    (barrelSelection.percentage / 100),
+                ),
+              ),
+            }
+          }
+
+          return {
+            itemId: item.id,
+            portions: Math.min(
+              available,
+              Math.max(0, portionsByItem[item.id] ?? 0),
+            ),
+          }
+        })
         .filter((entry) => entry.portions > 0),
-    [portionsByItem, supplies],
+    [barrelSelectionByItem, portionsByItem, supplies],
   )
   const totals = useMemo(
     () => getSupplySelectionTotals(partyInventory, selection),
@@ -369,34 +404,52 @@ function LongRestDialog({
     }))
   }
 
-  function setPercentage(item: SupplyItem, value: number) {
+  function setBarrelQuantity(item: SupplyItem, value: number) {
+    const available = getTotalSupplyPortions(item)
+    const snapped = Math.round(value / PORTION_STEP) * PORTION_STEP
+    const quantity = Math.max(0, Math.min(available, snapped))
+
+    setBarrelSelectionByItem((current) => ({
+      ...current,
+      [item.id]: {
+        quantity,
+        percentage: current[item.id]?.percentage ?? 100,
+      },
+    }))
+  }
+
+  function setBarrelPercentage(item: SupplyItem, value: number) {
     const percentage = Math.max(
       0,
       Math.min(100, Math.round(value / 25) * 25),
     )
-    const available = getTotalSupplyPortions(item)
-    setPortions(item, available * (percentage / 100))
+
+    setBarrelSelectionByItem((current) => ({
+      ...current,
+      [item.id]: {
+        quantity: current[item.id]?.quantity ?? 0,
+        percentage,
+      },
+    }))
   }
 
   function autoSelect() {
-    setPortionsByItem(
-      selectionToPortions(
-        createAutomaticLongRestSelection(
-          partyInventory,
-          requiredSupply,
-        ),
-      ),
-    )
+    applyAutomaticSelection()
+  }
+
+  function clearSelection() {
+    setPortionsByItem({})
+    setBarrelSelectionByItem({})
   }
 
   function resetAndClose() {
-    setPortionsByItem({})
+    clearSelection()
     onClose()
   }
 
   function confirm() {
     onConfirm(selection)
-    setPortionsByItem({})
+    clearSelection()
   }
 
   return (
@@ -414,7 +467,7 @@ function LongRestDialog({
         <DialogHeader
           id="long-rest-title"
           title="Preparar descanso longo"
-          description="Cada estoque aparece uma única vez. Barris possuem uma barra por quantidade de porções e outra por porcentagem do conteúdo."
+          description="Nos barris, escolha primeiro quantas rações entram na seleção e depois qual porcentagem dessas rações será consumida."
           onClose={resetAndClose}
         />
 
@@ -429,7 +482,7 @@ function LongRestDialog({
               className="w-full sm:w-auto"
               size="sm"
               variant="secondary"
-              onClick={() => setPortionsByItem({})}
+              onClick={clearSelection}
             >
               Limpar seleção
             </Button>
@@ -447,16 +500,23 @@ function LongRestDialog({
             <div className="grid gap-2">
               {supplies.map((item) => {
                 const available = getTotalSupplyPortions(item)
-                const portions = Math.min(
+                const isBarrel = isBarrelSupply(item)
+                const directPortions = Math.min(
                   available,
                   Math.max(0, portionsByItem[item.id] ?? 0),
                 )
-                const midpoint = available / 2
-                const percentage =
-                  available > 0 ? (portions / available) * 100 : 0
-                const isBarrel =
-                  item.supplyPackage === "barrel" ||
-                  item.supplyUnitsPerItem === 40
+                const barrelSelection = barrelSelectionByItem[item.id] ?? {
+                  quantity: 0,
+                  percentage: 100,
+                }
+                const selectedRations = Math.min(
+                  available,
+                  Math.max(0, barrelSelection.quantity),
+                )
+                const percentage = barrelSelection.percentage
+                const consumedPortions = isBarrel
+                  ? selectedRations * (percentage / 100)
+                  : directPortions
 
                 return (
                   <div
@@ -472,65 +532,109 @@ function LongRestDialog({
                       </div>
                     </div>
 
-                    <label className="grid min-w-0 gap-2">
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                        <span className="font-medium text-textH">
-                          Quantidade de porções
-                        </span>
-                        <span className="rounded-md border border-border bg-bg px-2 py-1 font-semibold text-textH">
-                          {formatPortions(portions)}
-                        </span>
-                      </div>
-
-                      <input
-                        type="range"
-                        min={0}
-                        max={available}
-                        step={PORTION_STEP}
-                        value={portions}
-                        onChange={(event) =>
-                          setPortions(item, Number(event.target.value))
-                        }
-                        className="w-full cursor-pointer"
-                      />
-
-                      <div className="flex justify-between text-[10px] text-textMuted">
-                        <span>0</span>
-                        <span>{formatCompactNumber(midpoint)}</span>
-                        <span>{formatCompactNumber(available)}</span>
-                      </div>
-                    </label>
-
                     {isBarrel ? (
-                      <label className="grid min-w-0 gap-2 border-t border-border pt-3">
+                      <>
+                        <label className="grid min-w-0 gap-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <span className="font-medium text-textH">
+                              Rações selecionadas
+                            </span>
+                            <span className="rounded-md border border-border bg-bg px-2 py-1 font-semibold text-textH">
+                              {formatPortions(selectedRations)}
+                            </span>
+                          </div>
+
+                          <input
+                            type="range"
+                            min={0}
+                            max={available}
+                            step={PORTION_STEP}
+                            value={selectedRations}
+                            onChange={(event) =>
+                              setBarrelQuantity(
+                                item,
+                                Number(event.target.value),
+                              )
+                            }
+                            className="w-full cursor-pointer"
+                          />
+
+                          <div className="flex justify-between text-[10px] text-textMuted">
+                            <span>0</span>
+                            <span>{formatCompactNumber(available / 2)}</span>
+                            <span>{formatCompactNumber(available)}</span>
+                          </div>
+                        </label>
+
+                        <label className="grid min-w-0 gap-2 border-t border-border pt-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <span className="font-medium text-textH">
+                              Percentual das rações selecionadas
+                            </span>
+                            <span className="rounded-md border border-border bg-bg px-2 py-1 font-semibold text-textH">
+                              {formatPercentage(percentage)}
+                            </span>
+                          </div>
+
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            step={25}
+                            value={percentage}
+                            onChange={(event) =>
+                              setBarrelPercentage(
+                                item,
+                                Number(event.target.value),
+                              )
+                            }
+                            className="w-full cursor-pointer"
+                          />
+
+                          <div className="flex justify-between text-[10px] text-textMuted">
+                            {PERCENTAGE_STEPS.map((step) => (
+                              <span key={step}>{step}%</span>
+                            ))}
+                          </div>
+                        </label>
+
+                        <div className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs text-textH">
+                          Consumo resultante: {formatPortions(consumedPortions)}
+                          <span className="ml-1 text-textMuted">
+                            ({formatCompactNumber(selectedRations)} × {formatPercentage(percentage)})
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <label className="grid min-w-0 gap-2">
                         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                           <span className="font-medium text-textH">
-                            Porcentagem do barril
+                            Porções a consumir
                           </span>
                           <span className="rounded-md border border-border bg-bg px-2 py-1 font-semibold text-textH">
-                            {formatPercentage(percentage)}
+                            {formatPortions(directPortions)}
                           </span>
                         </div>
 
                         <input
                           type="range"
                           min={0}
-                          max={100}
-                          step={25}
-                          value={percentage}
+                          max={available}
+                          step={PORTION_STEP}
+                          value={directPortions}
                           onChange={(event) =>
-                            setPercentage(item, Number(event.target.value))
+                            setPortions(item, Number(event.target.value))
                           }
                           className="w-full cursor-pointer"
                         />
 
                         <div className="flex justify-between text-[10px] text-textMuted">
-                          {PERCENTAGE_STEPS.map((step) => (
-                            <span key={step}>{step}%</span>
-                          ))}
+                          <span>0</span>
+                          <span>{formatCompactNumber(available / 2)}</span>
+                          <span>{formatCompactNumber(available)}</span>
                         </div>
                       </label>
-                    ) : null}
+                    )}
                   </div>
                 )
               })}
@@ -657,6 +761,59 @@ function selectionToPortions(
 ): Record<string, number> {
   return Object.fromEntries(
     selection.map((entry) => [entry.itemId, entry.portions]),
+  )
+}
+
+function selectionToBarrelSelections(
+  selection: LongRestSupplySelection[],
+  supplies: SupplyItem[],
+): Record<string, BarrelSelection> {
+  const selectedByItem = new Map(
+    selection.map((entry) => [entry.itemId, entry.portions]),
+  )
+
+  return Object.fromEntries(
+    supplies
+      .filter(isBarrelSupply)
+      .map((item) => {
+        const available = getTotalSupplyPortions(item)
+        const selected = Math.min(
+          available,
+          Math.max(0, selectedByItem.get(item.id) ?? 0),
+        )
+
+        if (
+          selected > 0 &&
+          selected < 1 &&
+          available >= 1 &&
+          PERCENTAGE_STEPS.includes(
+            Math.round(selected * 100) as (typeof PERCENTAGE_STEPS)[number],
+          )
+        ) {
+          return [
+            item.id,
+            {
+              quantity: 1,
+              percentage: Math.round(selected * 100),
+            },
+          ]
+        }
+
+        return [
+          item.id,
+          {
+            quantity: selected,
+            percentage: 100,
+          },
+        ]
+      }),
+  )
+}
+
+function isBarrelSupply(item: SupplyItem): boolean {
+  return (
+    item.supplyPackage === "barrel" ||
+    item.supplyUnitsPerItem === 40
   )
 }
 
