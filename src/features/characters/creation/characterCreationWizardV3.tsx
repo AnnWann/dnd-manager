@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Check, ChevronLeft, X } from "lucide-react"
+import { Check, X } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
@@ -65,8 +65,8 @@ export function CharacterCreationWizard({
   const [startingGold, setStartingGold] = useState(0)
 
   const className: ClassName | undefined = pendingCharacter
-    ? pendingCharacter.get("sheet").classes[0]?.className
-    : undefined
+    ?.get("sheet")
+    .classes?.[0]?.className
   const preset = className
     ? getPhbClassEquipmentPreset(className)
     : undefined
@@ -91,7 +91,6 @@ export function CharacterCreationWizard({
 
   useEffect(() => {
     if (!className || !preset) return
-
     setMode("equipment")
     setSelections(getDefaultClassEquipmentSelections(className))
     setStartingGold(averageStartingGold(preset.startingGold))
@@ -111,11 +110,6 @@ export function CharacterCreationWizard({
     onClose()
   }
 
-  function goBack() {
-    advancingRef.current = false
-    setPendingCharacter(null)
-  }
-
   function finish() {
     if (!pendingCharacter) return
 
@@ -133,16 +127,19 @@ export function CharacterCreationWizard({
         ? startingGold > 0
           ? [createStartingGoldItem(startingGold)]
           : []
-        : selectedItems.map((item) =>
-            createStartingInventoryItem(item, flavors[item.id]),
+        : selectedItems.map((item, index) =>
+            createStartingInventoryItem(
+              item,
+              flavors[`${item.id}:${index}`],
+            ),
           )
 
-    const completed = pendingCharacter.with("inventory", [
-      ...retainedInventory,
-      ...classInventory,
-    ])
-
-    onCreate(completed)
+    onCreate(
+      pendingCharacter.with("inventory", [
+        ...retainedInventory,
+        ...classInventory,
+      ]),
+    )
     setPendingCharacter(null)
     onClose()
   }
@@ -180,9 +177,8 @@ export function CharacterCreationWizard({
                   Equipamento inicial — {classLabel}
                 </h2>
                 <p className="mt-1 break-words text-xs leading-5 text-textMuted">
-                  Escolha as opções do pacote ou substitua o pacote da classe por
-                  ouro inicial. O nome e a aparência podem ser alterados sem
-                  mudar a base mecânica do item.
+                  Escolha as opções da classe ou use o ouro inicial. O nome de
+                  cada item pode ser alterado sem mudar sua base mecânica.
                 </p>
               </div>
               <button
@@ -197,28 +193,18 @@ export function CharacterCreationWizard({
 
             <main className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto p-3 sm:p-5">
               <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-bg p-2">
-                <button
-                  type="button"
+                <ModeButton
+                  active={mode === "equipment"}
                   onClick={() => setMode("equipment")}
-                  className={
-                    mode === "equipment"
-                      ? "min-w-0 rounded-lg border border-accentBorder bg-accentBg px-3 py-3 text-xs font-semibold text-textH"
-                      : "min-w-0 rounded-lg border border-transparent px-3 py-3 text-xs text-textMuted"
-                  }
                 >
                   Pacote de classe
-                </button>
-                <button
-                  type="button"
+                </ModeButton>
+                <ModeButton
+                  active={mode === "gold"}
                   onClick={() => setMode("gold")}
-                  className={
-                    mode === "gold"
-                      ? "min-w-0 rounded-lg border border-accentBorder bg-accentBg px-3 py-3 text-xs font-semibold text-textH"
-                      : "min-w-0 rounded-lg border border-transparent px-3 py-3 text-xs text-textMuted"
-                  }
                 >
                   Ouro inicial
-                </button>
+                </ModeButton>
               </div>
 
               {mode === "equipment" ? (
@@ -235,7 +221,6 @@ export function CharacterCreationWizard({
                         {choiceGroup.options.map((choiceOption) => {
                           const selected =
                             selections[choiceGroup.id] === choiceOption.id
-
                           return (
                             <button
                               key={choiceOption.id}
@@ -261,33 +246,14 @@ export function CharacterCreationWizard({
                     </section>
                   ))}
 
-                  {preset.fixedItems.length > 0 ? (
-                    <section className="min-w-0 rounded-xl border border-border bg-bg p-3">
-                      <div className="text-xs font-semibold text-textH">
-                        Itens fixos
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {preset.fixedItems.map((fixedItem) => (
-                          <span
-                            key={fixedItem.id}
-                            className="rounded-full border border-border bg-bg-subtle px-3 py-1.5 text-[11px] text-text"
-                          >
-                            {(fixedItem.quantity ?? 1) > 1
-                              ? `${fixedItem.name} ×${fixedItem.quantity}`
-                              : fixedItem.name}
-                          </span>
-                        ))}
-                      </div>
-                    </section>
-                  ) : null}
-
                   <section className="min-w-0 rounded-xl border border-border bg-bg p-3">
                     <div className="text-xs font-semibold text-textH">
-                      Aparência e nome dos itens
+                      Nome e aparência
                     </div>
                     <p className="mt-1 text-[11px] leading-4 text-textMuted">
-                      O texto aparece no inventário. Tipo, dano, categoria e
-                      demais valores continuam usando o item-base.
+                      Renomear altera apenas a apresentação. Armas continuam
+                      armas, armaduras continuam armaduras e os valores
+                      mecânicos são preservados.
                     </p>
                     <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2">
                       {selectedItems.map((selectedItem, index) => {
@@ -316,7 +282,6 @@ export function CharacterCreationWizard({
                                   [flavorKey]: event.target.value,
                                 }))
                               }
-                              placeholder="Nome/aparência personalizada"
                             />
                           </label>
                         )
@@ -332,11 +297,10 @@ export function CharacterCreationWizard({
                     </div>
                     <p className="mt-1 text-xs leading-5 text-textMuted">
                       Fórmula: {formatStartingGoldFormula(preset.startingGold)}.
-                      Esta opção substitui apenas o pacote da classe; os itens do
-                      antecedente são preservados.
+                      Substitui o pacote da classe e preserva os itens do
+                      antecedente.
                     </p>
                   </div>
-
                   <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                     <label className="grid min-w-0 gap-1.5">
                       <span className="text-xs font-medium text-textH">
@@ -366,18 +330,15 @@ export function CharacterCreationWizard({
                       Rolar ouro
                     </Button>
                   </div>
-
-                  <div className="rounded-lg border border-accentBorder bg-accentBg p-3 text-xs text-text">
-                    O inventário receberá {startingGold} peças de ouro na
-                    categoria Moeda.
-                  </div>
                 </section>
               )}
             </main>
 
             <footer className="flex min-w-0 flex-col-reverse gap-2 border-t border-border bg-bg-elevated p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-              <Button variant="secondary" onClick={goBack}>
-                <ChevronLeft className="h-4 w-4" />
+              <Button
+                variant="secondary"
+                onClick={() => setPendingCharacter(null)}
+              >
                 Voltar
               </Button>
               <div className="flex min-w-0 flex-col-reverse gap-2 sm:flex-row">
@@ -394,5 +355,29 @@ export function CharacterCreationWizard({
         </div>
       ) : null}
     </>
+  )
+}
+
+function ModeButton({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean
+  children: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        active
+          ? "min-w-0 rounded-lg border border-accentBorder bg-accentBg px-3 py-3 text-xs font-semibold text-textH"
+          : "min-w-0 rounded-lg border border-transparent px-3 py-3 text-xs text-textMuted"
+      }
+    >
+      {children}
+    </button>
   )
 }
