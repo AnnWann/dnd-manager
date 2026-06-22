@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { CharacterAbilitiesTab } from "../features/characters/abilities/characterAbilities"
 import { CharacterSelector } from "../features/characters/characterSelector"
 import { CharacterSheetTab } from "../features/characters/characterSheet/characterSheet"
@@ -11,6 +11,7 @@ import { CharacterProficienciesTab } from "../features/characters/proficiencies/
 import { CharacterRaceTab } from "../features/characters/race/characterRace"
 import { CharacterProfileTab } from "../features/characters/profile/characterProfile"
 import { CharacterRestControls } from "../features/characters/rest/characterRestControls"
+import { CharacterCreationWizard } from "../features/characters/creation/characterCreationWizard"
 
 export function CharacterView() {
   const {
@@ -18,7 +19,6 @@ export function CharacterView() {
     activeCharacter,
     partyInventory,
     setSelectedCharacterId,
-    addCharacter,
     importCharacter,
     deleteCharacter,
     updateCharacter,
@@ -31,24 +31,52 @@ export function CharacterView() {
   } = useCharacterContext()
 
   const [activeTab, setActiveTab] = useState<CharacterTab>("sheet")
+  const [creationOpen, setCreationOpen] = useState(false)
+
+  const owners = useMemo(
+    () => playerKeys.map((key) => getOwner(key)),
+    [getOwner, playerKeys],
+  )
+  const defaultOwner =
+    activeCharacter?.get("owner") ??
+    owners[0] ??
+    createOwner("Novo jogador")
+
+  const creationWizard = (
+    <CharacterCreationWizard
+      open={creationOpen}
+      defaultOwner={defaultOwner}
+      owners={owners.length > 0 ? owners : [defaultOwner]}
+      canAssignOwners={canAssignOwners}
+      createOwner={createOwner}
+      onClose={() => setCreationOpen(false)}
+      onCreate={(character) => {
+        importCharacter(character.toJSON())
+        setActiveTab("sheet")
+      }}
+    />
+  )
 
   if (!activeCharacter) {
     return (
-      <div className="mx-auto w-full max-w-xl rounded-xl border border-accentBorder bg-bg p-4">
-        <div className="text-sm font-semibold text-textH">
-          Nenhum personagem visível
+      <>
+        <div className="mx-auto w-full max-w-xl rounded-xl border border-accentBorder bg-bg p-4">
+          <div className="text-sm font-semibold text-textH">
+            Nenhum personagem visível
+          </div>
+          <div className="mt-1 text-xs text-text">
+            Você ainda não tem um personagem associado a este jogador.
+          </div>
+          <button
+            type="button"
+            className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accentText"
+            onClick={() => setCreationOpen(true)}
+          >
+            Criar personagem
+          </button>
         </div>
-        <div className="mt-1 text-xs text-text">
-          Você ainda não tem um personagem associado a este jogador.
-        </div>
-        <button
-          type="button"
-          className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accentText"
-          onClick={addCharacter}
-        >
-          Criar personagem
-        </button>
-      </div>
+        {creationWizard}
+      </>
     )
   }
 
@@ -61,7 +89,7 @@ export function CharacterView() {
       <CharacterSelector
         characters={characters}
         activeCharacter={activeCharacter}
-        addCharacter={addCharacter}
+        addCharacter={() => setCreationOpen(true)}
         importCharacter={importCharacter}
         setActiveCharacterId={setSelectedCharacterId}
         deleteActiveCharacter={deleteActiveCharacter}
@@ -94,19 +122,31 @@ export function CharacterView() {
         )}
 
         {activeTab === "race" && (
-          <CharacterRaceTab character={activeCharacter} updateCharacter={updateCharacter} />
+          <CharacterRaceTab
+            character={activeCharacter}
+            updateCharacter={updateCharacter}
+          />
         )}
 
         {activeTab === "profile" && (
-          <CharacterProfileTab character={activeCharacter} updateCharacter={updateCharacter} />
+          <CharacterProfileTab
+            character={activeCharacter}
+            updateCharacter={updateCharacter}
+          />
         )}
 
         {activeTab === "abilities" && (
-          <CharacterAbilitiesTab character={activeCharacter} updateCharacter={updateCharacter} />
+          <CharacterAbilitiesTab
+            character={activeCharacter}
+            updateCharacter={updateCharacter}
+          />
         )}
 
         {activeTab === "equipment" && (
-          <CharacterEquipmentTab character={activeCharacter} updateCharacter={updateCharacter} />
+          <CharacterEquipmentTab
+            character={activeCharacter}
+            updateCharacter={updateCharacter}
+          />
         )}
 
         {activeTab === "inventory" && (
@@ -118,13 +158,21 @@ export function CharacterView() {
         )}
 
         {activeTab === "spellsList" && (
-          <CharacterMagicTab character={activeCharacter} updateCharacter={updateCharacter} />
+          <CharacterMagicTab
+            character={activeCharacter}
+            updateCharacter={updateCharacter}
+          />
         )}
 
         {activeTab === "proficiencies" && (
-          <CharacterProficienciesTab character={activeCharacter} updateCharacter={updateCharacter} />
+          <CharacterProficienciesTab
+            character={activeCharacter}
+            updateCharacter={updateCharacter}
+          />
         )}
       </div>
+
+      {creationWizard}
     </div>
   )
 }
