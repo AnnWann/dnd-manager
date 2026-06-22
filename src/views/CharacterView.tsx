@@ -8,7 +8,7 @@ import { CharacterViewTabs, type CharacterTab } from "../features/characters/cha
 import { CharacterMagicTab } from "../features/characters/magic/characterMagicModule"
 import { useCharacterContext } from "../contexts/characterContext"
 import { CharacterProficienciesTab } from "../features/characters/proficiencies/characterProficiencies"
-import { CharacterRaceTab } from "../features/characters/race/characterRace"
+import { CharacterRaceTab } from "../features/characters/race/characterRaceV2"
 import { CharacterProfileTab } from "../features/characters/profile/characterProfile"
 import { CharacterRestControls } from "../features/characters/rest/characterRestControls"
 import { CharacterCreationWizard } from "../features/characters/creation/characterCreationWizardV2"
