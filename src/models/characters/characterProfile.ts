@@ -1,3 +1,5 @@
+import type { CharacterBackground } from "./CharacterBackground"
+
 export type CharacterRelationship = {
   id: string
   name: string
@@ -11,4 +13,5 @@ export type CharacterProfile = {
   physicalAppearance: string
   imageUrl?: string
   relationships: CharacterRelationship[]
+  background?: CharacterBackground
 }
