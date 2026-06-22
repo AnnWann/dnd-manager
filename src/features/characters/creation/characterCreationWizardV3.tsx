@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Check, ChevronLeft, Coins, Dices, Package, X } from "lucide-react"
+import { Check, ChevronLeft, X } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
@@ -64,17 +64,12 @@ export function CharacterCreationWizard({
   const [flavors, setFlavors] = useState<Record<string, string>>({})
   const [startingGold, setStartingGold] = useState(0)
 
-  const className = useMemo(
-    () =>
-      pendingCharacter?.get("sheet").classes[0]?.className as
-        | ClassName
-        | undefined,
-    [pendingCharacter],
-  )
-  const preset = useMemo(
-    () => (className ? getPhbClassEquipmentPreset(className) : undefined),
-    [className],
-  )
+  const className: ClassName | undefined = pendingCharacter
+    ? pendingCharacter.get("sheet").classes[0]?.className
+    : undefined
+  const preset = className
+    ? getPhbClassEquipmentPreset(className)
+    : undefined
   const selectedItems = useMemo(
     () =>
       className
@@ -129,7 +124,7 @@ export function CharacterCreationWizard({
       .filter(
         (item) =>
           !item.desc
-            ?.toLocaleLowerCase("pt-BR")
+            .toLocaleLowerCase("pt-BR")
             .includes("equipamento inicial da classe"),
       )
 
@@ -186,8 +181,8 @@ export function CharacterCreationWizard({
                 </h2>
                 <p className="mt-1 break-words text-xs leading-5 text-textMuted">
                   Escolha as opções do pacote ou substitua o pacote da classe por
-                  ouro inicial. Os nomes podem ser alterados sem mudar a base
-                  mecânica do item.
+                  ouro inicial. O nome e a aparência podem ser alterados sem
+                  mudar a base mecânica do item.
                 </p>
               </div>
               <button
@@ -207,11 +202,10 @@ export function CharacterCreationWizard({
                   onClick={() => setMode("equipment")}
                   className={
                     mode === "equipment"
-                      ? "flex min-w-0 items-center justify-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-3 text-xs font-semibold text-textH"
-                      : "flex min-w-0 items-center justify-center gap-2 rounded-lg border border-transparent px-3 py-3 text-xs text-textMuted"
+                      ? "min-w-0 rounded-lg border border-accentBorder bg-accentBg px-3 py-3 text-xs font-semibold text-textH"
+                      : "min-w-0 rounded-lg border border-transparent px-3 py-3 text-xs text-textMuted"
                   }
                 >
-                  <Package className="h-4 w-4 shrink-0" />
                   Pacote de classe
                 </button>
                 <button
@@ -219,11 +213,10 @@ export function CharacterCreationWizard({
                   onClick={() => setMode("gold")}
                   className={
                     mode === "gold"
-                      ? "flex min-w-0 items-center justify-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-3 text-xs font-semibold text-textH"
-                      : "flex min-w-0 items-center justify-center gap-2 rounded-lg border border-transparent px-3 py-3 text-xs text-textMuted"
+                      ? "min-w-0 rounded-lg border border-accentBorder bg-accentBg px-3 py-3 text-xs font-semibold text-textH"
+                      : "min-w-0 rounded-lg border border-transparent px-3 py-3 text-xs text-textMuted"
                   }
                 >
-                  <Coins className="h-4 w-4 shrink-0" />
                   Ouro inicial
                 </button>
               </div>
@@ -242,6 +235,7 @@ export function CharacterCreationWizard({
                         {choiceGroup.options.map((choiceOption) => {
                           const selected =
                             selections[choiceGroup.id] === choiceOption.id
+
                           return (
                             <button
                               key={choiceOption.id}
@@ -292,38 +286,41 @@ export function CharacterCreationWizard({
                       Aparência e nome dos itens
                     </div>
                     <p className="mt-1 text-[11px] leading-4 text-textMuted">
-                      O texto digitado aparece no inventário. O tipo, dano,
-                      armadura e demais valores continuam usando o item-base.
+                      O texto aparece no inventário. Tipo, dano, categoria e
+                      demais valores continuam usando o item-base.
                     </p>
                     <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2">
-                      {selectedItems.map((selectedItem) => (
-                        <label
-                          key={selectedItem.id}
-                          className="grid min-w-0 gap-1.5 rounded-lg border border-border bg-bg-subtle p-3"
-                        >
-                          <span className="flex min-w-0 items-center justify-between gap-2 text-[10px] text-textMuted">
-                            <span className="truncate">
-                              {selectedItem.name}
-                              {(selectedItem.quantity ?? 1) > 1
-                                ? ` ×${selectedItem.quantity}`
-                                : ""}
+                      {selectedItems.map((selectedItem, index) => {
+                        const flavorKey = `${selectedItem.id}:${index}`
+                        return (
+                          <label
+                            key={flavorKey}
+                            className="grid min-w-0 gap-1.5 rounded-lg border border-border bg-bg-subtle p-3"
+                          >
+                            <span className="flex min-w-0 items-center justify-between gap-2 text-[10px] text-textMuted">
+                              <span className="truncate">
+                                {selectedItem.name}
+                                {(selectedItem.quantity ?? 1) > 1
+                                  ? ` ×${selectedItem.quantity}`
+                                  : ""}
+                              </span>
+                              <span className="shrink-0 uppercase">
+                                {CATEGORY_LABELS[selectedItem.category]}
+                              </span>
                             </span>
-                            <span className="shrink-0 uppercase">
-                              {CATEGORY_LABELS[selectedItem.category]}
-                            </span>
-                          </span>
-                          <Input
-                            value={flavors[selectedItem.id] ?? selectedItem.name}
-                            onChange={(event) =>
-                              setFlavors((current) => ({
-                                ...current,
-                                [selectedItem.id]: event.target.value,
-                              }))
-                            }
-                            placeholder="Nome/aparência personalizada"
-                          />
-                        </label>
-                      ))}
+                            <Input
+                              value={flavors[flavorKey] ?? selectedItem.name}
+                              onChange={(event) =>
+                                setFlavors((current) => ({
+                                  ...current,
+                                  [flavorKey]: event.target.value,
+                                }))
+                              }
+                              placeholder="Nome/aparência personalizada"
+                            />
+                          </label>
+                        )
+                      })}
                     </div>
                   </section>
                 </div>
@@ -335,8 +332,8 @@ export function CharacterCreationWizard({
                     </div>
                     <p className="mt-1 text-xs leading-5 text-textMuted">
                       Fórmula: {formatStartingGoldFormula(preset.startingGold)}.
-                      Esta opção substitui apenas o pacote de equipamentos da
-                      classe; os itens do antecedente são preservados.
+                      Esta opção substitui apenas o pacote da classe; os itens do
+                      antecedente são preservados.
                     </p>
                   </div>
 
@@ -352,7 +349,10 @@ export function CharacterCreationWizard({
                         value={startingGold}
                         onChange={(event) =>
                           setStartingGold(
-                            Math.max(0, Math.trunc(Number(event.target.value) || 0)),
+                            Math.max(
+                              0,
+                              Math.trunc(Number(event.target.value) || 0),
+                            ),
                           )
                         }
                       />
@@ -363,14 +363,13 @@ export function CharacterCreationWizard({
                         setStartingGold(rollStartingGold(preset.startingGold))
                       }
                     >
-                      <Dices className="h-4 w-4" />
-                      Rolar
+                      Rolar ouro
                     </Button>
                   </div>
 
                   <div className="rounded-lg border border-accentBorder bg-accentBg p-3 text-xs text-text">
-                    O inventário receberá {startingGold} peças de ouro como item
-                    de categoria Moeda.
+                    O inventário receberá {startingGold} peças de ouro na
+                    categoria Moeda.
                   </div>
                 </section>
               )}
