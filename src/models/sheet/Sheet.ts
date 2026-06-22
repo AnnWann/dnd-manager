@@ -13,6 +13,7 @@ export type Sheet = {
     mobility: number
     initiative: number
     passive_perception: number
+    exhaustion: number
   }
 
   HP: HP
