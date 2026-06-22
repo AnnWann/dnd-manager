@@ -36,6 +36,7 @@ export function CharacterInventoryTab({
     transferCharacters,
     transferItem,
     canTransferFromCharacter,
+    canViewCharacterDetails,
   } = useCharacterContext()
   const [transferringItem, setTransferringItem] =
     useState<Itemmable | null>(null)
@@ -104,6 +105,7 @@ export function CharacterInventoryTab({
           characterId: character.get("id"),
         }}
         characters={transferCharacters}
+        canViewCharacterDetails={canViewCharacterDetails}
         onClose={() => setTransferringItem(null)}
         onTransfer={transferItem}
       />
