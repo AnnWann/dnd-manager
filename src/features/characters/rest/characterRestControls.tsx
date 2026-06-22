@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Coffee, Moon, X } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
@@ -11,8 +11,15 @@ import {
 import type { DieSides } from "../../../models/dice/Die"
 import type { Itemmable } from "../../../models/items/item"
 import {
-  getAvailableFoodPortions,
+  isSupplyItem,
+  type SupplyItem,
+} from "../../../models/items/SupplyItem"
+import {
+  createAutomaticLongRestSelection,
   getEffectiveRaceSupplyConsumption,
+  getSupplySelectionTotals,
+  getTotalSupplyPortions,
+  type LongRestSupplySelection,
 } from "../../../models/supplies/partySupply"
 
 const DIE_ORDER: DieSides[] = [
@@ -27,6 +34,8 @@ const DIE_ORDER: DieSides[] = [
   "d100",
 ]
 
+const PORTION_EPSILON = 0.000001
+
 type Props = {
   character: CharacterTemplate
   partyInventory: Itemmable[]
@@ -34,7 +43,10 @@ type Props = {
     characterId: string,
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) => void
-  completeLongRest: (characterId: string) => void
+  completeLongRest: (
+    characterId: string,
+    selection: LongRestSupplySelection[],
+  ) => void
 }
 
 export function CharacterRestControls({
@@ -56,8 +68,8 @@ export function CharacterRestControls({
     setShortRestOpen(false)
   }
 
-  function confirmLongRest() {
-    completeLongRest(character.get("id"))
+  function confirmLongRest(selection: LongRestSupplySelection[]) {
+    completeLongRest(character.get("id"), selection)
     setLongRestOpen(false)
   }
 
@@ -296,82 +308,287 @@ function LongRestDialog({
   character: CharacterTemplate
   partyInventory: Itemmable[]
   onClose: () => void
-  onConfirm: () => void
+  onConfirm: (selection: LongRestSupplySelection[]) => void
 }) {
+  const consumption = getEffectiveRaceSupplyConsumption(
+    character.get("sheet").race,
+  )
+  const foodCost = consumption.food
+  const drinkCost = consumption.drink
+  const supplies = useMemo(
+    () =>
+      partyInventory.filter(
+        (item): item is SupplyItem =>
+          isSupplyItem(item) &&
+          item.supplyCategory !== "other" &&
+          getTotalSupplyPortions(item) > 0,
+      ),
+    [partyInventory],
+  )
+  const [selectedByItem, setSelectedByItem] = useState<
+    Record<string, number>
+  >({})
+
+  useEffect(() => {
+    if (!open) return
+
+    setSelectedByItem(
+      selectionToRecord(
+        createAutomaticLongRestSelection(
+          partyInventory,
+          foodCost,
+          drinkCost,
+        ),
+      ),
+    )
+  }, [drinkCost, foodCost, open, partyInventory])
+
+  const selection = useMemo<LongRestSupplySelection[]>(
+    () =>
+      Object.entries(selectedByItem)
+        .filter(([, portions]) => portions > 0)
+        .map(([itemId, portions]) => ({ itemId, portions })),
+    [selectedByItem],
+  )
+  const totals = useMemo(
+    () => getSupplySelectionTotals(partyInventory, selection),
+    [partyInventory, selection],
+  )
+
   if (!open) return null
 
-  const foodCost = getEffectiveRaceSupplyConsumption(
-    character.get("sheet").race,
-  ).food
-  const availableFood = getAvailableFoodPortions(partyInventory)
-  const missingFood = Math.max(0, foodCost - availableFood)
+  const missingFood = Math.max(0, foodCost - totals.food)
+  const missingDrink = Math.max(0, drinkCost - totals.drink)
+  const foodComplete = missingFood <= PORTION_EPSILON
+  const drinkComplete = missingDrink <= PORTION_EPSILON
+  const canConfirm = foodComplete && drinkComplete
+
+  function setSelectedPortions(item: SupplyItem, value: number) {
+    const available = getTotalSupplyPortions(item)
+    const nextValue = Math.max(0, Math.min(available, value || 0))
+
+    setSelectedByItem((current) => ({
+      ...current,
+      [item.id]: nextValue,
+    }))
+  }
+
+  function autoSelect() {
+    setSelectedByItem(
+      selectionToRecord(
+        createAutomaticLongRestSelection(
+          partyInventory,
+          foodCost,
+          drinkCost,
+        ),
+      ),
+    )
+  }
+
+  function resetAndClose() {
+    setSelectedByItem({})
+    onClose()
+  }
+
+  function confirm() {
+    if (!canConfirm) return
+    onConfirm(selection)
+    setSelectedByItem({})
+  }
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"
-      onMouseDown={onClose}
+      className="fixed inset-0 z-[70] flex items-center justify-center overflow-x-hidden bg-black/65 p-2 backdrop-blur-sm sm:p-4"
+      onMouseDown={resetAndClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="long-rest-title"
-        className="w-full max-w-md rounded-xl border border-border bg-bg-elevated p-4 text-text shadow-theme-lg"
+        className="grid max-h-[94vh] w-full min-w-0 max-w-2xl overflow-hidden rounded-xl border border-border bg-bg-elevated p-3 text-text shadow-theme-lg sm:p-4"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <DialogHeader
           id="long-rest-title"
           title="Descanso longo"
-          description="O personagem recuperará toda a vida, dados de vida, espaços de magia, espaços de pacto, pontos de feitiçaria e habilidades de descanso curto ou longo."
-          onClose={onClose}
+          description="Escolha os suprimentos que serão consumidos. Você pode dividir comida e bebida entre várias pilhas ou consumir apenas parte de uma embalagem."
+          onClose={resetAndClose}
         />
 
-        <div className="grid gap-3 py-4">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl border border-border bg-bg-subtle p-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-                Consumo deste personagem
-              </div>
-              <div className="mt-1 text-lg font-bold text-textH">
-                {formatPortions(foodCost)}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-border bg-bg-subtle p-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-                Comida disponível
-              </div>
-              <div className="mt-1 text-lg font-bold text-textH">
-                {formatPortions(availableFood)}
-              </div>
-            </div>
+        <div className="grid min-h-0 gap-4 overflow-y-auto py-4 pr-1">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <SupplyRequirement
+              label="Comida necessária"
+              value={foodCost}
+              complete={foodComplete}
+            />
+            <SupplyRequirement
+              label="Comida selecionada"
+              value={totals.food}
+              complete={foodComplete}
+            />
+            <SupplyRequirement
+              label="Bebida necessária"
+              value={drinkCost}
+              complete={drinkComplete}
+            />
+            <SupplyRequirement
+              label="Bebida selecionada"
+              value={totals.drink}
+              complete={drinkComplete}
+            />
           </div>
 
-          <p className="text-xs leading-5 text-textMuted">
-            Ao concluir, essa quantidade será retirada das porções de comida do
-            inventário compartilhado. Rações soltas, barris e suprimentos
-            personalizados são consumidos pelo mesmo valor equivalente.
-          </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              className="w-full sm:w-auto"
+              size="sm"
+              variant="secondary"
+              onClick={() => setSelectedByItem({})}
+            >
+              Limpar seleção
+            </Button>
+            <Button
+              className="w-full sm:w-auto"
+              size="sm"
+              variant="secondary"
+              onClick={autoSelect}
+            >
+              Seleção automática
+            </Button>
+          </div>
 
-          {missingFood > 0 ? (
-            <div className="rounded-xl border border-danger bg-dangerBg p-3 text-xs leading-5 text-danger">
-              O grupo não possui comida suficiente. Faltam {formatPortions(missingFood)}.
-              O descanso ainda será concluído, mas apenas o estoque disponível
-              poderá ser removido.
+          {supplies.length > 0 ? (
+            <div className="grid gap-2">
+              {supplies.map((item) => {
+                const available = getTotalSupplyPortions(item)
+                const selected = selectedByItem[item.id] ?? 0
+
+                return (
+                  <label
+                    key={item.id}
+                    className="grid min-w-0 gap-3 rounded-xl border border-border bg-bg-subtle p-3 sm:grid-cols-[minmax(0,1fr)_130px] sm:items-center"
+                  >
+                    <span className="min-w-0">
+                      <span className="block break-words text-sm font-semibold text-textH">
+                        {item.name || "Suprimento sem nome"}
+                      </span>
+                      <span className="mt-1 block break-words text-[11px] leading-4 text-textMuted">
+                        {supplyCategoryLabel(item)} • {formatPortions(available)} disponíveis
+                      </span>
+                    </span>
+
+                    <span className="grid min-w-0 gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+                        Porções a consumir
+                      </span>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={available}
+                        step="any"
+                        value={selected}
+                        onChange={(event) =>
+                          setSelectedPortions(
+                            item,
+                            Number(event.target.value) || 0,
+                          )
+                        }
+                      />
+                    </span>
+                  </label>
+                )
+              })}
             </div>
-          ) : null}
+          ) : (
+            <div className="rounded-xl border border-dashed border-border bg-bg-subtle px-3 py-6 text-center text-xs leading-5 text-textMuted">
+              O inventário do grupo não possui suprimentos de comida ou bebida disponíveis.
+            </div>
+          )}
+
+          {!canConfirm ? (
+            <div className="rounded-xl border border-danger bg-dangerBg p-3 text-xs leading-5 text-danger">
+              A seleção ainda não sustenta o descanso.
+              {!foodComplete
+                ? ` Faltam ${formatPortions(missingFood)} de comida.`
+                : ""}
+              {!drinkComplete
+                ? ` Faltam ${formatPortions(missingDrink)} de bebida.`
+                : ""}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-accentBorder bg-accentBg p-3 text-xs leading-5 text-textH">
+              Suprimentos suficientes. Serão consumidas {formatPortions(totals.selectedPortions)} distribuídas entre os itens selecionados.
+            </div>
+          )}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-border pt-4">
-          <Button size="sm" variant="secondary" onClick={onClose}>
+        <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end">
+          <Button
+            className="w-full sm:w-auto"
+            size="sm"
+            variant="secondary"
+            onClick={resetAndClose}
+          >
             Cancelar
           </Button>
 
-          <Button size="sm" variant="primary" onClick={onConfirm}>
-            Concluir descanso
+          <Button
+            className="w-full sm:w-auto"
+            size="sm"
+            variant="primary"
+            disabled={!canConfirm}
+            onClick={confirm}
+          >
+            Consumir e descansar
           </Button>
         </div>
       </div>
     </div>
+  )
+}
+
+function SupplyRequirement({
+  label,
+  value,
+  complete,
+}: {
+  label: string
+  value: number
+  complete: boolean
+}) {
+  return (
+    <div
+      className={
+        complete
+          ? "min-w-0 rounded-xl border border-accentBorder bg-accentBg p-3"
+          : "min-w-0 rounded-xl border border-border bg-bg-subtle p-3"
+      }
+    >
+      <div className="break-words text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+        {label}
+      </div>
+      <div className="mt-1 break-words text-lg font-bold text-textH">
+        {formatPortions(value)}
+      </div>
+    </div>
+  )
+}
+
+function supplyCategoryLabel(item: SupplyItem): string {
+  if (item.supplyCategory === "food") return "Comida"
+  if (item.supplyCategory === "drink") return "Bebida"
+  if (item.supplyCategory === "mixed") {
+    return "Misto — conta como comida e bebida"
+  }
+  return "Outro"
+}
+
+function selectionToRecord(
+  selection: LongRestSupplySelection[],
+): Record<string, number> {
+  return Object.fromEntries(
+    selection.map((entry) => [entry.itemId, entry.portions]),
   )
 }
 
@@ -388,12 +605,12 @@ function DialogHeader({
 }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-border pb-4">
-      <div>
-        <h2 id={id} className="text-base font-semibold text-textH">
+      <div className="min-w-0">
+        <h2 id={id} className="break-words text-base font-semibold text-textH">
           {title}
         </h2>
 
-        <p className="mt-1 text-xs leading-5 text-textMuted">
+        <p className="mt-1 max-w-full break-words text-xs leading-5 text-textMuted">
           {description}
         </p>
       </div>
@@ -411,9 +628,10 @@ function DialogHeader({
 }
 
 function formatPortions(value: number): string {
-  const formatted = Number.isInteger(value)
-    ? String(value)
-    : value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })
+  const normalized = Math.max(0, value)
+  const formatted = Number.isInteger(normalized)
+    ? String(normalized)
+    : normalized.toLocaleString("pt-BR", { maximumFractionDigits: 2 })
 
-  return `${formatted} ${value === 1 ? "porção" : "porções"}`
+  return `${formatted} ${normalized === 1 ? "porção" : "porções"}`
 }
