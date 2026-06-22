@@ -64,6 +64,7 @@ export type CharacterContextValue = {
   removePartyItem: (itemId: string) => void
   transferItem: (request: TransferItemRequest) => void
   canTransferFromCharacter: (characterId: string) => boolean
+  canViewCharacterDetails: (characterId: string) => boolean
   canAssignOwners: boolean
   canEditCharacterType: boolean
   knownPlayerKeys: string[]
@@ -139,14 +140,27 @@ export function CharacterProvider({
     return Array.from(keys).sort((left, right) => left.localeCompare(right))
   }, [characters, normalizedUserKey])
 
+  function canViewCharacterDetails(characterId: string): boolean {
+    const character = characters.find(
+      (entry) => entry.get("id") === characterId,
+    )
+    if (!character) return false
+    if (userRole === "master") return true
+
+    const isOwned =
+      character.get("owner")?.id?.trim() === normalizedUserKey
+    return isOwned || character.get("visibility") === "party"
+  }
+
   const visibleCharacters = useMemo(() => {
     if (userRole === "master") return characters
     if (!normalizedUserKey) return []
 
-    return characters.filter(
-      (character) =>
-        character.get("owner")?.id?.trim() === normalizedUserKey,
-    )
+    return characters.filter((character) => {
+      const isOwned =
+        character.get("owner")?.id?.trim() === normalizedUserKey
+      return isOwned || character.get("visibility") === "party"
+    })
   }, [characters, normalizedUserKey, userRole])
 
   const transferCharacters = useMemo(() => {
@@ -155,7 +169,7 @@ export function CharacterProvider({
     return characters.filter((character) => {
       const isOwned =
         character.get("owner")?.id?.trim() === normalizedUserKey
-      return isOwned || character.get("visibility") === "party"
+      return isOwned || character.get("visibility") !== "master"
     })
   }, [characters, normalizedUserKey, userRole])
 
@@ -507,6 +521,7 @@ export function CharacterProvider({
         removePartyItem,
         transferItem,
         canTransferFromCharacter,
+        canViewCharacterDetails,
         canAssignOwners,
         canEditCharacterType,
         knownPlayerKeys,
@@ -544,10 +559,8 @@ function canUseCharacterAsTarget(
   if (!character) return false
   if (userRole === "master") return true
 
-  return (
-    character.get("owner")?.id?.trim() === userKey ||
-    character.get("visibility") === "party"
-  )
+  const isOwned = character.get("owner")?.id?.trim() === userKey
+  return isOwned || character.get("visibility") !== "master"
 }
 
 function getLocationInventory(
