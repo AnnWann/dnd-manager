@@ -229,14 +229,8 @@ export function createAutomaticLongRestSelection(
     if (remaining <= 0) break
 
     const available = getTotalSupplyPortions(item)
-    const quarter = available / 4
-    if (quarter <= 0) continue
-
-    const quarterSteps = Math.min(
-      4,
-      Math.max(1, Math.ceil(remaining / quarter)),
-    )
-    const portions = roundPortions(quarter * quarterSteps)
+    const portions = roundPortions(Math.min(available, remaining))
+    if (portions <= 0) continue
 
     selection.push({ itemId: item.id, portions })
     remaining = roundPortions(Math.max(0, remaining - portions))
