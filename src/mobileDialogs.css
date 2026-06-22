@@ -1,0 +1,30 @@
+@media (max-width: 639px) {
+  [class~="fixed"][class~="inset-0"] > [role="dialog"][aria-modal="true"] {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    width: 100%;
+    height: calc(100dvh - 1rem);
+    max-height: calc(100dvh - 1rem) !important;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  [class~="fixed"][class~="inset-0"]
+    > [role="dialog"][aria-modal="true"]
+    > :nth-child(2) {
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  [class~="fixed"][class~="inset-0"]
+    > [role="dialog"][aria-modal="true"]
+    > :last-child {
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+    background: var(--surface-elevated);
+  }
+}
