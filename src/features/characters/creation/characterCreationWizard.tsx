@@ -1,5 +1,17 @@
-import { useEffect, useMemo, useState } from "react"
-import { Check, ChevronLeft, ChevronRight, X } from "lucide-react"
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react"
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Minus,
+  Plus,
+  X,
+} from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
@@ -10,7 +22,10 @@ import type { CharacterBackground } from "../../../models/characters/CharacterBa
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Itemmable } from "../../../models/items/item"
 import type { Player } from "../../../models/player/Player"
-import type { CharacterRace, CreatureSize } from "../../../models/races/CharacterRace"
+import type {
+  CharacterRace,
+  CreatureSize,
+} from "../../../models/races/CharacterRace"
 import type { Attribute } from "../../../models/sheet/Attribute"
 import { ATTRIBUTE_KEYS } from "../../../models/sheet/Attribute"
 import {
@@ -49,6 +64,15 @@ const ATTRIBUTE_LABELS: Record<Attribute, string> = {
   cha: "Carisma",
 }
 
+const ATTRIBUTE_SHORT: Record<Attribute, string> = {
+  str: "FOR",
+  dex: "DES",
+  con: "CON",
+  int: "INT",
+  wis: "SAB",
+  cha: "CAR",
+}
+
 const SIZE_LABELS: Record<CreatureSize, string> = {
   tiny: "Minúsculo",
   small: "Pequeno",
@@ -59,6 +83,13 @@ const SIZE_LABELS: Record<CreatureSize, string> = {
 }
 
 type Visibility = "private" | "party" | "master"
+
+type RaceBonusSlot = {
+  id: string
+  amount: number
+  attribute?: Attribute
+  locked: boolean
+}
 
 type Props = {
   open: boolean
@@ -91,6 +122,9 @@ export function CharacterCreationWizard({
   const [race, setRace] = useState<CharacterRace>(
     racePresetToCharacterRace(firstRace),
   )
+  const [raceBonusSlots, setRaceBonusSlots] = useState<RaceBonusSlot[]>(
+    getRaceBonusSlots(firstRace.id, firstRace.attributeBonus),
+  )
   const [backgroundPresetId, setBackgroundPresetId] = useState(
     firstBackground.id,
   )
@@ -120,12 +154,16 @@ export function CharacterCreationWizard({
   useEffect(() => {
     if (!open) return
 
+    const initialRace = racePresetToCharacterRace(firstRace)
     setStep(0)
     setName("")
     setOwnerName(defaultOwner.name)
     setVisibility("party")
     setRacePresetId(firstRace.id)
-    setRace(racePresetToCharacterRace(firstRace))
+    setRace(initialRace)
+    setRaceBonusSlots(
+      getRaceBonusSlots(firstRace.id, firstRace.attributeBonus),
+    )
     setBackgroundPresetId(firstBackground.id)
     setBackground(cloneBackground(firstBackground))
     setClassName(firstClass.id)
@@ -141,6 +179,14 @@ export function CharacterCreationWizard({
     )
     setEquipmentText(backgroundEquipmentText(firstBackground))
   }, [defaultOwner.id, open])
+
+  useEffect(() => {
+    setClassSkills((current) =>
+      current.filter(
+        (skill) => !background.skillProficiencies.includes(skill),
+      ),
+    )
+  }, [background.skillProficiencies])
 
   if (!open) return null
 
@@ -160,18 +206,56 @@ export function CharacterCreationWizard({
   )
 
   function selectRacePreset(preset: RacePreset) {
+    const nextRace = racePresetToCharacterRace(preset)
+    const slots = getRaceBonusSlots(preset.id, preset.attributeBonus)
     setRacePresetId(preset.id)
-    setRace(racePresetToCharacterRace(preset))
+    setRace(applyRaceBonusSlots(nextRace, slots))
+    setRaceBonusSlots(slots)
   }
 
   function selectCustomRace() {
+    const slots: RaceBonusSlot[] = [
+      { id: "custom-plus-two", amount: 2, attribute: "str", locked: false },
+      { id: "custom-plus-one", amount: 1, attribute: "dex", locked: false },
+    ]
     setRacePresetId("custom")
-    setRace((current) => ({
-      ...current,
-      naturalAbilities: [...(current.naturalAbilities ?? [])],
-      proficiencies: [...(current.proficiencies ?? [])],
-      attributeBonus: { ...current.attributeBonus },
-    }))
+    setRaceBonusSlots(slots)
+    setRace((current) =>
+      applyRaceBonusSlots(
+        {
+          ...current,
+          naturalAbilities: [...(current.naturalAbilities ?? [])],
+          proficiencies: [...(current.proficiencies ?? [])],
+        },
+        slots,
+      ),
+    )
+  }
+
+  function moveRaceBonus(slotId: string, attribute: Attribute) {
+    setRaceBonusSlots((current) => {
+      const targetSlot = current.find((slot) => slot.id === slotId)
+      if (!targetSlot || targetSlot.locked) return current
+
+      const occupied = current.find(
+        (slot) => slot.id !== slotId && slot.attribute === attribute,
+      )
+      if (occupied?.locked) return current
+
+      const previousAttribute = targetSlot.attribute
+      const nextSlots = current.map((slot) => {
+        if (slot.id === slotId) return { ...slot, attribute }
+        if (occupied && slot.id === occupied.id) {
+          return { ...slot, attribute: previousAttribute }
+        }
+        return slot
+      })
+
+      setRace((currentRace) =>
+        applyRaceBonusSlots(currentRace, nextSlots),
+      )
+      return nextSlots
+    })
   }
 
   function selectBackgroundPreset(preset: BackgroundPreset) {
@@ -215,8 +299,11 @@ export function CharacterCreationWizard({
     )
   }
 
-  function updateAttribute(attribute: Attribute, value: number) {
-    const nextValue = Math.max(1, Math.min(30, Math.trunc(value || 1)))
+  function updateAttribute(attribute: Attribute, delta: -1 | 1) {
+    const nextValue = Math.max(
+      1,
+      Math.min(30, attributes[attribute] + delta),
+    )
     const nextAttributes = { ...attributes, [attribute]: nextValue }
     setAttributes(nextAttributes)
 
@@ -226,6 +313,8 @@ export function CharacterCreationWizard({
   }
 
   function toggleClassSkill(skill: Skill) {
+    if (background.skillProficiencies.includes(skill)) return
+
     setClassSkills((current) => {
       if (current.includes(skill)) {
         return current.filter((entry) => entry !== skill)
@@ -318,18 +407,18 @@ export function CharacterCreationWizard({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/65 p-0 backdrop-blur-sm sm:p-4"
+      className="fixed inset-0 z-[80] flex max-w-[100vw] items-center justify-center overflow-x-hidden bg-black/65 p-0 backdrop-blur-sm sm:p-4"
       onMouseDown={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="character-creation-title"
-        className="grid h-[100dvh] w-full min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-border bg-bg-elevated text-text shadow-theme-lg sm:h-auto sm:max-h-[94dvh] sm:max-w-5xl sm:rounded-xl sm:border"
+        className="grid h-[100dvh] w-full min-w-0 max-w-[100vw] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-border bg-bg-elevated text-text shadow-theme-lg sm:h-auto sm:max-h-[94dvh] sm:max-w-5xl sm:rounded-xl sm:border"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <header className="border-b border-border p-3 sm:p-4">
-          <div className="flex items-start justify-between gap-3">
+        <header className="min-w-0 overflow-hidden border-b border-border p-3 sm:p-4">
+          <div className="flex min-w-0 items-start justify-between gap-3">
             <div className="min-w-0">
               <h2
                 id="character-creation-title"
@@ -337,7 +426,7 @@ export function CharacterCreationWizard({
               >
                 Criar personagem
               </h2>
-              <p className="mt-1 text-xs text-textMuted">
+              <p className="mt-1 break-words text-xs text-textMuted">
                 Presets do Livro do Jogador com todos os campos editáveis.
               </p>
             </div>
@@ -351,7 +440,7 @@ export function CharacterCreationWizard({
             </button>
           </div>
 
-          <div className="mt-3 flex gap-1 overflow-x-auto pb-1">
+          <div className="mt-3 flex max-w-full gap-1 overflow-x-auto pb-1">
             {STEPS.map((label, index) => (
               <button
                 key={label}
@@ -372,7 +461,7 @@ export function CharacterCreationWizard({
           </div>
         </header>
 
-        <main className="min-h-0 overflow-y-auto overscroll-contain p-3 sm:p-5">
+        <main className="min-h-0 min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-contain p-3 sm:p-5">
           {step === 0 ? (
             <IdentityStep
               name={name}
@@ -415,6 +504,7 @@ export function CharacterCreationWizard({
               level={level}
               maxHp={maxHp}
               selectedSkills={classSkills}
+              backgroundSkills={background.skillProficiencies}
               onSelectClass={selectClassPreset}
               onLevelChange={updateLevel}
               onMaxHpChange={setMaxHp}
@@ -426,7 +516,9 @@ export function CharacterCreationWizard({
             <AttributesStep
               attributes={attributes}
               raceBonuses={race.attributeBonus}
+              bonusSlots={raceBonusSlots}
               onChange={updateAttribute}
+              onMoveBonus={moveRaceBonus}
             />
           ) : null}
 
@@ -448,7 +540,7 @@ export function CharacterCreationWizard({
           ) : null}
         </main>
 
-        <footer className="flex flex-col-reverse gap-2 border-t border-border bg-bg-elevated p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+        <footer className="flex min-w-0 max-w-full flex-col-reverse gap-2 overflow-hidden border-t border-border bg-bg-elevated p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
           <Button
             variant="secondary"
             disabled={step === 0}
@@ -458,7 +550,7 @@ export function CharacterCreationWizard({
             Voltar
           </Button>
 
-          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+          <div className="flex min-w-0 flex-col-reverse gap-2 sm:flex-row">
             <Button variant="secondary" onClick={onClose}>
               Cancelar
             </Button>
@@ -516,8 +608,8 @@ function IdentityStep({
       title="Identidade básica"
       description="Defina quem é o personagem e quem poderá controlá-lo."
     >
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="grid gap-1.5">
+      <div className="grid min-w-0 gap-4 md:grid-cols-2">
+        <label className="grid min-w-0 gap-1.5">
           <span className="text-xs font-medium text-textH">Nome</span>
           <Input
             autoFocus
@@ -527,7 +619,7 @@ function IdentityStep({
           />
         </label>
 
-        <label className="grid gap-1.5">
+        <label className="grid min-w-0 gap-1.5">
           <span className="text-xs font-medium text-textH">Dono</span>
           <Input
             value={ownerName}
@@ -542,7 +634,7 @@ function IdentityStep({
           </datalist>
         </label>
 
-        <label className="grid gap-1.5 md:col-span-2">
+        <label className="grid min-w-0 gap-1.5 md:col-span-2">
           <span className="text-xs font-medium text-textH">Visibilidade</span>
           <Select
             value={visibility}
@@ -574,12 +666,12 @@ function RaceStep({
   onChange: (race: CharacterRace) => void
 }) {
   return (
-    <div className="grid gap-5">
+    <div className="grid min-w-0 gap-5">
       <StepSection
         title="Preset racial"
-        description="Escolha uma raça do Livro do Jogador. O preset apenas preenche os campos; você pode alterar tudo abaixo."
+        description="Escolha uma raça do Livro do Jogador. O preset preenche os campos; bônus fixos ficam travados e bônus flexíveis podem ser redistribuídos na etapa de atributos."
       >
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {PHB_RACE_PRESETS.map((preset) => (
             <PresetCard
               key={preset.id}
@@ -592,15 +684,15 @@ function RaceStep({
           <PresetCard
             selected={selectedPresetId === "custom"}
             title="Personalizada"
-            description="Mantém a base atual e permite alterar livremente seus valores."
+            description="Usa um bônus flexível de +2 e outro de +1, reposicionáveis na etapa de atributos."
             onClick={onSelectCustom}
           />
         </div>
       </StepSection>
 
       <StepSection title="Personalização racial">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="grid gap-1.5">
+        <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="grid min-w-0 gap-1.5">
             <span className="text-xs font-medium text-textH">Sub-raça</span>
             <Input
               value={race.subrace}
@@ -609,7 +701,7 @@ function RaceStep({
               }
             />
           </label>
-          <label className="grid gap-1.5">
+          <label className="grid min-w-0 gap-1.5">
             <span className="text-xs font-medium text-textH">Tamanho</span>
             <Select
               value={race.size ?? "medium"}
@@ -627,7 +719,7 @@ function RaceStep({
               ))}
             </Select>
           </label>
-          <label className="grid gap-1.5">
+          <label className="grid min-w-0 gap-1.5">
             <span className="text-xs font-medium text-textH">
               Ajuste de deslocamento
             </span>
@@ -643,52 +735,27 @@ function RaceStep({
               }
             />
           </label>
-          <div className="rounded-xl border border-border bg-bg-subtle p-3 text-xs text-textMuted">
+          <div className="min-w-0 rounded-xl border border-border bg-bg-subtle p-3 text-xs text-textMuted">
             Deslocamento base do sistema: 9 m. O ajuste racial é somado a ele.
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {ATTRIBUTE_KEYS.map((attribute) => (
-            <label key={attribute} className="grid gap-1.5">
-              <span className="text-xs font-medium text-textH">
-                {ATTRIBUTE_LABELS[attribute]}
-              </span>
-              <Input
-                type="number"
-                min={-5}
-                max={5}
-                value={race.attributeBonus[attribute] ?? 0}
-                onChange={(event) =>
-                  onChange({
-                    ...race,
-                    attributeBonus: {
-                      ...race.attributeBonus,
-                      [attribute]: Number(event.target.value) || 0,
-                    },
-                  })
-                }
-              />
-            </label>
-          ))}
-        </div>
-
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2">
           {race.naturalAbilities.map((ability) => (
             <div
               key={ability.id}
-              className="rounded-xl border border-border bg-bg-subtle p-3"
+              className="min-w-0 rounded-xl border border-border bg-bg-subtle p-3"
             >
-              <div className="text-sm font-semibold text-textH">
+              <div className="break-words text-sm font-semibold text-textH">
                 {ability.name}
               </div>
-              <div className="mt-1 text-xs leading-5 text-textMuted">
+              <div className="mt-1 break-words text-xs leading-5 text-textMuted">
                 {ability.description}
               </div>
             </div>
           ))}
         </div>
-        <p className="mt-3 text-[11px] text-textMuted">
+        <p className="mt-3 break-words text-[11px] text-textMuted">
           Habilidades naturais e proficiências podem ser editadas detalhadamente na aba Raça após a criação.
         </p>
       </StepSection>
@@ -716,12 +783,12 @@ function BackgroundStep({
   onToggleSkill: (skill: Skill) => void
 }) {
   return (
-    <div className="grid gap-5">
+    <div className="grid min-w-0 gap-5">
       <StepSection
         title="Antecedente"
         description="Escolha um antecedente do Livro do Jogador ou use-o apenas como ponto de partida."
       >
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {PHB_BACKGROUND_PRESETS.map((preset) => (
             <PresetCard
               key={preset.id}
@@ -741,8 +808,8 @@ function BackgroundStep({
       </StepSection>
 
       <StepSection title="Personalização do antecedente">
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="grid gap-1.5">
+        <div className="grid min-w-0 gap-4 md:grid-cols-2">
+          <label className="grid min-w-0 gap-1.5">
             <span className="text-xs font-medium text-textH">Nome</span>
             <Input
               value={background.name}
@@ -755,7 +822,7 @@ function BackgroundStep({
               }
             />
           </label>
-          <label className="grid gap-1.5">
+          <label className="grid min-w-0 gap-1.5">
             <span className="text-xs font-medium text-textH">
               Característica
             </span>
@@ -770,7 +837,7 @@ function BackgroundStep({
               }
             />
           </label>
-          <label className="grid gap-1.5 md:col-span-2">
+          <label className="grid min-w-0 gap-1.5 md:col-span-2">
             <span className="text-xs font-medium text-textH">Descrição</span>
             <Textarea
               value={background.description}
@@ -783,7 +850,7 @@ function BackgroundStep({
               }
             />
           </label>
-          <label className="grid gap-1.5 md:col-span-2">
+          <label className="grid min-w-0 gap-1.5 md:col-span-2">
             <span className="text-xs font-medium text-textH">
               Descrição da característica
             </span>
@@ -798,7 +865,7 @@ function BackgroundStep({
               }
             />
           </label>
-          <label className="grid gap-1.5 md:col-span-2">
+          <label className="grid min-w-0 gap-1.5 md:col-span-2">
             <span className="text-xs font-medium text-textH">
               Equipamento inicial — um item por linha
             </span>
@@ -809,11 +876,11 @@ function BackgroundStep({
           </label>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-4 min-w-0">
           <div className="text-xs font-semibold text-textH">
             Perícias do antecedente
           </div>
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="mt-2 grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             {Object.entries(SKILL_LABELS).map(([skill, label]) => (
               <SkillToggle
                 key={skill}
@@ -827,7 +894,7 @@ function BackgroundStep({
           </div>
         </div>
 
-        <p className="mt-3 text-[11px] text-textMuted">
+        <p className="mt-3 break-words text-[11px] text-textMuted">
           Ferramentas, idiomas e outras proficiências do preset serão adicionados à ficha e poderão ser alterados na aba Proficiências.
         </p>
       </StepSection>
@@ -840,6 +907,7 @@ function ClassStep({
   level,
   maxHp,
   selectedSkills,
+  backgroundSkills,
   onSelectClass,
   onLevelChange,
   onMaxHpChange,
@@ -849,18 +917,19 @@ function ClassStep({
   level: number
   maxHp: number
   selectedSkills: Skill[]
+  backgroundSkills: Skill[]
   onSelectClass: (preset: ClassPreset) => void
   onLevelChange: (level: number) => void
   onMaxHpChange: (hp: number) => void
   onToggleSkill: (skill: Skill) => void
 }) {
   return (
-    <div className="grid gap-5">
+    <div className="grid min-w-0 gap-5">
       <StepSection
         title="Classe inicial"
         description="As doze classes do Livro do Jogador estão disponíveis. Multiclasse pode ser configurada depois."
       >
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {PHB_CLASS_PRESETS.map((preset) => (
             <PresetCard
               key={preset.id}
@@ -874,8 +943,8 @@ function ClassStep({
       </StepSection>
 
       <StepSection title="Nível, vida e perícias">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="grid gap-1.5">
+        <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+          <label className="grid min-w-0 gap-1.5">
             <span className="text-xs font-medium text-textH">Nível</span>
             <Input
               type="number"
@@ -885,7 +954,7 @@ function ClassStep({
               onChange={(event) => onLevelChange(Number(event.target.value))}
             />
           </label>
-          <label className="grid gap-1.5">
+          <label className="grid min-w-0 gap-1.5">
             <span className="text-xs font-medium text-textH">
               Pontos de vida máximos
             </span>
@@ -900,25 +969,45 @@ function ClassStep({
           </label>
         </div>
 
-        <div className="mt-4 rounded-xl border border-border bg-bg-subtle p-3 text-xs text-text">
+        <div className="mt-4 min-w-0 rounded-xl border border-border bg-bg-subtle p-3 text-xs text-text">
           Salvaguardas: {selectedClass.savingThrows.map((entry) => ATTRIBUTE_LABELS[entry]).join(" e ")}.
           Escolha até {selectedClass.skillChoices} perícias de classe.
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-          {selectedClass.availableSkills.map((skill) => (
-            <SkillToggle
-              key={skill}
-              label={SKILL_LABELS[skill]}
-              selected={selectedSkills.includes(skill)}
-              disabled={
-                !selectedSkills.includes(skill) &&
-                selectedSkills.length >= selectedClass.skillChoices
-              }
-              onClick={() => onToggleSkill(skill)}
-            />
-          ))}
+        <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          {selectedClass.availableSkills.map((skill) => {
+            const inheritedFromBackground = backgroundSkills.includes(skill)
+            const choiceLimitReached =
+              !selectedSkills.includes(skill) &&
+              selectedSkills.length >= selectedClass.skillChoices
+
+            return (
+              <SkillToggle
+                key={skill}
+                label={SKILL_LABELS[skill]}
+                selected={selectedSkills.includes(skill)}
+                disabled={inheritedFromBackground || choiceLimitReached}
+                conflict={inheritedFromBackground}
+                note={
+                  inheritedFromBackground
+                    ? "Antecedente"
+                    : selectedSkills.includes(skill)
+                      ? "Classe"
+                      : undefined
+                }
+                onClick={() => onToggleSkill(skill)}
+              />
+            )
+          })}
         </div>
+
+        {backgroundSkills.some((skill) =>
+          selectedClass.availableSkills.includes(skill),
+        ) ? (
+          <p className="mt-3 text-[11px] leading-5 text-danger">
+            Perícias vermelhas já são concedidas pelo antecedente. Elas ficam bloqueadas e não consomem uma escolha de classe.
+          </p>
+        ) : null}
       </StepSection>
     </div>
   )
@@ -927,50 +1016,143 @@ function ClassStep({
 function AttributesStep({
   attributes,
   raceBonuses,
+  bonusSlots,
   onChange,
+  onMoveBonus,
 }: {
   attributes: Record<Attribute, number>
   raceBonuses: Partial<Record<Attribute, number>>
-  onChange: (attribute: Attribute, value: number) => void
+  bonusSlots: RaceBonusSlot[]
+  onChange: (attribute: Attribute, delta: -1 | 1) => void
+  onMoveBonus: (slotId: string, attribute: Attribute) => void
 }) {
+  const hasFlexibleBonuses = bonusSlots.some((slot) => !slot.locked)
+
   return (
     <StepSection
       title="Atributos"
-      description="Os valores base são totalmente manuais. O bônus racial aparece separadamente e é aplicado pelos cálculos da ficha."
+      description="Ajuste os valores base com − e +. Os botões raciais funcionam como em BG3: bônus fixos ficam travados e bônus flexíveis podem ser movidos."
     >
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mb-4 flex flex-wrap gap-2 text-[11px] text-textMuted">
+        {bonusSlots.map((slot) => (
+          <span
+            key={slot.id}
+            className={
+              slot.locked
+                ? "rounded-full border border-border bg-bg-subtle px-3 py-1"
+                : "rounded-full border border-accentBorder bg-accentBg px-3 py-1 text-textH"
+            }
+          >
+            +{slot.amount} {slot.attribute ? ATTRIBUTE_SHORT[slot.attribute] : "não atribuído"}
+            {slot.locked ? " · fixo" : " · flexível"}
+          </span>
+        ))}
+      </div>
+
+      <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {ATTRIBUTE_KEYS.map((attribute) => {
           const base = attributes[attribute]
           const racial = raceBonuses[attribute] ?? 0
+          const assignedSlots = bonusSlots.filter(
+            (slot) => slot.attribute === attribute,
+          )
+
           return (
-            <label
+            <div
               key={attribute}
-              className="grid gap-2 rounded-xl border border-border bg-bg-subtle p-3"
+              className="grid min-w-0 gap-3 rounded-xl border border-border bg-bg-subtle p-3"
             >
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-textH">
-                  {ATTRIBUTE_LABELS[attribute]}
-                </span>
-                <span className="text-xs text-textMuted">
-                  Final: {base + racial}
-                </span>
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-textH">
+                    {ATTRIBUTE_LABELS[attribute]}
+                  </div>
+                  <div className="text-[11px] text-textMuted">
+                    Final {base + racial} · racial {racial >= 0 ? "+" : ""}{racial}
+                  </div>
+                </div>
+                <div className="text-2xl font-bold text-textH">{base}</div>
               </div>
-              <Input
-                type="number"
-                min={1}
-                max={30}
-                value={base}
-                onChange={(event) =>
-                  onChange(attribute, Number(event.target.value))
-                }
-              />
-              <div className="text-[11px] text-textMuted">
-                Base {base} {racial >= 0 ? "+" : ""}{racial} racial
+
+              <div className="grid grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-2">
+                <button
+                  type="button"
+                  aria-label={`Diminuir ${ATTRIBUTE_LABELS[attribute]}`}
+                  disabled={base <= 1}
+                  onClick={() => onChange(attribute, -1)}
+                  className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-bg text-textH disabled:opacity-35"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <div className="rounded-lg border border-border bg-bg px-3 py-2 text-center text-lg font-bold text-textH">
+                  {base}
+                </div>
+                <button
+                  type="button"
+                  aria-label={`Aumentar ${ATTRIBUTE_LABELS[attribute]}`}
+                  disabled={base >= 30}
+                  onClick={() => onChange(attribute, 1)}
+                  className="flex h-11 w-11 items-center justify-center rounded-lg border border-border bg-bg text-textH disabled:opacity-35"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
               </div>
-            </label>
+
+              <div className="grid grid-cols-2 gap-2">
+                {bonusSlots
+                  .filter((slot) => slot.amount === 2 || slot.amount === 1)
+                  .map((slot) => {
+                    const active = slot.attribute === attribute
+                    const occupiedByLockedSlot = bonusSlots.some(
+                      (other) =>
+                        other.id !== slot.id &&
+                        other.attribute === attribute &&
+                        other.locked,
+                    )
+                    const disabled =
+                      slot.locked || (!active && occupiedByLockedSlot)
+
+                    return (
+                      <button
+                        key={slot.id}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => onMoveBonus(slot.id, attribute)}
+                        className={
+                          active
+                            ? slot.locked
+                              ? "rounded-lg border border-borderStrong bg-bg px-2 py-2 text-xs font-bold text-textMuted"
+                              : "rounded-lg border border-accentBorder bg-accentBg px-2 py-2 text-xs font-bold text-textH"
+                            : "rounded-lg border border-border bg-bg px-2 py-2 text-xs font-semibold text-textMuted disabled:cursor-not-allowed disabled:opacity-35"
+                        }
+                      >
+                        +{slot.amount}
+                        {slot.locked ? " 🔒" : ""}
+                      </button>
+                    )
+                  })}
+              </div>
+
+              {assignedSlots.length > 0 ? (
+                <div className="text-[10px] text-textMuted">
+                  {assignedSlots
+                    .map(
+                      (slot) =>
+                        `+${slot.amount}${slot.locked ? " fixo" : " flexível"}`,
+                    )
+                    .join(" · ")}
+                </div>
+              ) : null}
+            </div>
           )
         })}
       </div>
+
+      {!hasFlexibleBonuses ? (
+        <p className="mt-4 text-[11px] leading-5 text-textMuted">
+          Esta raça usa bônus fixos do Livro do Jogador. Selecione “Personalizada” na etapa de raça para distribuir livremente +2 e +1.
+        </p>
+      ) : null}
     </StepSection>
   )
 }
@@ -1003,7 +1185,7 @@ function ReviewStep({
   equipmentText: string
 }) {
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid min-w-0 gap-4 lg:grid-cols-2">
       <ReviewCard title="Identidade">
         <ReviewLine label="Nome" value={name || "Sem nome"} />
         <ReviewLine label="Dono" value={owner.name} />
@@ -1056,11 +1238,11 @@ function ReviewStep({
       </ReviewCard>
 
       <ReviewCard title="Atributos" className="lg:col-span-2">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           {ATTRIBUTE_KEYS.map((attribute) => (
             <div
               key={attribute}
-              className="rounded-lg border border-border bg-bg-subtle p-3 text-center"
+              className="min-w-0 rounded-lg border border-border bg-bg-subtle p-3 text-center"
             >
               <div className="text-[10px] uppercase text-textMuted">
                 {ATTRIBUTE_LABELS[attribute]}
@@ -1086,14 +1268,16 @@ function StepSection({
 }: {
   title: string
   description?: string
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
-    <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
-      <div className="mb-4">
-        <h3 className="text-base font-semibold text-textH">{title}</h3>
+    <section className="min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
+      <div className="mb-4 min-w-0">
+        <h3 className="break-words text-base font-semibold text-textH">{title}</h3>
         {description ? (
-          <p className="mt-1 text-xs leading-5 text-textMuted">{description}</p>
+          <p className="mt-1 break-words text-xs leading-5 text-textMuted">
+            {description}
+          </p>
         ) : null}
       </div>
       {children}
@@ -1118,15 +1302,19 @@ function PresetCard({
       onClick={onClick}
       className={
         selected
-          ? "min-h-24 rounded-xl border border-accentBorder bg-accentBg p-3 text-left shadow-theme-sm"
-          : "min-h-24 rounded-xl border border-border bg-bg-subtle p-3 text-left hover:border-borderStrong hover:bg-bg"
+          ? "min-h-24 min-w-0 max-w-full overflow-hidden rounded-xl border border-accentBorder bg-accentBg p-3 text-left shadow-theme-sm"
+          : "min-h-24 min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-bg-subtle p-3 text-left hover:border-borderStrong hover:bg-bg"
       }
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-sm font-semibold text-textH">{title}</span>
+      <div className="flex min-w-0 items-start justify-between gap-2">
+        <span className="min-w-0 break-words text-sm font-semibold text-textH">
+          {title}
+        </span>
         {selected ? <Check className="h-4 w-4 shrink-0 text-accent" /> : null}
       </div>
-      <p className="mt-1 text-xs leading-5 text-textMuted">{description}</p>
+      <p className="mt-1 break-words text-xs leading-5 text-textMuted">
+        {description}
+      </p>
     </button>
   )
 }
@@ -1135,11 +1323,15 @@ function SkillToggle({
   label,
   selected,
   disabled = false,
+  conflict = false,
+  note,
   onClick,
 }: {
   label: string
   selected: boolean
   disabled?: boolean
+  conflict?: boolean
+  note?: string
   onClick: () => void
 }) {
   return (
@@ -1148,12 +1340,19 @@ function SkillToggle({
       disabled={disabled}
       onClick={onClick}
       className={
-        selected
-          ? "rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH"
-          : "rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs text-text disabled:opacity-40"
+        conflict
+          ? "min-w-0 rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs font-semibold text-danger"
+          : selected
+            ? "min-w-0 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH"
+            : "min-w-0 rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs text-text disabled:opacity-40"
       }
     >
-      {label}
+      <span className="block break-words">{label}</span>
+      {note ? (
+        <span className="mt-0.5 block text-[9px] uppercase tracking-wide opacity-80">
+          {note}
+        </span>
+      ) : null}
     </button>
   )
 }
@@ -1165,25 +1364,75 @@ function ReviewCard({
 }: {
   title: string
   className?: string
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
-    <section className={`rounded-xl border border-border bg-bg p-4 ${className}`}>
+    <section className={`min-w-0 rounded-xl border border-border bg-bg p-4 ${className}`}>
       <h3 className="text-sm font-semibold text-textH">{title}</h3>
-      <div className="mt-3 grid gap-2">{children}</div>
+      <div className="mt-3 grid min-w-0 gap-2">{children}</div>
     </section>
   )
 }
 
 function ReviewLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-4 text-xs">
-      <span className="text-textMuted">{label}</span>
-      <span className="max-w-[70%] text-right font-medium text-textH">
+    <div className="flex min-w-0 items-start justify-between gap-4 text-xs">
+      <span className="shrink-0 text-textMuted">{label}</span>
+      <span className="min-w-0 max-w-[70%] break-words text-right font-medium text-textH">
         {value}
       </span>
     </div>
   )
+}
+
+function getRaceBonusSlots(
+  presetId: string,
+  bonuses: Partial<Record<Attribute, number>>,
+): RaceBonusSlot[] {
+  if (presetId === "variant-human") {
+    return [
+      { id: "variant-plus-one-a", amount: 1, attribute: "str", locked: false },
+      { id: "variant-plus-one-b", amount: 1, attribute: "dex", locked: false },
+    ]
+  }
+
+  if (presetId === "half-elf") {
+    return [
+      { id: "half-elf-plus-two", amount: 2, attribute: "cha", locked: true },
+      { id: "half-elf-plus-one-a", amount: 1, attribute: "dex", locked: false },
+      { id: "half-elf-plus-one-b", amount: 1, attribute: "con", locked: false },
+    ]
+  }
+
+  const slots: RaceBonusSlot[] = []
+  ATTRIBUTE_KEYS.forEach((attribute) => {
+    const amount = bonuses[attribute] ?? 0
+    if (amount === 0) return
+    slots.push({
+      id: `${presetId}-${attribute}-${amount}`,
+      amount,
+      attribute,
+      locked: true,
+    })
+  })
+  return slots
+}
+
+function applyRaceBonusSlots(
+  race: CharacterRace,
+  slots: RaceBonusSlot[],
+): CharacterRace {
+  const attributeBonus = ATTRIBUTE_KEYS.reduce(
+    (result, attribute) => ({ ...result, [attribute]: 0 }),
+    {} as Record<Attribute, number>,
+  )
+
+  slots.forEach((slot) => {
+    if (!slot.attribute) return
+    attributeBonus[slot.attribute] += slot.amount
+  })
+
+  return { ...race, attributeBonus }
 }
 
 function cloneBackground(background: CharacterBackground): CharacterBackground {
