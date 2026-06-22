@@ -81,6 +81,6 @@ export function newCharacterTemplate(
     inventory: [],
     notes: [],
     owner,
-    visibility: "party",
+    visibility: "private",
   })
 }
