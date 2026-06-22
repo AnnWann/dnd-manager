@@ -34,7 +34,7 @@ const DIE_ORDER: DieSides[] = [
   "d100",
 ]
 
-const PERCENTAGE_STEPS = [0, 25, 50, 75, 100] as const
+const PORTION_STEP = 0.25
 const PORTION_EPSILON = 0.000001
 
 type Props = {
@@ -316,33 +316,35 @@ function LongRestDialog({
       ),
     [partyInventory],
   )
-  const [percentageByItem, setPercentageByItem] = useState<
+  const [portionsByItem, setPortionsByItem] = useState<
     Record<string, number>
   >({})
 
   useEffect(() => {
     if (!open) return
 
-    const automatic = createAutomaticLongRestSelection(
-      partyInventory,
-      requiredSupply,
+    setPortionsByItem(
+      selectionToPortions(
+        createAutomaticLongRestSelection(
+          partyInventory,
+          requiredSupply,
+        ),
+      ),
     )
-    setPercentageByItem(selectionToPercentages(automatic, supplies))
-  }, [open, partyInventory, requiredSupply, supplies])
+  }, [open, partyInventory, requiredSupply])
 
   const selection = useMemo<LongRestSupplySelection[]>(
     () =>
       supplies
-        .map((item) => {
-          const percentage = percentageByItem[item.id] ?? 0
-          return {
-            itemId: item.id,
-            portions:
-              getTotalSupplyPortions(item) * (percentage / 100),
-          }
-        })
+        .map((item) => ({
+          itemId: item.id,
+          portions: Math.min(
+            getTotalSupplyPortions(item),
+            Math.max(0, portionsByItem[item.id] ?? 0),
+          ),
+        }))
         .filter((entry) => entry.portions > 0),
-    [percentageByItem, supplies],
+    [portionsByItem, supplies],
   )
   const totals = useMemo(
     () => getSupplySelectionTotals(partyInventory, selection),
@@ -355,38 +357,36 @@ function LongRestDialog({
   const difference = selectedSupply - requiredSupply
   const isPartial = difference < -PORTION_EPSILON
 
-  function setPercentage(itemId: string, value: number) {
-    const snapped = Math.max(
-      0,
-      Math.min(100, Math.round(value / 25) * 25),
-    )
+  function setPortions(item: SupplyItem, value: number) {
+    const available = getTotalSupplyPortions(item)
+    const snapped = Math.round(value / PORTION_STEP) * PORTION_STEP
+    const nextValue = Math.max(0, Math.min(available, snapped))
 
-    setPercentageByItem((current) => ({
+    setPortionsByItem((current) => ({
       ...current,
-      [itemId]: snapped,
+      [item.id]: nextValue,
     }))
   }
 
   function autoSelect() {
-    setPercentageByItem(
-      selectionToPercentages(
+    setPortionsByItem(
+      selectionToPortions(
         createAutomaticLongRestSelection(
           partyInventory,
           requiredSupply,
         ),
-        supplies,
       ),
     )
   }
 
   function resetAndClose() {
-    setPercentageByItem({})
+    setPortionsByItem({})
     onClose()
   }
 
   function confirm() {
     onConfirm(selection)
-    setPercentageByItem({})
+    setPortionsByItem({})
   }
 
   return (
@@ -404,7 +404,7 @@ function LongRestDialog({
         <DialogHeader
           id="long-rest-title"
           title="Preparar descanso longo"
-          description="Comida e bebida valem como suprimento. Escolha 0%, 25%, 50%, 75% ou 100% de cada estoque para consumir."
+          description="Cada estoque aparece apenas uma vez. Escolha quantas porções individuais serão retiradas dele; um barril com 40 porções permite consumir apenas 1."
           onClose={resetAndClose}
         />
 
@@ -419,7 +419,7 @@ function LongRestDialog({
               className="w-full sm:w-auto"
               size="sm"
               variant="secondary"
-              onClick={() => setPercentageByItem({})}
+              onClick={() => setPortionsByItem({})}
             >
               Limpar seleção
             </Button>
@@ -437,8 +437,11 @@ function LongRestDialog({
             <div className="grid gap-2">
               {supplies.map((item) => {
                 const available = getTotalSupplyPortions(item)
-                const percentage = percentageByItem[item.id] ?? 0
-                const portions = available * (percentage / 100)
+                const portions = Math.min(
+                  available,
+                  Math.max(0, portionsByItem[item.id] ?? 0),
+                )
+                const midpoint = available / 2
 
                 return (
                   <div
@@ -457,9 +460,9 @@ function LongRestDialog({
                     <label className="grid min-w-0 gap-2">
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                         <span className="font-medium text-textH">
-                          Consumir {percentage}%
+                          Porções a consumir
                         </span>
-                        <span className="text-textMuted">
+                        <span className="rounded-md border border-border bg-bg px-2 py-1 font-semibold text-textH">
                           {formatPortions(portions)}
                         </span>
                       </div>
@@ -467,19 +470,19 @@ function LongRestDialog({
                       <input
                         type="range"
                         min={0}
-                        max={100}
-                        step={25}
-                        value={percentage}
+                        max={available}
+                        step={PORTION_STEP}
+                        value={portions}
                         onChange={(event) =>
-                          setPercentage(item.id, Number(event.target.value))
+                          setPortions(item, Number(event.target.value))
                         }
                         className="w-full cursor-pointer"
                       />
 
                       <div className="flex justify-between text-[10px] text-textMuted">
-                        {PERCENTAGE_STEPS.map((step) => (
-                          <span key={step}>{step}%</span>
-                        ))}
+                        <span>0</span>
+                        <span>{formatCompactNumber(midpoint)}</span>
+                        <span>{formatCompactNumber(available)}</span>
                       </div>
                     </label>
                   </div>
@@ -603,28 +606,11 @@ function SupplyBalanceBar({
   )
 }
 
-function selectionToPercentages(
+function selectionToPortions(
   selection: LongRestSupplySelection[],
-  supplies: SupplyItem[],
 ): Record<string, number> {
-  const portionsById = new Map(
-    selection.map((entry) => [entry.itemId, entry.portions]),
-  )
-
   return Object.fromEntries(
-    supplies.map((item) => {
-      const available = getTotalSupplyPortions(item)
-      const selected = portionsById.get(item.id) ?? 0
-      const percentage =
-        available > 0
-          ? Math.max(
-              0,
-              Math.min(100, Math.round((selected / available) * 4) * 25),
-            )
-          : 0
-
-      return [item.id, percentage]
-    }),
+    selection.map((entry) => [entry.itemId, entry.portions]),
   )
 }
 
@@ -679,11 +665,15 @@ function DialogHeader({
   )
 }
 
+function formatCompactNumber(value: number): string {
+  return Number.isInteger(value)
+    ? String(value)
+    : value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })
+}
+
 function formatPortions(value: number): string {
   const normalized = Math.max(0, value)
-  const formatted = Number.isInteger(normalized)
-    ? String(normalized)
-    : normalized.toLocaleString("pt-BR", { maximumFractionDigits: 2 })
+  const formatted = formatCompactNumber(normalized)
 
   return `${formatted} ${normalized === 1 ? "porção" : "porções"}`
 }
