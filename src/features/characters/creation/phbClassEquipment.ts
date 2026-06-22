@@ -1,6 +1,6 @@
 import type { ClassName } from "../../../models/sheet/Class"
 
-const CLASS_STARTING_EQUIPMENT: Record<ClassName, string[]> = {
+const CLASS_STARTING_EQUIPMENT: Partial<Record<ClassName, string[]>> = {
   barbarian: [
     "Machado grande",
     "Machadinha ×2",
@@ -92,7 +92,7 @@ const CLASS_STARTING_EQUIPMENT: Record<ClassName, string[]> = {
 }
 
 export function getPhbClassStartingEquipment(className: ClassName): string[] {
-  return [...CLASS_STARTING_EQUIPMENT[className]]
+  return [...(CLASS_STARTING_EQUIPMENT[className] ?? [])]
 }
 
 export function getPhbClassStartingEquipmentText(className: ClassName): string {
