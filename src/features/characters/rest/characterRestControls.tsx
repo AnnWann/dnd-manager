@@ -35,6 +35,7 @@ const DIE_ORDER: DieSides[] = [
 ]
 
 const PORTION_STEP = 0.25
+const PERCENTAGE_STEPS = [0, 25, 50, 75, 100] as const
 const PORTION_EPSILON = 0.000001
 
 type Props = {
@@ -368,6 +369,15 @@ function LongRestDialog({
     }))
   }
 
+  function setPercentage(item: SupplyItem, value: number) {
+    const percentage = Math.max(
+      0,
+      Math.min(100, Math.round(value / 25) * 25),
+    )
+    const available = getTotalSupplyPortions(item)
+    setPortions(item, available * (percentage / 100))
+  }
+
   function autoSelect() {
     setPortionsByItem(
       selectionToPortions(
@@ -404,7 +414,7 @@ function LongRestDialog({
         <DialogHeader
           id="long-rest-title"
           title="Preparar descanso longo"
-          description="Cada estoque aparece apenas uma vez. Escolha quantas porções individuais serão retiradas dele; um barril com 40 porções permite consumir apenas 1."
+          description="Cada estoque aparece uma única vez. Barris possuem uma barra por quantidade de porções e outra por porcentagem do conteúdo."
           onClose={resetAndClose}
         />
 
@@ -442,11 +452,16 @@ function LongRestDialog({
                   Math.max(0, portionsByItem[item.id] ?? 0),
                 )
                 const midpoint = available / 2
+                const percentage =
+                  available > 0 ? (portions / available) * 100 : 0
+                const isBarrel =
+                  item.supplyPackage === "barrel" ||
+                  item.supplyUnitsPerItem === 40
 
                 return (
                   <div
                     key={item.id}
-                    className="grid min-w-0 gap-3 rounded-xl border border-border bg-bg-subtle p-3"
+                    className="grid min-w-0 gap-4 rounded-xl border border-border bg-bg-subtle p-3"
                   >
                     <div className="min-w-0">
                       <div className="break-words text-sm font-semibold text-textH">
@@ -460,7 +475,7 @@ function LongRestDialog({
                     <label className="grid min-w-0 gap-2">
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                         <span className="font-medium text-textH">
-                          Porções a consumir
+                          Quantidade de porções
                         </span>
                         <span className="rounded-md border border-border bg-bg px-2 py-1 font-semibold text-textH">
                           {formatPortions(portions)}
@@ -485,6 +500,37 @@ function LongRestDialog({
                         <span>{formatCompactNumber(available)}</span>
                       </div>
                     </label>
+
+                    {isBarrel ? (
+                      <label className="grid min-w-0 gap-2 border-t border-border pt-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <span className="font-medium text-textH">
+                            Porcentagem do barril
+                          </span>
+                          <span className="rounded-md border border-border bg-bg px-2 py-1 font-semibold text-textH">
+                            {formatPercentage(percentage)}
+                          </span>
+                        </div>
+
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={25}
+                          value={percentage}
+                          onChange={(event) =>
+                            setPercentage(item, Number(event.target.value))
+                          }
+                          className="w-full cursor-pointer"
+                        />
+
+                        <div className="flex justify-between text-[10px] text-textMuted">
+                          {PERCENTAGE_STEPS.map((step) => (
+                            <span key={step}>{step}%</span>
+                          ))}
+                        </div>
+                      </label>
+                    ) : null}
                   </div>
                 )
               })}
@@ -663,6 +709,13 @@ function DialogHeader({
       </button>
     </div>
   )
+}
+
+function formatPercentage(value: number): string {
+  const normalized = Math.max(0, Math.min(100, value))
+  return `${normalized.toLocaleString("pt-BR", {
+    maximumFractionDigits: 2,
+  })}%`
 }
 
 function formatCompactNumber(value: number): string {
