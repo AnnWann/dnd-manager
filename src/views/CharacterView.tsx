@@ -9,9 +9,10 @@ import { CharacterMagicTab } from "../features/characters/magic/characterMagicMo
 import { useCharacterContext } from "../contexts/characterContext"
 import { CharacterProficienciesTab } from "../features/characters/proficiencies/characterProficiencies"
 import { CharacterRaceTab } from "../features/characters/race/characterRaceV2"
-import { CharacterProfileTab } from "../features/characters/profile/characterProfile"
+import { CharacterProfileTab } from "../features/characters/profile/characterProfileV2"
 import { CharacterRestControls } from "../features/characters/rest/characterRestControls"
 import { CharacterCreationWizard } from "../features/characters/creation/characterCreationWizardV4"
+import { ensureCharacterBackgroundFromHistory } from "../features/characters/creation/inferCharacterBackground"
 
 export function CharacterView() {
   const {
@@ -51,8 +52,9 @@ export function CharacterView() {
       createOwner={createOwner}
       onClose={() => setCreationOpen(false)}
       onCreate={(character) => {
-        importCharacter(character.toJSON())
-        setActiveTab("sheet")
+        const preparedCharacter = ensureCharacterBackgroundFromHistory(character)
+        importCharacter(preparedCharacter.toJSON())
+        setActiveTab("profile")
       }}
     />
   )
