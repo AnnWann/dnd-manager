@@ -60,22 +60,20 @@ export function PartyInventoryView() {
 
   return (
     <div className="grid w-full min-w-0 max-w-full gap-4 overflow-hidden">
-      <Card className="min-w-0 max-w-full overflow-hidden">
-        <CardHeader className="min-w-0">
+      <Card>
+        <CardHeader>
           <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-textH">
             <PackageOpen className="h-4 w-4 shrink-0 text-accent" />
-            <span className="min-w-0 break-words">
-              Inventário compartilhado
-            </span>
+            <span className="break-words">Inventário compartilhado</span>
           </div>
-          <p className="mt-1 max-w-full break-words text-xs leading-5 text-textMuted">
+          <p className="mt-1 break-words text-xs leading-5 text-textMuted">
             Itens deste espaço pertencem ao grupo. A capacidade representa o
             transporte disponível, como carroça, animais de tração e outros
             veículos definidos pelo mestre.
           </p>
         </CardHeader>
 
-        <CardContent className="min-w-0 overflow-hidden">
+        <CardContent>
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryCard
               label="Itens diferentes"
@@ -108,29 +106,25 @@ export function PartyInventoryView() {
         </CardContent>
       </Card>
 
-      <Card className="min-w-0 max-w-full overflow-hidden">
-        <CardHeader className="min-w-0">
+      <Card>
+        <CardHeader>
           <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-textH">
             <Truck className="h-4 w-4 shrink-0 text-accent" />
-            <span className="min-w-0 break-words">
-              Capacidade de transporte
-            </span>
+            <span className="break-words">Capacidade de transporte</span>
           </div>
-          <p className="mt-1 max-w-full break-words text-xs leading-5 text-textMuted">
-            Este valor não depende dos atributos dos personagens. Ele é
-            definido pelo mestre conforme a carroça, embarcação, montarias e
-            animais que puxam a carga.
+          <p className="mt-1 break-words text-xs leading-5 text-textMuted">
+            Este valor é definido pelo mestre conforme a carroça, embarcação,
+            montarias e animais que puxam a carga.
           </p>
         </CardHeader>
 
-        <CardContent className="grid min-w-0 gap-4 overflow-hidden">
+        <CardContent className="grid gap-4">
           {canEditCarryCapacity ? (
             <label className="grid min-w-0 gap-1.5">
               <span className="text-xs font-medium text-textH">
                 Capacidade máxima do transporte
               </span>
               <Input
-                className="w-full min-w-0 max-w-full"
                 type="number"
                 min={0}
                 step="any"
@@ -148,14 +142,14 @@ export function PartyInventoryView() {
           ) : (
             <div className="rounded-xl border border-border bg-bg-subtle p-3 text-sm text-text">
               {hasCapacity
-                ? `O mestre definiu a capacidade do transporte como ${formatNumber(carryCapacity)}.`
+                ? `O mestre definiu a capacidade como ${formatNumber(carryCapacity)}.`
                 : "O mestre ainda não definiu a capacidade do transporte."}
             </div>
           )}
 
           {hasCapacity ? (
-            <div className="grid min-w-0 gap-2">
-              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="grid gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="flex min-w-0 items-center gap-2 text-textMuted">
                   <Scale className="h-4 w-4 shrink-0 text-accent" />
                   <span className="break-words">
@@ -175,7 +169,7 @@ export function PartyInventoryView() {
                 </span>
               </div>
 
-              <div className="h-2 w-full min-w-0 overflow-hidden rounded-full bg-bg-subtle">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-bg-subtle">
                 <div
                   className={
                     overloaded
@@ -187,9 +181,9 @@ export function PartyInventoryView() {
               </div>
 
               {overloaded ? (
-                <p className="break-words text-xs leading-5 text-danger">
-                  O transporte está sobrecarregado. O sistema apenas sinaliza
-                  a situação; ele não impede transferências automaticamente.
+                <p className="text-xs leading-5 text-danger">
+                  O transporte está sobrecarregado. O sistema apenas sinaliza a
+                  situação; ele não impede transferências automaticamente.
                 </p>
               ) : null}
             </div>
@@ -197,53 +191,50 @@ export function PartyInventoryView() {
         </CardContent>
       </Card>
 
-      <Card className="min-w-0 max-w-full overflow-hidden">
-        <CardHeader className="min-w-0">
+      <Card>
+        <CardHeader>
           <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-textH">
             <Utensils className="h-4 w-4 shrink-0 text-accent" />
-            <span className="min-w-0 break-words">Autonomia de suprimentos</span>
+            <span className="break-words">Autonomia de suprimentos</span>
           </div>
-          <p className="mt-1 max-w-full break-words text-xs leading-5 text-textMuted">
-            Uma ração individual vale {STANDARD_PORTIONS_PER_RATION} porção. Um
-            barril vale {STANDARD_PORTIONS_PER_BARREL} porções. Comida e bebida
-            são exigidas para descansar; suprimentos mistos cobrem uma porção de
-            cada tipo ao mesmo tempo.
+          <p className="mt-1 break-words text-xs leading-5 text-textMuted">
+            Comida e bebida contam igualmente como suprimento. Uma ração vale {" "}
+            {STANDARD_PORTIONS_PER_RATION} porção e um barril vale {" "}
+            {STANDARD_PORTIONS_PER_BARREL}. Cada item é contado apenas uma vez,
+            mesmo quando sua categoria é mista.
           </p>
         </CardHeader>
 
-        <CardContent className="grid min-w-0 gap-4 overflow-hidden">
-          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <CardContent className="grid gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <SupplyMetric
-              label="Porções de comida"
-              value={formatNumber(supplyCalculation.foodPortions)}
-              detail={`${formatNumber(supplyCalculation.foodPerLongRest)} consumidas pelo grupo por descanso`}
+              label="Suprimento total"
+              value={formatNumber(supplyCalculation.supplyPortions)}
+              detail={`${supplyItemCount} tipos registrados`}
             />
             <SupplyMetric
-              label="Descansos pela comida"
+              label="Consumo do grupo"
+              value={formatNumber(supplyCalculation.supplyPerLongRest)}
+              detail="porções por rodada de descansos"
+            />
+            <SupplyMetric
+              label="Descansos equivalentes"
               value={formatLongRestEstimate(
-                supplyCalculation.foodLongRests,
+                supplyCalculation.supplyLongRests,
                 supplyCalculation.consumers.length,
               )}
               detail="antes do arredondamento"
             />
             <SupplyMetric
-              label="Porções de bebida"
-              value={formatNumber(supplyCalculation.drinkPortions)}
-              detail={`${formatNumber(supplyCalculation.drinkPerLongRest)} consumidas pelo grupo por descanso`}
-            />
-            <SupplyMetric
-              label="Descansos pela bebida"
-              value={formatLongRestEstimate(
-                supplyCalculation.drinkLongRests,
-                supplyCalculation.consumers.length,
-              )}
-              detail="antes do arredondamento"
+              label="Comida / bebida"
+              value={`${formatNumber(supplyCalculation.foodPortions)} / ${formatNumber(supplyCalculation.drinkPortions)}`}
+              detail="apenas composição informativa"
             />
           </div>
 
           <div className="rounded-xl border border-accentBorder bg-accentBg p-4">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-              Descansos longos sustentados pelos suprimentos atuais
+              Descansos longos completos sustentados pelo estoque
             </div>
             <div className="mt-1 text-2xl font-bold text-textH">
               {formatSupportedLongRests(
@@ -252,20 +243,21 @@ export function PartyInventoryView() {
               )}
             </div>
             <p className="mt-1 text-xs leading-5 text-textMuted">
-              O menor valor entre a autonomia de comida e a autonomia de bebida
-              limita o grupo. Cada descanso consome apenas os itens escolhidos
-              na janela de preparação do personagem.
+              Cada personagem precisa apenas atingir seu requisito total de
+              suprimento. A escolha pode misturar comida e bebida livremente.
+              Descansos abaixo do requisito continuam possíveis, mas recuperam
+              apenas metade dos recursos e aumentam a exaustão.
             </p>
           </div>
 
-          <div className="grid min-w-0 gap-2">
+          <div className="grid gap-2">
             <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-textH">
               <UserRound className="h-4 w-4 shrink-0 text-accent" />
               Consumidores considerados ({supplyCalculation.consumers.length})
             </div>
 
             {supplyCalculation.consumers.length > 0 ? (
-              <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {supplyCalculation.consumers.map((consumer) => (
                   <div
                     key={consumer.characterId}
@@ -277,13 +269,8 @@ export function PartyInventoryView() {
                     <div className="mt-1 text-[11px] text-textMuted">
                       {formatRaceName(consumer.race)}
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text">
-                      <span>
-                        Comida: {formatNumber(consumer.foodPerLongRest)}
-                      </span>
-                      <span>
-                        Bebida: {formatNumber(consumer.drinkPerLongRest)}
-                      </span>
+                    <div className="mt-2 text-xs text-text">
+                      Suprimento por descanso: {formatNumber(consumer.supplyPerLongRest)}
                     </div>
                   </div>
                 ))}
@@ -297,10 +284,8 @@ export function PartyInventoryView() {
           </div>
 
           <p className="text-[11px] leading-4 text-textMuted">
-            Estoque registrado em {supplyItemCount} tipos de suprimento. Golias
-            e meio-gigantes consomem 2 porções de comida por descanso; halflings
-            e gnomos consomem 0,5; as demais raças usam 1. A bebida padrão é 1
-            porção por personagem, salvo ajuste racial personalizado.
+            Golias e meio-gigantes precisam de 2 porções por descanso; halflings
+            e gnomos precisam de 0,5; as demais raças usam 1 porção por padrão.
           </p>
         </CardContent>
       </Card>
@@ -348,8 +333,8 @@ function SummaryCard({
     <div
       className={
         danger
-          ? "min-w-0 max-w-full rounded-xl border border-danger bg-dangerBg p-3"
-          : "min-w-0 max-w-full rounded-xl border border-border bg-bg-subtle p-3"
+          ? "min-w-0 rounded-xl border border-danger bg-dangerBg p-3"
+          : "min-w-0 rounded-xl border border-border bg-bg-subtle p-3"
       }
     >
       <div className="break-words text-[10px] font-semibold uppercase tracking-wide text-textMuted">
@@ -358,8 +343,8 @@ function SummaryCard({
       <div
         className={
           danger
-            ? "mt-1 max-w-full break-words text-base font-semibold text-danger"
-            : "mt-1 max-w-full break-words text-base font-semibold text-textH"
+            ? "mt-1 break-words text-base font-semibold text-danger"
+            : "mt-1 break-words text-base font-semibold text-textH"
         }
       >
         {value}
@@ -406,7 +391,7 @@ function formatLongRestEstimate(
   consumerCount: number,
 ): string {
   if (consumerCount === 0) return "Sem membros"
-  if (!Number.isFinite(value)) return "Não é consumida"
+  if (!Number.isFinite(value)) return "Não é consumido"
   return formatNumber(Math.max(0, value))
 }
 
