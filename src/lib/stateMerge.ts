@@ -44,21 +44,22 @@ function mergeValue(
     return Math.max(0, base + (local - base) + (remote - base))
   }
 
-  if (Array.isArray(base) && Array.isArray(local) && Array.isArray(remote)) {
-    return mergeArrays(base, local, remote, path)
-  }
-
-  if (isPlainObject(base) && isPlainObject(local) && isPlainObject(remote)) {
+  if (
+    (base === undefined || isPlainObject(base)) &&
+    isPlainObject(local) &&
+    isPlainObject(remote)
+  ) {
+    const baseObject = isPlainObject(base) ? base : {}
     const result: Record<string, unknown> = {}
     const keys = new Set([
-      ...Object.keys(base),
+      ...Object.keys(baseObject),
       ...Object.keys(local),
       ...Object.keys(remote),
     ])
 
     for (const key of keys) {
       result[key] = mergeValue(
-        base[key],
+        baseObject[key],
         local[key],
         remote[key],
         [...path, key],
@@ -66,6 +67,19 @@ function mergeValue(
     }
 
     return result
+  }
+
+  if (
+    (base === undefined || Array.isArray(base)) &&
+    Array.isArray(local) &&
+    Array.isArray(remote)
+  ) {
+    return mergeArrays(
+      Array.isArray(base) ? base : [],
+      local,
+      remote,
+      path,
+    )
   }
 
   // A real same-field conflict cannot be resolved without domain intent.
@@ -179,8 +193,13 @@ function mergePrimitiveArrays(
 function resolveIdentity(
   ...arrays: unknown[][]
 ): ((value: unknown) => string) | undefined {
-  const values = arrays.flat()
-  if (values.length === 0 || !values.every(isPlainObject)) return undefined
+  const populatedArrays = arrays.filter((array) => array.length > 0)
+  if (
+    populatedArrays.length === 0 ||
+    !populatedArrays.every((array) => array.every(isPlainObject))
+  ) {
+    return undefined
+  }
 
   const candidates: Array<(value: Record<string, unknown>) => string> = [
     (value) => stringKey("id", value.id),
@@ -192,8 +211,15 @@ function resolveIdentity(
   ]
 
   for (const candidate of candidates) {
-    const keys = values.map(candidate)
-    if (keys.every(Boolean) && keys.length === new Set(keys).size) {
+    const validForEveryVersion = populatedArrays.every((array) => {
+      const keys = array.map((value) =>
+        candidate(value as Record<string, unknown>),
+      )
+
+      return keys.every(Boolean) && keys.length === new Set(keys).size
+    })
+
+    if (validForEveryVersion) {
       return (value) => candidate(value as Record<string, unknown>)
     }
   }
@@ -255,7 +281,12 @@ function sortValue(value: unknown): unknown {
 
 function clone<T>(value: T): T {
   if (value === undefined) return value
-  return structuredClone(value)
+
+  if (typeof structuredClone === "function") {
+    return structuredClone(value)
+  }
+
+  return JSON.parse(JSON.stringify(value)) as T
 }
 
 function unique(values: string[]): string[] {
