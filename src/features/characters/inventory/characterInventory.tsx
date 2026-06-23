@@ -2,7 +2,9 @@ import { useState } from "react"
 
 import { useCharacterContext } from "../../../contexts/characterContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { getEncumbranceInfo } from "../../../models/characters/characterEncumbrance"
 import type { Itemmable } from "../../../models/items/item"
+import { CharacterEncumbrancePanel } from "./characterEncumbrancePanel"
 import { InventoryEditor } from "./inventoryEditor"
 import { TransferItemDialog } from "./transferItemDialog"
 
@@ -42,10 +44,7 @@ export function CharacterInventoryTab({
     useState<Itemmable | null>(null)
 
   const items = character.get("inventory") ?? []
-  const currentWeight = character.getWeight()
-  const encumbranceLimit = character.getEncumbranceLimit()
-  const heavyEncumbranceLimit = character.getHeavyEncumbranceLimit()
-  const carryingCapacity = character.getCarryingCapacity()
+  const encumbrance = getEncumbranceInfo(character)
   const canTransfer = canTransferFromCharacter(character.get("id"))
 
   function addItem(item: Itemmable) {
@@ -71,9 +70,13 @@ export function CharacterInventoryTab({
 
   return (
     <>
+      <div className="mb-4">
+        <CharacterEncumbrancePanel character={character} />
+      </div>
+
       <InventoryEditor
         title={`Inventário pessoal: ${character.get("name")}`}
-        description={`Peso: ${currentWeight}/${carryingCapacity} • Sobrecarga: ${encumbranceLimit} • Sobrecarga pesada: ${heavyEncumbranceLimit}`}
+        description={`Peso carregado: ${formatKg(encumbrance.weight)} de ${formatKg(encumbrance.carryingCapacity)}.`}
         items={items}
         emptyMessage="Nenhum item encontrado."
         onAddItem={addItem}
@@ -111,4 +114,11 @@ export function CharacterInventoryTab({
       />
     </>
   )
+}
+
+function formatKg(value: number): string {
+  return `${value.toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })} kg`
 }
