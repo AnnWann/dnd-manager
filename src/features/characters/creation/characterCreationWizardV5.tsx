@@ -1,12 +1,7 @@
-import {
-  Component,
-  useEffect,
-  useRef,
-  type MouseEvent,
-  type ReactNode,
-} from "react"
+import { Component, useEffect, type ReactNode } from "react"
 
 import { Button } from "../../../components/ui/Button"
+import { confirmAndResetLocalAppData } from "../../../lib/resetLocalAppData"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Player } from "../../../models/player/Player"
 import { CharacterCreationWizard as BaseCharacterCreationWizard } from "./characterCreationWizardV4"
@@ -59,9 +54,11 @@ class CharacterCreationErrorBoundary extends Component<
             Não foi possível abrir esta etapa
           </h2>
           <p className="mt-2 text-sm leading-6 text-text">
-            O criador encontrou um erro neste dispositivo. Feche e abra novamente;
-            seus dados sincronizados não foram alterados.
+            O criador encontrou um erro neste dispositivo. Você pode apenas fechar
+            o criador ou limpar os dados locais para remover um estado antigo ou
+            corrompido.
           </p>
+
           <details className="mt-3 rounded-lg border border-border bg-bg-subtle p-3 text-xs text-textMuted">
             <summary className="cursor-pointer font-medium text-textH">
               Detalhes técnicos
@@ -70,15 +67,25 @@ class CharacterCreationErrorBoundary extends Component<
               {this.state.error.message || "Erro desconhecido"}
             </pre>
           </details>
-          <div className="mt-4 flex justify-end">
+
+          <div className="mt-4 rounded-lg border border-warning bg-warningBg p-3 text-xs leading-5 text-warning">
+            “Limpar tudo neste dispositivo” apaga o estado local, a chave de
+            sincronização, o nome do jogador e o papel selecionado. O estado salvo
+            no servidor não é apagado.
+          </div>
+
+          <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
-              variant="primary"
+              variant="secondary"
               onClick={() => {
                 this.setState({ error: null })
                 this.props.onClose()
               }}
             >
               Fechar criador
+            </Button>
+            <Button variant="primary" onClick={confirmAndResetLocalAppData}>
+              Limpar tudo neste dispositivo
             </Button>
           </div>
         </div>
@@ -88,8 +95,6 @@ class CharacterCreationErrorBoundary extends Component<
 }
 
 export function CharacterCreationWizard(props: Props) {
-  const rootRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     if (!props.open) return
 
@@ -101,38 +106,9 @@ export function CharacterCreationWizard(props: Props) {
     }
   }, [props.open])
 
-  function handleClickCapture(event: MouseEvent<HTMLDivElement>) {
-    const target = event.target
-    if (!(target instanceof Element)) return
-
-    const button = target.closest("button")
-    const label = button?.textContent?.trim().toLocaleLowerCase("pt-BR") ?? ""
-    const changesStep =
-      label.includes("continuar") ||
-      label.includes("voltar") ||
-      /^\d+\./.test(label.replace(/^✓\s*/, ""))
-
-    if (!changesStep) return
-
-    const activeElement = document.activeElement
-    if (activeElement instanceof HTMLElement) activeElement.blur()
-
-    window.setTimeout(() => {
-      const body = rootRef.current?.querySelector(
-        '[aria-labelledby="character-creation-title"] main',
-      )
-
-      if (body instanceof HTMLElement) {
-        body.scrollTo({ top: 0, behavior: "auto" })
-      }
-    }, 0)
-  }
-
   return (
     <CharacterCreationErrorBoundary open={props.open} onClose={props.onClose}>
-      <div ref={rootRef} onClickCapture={handleClickCapture}>
-        <BaseCharacterCreationWizard {...props} />
-      </div>
+      <BaseCharacterCreationWizard {...props} />
     </CharacterCreationErrorBoundary>
   )
 }
