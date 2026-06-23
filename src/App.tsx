@@ -1,3 +1,10 @@
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  type Dispatch,
+  type SetStateAction,
+} from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 
 import {
@@ -12,7 +19,11 @@ import { CharacterProvider } from "./contexts/characterContext"
 import { MagicProvider } from "./contexts/magicContext"
 import { PartyInventorySettingsProvider } from "./contexts/partyInventorySettingsContext"
 import { SyncProvider } from "./contexts/syncContext"
-import { useRemoteAppState } from "./lib/remoteState"
+import { normalizeAppStateInventory } from "./lib/normalizeAppStateInventory"
+import {
+  useRemoteAppState,
+  type AppStateV1,
+} from "./lib/remoteState"
 import { AppRouter } from "./Router"
 
 function App() {
@@ -27,11 +38,36 @@ function App() {
     userKey,
     setUserKey,
     canSync,
-    state: appState,
-    setState: setAppState,
+    state: rawAppState,
+    setState: setRawAppState,
     status: syncStatus,
     pullFromServer,
   } = useRemoteAppState()
+
+  const appState = useMemo(
+    () => normalizeAppStateInventory(rawAppState),
+    [rawAppState],
+  )
+
+  const setAppState = useCallback<Dispatch<SetStateAction<AppStateV1>>>(
+    (action) => {
+      setRawAppState((previousRaw) => {
+        const previous = normalizeAppStateInventory(previousRaw)
+        const next =
+          typeof action === "function"
+            ? (action as (state: AppStateV1) => AppStateV1)(previous)
+            : action
+
+        return normalizeAppStateInventory(next)
+      })
+    },
+    [setRawAppState],
+  )
+
+  useEffect(() => {
+    if (appState === rawAppState) return
+    setRawAppState(appState)
+  }, [appState, rawAppState, setRawAppState])
 
   const sidebarItems = [
     {
