@@ -20,10 +20,8 @@ import { MagicProvider } from "./contexts/magicContext"
 import { PartyInventorySettingsProvider } from "./contexts/partyInventorySettingsContext"
 import { SyncProvider } from "./contexts/syncContext"
 import { normalizeAppStateInventory } from "./lib/normalizeAppStateInventory"
-import {
-  useRemoteAppState,
-  type AppStateV1,
-} from "./lib/remoteState"
+import { type AppStateV1 } from "./lib/remoteState"
+import { useConcurrentRemoteAppState } from "./lib/remoteStateConcurrent"
 import { AppRouter } from "./Router"
 
 function App() {
@@ -42,7 +40,7 @@ function App() {
     setState: setRawAppState,
     status: syncStatus,
     pullFromServer,
-  } = useRemoteAppState()
+  } = useConcurrentRemoteAppState()
 
   const appState = useMemo(
     () => normalizeAppStateInventory(rawAppState),
