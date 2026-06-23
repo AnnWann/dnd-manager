@@ -7,12 +7,14 @@ import { CharacterInventoryTab } from "../features/characters/inventory/characte
 import { CharacterViewTabs, type CharacterTab } from "../features/characters/characterViewTabs"
 import { CharacterMagicTab } from "../features/characters/magic/characterMagicModule"
 import { useCharacterContext } from "../contexts/characterContext"
+import { useSyncContext } from "../contexts/syncContext"
 import { CharacterProficienciesTab } from "../features/characters/proficiencies/characterProficiencies"
 import { CharacterRaceTab } from "../features/characters/race/characterRaceV2"
 import { CharacterProfileTab } from "../features/characters/profile/characterProfileV2"
 import { CharacterRestControls } from "../features/characters/rest/characterRestControls"
-import { CharacterCreationWizard } from "../features/characters/creation/characterCreationWizardV4"
+import { CharacterCreationWizard } from "../features/characters/creation/characterCreationWizardV5"
 import { ensureCharacterBackgroundFromHistory } from "../features/characters/creation/inferCharacterBackground"
+import type { Player } from "../models/player/Player"
 
 export function CharacterView() {
   const {
@@ -30,6 +32,7 @@ export function CharacterView() {
     getOwner,
     createOwner,
   } = useCharacterContext()
+  const { userKey } = useSyncContext()
 
   const [activeTab, setActiveTab] = useState<CharacterTab>("sheet")
   const [creationOpen, setCreationOpen] = useState(false)
@@ -38,16 +41,31 @@ export function CharacterView() {
     () => playerKeys.map((key) => getOwner(key)),
     [getOwner, playerKeys],
   )
-  const defaultOwner =
-    activeCharacter?.get("owner") ??
-    owners[0] ??
-    createOwner("Novo jogador")
+
+  const defaultOwner = useMemo(() => {
+    const normalizedUserKey = userKey.trim()
+
+    if (normalizedUserKey) {
+      return getOwner(normalizedUserKey)
+    }
+
+    return (
+      activeCharacter?.get("owner") ??
+      owners[0] ??
+      createOwner("Jogador local")
+    )
+  }, [activeCharacter, createOwner, getOwner, owners, userKey])
+
+  const wizardOwners = useMemo(
+    () => uniqueOwners([defaultOwner, ...owners]),
+    [defaultOwner, owners],
+  )
 
   const creationWizard = (
     <CharacterCreationWizard
       open={creationOpen}
       defaultOwner={defaultOwner}
-      owners={owners.length > 0 ? owners : [defaultOwner]}
+      owners={wizardOwners}
       canAssignOwners={canAssignOwners}
       createOwner={createOwner}
       onClose={() => setCreationOpen(false)}
@@ -177,4 +195,15 @@ export function CharacterView() {
       {creationWizard}
     </div>
   )
+}
+
+function uniqueOwners(owners: Player[]): Player[] {
+  const seen = new Set<string>()
+
+  return owners.filter((owner) => {
+    const key = owner.id.trim() || owner.name.trim()
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
