@@ -6,6 +6,7 @@ import type { Weapon } from "../items/equipment/Weapon"
 import type { Attribute } from "../sheet/Attribute"
 import type { Sheet } from "../sheet/Sheet"
 import type { CharacterTemplate } from "./CharacterTemplate"
+import { getEncumbranceSpeedPenalty } from "./characterEncumbrance"
 
 export type StatBonusKey =
   | "armorClass"
@@ -208,9 +209,14 @@ export function getEffectiveMobility(character: CharacterTemplate): number {
   const baseSpeed =
     (character.get("sheet").stats.mobility ?? 9) + raceSpeedBonus
 
-  return applyBonuses(
+  const unencumberedSpeed = applyBonuses(
     baseSpeed,
     getCharacterBonuses(character, "speed"),
+  )
+
+  return Math.max(
+    0,
+    unencumberedSpeed - getEncumbranceSpeedPenalty(character),
   )
 }
 
