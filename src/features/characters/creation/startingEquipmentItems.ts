@@ -1,4 +1,5 @@
 import type { Armor } from "../../../models/items/equipment/Armor"
+import { withShieldDefaults } from "../../../models/items/equipment/Shield"
 import { WEAPON_PROPERTIES, type Weapon } from "../../../models/items/equipment/Weapon"
 import type { Itemmable, ItemKind } from "../../../models/items/item"
 import type { StartingItemSpec } from "./phbClassEquipment"
@@ -17,10 +18,9 @@ const CATEGORY_LABELS: Record<StartingItemSpec["category"], string> = {
 }
 
 const KIND_BY_CATEGORY: Record<
-  Exclude<StartingItemSpec["category"], "weapon" | "armor">,
+  Exclude<StartingItemSpec["category"], "weapon" | "armor" | "shield">,
   ItemKind
 > = {
-  shield: "shield",
   ammunition: "ammunition",
   tool: "tool",
   focus: "focus",
@@ -45,7 +45,12 @@ export function createStartingInventoryItem(
         : `Equipamento inicial da classe com aparência/nome personalizado. Item-base: ${spec.name}.`,
     quantity: Math.max(1, spec.quantity ?? 1),
     weight: Math.max(0, spec.weight ?? 0),
-    pocketable: spec.category === "weapon" || spec.category === "ammunition",
+    pocketable:
+      spec.category === "weapon" ||
+      spec.category === "ammunition" ||
+      spec.category === "currency" ||
+      spec.category === "tool" ||
+      spec.category === "focus",
     insideBagOfHolding: false,
   }
 
@@ -74,6 +79,13 @@ export function createStartingInventoryItem(
       pocketable: false,
       armorType: spec.armorType ?? "light",
     } satisfies Armor
+  }
+
+  if (spec.category === "shield") {
+    return withShieldDefaults({
+      ...base,
+      kind: "shield",
+    })
   }
 
   return {
