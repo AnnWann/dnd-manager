@@ -9,6 +9,8 @@ export type EquipSlot =
   | "helmet"
   | "gloves"
   | "boots"
+  | "cape"
+  | "shield"
   | "weapon"
   | "ring"
 
