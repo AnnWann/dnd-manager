@@ -1,11 +1,19 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { useMagicContext } from "../../../contexts/magicContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import {
+  getSorcererLevel,
+  getSorceryPointPool,
+  isSorceryPointPoolSynchronized,
+  restoreSorceryPointDerived,
+  spendSorceryPointDerived,
+  synchronizeSorceryPointPool,
+} from "../../../models/characters/characterSorceryPoints"
 import type { MetamagicId } from "../../../models/magic/metamagic/Metamagic"
-import { MetamagicSelector } from "../../magic/metamagicSelector/metamagicSelector"
 import { getMetamagicLimit } from "../../../rules/MetamagicsRules"
+import { MetamagicSelector } from "../../magic/metamagicSelector/metamagicSelector"
 
 type Props = {
   character: CharacterTemplate
@@ -27,29 +35,44 @@ export function MetamagicModule({ character, updateCharacter }: Props) {
     [getMetamagicsByIds, knownMetamagicIds],
   )
 
-  const sorcererLevel = character.getClassLevel("sorcerer")
+  const sorcererLevel = getSorcererLevel(character)
   const maxMetamagics = getMetamagicLimit(sorcererLevel)
   const hasReachedLimit = knownMetamagicIds.length >= maxMetamagics
+  const sorceryPoints = getSorceryPointPool(character)
+
+  useEffect(() => {
+    if (isSorceryPointPoolSynchronized(character)) return
+
+    updateCharacter(character.get("id"), (current) =>
+      synchronizeSorceryPointPool(current),
+    )
+  }, [character, updateCharacter])
 
   function addSelectedMetamagic(id: MetamagicId) {
     if (hasReachedLimit) return
 
-    updateCharacter(character.get("id"), (c) => c.addMetamagic(id))
+    updateCharacter(character.get("id"), (current) =>
+      synchronizeSorceryPointPool(current.addMetamagic(id)),
+    )
     setIsSelectorOpen(false)
   }
 
   function removeSelectedMetamagic(id: MetamagicId) {
-    updateCharacter(character.get("id"), (c) => c.removeMetamagic(id))
+    updateCharacter(character.get("id"), (current) =>
+      synchronizeSorceryPointPool(current.removeMetamagic(id)),
+    )
   }
 
-  const sorceryPoints = character.getSorceryPoints()
-
   function spendSorceryPoint() {
-    updateCharacter(character.get("id"), (c) => c.spendSorceryPoint())
+    updateCharacter(character.get("id"), (current) =>
+      spendSorceryPointDerived(current),
+    )
   }
 
   function restoreSorceryPoint() {
-    updateCharacter(character.get("id"), (c) => c.restoreSorceryPoint())
+    updateCharacter(character.get("id"), (current) =>
+      restoreSorceryPointDerived(current),
+    )
   }
 
   return (
@@ -69,14 +92,14 @@ export function MetamagicModule({ character, updateCharacter }: Props) {
           <Button
             size="sm"
             variant="primary"
-            disabled={hasReachedLimit}
+            disabled={hasReachedLimit || maxMetamagics <= 0}
             onClick={() => setIsSelectorOpen(true)}
           >
             Adicionar
           </Button>
         </div>
       </CardHeader>
-      
+
       <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-border p-3">
         <div>
           <div className="text-sm font-medium text-textH">
@@ -85,6 +108,10 @@ export function MetamagicModule({ character, updateCharacter }: Props) {
 
           <div className="text-xs text-text">
             {sorceryPoints.current}/{sorceryPoints.max} disponíveis
+          </div>
+
+          <div className="mt-1 text-[10px] text-textMuted">
+            Máximo calculado pelo nível de feiticeiro ({sorcererLevel}).
           </div>
         </div>
 
@@ -112,7 +139,9 @@ export function MetamagicModule({ character, updateCharacter }: Props) {
       <CardContent>
         {knownMetamagics.length === 0 ? (
           <p className="text-xs text-text">
-            Nenhuma metamagia escolhida.
+            {maxMetamagics > 0
+              ? "Nenhuma metamagia escolhida."
+              : "Metamagia é liberada no 3º nível de feiticeiro."}
           </p>
         ) : (
           <div className="grid gap-3">
