@@ -3,13 +3,13 @@ import type { Equipment } from "./EquipmentSlot"
 import type { PocketItem } from "./PocketItem"
 import type { Weapon } from "./Weapon"
 
-
 export type CharacterEquipment = {
   armor?: Armor
   boots?: Equipment
   helmet?: Equipment
   gloves?: Equipment
   cape?: Equipment
+  shield?: Equipment
   rings: Equipment[]
 
   // armas realmente empunhadas
