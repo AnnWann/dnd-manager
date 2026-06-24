@@ -1,5 +1,6 @@
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getCarriedWeightKg } from "../../../models/characters/characterEncumbrance"
+import { getUsedArmsIncludingShield } from "../../../models/characters/characterEquipmentInteractions"
 
 type Props = {
   character: CharacterTemplate
@@ -9,7 +10,7 @@ export function EquipmentSummary({ character }: Props) {
   const equipment = character.get("equipment")
   const sheet = character.get("sheet")
 
-  const usedArms = character.getUsedArms()
+  const usedArms = getUsedArmsIncludingShield(character)
   const totalArms = sheet.arms
 
   const usedFingers = equipment.rings.length
