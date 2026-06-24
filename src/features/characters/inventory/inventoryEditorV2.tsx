@@ -5,7 +5,13 @@ import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
 import { Textarea } from "../../../components/ui/Textarea"
 import { normalizeItemText } from "../../../lib/textNormalization"
+import { withShieldDefaults } from "../../../models/items/equipment/Shield"
 import type { ItemKind, Itemmable } from "../../../models/items/item"
+import {
+  canItemGoInPocket,
+  getDefaultPocketableForKind,
+  isAutomaticallyPocketableKind,
+} from "../../../models/items/itemPocketability"
 import type { SupplyItem } from "../../../models/items/SupplyItem"
 import { newInventoryItem } from "./characterInventory"
 import { ConsumableFields, withConsumableDefaults } from "./consumableFields"
@@ -242,10 +248,7 @@ export function InventoryEditor({
                           Editar
                         </Button>
 
-                        {item.kind === "equipment" &&
-                        item.equippable &&
-                        item.equipSlot &&
-                        onEquipItem ? (
+                        {item.equippable && item.equipSlot && onEquipItem ? (
                           <Button
                             size="sm"
                             variant="secondary"
@@ -346,6 +349,7 @@ function updateItemKind(item: Itemmable, kind: ItemKind): Itemmable {
   if (kind === "equipment") {
     return withEquipmentDefaults(item, item.equipSlot ?? "weapon")
   }
+  if (kind === "shield") return withShieldDefaults(item)
   if (kind === "consumable") return withConsumableDefaults(item)
   if (kind === "throwable") return withThrowableDefaults(item)
   if (kind === "supply") return withSupplyDefaults(item)
@@ -355,11 +359,7 @@ function updateItemKind(item: Itemmable, kind: ItemKind): Itemmable {
     kind,
     equippable: false,
     equipSlot: undefined,
-    pocketable:
-      kind === "ammunition" ||
-      kind === "currency" ||
-      kind === "tool" ||
-      kind === "focus",
+    pocketable: getDefaultPocketableForKind(kind),
     insideBagOfHolding: false,
   }
 }
@@ -370,6 +370,7 @@ function inventoryItemTypeLabel(item: Itemmable): string {
     if (item.equipSlot === "helmet") return "Capacete"
     if (item.equipSlot === "gloves") return "Luvas"
     if (item.equipSlot === "boots") return "Botas"
+    if (item.equipSlot === "cape") return "Capa"
     if (item.equipSlot === "weapon") return "Arma"
     if (item.equipSlot === "ring") return "Anel"
   }
@@ -384,7 +385,7 @@ function formatSupplySummary(item: SupplyItem): string {
 }
 
 function canGoToPocket(item: Itemmable): boolean {
-  return item.kind !== "supply" && item.pocketable === true
+  return canItemGoInPocket(item)
 }
 
 function ItemKindButtons({
@@ -439,6 +440,12 @@ function ItemEditPopup({
   function patch(updater: (item: Itemmable) => Itemmable) {
     setDraft((current) => (current ? updater(current) : current))
   }
+
+  const automaticPocket = isAutomaticallyPocketableKind(draft.kind)
+  const blockedFromPocket =
+    draft.kind === "supply" ||
+    draft.kind === "pack" ||
+    draft.kind === "shield"
 
   return (
     <div className="fixed inset-0 z-[10000] flex max-w-[100vw] items-center justify-center overflow-x-hidden bg-black/65 p-2 backdrop-blur-sm sm:p-4">
@@ -509,6 +516,31 @@ function ItemEditPopup({
             />
           </div>
 
+          <label className="flex items-start gap-2 rounded-lg border border-border bg-bg-subtle p-3 text-xs text-text md:col-span-3">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={canItemGoInPocket(draft)}
+              disabled={automaticPocket || blockedFromPocket}
+              onChange={(event) =>
+                patch((current) => ({
+                  ...current,
+                  pocketable: event.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-textH">Cabe no bolso</span>
+              <span className="mt-0.5 block text-textMuted">
+                {automaticPocket
+                  ? "Esta categoria sempre pode ser guardada no bolso."
+                  : blockedFromPocket
+                    ? "Esta categoria não pode ser colocada no bolso."
+                    : "Marque para permitir que este item específico seja colocado no bolso."}
+              </span>
+            </span>
+          </label>
+
           <label className="grid min-w-0 gap-2 md:col-span-3">
             <span className="text-xs text-text">Descrição</span>
             <Textarea
@@ -537,7 +569,7 @@ function ItemEditPopup({
             />
           </label>
 
-          {draft.kind === "equipment" ? (
+          {draft.kind === "equipment" || draft.kind === "shield" ? (
             <EquipmentFields item={draft} onUpdate={patch} />
           ) : null}
           {draft.kind === "consumable" ? (
