@@ -1,4 +1,5 @@
 import type { CharacterType } from "../characters/CharacterType"
+import type { CharacterCondition } from "../characters/CharacterCondition"
 import type { Proficiency } from "./Proficiency"
 import type { CharacterRace } from "../races/CharacterRace"
 import type { CharacterAttribute } from "./CharacterAttribute"
@@ -22,6 +23,7 @@ export type Sheet = {
   }
 
   HP: HP
+  conditions?: CharacterCondition[]
 
   attributes: CharacterAttribute
   skills: CharacterSkills
