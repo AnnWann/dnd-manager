@@ -14,6 +14,7 @@ export type Sheet = {
     initiative: number
     passive_perception: number
     exhaustion?: number
+    inspiration?: boolean
   }
 
   HP: HP
