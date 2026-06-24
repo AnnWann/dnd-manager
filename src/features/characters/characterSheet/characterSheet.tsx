@@ -10,6 +10,7 @@ import { GroupHP } from "./character_info/components/hp/GroupHP"
 import { GroupStats } from "./character_info/components/stats/GroupStats"
 import { AttributeCalculators } from "./attributeCalculators"
 import { CharacterConditions } from "./characterConditions"
+import { CharacterExperience } from "./characterExperience"
 import { SavingThrows } from "./savingThrows"
 
 type Props = {
@@ -52,6 +53,11 @@ export function CharacterSheetTab({
       />
 
       <GroupStats
+        character={character}
+        updateCharacter={updateCharacter}
+      />
+
+      <CharacterExperience
         character={character}
         updateCharacter={updateCharacter}
       />
