@@ -3,6 +3,10 @@ import { useState } from "react"
 import { useCharacterContext } from "../../../contexts/characterContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getEncumbranceInfo } from "../../../models/characters/characterEncumbrance"
+import {
+  equipInventoryItemWithRules,
+  pocketInventoryItemWithRules,
+} from "../../../models/characters/characterEquipmentInteractions"
 import type { Itemmable } from "../../../models/items/item"
 import { CharacterEncumbrancePanel } from "./characterEncumbrancePanel"
 import { InventoryEditor } from "./inventoryEditor"
@@ -84,12 +88,12 @@ export function CharacterInventoryTab({
         onRemoveItem={removeItem}
         onEquipItem={(itemId) =>
           updateCharacter(character.get("id"), (current) =>
-            current.equipInventoryItem(itemId),
+            equipInventoryItemWithRules(current, itemId),
           )
         }
         onPocketItem={(itemId) =>
           updateCharacter(character.get("id"), (current) =>
-            current.pocketInventoryItem(itemId),
+            pocketInventoryItemWithRules(current, itemId),
           )
         }
         onToggleBagOfHolding={(itemId) =>
