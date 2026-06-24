@@ -7,12 +7,11 @@ import { EquipmentSingleSlotSection } from "./EquipmentSingleSlotSection"
 import { EquipmentSummary } from "./equipmentSummary"
 import { EquipmentWeaponsSection } from "./EquipmentWeaponsSection"
 
-
 type Props = {
   character: CharacterTemplate
   updateCharacter: (
     characterId: string,
-    updater: (c: CharacterTemplate) => CharacterTemplate
+    updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
 }
 
@@ -22,62 +21,67 @@ export function CharacterEquipmentTab({ character, updateCharacter }: Props) {
       <CardHeader>
         <div className="text-sm font-semibold text-textH">Equipamento</div>
         <div className="mt-1 text-xs text-text">
-          Itens equipados, armas, anéis e bolsos.
+          Itens equipados, escudo, armas, anéis e bolsos.
         </div>
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
         <EquipmentSummary character={character} />
-     
 
-      <EquipmentArmorSection
-        character={character}
-        updateCharacter={updateCharacter}
-      />
+        <EquipmentArmorSection
+          character={character}
+          updateCharacter={updateCharacter}
+        />
 
-      <EquipmentSingleSlotSection
-        title="Capacete"
-        slot="helmet"
-        character={character}
-        updateCharacter={updateCharacter}
-      />
+        <EquipmentSingleSlotSection
+          title="Escudo"
+          slot="shield"
+          character={character}
+          updateCharacter={updateCharacter}
+        />
 
-      <EquipmentSingleSlotSection
-        title="Luvas"
-        slot="gloves"
-        character={character}
-        updateCharacter={updateCharacter}
-      />
+        <EquipmentSingleSlotSection
+          title="Capacete"
+          slot="helmet"
+          character={character}
+          updateCharacter={updateCharacter}
+        />
 
-      <EquipmentSingleSlotSection
-        title="Botas"
-        slot="boots"
-        character={character}
-        updateCharacter={updateCharacter}
-      />
+        <EquipmentSingleSlotSection
+          title="Luvas"
+          slot="gloves"
+          character={character}
+          updateCharacter={updateCharacter}
+        />
 
-      <EquipmentSingleSlotSection
-        title="Capa"
-        slot="cape"
-        character={character}
-        updateCharacter={updateCharacter}
-      />
+        <EquipmentSingleSlotSection
+          title="Botas"
+          slot="boots"
+          character={character}
+          updateCharacter={updateCharacter}
+        />
 
-      <EquipmentWeaponsSection
-        character={character}
-        updateCharacter={updateCharacter}
-      />
+        <EquipmentSingleSlotSection
+          title="Capa"
+          slot="cape"
+          character={character}
+          updateCharacter={updateCharacter}
+        />
 
-      <EquipmentRingsSection
-        character={character}
-        updateCharacter={updateCharacter}
-      />
+        <EquipmentWeaponsSection
+          character={character}
+          updateCharacter={updateCharacter}
+        />
 
-      <EquipmentPocketsSection
-        character={character}
-        updateCharacter={updateCharacter}
-      />
+        <EquipmentRingsSection
+          character={character}
+          updateCharacter={updateCharacter}
+        />
 
+        <EquipmentPocketsSection
+          character={character}
+          updateCharacter={updateCharacter}
+        />
       </CardContent>
     </Card>
   )
