@@ -2,17 +2,16 @@ import { Button } from "../../../components/ui/Button"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatSigned } from "../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import type {
-  Itemmable,
-} from "../../../models/items/item"
-import type { Weapon } from "../../../models/items/equipment/Weapon"
+import { wieldPocketWeaponWithRules } from "../../../models/characters/characterEquipmentInteractions"
 import type { ConsumableItem, ThrowableItem } from "../../../models/items/equipment/PocketItem"
+import type { Weapon } from "../../../models/items/equipment/Weapon"
+import type { Itemmable } from "../../../models/items/item"
 
 type Props = {
   character: CharacterTemplate
   updateCharacter: (
     characterId: string,
-    updater: (c: CharacterTemplate) => CharacterTemplate
+    updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
 }
 
@@ -30,6 +29,12 @@ function itemTypeLabel(item: Itemmable): string {
 
   if (item.kind === "consumable") return "Consumível"
   if (item.kind === "throwable") return "Arremessável"
+  if (item.kind === "ammunition") return "Munição"
+  if (item.kind === "currency") return "Moeda"
+  if (item.kind === "tool") return "Ferramenta"
+  if (item.kind === "focus") return "Foco"
+  if (item.kind === "instrument") return "Instrumento"
+  if (item.kind === "gear") return "Equipamento geral"
 
   return "Item comum"
 }
@@ -53,21 +58,21 @@ export function EquipmentPocketsSection({
   const pockets = character.get("equipment").pockets
 
   function unequipPocketItem(index: number) {
-    updateCharacter(character.get("id"), (c) =>
-      c.unequipPocketItem(index),
+    updateCharacter(character.get("id"), (current) =>
+      current.unequipPocketItem(index),
     )
   }
 
   function wieldPocketWeapon(index: number) {
-    updateCharacter(character.get("id"), (c) =>
-      c.wieldPocketWeapon(index),
+    updateCharacter(character.get("id"), (current) =>
+      wieldPocketWeaponWithRules(current, index),
     )
   }
 
   function usePocketItem(index: number) {
-  updateCharacter(character.get("id"), (c) =>
-    c.usePocketItem(index),
-  )
+    updateCharacter(character.get("id"), (current) =>
+      current.usePocketItem(index),
+    )
   }
 
   return (
