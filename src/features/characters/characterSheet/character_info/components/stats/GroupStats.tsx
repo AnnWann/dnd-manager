@@ -2,6 +2,10 @@ import { Sparkles } from "lucide-react"
 
 import { Input } from "../../../../../../components/ui/Input"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
+import {
+  getCalculatedArmorClassWithShield,
+  getEffectiveArmorClassWithShield,
+} from "../../../../../../models/items/equipment/Shield"
 import { SelectStatModule } from "./selectStatModule"
 
 type Props = {
@@ -26,7 +30,8 @@ export function GroupStats({
         <SelectStatModule
           name="CA"
           statKey="armorClass"
-          getValue={(current) => current.getEffectiveArmorClass()}
+          getValue={getEffectiveArmorClassWithShield}
+          getCalculatedValue={getCalculatedArmorClassWithShield}
           character={character}
           updateCharacter={updateCharacter}
           fallback={10}
