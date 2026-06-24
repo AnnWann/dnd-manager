@@ -19,7 +19,7 @@ import {
 import {
   takeLongRest,
   takePartialLongRest,
-} from "../models/characters/characterRest"
+} from "../models/characters/characterRestWithSorcery"
 import type { Itemmable } from "../models/items/item"
 import type { Player } from "../models/player/Player"
 import {
@@ -80,7 +80,9 @@ type CharacterProviderProps = {
   userKey: string
 }
 
-const CharacterContext = createContext<CharacterContextValue | null>(null)
+const CharacterContext = createContext<CharacterContextValue | undefined>(
+  undefined,
+)
 
 export function CharacterProvider({
   children,
@@ -89,154 +91,50 @@ export function CharacterProvider({
   userRole,
   userKey,
 }: CharacterProviderProps) {
-  const [selectedCharacterId, setSelectedCharacterId] = useState("")
-
-  const characters = useMemo(
+  const normalizedUserKey = userKey.trim()
+  const characterObjects = useMemo(
     () =>
       appState.characters.map((character) =>
-        character instanceof CharacterTemplate
-          ? character
-          : CharacterTemplate.fromJSON(character),
+        CharacterTemplate.fromJSON(character),
       ),
     [appState.characters],
   )
 
-  const canAssignOwners = userRole === "master"
-  const canEditCharacterType = userRole === "master"
-  const normalizedUserKey = userKey.trim()
-
-  const playersById = useMemo(() => {
-    const map = new Map<string, Player>()
-    for (const character of characters) {
-      const owner = character.get("owner")
-      if (owner?.id) map.set(owner.id, owner)
-    }
-    return map
-  }, [characters])
-
-  function getOwner(ownerId: string): Player {
-    return playersById.get(ownerId) ?? {
-      id: ownerId,
-      name: ownerId,
-      role: "player",
-    }
-  }
-
-  function createOwner(ownerName: string): Player {
-    return {
-      id: ownerName.trim() || crypto.randomUUID(),
-      name: ownerName.trim() || "Novo jogador",
-      role: "player",
-    }
-  }
-
-  const knownPlayerKeys = useMemo(() => {
-    const keys = new Set<string>()
-    for (const character of characters) {
-      const ownerId = character.get("owner")?.id?.trim()
-      if (ownerId) keys.add(ownerId)
-    }
-    if (normalizedUserKey) keys.add(normalizedUserKey)
-    return Array.from(keys).sort((left, right) => left.localeCompare(right))
-  }, [characters, normalizedUserKey])
-
-  function canViewCharacterDetails(characterId: string): boolean {
-    const character = characters.find(
-      (entry) => entry.get("id") === characterId,
-    )
-    if (!character) return false
+  const canViewCharacter = (character: CharacterTemplate) => {
     if (userRole === "master") return true
-
-    const isOwned =
-      character.get("owner")?.id?.trim() === normalizedUserKey
-    return isOwned || character.get("visibility") === "party"
+    if (character.get("visibility") === "party") return true
+    return character.get("owner")?.id?.trim() === normalizedUserKey
   }
 
-  const visibleCharacters = useMemo(() => {
-    if (userRole === "master") return characters
-    if (!normalizedUserKey) return []
-
-    return characters.filter((character) => {
-      const isOwned =
-        character.get("owner")?.id?.trim() === normalizedUserKey
-      return isOwned || character.get("visibility") === "party"
-    })
-  }, [characters, normalizedUserKey, userRole])
-
-  const transferCharacters = useMemo(() => {
-    if (userRole === "master") return characters
-
-    return characters.filter((character) => {
-      const isOwned =
-        character.get("owner")?.id?.trim() === normalizedUserKey
-      return isOwned || character.get("visibility") !== "master"
-    })
-  }, [characters, normalizedUserKey, userRole])
-
-  const activeCharacter = useMemo(
-    () =>
-      visibleCharacters.find(
-        (character) => character.get("id") === selectedCharacterId,
-      ) ??
-      visibleCharacters.find(
-        (character) =>
-          character.get("id") === appState.activeCharacterId,
-      ) ??
-      visibleCharacters[0],
-    [appState.activeCharacterId, selectedCharacterId, visibleCharacters],
-  )
+  const visibleCharacters = characterObjects.filter(canViewCharacter)
+  const transferCharacters = characterObjects
+  const activeCharacter =
+    visibleCharacters.find(
+      (character) => character.get("id") === appState.activeCharacterId,
+    ) ?? visibleCharacters[0]
 
   useEffect(() => {
-    if (visibleCharacters.length === 0) {
-      if (selectedCharacterId !== "") setSelectedCharacterId("")
-      return
-    }
-
-    const resolved =
-      visibleCharacters.find(
-        (character) => character.get("id") === selectedCharacterId,
-      ) ??
-      visibleCharacters.find(
-        (character) =>
-          character.get("id") === appState.activeCharacterId,
-      ) ??
-      visibleCharacters[0]
-
-    if (resolved && resolved.get("id") !== selectedCharacterId) {
-      setSelectedCharacterId(resolved.get("id"))
-    }
-  }, [appState.activeCharacterId, selectedCharacterId, visibleCharacters])
-
-  useEffect(() => {
-    if (characters.length > 0) return
-
-    const character = newCharacterTemplate(
-      "Meu personagem",
-      getOwner(userKey),
-    )
+    if (!activeCharacter) return
+    if (activeCharacter.get("id") === appState.activeCharacterId) return
 
     setAppState((previous) => ({
       ...previous,
-      characters: [character.toJSON()],
-      activeCharacterId: character.get("id"),
+      activeCharacterId: activeCharacter.get("id"),
     }))
-    setSelectedCharacterId(character.get("id"))
-  }, [characters.length, setAppState, userKey])
+  }, [activeCharacter, appState.activeCharacterId, setAppState])
 
   function updateCharacter(
     characterId: string,
-    updater: (c: CharacterTemplate) => CharacterTemplate,
+    updater: (character: CharacterTemplate) => CharacterTemplate,
   ) {
     setAppState((previous) => ({
       ...previous,
       characters: previous.characters.map((rawCharacter) => {
         const character = CharacterTemplate.fromJSON(rawCharacter)
 
-        if (character.get("id") !== characterId) {
-          return character.toJSON()
-        }
-
-        return updater(character).toJSON()
+        return character.get("id") === characterId
+          ? updater(character).toJSON()
+          : rawCharacter
       }),
     }))
   }
@@ -246,107 +144,107 @@ export function CharacterProvider({
     selection: LongRestSupplySelection[],
   ) {
     setAppState((previous) => {
-      const characterObjects = previous.characters.map((rawCharacter) =>
+      const characters = previous.characters.map((rawCharacter) =>
         CharacterTemplate.fromJSON(rawCharacter),
       )
-      const restedCharacter = characterObjects.find(
-        (character) => character.get("id") === characterId,
+      const character = characters.find(
+        (entry) => entry.get("id") === characterId,
       )
 
-      if (!restedCharacter) return previous
+      if (!character) return previous
 
       const canRest =
         userRole === "master" ||
-        restedCharacter.get("owner")?.id?.trim() === normalizedUserKey
+        character.get("owner")?.id?.trim() === normalizedUserKey
 
       if (!canRest) return previous
 
-      const requiredSupply = getRequiredSupplyForRace(
-        restedCharacter.get("sheet").race,
+      const required = getRequiredSupplyForRace(
+        character.get("sheet").race,
       )
       const consumption = consumeSelectedSupplies(
         previous.partyInventory ?? [],
         selection,
+        required,
       )
 
       if (!consumption.valid) return previous
 
-      const isPartialRest =
-        consumption.selectedPortions + 0.000001 < requiredSupply
+      const restedCharacter = consumption.completeRest
+        ? takeLongRest(character)
+        : takePartialLongRest(character)
 
       return {
         ...previous,
-        characters: characterObjects.map((character) => {
-          if (character.get("id") !== characterId) {
-            return character.toJSON()
-          }
-
-          return (
-            isPartialRest
-              ? takePartialLongRest(character)
-              : takeLongRest(character)
-          ).toJSON()
-        }),
+        characters: characters.map((entry) =>
+          entry.get("id") === characterId
+            ? restedCharacter.toJSON()
+            : entry.toJSON(),
+        ),
         partyInventory: consumption.items,
       }
     })
   }
 
   function addCharacter() {
-    const character = newCharacterTemplate(
-      `Personagem ${characters.length + 1}`,
-      getOwner(userKey),
-    )
+    const owner = createOwner(normalizedUserKey || "Novo jogador")
+    const character = newCharacterTemplate("Novo personagem", owner)
 
     setAppState((previous) => ({
       ...previous,
       characters: [...previous.characters, character.toJSON()],
       activeCharacterId: character.get("id"),
     }))
-    setSelectedCharacterId(character.get("id"))
   }
 
   function importCharacter(rawCharacter: unknown): CharacterTemplate {
-    if (
-      !rawCharacter ||
-      typeof rawCharacter !== "object" ||
-      Array.isArray(rawCharacter)
-    ) {
-      throw new Error("O arquivo não contém um personagem válido.")
-    }
-
-    const restored = CharacterTemplate.fromJSON(
+    const parsed = CharacterTemplate.fromJSON(
       rawCharacter as Partial<CharacterTemplateProps>,
     )
-    const importedOwner =
-      userRole === "master"
-        ? restored.get("owner")
-        : getOwner(userKey)
-    const imported = restored.withPatch({
-      id: crypto.randomUUID(),
-      owner: importedOwner,
+    const character = parsed.withPatch({
+      id: parsed.get("id") || crypto.randomUUID(),
+      owner:
+        parsed.get("owner")?.id?.trim()
+          ? parsed.get("owner")
+          : createOwner(normalizedUserKey || "Novo jogador"),
     })
 
     setAppState((previous) => ({
       ...previous,
-      characters: [...previous.characters, imported.toJSON()],
-      activeCharacterId: imported.get("id"),
+      characters: [
+        ...previous.characters.filter(
+          (entry) => entry.id !== character.get("id"),
+        ),
+        character.toJSON(),
+      ],
+      activeCharacterId: character.get("id"),
     }))
-    setSelectedCharacterId(imported.get("id"))
-    return imported
+
+    return character
   }
 
-  function deleteCharacter(characterId: string) {
+  function deleteCharacter(id: string) {
+    setAppState((previous) => {
+      const remaining = previous.characters.filter(
+        (character) => character.id !== id,
+      )
+
+      return {
+        ...previous,
+        characters: remaining,
+        activeCharacterId:
+          previous.activeCharacterId === id
+            ? remaining[0]?.id ?? ""
+            : previous.activeCharacterId,
+      }
+    })
+  }
+
+  function setSelectedCharacterId(id: string) {
     setAppState((previous) => ({
       ...previous,
-      characters: previous.characters.filter(
-        (rawCharacter) => rawCharacter.id !== characterId,
-      ),
+      activeCharacterId: id,
     }))
-
-    setSelectedCharacterId((current) =>
-      current === characterId ? "" : current,
-    )
   }
 
   function addPartyItem(item: Itemmable) {
@@ -382,200 +280,240 @@ export function CharacterProvider({
     }))
   }
 
-  function canTransferFromCharacter(characterId: string): boolean {
-    if (userRole === "master") return true
-
-    return characters.some(
-      (character) =>
-        character.get("id") === characterId &&
-        character.get("owner")?.id?.trim() === normalizedUserKey,
-    )
-  }
-
   function transferItem(request: TransferItemRequest) {
-    if (locationKey(request.from) === locationKey(request.to)) return
-
     setAppState((previous) => {
-      const characterObjects = previous.characters.map((raw) =>
-        CharacterTemplate.fromJSON(raw),
-      )
-      const characterById = new Map(
-        characterObjects.map((character) => [
-          character.get("id"),
-          character,
-        ]),
-      )
-
-      if (
-        request.from.type === "character" &&
-        !canUseCharacterAsSource(
-          characterById.get(request.from.characterId),
-          userRole,
-          normalizedUserKey,
-        )
-      ) {
-        return previous
-      }
-
-      if (
-        request.to.type === "character" &&
-        !canUseCharacterAsTarget(
-          characterById.get(request.to.characterId),
-          userRole,
-          normalizedUserKey,
-        )
-      ) {
-        return previous
-      }
-
-      const partyInventory = [...(previous.partyInventory ?? [])]
-      const inventoryByCharacterId = new Map(
-        characterObjects.map((character) => [
-          character.get("id"),
-          [...(character.get("inventory") ?? [])],
-        ]),
-      )
-
-      const sourceInventory = getLocationInventory(
-        request.from,
-        partyInventory,
-        inventoryByCharacterId,
-      )
-      const destinationInventory = getLocationInventory(
-        request.to,
-        partyInventory,
-        inventoryByCharacterId,
-      )
-
-      if (!sourceInventory || !destinationInventory) return previous
-
-      const itemIndex = sourceInventory.findIndex(
+      const sourceItems = getInventoryAtLocation(previous, request.from)
+      const sourceItem = sourceItems.find(
         (item) => item.id === request.itemId,
       )
-      if (itemIndex < 0) return previous
 
-      const sourceItem = sourceInventory[itemIndex]
-      const availableQuantity = Math.max(
-        0,
-        Number(sourceItem.quantity) || 0,
-      )
-      if (availableQuantity <= 0) return previous
+      if (!sourceItem) return previous
 
+      const availableQuantity = Math.max(0, sourceItem.quantity ?? 0)
       const requestedQuantity = Math.max(
         1,
-        Math.trunc(Number(request.quantity) || availableQuantity),
+        Math.trunc(request.quantity || 1),
       )
       const movedQuantity = Math.min(
         availableQuantity,
         requestedQuantity,
       )
 
-      if (movedQuantity >= availableQuantity) {
-        sourceInventory.splice(itemIndex, 1)
-      } else {
-        sourceInventory[itemIndex] = normalizeItemText({
-          ...sourceItem,
-          quantity: availableQuantity - movedQuantity,
-        })
-      }
+      if (movedQuantity <= 0) return previous
 
-      destinationInventory.push(
-        normalizeItemText({
-          ...sourceItem,
-          id: crypto.randomUUID(),
-          quantity: movedQuantity,
-          insideBagOfHolding: false,
-        }),
+      const remainingQuantity = availableQuantity - movedQuantity
+      const nextSourceItems = sourceItems.flatMap((item) => {
+        if (item.id !== request.itemId) return [item]
+        if (remainingQuantity <= 0) return []
+
+        return [
+          {
+            ...item,
+            quantity: remainingQuantity,
+          },
+        ]
+      })
+      const destinationItems = getInventoryAtLocation(previous, request.to)
+      const transferredItem: Itemmable = normalizeItemText({
+        ...sourceItem,
+        id: crypto.randomUUID(),
+        quantity: movedQuantity,
+        insideBagOfHolding: false,
+      })
+      const nextDestinationItems = mergeTransferredItem(
+        destinationItems,
+        transferredItem,
       )
 
-      return {
-        ...previous,
-        partyInventory,
-        characters: characterObjects.map((character) =>
-          character
-            .with(
-              "inventory",
-              inventoryByCharacterId.get(character.get("id")) ?? [],
-            )
-            .toJSON(),
-        ),
-      }
+      return setInventoryAtLocation(
+        setInventoryAtLocation(previous, request.from, nextSourceItems),
+        request.to,
+        nextDestinationItems,
+      )
     })
   }
 
+  function canTransferFromCharacter(characterId: string): boolean {
+    const character = characterObjects.find(
+      (entry) => entry.get("id") === characterId,
+    )
+
+    if (!character) return false
+    if (userRole === "master") return true
+    return character.get("owner")?.id?.trim() === normalizedUserKey
+  }
+
+  function canViewCharacterDetails(characterId: string): boolean {
+    const character = characterObjects.find(
+      (entry) => entry.get("id") === characterId,
+    )
+
+    return character ? canViewCharacter(character) : false
+  }
+
+  const knownPlayerKeys = useMemo(() => {
+    const keys = new Set<string>()
+
+    if (normalizedUserKey) keys.add(normalizedUserKey)
+
+    for (const character of characterObjects) {
+      const ownerId = character.get("owner")?.id?.trim()
+      if (ownerId) keys.add(ownerId)
+    }
+
+    return Array.from(keys)
+  }, [characterObjects, normalizedUserKey])
+
+  function getOwner(ownerId: string): Player {
+    const normalizedOwnerId = ownerId.trim()
+    const characterOwner = characterObjects
+      .map((character) => character.get("owner"))
+      .find((owner) => owner.id.trim() === normalizedOwnerId)
+
+    return (
+      characterOwner ?? {
+        id: normalizedOwnerId,
+        name: normalizedOwnerId,
+        role: "player",
+      }
+    )
+  }
+
+  function createOwner(ownerName: string): Player {
+    const normalizedOwnerName = ownerName.trim()
+    const existing = characterObjects
+      .map((character) => character.get("owner"))
+      .find(
+        (owner) =>
+          owner.id.trim() === normalizedOwnerName ||
+          owner.name.trim() === normalizedOwnerName,
+      )
+
+    return (
+      existing ?? {
+        id: normalizedOwnerName,
+        name: normalizedOwnerName,
+        role: "player",
+      }
+    )
+  }
+
+  const value: CharacterContextValue = {
+    activeCharacter,
+    visibleCharacters,
+    transferCharacters,
+    partyInventory: appState.partyInventory ?? [],
+    updateCharacter,
+    completeLongRest,
+    addCharacter,
+    importCharacter,
+    deleteCharacter,
+    setSelectedCharacterId,
+    addPartyItem,
+    updatePartyItem,
+    removePartyItem,
+    transferItem,
+    canTransferFromCharacter,
+    canViewCharacterDetails,
+    canAssignOwners: userRole === "master",
+    canEditCharacterType: userRole === "master",
+    knownPlayerKeys,
+    getOwner,
+    createOwner,
+  }
+
   return (
-    <CharacterContext.Provider
-      value={{
-        activeCharacter,
-        visibleCharacters,
-        transferCharacters,
-        partyInventory: appState.partyInventory ?? [],
-        updateCharacter,
-        completeLongRest,
-        addCharacter,
-        importCharacter,
-        deleteCharacter,
-        setSelectedCharacterId,
-        addPartyItem,
-        updatePartyItem,
-        removePartyItem,
-        transferItem,
-        canTransferFromCharacter,
-        canViewCharacterDetails,
-        canAssignOwners,
-        canEditCharacterType,
-        knownPlayerKeys,
-        getOwner,
-        createOwner,
-      }}
-    >
+    <CharacterContext.Provider value={value}>
       {children}
     </CharacterContext.Provider>
   )
 }
 
-function locationKey(location: InventoryLocation): string {
-  return location.type === "party"
-    ? "party"
-    : `character:${location.characterId}`
-}
-
-function canUseCharacterAsSource(
-  character: CharacterTemplate | undefined,
-  userRole: "master" | "player",
-  userKey: string,
-): boolean {
-  if (!character) return false
-  if (userRole === "master") return true
-
-  return character.get("owner")?.id?.trim() === userKey
-}
-
-function canUseCharacterAsTarget(
-  character: CharacterTemplate | undefined,
-  userRole: "master" | "player",
-  userKey: string,
-): boolean {
-  if (!character) return false
-  if (userRole === "master") return true
-
-  const isOwned = character.get("owner")?.id?.trim() === userKey
-  return isOwned || character.get("visibility") !== "master"
-}
-
-function getLocationInventory(
-  location: InventoryLocation,
-  partyInventory: Itemmable[],
-  inventoryByCharacterId: Map<string, Itemmable[]>,
-): Itemmable[] | undefined {
-  if (location.type === "party") return partyInventory
-  return inventoryByCharacterId.get(location.characterId)
-}
-
-export function useCharacterContext() {
+export function useCharacterContext(): CharacterContextValue {
   const context = useContext(CharacterContext)
+
   if (!context) {
-    throw new Error("useCharacterContext must be used inside CharacterProvider")
+    throw new Error(
+      "useCharacterContext precisa estar dentro de CharacterProvider.",
+    )
   }
+
   return context
+}
+
+function getInventoryAtLocation(
+  state: AppStateV1,
+  location: InventoryLocation,
+): Itemmable[] {
+  if (location.type === "party") return state.partyInventory ?? []
+
+  return (
+    state.characters.find(
+      (character) => character.id === location.characterId,
+    )?.inventory ?? []
+  )
+}
+
+function setInventoryAtLocation(
+  state: AppStateV1,
+  location: InventoryLocation,
+  items: Itemmable[],
+): AppStateV1 {
+  if (location.type === "party") {
+    return {
+      ...state,
+      partyInventory: items,
+    }
+  }
+
+  return {
+    ...state,
+    characters: state.characters.map((character) =>
+      character.id === location.characterId
+        ? {
+            ...character,
+            inventory: items,
+          }
+        : character,
+    ),
+  }
+}
+
+function mergeTransferredItem(
+  items: Itemmable[],
+  transferredItem: Itemmable,
+): Itemmable[] {
+  const matchingIndex = items.findIndex((item) =>
+    canStackItems(item, transferredItem),
+  )
+
+  if (matchingIndex < 0) return [...items, transferredItem]
+
+  return items.map((item, index) =>
+    index === matchingIndex
+      ? {
+          ...item,
+          quantity:
+            (item.quantity ?? 0) +
+            (transferredItem.quantity ?? 0),
+        }
+      : item,
+  )
+}
+
+function canStackItems(left: Itemmable, right: Itemmable): boolean {
+  const leftComparable = {
+    ...left,
+    id: "",
+    quantity: 0,
+    insideBagOfHolding: false,
+  }
+  const rightComparable = {
+    ...right,
+    id: "",
+    quantity: 0,
+    insideBagOfHolding: false,
+  }
+
+  return JSON.stringify(leftComparable) === JSON.stringify(rightComparable)
 }
