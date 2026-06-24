@@ -14,6 +14,18 @@ export type StatBonusKey =
   | "passivePerception"
   | "speed"
 
+export type CalculatedStatKey =
+  | "armorClass"
+  | "initiative"
+  | "mobility"
+  | "passive_perception"
+
+export type StatAdjustmentKey =
+  | "armorClassAdjustment"
+  | "initiativeAdjustment"
+  | "mobilityAdjustment"
+  | "passivePerceptionAdjustment"
+
 export function getProficiencyBonus(character: CharacterTemplate): number {
   const totalLevel =
     character.get("sheet").classes?.reduce(
@@ -151,13 +163,21 @@ export function getEffectiveStat<K extends keyof Sheet["stats"]>(
   const bonusKey = statToBonusKey(stat)
   if (!bonusKey) return baseValue
 
-  return applyBonuses(
+  const calculated = applyBonuses(
     baseValue,
     getCharacterBonuses(character, bonusKey),
-  ) as Sheet["stats"][K]
+  )
+  const adjustmentKey = statToAdjustmentKey(stat)
+  const adjustment = adjustmentKey
+    ? character.get("sheet").stats[adjustmentKey] ?? 0
+    : 0
+
+  return (calculated + adjustment) as Sheet["stats"][K]
 }
 
-export function getEffectiveArmorClass(character: CharacterTemplate): number {
+export function getCalculatedArmorClass(
+  character: CharacterTemplate,
+): number {
   const armor = getEquippedArmor(character)
   const allBonuses = getCharacterBonuses(character, "armorClass")
   const flatBase =
@@ -175,7 +195,16 @@ export function getEffectiveArmorClass(character: CharacterTemplate): number {
   )
 }
 
-export function getEffectiveInitiative(character: CharacterTemplate): number {
+export function getEffectiveArmorClass(character: CharacterTemplate): number {
+  return (
+    getCalculatedArmorClass(character) +
+    getStatAdjustment(character, "armorClassAdjustment")
+  )
+}
+
+export function getCalculatedInitiative(
+  character: CharacterTemplate,
+): number {
   const dexModifier = getEffectiveAttributeModifier(character, "dex")
 
   return applyBonuses(
@@ -184,17 +213,26 @@ export function getEffectiveInitiative(character: CharacterTemplate): number {
   )
 }
 
-export function getEffectivePassivePerception(
+export function getEffectiveInitiative(character: CharacterTemplate): number {
+  return (
+    getCalculatedInitiative(character) +
+    getStatAdjustment(character, "initiativeAdjustment")
+  )
+}
+
+export function getCalculatedPassivePerception(
   character: CharacterTemplate,
 ): number {
   let wisdomModifier = getEffectiveAttributeModifier(character, "wis")
   const perceptionProficiency = character.get("sheet").skills.perception
 
-  if (perceptionProficiency === "proficient")
+  if (perceptionProficiency === "proficient") {
     wisdomModifier += getProficiencyBonus(character)
+  }
 
-  if (perceptionProficiency === "expertise")
+  if (perceptionProficiency === "expertise") {
     wisdomModifier += getProficiencyBonus(character) * 2
+  }
 
   return applyBonuses(
     10 + wisdomModifier,
@@ -202,7 +240,16 @@ export function getEffectivePassivePerception(
   )
 }
 
-export function getEffectiveMobility(character: CharacterTemplate): number {
+export function getEffectivePassivePerception(
+  character: CharacterTemplate,
+): number {
+  return (
+    getCalculatedPassivePerception(character) +
+    getStatAdjustment(character, "passivePerceptionAdjustment")
+  )
+}
+
+export function getCalculatedMobility(character: CharacterTemplate): number {
   const raceSpeedBonus =
     character.get("sheet").race.speedBonus ?? 0
 
@@ -218,6 +265,31 @@ export function getEffectiveMobility(character: CharacterTemplate): number {
     0,
     unencumberedSpeed - getEncumbranceSpeedPenalty(character),
   )
+}
+
+export function getEffectiveMobility(character: CharacterTemplate): number {
+  return Math.max(
+    0,
+    getCalculatedMobility(character) +
+      getStatAdjustment(character, "mobilityAdjustment"),
+  )
+}
+
+export function getStatAdjustment(
+  character: CharacterTemplate,
+  key: StatAdjustmentKey,
+): number {
+  const value = character.get("sheet").stats[key]
+  return typeof value === "number" && Number.isFinite(value) ? value : 0
+}
+
+export function getStatAdjustmentKey(
+  stat: CalculatedStatKey,
+): StatAdjustmentKey {
+  if (stat === "armorClass") return "armorClassAdjustment"
+  if (stat === "initiative") return "initiativeAdjustment"
+  if (stat === "mobility") return "mobilityAdjustment"
+  return "passivePerceptionAdjustment"
 }
 
 export function getEffectiveWeaponAttackBonus(
@@ -279,6 +351,19 @@ function statToBonusKey(
   if (stat === "initiative") return "initiative"
   if (stat === "passive_perception") return "passivePerception"
   if (stat === "mobility") return "speed"
+
+  return undefined
+}
+
+function statToAdjustmentKey(
+  stat: keyof Sheet["stats"],
+): StatAdjustmentKey | undefined {
+  if (stat === "armorClass") return "armorClassAdjustment"
+  if (stat === "initiative") return "initiativeAdjustment"
+  if (stat === "passive_perception") {
+    return "passivePerceptionAdjustment"
+  }
+  if (stat === "mobility") return "mobilityAdjustment"
 
   return undefined
 }
