@@ -16,6 +16,7 @@ type Props = {
   name: string
   statKey: CalculatedStatKey
   getValue: (character: CharacterTemplate) => number
+  getCalculatedValue?: (character: CharacterTemplate) => number
   character: CharacterTemplate
   updateCharacter: (
     characterId: string,
@@ -29,6 +30,7 @@ export function SelectStatModule({
   name,
   statKey,
   getValue,
+  getCalculatedValue,
   character,
   updateCharacter,
   fallback = 0,
@@ -37,10 +39,9 @@ export function SelectStatModule({
   const effectiveValue = finiteOr(getValue(character), fallback)
   const adjustmentKey = getStatAdjustmentKey(statKey)
   const adjustment = getStatAdjustment(character, adjustmentKey)
-  const calculatedValue = finiteOr(
-    getCalculatedValue(character, statKey),
-    fallback,
-  )
+  const calculate = getCalculatedValue ?? ((current: CharacterTemplate) =>
+    getDefaultCalculatedValue(current, statKey))
+  const calculatedValue = finiteOr(calculate(character), fallback)
   const [draft, setDraft] = useState(String(effectiveValue))
   const [editing, setEditing] = useState(false)
 
@@ -58,10 +59,7 @@ export function SelectStatModule({
     }
 
     updateCharacter(character.get("id"), (current) => {
-      const currentCalculated = finiteOr(
-        getCalculatedValue(current, statKey),
-        fallback,
-      )
+      const currentCalculated = finiteOr(calculate(current), fallback)
       const nextAdjustment = cleanNumber(desiredValue - currentCalculated)
 
       return current.withStat(adjustmentKey, nextAdjustment)
@@ -127,7 +125,7 @@ export function SelectStatModule({
   )
 }
 
-function getCalculatedValue(
+function getDefaultCalculatedValue(
   character: CharacterTemplate,
   stat: CalculatedStatKey,
 ): number {
