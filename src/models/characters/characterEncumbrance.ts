@@ -30,6 +30,7 @@ export function getCarriedWeightKg(character: CharacterTemplate): number {
 
   const equippedWeight =
     itemWeight(equipment.armor) +
+    itemWeight(equipment.shield) +
     itemWeight(equipment.boots) +
     itemWeight(equipment.gloves) +
     itemWeight(equipment.helmet) +
