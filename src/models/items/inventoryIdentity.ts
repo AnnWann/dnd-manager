@@ -1,4 +1,5 @@
 import { normalizeItemText } from "../../lib/textNormalization"
+import { withShieldDefaults } from "./equipment/Shield"
 import type { Itemmable } from "./item"
 
 export function normalizeInventoryItemIds(
@@ -15,7 +16,7 @@ export function normalizeInventoryItemIds(
 
     seen.add(id)
 
-    return normalizeItemText({
+    return normalizeInventoryItem({
       ...item,
       id,
     })
@@ -39,7 +40,7 @@ export function prepareInventoryItemForInsert(
     ? requestedId
     : crypto.randomUUID()
 
-  return normalizeItemText({
+  return normalizeInventoryItem({
     ...item,
     id,
   })
@@ -56,7 +57,7 @@ export function updateSingleInventoryItem(
     if (updated || item.id !== itemId) return item
 
     updated = true
-    const next = normalizeItemText(updater({ ...item }))
+    const next = normalizeInventoryItem(updater({ ...item }))
 
     return {
       ...next,
@@ -76,4 +77,12 @@ export function removeSingleInventoryItem(
     ...items.slice(0, index),
     ...items.slice(index + 1),
   ]
+}
+
+function normalizeInventoryItem(item: Itemmable): Itemmable {
+  const normalized = normalizeItemText(item)
+
+  return normalized.kind === "shield"
+    ? withShieldDefaults(normalized)
+    : normalized
 }
