@@ -28,6 +28,7 @@ export function newCharacterTemplate(
         passive_perception: 10,
         exhaustion: 0,
         inspiration: false,
+        experience: 0,
       },
       attributes: {
         str: 10,
