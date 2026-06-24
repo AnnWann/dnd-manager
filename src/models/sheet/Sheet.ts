@@ -16,6 +16,7 @@ export type Sheet = {
     passive_perception: number
     exhaustion?: number
     inspiration?: boolean
+    experience?: number
     armorClassAdjustment?: number
     mobilityAdjustment?: number
     initiativeAdjustment?: number
