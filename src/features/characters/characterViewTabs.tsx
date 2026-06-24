@@ -32,12 +32,12 @@ const TABS: Array<{
   icon: LucideIcon
 }> = [
   { key: "sheet", label: "Ficha", icon: ScrollText },
-  { key: "race", label: "Raça", icon: Leaf },
-  { key: "profile", label: "Perfil", icon: UserRound },
   { key: "abilities", label: "Habilidades", icon: Sparkles },
+  { key: "spellsList", label: "Magias", icon: WandSparkles },
   { key: "equipment", label: "Equipamento", icon: Shield },
   { key: "inventory", label: "Inventário", icon: Backpack },
-  { key: "spellsList", label: "Magias", icon: WandSparkles },
+  { key: "race", label: "Raça", icon: Leaf },
+  { key: "profile", label: "Perfil", icon: UserRound },
   { key: "proficiencies", label: "Proficiências", icon: BadgeCheck },
 ]
 
