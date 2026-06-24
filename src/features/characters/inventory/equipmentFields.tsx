@@ -11,6 +11,7 @@ import type {
   Equipment,
   EquipmentSpellGrant,
 } from "../../../models/items/equipment/EquipmentSlot"
+import { withShieldDefaults as withShieldModelDefaults } from "../../../models/items/equipment/Shield"
 import type { Weapon } from "../../../models/items/equipment/Weapon"
 import type { EquipSlot, Itemmable } from "../../../models/items/item"
 import type { Attribute } from "../../../models/sheet/Attribute"
@@ -33,9 +34,10 @@ export function EquipmentFields({
       <div className="grid gap-2 md:col-span-3">
         <label className="text-xs text-text">Slot</label>
 
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           {[
             ["armor", "Armadura"],
+            ["shield", "Escudo"],
             ["helmet", "Capacete"],
             ["gloves", "Luvas"],
             ["boots", "Botas"],
@@ -337,6 +339,8 @@ export function withEquipmentDefaults(
   item: Itemmable,
   equipSlot: EquipSlot,
 ): Itemmable {
+  if (equipSlot === "shield") return withShieldModelDefaults(item)
+
   const base = {
     ...item,
     kind: "equipment" as const,
