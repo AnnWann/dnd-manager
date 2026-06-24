@@ -2,15 +2,16 @@
 
 import { Card, CardHeader } from "../../../components/ui/Card"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { getSorcererLevel } from "../../../models/characters/characterSorceryPoints"
 import { KnownSpellsList } from "./knownSpellsList"
-import { SpellSlotsEditor } from "./slots"
 import { MetamagicModule } from "./metamagicModule"
+import { SpellSlotsEditor } from "./slots"
 
 type Props = {
   character: CharacterTemplate
   updateCharacter: (
     characterId: string,
-    updater: (c: CharacterTemplate) => CharacterTemplate
+    updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
 }
 
@@ -18,9 +19,8 @@ export function CharacterMagicTab({
   character,
   updateCharacter,
 }: Props) {
-  const hasSorcerer = character
-  .get("sheet")
-  .classes?.some((classData) => classData.className === "sorcerer" && classData.level > 1)
+  const sorcererLevel = getSorcererLevel(character)
+  const hasSorcererResources = sorcererLevel >= 2
 
   return (
     <div className="flex flex-col gap-4">
@@ -35,7 +35,7 @@ export function CharacterMagicTab({
           </div>
         </CardHeader>
 
-        {hasSorcerer ? (
+        {hasSorcererResources ? (
           <MetamagicModule
             character={character}
             updateCharacter={updateCharacter}
@@ -52,8 +52,6 @@ export function CharacterMagicTab({
           updateCharacter={updateCharacter}
         />
       </Card>
-
-
     </div>
   )
 }
