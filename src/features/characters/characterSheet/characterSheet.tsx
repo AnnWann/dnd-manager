@@ -9,6 +9,7 @@ import { GroupActions } from "./character_info/components/actions/GroupActions"
 import { GroupHP } from "./character_info/components/hp/GroupHP"
 import { GroupStats } from "./character_info/components/stats/GroupStats"
 import { AttributeCalculators } from "./attributeCalculators"
+import { CharacterConditions } from "./characterConditions"
 import { SavingThrows } from "./savingThrows"
 
 type Props = {
@@ -45,7 +46,17 @@ export function CharacterSheetTab({
         createOwner={createOwner}
       />
 
+      <GroupHP
+        character={character}
+        updateCharacter={updateCharacter}
+      />
+
       <GroupStats
+        character={character}
+        updateCharacter={updateCharacter}
+      />
+
+      <CharacterConditions
         character={character}
         updateCharacter={updateCharacter}
       />
@@ -63,26 +74,15 @@ export function CharacterSheetTab({
           />
         </div>
 
-        <div className="grid gap-4">
-          <GroupHP
-            character={character}
-            updateCharacter={updateCharacter}
-          />
-
-          <AttributeCalculators character={character} />
-        </div>
-
-        <div className="grid gap-4">
-          <Skills
-            character={character}
-            updateCharacter={updateCharacter}
-          />
-        </div>
+        <Skills
+          character={character}
+          updateCharacter={updateCharacter}
+        />
 
         <GroupActions
-            character={character}
-            updateCharacter={updateCharacter}
-          />
+          character={character}
+          updateCharacter={updateCharacter}
+        />
       </div>
 
       {character.get("sheet").type === "pc" && (
@@ -91,6 +91,8 @@ export function CharacterSheetTab({
           updateCharacter={updateCharacter}
         />
       )}
+
+      <AttributeCalculators character={character} />
     </div>
   )
 }
