@@ -6,6 +6,7 @@ import { EquipmentItemCard } from "./equipmentItemCard"
 
 type SingleSlot =
   | "armor"
+  | "shield"
   | "helmet"
   | "gloves"
   | "boots"
@@ -17,7 +18,7 @@ type Props = {
   character: CharacterTemplate
   updateCharacter: (
     characterId: string,
-    updater: (c: CharacterTemplate) => CharacterTemplate
+    updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
 }
 
