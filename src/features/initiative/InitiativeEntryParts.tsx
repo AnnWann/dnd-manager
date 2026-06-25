@@ -1,6 +1,5 @@
 import {
   ChevronDown,
-  ChevronUp,
   CirclePlus,
   Swords,
   X,
@@ -200,16 +199,7 @@ export function TradeControls({
       <Button
         size="icon"
         variant="ghost"
-        title="Trocar com aliado anterior"
-        disabled={!canTrade(entry.id, -1)}
-        onClick={() => onTrade(entry.id, -1)}
-      >
-        <ChevronUp className="h-4 w-4" />
-      </Button>
-      <Button
-        size="icon"
-        variant="ghost"
-        title="Trocar com próximo aliado"
+        title="Trocar com o próximo aliado"
         disabled={!canTrade(entry.id, 1)}
         onClick={() => onTrade(entry.id, 1)}
       >
