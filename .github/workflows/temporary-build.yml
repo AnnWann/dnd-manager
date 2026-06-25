@@ -14,5 +14,13 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm install
-      - run: npm run build
+      - name: Install dependencies
+        run: npm install --silent > /dev/null 2>&1
+      - name: Build
+        shell: bash
+        run: |
+          set +e
+          npm run build > build.log 2>&1
+          status=$?
+          tail -120 build.log
+          exit $status
