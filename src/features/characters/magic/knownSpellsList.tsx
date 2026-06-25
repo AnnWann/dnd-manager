@@ -22,7 +22,8 @@ type Props = {
 }
 
 type PreparedFilter = "all" | "prepared" | "not-prepared"
-type ClassFilter = "all" | ClassName
+type SourceTypeFilter = "all" | SpellSource["type"]
+type SpecificSourceFilter = "all" | string
 
 type SpellLimitInfo = {
   className: ClassName
@@ -40,11 +41,29 @@ type DisplaySpellEntry = {
   accessLabel?: string
 }
 
+type SourceOption = {
+  key: string
+  label: string
+  type: SpellSource["type"]
+  count: number
+}
+
+const SOURCE_TYPE_ORDER: SpellSource["type"][] = [
+  "class",
+  "ability",
+  "feat",
+  "race",
+  "equipment",
+]
+
 export function KnownSpellsList({ character, updateCharacter }: Props) {
   const { getSpellByIndex } = useMagicContext()
   const [preparedFilter, setPreparedFilter] =
     useState<PreparedFilter>("all")
-  const [classFilter, setClassFilter] = useState<ClassFilter>("all")
+  const [sourceTypeFilter, setSourceTypeFilter] =
+    useState<SourceTypeFilter>("all")
+  const [specificSourceFilter, setSpecificSourceFilter] =
+    useState<SpecificSourceFilter>("all")
   const classes = character.get("sheet").classes ?? []
 
   const regularSpells: DisplaySpellEntry[] = []
@@ -100,6 +119,11 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     ...grantedSpells,
   ]
   const spellLimits = getSpellClassLimits(character, regularSpells)
+  const sourceTypeOptions = getAvailableSourceTypes(spells)
+  const specificSourceOptions = getSpecificSourceOptions(
+    spells,
+    sourceTypeFilter,
+  )
 
   const filteredSpells = spells.filter(({ prepared, source }) => {
     const matchesPrepared =
@@ -107,11 +131,14 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       (preparedFilter === "prepared" && prepared) ||
       (preparedFilter === "not-prepared" && !prepared)
 
-    const matchesClass =
-      classFilter === "all" ||
-      (source.type === "class" && source.name === classFilter)
+    const matchesSourceType =
+      sourceTypeFilter === "all" || source.type === sourceTypeFilter
 
-    return matchesPrepared && matchesClass
+    const matchesSpecificSource =
+      specificSourceFilter === "all" ||
+      getSourceKey(source) === specificSourceFilter
+
+    return matchesPrepared && matchesSourceType && matchesSpecificSource
   })
 
   function canPrepareSpell(entry: DisplaySpellEntry): boolean {
@@ -154,7 +181,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
           Magias disponíveis
         </div>
         <div className="mt-1 text-xs text-text">
-          Magias conhecidas e magias concedidas por habilidades, raça e equipamentos.
+          Magias aprendidas por classes e concedidas por habilidades, talentos, raça e equipamentos equipados.
         </div>
 
         {spellLimits.length ? (
@@ -175,34 +202,79 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
           </div>
         ) : null}
 
-        <div className="mt-3 grid gap-2 md:grid-cols-2">
-          <select
-            className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
-            value={preparedFilter}
-            onChange={(event) =>
-              setPreparedFilter(event.target.value as PreparedFilter)
-            }
-          >
-            <option value="all">Todas as magias</option>
-            <option value="prepared">Apenas disponíveis</option>
-            <option value="not-prepared">Apenas não preparadas</option>
-          </select>
+        <div className="mt-3 grid gap-2 md:grid-cols-3">
+          <label className="grid gap-1 text-[11px] text-textMuted">
+            Disponibilidade
+            <select
+              className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
+              value={preparedFilter}
+              onChange={(event) =>
+                setPreparedFilter(event.target.value as PreparedFilter)
+              }
+            >
+              <option value="all">Todas as magias</option>
+              <option value="prepared">Apenas disponíveis</option>
+              <option value="not-prepared">Apenas não preparadas</option>
+            </select>
+          </label>
 
-          <select
-            className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
-            value={classFilter}
-            onChange={(event) =>
-              setClassFilter(event.target.value as ClassFilter)
-            }
-          >
-            <option value="all">Todas as origens</option>
-            {classes.map((classData) => (
-              <option key={classData.className} value={classData.className}>
-                Classe: {CLASS_NAMES[classData.className]}
-              </option>
-            ))}
-          </select>
+          <label className="grid gap-1 text-[11px] text-textMuted">
+            Forma de aquisição
+            <select
+              className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
+              value={sourceTypeFilter}
+              onChange={(event) => {
+                setSourceTypeFilter(event.target.value as SourceTypeFilter)
+                setSpecificSourceFilter("all")
+              }}
+            >
+              <option value="all">Todas as formas</option>
+              {sourceTypeOptions.map((type) => (
+                <option key={type} value={type}>
+                  {getSourceTypeLabel(type)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="grid gap-1 text-[11px] text-textMuted">
+            Origem específica
+            <select
+              className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent disabled:opacity-60"
+              value={specificSourceFilter}
+              disabled={specificSourceOptions.length === 0}
+              onChange={(event) =>
+                setSpecificSourceFilter(event.target.value)
+              }
+            >
+              <option value="all">Todas as origens específicas</option>
+              {specificSourceOptions.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label} ({option.count})
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
+
+        {spells.length ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {sourceTypeOptions.map((type) => {
+              const count = spells.filter(
+                (entry) => entry.source.type === type,
+              ).length
+
+              return (
+                <span
+                  key={type}
+                  className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-[10px] text-textMuted"
+                >
+                  {getSourceTypeLabel(type)}: {count}
+                </span>
+              )
+            })}
+          </div>
+        ) : null}
       </CardHeader>
 
       <CardContent>
@@ -249,6 +321,75 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       </CardContent>
     </Card>
   )
+}
+
+function getAvailableSourceTypes(
+  spells: DisplaySpellEntry[],
+): SpellSource["type"][] {
+  const present = new Set(spells.map((entry) => entry.source.type))
+  return SOURCE_TYPE_ORDER.filter((type) => present.has(type))
+}
+
+function getSpecificSourceOptions(
+  spells: DisplaySpellEntry[],
+  typeFilter: SourceTypeFilter,
+): SourceOption[] {
+  const options = new Map<string, SourceOption>()
+
+  for (const entry of spells) {
+    if (typeFilter !== "all" && entry.source.type !== typeFilter) continue
+
+    const key = getSourceKey(entry.source)
+    const existing = options.get(key)
+
+    if (existing) {
+      existing.count += 1
+      continue
+    }
+
+    options.set(key, {
+      key,
+      label: getSpecificSourceLabel(entry.source),
+      type: entry.source.type,
+      count: 1,
+    })
+  }
+
+  return Array.from(options.values()).toSorted((left, right) => {
+    const typeDifference =
+      SOURCE_TYPE_ORDER.indexOf(left.type) -
+      SOURCE_TYPE_ORDER.indexOf(right.type)
+    if (typeDifference !== 0) return typeDifference
+    return left.label.localeCompare(right.label, "pt-BR")
+  })
+}
+
+function getSourceKey(source: SpellSource): string {
+  return `${source.type}:${source.sourceId || source.name}`
+}
+
+function getSourceTypeLabel(type: SpellSource["type"]): string {
+  if (type === "class") return "Classes"
+  if (type === "ability") return "Habilidades"
+  if (type === "feat") return "Talentos"
+  if (type === "race") return "Raça"
+  return "Equipamentos"
+}
+
+function getSpecificSourceLabel(source: SpellSource): string {
+  if (source.type === "class") {
+    return `Classe: ${CLASS_NAMES[source.name as ClassName] ?? source.name}`
+  }
+  if (source.type === "ability") {
+    return `Habilidade: ${source.name || "Sem nome"}`
+  }
+  if (source.type === "feat") {
+    return `Talento: ${source.name || "Sem nome"}`
+  }
+  if (source.type === "race") {
+    return `Raça: ${source.name || "Sem nome"}`
+  }
+  return `Equipamento: ${source.name || "Sem nome"}`
 }
 
 function isAlwaysAvailableSpell(
