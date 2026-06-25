@@ -341,13 +341,23 @@ export function tradeConsecutiveAllies(
 
   if (entry.side !== "ally" || target.side !== "ally") return session
 
+  const roundAnchorIndex = session.roundAnchorEntryId
+    ? session.entries.findIndex(
+        (candidate) => candidate.id === session.roundAnchorEntryId,
+      )
+    : -1
   const entries = [...session.entries]
   entries[index] = target
   entries[targetIndex] = entry
+  const orderedEntries = entries.map((item, order) => ({ ...item, order }))
 
   return touchSession({
     ...session,
-    entries: entries.map((item, order) => ({ ...item, order })),
+    entries: orderedEntries,
+    roundAnchorEntryId:
+      roundAnchorIndex >= 0
+        ? orderedEntries[roundAnchorIndex]?.id
+        : session.roundAnchorEntryId,
   })
 }
 

@@ -1,7 +1,9 @@
 import {
+  Archive,
   BookOpen,
   Copy,
   FileImage,
+  FileJson,
   Pencil,
   Plus,
   Search,
@@ -15,11 +17,16 @@ import { Input } from "../components/ui/Input"
 import { Modal } from "../components/ui/Modal"
 import { useCreatureCompendium } from "../contexts/creatureCompendiumContext"
 import { useSyncContext } from "../contexts/syncContext"
+import { CreatureCompendiumTransferBar } from "../features/creatures/CreatureCompendiumTransferBar"
 import { CreatureEditorDialog } from "../features/creatures/CreatureEditorDialog"
 import {
   CreatureQuickSheet,
   quickSheetFromCompendiumCreature,
 } from "../features/creatures/CreatureQuickSheet"
+import {
+  downloadCreatureJson,
+  downloadCreatureZip,
+} from "../features/creatures/creatureCompendiumIO"
 import {
   createCompendiumCreature,
   type CompendiumCreature,
@@ -32,6 +39,7 @@ export function CreaturesCompendiumView() {
     creatures,
     hydrated,
     upsertCreature,
+    upsertCreatures,
     deleteCreature,
     duplicateCreature,
   } = useCreatureCompendium()
@@ -84,6 +92,19 @@ export function CreaturesCompendiumView() {
     )
   }
 
+  async function exportCreatureZip(creature: CompendiumCreature) {
+    try {
+      const warnings = await downloadCreatureZip(creature)
+      if (warnings.length > 0) window.alert(warnings.join("\n"))
+    } catch (error) {
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível exportar a criatura.",
+      )
+    }
+  }
+
   return (
     <div className="grid gap-4">
       <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
@@ -116,6 +137,11 @@ export function CreaturesCompendiumView() {
           </Button>
         </div>
       </section>
+
+      <CreatureCompendiumTransferBar
+        creatures={creatures}
+        onImport={upsertCreatures}
+      />
 
       <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
@@ -156,6 +182,8 @@ export function CreaturesCompendiumView() {
                 const duplicate = duplicateCreature(creature.id)
                 if (duplicate) setEditingCreature(duplicate)
               }}
+              onExportJson={() => downloadCreatureJson(creature)}
+              onExportZip={() => void exportCreatureZip(creature)}
               onDelete={() => {
                 if (
                   window.confirm(
@@ -178,7 +206,7 @@ export function CreaturesCompendiumView() {
           </h2>
           <p className="mt-1 text-sm text-text">
             {creatures.length === 0
-              ? "Crie fichas rápidas para reutilizar em diferentes encontros."
+              ? "Crie fichas rápidas ou importe arquivos JSON e ZIP."
               : "Tente alterar a busca ou o filtro de lado."}
           </p>
         </section>
@@ -216,12 +244,16 @@ function CreatureCard({
   onView,
   onEdit,
   onDuplicate,
+  onExportJson,
+  onExportZip,
   onDelete,
 }: {
   creature: CompendiumCreature
   onView: () => void
   onEdit: () => void
   onDuplicate: () => void
+  onExportJson: () => void
+  onExportZip: () => void
   onDelete: () => void
 }) {
   return (
@@ -280,6 +312,22 @@ function CreatureCard({
       </button>
 
       <div className="flex items-center justify-end gap-1 border-t border-border px-3 py-2">
+        <Button
+          size="icon"
+          variant="ghost"
+          title="Exportar JSON"
+          onClick={onExportJson}
+        >
+          <FileJson className="h-4 w-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          title="Exportar ZIP"
+          onClick={onExportZip}
+        >
+          <Archive className="h-4 w-4" />
+        </Button>
         <Button size="icon" variant="ghost" title="Duplicar" onClick={onDuplicate}>
           <Copy className="h-4 w-4" />
         </Button>

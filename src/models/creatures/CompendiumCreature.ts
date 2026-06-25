@@ -100,6 +100,57 @@ export function createCompendiumCreature(
   }
 }
 
+export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
+  const value = asRecord(raw)
+  if (!value) throw new Error("A criatura precisa ser um objeto JSON.")
+
+  const name = stringValue(value.name).trim()
+  if (!name) throw new Error("A criatura precisa ter um nome.")
+
+  const now = Date.now()
+  const abilityScores = asRecord(value.abilityScores)
+
+  return {
+    id: stringValue(value.id).trim() || crypto.randomUUID(),
+    name,
+    category: stringValue(value.category, "Monstro"),
+    size: stringValue(value.size, "Médio"),
+    challengeRating: stringValue(value.challengeRating),
+    unique: booleanValue(value.unique),
+    defaultSide: creatureSideValue(value.defaultSide),
+    initiativeBonus: finiteNumber(value.initiativeBonus),
+    armorClass: optionalFiniteNumber(value.armorClass),
+    maxHp: optionalFiniteNumber(value.maxHp),
+    speed: stringValue(value.speed, "9 m"),
+    passivePerception: optionalFiniteNumber(value.passivePerception),
+    abilityScores: {
+      str: finiteNumber(abilityScores?.str, DEFAULT_ABILITY_SCORES.str),
+      dex: finiteNumber(abilityScores?.dex, DEFAULT_ABILITY_SCORES.dex),
+      con: finiteNumber(abilityScores?.con, DEFAULT_ABILITY_SCORES.con),
+      int: finiteNumber(abilityScores?.int, DEFAULT_ABILITY_SCORES.int),
+      wis: finiteNumber(abilityScores?.wis, DEFAULT_ABILITY_SCORES.wis),
+      cha: finiteNumber(abilityScores?.cha, DEFAULT_ABILITY_SCORES.cha),
+    },
+    savingThrows: stringValue(value.savingThrows),
+    skills: stringValue(value.skills),
+    vulnerabilities: stringValue(value.vulnerabilities),
+    resistances: stringValue(value.resistances),
+    immunities: stringValue(value.immunities),
+    conditionImmunities: stringValue(value.conditionImmunities),
+    senses: stringValue(value.senses),
+    languages: stringValue(value.languages),
+    traits: stringValue(value.traits),
+    actions: stringValue(value.actions),
+    bonusActions: stringValue(value.bonusActions),
+    reactions: stringValue(value.reactions),
+    legendaryActions: stringValue(value.legendaryActions),
+    combatNotes: stringValue(value.combatNotes),
+    sheetImageUrl: optionalStringValue(value.sheetImageUrl),
+    createdAt: finiteNumber(value.createdAt, now),
+    updatedAt: finiteNumber(value.updatedAt, now),
+  }
+}
+
 export function createCreatureCompendiumState(): CreatureCompendiumState {
   return {
     version: 1,
@@ -118,10 +169,13 @@ export function normalizeCreatureCompendiumState(
   return {
     version: 1,
     creatures: raw.creatures
-      .filter((entry): entry is CompendiumCreature =>
-        Boolean(entry && typeof entry === "object" && entry.id),
-      )
-      .map((entry) => createCompendiumCreature(entry))
+      .flatMap((entry) => {
+        try {
+          return [normalizeCompendiumCreature(entry)]
+        } catch {
+          return []
+        }
+      })
       .sort((left, right) => left.name.localeCompare(right.name)),
     updatedAt: finiteNumber(raw.updatedAt, Date.now()),
   }
@@ -152,14 +206,50 @@ function normalizeAbilityScores(
   }
 }
 
-function finiteNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value)
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined
+}
+
+function stringValue(value: unknown, fallback = ""): string {
+  if (typeof value === "string") return value
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value)
+  }
+  return fallback
+}
+
+function optionalStringValue(value: unknown): string | undefined {
+  const result = stringValue(value).trim()
+  return result || undefined
+}
+
+function booleanValue(value: unknown): boolean {
+  if (typeof value === "boolean") return value
+  if (typeof value === "string") return value.toLowerCase() === "true"
+  return Boolean(value)
+}
+
+function creatureSideValue(value: unknown): CreatureSide {
+  return value === "ally" || value === "neutral" || value === "enemy"
     ? value
-    : fallback
+    : "enemy"
+}
+
+function finiteNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+
+  return fallback
 }
 
 function optionalFiniteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined
+  if (value === undefined || value === null || value === "") return undefined
+  const parsed = finiteNumber(value, Number.NaN)
+  return Number.isFinite(parsed) ? parsed : undefined
 }
