@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom"
 
 import { CharacterView } from "./views/CharacterView"
+import { CreaturesCompendiumView } from "./views/CreaturesCompendiumView"
 import { InitiativeView } from "./views/InitiativeView"
 import { MagicView } from "./views/MagicView"
 import { PartyInventoryView } from "./views/PartyInventoryView"
@@ -13,6 +14,7 @@ export function AppRouter() {
       <Route path="/sync" element={<SyncView />} />
       <Route path="/character" element={<CharacterView />} />
       <Route path="/party-inventory" element={<PartyInventoryView />} />
+      <Route path="/creatures-compendium" element={<CreaturesCompendiumView />} />
       <Route path="/initiative" element={<InitiativeView />} />
       <Route path="/magic" element={<MagicView />} />
     </Routes>
