@@ -1,4 +1,4 @@
-import type { Usage } from "../abilities/Ability"
+import type { Ability, Usage } from "../abilities/Ability"
 import type { Equipment } from "../items/equipment/EquipmentSlot"
 import type { SpellSource } from "../magic/spells/SpellSource"
 import type { SpellGrantCastingMode } from "../magic/spells/SpellGrant"
@@ -18,52 +18,33 @@ export function getCharacterGrantedSpells(
   const results: CharacterGrantedSpell[] = []
 
   for (const ability of character.get("abilities") ?? []) {
-    for (const grant of ability.grantedSpells ?? []) {
-      if (!grant.index) continue
-
-      results.push({
-        key: `ability:${ability.id}:${grant.index}`,
-        index: grant.index,
-        castingMode: grant.castingMode ?? "source",
-        source: {
-          type: "ability",
-          name: ability.name || "Habilidade",
-          sourceId: ability.id,
-          attribute: grant.attribute ?? "cha",
-        },
-        usage:
-          (grant.castingMode ?? "source") === "source"
-            ? ability.usage
-            : undefined,
-      })
-    }
+    addAbilitySpellGrants(results, ability, {
+      type: ability.category === "feat" ? "feat" : "ability",
+      name: ability.name || (ability.category === "feat" ? "Talento" : "Habilidade"),
+      sourceId: ability.id,
+    })
   }
 
   const race = character.get("sheet").race
   for (const ability of race.naturalAbilities ?? []) {
-    for (const grant of ability.grantedSpells ?? []) {
-      if (!grant.index) continue
-
-      results.push({
-        key: `race:${ability.id}:${grant.index}`,
-        index: grant.index,
-        castingMode: grant.castingMode ?? "source",
-        source: {
-          type: "race",
-          name: ability.name || race.subrace || race.race,
-          sourceId: ability.id,
-          attribute: grant.attribute ?? "cha",
-        },
-        usage:
-          (grant.castingMode ?? "source") === "source"
-            ? ability.usage
-            : undefined,
-      })
-    }
+    addAbilitySpellGrants(results, ability, {
+      type: "race",
+      name: ability.name || race.subrace || race.race,
+      sourceId: ability.id,
+    })
   }
 
-  for (const item of character.getEquippedItems()) {
+  const shield = character.get("equipment").shield
+  const equippedItems = [
+    ...character.getEquippedItems(),
+    ...(shield ? [shield] : []),
+  ]
+  const seenEquipment = new Set<string>()
+
+  for (const item of equippedItems) {
     const equipment = item as Equipment
+    if (!equipment.id || seenEquipment.has(equipment.id)) continue
+    seenEquipment.add(equipment.id)
 
     for (const grant of equipment.spells ?? []) {
       if (!grant.index) continue
@@ -109,4 +90,27 @@ export function getCharacterGrantedSpells(
   }
 
   return results
+}
+
+function addAbilitySpellGrants(
+  results: CharacterGrantedSpell[],
+  ability: Ability,
+  source: Pick<SpellSource, "type" | "name" | "sourceId">,
+): void {
+  for (const grant of ability.grantedSpells ?? []) {
+    if (!grant.index) continue
+
+    const castingMode = grant.castingMode ?? "source"
+
+    results.push({
+      key: `${source.type}:${source.sourceId}:${grant.index}`,
+      index: grant.index,
+      castingMode,
+      source: {
+        ...source,
+        attribute: grant.attribute ?? "cha",
+      },
+      usage: castingMode === "source" ? ability.usage : undefined,
+    })
+  }
 }
