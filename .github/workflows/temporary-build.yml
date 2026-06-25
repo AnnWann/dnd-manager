@@ -1,9 +1,9 @@
 name: Temporary build diagnostics
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/portable-creature-compendium
+      - master
 
 jobs:
   build:
