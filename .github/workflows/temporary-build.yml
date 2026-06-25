@@ -17,10 +17,15 @@ jobs:
       - name: Install dependencies
         run: npm install --silent > /dev/null 2>&1
       - name: Build
-        shell: bash
-        run: |
-          set +e
-          npm run build > build.log 2>&1
-          status=$?
-          tail -120 build.log
-          exit $status
+        id: build
+        continue-on-error: true
+        run: npm run build > build.log 2>&1
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+      - name: Fail when build failed
+        if: steps.build.outcome == 'failure'
+        run: exit 1
