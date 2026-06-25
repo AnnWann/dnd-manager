@@ -41,6 +41,13 @@ export type CompendiumCreature = {
   legendaryActions: string
   combatNotes: string
 
+  /**
+   * Portrait or representative image of the creature.
+   *
+   * The property keeps its original name so existing local compendiums remain
+   * compatible. Imported/exported JSON also accepts the clearer `imageUrl`
+   * alias.
+   */
   sheetImageUrl?: string
   createdAt: number
   updatedAt: number
@@ -145,7 +152,10 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
     reactions: stringValue(value.reactions),
     legendaryActions: stringValue(value.legendaryActions),
     combatNotes: stringValue(value.combatNotes),
-    sheetImageUrl: optionalStringValue(value.sheetImageUrl),
+    sheetImageUrl:
+      optionalStringValue(value.imageUrl) ??
+      optionalStringValue(value.creatureImageUrl) ??
+      optionalStringValue(value.sheetImageUrl),
     createdAt: finiteNumber(value.createdAt, now),
     updatedAt: finiteNumber(value.updatedAt, now),
   }
