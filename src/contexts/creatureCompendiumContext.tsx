@@ -21,6 +21,7 @@ type CreatureCompendiumContextValue = {
   creatures: CompendiumCreature[]
   hydrated: boolean
   upsertCreature: (creature: CompendiumCreature) => void
+  upsertCreatures: (creatures: CompendiumCreature[]) => void
   deleteCreature: (creatureId: string) => void
   duplicateCreature: (creatureId: string) => CompendiumCreature | undefined
   clearCompendium: () => Promise<void>
@@ -69,18 +70,27 @@ export function CreatureCompendiumProvider({
   }, [hydrated, repository, state])
 
   function upsertCreature(creature: CompendiumCreature) {
+    upsertCreatures([creature])
+  }
+
+  function upsertCreatures(importedCreatures: CompendiumCreature[]) {
+    if (importedCreatures.length === 0) return
+
     setState((current) => {
-      const exists = current.creatures.some((entry) => entry.id === creature.id)
-      const nextCreature = { ...creature, updatedAt: Date.now() }
-      const creatures = exists
-        ? current.creatures.map((entry) =>
-            entry.id === creature.id ? nextCreature : entry,
-          )
-        : [...current.creatures, nextCreature]
+      const creaturesById = new Map(
+        current.creatures.map((creature) => [creature.id, creature]),
+      )
+
+      for (const creature of importedCreatures) {
+        creaturesById.set(creature.id, {
+          ...creature,
+          updatedAt: Date.now(),
+        })
+      }
 
       return {
         ...current,
-        creatures: creatures.sort((left, right) =>
+        creatures: [...creaturesById.values()].sort((left, right) =>
           left.name.localeCompare(right.name),
         ),
         updatedAt: Date.now(),
@@ -117,6 +127,7 @@ export function CreatureCompendiumProvider({
         creatures: state.creatures,
         hydrated,
         upsertCreature,
+        upsertCreatures,
         deleteCreature,
         duplicateCreature,
         clearCompendium,
