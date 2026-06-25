@@ -5,6 +5,8 @@ import {
   useRef,
   useState,
 } from 'react'
+import type { Mission } from '../models/missions/Mission'
+import { normalizeMissions } from '../models/missions/Mission'
 import { normalizeAppStateInventory } from './normalizeAppStateInventory'
 import {
   readSyncKey,
@@ -19,6 +21,10 @@ import {
 import { readLocalStorageJson, writeLocalStorageJson } from './storage'
 import { mergeAppStates } from './stateMerge'
 
+export type ConcurrentAppState = AppStateV1 & {
+  missions?: Mission[]
+}
+
 const LOCAL_STATE_KEY = 'dndmm.appState.v1'
 const CLIENT_ID_STORAGE = 'dndmm.clientId.v1'
 const SAVE_DELAY_MS = 800
@@ -26,7 +32,7 @@ const POLL_INTERVAL_MS = 5000
 const MAX_CONFLICT_RETRIES = 5
 
 type RemoteSnapshot = {
-  state: AppStateV1 | null
+  state: ConcurrentAppState | null
   revision: number
   updatedAt: string | null
   updatedBy: string | null
@@ -44,7 +50,7 @@ class SyncConflictError extends Error {
   }
 }
 
-function defaultState(): AppStateV1 {
+function defaultState(): ConcurrentAppState {
   return {
     version: 1,
     characters: [],
@@ -52,6 +58,7 @@ function defaultState(): AppStateV1 {
     partyInventory: [],
     partyCarryCapacity: 0,
     spells: [],
+    missions: [],
   }
 }
 
@@ -88,7 +95,7 @@ async function apiGetState(syncKey: string): Promise<RemoteSnapshot> {
 
 async function apiPutState(
   syncKey: string,
-  state: AppStateV1,
+  state: ConcurrentAppState,
   expectedRevision: number,
   clientId: string,
 ): Promise<SaveResponse> {
@@ -107,7 +114,7 @@ async function apiPutState(
 
   const data = (await response.json().catch(() => ({}))) as {
     error?: string
-    state?: AppStateV1 | null
+    state?: ConcurrentAppState | null
     revision?: number
     updatedAt?: string | null
     updatedBy?: string | null
@@ -143,8 +150,8 @@ export function useConcurrentRemoteAppState() {
   )
   const [userKey, setUserKey] = useState<string>(() => readUserKey())
   const [clientId] = useState(() => readClientId())
-  const [state, setState] = useState<AppStateV1>(() => {
-    const local = readLocalStorageJson<AppStateV1>(LOCAL_STATE_KEY)
+  const [state, setState] = useState<ConcurrentAppState>(() => {
+    const local = readLocalStorageJson<ConcurrentAppState>(LOCAL_STATE_KEY)
     return normalizeState(local)
   })
   const [status, setStatus] = useState<SyncStatus>({ kind: 'idle' })
@@ -243,14 +250,14 @@ export function useConcurrentRemoteAppState() {
               base,
               localSnapshot,
               remote,
-            )
+            ) as ConcurrentAppState
             const latestLocal = normalizeState(stateRef.current)
 
             candidate = mergeAppStates(
               localSnapshot,
               latestLocal,
               mergedSnapshot,
-            )
+            ) as ConcurrentAppState
             base = remote
             expectedRevision = error.snapshot.revision
             baseStateRef.current = remote
@@ -353,8 +360,8 @@ export function useConcurrentRemoteAppState() {
         const hasLocalChanges =
           hydratedRef.current &&
           !sharedStatesEqual(local, previousBase)
-        const next = hasLocalChanges
-          ? mergeAppStates(previousBase, local, remote)
+        const next: ConcurrentAppState = hasLocalChanges
+          ? (mergeAppStates(previousBase, local, remote) as ConcurrentAppState)
           : {
               ...remote,
               activeCharacterId: local.activeCharacterId,
@@ -445,11 +452,11 @@ export function useConcurrentRemoteAppState() {
   }
 }
 
-function normalizeState(state: unknown): AppStateV1 {
+function normalizeState(state: unknown): ConcurrentAppState {
   try {
     if (!state || typeof state !== 'object') return defaultState()
 
-    const raw = state as Partial<AppStateV1>
+    const raw = state as Partial<ConcurrentAppState>
     const parsedCapacity = Number(raw.partyCarryCapacity)
 
     return normalizeAppStateInventory({
@@ -467,21 +474,24 @@ function normalizeState(state: unknown): AppStateV1 {
           ? parsedCapacity
           : 0,
       spells: Array.isArray(raw.spells) ? raw.spells : [],
-    })
+      missions: normalizeMissions(raw.missions),
+    } as ConcurrentAppState)
   } catch {
     return defaultState()
   }
 }
 
 function sharedStatesEqual(
-  left: AppStateV1,
-  right: AppStateV1,
+  left: ConcurrentAppState,
+  right: ConcurrentAppState,
 ): boolean {
   return JSON.stringify(withoutLocalPreferences(left)) ===
     JSON.stringify(withoutLocalPreferences(right))
 }
 
-function withoutLocalPreferences(state: AppStateV1): AppStateV1 {
+function withoutLocalPreferences(
+  state: ConcurrentAppState,
+): ConcurrentAppState {
   return {
     ...state,
     activeCharacterId: '',
