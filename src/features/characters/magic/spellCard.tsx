@@ -33,6 +33,7 @@ export function SpellCard({
 }: Props) {
   const [isViewOpen, setIsViewOpen] = useState(false)
   const canTogglePrepared = Boolean(onTogglePrepared) && !alwaysPrepared
+  const material = spell.material?.trim()
 
   return (
     <>
@@ -44,10 +45,17 @@ export function SpellCard({
             </h3>
 
             <div className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1.5 text-xs leading-5 text-text">
-              <SpellMeta>{spell.slotLevel === 0 ? "Truque" : `Nível ${spell.slotLevel}`}</SpellMeta>
-              <SpellMeta>{MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}</SpellMeta>
+              <SpellMeta>
+                {spell.slotLevel === 0 ? "Truque" : `Nível ${spell.slotLevel}`}
+              </SpellMeta>
+              <SpellMeta>
+                {MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}
+              </SpellMeta>
               <SpellMeta>{formatCastingTime(spell)}</SpellMeta>
               <SpellMeta>{formatRange(spell)}</SpellMeta>
+              <SpellMeta className="font-medium text-textH">
+                {formatComponentsCompact(spell)}
+              </SpellMeta>
               {formatAreaTiles(spell) ? (
                 <SpellMeta>{formatAreaTiles(spell)}</SpellMeta>
               ) : null}
@@ -68,7 +76,7 @@ export function SpellCard({
             </div>
           </div>
 
-          <div className="flex w-full flex-wrap gap-2 border-t border-border pt-3 sm:w-auto sm:shrink-0 sm:border-0 sm:pt-0 sm:justify-end">
+          <div className="flex w-full flex-wrap gap-2 border-t border-border pt-3 sm:w-auto sm:shrink-0 sm:justify-end sm:border-0 sm:pt-0">
             <Button
               className="flex-1 sm:flex-none"
               size="sm"
@@ -113,6 +121,13 @@ export function SpellCard({
           </div>
         </div>
 
+        {material ? (
+          <div className="mt-3 rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs leading-5 text-text">
+            <span className="font-semibold text-textH">Material:</span>{" "}
+            {material}
+          </div>
+        ) : null}
+
         {spell.description?.trim() ? (
           <p className="mt-3 line-clamp-3 whitespace-pre-wrap break-words text-xs leading-5 text-text">
             {spell.description}
@@ -121,7 +136,7 @@ export function SpellCard({
       </article>
 
       {isViewOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-4">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 p-3 sm:p-4">
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-bg shadow-xl">
             <div className="flex flex-col gap-3 border-b border-accentBorder p-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
@@ -130,8 +145,12 @@ export function SpellCard({
                 </h2>
 
                 <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-xs leading-5 text-text">
-                  <SpellMeta>{spell.slotLevel === 0 ? "Truque" : `Nível ${spell.slotLevel}`}</SpellMeta>
-                  <SpellMeta>{MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}</SpellMeta>
+                  <SpellMeta>
+                    {spell.slotLevel === 0 ? "Truque" : `Nível ${spell.slotLevel}`}
+                  </SpellMeta>
+                  <SpellMeta>
+                    {MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}
+                  </SpellMeta>
                   <SpellMeta>{formatCastingTime(spell)}</SpellMeta>
                   <SpellMeta>{formatRange(spell)}</SpellMeta>
                   <SpellMeta>{formatSpellOrigin(source)}</SpellMeta>
@@ -152,6 +171,41 @@ export function SpellCard({
             </div>
 
             <div className="grid gap-4 p-4 text-sm text-text">
+              <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                <h3 className="text-sm font-semibold text-textH">
+                  Componentes
+                </h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {getSpellComponents(spell).length ? (
+                    getSpellComponents(spell).map((component) => (
+                      <span
+                        key={component}
+                        className="rounded-full border border-accentBorder bg-accentBg px-2.5 py-1 text-xs font-medium text-textH"
+                      >
+                        {formatComponentLong(component)}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-textMuted">
+                      Nenhum componente informado.
+                    </span>
+                  )}
+                </div>
+
+                {material ? (
+                  <div className="mt-3 text-xs leading-5 text-text">
+                    <span className="font-semibold text-textH">
+                      Componente material:
+                    </span>{" "}
+                    {material}
+                  </div>
+                ) : getSpellComponents(spell).includes("M") ? (
+                  <div className="mt-3 text-xs text-textMuted">
+                    A magia exige componente material, mas o material específico não foi informado.
+                  </div>
+                ) : null}
+              </section>
+
               <section>
                 <h3 className="text-sm font-semibold text-textH">Descrição</h3>
                 <div className="mt-2 whitespace-pre-wrap break-words leading-6">
@@ -190,6 +244,26 @@ function SpellMeta({
   )
 }
 
+function getSpellComponents(spell: Spell): Array<"V" | "S" | "M"> {
+  if (!Array.isArray(spell.components)) return []
+
+  const order: Array<"V" | "S" | "M"> = ["V", "S", "M"]
+  return order.filter((component) => spell.components.includes(component))
+}
+
+function formatComponentsCompact(spell: Spell): string {
+  const components = getSpellComponents(spell)
+  return components.length
+    ? `Componentes: ${components.join(", ")}`
+    : "Componentes: nenhum"
+}
+
+function formatComponentLong(component: "V" | "S" | "M"): string {
+  if (component === "V") return "V — Verbal"
+  if (component === "S") return "S — Somático"
+  return "M — Material"
+}
+
 function formatCastingTime(spell: Spell): string {
   const castingTime = spell.castingTime
   if (castingTime.type === "special") return castingTime.special || "Especial"
@@ -198,7 +272,9 @@ function formatCastingTime(spell: Spell): string {
       ? `Reação: ${castingTime.reactionWhen}`
       : "Reação"
   }
-  if (castingTime.value === 1) return `1 ${CASTING_TIME_NAMES[castingTime.type]}`
+  if (castingTime.value === 1) {
+    return `1 ${CASTING_TIME_NAMES[castingTime.type]}`
+  }
   return `${castingTime.value} ${CASTING_TIME_NAMES[castingTime.type]}s`
 }
 
@@ -230,7 +306,9 @@ function formatSpellOrigin(source?: SpellSource): string {
     return source.name ? `Origem: Talento (${source.name})` : "Origem: Talento"
   }
   if (source.type === "ability") {
-    return source.name ? `Origem: Habilidade (${source.name})` : "Origem: Habilidade"
+    return source.name
+      ? `Origem: Habilidade (${source.name})`
+      : "Origem: Habilidade"
   }
   if (source.type === "race") {
     return source.name ? `Origem: Raça (${source.name})` : "Origem: Raça"
