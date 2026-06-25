@@ -1,4 +1,9 @@
-import { FileImage, ImagePlus, Trash2 } from "lucide-react"
+import {
+  ClipboardPaste,
+  FileImage,
+  ImagePlus,
+  Trash2,
+} from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react"
 
 import { Button } from "../../components/ui/Button"
@@ -6,10 +11,11 @@ import { Input } from "../../components/ui/Input"
 import { Modal } from "../../components/ui/Modal"
 import { Textarea } from "../../components/ui/Textarea"
 import { uploadImage } from "../../lib/uploadImage"
-import type {
-  CompendiumCreature,
-  CreatureAbilityScores,
-  CreatureSide,
+import {
+  normalizeCompendiumCreature,
+  type CompendiumCreature,
+  type CreatureAbilityScores,
+  type CreatureSide,
 } from "../../models/creatures/CompendiumCreature"
 
 type CreatureEditorDialogProps = {
@@ -28,8 +34,16 @@ export function CreatureEditorDialog({
 }: CreatureEditorDialogProps) {
   const [draft, setDraft] = useState(creature)
   const [uploading, setUploading] = useState(false)
+  const [jsonOpen, setJsonOpen] = useState(false)
+  const [jsonText, setJsonText] = useState("")
+  const [jsonError, setJsonError] = useState<string>()
 
-  useEffect(() => setDraft(creature), [creature])
+  useEffect(() => {
+    setDraft(creature)
+    setJsonOpen(false)
+    setJsonText("")
+    setJsonError(undefined)
+  }, [creature])
 
   function patch(patchValue: Partial<CompendiumCreature>) {
     setDraft((current) => ({ ...current, ...patchValue }))
@@ -64,6 +78,43 @@ export function CreatureEditorDialog({
     }
   }
 
+  async function pasteJsonFromClipboard() {
+    try {
+      const clipboardText = await navigator.clipboard.readText()
+      setJsonText(clipboardText)
+      setJsonError(undefined)
+    } catch {
+      setJsonError(
+        "O navegador não permitiu ler a área de transferência. Cole o JSON manualmente no campo abaixo.",
+      )
+    }
+  }
+
+  function applyPastedJson() {
+    try {
+      const payload = parsePastedJson(jsonText)
+      const importedCreature = normalizeCompendiumCreature(payload)
+
+      setDraft((current) => ({
+        ...importedCreature,
+        id: current.id,
+        createdAt: current.createdAt,
+        updatedAt: Date.now(),
+        sheetImageUrl:
+          importedCreature.sheetImageUrl ?? current.sheetImageUrl,
+      }))
+      setJsonError(undefined)
+      setJsonText("")
+      setJsonOpen(false)
+    } catch (error) {
+      setJsonError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível interpretar o JSON.",
+      )
+    }
+  }
+
   function save() {
     const name = draft.name.trim()
     if (!name) return
@@ -72,11 +123,95 @@ export function CreatureEditorDialog({
 
   return (
     <Modal
-      title={creature.name === "Nova criatura" ? "Criar criatura" : `Editar ${creature.name}`}
+      title={
+        creature.name === "Nova criatura"
+          ? "Criar criatura"
+          : `Editar ${creature.name}`
+      }
       onClose={onClose}
       className="max-w-5xl"
     >
       <div className="grid gap-5">
+        <section className="rounded-xl border border-border bg-bg-subtle p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-textH">
+                Preencher criatura com JSON
+              </h3>
+              <p className="mt-1 text-xs text-textMuted">
+                Cole um objeto criado manualmente ou por uma IA para preencher o
+                formulário. O identificador desta criatura será preservado.
+              </p>
+            </div>
+
+            <Button
+              variant={jsonOpen ? "primary" : "secondary"}
+              onClick={() => {
+                setJsonOpen((current) => !current)
+                setJsonError(undefined)
+              }}
+            >
+              <ClipboardPaste className="h-4 w-4" />
+              {jsonOpen ? "Fechar JSON" : "Colar JSON"}
+            </Button>
+          </div>
+
+          {jsonOpen ? (
+            <div className="mt-4 grid gap-3 border-t border-border pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs text-textMuted">
+                  Aceita um objeto único, uma lista com uma criatura ou
+                  blocos cercados por <code>```json</code>.
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void pasteJsonFromClipboard()}
+                >
+                  <ClipboardPaste className="h-4 w-4" />
+                  Colar da área de transferência
+                </Button>
+              </div>
+
+              <Textarea
+                className="min-h-64 font-mono text-xs leading-5"
+                value={jsonText}
+                onChange={(event) => {
+                  setJsonText(event.target.value)
+                  setJsonError(undefined)
+                }}
+                placeholder={'{\n  "name": "Goblin",\n  "armorClass": 15,\n  "maxHp": 7\n}'}
+                autoFocus
+              />
+
+              {jsonError ? (
+                <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+                  {jsonError}
+                </div>
+              ) : null}
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  onClick={() => {
+                    setJsonText("")
+                    setJsonError(undefined)
+                    setJsonOpen(false)
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={applyPastedJson}
+                  disabled={!jsonText.trim()}
+                >
+                  Aplicar JSON ao formulário
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </section>
+
         <section className="grid gap-4 rounded-xl border border-border bg-bg-subtle p-4 lg:grid-cols-[240px_1fr]">
           <div className="grid content-start gap-3">
             <div className="flex aspect-[3/4] items-center justify-center overflow-hidden rounded-xl border border-border bg-bg">
@@ -133,7 +268,7 @@ export function CreatureEditorDialog({
                 <Input
                   value={draft.name}
                   onChange={(event) => patch({ name: event.target.value })}
-                  autoFocus
+                  autoFocus={!jsonOpen}
                 />
               </Field>
 
@@ -227,16 +362,18 @@ export function CreatureEditorDialog({
           </div>
 
           <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
-            {(Object.keys(draft.abilityScores) as Array<keyof CreatureAbilityScores>).map(
-              (attribute) => (
-                <NumberField
-                  key={attribute}
-                  label={attribute.toUpperCase()}
-                  value={draft.abilityScores[attribute]}
-                  onChange={(value) => patchAbility(attribute, value ?? 10)}
-                />
-              ),
-            )}
+            {(
+              Object.keys(draft.abilityScores) as Array<
+                keyof CreatureAbilityScores
+              >
+            ).map((attribute) => (
+              <NumberField
+                key={attribute}
+                label={attribute.toUpperCase()}
+                value={draft.abilityScores[attribute]}
+                onChange={(value) => patchAbility(attribute, value ?? 10)}
+              />
+            ))}
           </div>
         </section>
 
@@ -367,7 +504,9 @@ function Field({
   children: ReactNode
 }) {
   return (
-    <label className={`grid gap-1.5 text-xs font-medium text-textH ${className ?? ""}`}>
+    <label
+      className={`grid gap-1.5 text-xs font-medium text-textH ${className ?? ""}`}
+    >
       {label}
       {children}
     </label>
@@ -437,6 +576,55 @@ function LongText({
       />
     </Field>
   )
+}
+
+function parsePastedJson(text: string): unknown {
+  const trimmed = text.trim()
+  if (!trimmed) throw new Error("Cole um JSON antes de aplicar.")
+
+  const withoutFence = trimmed
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+
+  let payload: unknown
+  try {
+    payload = JSON.parse(withoutFence)
+  } catch (error) {
+    throw new Error(
+      error instanceof Error ? `JSON inválido: ${error.message}` : "JSON inválido.",
+    )
+  }
+
+  if (Array.isArray(payload)) {
+    if (payload.length !== 1) {
+      throw new Error(
+        "O criador aceita uma criatura por vez. Cole uma lista contendo exatamente uma criatura.",
+      )
+    }
+    return payload[0]
+  }
+
+  const record = asRecord(payload)
+  if (!record) throw new Error("O JSON precisa representar uma criatura.")
+
+  if (record.creature !== undefined) return record.creature
+
+  if (Array.isArray(record.creatures)) {
+    if (record.creatures.length !== 1) {
+      throw new Error(
+        "O criador aceita uma criatura por vez. O campo creatures precisa conter exatamente uma criatura.",
+      )
+    }
+    return record.creatures[0]
+  }
+
+  return record
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 function optionalNumber(value: string): number | undefined {
