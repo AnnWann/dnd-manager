@@ -36,6 +36,7 @@ import {
 import { InitiativeTable } from "../features/initiative/InitiativeTable"
 import { useInitiativeSession } from "../hooks/useInitiativeSession"
 import type { CompendiumCreature } from "../models/creatures/CompendiumCreature"
+import { getEffectiveArmorClassWithShield } from "../models/items/equipment/Shield"
 import {
   addInitiativeEntries,
   advanceInitiativeTurn,
@@ -168,7 +169,7 @@ export function InitiativeView() {
           initiativeBonus,
           dexterity: selectedCharacter.getEffectiveAttribute("dex"),
           side: selectedCharacterSide,
-          armorClass: selectedCharacter.getEffectiveArmorClass(),
+          armorClass: getEffectiveArmorClassWithShield(selectedCharacter),
           currentHp: sheet.HP.current,
           maxHp: selectedCharacter.getEffectiveMaxHp(),
           temporaryHp: selectedCharacter.getEffectiveTemporaryHp(),
@@ -366,7 +367,7 @@ export function InitiativeView() {
         <div className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-textH">
             <BookOpen className="h-4 w-4 text-accent" />
-            Adicionar do Creatures Compendium
+            Adicionar do Compêndio de Criaturas
           </div>
           <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_5rem_auto_auto]">
             <select
