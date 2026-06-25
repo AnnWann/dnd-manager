@@ -383,8 +383,12 @@ async function restoreBundledImage(
 
   try {
     const bytes = await imageEntry.async("uint8array")
+    const imageBuffer = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    ) as ArrayBuffer
     const filename = imagePath.split("/").pop() || "creature-sheet.png"
-    const imageFile = new File([bytes], filename, {
+    const imageFile = new File([imageBuffer], filename, {
       type: mimeTypeFromFilename(filename),
     })
     const sheetImageUrl = await uploadImage(imageFile)
