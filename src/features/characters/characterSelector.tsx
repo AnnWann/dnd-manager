@@ -5,6 +5,7 @@ import { Button } from "../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../components/ui/Card"
 import { useMagicContext } from "../../contexts/magicContext"
 import type { Ability } from "../../models/abilities/Ability"
+import { getCharacterGrantedSpells } from "../../models/characters/characterGrantedSpells"
 import type {
   CharacterTemplate,
   CharacterTemplateProps,
@@ -166,7 +167,6 @@ export function CharacterSelector({
             const id = character.get("id")
             const name = character.get("name")
             const sheet = character.get("sheet")
-            const magic = character.get("magic")
             const visibility = character.get("visibility")
             const owner = character.get("owner")
             const isActive = id === activeCharacter.get("id")
@@ -175,7 +175,10 @@ export function CharacterSelector({
               (total, entry) => total + (entry.level ?? 0),
               0,
             )
-            const spellCount = magic?.spells.knownSpells.length ?? 0
+            const spellCount = getAvailableSpellCount(
+              character,
+              getSpellByIndex,
+            )
 
             return (
               <button
@@ -232,6 +235,26 @@ export function CharacterSelector({
   )
 }
 
+function getAvailableSpellCount(
+  character: CharacterTemplate,
+  getSpellByIndex: (spellIndex: string) => Spell | undefined,
+): number {
+  const indexes = new Set<string>()
+
+  for (const knownSpell of
+    character.get("magic")?.spells.knownSpells ?? []) {
+    addSpellIndex(indexes, knownSpell.spells.id)
+  }
+
+  for (const grantedSpell of getCharacterGrantedSpells(character)) {
+    addSpellIndex(indexes, grantedSpell.index)
+  }
+
+  return Array.from(indexes).filter((index) =>
+    Boolean(getSpellByIndex(index)),
+  ).length
+}
+
 function collectReferencedSpellIndexes(
   character: CharacterTemplate,
 ): Set<string> {
@@ -254,6 +277,7 @@ function collectReferencedSpellIndexes(
   const equipment = character.get("equipment")
   const equippedItems: Array<Itemmable | undefined> = [
     equipment.armor,
+    equipment.shield,
     equipment.boots,
     equipment.gloves,
     equipment.helmet,
