@@ -1,5 +1,6 @@
 import {
   Backpack,
+  BookOpen,
   Flame,
   ChevronLeft,
   ChevronRight,
@@ -272,6 +273,7 @@ export {
   Sparkles as IconMagic,
   Gem as IconEquipment,
   ClipboardList as IconInitiative,
+  BookOpen as IconCompendium,
   Swords as IconActions,
   Backpack as IconBackpack,
   Flame as IconCamp,
