@@ -18,7 +18,10 @@ export type CreatureImportResult = {
   importedFiles: number
 }
 
-type PortableCreature = CompendiumCreature & {
+type PortableCreature = Omit<CompendiumCreature, "sheetImageUrl"> & {
+  imageUrl?: string
+  imagePath?: string
+  /** Legacy path accepted from packs created before creature portraits. */
   sheetImagePath?: string
 }
 
@@ -79,7 +82,7 @@ export function getCreatureJsonTemplate(): string {
       reactions: "",
       legendaryActions: "",
       combatNotes: "",
-      sheetImageUrl: "",
+      imageUrl: "",
     },
     null,
     2,
@@ -135,7 +138,11 @@ export async function downloadCreaturePackZip(
       try {
         const asset = await fetchImageAsset(creature.sheetImageUrl)
         imagePath = `images/${baseName}.${asset.extension}`
-        portable.sheetImagePath = imagePath
+        portable.imagePath = imagePath
+
+        // A ZIP deve ser autocontido. O JSON da criatura referencia o arquivo
+        // relativo do pack em vez de depender da URL remota original.
+        delete portable.imageUrl
         zip.file(imagePath, asset.blob)
       } catch {
         warnings.push(
@@ -167,7 +174,9 @@ export async function downloadCreaturePackZip(
       "Compêndio de Criaturas — D&D Manager",
       "",
       "Importe este arquivo ZIP pela página Compêndio de Criaturas.",
-      "As fichas ficam em /creatures e as imagens portáteis em /images.",
+      "As criaturas ficam em /creatures e suas imagens em /images.",
+      "Cada JSON usa imagePath para referenciar a imagem correspondente dentro do pack.",
+      "Ao importar, o aplicativo descompacta a imagem, envia-a novamente e grava a nova URL na criatura.",
       "Também é possível editar os arquivos JSON manualmente antes da importação.",
     ].join("\n"),
   )
@@ -247,7 +256,7 @@ async function importCreatureZip(file: File): Promise<CreatureImportResult> {
 
           if (!creatureFile) {
             warnings.push(
-              `${file.name}: ficha ausente para ${entry?.name ?? "uma criatura"}.`,
+              `${file.name}: criatura ausente para ${entry?.name ?? "uma entrada"}.`,
             )
             continue
           }
@@ -372,7 +381,11 @@ async function restoreBundledImage(
   if (!record) return candidate
 
   const imagePath =
-    manifestImagePath || stringValue(record.sheetImagePath).trim() || undefined
+    manifestImagePath ||
+    stringValue(record.imagePath).trim() ||
+    stringValue(record.sheetImagePath).trim() ||
+    undefined
+
   if (!imagePath) return record
 
   const imageEntry = zip.file(imagePath)
@@ -387,15 +400,15 @@ async function restoreBundledImage(
       bytes.byteOffset,
       bytes.byteOffset + bytes.byteLength,
     ) as ArrayBuffer
-    const filename = imagePath.split("/").pop() || "creature-sheet.png"
+    const filename = imagePath.split("/").pop() || "creature-image.png"
     const imageFile = new File([imageBuffer], filename, {
       type: mimeTypeFromFilename(filename),
     })
-    const sheetImageUrl = await uploadImage(imageFile)
+    const imageUrl = await uploadImage(imageFile)
 
     return {
       ...record,
-      sheetImageUrl,
+      imageUrl,
     }
   } catch (error) {
     warnings.push(
@@ -406,7 +419,12 @@ async function restoreBundledImage(
 }
 
 function toPortableCreature(creature: CompendiumCreature): PortableCreature {
-  return { ...creature }
+  const { sheetImageUrl, ...portable } = creature
+
+  return {
+    ...portable,
+    imageUrl: sheetImageUrl,
+  }
 }
 
 async function fetchImageAsset(

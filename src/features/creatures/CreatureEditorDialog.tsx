@@ -62,7 +62,7 @@ export function CreatureEditorDialog({
     }))
   }
 
-  async function handleSheetImage(file: File | undefined) {
+  async function handleCreatureImage(file: File | undefined) {
     if (!file) return
 
     setUploading(true)
@@ -180,7 +180,7 @@ export function CreatureEditorDialog({
                   setJsonText(event.target.value)
                   setJsonError(undefined)
                 }}
-                placeholder={'{\n  "name": "Goblin",\n  "armorClass": 15,\n  "maxHp": 7\n}'}
+                placeholder={'{\n  "name": "Goblin",\n  "armorClass": 15,\n  "maxHp": 7,\n  "imageUrl": "https://..."\n}'}
                 autoFocus
               />
 
@@ -214,20 +214,25 @@ export function CreatureEditorDialog({
 
         <section className="grid gap-4 rounded-xl border border-border bg-bg-subtle p-4 lg:grid-cols-[240px_1fr]">
           <div className="grid content-start gap-3">
-            <div className="flex aspect-[3/4] items-center justify-center overflow-hidden rounded-xl border border-border bg-bg">
+            <div className="flex aspect-square items-center justify-center overflow-hidden rounded-xl border border-border bg-bg">
               {draft.sheetImageUrl ? (
                 <img
                   src={draft.sheetImageUrl}
-                  alt={`Ficha de ${draft.name}`}
-                  className="h-full w-full object-contain"
+                  alt={`Imagem de ${draft.name}`}
+                  className="h-full w-full object-cover object-center"
                 />
               ) : (
-                <div className="grid justify-items-center gap-2 text-textMuted">
+                <div className="grid justify-items-center gap-2 px-4 text-center text-textMuted">
                   <FileImage className="h-12 w-12" />
-                  <span className="text-xs">Sem imagem da ficha</span>
+                  <span className="text-xs">Sem imagem da criatura</span>
                 </div>
               )}
             </div>
+
+            <p className="text-xs leading-5 text-textMuted">
+              Use uma arte, retrato ou token que represente visualmente o
+              monstro. Essa imagem também será usada na iniciativa.
+            </p>
 
             <label className="cursor-pointer">
               <input
@@ -236,12 +241,12 @@ export function CreatureEditorDialog({
                 className="sr-only"
                 disabled={uploading}
                 onChange={(event) =>
-                  void handleSheetImage(event.target.files?.[0])
+                  void handleCreatureImage(event.target.files?.[0])
                 }
               />
               <span className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-bg text-sm font-medium text-textH shadow-theme-sm transition-colors hover:border-borderStrong hover:bg-bg-subtle">
                 <ImagePlus className="h-4 w-4" />
-                {uploading ? "Enviando…" : "Importar imagem da ficha"}
+                {uploading ? "Enviando…" : "Importar imagem da criatura"}
               </span>
             </label>
 
