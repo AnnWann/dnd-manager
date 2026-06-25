@@ -329,10 +329,12 @@ export function tradeConsecutiveAllies(
   entryId: string,
   direction: -1 | 1,
 ): InitiativeSession {
-  const index = session.entries.findIndex((entry) => entry.id === entryId)
-  const targetIndex = index + direction
+  if (direction !== 1) return session
 
-  if (index < 0 || targetIndex < 0 || targetIndex >= session.entries.length) {
+  const index = session.entries.findIndex((entry) => entry.id === entryId)
+  const targetIndex = index + 1
+
+  if (index < 0 || targetIndex >= session.entries.length) {
     return session
   }
 
@@ -341,6 +343,11 @@ export function tradeConsecutiveAllies(
 
   if (entry.side !== "ally" || target.side !== "ally") return session
 
+  const activeEntryIndex = session.activeEntryId
+    ? session.entries.findIndex(
+        (candidate) => candidate.id === session.activeEntryId,
+      )
+    : -1
   const roundAnchorIndex = session.roundAnchorEntryId
     ? session.entries.findIndex(
         (candidate) => candidate.id === session.roundAnchorEntryId,
@@ -354,6 +361,10 @@ export function tradeConsecutiveAllies(
   return touchSession({
     ...session,
     entries: orderedEntries,
+    activeEntryId:
+      activeEntryIndex >= 0
+        ? orderedEntries[activeEntryIndex]?.id
+        : session.activeEntryId,
     roundAnchorEntryId:
       roundAnchorIndex >= 0
         ? orderedEntries[roundAnchorIndex]?.id
@@ -366,10 +377,12 @@ export function canTradeConsecutiveAllies(
   entryId: string,
   direction: -1 | 1,
 ): boolean {
-  const index = session.entries.findIndex((entry) => entry.id === entryId)
-  const targetIndex = index + direction
+  if (direction !== 1) return false
 
-  if (index < 0 || targetIndex < 0 || targetIndex >= session.entries.length) {
+  const index = session.entries.findIndex((entry) => entry.id === entryId)
+  const targetIndex = index + 1
+
+  if (index < 0 || targetIndex >= session.entries.length) {
     return false
   }
 
