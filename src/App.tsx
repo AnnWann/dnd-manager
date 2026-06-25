@@ -14,12 +14,14 @@ import {
   IconCompendium,
   IconInitiative,
   IconMagic,
+  IconNotes,
   IconSync,
 } from "./components/AppSidebar"
 import { AppHeader } from "./components/AppTopBar"
 import { CharacterProvider } from "./contexts/characterContext"
 import { CreatureCompendiumProvider } from "./contexts/creatureCompendiumContext"
 import { MagicProvider } from "./contexts/magicContext"
+import { MissionProvider } from "./contexts/missionContext"
 import { PartyInventorySettingsProvider } from "./contexts/partyInventorySettingsContext"
 import { SyncProvider } from "./contexts/syncContext"
 import { normalizeAppStateInventory } from "./lib/normalizeAppStateInventory"
@@ -89,6 +91,12 @@ function App() {
       active: location.pathname === "/party-inventory",
       onClick: () => navigate("/party-inventory"),
     },
+    {
+      label: "Missões",
+      icon: <IconNotes />,
+      active: location.pathname === "/missions",
+      onClick: () => navigate("/missions"),
+    },
     ...(userRole === "master"
       ? [
           {
@@ -132,32 +140,39 @@ function App() {
         canEditCarryCapacity={userRole === "master"}
         setAppState={setAppState}
       >
-        <CreatureCompendiumProvider>
-          <CharacterProvider
-            appState={appState}
-            setAppState={setAppState}
-            userRole={userRole}
-            userKey={userKey}
-          >
-            <MagicProvider
-              spells={appState.spells ?? []}
+        <MissionProvider
+          state={rawAppState}
+          setState={setRawAppState}
+          userRole={userRole}
+          userKey={userKey}
+        >
+          <CreatureCompendiumProvider>
+            <CharacterProvider
+              appState={appState}
               setAppState={setAppState}
+              userRole={userRole}
+              userKey={userKey}
             >
-              <div className="flex h-svh max-w-full flex-col overflow-hidden bg-[color:var(--surface-app)] text-text">
-                <AppHeader />
+              <MagicProvider
+                spells={appState.spells ?? []}
+                setAppState={setAppState}
+              >
+                <div className="flex h-svh max-w-full flex-col overflow-hidden bg-[color:var(--surface-app)] text-text">
+                  <AppHeader />
 
-                <div className="flex min-h-0 min-w-0 max-w-full flex-1 overflow-hidden">
-                  <AppSidebar items={sidebarItems} />
-                  <main className="min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto">
-                    <div className="w-full min-w-0 max-w-full overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6">
-                      <AppRouter />
-                    </div>
-                  </main>
+                  <div className="flex min-h-0 min-w-0 max-w-full flex-1 overflow-hidden">
+                    <AppSidebar items={sidebarItems} />
+                    <main className="min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto">
+                      <div className="w-full min-w-0 max-w-full overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6">
+                        <AppRouter />
+                      </div>
+                    </main>
+                  </div>
                 </div>
-              </div>
-            </MagicProvider>
-          </CharacterProvider>
-        </CreatureCompendiumProvider>
+              </MagicProvider>
+            </CharacterProvider>
+          </CreatureCompendiumProvider>
+        </MissionProvider>
       </PartyInventorySettingsProvider>
     </SyncProvider>
   )
