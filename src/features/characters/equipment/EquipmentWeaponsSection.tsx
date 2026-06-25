@@ -5,6 +5,7 @@ import { attributeShort } from "../../../lib/attributeShorts"
 import { formatBonusName, formatBonusValue } from "../../../lib/formatBonus"
 import { formatSigned } from "../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { getUsedArmsIncludingShield } from "../../../models/characters/characterEquipmentInteractions"
 import type { Weapon } from "../../../models/items/equipment/Weapon"
 import { EquipmentFeaturesList } from "./equipmentFeaturesList"
 
@@ -77,6 +78,7 @@ export function EquipmentWeaponsSection({
   updateCharacter,
 }: Props) {
   const weapons = character.get("equipment").weapons
+  const usedHands = getUsedArmsIncludingShield(character)
 
   function unequipWeapon(index: number) {
     updateCharacter(character.get("id"), (c) =>
@@ -99,7 +101,7 @@ export function EquipmentWeaponsSection({
         </div>
 
         <div className="rounded-full border border-border bg-bg-subtle px-2.5 py-1 text-[11px] font-semibold text-text">
-          {character.getUsedArms()}/{character.get("sheet").arms} braços
+          {usedHands}/{character.get("sheet").arms} mãos
         </div>
       </div>
 
