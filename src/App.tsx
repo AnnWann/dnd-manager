@@ -11,6 +11,7 @@ import {
   AppSidebar,
   IconBackpack,
   IconCharacter,
+  IconInitiative,
   IconMagic,
   IconSync,
 } from "./components/AppSidebar"
@@ -86,6 +87,16 @@ function App() {
       active: location.pathname === "/party-inventory",
       onClick: () => navigate("/party-inventory"),
     },
+    ...(userRole === "master"
+      ? [
+          {
+            label: "Iniciativa",
+            icon: <IconInitiative />,
+            active: location.pathname === "/initiative",
+            onClick: () => navigate("/initiative"),
+          },
+        ]
+      : []),
     {
       label: "Magia",
       icon: <IconMagic />,
@@ -128,7 +139,6 @@ function App() {
 
               <div className="flex min-h-0 min-w-0 max-w-full flex-1 overflow-hidden">
                 <AppSidebar items={sidebarItems} />
-
                 <main className="min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto">
                   <div className="w-full min-w-0 max-w-full overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6">
                     <AppRouter />
