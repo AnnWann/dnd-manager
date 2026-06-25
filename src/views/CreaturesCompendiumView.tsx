@@ -65,7 +65,7 @@ export function CreaturesCompendiumView() {
           <Shield className="h-6 w-6 text-accent" />
           <div>
             <h1 className="font-heading text-lg font-semibold text-textH">
-              Creatures Compendium
+              Compêndio de Criaturas
             </h1>
             <p className="mt-1 text-sm text-text">
               Esta página só pode ser acessada com o perfil de mestre.
@@ -92,7 +92,7 @@ export function CreaturesCompendiumView() {
             <div className="flex flex-wrap items-center gap-2">
               <BookOpen className="h-6 w-6 text-accent" />
               <h1 className="font-heading text-xl font-semibold text-textH">
-                Creatures Compendium
+                Compêndio de Criaturas
               </h1>
               <span className="rounded-full border border-border bg-bg-subtle px-2.5 py-1 text-xs text-textMuted">
                 {creatures.length} criatura{creatures.length === 1 ? "" : "s"}

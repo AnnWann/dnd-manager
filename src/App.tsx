@@ -92,7 +92,7 @@ function App() {
     ...(userRole === "master"
       ? [
           {
-            label: "Creatures Compendium",
+            label: "Compêndio de Criaturas",
             icon: <IconCompendium />,
             active: location.pathname === "/creatures-compendium",
             onClick: () => navigate("/creatures-compendium"),
