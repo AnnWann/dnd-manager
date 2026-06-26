@@ -4,7 +4,10 @@ import type { AppStateV1 } from "../lib/remoteState"
 import { normalizeSpellText } from "../lib/textNormalization"
 import spellData from "../data/spells.v1.json"
 import metamagicData from "../data/metamagics.v1.json"
-import type { Metamagic, MetamagicId } from "../models/magic/metamagic/Metamagic"
+import type {
+  Metamagic,
+  MetamagicId,
+} from "../models/magic/metamagic/Metamagic"
 
 const officialSpells = (spellData.spells as unknown[]).map((rawSpell) => {
   const { source: _source, ...spell } = rawSpell as Record<string, unknown>
@@ -36,11 +39,32 @@ type MagicProviderProps = {
   setAppState: React.Dispatch<React.SetStateAction<AppStateV1>>
 }
 
-export function MagicProvider({ children, spells, setAppState }: MagicProviderProps) {
-  const allSpells = useMemo(() => [...officialSpells, ...spells], [spells])
-  const spellByIndex = useMemo(
-    () => new Map(allSpells.map((spell) => [spell.index, spell])),
-    [allSpells],
+export function MagicProvider({
+  children,
+  spells,
+  setAppState,
+}: MagicProviderProps) {
+  const spellByIndex = useMemo(() => {
+    const map = new Map<string, Spell>()
+
+    for (const spell of officialSpells) {
+      const index = spell.index?.trim()
+      if (index) map.set(index, spell)
+    }
+
+    // Saved spells intentionally override an official spell with the same
+    // index, which supports edited/homebrew replacements without duplicates.
+    for (const rawSpell of spells) {
+      const spell = normalizeSpellText(rawSpell)
+      const index = spell.index?.trim()
+      if (index) map.set(index, spell)
+    }
+
+    return map
+  }, [spells])
+  const allSpells = useMemo(
+    () => Array.from(spellByIndex.values()),
+    [spellByIndex],
   )
   const metamagics = useMemo(() => officialMetamagics, [])
   const metamagicById = useMemo(
@@ -49,12 +73,12 @@ export function MagicProvider({ children, spells, setAppState }: MagicProviderPr
   )
 
   function getSpellByIndex(spellIndex: string) {
-    return spellByIndex.get(spellIndex)
+    return spellByIndex.get(spellIndex.trim())
   }
 
   function getSpellsByIndexes(spellIndexes: string[]) {
     return spellIndexes
-      .map((spellIndex) => spellByIndex.get(spellIndex))
+      .map((spellIndex) => spellByIndex.get(spellIndex.trim()))
       .filter((spell): spell is Spell => Boolean(spell))
   }
 
