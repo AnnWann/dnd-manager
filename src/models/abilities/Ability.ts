@@ -12,6 +12,15 @@ export interface Ability {
   trigger?: Trigger
   grantedSpells?: SpellGrant[]
   bonuses?: BonusCollection
+
+  /** Stable identifier of the class feature, choice or template that created it. */
+  sourceAbilityId?: string
+
+  /** Version of the source definition used to create the ability. */
+  sourceVersion?: number
+
+  /** True when player-provided details override the source definition. */
+  customized?: boolean
 }
 
 export interface Usage {
