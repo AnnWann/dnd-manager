@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getExperienceProgress } from "../../../models/characters/characterExperience"
-import { LevelUpWizardV2 } from "./levelUpWizardV2"
+import { LevelUpWizardV3 } from "./levelUpWizardV3"
 
 type Props = {
   character: CharacterTemplate
@@ -159,7 +159,7 @@ export function CharacterExperience({
         </CardContent>
       </Card>
 
-      <LevelUpWizardV2
+      <LevelUpWizardV3
         open={levelUpOpen}
         character={character}
         onApply={(nextCharacter) => {
@@ -170,8 +170,4 @@ export function CharacterExperience({
       />
     </>
   )
-}
-
-function formatXp(value: number): string {
-  return Math.max(0, Math.trunc(value)).toLocaleString("pt-BR")
 }
