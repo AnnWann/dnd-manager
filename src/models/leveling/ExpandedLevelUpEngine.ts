@@ -43,6 +43,14 @@ export function getLevelUpPlan(
         ),
       }
     : undefined
+  const conModifier = character.getEffectiveAttributeModifier("con")
+  const firstLevelHp =
+    base.nextTotalLevel === 1
+      ? Math.max(
+          1,
+          Number(base.progression.hitDie.replace("d", "")) + conModifier,
+        )
+      : base.averageHpGain
 
   return {
     ...base,
@@ -52,6 +60,7 @@ export function getLevelUpPlan(
       subclasses: localizedSubclasses,
     },
     selectedSubclass,
+    averageHpGain: firstLevelHp,
     multiclassRequirements: checkMulticlassRequirements(
       character,
       className,
