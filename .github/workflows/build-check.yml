@@ -19,4 +19,10 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Build
-        run: npm run build
+        shell: bash
+        run: |
+          set +e
+          npm run build > build.log 2>&1
+          status=$?
+          tail -n 140 build.log
+          exit $status
