@@ -171,3 +171,7 @@ export function CharacterExperience({
     </>
   )
 }
+
+function formatXp(value: number): string {
+  return Math.max(0, Math.trunc(value)).toLocaleString("pt-BR")
+}
