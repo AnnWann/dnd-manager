@@ -14,9 +14,19 @@ import {
   getSubclassNamePt,
 } from "./ClassLocalization"
 import {
+  getChoiceLabelPt,
+  getChoiceOptionPt,
+  getFeatureNamePt,
+} from "./FeatureLocalization"
+import {
   checkMulticlassRequirements,
   type MulticlassRequirementResult,
 } from "./MulticlassRequirements"
+import type {
+  LevelChoiceDefinition,
+  LevelFeatureDefinition,
+  SubclassDefinition,
+} from "./ClassProgression"
 
 export * from "./LevelUpEngine"
 
@@ -30,19 +40,13 @@ export function getLevelUpPlan(
   subclassId?: string,
 ): ExpandedLevelUpPlan {
   const base = getBaseLevelUpPlan(character, className, subclassId)
-  const localizedSubclasses = base.progression.subclasses.map((subclass) => ({
-    ...subclass,
-    name: getSubclassNamePt(subclass.id, subclass.name),
-  }))
+  const localizedSubclasses = base.progression.subclasses.map(
+    localizeSubclass,
+  )
   const selectedSubclass = base.selectedSubclass
-    ? {
-        ...base.selectedSubclass,
-        name: getSubclassNamePt(
-          base.selectedSubclass.id,
-          base.selectedSubclass.name,
-        ),
-      }
+    ? localizeSubclass(base.selectedSubclass)
     : undefined
+  const localizedFeatures = base.features.map(localizeFeature)
   const conModifier = character.getEffectiveAttributeModifier("con")
   const firstLevelHp =
     base.nextTotalLevel === 1
@@ -60,6 +64,10 @@ export function getLevelUpPlan(
       subclasses: localizedSubclasses,
     },
     selectedSubclass,
+    features: localizedFeatures,
+    choices: localizedFeatures.flatMap((feature) =>
+      feature.choice ? [feature.choice] : [],
+    ),
     averageHpGain: firstLevelHp,
     multiclassRequirements: checkMulticlassRequirements(
       character,
@@ -97,4 +105,36 @@ export function applyLevelUp(
   if (errors.length) throw new Error(errors.join("\n"))
 
   return applyBaseLevelUp(character, plan, selections)
+}
+
+function localizeSubclass(
+  subclass: SubclassDefinition,
+): SubclassDefinition {
+  return {
+    ...subclass,
+    name: getSubclassNamePt(subclass.id, subclass.name),
+    features: subclass.features.map(localizeFeature),
+  }
+}
+
+function localizeFeature(
+  feature: LevelFeatureDefinition,
+): LevelFeatureDefinition {
+  return {
+    ...feature,
+    name: getFeatureNamePt(feature.name),
+    choice: feature.choice
+      ? localizeChoice(feature.choice)
+      : undefined,
+  }
+}
+
+function localizeChoice(
+  choice: LevelChoiceDefinition,
+): LevelChoiceDefinition {
+  return {
+    ...choice,
+    label: getChoiceLabelPt(choice.label),
+    options: choice.options?.map(getChoiceOptionPt),
+  }
 }
