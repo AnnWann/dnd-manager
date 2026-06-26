@@ -250,7 +250,7 @@ export function homebrewMatchesRequirementWithoutClass(
 }
 
 function getSpellReplacementRequirements(
-  character: CharacterTemplate,
+  _character: CharacterTemplate,
   className: ClassName,
   currentLevel: number,
   nextLevel: number,
@@ -265,20 +265,11 @@ function getSpellReplacementRequirements(
     nextLevel,
     subclassId,
   )
-  const knownSpellIds = character.get("magic")?.spells.knownSpells ?? []
-  const hasLeveledSpell = knownSpellIds.some(
-    (entry) => !entry.spells.id.startsWith("cantrip:"),
-  )
-  const hasCantrip = knownSpellIds.some((entry) => {
-    const id = entry.spells.id.toLowerCase()
-    return id.startsWith("cantrip:") || id.includes("cantrip")
-  })
 
   if (
     currentLevel > 0 &&
     canReplaceKnownSpell(className, subclassId) &&
-    maximumLevel > 0 &&
-    hasLeveledSpell
+    maximumLevel > 0
   ) {
     requirements.push(
       {
@@ -287,7 +278,7 @@ function getSpellReplacementRequirements(
         count: 1,
         maxLevel: 9,
         existingOnly: true,
-        classFilter,
+        anyClass: true,
         note: "Escolha uma magia conhecida para remover e, no cartão seguinte, a substituta. Deixe ambos vazios para não trocar.",
       },
       {
@@ -304,8 +295,7 @@ function getSpellReplacementRequirements(
   if (
     currentLevel > 0 &&
     ASI_LEVELS.has(nextLevel) &&
-    canReplaceCantrip(className) &&
-    hasCantrip
+    canReplaceCantrip(className)
   ) {
     requirements.push(
       {
@@ -315,7 +305,7 @@ function getSpellReplacementRequirements(
         maxLevel: 0,
         cantrip: true,
         existingOnly: true,
-        classFilter,
+        anyClass: true,
         note: "Escolha um truque conhecido e, no cartão seguinte, o novo truque. Deixe ambos vazios para manter os atuais.",
       },
       {
@@ -525,44 +515,60 @@ function applyChoiceReplacement(
 
   const oldName = stripChoicePrefix(removal)
   const newName = stripChoicePrefix(addition)
-  const oldAbility = character.get("abilities")?.find((ability) => {
-    if (ability.name !== oldName) return false
-    return kind === "invocation"
-      ? ability.category === "invocation"
-      : true
-  })
-
-  let next = oldAbility
-    ? character.removeAbility(oldAbility.id)
-    : character
-  const sourceChoiceId =
-    kind === "invocation"
-      ? `invocations-replacement-${plan.nextClassLevel}`
-      : `fighting-style-replacement-${plan.nextClassLevel}`
-
-  next = next.addAbility({
-    id: choiceAbilityId(plan.className, sourceChoiceId, newName),
-    name: newName,
-    description: `${feature.name}. ${oldName} foi substituído por ${newName} no nível ${plan.nextClassLevel} de ${plan.progression.label}.`,
-    kind: "passive",
-    category: kind === "invocation" ? "invocation" : "general",
-    sourceAbilityId: `class-choice:${plan.className}:${kind}:${slug(newName)}`,
-    sourceVersion: 1,
-  })
-
-  const classes = next.get("sheet").classes ?? []
-  const nextClasses = classes.map((entry) => {
+  let persistedChoiceUpdated = false
+  const nextClasses = (character.get("sheet").classes ?? []).map((entry) => {
     if (entry.className !== plan.className) return entry
+
+    const nextChoices = Object.fromEntries(
+      Object.entries(entry.levelChoices ?? {}).map(([id, choiceValues]) => {
+        const replaced = choiceValues.map((value) => {
+          if (value !== oldName) return value
+          persistedChoiceUpdated = true
+          return newName
+        })
+        return [id, replaced]
+      }),
+    )
+
     return {
       ...entry,
       levelChoices: {
-        ...(entry.levelChoices ?? {}),
+        ...nextChoices,
         [feature.choice!.id]: values,
       },
     }
   })
 
-  return next.withSheet("classes", nextClasses)
+  let next = character
+    .with(
+      "abilities",
+      (character.get("abilities") ?? []).filter((ability) => {
+        if (ability.name !== oldName) return true
+        return kind === "invocation"
+          ? ability.category !== "invocation"
+          : false
+      }),
+    )
+    .withSheet("classes", nextClasses)
+
+  if (!persistedChoiceUpdated) {
+    const sourceChoiceId =
+      kind === "invocation"
+        ? `invocations-replacement-${plan.nextClassLevel}`
+        : `fighting-style-replacement-${plan.nextClassLevel}`
+
+    next = next.addAbility({
+      id: choiceAbilityId(plan.className, sourceChoiceId, newName),
+      name: newName,
+      description: `${feature.name}. ${oldName} foi substituído por ${newName} no nível ${plan.nextClassLevel} de ${plan.progression.label}.`,
+      kind: "passive",
+      category: kind === "invocation" ? "invocation" : "general",
+      sourceAbilityId: `class-choice:${plan.className}:${kind}:${slug(newName)}`,
+      sourceVersion: 1,
+    })
+  }
+
+  return next
 }
 
 function stripFlexibilityFromPlan(
