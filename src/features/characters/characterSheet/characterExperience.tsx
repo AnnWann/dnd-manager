@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getExperienceProgress } from "../../../models/characters/characterExperience"
-import { LevelUpWizard } from "./levelUpWizard"
+import { LevelUpWizardV2 } from "./levelUpWizardV2"
 
 type Props = {
   character: CharacterTemplate
@@ -48,7 +48,7 @@ export function CharacterExperience({
                   Experiência
                 </div>
                 <div className="mt-1 text-xs text-textMuted">
-                  Nível total {progress.level}. O assistente aplica cada escolha antes de alterar a ficha.
+                  Nível total {progress.level}. O assistente valida multiclasse e aplica cada escolha antes de alterar a ficha.
                 </div>
               </div>
             </div>
@@ -159,10 +159,13 @@ export function CharacterExperience({
         </CardContent>
       </Card>
 
-      <LevelUpWizard
+      <LevelUpWizardV2
         open={levelUpOpen}
         character={character}
-        updateCharacter={updateCharacter}
+        onApply={(nextCharacter) => {
+          updateCharacter(character.get("id"), () => nextCharacter)
+          setLevelUpOpen(false)
+        }}
         onClose={() => setLevelUpOpen(false)}
       />
     </>
