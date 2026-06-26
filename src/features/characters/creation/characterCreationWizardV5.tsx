@@ -4,8 +4,14 @@ import { Button } from "../../../components/ui/Button"
 import { confirmAndResetLocalAppData } from "../../../lib/resetLocalAppData"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Player } from "../../../models/player/Player"
+import type { ClassName } from "../../../models/sheet/Class"
 import { CharacterCreationWizard as BaseCharacterCreationWizard } from "./characterCreationWizardV4"
 import "./characterCreationWizardMobileFix.css"
+
+export type CharacterCreationProgressionPlan = {
+  className: ClassName
+  targetLevel: number
+}
 
 type Props = {
   open: boolean
@@ -13,7 +19,10 @@ type Props = {
   owners: Player[]
   canAssignOwners: boolean
   onClose: () => void
-  onCreate: (character: CharacterTemplate) => void
+  onCreate: (
+    character: CharacterTemplate,
+    plan: CharacterCreationProgressionPlan,
+  ) => void
   createOwner: (ownerName: string) => Player
 }
 
@@ -106,9 +115,40 @@ export function CharacterCreationWizard(props: Props) {
     }
   }, [props.open])
 
+  const { onCreate, ...baseProps } = props
+
   return (
     <CharacterCreationErrorBoundary open={props.open} onClose={props.onClose}>
-      <BaseCharacterCreationWizard {...props} />
+      <BaseCharacterCreationWizard
+        {...baseProps}
+        onCreate={(configuredCharacter) => {
+          const initialClass = configuredCharacter.get("sheet").classes?.[0]
+
+          if (!initialClass) {
+            throw new Error(
+              "A criação não definiu uma classe inicial válida.",
+            )
+          }
+
+          const targetLevel = Math.max(
+            1,
+            Math.min(20, Math.trunc(Number(initialClass.level) || 1)),
+          )
+          const progressionDraft = configuredCharacter
+            .withSheet("classes", [])
+            .withSheet("HP", {
+              max: 0,
+              current: 0,
+              temporary: 0,
+              hitDice: {},
+            })
+
+          onCreate(progressionDraft, {
+            className: initialClass.className,
+            targetLevel,
+          })
+        }}
+      />
     </CharacterCreationErrorBoundary>
   )
 }
