@@ -27,7 +27,6 @@ export const SUBCLASS_NAME_PT: Record<string, string> = {
   berserker: "Caminho do Berserker",
   "totem-warrior": "Caminho do Guerreiro Totêmico",
   beast: "Caminho da Besta",
-  "wild-magic": "Caminho da Magia Selvagem",
   "ancestral-guardian": "Caminho do Guardião Ancestral",
   "storm-herald": "Caminho do Arauto da Tempestade",
   zealot: "Caminho do Zelote",
@@ -115,8 +114,6 @@ export const SUBCLASS_NAME_PT: Record<string, string> = {
 
   // Feiticeiro
   draconic: "Linhagem Dracônica",
-  "wild-magic-sorcerer": "Magia Selvagem",
-  "wild-magic": "Magia Selvagem",
   "aberrant-mind": "Mente Aberrante",
   "clockwork-soul": "Alma Mecânica",
   "divine-soul": "Alma Divina",
@@ -146,6 +143,13 @@ export const SUBCLASS_NAME_PT: Record<string, string> = {
   "war-magic": "Magia de Guerra",
 }
 
+const CLASS_SPECIFIC_SUBCLASS_NAME_PT: Partial<
+  Record<`${ClassName}:${string}`, string>
+> = {
+  "barbarian:wild-magic": "Caminho da Magia Selvagem",
+  "sorcerer:wild-magic": "Magia Selvagem",
+}
+
 export function getClassNamePt(className: ClassName): string {
   return CLASS_NAME_PT[className]
 }
@@ -153,6 +157,11 @@ export function getClassNamePt(className: ClassName): string {
 export function getSubclassNamePt(
   subclassId: string,
   fallback?: string,
+  className?: ClassName,
 ): string {
-  return SUBCLASS_NAME_PT[subclassId] ?? fallback ?? subclassId
+  const classSpecificName = className
+    ? CLASS_SPECIFIC_SUBCLASS_NAME_PT[`${className}:${subclassId}`]
+    : undefined
+
+  return classSpecificName ?? SUBCLASS_NAME_PT[subclassId] ?? fallback ?? subclassId
 }
