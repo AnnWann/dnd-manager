@@ -2,9 +2,13 @@ import { useMemo, useState } from "react"
 import { CharacterAbilitiesTab } from "../features/characters/abilities/characterAbilities"
 import { CharacterSelector } from "../features/characters/characterSelector"
 import { CharacterSheetTab } from "../features/characters/characterSheet/characterSheet"
+import { LevelUpWizardV3 } from "../features/characters/characterSheet/levelUpWizardV3"
 import { CharacterEquipmentTab } from "../features/characters/equipment/characterEquipment"
 import { CharacterInventoryTab } from "../features/characters/inventory/characterInventory"
-import { CharacterViewTabs, type CharacterTab } from "../features/characters/characterViewTabs"
+import {
+  CharacterViewTabs,
+  type CharacterTab,
+} from "../features/characters/characterViewTabs"
 import { CharacterMagicTab } from "../features/characters/magic/characterMagicModule"
 import { useCharacterContext } from "../contexts/characterContext"
 import { useSyncContext } from "../contexts/syncContext"
@@ -12,9 +16,17 @@ import { CharacterProficienciesTab } from "../features/characters/proficiencies/
 import { CharacterRaceTab } from "../features/characters/race/characterRaceV2"
 import { CharacterProfileTab } from "../features/characters/profile/characterProfileV2"
 import { CharacterRestControls } from "../features/characters/rest/characterRestControlsV2"
-import { CharacterCreationWizard } from "../features/characters/creation/characterCreationWizardV5"
+import {
+  CharacterCreationWizard,
+  type CharacterCreationProgressionPlan,
+} from "../features/characters/creation/characterCreationWizardV5"
 import { ensureCharacterBackgroundFromHistory } from "../features/characters/creation/inferCharacterBackground"
+import type { CharacterTemplate } from "../models/characters/CharacterTemplate"
 import type { Player } from "../models/player/Player"
+
+type PendingCharacterCreation = CharacterCreationProgressionPlan & {
+  character: CharacterTemplate
+}
 
 export function CharacterView() {
   const {
@@ -36,6 +48,8 @@ export function CharacterView() {
 
   const [activeTab, setActiveTab] = useState<CharacterTab>("sheet")
   const [creationOpen, setCreationOpen] = useState(false)
+  const [pendingCreation, setPendingCreation] =
+    useState<PendingCharacterCreation | null>(null)
 
   const owners = useMemo(
     () => playerKeys.map((key) => getOwner(key)),
@@ -69,13 +83,40 @@ export function CharacterView() {
       canAssignOwners={canAssignOwners}
       createOwner={createOwner}
       onClose={() => setCreationOpen(false)}
-      onCreate={(character) => {
-        const preparedCharacter = ensureCharacterBackgroundFromHistory(character)
-        importCharacter(preparedCharacter.toJSON())
-        setActiveTab("profile")
+      onCreate={(character, plan) => {
+        setCreationOpen(false)
+        setPendingCreation({ character, ...plan })
       }}
     />
   )
+
+  const creationLevelWizard = pendingCreation ? (
+    <LevelUpWizardV3
+      open
+      character={pendingCreation.character}
+      lockedClassName={pendingCreation.className}
+      title={`Criação do personagem — nível ${getTotalLevel(pendingCreation.character) + 1} de ${pendingCreation.targetLevel}`}
+      subtitle="Resolva as características, escolhas e magias deste nível antes de avançar para o próximo."
+      onClose={() => setPendingCreation(null)}
+      onApply={(nextCharacter) => {
+        const nextLevel = getTotalLevel(nextCharacter)
+
+        if (nextLevel < pendingCreation.targetLevel) {
+          setPendingCreation({
+            ...pendingCreation,
+            character: nextCharacter,
+          })
+          return
+        }
+
+        const preparedCharacter =
+          ensureCharacterBackgroundFromHistory(nextCharacter)
+        importCharacter(preparedCharacter.toJSON())
+        setPendingCreation(null)
+        setActiveTab("profile")
+      }}
+    />
+  ) : null
 
   if (!activeCharacter) {
     return (
@@ -96,6 +137,7 @@ export function CharacterView() {
           </button>
         </div>
         {creationWizard}
+        {creationLevelWizard}
       </>
     )
   }
@@ -125,7 +167,10 @@ export function CharacterView() {
       />
 
       <div className="sticky top-0 z-20 bg-[color:var(--surface-app)] py-2">
-        <CharacterViewTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+        <CharacterViewTabs
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
       </div>
 
       <div className="min-w-0">
@@ -193,7 +238,15 @@ export function CharacterView() {
       </div>
 
       {creationWizard}
+      {creationLevelWizard}
     </div>
+  )
+}
+
+function getTotalLevel(character: CharacterTemplate): number {
+  return (character.get("sheet").classes ?? []).reduce(
+    (total, entry) => total + Math.max(0, Number(entry.level) || 0),
+    0,
   )
 }
 
