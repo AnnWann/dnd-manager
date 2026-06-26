@@ -1,13 +1,16 @@
 import "./ExpandedClassProgression"
 
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
+import type { Spell } from "../magic/spells/Spell"
 import type { ClassName } from "../sheet/Class"
 import {
   applyLevelUp as applyBaseLevelUp,
   getLevelUpPlan as getBaseLevelUpPlan,
+  spellMatchesRequirement as spellMatchesBaseRequirement,
   validateLevelUpSelections as validateBaseLevelUpSelections,
   type LevelUpPlan,
   type LevelUpSelections,
+  type LevelUpSpellRequirement,
 } from "./LevelUpEngine"
 import {
   getClassNamePt,
@@ -107,6 +110,61 @@ export function applyLevelUp(
   return applyBaseLevelUp(character, plan, selections)
 }
 
+export function spellMatchesRequirement(
+  spell: Spell,
+  requirement: LevelUpSpellRequirement,
+  character: CharacterTemplate,
+): boolean {
+  const normalizedSpell: Spell = {
+    ...spell,
+    classes: Array.isArray(spell.classes)
+      ? spell.classes.filter(isClassName)
+      : [],
+  }
+
+  return spellMatchesBaseRequirement(
+    normalizedSpell,
+    requirement,
+    character,
+  )
+}
+
+export function homebrewMatchesRequirementWithoutClass(
+  spell: Spell,
+  requirement: LevelUpSpellRequirement,
+  character: CharacterTemplate,
+): boolean {
+  if (!spell.homebrew) return false
+
+  if (requirement.existingOnly) {
+    const known = character.get("magic")?.spells.knownSpells.some(
+      (entry) => entry.spells.id === spell.index,
+    )
+    if (!known) return false
+  }
+
+  if (requirement.cantrip && spell.slotLevel !== 0) return false
+  if (!requirement.cantrip && spell.slotLevel === 0) return false
+  if (
+    requirement.exactLevel !== undefined &&
+    spell.slotLevel !== requirement.exactLevel
+  ) {
+    return false
+  }
+  if (spell.slotLevel > requirement.maxLevel) return false
+  if (
+    requirement.schools?.length &&
+    !requirement.schools.some(
+      (school) =>
+        school.toLowerCase() === String(spell.school).toLowerCase(),
+    )
+  ) {
+    return false
+  }
+
+  return true
+}
+
 function localizeSubclass(
   subclass: SubclassDefinition,
 ): SubclassDefinition {
@@ -137,4 +195,22 @@ function localizeChoice(
     label: getChoiceLabelPt(choice.label),
     options: choice.options?.map(getChoiceOptionPt),
   }
+}
+
+function isClassName(value: unknown): value is ClassName {
+  return (
+    value === "artificer" ||
+    value === "barbarian" ||
+    value === "bard" ||
+    value === "cleric" ||
+    value === "druid" ||
+    value === "fighter" ||
+    value === "monk" ||
+    value === "paladin" ||
+    value === "ranger" ||
+    value === "rogue" ||
+    value === "sorcerer" ||
+    value === "warlock" ||
+    value === "wizard"
+  )
 }
