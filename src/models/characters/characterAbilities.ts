@@ -24,12 +24,10 @@ export function updateAbility(
   character: CharacterTemplate,
   ability: Ability,
 ): CharacterTemplate {
-  const normalized = applyAbilityDefault(ability)
-
   return character.with(
     "abilities",
     (character.get("abilities") ?? []).map((a) =>
-      a.id === normalized.id ? normalized : a,
+      a.id === ability.id ? ability : a,
     ),
   )
 }
