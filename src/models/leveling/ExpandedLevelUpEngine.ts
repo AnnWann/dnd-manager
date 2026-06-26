@@ -170,7 +170,11 @@ function localizeSubclass(
 ): SubclassDefinition {
   return {
     ...subclass,
-    name: getSubclassNamePt(subclass.id, subclass.name),
+    name: getSubclassNamePt(
+      subclass.id,
+      subclass.name,
+      subclass.className,
+    ),
     features: subclass.features.map(localizeFeature),
   }
 }
