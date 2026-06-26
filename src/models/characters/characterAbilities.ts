@@ -1,16 +1,22 @@
 // models/characters/characterAbilities.ts
 
 import type { Ability } from "../abilities/Ability"
-import { getEquipmentAbilities, getEquippedItems } from "./characterEquipment"
+import {
+  applyAbilityDefault,
+  saveAbilityDefault,
+} from "../abilities/AbilityDefaults"
+import { getEquipmentAbilities } from "./characterEquipment"
 import type { CharacterTemplate } from "./CharacterTemplate"
 
 export function addAbility(
   character: CharacterTemplate,
   ability: Ability,
 ): CharacterTemplate {
+  const normalized = applyAbilityDefault(ability)
+
   return character.with("abilities", [
     ...(character.get("abilities") ?? []),
-    ability,
+    normalized,
   ])
 }
 
@@ -18,10 +24,12 @@ export function updateAbility(
   character: CharacterTemplate,
   ability: Ability,
 ): CharacterTemplate {
+  const normalized = applyAbilityDefault(ability)
+
   return character.with(
     "abilities",
     (character.get("abilities") ?? []).map((a) =>
-      a.id === ability.id ? ability : a,
+      a.id === normalized.id ? normalized : a,
     ),
   )
 }
@@ -40,13 +48,22 @@ export function saveAbility(
   character: CharacterTemplate,
   ability: Ability,
 ): CharacterTemplate {
-  const exists = (character.get("abilities") ?? []).some(
-    (a) => a.id === ability.id,
+  const previous = (character.get("abilities") ?? []).find(
+    (entry) => entry.id === ability.id,
   )
+  const normalized: Ability = {
+    ...ability,
+    sourceAbilityId:
+      ability.sourceAbilityId ?? previous?.sourceAbilityId,
+    sourceVersion: ability.sourceVersion ?? previous?.sourceVersion,
+    customized: true,
+  }
 
-  return exists
-    ? updateAbility(character, ability)
-    : addAbility(character, ability)
+  saveAbilityDefault(normalized)
+
+  return previous
+    ? updateAbility(character, normalized)
+    : addAbility(character, normalized)
 }
 
 export function useAbility(
@@ -98,7 +115,6 @@ export function getCharacterAbilities(
 
   return [...characterAbilities, ...equipmentAbilities]
 }
-
 
 export function restoreAbility(
   character: CharacterTemplate,
