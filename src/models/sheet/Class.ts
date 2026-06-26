@@ -16,7 +16,7 @@ export type KnownSpellsRule = {
   canPrepare?: (character: CharacterTemplate) => number
 }
 
-export type ClassSourceBook = "PHB" | "Tasha"
+export type ClassSourceBook = "PHB" | "Tasha" | "Xanathar"
 
 export type CharacterSubclassSelection = {
   id: string
