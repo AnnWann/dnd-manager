@@ -30,24 +30,25 @@ export function synchronizeClassFeatures(
       const features = getFeaturesAtLevel(className, level, subclassId)
 
       for (const feature of features) {
-        const featureId = featureAbilityId(className, level, feature.id)
-        const existingIndex = abilities.findIndex(
-          (ability) => ability.id === featureId,
-        )
-        const savedChoice = feature.choice
-          ? characterClass.levelChoices?.[feature.choice.id] ?? []
-          : []
-
-        if (feature.optional && existingIndex < 0 && savedChoice.length === 0) {
-          continue
-        }
-
         const generated = createFeatureAbility(
           className,
           level,
           feature,
-          savedChoice,
+          feature.choice
+            ? characterClass.levelChoices?.[feature.choice.id] ?? []
+            : [],
         )
+        const savedChoice = feature.choice
+          ? characterClass.levelChoices?.[feature.choice.id] ?? []
+          : []
+        const existingIndex = findExistingAbilityIndex(
+          abilities,
+          generated,
+        )
+
+        if (feature.optional && existingIndex < 0 && savedChoice.length === 0) {
+          continue
+        }
 
         if (existingIndex >= 0) {
           const existing = abilities[existingIndex]
@@ -70,7 +71,24 @@ export function synchronizeClassFeatures(
             feature.choice.id,
             selected,
           )
-          if (abilities.some((ability) => ability.id === selectedId)) continue
+          const existingChoiceIndex = abilities.findIndex(
+            (ability) =>
+              ability.id === selectedId ||
+              (!ability.sourceAbilityId &&
+                normalize(ability.name) === normalize(selected)),
+          )
+
+          if (existingChoiceIndex >= 0) {
+            const existing = abilities[existingChoiceIndex]
+            abilities[existingChoiceIndex] = applyAbilityDefault({
+              ...existing,
+              sourceAbilityId:
+                existing.sourceAbilityId ??
+                `class-choice:${className}:${feature.choice.id}:${slug(selected)}`,
+              sourceVersion: existing.sourceVersion ?? SOURCE_VERSION,
+            })
+            continue
+          }
 
           abilities.push(
             applyAbilityDefault({
@@ -95,6 +113,20 @@ export function synchronizeClassFeatures(
   next = next.ensureMagic().syncMagicWithClasses()
   next = synchronizeSorceryPointPool(next)
   return next
+}
+
+function findExistingAbilityIndex(
+  abilities: Ability[],
+  generated: Ability,
+): number {
+  const byId = abilities.findIndex((ability) => ability.id === generated.id)
+  if (byId >= 0) return byId
+
+  return abilities.findIndex(
+    (ability) =>
+      !ability.sourceAbilityId &&
+      normalize(ability.name) === normalize(generated.name),
+  )
 }
 
 function createFeatureAbility(
@@ -143,11 +175,16 @@ export function choiceAbilityId(
   return `choice:${className}:${choiceId}:${slug(value)}`
 }
 
-function slug(value: string): string {
+function normalize(value: string): string {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .trim()
     .toLowerCase()
+}
+
+function slug(value: string): string {
+  return normalize(value)
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
 }
