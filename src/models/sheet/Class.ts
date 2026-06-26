@@ -16,6 +16,14 @@ export type KnownSpellsRule = {
   canPrepare?: (character: CharacterTemplate) => number
 }
 
+export type ClassSourceBook = "PHB" | "Tasha"
+
+export type CharacterSubclassSelection = {
+  id: string
+  name: string
+  source: ClassSourceBook
+}
+
 export interface CharacterClassInterface {
   className: ClassName
   level: ClassLevel
@@ -25,6 +33,12 @@ export interface CharacterClassInterface {
   spellcastingProgression?: SpellcastingProgression
 
   knownSpells?: KnownSpellsRule
+
+  /** Selected 2014 subclass, when the class has reached its subclass level. */
+  subclass?: CharacterSubclassSelection
+
+  /** Persisted selections made during level-up, keyed by rule/feature id. */
+  levelChoices?: Record<string, string[]>
 }
 
 export class CharacterClass implements CharacterClassInterface {
@@ -33,6 +47,8 @@ export class CharacterClass implements CharacterClassInterface {
   castingAttribute?: Attribute
   spellcastingProgression?: SpellcastingProgression
   knownSpells?: KnownSpellsRule
+  subclass?: CharacterSubclassSelection
+  levelChoices?: Record<string, string[]>
 
   constructor(
     className: ClassName,
@@ -40,12 +56,16 @@ export class CharacterClass implements CharacterClassInterface {
     castingAttribute: Attribute | undefined = undefined,
     spellcastingProgression: SpellcastingProgression | undefined = undefined,
     knownSpells: KnownSpellsRule | undefined = undefined,
+    subclass: CharacterSubclassSelection | undefined = undefined,
+    levelChoices: Record<string, string[]> | undefined = undefined,
   ) {
     this.className = className
     this.level = classLevel
     this.castingAttribute = castingAttribute
     this.spellcastingProgression = spellcastingProgression
     this.knownSpells = knownSpells
+    this.subclass = subclass
+    this.levelChoices = levelChoices
   }
 
   getKnownSpellLimit(): number | undefined {
@@ -173,7 +193,7 @@ const ARTIFICER_PREPARED_SPELLS: KnownSpellsRule = {
   canPrepare: (character) =>
     minimumOne(
       Math.floor(character.getClassLevel("artificer") / 2) +
-        character.getAttributeModifier('int'),
+        character.getAttributeModifier("int"),
     ),
 }
 
@@ -182,7 +202,7 @@ const CLERIC_PREPARED_SPELLS: KnownSpellsRule = {
   canPrepare: (character) =>
     minimumOne(
       character.getClassLevel("cleric") +
-        character.getAttributeModifier("wis")
+        character.getAttributeModifier("wis"),
     ),
 }
 
@@ -190,8 +210,8 @@ const DRUID_PREPARED_SPELLS: KnownSpellsRule = {
   ...PREPARED_ONLY_SPELLS,
   canPrepare: (character) =>
     minimumOne(
-     character.getClassLevel("druid") +
-        character.getAttributeModifier("wis")
+      character.getClassLevel("druid") +
+        character.getAttributeModifier("wis"),
     ),
 }
 
