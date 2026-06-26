@@ -1,10 +1,6 @@
 // models/characters/characterAbilities.ts
 
 import type { Ability } from "../abilities/Ability"
-import {
-  applyAbilityDefault,
-  saveAbilityDefault,
-} from "../abilities/AbilityDefaults"
 import { getEquipmentAbilities } from "./characterEquipment"
 import type { CharacterTemplate } from "./CharacterTemplate"
 
@@ -12,11 +8,9 @@ export function addAbility(
   character: CharacterTemplate,
   ability: Ability,
 ): CharacterTemplate {
-  const normalized = applyAbilityDefault(ability)
-
   return character.with("abilities", [
     ...(character.get("abilities") ?? []),
-    normalized,
+    ability,
   ])
 }
 
@@ -46,22 +40,13 @@ export function saveAbility(
   character: CharacterTemplate,
   ability: Ability,
 ): CharacterTemplate {
-  const previous = (character.get("abilities") ?? []).find(
-    (entry) => entry.id === ability.id,
+  const exists = (character.get("abilities") ?? []).some(
+    (a) => a.id === ability.id,
   )
-  const normalized: Ability = {
-    ...ability,
-    sourceAbilityId:
-      ability.sourceAbilityId ?? previous?.sourceAbilityId,
-    sourceVersion: ability.sourceVersion ?? previous?.sourceVersion,
-    customized: true,
-  }
 
-  saveAbilityDefault(normalized)
-
-  return previous
-    ? updateAbility(character, normalized)
-    : addAbility(character, normalized)
+  return exists
+    ? updateAbility(character, ability)
+    : addAbility(character, ability)
 }
 
 export function useAbility(
