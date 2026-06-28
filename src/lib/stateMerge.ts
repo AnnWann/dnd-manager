@@ -7,6 +7,8 @@ const COUNTER_FIELDS = new Set([
   "current",
   "successes",
   "failures",
+  "version",
+  "stateVersion",
 ])
 
 export function mergeAppStates(
@@ -259,36 +261,20 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value)
 }
 
-function deepEqual(left: unknown, right: unknown): boolean {
-  if (left === right) return true
-  return stableKey(left) === stableKey(right)
-}
-
 function stableKey(value: unknown): string {
-  return JSON.stringify(sortValue(value))
+  return JSON.stringify(value)
 }
 
-function sortValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sortValue)
-  if (!isPlainObject(value)) return value
+function unique<T>(values: T[]): T[] {
+  return Array.from(new Set(values))
+}
 
-  return Object.fromEntries(
-    Object.keys(value)
-      .sort()
-      .map((key) => [key, sortValue(value[key])]),
-  )
+function deepEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
 }
 
 function clone<T>(value: T): T {
-  if (value === undefined) return value
-
-  if (typeof structuredClone === "function") {
-    return structuredClone(value)
-  }
-
-  return JSON.parse(JSON.stringify(value)) as T
-}
-
-function unique(values: string[]): string[] {
-  return Array.from(new Set(values))
+  return value === undefined
+    ? value
+    : JSON.parse(JSON.stringify(value))
 }
