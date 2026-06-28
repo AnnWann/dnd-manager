@@ -11,43 +11,46 @@ import {
 
 import { newCharacterTemplate } from "../lib/newCharacterTemplate"
 import type { AppStateV1 } from "../lib/remoteState"
-import { normalizeItemText } from "../lib/textNormalization"
 import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from "../models/characters/CharacterTemplate"
 import {
-  takeLongRest,
-  takePartialLongRest,
-} from "../models/characters/characterRestWithSorcery"
+  applyRecordedGameOperation,
+} from "../models/game/applyGameOperation"
+import {
+  createGameOperationRecord,
+  type GameOperation,
+  type GameOperationRecord,
+  type InventoryLocation,
+  type TransferItemOperationRequest,
+} from "../models/game/GameOperation"
 import type { Itemmable } from "../models/items/item"
 import type { Player } from "../models/player/Player"
-import {
-  consumeSelectedSupplies,
-  getRequiredSupplyForRace,
-  type LongRestSupplySelection,
-} from "../models/supplies/partySupply"
+import type { LongRestSupplySelection } from "../models/supplies/partySupply"
 
-export type InventoryLocation =
-  | { type: "party" }
-  | { type: "character"; characterId: string }
+export type { InventoryLocation } from "../models/game/GameOperation"
 
-export type TransferItemRequest = {
-  itemId: string
-  quantity: number
-  from: InventoryLocation
-  to: InventoryLocation
-}
+export type TransferItemRequest = TransferItemOperationRequest
 
 export type CharacterContextValue = {
   activeCharacter?: CharacterTemplate
   visibleCharacters: CharacterTemplate[]
   transferCharacters: CharacterTemplate[]
   partyInventory: Itemmable[]
+  operationLog: GameOperationRecord[]
+  dispatchGameOperation: (operation: GameOperation) => void
   updateCharacter: (
     characterId: string,
     updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
+  setCharacterCurrentHp: (characterId: string, value: number) => void
+  setCharacterTemporaryHp: (characterId: string, value: number) => void
+  damageCharacter: (characterId: string, amount: number) => void
+  healCharacter: (characterId: string, amount: number) => void
+  useCharacterAbility: (characterId: string, abilityId: string) => void
+  restoreCharacterAbility: (characterId: string, abilityId: string) => void
+  resetCharacterAbility: (characterId: string, abilityId: string) => void
   completeLongRest: (
     characterId: string,
     selection: LongRestSupplySelection[],
@@ -104,6 +107,7 @@ export function CharacterProvider({
   const canAssignOwners = userRole === "master"
   const canEditCharacterType = userRole === "master"
   const normalizedUserKey = userKey.trim()
+  const actorId = normalizedUserKey || userRole
 
   const playersById = useMemo(() => {
     const map = new Map<string, Player>()
@@ -215,30 +219,100 @@ export function CharacterProvider({
       getOwner(userKey),
     )
 
-    setAppState((previous) => ({
-      ...previous,
-      characters: [character.toJSON()],
-      activeCharacterId: character.get("id"),
-    }))
+    setAppState((previous) =>
+      applyRecordedGameOperation(
+        previous,
+        createGameOperationRecord(
+          {
+            type: "character.add",
+            character: character.toJSON(),
+            select: true,
+          },
+          actorId,
+        ),
+      ),
+    )
     setSelectedCharacterId(character.get("id"))
-  }, [characters.length, setAppState, userKey])
+  }, [actorId, characters.length, setAppState, userKey])
+
+  function dispatchGameOperation(operation: GameOperation) {
+    setAppState((previous) =>
+      applyRecordedGameOperation(
+        previous,
+        createGameOperationRecord(operation, actorId),
+      ),
+    )
+  }
 
   function updateCharacter(
     characterId: string,
     updater: (c: CharacterTemplate) => CharacterTemplate,
   ) {
-    setAppState((previous) => ({
-      ...previous,
-      characters: previous.characters.map((rawCharacter) => {
-        const character = CharacterTemplate.fromJSON(rawCharacter)
+    setAppState((previous) => {
+      const rawCharacter = previous.characters.find(
+        (entry) => entry.id === characterId,
+      )
+      if (!rawCharacter) return previous
 
-        if (character.get("id") !== characterId) {
-          return character.toJSON()
-        }
+      const character = CharacterTemplate.fromJSON(rawCharacter)
+      const nextCharacter = updater(character)
 
-        return updater(character).toJSON()
-      }),
-    }))
+      return applyRecordedGameOperation(
+        previous,
+        createGameOperationRecord(
+          {
+            type: "character.replace",
+            characterId,
+            character: nextCharacter.toJSON(),
+          },
+          actorId,
+        ),
+      )
+    })
+  }
+
+  function setCharacterCurrentHp(characterId: string, value: number) {
+    dispatchGameOperation({ type: "character.hp.set", characterId, value })
+  }
+
+  function setCharacterTemporaryHp(characterId: string, value: number) {
+    dispatchGameOperation({
+      type: "character.hp.temporary.set",
+      characterId,
+      value,
+    })
+  }
+
+  function damageCharacter(characterId: string, amount: number) {
+    dispatchGameOperation({ type: "character.hp.damage", characterId, amount })
+  }
+
+  function healCharacter(characterId: string, amount: number) {
+    dispatchGameOperation({ type: "character.hp.heal", characterId, amount })
+  }
+
+  function useCharacterAbility(characterId: string, abilityId: string) {
+    dispatchGameOperation({
+      type: "character.ability.use",
+      characterId,
+      abilityId,
+    })
+  }
+
+  function restoreCharacterAbility(characterId: string, abilityId: string) {
+    dispatchGameOperation({
+      type: "character.ability.restore",
+      characterId,
+      abilityId,
+    })
+  }
+
+  function resetCharacterAbility(characterId: string, abilityId: string) {
+    dispatchGameOperation({
+      type: "character.ability.reset",
+      characterId,
+      abilityId,
+    })
   }
 
   function completeLongRest(
@@ -246,49 +320,29 @@ export function CharacterProvider({
     selection: LongRestSupplySelection[],
   ) {
     setAppState((previous) => {
-      const characterObjects = previous.characters.map((rawCharacter) =>
-        CharacterTemplate.fromJSON(rawCharacter),
+      const rawCharacter = previous.characters.find(
+        (entry) => entry.id === characterId,
       )
-      const restedCharacter = characterObjects.find(
-        (character) => character.get("id") === characterId,
-      )
+      if (!rawCharacter) return previous
 
-      if (!restedCharacter) return previous
-
+      const restedCharacter = CharacterTemplate.fromJSON(rawCharacter)
       const canRest =
         userRole === "master" ||
         restedCharacter.get("owner")?.id?.trim() === normalizedUserKey
 
       if (!canRest) return previous
 
-      const requiredSupply = getRequiredSupplyForRace(
-        restedCharacter.get("sheet").race,
+      return applyRecordedGameOperation(
+        previous,
+        createGameOperationRecord(
+          {
+            type: "character.longRest.complete",
+            characterId,
+            selection,
+          },
+          actorId,
+        ),
       )
-      const consumption = consumeSelectedSupplies(
-        previous.partyInventory ?? [],
-        selection,
-      )
-
-      if (!consumption.valid) return previous
-
-      const isPartialRest =
-        consumption.selectedPortions + 0.000001 < requiredSupply
-
-      return {
-        ...previous,
-        characters: characterObjects.map((character) => {
-          if (character.get("id") !== characterId) {
-            return character.toJSON()
-          }
-
-          return (
-            isPartialRest
-              ? takePartialLongRest(character)
-              : takeLongRest(character)
-          ).toJSON()
-        }),
-        partyInventory: consumption.items,
-      }
     })
   }
 
@@ -298,11 +352,11 @@ export function CharacterProvider({
       getOwner(userKey),
     )
 
-    setAppState((previous) => ({
-      ...previous,
-      characters: [...previous.characters, character.toJSON()],
-      activeCharacterId: character.get("id"),
-    }))
+    dispatchGameOperation({
+      type: "character.add",
+      character: character.toJSON(),
+      select: true,
+    })
     setSelectedCharacterId(character.get("id"))
   }
 
@@ -327,22 +381,17 @@ export function CharacterProvider({
       owner: importedOwner,
     })
 
-    setAppState((previous) => ({
-      ...previous,
-      characters: [...previous.characters, imported.toJSON()],
-      activeCharacterId: imported.get("id"),
-    }))
+    dispatchGameOperation({
+      type: "character.add",
+      character: imported.toJSON(),
+      select: true,
+    })
     setSelectedCharacterId(imported.get("id"))
     return imported
   }
 
   function deleteCharacter(characterId: string) {
-    setAppState((previous) => ({
-      ...previous,
-      characters: previous.characters.filter(
-        (rawCharacter) => rawCharacter.id !== characterId,
-      ),
-    }))
+    dispatchGameOperation({ type: "character.delete", characterId })
 
     setSelectedCharacterId((current) =>
       current === characterId ? "" : current,
@@ -350,36 +399,35 @@ export function CharacterProvider({
   }
 
   function addPartyItem(item: Itemmable) {
-    setAppState((previous) => ({
-      ...previous,
-      partyInventory: [
-        ...(previous.partyInventory ?? []),
-        normalizeItemText(item),
-      ],
-    }))
+    dispatchGameOperation({ type: "party.item.add", item })
   }
 
   function updatePartyItem(
     itemId: string,
     updater: (item: Itemmable) => Itemmable,
   ) {
-    setAppState((previous) => ({
-      ...previous,
-      partyInventory: (previous.partyInventory ?? []).map((item) =>
-        item.id === itemId
-          ? normalizeItemText(updater(item))
-          : item,
-      ),
-    }))
+    setAppState((previous) => {
+      const item = (previous.partyInventory ?? []).find(
+        (entry) => entry.id === itemId,
+      )
+      if (!item) return previous
+
+      return applyRecordedGameOperation(
+        previous,
+        createGameOperationRecord(
+          {
+            type: "party.item.update",
+            itemId,
+            item: updater(item),
+          },
+          actorId,
+        ),
+      )
+    })
   }
 
   function removePartyItem(itemId: string) {
-    setAppState((previous) => ({
-      ...previous,
-      partyInventory: (previous.partyInventory ?? []).filter(
-        (item) => item.id !== itemId,
-      ),
-    }))
+    dispatchGameOperation({ type: "party.item.remove", itemId })
   }
 
   function canTransferFromCharacter(characterId: string): boolean {
@@ -396,13 +444,10 @@ export function CharacterProvider({
     if (locationKey(request.from) === locationKey(request.to)) return
 
     setAppState((previous) => {
-      const characterObjects = previous.characters.map((raw) =>
-        CharacterTemplate.fromJSON(raw),
-      )
       const characterById = new Map(
-        characterObjects.map((character) => [
-          character.get("id"),
-          character,
+        previous.characters.map((rawCharacter) => [
+          rawCharacter.id,
+          CharacterTemplate.fromJSON(rawCharacter),
         ]),
       )
 
@@ -428,78 +473,19 @@ export function CharacterProvider({
         return previous
       }
 
-      const partyInventory = [...(previous.partyInventory ?? [])]
-      const inventoryByCharacterId = new Map(
-        characterObjects.map((character) => [
-          character.get("id"),
-          [...(character.get("inventory") ?? [])],
-        ]),
-      )
-
-      const sourceInventory = getLocationInventory(
-        request.from,
-        partyInventory,
-        inventoryByCharacterId,
-      )
-      const destinationInventory = getLocationInventory(
-        request.to,
-        partyInventory,
-        inventoryByCharacterId,
-      )
-
-      if (!sourceInventory || !destinationInventory) return previous
-
-      const itemIndex = sourceInventory.findIndex(
-        (item) => item.id === request.itemId,
-      )
-      if (itemIndex < 0) return previous
-
-      const sourceItem = sourceInventory[itemIndex]
-      const availableQuantity = Math.max(
-        0,
-        Number(sourceItem.quantity) || 0,
-      )
-      if (availableQuantity <= 0) return previous
-
-      const requestedQuantity = Math.max(
-        1,
-        Math.trunc(Number(request.quantity) || availableQuantity),
-      )
-      const movedQuantity = Math.min(
-        availableQuantity,
-        requestedQuantity,
-      )
-
-      if (movedQuantity >= availableQuantity) {
-        sourceInventory.splice(itemIndex, 1)
-      } else {
-        sourceInventory[itemIndex] = normalizeItemText({
-          ...sourceItem,
-          quantity: availableQuantity - movedQuantity,
-        })
-      }
-
-      destinationInventory.push(
-        normalizeItemText({
-          ...sourceItem,
-          id: crypto.randomUUID(),
-          quantity: movedQuantity,
-          insideBagOfHolding: false,
-        }),
-      )
-
-      return {
-        ...previous,
-        partyInventory,
-        characters: characterObjects.map((character) =>
-          character
-            .with(
-              "inventory",
-              inventoryByCharacterId.get(character.get("id")) ?? [],
-            )
-            .toJSON(),
+      return applyRecordedGameOperation(
+        previous,
+        createGameOperationRecord(
+          {
+            type: "inventory.item.transfer",
+            request: {
+              ...request,
+              destinationItemId: crypto.randomUUID(),
+            },
+          },
+          actorId,
         ),
-      }
+      )
     })
   }
 
@@ -510,7 +496,16 @@ export function CharacterProvider({
         visibleCharacters,
         transferCharacters,
         partyInventory: appState.partyInventory ?? [],
+        operationLog: appState.operations ?? [],
+        dispatchGameOperation,
         updateCharacter,
+        setCharacterCurrentHp,
+        setCharacterTemporaryHp,
+        damageCharacter,
+        healCharacter,
+        useCharacterAbility,
+        restoreCharacterAbility,
+        resetCharacterAbility,
         completeLongRest,
         addCharacter,
         importCharacter,
@@ -561,15 +556,6 @@ function canUseCharacterAsTarget(
 
   const isOwned = character.get("owner")?.id?.trim() === userKey
   return isOwned || character.get("visibility") !== "master"
-}
-
-function getLocationInventory(
-  location: InventoryLocation,
-  partyInventory: Itemmable[],
-  inventoryByCharacterId: Map<string, Itemmable[]>,
-): Itemmable[] | undefined {
-  if (location.type === "party") return partyInventory
-  return inventoryByCharacterId.get(location.characterId)
 }
 
 export function useCharacterContext() {
