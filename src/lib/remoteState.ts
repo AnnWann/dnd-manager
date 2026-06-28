@@ -6,6 +6,11 @@ import {
   useState,
 } from 'react'
 import type { CharacterTemplateProps } from '../models/characters/CharacterTemplate'
+import {
+  normalizeGameOperationLog,
+  type GameEntityMetadata,
+  type GameOperationRecord,
+} from '../models/game/GameOperation'
 import type { Itemmable } from '../models/items/item'
 import type { Spell } from '../models/magic/spells/Spell'
 import { normalizeAppStateInventory } from './normalizeAppStateInventory'
@@ -14,6 +19,14 @@ import { mergeAppStates } from './stateMerge'
 
 export type AppStateV1 = {
   version: 1
+  /** Monotonic shared-state version independent from the schema version above. */
+  stateVersion?: number
+  updatedAt?: string
+  updatedBy?: string
+  /** Entity-level versions used by future granular sync/conflict checks. */
+  entityVersions?: Record<string, GameEntityMetadata>
+  /** Recent operation log. It is intentionally bounded during normalization. */
+  operations?: GameOperationRecord[]
   characters: CharacterTemplateProps[]
   activeCharacterId: string
   partyInventory?: Itemmable[]
@@ -61,11 +74,14 @@ class SyncConflictError extends Error {
 function defaultState(): AppStateV1 {
   return {
     version: 1,
+    stateVersion: 0,
     characters: [],
     activeCharacterId: '',
     partyInventory: [],
     partyCarryCapacity: 0,
     spells: [],
+    entityVersions: {},
+    operations: [],
   }
 }
 
@@ -501,9 +517,18 @@ function normalizeState(state: unknown): AppStateV1 {
 
     const raw = state as Partial<AppStateV1>
     const parsedCapacity = Number(raw.partyCarryCapacity)
+    const parsedStateVersion = Number(raw.stateVersion)
 
     return normalizeAppStateInventory({
       version: 1,
+      stateVersion:
+        Number.isFinite(parsedStateVersion) && parsedStateVersion >= 0
+          ? Math.trunc(parsedStateVersion)
+          : 0,
+      updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : undefined,
+      updatedBy: typeof raw.updatedBy === 'string' ? raw.updatedBy : undefined,
+      entityVersions: normalizeEntityVersions(raw.entityVersions),
+      operations: normalizeGameOperationLog(raw.operations),
       characters: Array.isArray(raw.characters) ? raw.characters : [],
       activeCharacterId:
         typeof raw.activeCharacterId === 'string'
@@ -521,6 +546,32 @@ function normalizeState(state: unknown): AppStateV1 {
   } catch {
     return defaultState()
   }
+}
+
+function normalizeEntityVersions(
+  value: unknown,
+): Record<string, GameEntityMetadata> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+
+  const result: Record<string, GameEntityMetadata> = {}
+
+  for (const [key, entry] of Object.entries(value)) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue
+    const metadata = entry as GameEntityMetadata
+    const parsedVersion = Number(metadata.version)
+    result[key] = {
+      version:
+        Number.isFinite(parsedVersion) && parsedVersion >= 0
+          ? Math.trunc(parsedVersion)
+          : 0,
+      updatedAt:
+        typeof metadata.updatedAt === 'string' ? metadata.updatedAt : undefined,
+      updatedBy:
+        typeof metadata.updatedBy === 'string' ? metadata.updatedBy : undefined,
+    }
+  }
+
+  return result
 }
 
 function statesEqual(left: AppStateV1, right: AppStateV1): boolean {
