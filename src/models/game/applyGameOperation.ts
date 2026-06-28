@@ -1,6 +1,9 @@
 import type { AppStateV1 } from "../../lib/remoteState"
 import { normalizeItemText } from "../../lib/textNormalization"
-import { CharacterTemplate } from "../characters/CharacterTemplate"
+import {
+  CharacterTemplate,
+  type CharacterTemplateProps,
+} from "../characters/CharacterTemplate"
 import {
   takeLongRest,
   takePartialLongRest,
@@ -346,9 +349,9 @@ function touchCharacter(
 }
 
 function touchCharacterProps(
-  character: CharacterTemplate["toJSON"] extends () => infer T ? T : never,
+  character: CharacterTemplateProps,
   meta?: ApplyMeta,
-): CharacterTemplate["toJSON"] extends () => infer T ? T : never {
+): CharacterTemplateProps {
   return touchMetadata(character, meta)
 }
 
@@ -359,15 +362,17 @@ function touchItem<TItem extends Itemmable>(
   return touchMetadata(item, meta)
 }
 
-function touchMetadata<TValue extends GameEntityMetadata>(
+function touchMetadata<TValue extends object>(
   value: TValue,
   meta?: ApplyMeta,
-): TValue {
-  if (!meta) return value
+): TValue & GameEntityMetadata {
+  if (!meta) return value as TValue & GameEntityMetadata
+
+  const current = value as TValue & GameEntityMetadata
 
   return {
-    ...value,
-    version: Math.max(0, Math.trunc(Number(value.version) || 0)) + 1,
+    ...current,
+    version: Math.max(0, Math.trunc(Number(current.version) || 0)) + 1,
     updatedAt: meta.createdAt,
     updatedBy: meta.actorId,
   }
