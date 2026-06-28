@@ -36,6 +36,11 @@ export function applyRecordedGameOperation<TState extends AppStateV1>(
     stateVersion: currentVersion + 1,
     updatedAt: record.createdAt,
     updatedBy: record.actorId,
+    entityVersions: touchEntityVersions(
+      applied.entityVersions ?? {},
+      getTouchedEntityKeys(record.operation),
+      record,
+    ),
     operations: [...(applied.operations ?? []), record].slice(
       -MAX_GAME_OPERATION_LOG,
     ),
@@ -63,12 +68,11 @@ export function applyGameOperation<TState extends AppStateV1>(
     case "character.replace":
       return {
         ...state,
-        characters: state.characters.map((rawCharacter) => {
-          const character = CharacterTemplate.fromJSON(rawCharacter)
-          return character.get("id") === operation.characterId
+        characters: state.characters.map((rawCharacter) =>
+          rawCharacter.id === operation.characterId
             ? touchCharacterProps(operation.character, meta)
-            : character.toJSON()
-        }),
+            : rawCharacter,
+        ),
       }
 
     case "character.delete":
@@ -197,12 +201,9 @@ function updateCharacter<TState extends AppStateV1>(
   let changed = false
 
   const characters = state.characters.map((rawCharacter) => {
+    if (rawCharacter.id !== characterId) return rawCharacter
+
     const character = CharacterTemplate.fromJSON(rawCharacter)
-
-    if (character.get("id") !== characterId) {
-      return character.toJSON()
-    }
-
     changed = true
     return touchCharacter(updater(character), meta).toJSON()
   })
@@ -221,15 +222,12 @@ function completeLongRest<TState extends AppStateV1>(
   selection: Parameters<typeof consumeSelectedSupplies>[1],
   meta?: ApplyMeta,
 ): TState {
-  const characterObjects = state.characters.map((rawCharacter) =>
-    CharacterTemplate.fromJSON(rawCharacter),
+  const restedRawCharacter = state.characters.find(
+    (rawCharacter) => rawCharacter.id === characterId,
   )
-  const restedCharacter = characterObjects.find(
-    (character) => character.get("id") === characterId,
-  )
+  if (!restedRawCharacter) return state
 
-  if (!restedCharacter) return state
-
+  const restedCharacter = CharacterTemplate.fromJSON(restedRawCharacter)
   const requiredSupply = getRequiredSupplyForRace(
     restedCharacter.get("sheet").race,
   )
@@ -245,15 +243,13 @@ function completeLongRest<TState extends AppStateV1>(
 
   return {
     ...state,
-    characters: characterObjects.map((character) => {
-      if (character.get("id") !== characterId) {
-        return character.toJSON()
-      }
+    characters: state.characters.map((rawCharacter) => {
+      if (rawCharacter.id !== characterId) return rawCharacter
 
       return touchCharacter(
         isPartialRest
-          ? takePartialLongRest(character)
-          : takeLongRest(character),
+          ? takePartialLongRest(restedCharacter)
+          : takeLongRest(restedCharacter),
         meta,
       ).toJSON()
     }),
@@ -268,14 +264,11 @@ function transferItem<TState extends AppStateV1>(
 ): TState {
   if (locationKey(request.from) === locationKey(request.to)) return state
 
-  const characterObjects = state.characters.map((raw) =>
-    CharacterTemplate.fromJSON(raw),
-  )
   const partyInventory = [...(state.partyInventory ?? [])]
   const inventoryByCharacterId = new Map(
-    characterObjects.map((character) => [
-      character.get("id"),
-      [...(character.get("inventory") ?? [])],
+    state.characters.map((rawCharacter) => [
+      rawCharacter.id,
+      [...(rawCharacter.inventory ?? [])],
     ]),
   )
 
@@ -337,15 +330,11 @@ function transferItem<TState extends AppStateV1>(
   return {
     ...state,
     partyInventory,
-    characters: characterObjects.map((character) =>
-      touchCharacter(
-        character.with(
-          "inventory",
-          inventoryByCharacterId.get(character.get("id")) ?? [],
-        ),
-        meta,
-      ).toJSON(),
-    ),
+    characters: state.characters.map((rawCharacter) => ({
+      ...rawCharacter,
+      inventory:
+        inventoryByCharacterId.get(rawCharacter.id) ?? rawCharacter.inventory ?? [],
+    })),
   }
 }
 
@@ -381,6 +370,60 @@ function touchMetadata<TValue extends GameEntityMetadata>(
     version: Math.max(0, Math.trunc(Number(value.version) || 0)) + 1,
     updatedAt: meta.createdAt,
     updatedBy: meta.actorId,
+  }
+}
+
+function touchEntityVersions(
+  versions: Record<string, GameEntityMetadata>,
+  entityKeys: string[],
+  meta: ApplyMeta,
+): Record<string, GameEntityMetadata> {
+  const next = { ...versions }
+
+  for (const key of entityKeys) {
+    const previous = next[key] ?? {}
+    next[key] = touchMetadata(previous, meta)
+  }
+
+  return next
+}
+
+function getTouchedEntityKeys(operation: GameOperation): string[] {
+  switch (operation.type) {
+    case "character.add":
+      return [`character:${operation.character.id}`]
+    case "character.replace":
+    case "character.delete":
+    case "character.longRest.complete":
+    case "character.hp.set":
+    case "character.hp.temporary.set":
+    case "character.hp.damage":
+    case "character.hp.heal":
+    case "character.ability.add":
+    case "character.ability.save":
+    case "character.ability.remove":
+    case "character.ability.use":
+    case "character.ability.restore":
+    case "character.ability.reset":
+    case "character.spellSlot.spend":
+    case "character.spellSlot.restore":
+    case "character.pactSlot.spend":
+    case "character.pactSlot.restore":
+      return [`character:${operation.characterId}`]
+    case "party.item.add":
+      return ["inventory:party", `partyItem:${operation.item.id}`]
+    case "party.item.update":
+    case "party.item.remove":
+      return ["inventory:party", `partyItem:${operation.itemId}`]
+    case "inventory.item.transfer":
+      return [
+        `inventory:${locationKey(operation.request.from)}`,
+        `inventory:${locationKey(operation.request.to)}`,
+        `item:${operation.request.itemId}`,
+        ...(operation.request.destinationItemId
+          ? [`item:${operation.request.destinationItemId}`]
+          : []),
+      ]
   }
 }
 
