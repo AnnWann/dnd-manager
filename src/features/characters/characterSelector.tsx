@@ -111,6 +111,17 @@ export function CharacterSelector({
     }
   }
 
+  function confirmDeleteActiveCharacter() {
+    if (disableDelete) return
+
+    const characterName = activeCharacter.get("name").trim() || "personagem ativo"
+    const confirmed = window.confirm(
+      `Excluir permanentemente “${characterName}”?\n\nEssa ação não pode ser desfeita.`,
+    )
+
+    if (confirmed) deleteActiveCharacter()
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -219,7 +230,7 @@ export function CharacterSelector({
           <Button
             className="w-full"
             variant="secondary"
-            onClick={deleteActiveCharacter}
+            onClick={confirmDeleteActiveCharacter}
             disabled={disableDelete}
             title={
               disableDelete
