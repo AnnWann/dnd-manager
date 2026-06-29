@@ -6,6 +6,10 @@ import { wieldPocketWeaponWithRules } from "../../../models/characters/character
 import type { ConsumableItem, ThrowableItem } from "../../../models/items/equipment/PocketItem"
 import type { Weapon } from "../../../models/items/equipment/Weapon"
 import type { Itemmable } from "../../../models/items/item"
+import {
+  consumeItemQuantity,
+  isConsumableItemKind,
+} from "../../../models/items/itemConsumption"
 
 type Props = {
   character: CharacterTemplate
@@ -70,9 +74,24 @@ export function EquipmentPocketsSection({
   }
 
   function usePocketItem(index: number) {
-    updateCharacter(character.get("id"), (current) =>
-      current.usePocketItem(index),
-    )
+    updateCharacter(character.get("id"), (current) => {
+      const equipment = current.get("equipment")
+      const item = equipment.pockets[index]
+
+      if (!item || !isConsumableItemKind(item)) return current
+
+      const nextItem = consumeItemQuantity(item)
+      const pockets = nextItem
+        ? equipment.pockets.map((pocketItem, pocketIndex) =>
+            pocketIndex === index ? nextItem : pocketItem,
+          )
+        : equipment.pockets.filter((_, pocketIndex) => pocketIndex !== index)
+
+      return current.with("equipment", {
+        ...equipment,
+        pockets,
+      })
+    })
   }
 
   return (
@@ -141,7 +160,7 @@ export function EquipmentPocketsSection({
                     </Button>
                   ) : null}
 
-                  {isConsumable(item) || isThrowable(item) ? (
+                  {isConsumableItemKind(item) ? (
                     <Button
                       size="sm"
                       variant="secondary"
