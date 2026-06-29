@@ -7,6 +7,7 @@ import { Textarea } from "../../../components/ui/Textarea"
 import { normalizeItemText } from "../../../lib/textNormalization"
 import { withShieldDefaults } from "../../../models/items/equipment/Shield"
 import type { ItemKind, Itemmable } from "../../../models/items/item"
+import { isConsumableItemKind } from "../../../models/items/itemConsumption"
 import {
   canItemGoInPocket,
   getDefaultPocketableForKind,
@@ -31,6 +32,7 @@ type Props = {
     updater: (item: Itemmable) => Itemmable,
   ) => void
   onRemoveItem: (itemId: string) => void
+  onConsumeItem?: (itemId: string) => void
   onEquipItem?: (itemId: string) => void
   onPocketItem?: (itemId: string) => void
   onToggleBagOfHolding?: (itemId: string) => void
@@ -82,7 +84,6 @@ const INVENTORY_FILTERS: Array<{
   { value: "instrument", label: "Instrumentos" },
   { value: "pack", label: "Pacotes" },
   { value: "gear", label: "Equipamento geral" },
-  { value: "currency", label: "Moedas" },
   { value: "consumable", label: "Consumíveis" },
   { value: "throwable", label: "Arremessáveis" },
   { value: "helmet", label: "Capacetes" },
@@ -137,6 +138,7 @@ export function InventoryEditor({
   onAddItem,
   onUpdateItem,
   onRemoveItem,
+  onConsumeItem,
   onEquipItem,
   onPocketItem,
   onToggleBagOfHolding,
@@ -148,7 +150,9 @@ export function InventoryEditor({
   const [creatingItem, setCreatingItem] = useState(false)
   const [editingItem, setEditingItem] = useState<Itemmable | null>(null)
 
-  const filteredItems = items.filter((item) =>
+  const currencyItems = items.filter((item) => item.kind === "currency")
+  const regularItems = items.filter((item) => item.kind !== "currency")
+  const filteredItems = regularItems.filter((item) =>
     matchesInventoryFilter(item, filter),
   )
 
@@ -177,6 +181,16 @@ export function InventoryEditor({
       </CardHeader>
 
       <CardContent>
+        <CurrencyWallet
+          items={currencyItems}
+          onAddItem={onAddItem}
+          onUpdateItem={onUpdateItem}
+          onRemoveItem={onRemoveItem}
+          onTransferItem={onTransferItem}
+          transferLabel={transferLabel}
+          onEditItem={setEditingItem}
+        />
+
         <div className="mb-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {INVENTORY_FILTERS.map((option) => (
             <button
@@ -248,6 +262,18 @@ export function InventoryEditor({
                           Editar
                         </Button>
 
+                        {isConsumableItemKind(item) && onConsumeItem ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => onConsumeItem(item.id)}
+                          >
+                            {item.kind === "ammunition"
+                              ? "Consumir munição"
+                              : "Consumir"}
+                          </Button>
+                        ) : null}
+
                         {item.equippable && item.equipSlot && onEquipItem ? (
                           <Button
                             size="sm"
@@ -314,7 +340,9 @@ export function InventoryEditor({
         ) : (
           <p className="text-sm text-text">
             {items.length
-              ? "Nenhum item encontrado nesse filtro."
+              ? regularItems.length
+                ? "Nenhum item encontrado nesse filtro."
+                : "Nenhum item além das moedas."
               : emptyMessage}
           </p>
         )}
@@ -345,6 +373,137 @@ export function InventoryEditor({
   )
 }
 
+function CurrencyWallet({
+  items,
+  onAddItem,
+  onUpdateItem,
+  onRemoveItem,
+  onTransferItem,
+  transferLabel,
+  onEditItem,
+}: {
+  items: Itemmable[]
+  onAddItem: (item: Itemmable) => void
+  onUpdateItem: (
+    itemId: string,
+    updater: (item: Itemmable) => Itemmable,
+  ) => void
+  onRemoveItem: (itemId: string) => void
+  onTransferItem?: (item: Itemmable) => void
+  transferLabel: string
+  onEditItem: (item: Itemmable) => void
+}) {
+  return (
+    <div className="mb-4 rounded-xl border border-accentBorder bg-accentBg p-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="text-sm font-semibold text-textH">Moedas</div>
+          <div className="mt-1 text-xs leading-5 text-textMuted">
+            Valores monetários ficam separados do restante dos itens para evitar
+            misturar dinheiro com equipamento comum.
+          </div>
+        </div>
+
+        <Button
+          className="w-full sm:w-auto"
+          size="sm"
+          variant="secondary"
+          onClick={() => onAddItem(newCurrencyItem())}
+        >
+          + Moeda
+        </Button>
+      </div>
+
+      {items.length ? (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className="rounded-lg border border-border bg-bg p-3"
+            >
+              <div className="truncate text-sm font-medium text-textH">
+                {item.name || "Moedas"}
+              </div>
+
+              <label className="mt-2 grid gap-1.5">
+                <span className="text-[11px] text-textMuted">Quantidade</span>
+                <Input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={item.quantity ?? 0}
+                  onChange={(event) => {
+                    const quantity = Math.max(
+                      0,
+                      Number(event.target.value) || 0,
+                    )
+                    onUpdateItem(item.id, (current) => ({
+                      ...current,
+                      quantity,
+                    }))
+                  }}
+                />
+              </label>
+
+              {item.notes?.trim() ? (
+                <div className="mt-2 whitespace-pre-wrap text-xs text-text">
+                  {item.notes}
+                </div>
+              ) : null}
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => onEditItem(item)}
+                >
+                  Editar
+                </Button>
+
+                {onTransferItem ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => onTransferItem(item)}
+                  >
+                    {transferLabel}
+                  </Button>
+                ) : null}
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onRemoveItem(item.id)}
+                >
+                  Remover
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-textMuted">
+          Nenhuma moeda registrada.
+        </p>
+      )}
+    </div>
+  )
+}
+
+function newCurrencyItem(): Itemmable {
+  return normalizeItemText({
+    id: crypto.randomUUID(),
+    name: "Moedas",
+    desc: "",
+    notes: "",
+    quantity: 0,
+    weight: 0,
+    pocketable: true,
+    kind: "currency",
+    insideBagOfHolding: false,
+  })
+}
+
 function updateItemKind(item: Itemmable, kind: ItemKind): Itemmable {
   if (kind === "equipment") {
     return withEquipmentDefaults(item, item.equipSlot ?? "weapon")
@@ -361,6 +520,7 @@ function updateItemKind(item: Itemmable, kind: ItemKind): Itemmable {
     equipSlot: undefined,
     pocketable: getDefaultPocketableForKind(kind),
     insideBagOfHolding: false,
+    weight: kind === "currency" ? 0 : item.weight,
   }
 }
 
