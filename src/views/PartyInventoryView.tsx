@@ -15,6 +15,7 @@ import { InventoryEditor } from "../features/characters/inventory/inventoryEdito
 import { TransferItemDialog } from "../features/characters/inventory/transferItemDialog"
 import { formatRaceName } from "../lib/raceNames"
 import type { Itemmable } from "../models/items/item"
+import { consumeItemQuantity } from "../models/items/itemConsumption"
 import {
   calculatePartySupplies,
   STANDARD_PORTIONS_PER_BARREL,
@@ -58,6 +59,19 @@ export function PartyInventoryView() {
   const loadPercentage = hasCapacity
     ? Math.min(100, Math.max(0, (totalWeight / carryCapacity) * 100))
     : 0
+
+  function consumePartyItem(itemId: string) {
+    const item = partyInventory.find((entry) => entry.id === itemId)
+    if (!item) return
+
+    const nextItem = consumeItemQuantity(item)
+    if (!nextItem) {
+      removePartyItem(itemId)
+      return
+    }
+
+    updatePartyItem(itemId, () => nextItem)
+  }
 
   return (
     <div className="grid w-full min-w-0 max-w-full gap-4 overflow-hidden">
@@ -324,6 +338,7 @@ export function PartyInventoryView() {
           onAddItem={addPartyItem}
           onUpdateItem={updatePartyItem}
           onRemoveItem={removePartyItem}
+          onConsumeItem={consumePartyItem}
           onTransferItem={setTransferringItem}
           transferLabel="Enviar a personagem"
         />
