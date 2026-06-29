@@ -8,6 +8,7 @@ import {
   pocketInventoryItemWithRules,
 } from "../../../models/characters/characterEquipmentInteractions"
 import type { Itemmable } from "../../../models/items/item"
+import { consumeInventoryItem } from "../../../models/items/itemConsumption"
 import { CharacterEncumbrancePanel } from "./characterEncumbrancePanel"
 import { InventoryEditor } from "./inventoryEditor"
 import { TransferItemDialog } from "./transferItemDialog"
@@ -72,6 +73,15 @@ export function CharacterInventoryTab({
     )
   }
 
+  function consumeItem(itemId: string) {
+    updateCharacter(character.get("id"), (current) =>
+      current.with(
+        "inventory",
+        consumeInventoryItem(current.get("inventory"), itemId),
+      ),
+    )
+  }
+
   return (
     <>
       <div className="mb-4">
@@ -86,6 +96,7 @@ export function CharacterInventoryTab({
         onAddItem={addItem}
         onUpdateItem={updateItem}
         onRemoveItem={removeItem}
+        onConsumeItem={consumeItem}
         onEquipItem={(itemId) =>
           updateCharacter(character.get("id"), (current) =>
             equipInventoryItemWithRules(current, itemId),
