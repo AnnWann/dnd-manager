@@ -116,7 +116,7 @@ export function CharacterSelector({
 
     const characterName = activeCharacter.get("name").trim() || "personagem ativo"
     const confirmed = window.confirm(
-      `Excluir permanentemente “${characterName}”?\n\nEssa ação não pode ser desfeita.`,
+      `Tem certeza que deseja excluir permanentemente “${characterName}”?\n\nEssa ação não pode ser desfeita. Exporte o JSON antes se quiser manter uma cópia.`,
     )
 
     if (confirmed) deleteActiveCharacter()
@@ -235,7 +235,7 @@ export function CharacterSelector({
             title={
               disableDelete
                 ? "Mantenha pelo menos 1 personagem"
-                : "Excluir personagem"
+                : "Excluir personagem ativo"
             }
           >
             Excluir personagem ativo
