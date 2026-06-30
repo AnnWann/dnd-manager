@@ -2,7 +2,6 @@ import type { Player } from "../../../models/player/Player"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 
 import { Attributes } from "./attributes"
-import { Classes } from "./classes/class"
 import { Skills } from "./skills/skills"
 import { CharacterIdentity } from "./character_info/characterIdentity"
 import { GroupActions } from "./character_info/components/actions/GroupActions"
@@ -90,13 +89,6 @@ export function CharacterSheetTab({
           updateCharacter={updateCharacter}
         />
       </div>
-
-      {character.get("sheet").type === "pc" && (
-        <Classes
-          character={character}
-          updateCharacter={updateCharacter}
-        />
-      )}
 
       <AttributeCalculators character={character} />
     </div>
