@@ -11,6 +11,7 @@ import { SelectCharacterUniqueness } from "./components/selectCharacterUniquenes
 import { SelectCharacterVisibility } from "./components/selectCharacterVisibility"
 import { CLASS_NAMES } from "../../../../contexts/consts"
 import { Classes } from "../classes/class"
+import { CharacterExperience } from "../characterExperience"
 
 type Props = {
   character: CharacterTemplate
@@ -113,6 +114,13 @@ export function CharacterIdentity({
             <strong className="text-xl text-textH">{totalLevel}</strong>
           </div>
         </div>
+      </div>
+
+      <div className="mt-4">
+        <CharacterExperience
+          character={character}
+          updateCharacter={updateCharacter}
+        />
       </div>
 
       {(canAssignOwners || canEditCharacterType) && (
