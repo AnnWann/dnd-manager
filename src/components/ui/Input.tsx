@@ -14,16 +14,50 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
       invalid = false,
       disabled,
       readOnly,
+      value,
+      onBlur,
+      onChange,
       ...props
     },
     ref,
   ) => {
+    const [numberDraft, setNumberDraft] = React.useState<string | null>(null)
+    const isControlledNumberInput = type === "number" && value !== undefined
+    const displayedValue = isControlledNumberInput && numberDraft !== null
+      ? numberDraft
+      : value
+
+    function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
+      if (!isControlledNumberInput) {
+        onChange?.(event)
+        return
+      }
+
+      const nextValue = event.target.value
+      setNumberDraft(nextValue)
+
+      if (isIncompleteNumberInput(nextValue)) return
+
+      onChange?.(event)
+    }
+
+    function handleBlur(event: React.FocusEvent<HTMLInputElement>) {
+      if (isControlledNumberInput) {
+        setNumberDraft(null)
+      }
+
+      onBlur?.(event)
+    }
+
     return (
       <input
         ref={ref}
         type={type}
         disabled={disabled}
         readOnly={readOnly}
+        value={displayedValue}
+        onChange={handleChange}
+        onBlur={handleBlur}
         aria-invalid={invalid || undefined}
         className={cn(
           [
@@ -71,3 +105,15 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
 )
 
 Input.displayName = "Input"
+
+function isIncompleteNumberInput(value: string): boolean {
+  const trimmed = value.trim()
+  return (
+    trimmed === "" ||
+    trimmed === "-" ||
+    trimmed === "+" ||
+    trimmed === "." ||
+    trimmed === "-." ||
+    trimmed === "+."
+  )
+}
