@@ -34,6 +34,8 @@ export function CharacterSheetTab({
   getOwner,
   createOwner,
 }: Props) {
+  const showActionEconomy = canAssignOwners
+
   return (
     <div className="grid gap-4">
       <CharacterIdentity
@@ -66,7 +68,13 @@ export function CharacterSheetTab({
         updateCharacter={updateCharacter}
       />
 
-      <div className="grid items-start gap-4 xl:grid-cols-[280px_minmax(360px,1fr)_minmax(320px,0.9fr)]">
+      <div
+        className={
+          showActionEconomy
+            ? "grid items-start gap-4 xl:grid-cols-[280px_minmax(360px,1fr)_minmax(320px,0.9fr)]"
+            : "grid items-start gap-4 xl:grid-cols-[280px_minmax(360px,1fr)]"
+        }
+      >
         <div className="grid gap-4">
           <Attributes
             character={character}
@@ -84,10 +92,12 @@ export function CharacterSheetTab({
           updateCharacter={updateCharacter}
         />
 
-        <GroupActions
-          character={character}
-          updateCharacter={updateCharacter}
-        />
+        {showActionEconomy ? (
+          <GroupActions
+            character={character}
+            updateCharacter={updateCharacter}
+          />
+        ) : null}
       </div>
 
       <AttributeCalculators character={character} />
