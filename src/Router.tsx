@@ -11,9 +11,10 @@ import { SyncView } from "./views/SyncView"
 export function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/character" replace />} />
+      <Route path="/" element={<Navigate to="/character/sheet" replace />} />
       <Route path="/sync" element={<SyncView />} />
-      <Route path="/character" element={<CharacterView />} />
+      <Route path="/character" element={<Navigate to="/character/sheet" replace />} />
+      <Route path="/character/:tab" element={<CharacterView />} />
       <Route path="/party-inventory" element={<PartyInventoryView />} />
       <Route path="/missions" element={<MissionsView />} />
       <Route path="/creatures-compendium" element={<CreaturesCompendiumView />} />
