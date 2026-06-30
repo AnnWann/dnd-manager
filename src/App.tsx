@@ -82,8 +82,8 @@ function App() {
     {
       label: "Ficha",
       icon: <IconCharacter />,
-      active: location.pathname === "/character",
-      onClick: () => navigate("/character"),
+      active: location.pathname.startsWith("/character"),
+      onClick: () => navigate("/character/sheet"),
     },
     {
       label: "Inventário do grupo",
