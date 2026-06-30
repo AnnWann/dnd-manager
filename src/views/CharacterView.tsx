@@ -1,4 +1,13 @@
-import { useMemo, useRef, useState, type TouchEvent } from "react"
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type TouchEvent,
+} from "react"
+import { useNavigate, useParams } from "react-router-dom"
 import { CharacterAbilitiesTab } from "../features/characters/abilities/characterAbilities"
 import { CharacterSelector } from "../features/characters/characterSelector"
 import { CharacterSheetTab } from "../features/characters/characterSheet/characterSheet"
@@ -51,12 +60,16 @@ export function CharacterView() {
     createOwner,
   } = useCharacterContext()
   const { userKey } = useSyncContext()
+  const { tab } = useParams<{ tab?: string }>()
+  const navigate = useNavigate()
 
-  const [activeTab, setActiveTab] = useState<CharacterTab>("sheet")
+  const activeTab = normalizeCharacterTab(tab)
   const [creationOpen, setCreationOpen] = useState(false)
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [swipeDragging, setSwipeDragging] = useState(false)
+  const [tabPanelMinHeight, setTabPanelMinHeight] = useState(0)
   const swipeRef = useRef<SwipeState | null>(null)
+  const tabContentRef = useRef<HTMLDivElement | null>(null)
 
   const owners = useMemo(
     () => playerKeys.map((key) => getOwner(key)),
@@ -82,6 +95,20 @@ export function CharacterView() {
     [defaultOwner, owners],
   )
 
+  useEffect(() => {
+    if (tab && !isCharacterTab(tab)) {
+      navigate("/character/sheet", { replace: true })
+    }
+  }, [navigate, tab])
+
+  useLayoutEffect(() => {
+    lockTabPanelHeight()
+  }, [activeTab])
+
+  function setActiveTab(tab: CharacterTab, replace = false) {
+    navigate(`/character/${tab}`, { replace })
+  }
+
   function setAdjacentTab(direction: "previous" | "next") {
     const activeIndex = CHARACTER_TABS.findIndex(
       (tab) => tab.key === activeTab,
@@ -93,7 +120,23 @@ export function CharacterView() {
       : activeIndex - 1
     const nextTab = CHARACTER_TABS[nextIndex]?.key
 
-    if (nextTab) setActiveTab(nextTab)
+    if (nextTab) {
+      lockTabPanelHeight()
+      setActiveTab(nextTab)
+    }
+  }
+
+  function lockTabPanelHeight() {
+    const content = tabContentRef.current
+    if (!content) return
+
+    const nextHeight = Math.ceil(
+      Math.max(content.scrollHeight, content.offsetHeight),
+    )
+
+    if (nextHeight > 0) {
+      setTabPanelMinHeight((current) => Math.max(current, nextHeight))
+    }
   }
 
   function resetSwipePreview() {
@@ -103,6 +146,7 @@ export function CharacterView() {
 
   function handleSwipeStart(event: TouchEvent<HTMLDivElement>) {
     resetSwipePreview()
+    lockTabPanelHeight()
 
     if (event.touches.length !== 1) {
       swipeRef.current = null
@@ -197,7 +241,7 @@ export function CharacterView() {
         const preparedCharacter =
           ensureCharacterBackgroundFromHistory(character)
         importCharacter(preparedCharacter.toJSON())
-        setActiveTab("profile")
+        setActiveTab("profile", true)
       }}
     />
   )
@@ -233,7 +277,10 @@ export function CharacterView() {
     1,
     Math.abs(swipeOffset) / TAB_SWIPE_MAX_PREVIEW_OFFSET,
   )
-  const tabContentStyle = {
+  const tabPanelStyle: CSSProperties = {
+    minHeight: tabPanelMinHeight > 0 ? `${tabPanelMinHeight}px` : undefined,
+  }
+  const tabContentStyle: CSSProperties = {
     opacity: 1 - swipeProgress * 0.18,
     transform: `translate3d(${swipeOffset}px, 0, 0) scale(${1 - swipeProgress * 0.015})`,
     transition: swipeDragging
@@ -270,6 +317,7 @@ export function CharacterView() {
 
       <div
         className="min-w-0 overflow-hidden touch-pan-y"
+        style={tabPanelStyle}
         onTouchStart={handleSwipeStart}
         onTouchMove={handleSwipeMove}
         onTouchEnd={handleSwipeEnd}
@@ -278,7 +326,11 @@ export function CharacterView() {
           resetSwipePreview()
         }}
       >
-        <div className="min-w-0 will-change-transform" style={tabContentStyle}>
+        <div
+          ref={tabContentRef}
+          className="min-w-0 will-change-transform"
+          style={tabContentStyle}
+        >
           {activeTab === "sheet" && (
             <CharacterSheetTab
               character={activeCharacter}
@@ -361,6 +413,14 @@ function getSwipePreviewOffset(deltaX: number, activeTab: CharacterTab): number 
   )
 
   return direction * resisted
+}
+
+function normalizeCharacterTab(value: string | undefined): CharacterTab {
+  return isCharacterTab(value) ? value : "sheet"
+}
+
+function isCharacterTab(value: string | undefined): value is CharacterTab {
+  return CHARACTER_TABS.some((tab) => tab.key === value)
 }
 
 function shouldIgnoreTabSwipe(target: EventTarget): boolean {
