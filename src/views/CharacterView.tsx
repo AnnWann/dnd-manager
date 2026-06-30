@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState, type TouchEvent } from "react"
 import { CharacterAbilitiesTab } from "../features/characters/abilities/characterAbilities"
 import { CharacterSelector } from "../features/characters/characterSelector"
 import { CharacterSheetTab } from "../features/characters/characterSheet/characterSheet"
 import { CharacterEquipmentTab } from "../features/characters/equipment/characterEquipment"
 import { CharacterInventoryTab } from "../features/characters/inventory/characterInventory"
 import {
+  CHARACTER_TABS,
   CharacterViewTabs,
   type CharacterTab,
 } from "../features/characters/characterViewTabs"
@@ -18,6 +19,17 @@ import { CharacterRestControls } from "../features/characters/rest/characterRest
 import { CharacterCreationWizard } from "../features/characters/creation/characterCreationWizardV5"
 import { ensureCharacterBackgroundFromHistory } from "../features/characters/creation/inferCharacterBackground"
 import type { Player } from "../models/player/Player"
+
+const TAB_SWIPE_MIN_DISTANCE = 88
+const TAB_SWIPE_MAX_DURATION_MS = 850
+const TAB_SWIPE_HORIZONTAL_DOMINANCE = 1.8
+
+type SwipeState = {
+  startX: number
+  startY: number
+  startedAt: number
+  cancelled: boolean
+}
 
 export function CharacterView() {
   const {
@@ -39,6 +51,7 @@ export function CharacterView() {
 
   const [activeTab, setActiveTab] = useState<CharacterTab>("sheet")
   const [creationOpen, setCreationOpen] = useState(false)
+  const swipeRef = useRef<SwipeState | null>(null)
 
   const owners = useMemo(
     () => playerKeys.map((key) => getOwner(key)),
@@ -63,6 +76,79 @@ export function CharacterView() {
     () => uniqueOwners([defaultOwner, ...owners]),
     [defaultOwner, owners],
   )
+
+  function setAdjacentTab(direction: "previous" | "next") {
+    const activeIndex = CHARACTER_TABS.findIndex(
+      (tab) => tab.key === activeTab,
+    )
+    if (activeIndex < 0) return
+
+    const nextIndex = direction === "next"
+      ? activeIndex + 1
+      : activeIndex - 1
+    const nextTab = CHARACTER_TABS[nextIndex]?.key
+
+    if (nextTab) setActiveTab(nextTab)
+  }
+
+  function handleSwipeStart(event: TouchEvent<HTMLDivElement>) {
+    if (event.touches.length !== 1) {
+      swipeRef.current = null
+      return
+    }
+
+    if (shouldIgnoreTabSwipe(event.target)) {
+      swipeRef.current = null
+      return
+    }
+
+    const touch = event.touches[0]
+    swipeRef.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      startedAt: Date.now(),
+      cancelled: false,
+    }
+  }
+
+  function handleSwipeMove(event: TouchEvent<HTMLDivElement>) {
+    const swipe = swipeRef.current
+    if (!swipe || event.touches.length !== 1) return
+
+    const touch = event.touches[0]
+    const deltaX = touch.clientX - swipe.startX
+    const deltaY = touch.clientY - swipe.startY
+    const absX = Math.abs(deltaX)
+    const absY = Math.abs(deltaY)
+
+    if (absY > 28 && absY > absX) {
+      swipe.cancelled = true
+    }
+  }
+
+  function handleSwipeEnd(event: TouchEvent<HTMLDivElement>) {
+    const swipe = swipeRef.current
+    swipeRef.current = null
+
+    if (!swipe || swipe.cancelled) return
+
+    const touch = event.changedTouches[0]
+    if (!touch) return
+
+    const deltaX = touch.clientX - swipe.startX
+    const deltaY = touch.clientY - swipe.startY
+    const absX = Math.abs(deltaX)
+    const absY = Math.abs(deltaY)
+    const duration = Date.now() - swipe.startedAt
+    const isDeliberateHorizontalSwipe =
+      absX >= TAB_SWIPE_MIN_DISTANCE &&
+      absX >= absY * TAB_SWIPE_HORIZONTAL_DOMINANCE &&
+      duration <= TAB_SWIPE_MAX_DURATION_MS
+
+    if (!isDeliberateHorizontalSwipe) return
+
+    setAdjacentTab(deltaX < 0 ? "next" : "previous")
+  }
 
   const creationWizard = (
     <CharacterCreationWizard
@@ -136,7 +222,15 @@ export function CharacterView() {
         />
       </div>
 
-      <div className="min-w-0">
+      <div
+        className="min-w-0 touch-pan-y"
+        onTouchStart={handleSwipeStart}
+        onTouchMove={handleSwipeMove}
+        onTouchEnd={handleSwipeEnd}
+        onTouchCancel={() => {
+          swipeRef.current = null
+        }}
+      >
         {activeTab === "sheet" && (
           <CharacterSheetTab
             character={activeCharacter}
@@ -202,6 +296,26 @@ export function CharacterView() {
 
       {creationWizard}
     </div>
+  )
+}
+
+function shouldIgnoreTabSwipe(target: EventTarget): boolean {
+  if (!(target instanceof HTMLElement)) return false
+
+  return Boolean(
+    target.closest(
+      [
+        "button",
+        "a",
+        "input",
+        "select",
+        "textarea",
+        "[contenteditable='true']",
+        "[role='button']",
+        "[role='dialog']",
+        "[data-no-tab-swipe]",
+      ].join(","),
+    ),
   )
 }
 
