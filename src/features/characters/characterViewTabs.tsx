@@ -26,7 +26,7 @@ type Props = {
   setActiveTab: (tab: CharacterTab) => void
 }
 
-const TABS: Array<{
+export const CHARACTER_TABS: Array<{
   key: CharacterTab
   label: string
   icon: LucideIcon
@@ -61,7 +61,7 @@ export function CharacterViewTabs({
       className="overflow-x-auto overscroll-x-contain rounded-xl border border-border bg-bg p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       <div className="flex min-w-max snap-x snap-mandatory gap-1 sm:gap-2 lg:min-w-0">
-        {TABS.map((tab) => {
+        {CHARACTER_TABS.map((tab) => {
           const TabIcon = tab.icon
           const isActive = activeTab === tab.key
 
