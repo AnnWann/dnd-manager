@@ -38,20 +38,23 @@ type Props = {
   character: CharacterTemplate
   classData: CharacterClassInterface
   classIndex: number
+  maxLevel: number
   updateCharacter: (
     characterId: string,
     updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
 }
 
-function clampLevel(value: number): ClassLevel {
-  return Math.max(1, Math.min(20, value)) as ClassLevel
+function clampLevel(value: number, maxLevel: number): ClassLevel {
+  const safeMaxLevel = Math.max(1, Math.min(20, Math.trunc(maxLevel) || 1))
+  return Math.max(1, Math.min(safeMaxLevel, value)) as ClassLevel
 }
 
 export function SelectClassModule({
   character,
   classData,
   classIndex,
+  maxLevel,
   updateCharacter,
 }: Props) {
   const canEditCasting =
@@ -95,6 +98,8 @@ export function SelectClassModule({
     )
   }
 
+  const safeMaxLevel = Math.max(1, Math.min(20, Math.trunc(maxLevel) || 1))
+
   return (
     <div className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 md:grid-cols-[1fr_100px_220px_220px_44px]">
       <div className="min-w-0">
@@ -110,12 +115,13 @@ export function SelectClassModule({
           type="number"
           className="mt-1 h-9 px-2"
           min={1}
-          max={20}
+          max={safeMaxLevel}
           value={classData.level}
+          title={`Máximo para esta classe: ${safeMaxLevel}`}
           onChange={(event) =>
             updateClass({
               ...classData,
-              level: clampLevel(Number(event.target.value)),
+              level: clampLevel(Number(event.target.value), safeMaxLevel),
             })
           }
         />
