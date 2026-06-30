@@ -21,8 +21,11 @@ import { ensureCharacterBackgroundFromHistory } from "../features/characters/cre
 import type { Player } from "../models/player/Player"
 
 const TAB_SWIPE_MIN_DISTANCE = 88
+const TAB_SWIPE_PREVIEW_DISTANCE = 28
+const TAB_SWIPE_MAX_PREVIEW_OFFSET = 96
 const TAB_SWIPE_MAX_DURATION_MS = 850
 const TAB_SWIPE_HORIZONTAL_DOMINANCE = 1.8
+const TAB_SWIPE_PREVIEW_DOMINANCE = 1.35
 
 type SwipeState = {
   startX: number
@@ -51,6 +54,8 @@ export function CharacterView() {
 
   const [activeTab, setActiveTab] = useState<CharacterTab>("sheet")
   const [creationOpen, setCreationOpen] = useState(false)
+  const [swipeOffset, setSwipeOffset] = useState(0)
+  const [swipeDragging, setSwipeDragging] = useState(false)
   const swipeRef = useRef<SwipeState | null>(null)
 
   const owners = useMemo(
@@ -91,7 +96,14 @@ export function CharacterView() {
     if (nextTab) setActiveTab(nextTab)
   }
 
+  function resetSwipePreview() {
+    setSwipeDragging(false)
+    setSwipeOffset(0)
+  }
+
   function handleSwipeStart(event: TouchEvent<HTMLDivElement>) {
+    resetSwipePreview()
+
     if (event.touches.length !== 1) {
       swipeRef.current = null
       return
@@ -123,17 +135,37 @@ export function CharacterView() {
 
     if (absY > 28 && absY > absX) {
       swipe.cancelled = true
+      resetSwipePreview()
+      return
     }
+
+    const shouldShowPreview =
+      absX >= TAB_SWIPE_PREVIEW_DISTANCE &&
+      absX >= absY * TAB_SWIPE_PREVIEW_DOMINANCE
+
+    if (!shouldShowPreview) {
+      resetSwipePreview()
+      return
+    }
+
+    setSwipeDragging(true)
+    setSwipeOffset(getSwipePreviewOffset(deltaX, activeTab))
   }
 
   function handleSwipeEnd(event: TouchEvent<HTMLDivElement>) {
     const swipe = swipeRef.current
     swipeRef.current = null
 
-    if (!swipe || swipe.cancelled) return
+    if (!swipe || swipe.cancelled) {
+      resetSwipePreview()
+      return
+    }
 
     const touch = event.changedTouches[0]
-    if (!touch) return
+    if (!touch) {
+      resetSwipePreview()
+      return
+    }
 
     const deltaX = touch.clientX - swipe.startX
     const deltaY = touch.clientY - swipe.startY
@@ -144,6 +176,8 @@ export function CharacterView() {
       absX >= TAB_SWIPE_MIN_DISTANCE &&
       absX >= absY * TAB_SWIPE_HORIZONTAL_DOMINANCE &&
       duration <= TAB_SWIPE_MAX_DURATION_MS
+
+    resetSwipePreview()
 
     if (!isDeliberateHorizontalSwipe) return
 
@@ -195,6 +229,18 @@ export function CharacterView() {
     deleteCharacter(activeCharacter.get("id"))
   }
 
+  const swipeProgress = Math.min(
+    1,
+    Math.abs(swipeOffset) / TAB_SWIPE_MAX_PREVIEW_OFFSET,
+  )
+  const tabContentStyle = {
+    opacity: 1 - swipeProgress * 0.18,
+    transform: `translate3d(${swipeOffset}px, 0, 0) scale(${1 - swipeProgress * 0.015})`,
+    transition: swipeDragging
+      ? "none"
+      : "transform 160ms ease-out, opacity 160ms ease-out",
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <CharacterSelector
@@ -223,80 +269,98 @@ export function CharacterView() {
       </div>
 
       <div
-        className="min-w-0 touch-pan-y"
+        className="min-w-0 overflow-hidden touch-pan-y"
         onTouchStart={handleSwipeStart}
         onTouchMove={handleSwipeMove}
         onTouchEnd={handleSwipeEnd}
         onTouchCancel={() => {
           swipeRef.current = null
+          resetSwipePreview()
         }}
       >
-        {activeTab === "sheet" && (
-          <CharacterSheetTab
-            character={activeCharacter}
-            updateCharacter={updateCharacter}
-            canAssignOwners={canAssignOwners}
-            canEditCharacterType={canEditCharacterType}
-            playerKeys={playerKeys}
-            getOwner={getOwner}
-            createOwner={createOwner}
-          />
-        )}
+        <div className="min-w-0 will-change-transform" style={tabContentStyle}>
+          {activeTab === "sheet" && (
+            <CharacterSheetTab
+              character={activeCharacter}
+              updateCharacter={updateCharacter}
+              canAssignOwners={canAssignOwners}
+              canEditCharacterType={canEditCharacterType}
+              playerKeys={playerKeys}
+              getOwner={getOwner}
+              createOwner={createOwner}
+            />
+          )}
 
-        {activeTab === "race" && (
-          <CharacterRaceTab
-            character={activeCharacter}
-            updateCharacter={updateCharacter}
-          />
-        )}
+          {activeTab === "race" && (
+            <CharacterRaceTab
+              character={activeCharacter}
+              updateCharacter={updateCharacter}
+            />
+          )}
 
-        {activeTab === "profile" && (
-          <CharacterProfileTab
-            character={activeCharacter}
-            updateCharacter={updateCharacter}
-          />
-        )}
+          {activeTab === "profile" && (
+            <CharacterProfileTab
+              character={activeCharacter}
+              updateCharacter={updateCharacter}
+            />
+          )}
 
-        {activeTab === "abilities" && (
-          <CharacterAbilitiesTab
-            character={activeCharacter}
-            updateCharacter={updateCharacter}
-          />
-        )}
+          {activeTab === "abilities" && (
+            <CharacterAbilitiesTab
+              character={activeCharacter}
+              updateCharacter={updateCharacter}
+            />
+          )}
 
-        {activeTab === "equipment" && (
-          <CharacterEquipmentTab
-            character={activeCharacter}
-            updateCharacter={updateCharacter}
-          />
-        )}
+          {activeTab === "equipment" && (
+            <CharacterEquipmentTab
+              character={activeCharacter}
+              updateCharacter={updateCharacter}
+            />
+          )}
 
-        {activeTab === "inventory" && (
-          <CharacterInventoryTab
-            character={activeCharacter}
-            updateCharacter={updateCharacter}
-            canEditInventory={canEditCharacterType}
-          />
-        )}
+          {activeTab === "inventory" && (
+            <CharacterInventoryTab
+              character={activeCharacter}
+              updateCharacter={updateCharacter}
+              canEditInventory={canEditCharacterType}
+            />
+          )}
 
-        {activeTab === "spellsList" && (
-          <CharacterMagicTab
-            character={activeCharacter}
-            updateCharacter={updateCharacter}
-          />
-        )}
+          {activeTab === "spellsList" && (
+            <CharacterMagicTab
+              character={activeCharacter}
+              updateCharacter={updateCharacter}
+            />
+          )}
 
-        {activeTab === "proficiencies" && (
-          <CharacterProficienciesTab
-            character={activeCharacter}
-            updateCharacter={updateCharacter}
-          />
-        )}
+          {activeTab === "proficiencies" && (
+            <CharacterProficienciesTab
+              character={activeCharacter}
+              updateCharacter={updateCharacter}
+            />
+          )}
+        </div>
       </div>
 
       {creationWizard}
     </div>
   )
+}
+
+function getSwipePreviewOffset(deltaX: number, activeTab: CharacterTab): number {
+  const activeIndex = CHARACTER_TABS.findIndex((tab) => tab.key === activeTab)
+  const isAtFirstTab = activeIndex <= 0
+  const isAtLastTab = activeIndex >= CHARACTER_TABS.length - 1
+  const blockedByEdge = deltaX > 0 ? isAtFirstTab : isAtLastTab
+  const resistance = blockedByEdge ? 0.22 : 0.72
+  const direction = Math.sign(deltaX) || 1
+  const resisted = Math.min(
+    Math.abs(deltaX) * resistance,
+    TAB_SWIPE_MAX_PREVIEW_OFFSET,
+  )
+
+  return direction * resisted
 }
 
 function shouldIgnoreTabSwipe(target: EventTarget): boolean {
