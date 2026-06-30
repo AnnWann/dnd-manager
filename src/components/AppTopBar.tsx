@@ -5,11 +5,12 @@ type PageMetadata = {
   description: string
 }
 
+const CHARACTER_PAGE: PageMetadata = {
+  title: "Personagens",
+  description: "Ficha, habilidades, equipamentos, inventário e magias.",
+}
+
 const PAGE_METADATA: Record<string, PageMetadata> = {
-  "/character": {
-    title: "Personagens",
-    description: "Ficha, habilidades, equipamentos, inventário e magias.",
-  },
   "/party-inventory": {
     title: "Inventário do Grupo",
     description: "Itens compartilhados, transferências e suprimentos da equipe.",
@@ -31,7 +32,9 @@ const DEFAULT_PAGE: PageMetadata = {
 
 export function AppHeader() {
   const location = useLocation()
-  const page = PAGE_METADATA[location.pathname] ?? DEFAULT_PAGE
+  const page = location.pathname.startsWith("/character")
+    ? CHARACTER_PAGE
+    : PAGE_METADATA[location.pathname] ?? DEFAULT_PAGE
 
   return (
     <header className="shrink-0 border-b border-border bg-bg-elevated">
