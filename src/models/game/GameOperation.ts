@@ -140,7 +140,17 @@ export type GameOperationRecord = {
   operation: GameOperation
 }
 
-export const MAX_GAME_OPERATION_LOG = 200
+export const MAX_GAME_OPERATION_LOG = 40
+const MAX_STORED_OPERATION_RECORD_BYTES = 2000
+
+function isBulkyOperation(operation: GameOperation): boolean {
+  return (
+    operation.type === "character.add" ||
+    operation.type === "character.replace" ||
+    operation.type === "party.item.add" ||
+    operation.type === "party.item.update"
+  )
+}
 
 export function createGameOperationRecord(
   operation: GameOperation,
@@ -158,11 +168,26 @@ export function createGameOperationRecord(
 export function normalizeGameOperationLog(
   value: unknown,
 ): GameOperationRecord[] {
+  return compactGameOperationLog(value)
+}
+
+export function compactGameOperationLog(value: unknown): GameOperationRecord[] {
   if (!Array.isArray(value)) return []
 
   return value
     .filter(isGameOperationRecord)
+    .filter(shouldStoreOperationRecord)
     .slice(-MAX_GAME_OPERATION_LOG)
+}
+
+function shouldStoreOperationRecord(record: GameOperationRecord): boolean {
+  if (!isBulkyOperation(record.operation)) return true
+
+  try {
+    return JSON.stringify(record).length <= MAX_STORED_OPERATION_RECORD_BYTES
+  } catch {
+    return false
+  }
 }
 
 function isGameOperationRecord(value: unknown): value is GameOperationRecord {
