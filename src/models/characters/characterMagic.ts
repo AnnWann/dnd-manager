@@ -13,10 +13,13 @@ import type { SpellSource } from "../magic/spells/SpellSource"
 
 type KnownSpellEntry = CharacterSpells["knownSpells"][number]
 
+export const MAX_SPELL_CASTING_DESCRIPTIONS = 5
+
 function createEmptyMagic(): Magic {
   return {
     spells: {
       knownSpells: [],
+      castingDescriptions: {},
       slots: {},
       pactSlots: {
         level: 0,
@@ -143,6 +146,102 @@ export function setSpellPrepared(
       ),
     },
   })
+}
+
+export function getSpellCastingDescriptions(
+  character: CharacterTemplate,
+  spellIndex: string,
+): string[] {
+  const descriptions = getOrCreateMagic(character).spells.castingDescriptions?.[
+    spellIndex
+  ]
+
+  return Array.isArray(descriptions)
+    ? descriptions.filter((entry) => typeof entry === "string")
+    : []
+}
+
+export function setSpellCastingDescriptions(
+  character: CharacterTemplate,
+  spellIndex: string,
+  descriptions: string[],
+): CharacterTemplate {
+  const currentMagic = getOrCreateMagic(character)
+  const nextDescriptions = descriptions
+    .map((description) => String(description))
+    .slice(0, MAX_SPELL_CASTING_DESCRIPTIONS)
+  const nextCastingDescriptions = {
+    ...(currentMagic.spells.castingDescriptions ?? {}),
+  }
+
+  if (nextDescriptions.length > 0) {
+    nextCastingDescriptions[spellIndex] = nextDescriptions
+  } else {
+    delete nextCastingDescriptions[spellIndex]
+  }
+
+  return character.with("magic", {
+    ...currentMagic,
+    spells: {
+      ...currentMagic.spells,
+      castingDescriptions: nextCastingDescriptions,
+    },
+  })
+}
+
+export function addSpellCastingDescription(
+  character: CharacterTemplate,
+  spellIndex: string,
+): CharacterTemplate {
+  const currentDescriptions = getSpellCastingDescriptions(character, spellIndex)
+
+  if (currentDescriptions.length >= MAX_SPELL_CASTING_DESCRIPTIONS) {
+    return character
+  }
+
+  return setSpellCastingDescriptions(character, spellIndex, [
+    ...currentDescriptions,
+    "",
+  ])
+}
+
+export function updateSpellCastingDescription(
+  character: CharacterTemplate,
+  spellIndex: string,
+  descriptionIndex: number,
+  description: string,
+): CharacterTemplate {
+  const currentDescriptions = getSpellCastingDescriptions(character, spellIndex)
+
+  if (
+    descriptionIndex < 0 ||
+    descriptionIndex >= currentDescriptions.length ||
+    descriptionIndex >= MAX_SPELL_CASTING_DESCRIPTIONS
+  ) {
+    return character
+  }
+
+  return setSpellCastingDescriptions(
+    character,
+    spellIndex,
+    currentDescriptions.map((entry, index) =>
+      index === descriptionIndex ? description : entry,
+    ),
+  )
+}
+
+export function removeSpellCastingDescription(
+  character: CharacterTemplate,
+  spellIndex: string,
+  descriptionIndex: number,
+): CharacterTemplate {
+  const currentDescriptions = getSpellCastingDescriptions(character, spellIndex)
+
+  return setSpellCastingDescriptions(
+    character,
+    spellIndex,
+    currentDescriptions.filter((_, index) => index !== descriptionIndex),
+  )
 }
 
 export function getDerivedSpellSlots(
@@ -435,14 +534,7 @@ export function restoreSorceryPoint(
   character: CharacterTemplate,
 ): CharacterTemplate {
   const currentMagic = getOrCreateMagic(character)
-  const currentMetamagic = getOrCreateMetamagic(character)
-
-  if (
-    currentMetamagic.sorceryPoints.current >=
-    currentMetamagic.sorceryPoints.max
-  ) {
-    return character
-  }
+ const currentMetamagic = getOrCreateMetamagic(character)
 
   return character.with("magic", {
     ...currentMagic,
@@ -450,7 +542,10 @@ export function restoreSorceryPoint(
       ...currentMetamagic,
       sorceryPoints: {
         ...currentMetamagic.sorceryPoints,
-        current: currentMetamagic.sorceryPoints.current + 1,
+        current: Math.min(
+          currentMetamagic.sorceryPoints.max,
+          currentMetamagic.sorceryPoints.current + 1,
+        ),
       },
     },
   })
@@ -460,9 +555,9 @@ export function getSpellSource(
   character: CharacterTemplate,
   spellId: string,
 ): SpellSource | undefined {
-  return character
+  const spell = character
     .get("magic")
-    ?.spells.knownSpells.find(
-      (entry) => entry.spells.id === spellId,
-    )?.source
+    ?.spells.knownSpells.find((spell) => spell.spells.id === spellId)
+
+  return spell?.source
 }
