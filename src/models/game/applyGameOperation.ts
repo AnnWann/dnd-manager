@@ -14,7 +14,7 @@ import {
   getRequiredSupplyForRace,
 } from "../supplies/partySupply"
 import {
-  MAX_GAME_OPERATION_LOG,
+  compactGameOperationLog,
   type GameEntityMetadata,
   type GameOperation,
   type GameOperationRecord,
@@ -44,9 +44,7 @@ export function applyRecordedGameOperation<TState extends AppStateV1>(
       getTouchedEntityKeys(record.operation),
       record,
     ),
-    operations: [...(applied.operations ?? []), record].slice(
-      -MAX_GAME_OPERATION_LOG,
-    ),
+    operations: compactGameOperationLog([...(applied.operations ?? []), record]),
   }
 }
 
@@ -433,9 +431,8 @@ function getTouchedEntityKeys(operation: GameOperation): string[] {
 }
 
 function locationKey(location: InventoryLocation): string {
-  return location.type === "party"
-    ? "party"
-    : `character:${location.characterId}`
+  if (location.type === "party") return "party"
+  return `character:${location.characterId}`
 }
 
 function getLocationInventory(
