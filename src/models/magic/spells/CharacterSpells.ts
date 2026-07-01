@@ -10,6 +10,7 @@ export type CharacterSpells = {
       prepared: boolean
     }
   }[]
+  castingDescriptions?: Record<string, string[]>
   slots: Partial<Record<MagicCircleLevel, LeveledSlots>>
   pactSlots: LeveledSlots
 }
