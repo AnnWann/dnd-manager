@@ -15,7 +15,15 @@ export function readLocalStorageJson<T>(key: string): T | undefined {
 
 export function writeLocalStorageJson(key: string, value: unknown): void {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(key, JSON.stringify(value))
+
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value))
+  } catch (error) {
+    console.warn(
+      `Failed to persist ${key} to localStorage. The app state is probably too large.`,
+      error,
+    )
+  }
 }
 
 export function removeLocalStorage(key: string): void {
