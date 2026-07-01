@@ -59,6 +59,17 @@ export function AppSidebar({ items }: AppSidebarProps) {
     }
   }, [mobileOpen])
 
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--app-sidebar-width",
+      collapsed ? "5rem" : "15rem",
+    )
+
+    return () => {
+      document.documentElement.style.removeProperty("--app-sidebar-width")
+    }
+  }, [collapsed])
+
   return (
     <>
       <button
