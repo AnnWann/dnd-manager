@@ -10,12 +10,18 @@ import type { Spell } from "../../../models/magic/spells/Spell"
 import type { SpellSource } from "../../../models/magic/spells/SpellSource"
 import type { ClassName } from "../../../models/sheet/Class"
 
+const MAX_CASTING_DESCRIPTIONS = 5
+
 type Props = {
   spell: Spell
   prepared?: boolean
   source?: SpellSource
   alwaysPrepared?: boolean
   accessLabel?: string
+  castingDescriptions?: string[]
+  onAddCastingDescription?: () => void
+  onChangeCastingDescription?: (index: number, description: string) => void
+  onRemoveCastingDescription?: (index: number) => void
   onEdit?: () => void
   onRemove?: () => void
   onTogglePrepared?: () => void
@@ -27,12 +33,24 @@ export function SpellCard({
   source,
   alwaysPrepared = false,
   accessLabel,
+  castingDescriptions = [],
+  onAddCastingDescription,
+  onChangeCastingDescription,
+  onRemoveCastingDescription,
   onEdit,
   onRemove,
   onTogglePrepared,
 }: Props) {
   const [isViewOpen, setIsViewOpen] = useState(false)
   const canTogglePrepared = Boolean(onTogglePrepared) && !alwaysPrepared
+  const canEditCastingDescriptions = Boolean(
+    onAddCastingDescription &&
+      onChangeCastingDescription &&
+      onRemoveCastingDescription,
+  )
+  const canAddCastingDescription =
+    canEditCastingDescriptions &&
+    castingDescriptions.length < MAX_CASTING_DESCRIPTIONS
   const material = spell.material?.trim()
 
   return (
@@ -133,6 +151,78 @@ export function SpellCard({
             {spell.description}
           </p>
         ) : null}
+
+        <details
+          className="mt-3 rounded-xl border border-border bg-bg-subtle p-3"
+          defaultOpen={castingDescriptions.length > 0}
+        >
+          <summary className="cursor-pointer text-xs font-semibold text-textH">
+            Como o personagem conjura
+            {castingDescriptions.length > 0
+              ? ` (${castingDescriptions.length})`
+              : ""}
+          </summary>
+
+          <div className="mt-3 grid gap-3">
+            <p className="text-xs leading-5 text-textMuted">
+              Anote variações visuais, gestos, frases ou efeitos recorrentes dessa magia no personagem.
+            </p>
+
+            {castingDescriptions.length > 0 ? (
+              <div className="grid gap-2">
+                {castingDescriptions.map((description, index) => (
+                  <div key={index} className="grid gap-2">
+                    {canEditCastingDescriptions ? (
+                      <textarea
+                        className="min-h-20 w-full resize-y rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-5 text-textH outline-none transition-colors placeholder:text-textMuted focus:border-accent focus:ring-2 focus:ring-accent/25"
+                        value={description}
+                        placeholder="Ex.: a lâmina brilha em fogo azul antes do impacto..."
+                        onChange={(event) =>
+                          onChangeCastingDescription?.(
+                            index,
+                            event.target.value,
+                          )
+                        }
+                      />
+                    ) : (
+                      <p className="whitespace-pre-wrap break-words rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-5 text-text">
+                        {description || "Descrição vazia."}
+                      </p>
+                    )}
+
+                    {canEditCastingDescriptions ? (
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onRemoveCastingDescription?.(index)}
+                        >
+                          Remover descrição
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-textMuted">
+                Nenhuma descrição personalizada ainda.
+              </p>
+            )}
+
+            {canAddCastingDescription ? (
+              <div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={onAddCastingDescription}
+                >
+                  + Adicionar descrição
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        </details>
       </article>
 
       {isViewOpen ? (
@@ -171,6 +261,24 @@ export function SpellCard({
             </div>
 
             <div className="grid gap-4 p-4 text-sm text-text">
+              {castingDescriptions.length > 0 ? (
+                <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                  <h3 className="text-sm font-semibold text-textH">
+                    Como o personagem conjura
+                  </h3>
+                  <div className="mt-2 grid gap-2">
+                    {castingDescriptions.map((description, index) => (
+                      <p
+                        key={index}
+                        className="whitespace-pre-wrap break-words rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-6"
+                      >
+                        {description || "Descrição vazia."}
+                      </p>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
               <section className="rounded-xl border border-border bg-bg-subtle p-3">
                 <h3 className="text-sm font-semibold text-textH">
                   Componentes
