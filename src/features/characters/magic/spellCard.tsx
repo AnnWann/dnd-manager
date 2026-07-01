@@ -42,6 +42,9 @@ export function SpellCard({
   onTogglePrepared,
 }: Props) {
   const [isViewOpen, setIsViewOpen] = useState(false)
+  const [castingDescriptionsOpen, setCastingDescriptionsOpen] = useState(
+    castingDescriptions.length > 0,
+  )
   const canTogglePrepared = Boolean(onTogglePrepared) && !alwaysPrepared
   const canEditCastingDescriptions = Boolean(
     onAddCastingDescription &&
@@ -154,7 +157,10 @@ export function SpellCard({
 
         <details
           className="mt-3 rounded-xl border border-border bg-bg-subtle p-3"
-          defaultOpen={castingDescriptions.length > 0}
+          open={castingDescriptionsOpen}
+          onToggle={(event) =>
+            setCastingDescriptionsOpen(event.currentTarget.open)
+          }
         >
           <summary className="cursor-pointer text-xs font-semibold text-textH">
             Como o personagem conjura
