@@ -226,8 +226,12 @@ export function SpellCard({
       </article>
 
       {isViewOpen ? (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 p-3 sm:p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-bg shadow-xl">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-x-0 bottom-0 top-16 z-[10000] flex items-center justify-center overflow-y-auto bg-black/80 p-3 sm:p-4 md:left-[var(--app-sidebar-width,5rem)]"
+        >
+          <div className="max-h-[calc(100dvh-5rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-bg shadow-xl">
             <div className="flex flex-col gap-3 border-b border-accentBorder p-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <h2 className="break-words font-heading text-lg text-textH">
