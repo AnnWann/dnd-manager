@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { Button } from "../../../components/ui/Button"
@@ -12,6 +12,7 @@ import type { SpellSource } from "../../../models/magic/spells/SpellSource"
 import type { ClassName } from "../../../models/sheet/Class"
 
 const MAX_CASTING_DESCRIPTIONS = 5
+const MAX_CASTING_DESCRIPTION_LENGTH = 800
 
 type Props = {
   spell: Spell
@@ -46,6 +47,9 @@ export function SpellCard({
   const [castingDescriptionsOpen, setCastingDescriptionsOpen] = useState(
     castingDescriptions.length > 0,
   )
+  const [draftCastingDescriptions, setDraftCastingDescriptions] =
+    useState(castingDescriptions)
+  const castingDescriptionsKey = castingDescriptions.join("\u0000")
   const canTogglePrepared = Boolean(onTogglePrepared) && !alwaysPrepared
   const canEditCastingDescriptions = Boolean(
     onAddCastingDescription &&
@@ -56,6 +60,25 @@ export function SpellCard({
     canEditCastingDescriptions &&
     castingDescriptions.length < MAX_CASTING_DESCRIPTIONS
   const material = spell.material?.trim()
+
+  useEffect(() => {
+    setDraftCastingDescriptions(castingDescriptions)
+  }, [spell.index, castingDescriptionsKey])
+
+  function setDraftCastingDescription(index: number, description: string) {
+    const nextDescription = description.slice(0, MAX_CASTING_DESCRIPTION_LENGTH)
+    setDraftCastingDescriptions((current) => {
+      const next = [...current]
+      next[index] = nextDescription
+      return next
+    })
+  }
+
+  function commitCastingDescription(index: number) {
+    const draft = draftCastingDescriptions[index] ?? ""
+    if ((castingDescriptions[index] ?? "") === draft) return
+    onChangeCastingDescription?.(index, draft)
+  }
 
   const spellModal = isViewOpen
     ? createPortal(
@@ -292,21 +315,23 @@ export function SpellCard({
               Anote variações visuais, gestos, frases ou efeitos recorrentes dessa magia no personagem.
             </p>
 
-            {castingDescriptions.length > 0 ? (
+            {draftCastingDescriptions.length > 0 ? (
               <div className="grid gap-2">
-                {castingDescriptions.map((description, index) => (
+                {draftCastingDescriptions.map((description, index) => (
                   <div key={index} className="grid gap-2">
                     {canEditCastingDescriptions ? (
                       <textarea
                         className="min-h-20 w-full resize-y rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-5 text-textH outline-none transition-colors placeholder:text-textMuted focus:border-accent focus:ring-2 focus:ring-accent/25"
                         value={description}
+                        maxLength={MAX_CASTING_DESCRIPTION_LENGTH}
                         placeholder="Ex.: a lâmina brilha em fogo azul antes do impacto..."
                         onChange={(event) =>
-                          onChangeCastingDescription?.(
+                          setDraftCastingDescription(
                             index,
                             event.target.value,
                           )
                         }
+                        onBlur={() => commitCastingDescription(index)}
                       />
                     ) : (
                       <p className="whitespace-pre-wrap break-words rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-5 text-text">
