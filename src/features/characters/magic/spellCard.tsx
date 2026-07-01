@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { createPortal } from "react-dom"
 
 import { Button } from "../../../components/ui/Button"
 import {
@@ -55,6 +56,123 @@ export function SpellCard({
     canEditCastingDescriptions &&
     castingDescriptions.length < MAX_CASTING_DESCRIPTIONS
   const material = spell.material?.trim()
+
+  const spellModal = isViewOpen
+    ? createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[12000] flex h-screen w-screen items-center justify-center overflow-y-auto bg-black/80 p-3 sm:p-4"
+        >
+          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-bg shadow-xl">
+            <div className="flex flex-col gap-3 border-b border-accentBorder p-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h2 className="break-words font-heading text-lg text-textH">
+                  {spell.displayName || spell.name}
+                </h2>
+
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-xs leading-5 text-text">
+                  <SpellMeta>
+                    {spell.slotLevel === 0 ? "Truque" : `Nível ${spell.slotLevel}`}
+                  </SpellMeta>
+                  <SpellMeta>
+                    {MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}
+                  </SpellMeta>
+                  <SpellMeta>{formatCastingTime(spell)}</SpellMeta>
+                  <SpellMeta>{formatRange(spell)}</SpellMeta>
+                  <SpellMeta>{formatSpellOrigin(source)}</SpellMeta>
+                  {accessLabel ? <SpellMeta>{accessLabel}</SpellMeta> : null}
+                  {spell.concentration ? <SpellMeta>Concentração</SpellMeta> : null}
+                  {spell.ritual ? <SpellMeta>Ritual</SpellMeta> : null}
+                </div>
+              </div>
+
+              <Button
+                className="w-full sm:w-auto"
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsViewOpen(false)}
+              >
+                Fechar
+              </Button>
+            </div>
+
+            <div className="grid gap-4 p-4 text-sm text-text">
+              {castingDescriptions.length > 0 ? (
+                <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                  <h3 className="text-sm font-semibold text-textH">
+                    Como o personagem conjura
+                  </h3>
+                  <div className="mt-2 grid gap-2">
+                    {castingDescriptions.map((description, index) => (
+                      <p
+                        key={index}
+                        className="whitespace-pre-wrap break-words rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-6"
+                      >
+                        {description || "Descrição vazia."}
+                      </p>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                <h3 className="text-sm font-semibold text-textH">
+                  Componentes
+                </h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {getSpellComponents(spell).length ? (
+                    getSpellComponents(spell).map((component) => (
+                      <span
+                        key={component}
+                        className="rounded-full border border-accentBorder bg-accentBg px-2.5 py-1 text-xs font-medium text-textH"
+                      >
+                        {formatComponentLong(component)}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-textMuted">
+                      Nenhum componente informado.
+                    </span>
+                  )}
+                </div>
+
+                {material ? (
+                  <div className="mt-3 text-xs leading-5 text-text">
+                    <span className="font-semibold text-textH">
+                      Componente material:
+                    </span>{" "}
+                    {material}
+                  </div>
+                ) : getSpellComponents(spell).includes("M") ? (
+                  <div className="mt-3 text-xs text-textMuted">
+                    A magia exige componente material, mas o material específico não foi informado.
+                  </div>
+                ) : null}
+              </section>
+
+              <section>
+                <h3 className="text-sm font-semibold text-textH">Descrição</h3>
+                <div className="mt-2 whitespace-pre-wrap break-words leading-6">
+                  {spell.description?.trim() || "Sem descrição."}
+                </div>
+              </section>
+
+              <section>
+                <h3 className="text-sm font-semibold text-textH">
+                  Próximos níveis
+                </h3>
+                <div className="mt-2 whitespace-pre-wrap break-words leading-6">
+                  {spell.higherLevelText?.trim() ||
+                    "Sem efeito adicional em níveis superiores."}
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )
+    : null
 
   return (
     <>
@@ -231,119 +349,7 @@ export function SpellCard({
         </details>
       </article>
 
-      {isViewOpen ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-x-0 bottom-0 top-16 z-[10000] flex items-center justify-center overflow-y-auto bg-black/80 p-3 sm:p-4 md:left-[var(--app-sidebar-width,5rem)]"
-        >
-          <div className="max-h-[calc(100dvh-5rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-bg shadow-xl">
-            <div className="flex flex-col gap-3 border-b border-accentBorder p-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <h2 className="break-words font-heading text-lg text-textH">
-                  {spell.displayName || spell.name}
-                </h2>
-
-                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-xs leading-5 text-text">
-                  <SpellMeta>
-                    {spell.slotLevel === 0 ? "Truque" : `Nível ${spell.slotLevel}`}
-                  </SpellMeta>
-                  <SpellMeta>
-                    {MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}
-                  </SpellMeta>
-                  <SpellMeta>{formatCastingTime(spell)}</SpellMeta>
-                  <SpellMeta>{formatRange(spell)}</SpellMeta>
-                  <SpellMeta>{formatSpellOrigin(source)}</SpellMeta>
-                  {accessLabel ? <SpellMeta>{accessLabel}</SpellMeta> : null}
-                  {spell.concentration ? <SpellMeta>Concentração</SpellMeta> : null}
-                  {spell.ritual ? <SpellMeta>Ritual</SpellMeta> : null}
-                </div>
-              </div>
-
-              <Button
-                className="w-full sm:w-auto"
-                variant="secondary"
-                size="sm"
-                onClick={() => setIsViewOpen(false)}
-              >
-                Fechar
-              </Button>
-            </div>
-
-            <div className="grid gap-4 p-4 text-sm text-text">
-              {castingDescriptions.length > 0 ? (
-                <section className="rounded-xl border border-border bg-bg-subtle p-3">
-                  <h3 className="text-sm font-semibold text-textH">
-                    Como o personagem conjura
-                  </h3>
-                  <div className="mt-2 grid gap-2">
-                    {castingDescriptions.map((description, index) => (
-                      <p
-                        key={index}
-                        className="whitespace-pre-wrap break-words rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-6"
-                      >
-                        {description || "Descrição vazia."}
-                      </p>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              <section className="rounded-xl border border-border bg-bg-subtle p-3">
-                <h3 className="text-sm font-semibold text-textH">
-                  Componentes
-                </h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {getSpellComponents(spell).length ? (
-                    getSpellComponents(spell).map((component) => (
-                      <span
-                        key={component}
-                        className="rounded-full border border-accentBorder bg-accentBg px-2.5 py-1 text-xs font-medium text-textH"
-                      >
-                        {formatComponentLong(component)}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-textMuted">
-                      Nenhum componente informado.
-                    </span>
-                  )}
-                </div>
-
-                {material ? (
-                  <div className="mt-3 text-xs leading-5 text-text">
-                    <span className="font-semibold text-textH">
-                      Componente material:
-                    </span>{" "}
-                    {material}
-                  </div>
-                ) : getSpellComponents(spell).includes("M") ? (
-                  <div className="mt-3 text-xs text-textMuted">
-                    A magia exige componente material, mas o material específico não foi informado.
-                  </div>
-                ) : null}
-              </section>
-
-              <section>
-                <h3 className="text-sm font-semibold text-textH">Descrição</h3>
-                <div className="mt-2 whitespace-pre-wrap break-words leading-6">
-                  {spell.description?.trim() || "Sem descrição."}
-                </div>
-              </section>
-
-              <section>
-                <h3 className="text-sm font-semibold text-textH">
-                  Próximos níveis
-                </h3>
-                <div className="mt-2 whitespace-pre-wrap break-words leading-6">
-                  {spell.higherLevelText?.trim() ||
-                    "Sem efeito adicional em níveis superiores."}
-                </div>
-              </section>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {spellModal}
     </>
   )
 }
