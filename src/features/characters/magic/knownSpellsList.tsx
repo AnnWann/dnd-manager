@@ -4,6 +4,12 @@ import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { CLASS_NAMES } from "../../../contexts/consts"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { getCharacterGrantedSpells } from "../../../models/characters/characterGrantedSpells"
+import {
+  addSpellCastingDescription,
+  getSpellCastingDescriptions,
+  removeSpellCastingDescription,
+  updateSpellCastingDescription,
+} from "../../../models/characters/characterMagic"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Spell } from "../../../models/magic/spells/Spell"
 import type { SpellSource } from "../../../models/magic/spells/SpellSource"
@@ -174,6 +180,36 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     )
   }
 
+  function addCastingDescription(spellIndex: string) {
+    updateCharacter(character.get("id"), (current) =>
+      addSpellCastingDescription(current, spellIndex),
+    )
+  }
+
+  function changeCastingDescription(
+    spellIndex: string,
+    descriptionIndex: number,
+    description: string,
+  ) {
+    updateCharacter(character.get("id"), (current) =>
+      updateSpellCastingDescription(
+        current,
+        spellIndex,
+        descriptionIndex,
+        description,
+      ),
+    )
+  }
+
+  function removeCastingDescription(
+    spellIndex: string,
+    descriptionIndex: number,
+  ) {
+    updateCharacter(character.get("id"), (current) =>
+      removeSpellCastingDescription(current, spellIndex, descriptionIndex),
+    )
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -301,6 +337,23 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
                   source={entry.source}
                   alwaysPrepared={entry.alwaysPrepared}
                   accessLabel={entry.accessLabel}
+                  castingDescriptions={getSpellCastingDescriptions(
+                    character,
+                    entry.spell.index,
+                  )}
+                  onAddCastingDescription={() =>
+                    addCastingDescription(entry.spell.index)
+                  }
+                  onChangeCastingDescription={(index, description) =>
+                    changeCastingDescription(
+                      entry.spell.index,
+                      index,
+                      description,
+                    )
+                  }
+                  onRemoveCastingDescription={(index) =>
+                    removeCastingDescription(entry.spell.index, index)
+                  }
                   onTogglePrepared={
                     entry.alwaysPrepared
                       ? undefined
