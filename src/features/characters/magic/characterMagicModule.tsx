@@ -117,20 +117,24 @@ function buildAllCharacterSpellList(
   characters: CharacterTemplate[],
   getSpellByIndex: (spellIndex: string) => Spell | undefined,
 ): string {
-  const lines: string[] = []
+  const blocks: string[] = []
 
   for (const character of characters) {
     const characterName = character.get("name").trim() || "Personagem sem nome"
     const spells = getCharacterSpellRows(character, getSpellByIndex)
 
-    for (const spell of spells) {
-      lines.push(
-        `${characterName} — ${formatSpellLevel(spell.slotLevel)} — ${spell.displayName || spell.name}`,
-      )
-    }
+    if (spells.length === 0) continue
+
+    blocks.push([
+      characterName,
+      ...spells.map(
+        (spell) =>
+          `${spell.displayName || spell.name} - ${formatSpellLevel(spell.slotLevel)}`,
+      ),
+    ].join("\n"))
   }
 
-  return lines.join("\n")
+  return blocks.join("\n\n")
 }
 
 function getCharacterSpellRows(
