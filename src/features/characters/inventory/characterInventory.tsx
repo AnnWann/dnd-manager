@@ -1,5 +1,6 @@
 import { useState } from "react"
 
+import { Button } from "../../../components/ui/Button"
 import { useCharacterContext } from "../../../contexts/characterContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getEncumbranceInfo } from "../../../models/characters/characterEncumbrance"
@@ -7,6 +8,10 @@ import {
   equipInventoryItemWithRules,
   pocketInventoryItemWithRules,
 } from "../../../models/characters/characterEquipmentInteractions"
+import {
+  BAG_OF_HOLDING_CAPACITY_KG,
+  getBagOfHoldingWeightKg,
+} from "../../../models/items/bagOfHolding"
 import type { Itemmable } from "../../../models/items/item"
 import { consumeInventoryItem } from "../../../models/items/itemConsumption"
 import { CharacterEncumbrancePanel } from "./characterEncumbrancePanel"
@@ -21,6 +26,8 @@ type Props = {
   ) => void
   canEditInventory: boolean
 }
+
+const BAG_CAPACITY_EPSILON = 0.000001
 
 export function newInventoryItem(): Itemmable {
   return {
@@ -47,12 +54,37 @@ export function CharacterInventoryTab({
   } = useCharacterContext()
   const [transferringItem, setTransferringItem] =
     useState<Itemmable | null>(null)
+  const [bagLimitMessage, setBagLimitMessage] = useState<string | null>(null)
 
   const items = character.get("inventory") ?? []
   const encumbrance = getEncumbranceInfo(character)
   const canTransfer = canTransferFromCharacter(character.get("id"))
+  const bagWeight = getBagOfHoldingWeightKg(items)
+
+  function wouldExceedBagCapacity(candidateItems: Itemmable[]): boolean {
+    const currentWeight = getBagOfHoldingWeightKg(items)
+    const candidateWeight = getBagOfHoldingWeightKg(candidateItems)
+
+    if (candidateWeight <= BAG_OF_HOLDING_CAPACITY_KG + BAG_CAPACITY_EPSILON) {
+      return false
+    }
+
+    if (candidateWeight <= currentWeight + BAG_CAPACITY_EPSILON) {
+      return false
+    }
+
+    const excess = candidateWeight - BAG_OF_HOLDING_CAPACITY_KG
+    setBagLimitMessage(
+      `A Bolsa Mágica suporta no máximo ${formatKg(BAG_OF_HOLDING_CAPACITY_KG)}. ` +
+        `Essa ação deixaria a bolsa com ${formatKg(candidateWeight)}, excedendo o limite em ${formatKg(excess)}.`,
+    )
+    return true
+  }
 
   function addItem(item: Itemmable) {
+    const candidateItems = [...items, item]
+    if (wouldExceedBagCapacity(candidateItems)) return
+
     updateCharacter(character.get("id"), (current) =>
       current.addInventoryItem(item),
     )
@@ -62,6 +94,11 @@ export function CharacterInventoryTab({
     itemId: string,
     updater: (item: Itemmable) => Itemmable,
   ) {
+    const candidateItems = items.map((item) =>
+      item.id === itemId ? updater(item) : item,
+    )
+    if (wouldExceedBagCapacity(candidateItems)) return
+
     updateCharacter(character.get("id"), (current) =>
       current.updateInventoryItem(itemId, updater),
     )
@@ -82,10 +119,28 @@ export function CharacterInventoryTab({
     )
   }
 
+  function toggleBagOfHolding(itemId: string) {
+    const candidateItems = items.map((item) =>
+      item.id === itemId
+        ? {
+            ...item,
+            insideBagOfHolding: !item.insideBagOfHolding,
+          }
+        : item,
+    )
+
+    if (wouldExceedBagCapacity(candidateItems)) return
+
+    updateCharacter(character.get("id"), (current) =>
+      current.toggleInventoryItemBagOfHolding(itemId),
+    )
+  }
+
   return (
     <>
-      <div className="mb-4">
+      <div className="mb-4 grid gap-4">
         <CharacterEncumbrancePanel character={character} />
+        <BagOfHoldingCounter weight={bagWeight} />
       </div>
 
       <InventoryEditor
@@ -107,11 +162,7 @@ export function CharacterInventoryTab({
             pocketInventoryItemWithRules(current, itemId),
           )
         }
-        onToggleBagOfHolding={(itemId) =>
-          updateCharacter(character.get("id"), (current) =>
-            current.toggleInventoryItemBagOfHolding(itemId),
-          )
-        }
+        onToggleBagOfHolding={toggleBagOfHolding}
         onTransferItem={canTransfer ? setTransferringItem : undefined}
       />
 
@@ -127,7 +178,90 @@ export function CharacterInventoryTab({
         onClose={() => setTransferringItem(null)}
         onTransfer={transferItem}
       />
+
+      <BagOfHoldingLimitPopup
+        message={bagLimitMessage}
+        onClose={() => setBagLimitMessage(null)}
+      />
     </>
+  )
+}
+
+function BagOfHoldingCounter({ weight }: { weight: number }) {
+  const remaining = Math.max(0, BAG_OF_HOLDING_CAPACITY_KG - weight)
+  const percentage = Math.min(100, Math.max(0, (weight / BAG_OF_HOLDING_CAPACITY_KG) * 100))
+  const isFull = weight >= BAG_OF_HOLDING_CAPACITY_KG - BAG_CAPACITY_EPSILON
+  const isOverCapacity = weight > BAG_OF_HOLDING_CAPACITY_KG + BAG_CAPACITY_EPSILON
+
+  return (
+    <section
+      className={[
+        "rounded-xl border bg-bg p-3 shadow-theme-sm",
+        isOverCapacity ? "border-danger" : "border-border",
+      ].join(" ")}
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="text-sm font-semibold text-textH">
+            Bolsa Mágica
+          </div>
+          <div className="mt-1 text-xs leading-5 text-text">
+            Capacidade RAW: {formatKg(BAG_OF_HOLDING_CAPACITY_KG)}.
+          </div>
+        </div>
+
+        <div className="text-left text-xs sm:text-right">
+          <div className={isOverCapacity ? "font-semibold text-danger" : "font-semibold text-textH"}>
+            {formatKg(weight)} / {formatKg(BAG_OF_HOLDING_CAPACITY_KG)}
+          </div>
+          <div className="mt-1 text-textMuted">
+            {isOverCapacity
+              ? `Excedeu em ${formatKg(weight - BAG_OF_HOLDING_CAPACITY_KG)}`
+              : isFull
+                ? "Bolsa cheia"
+                : `Restam ${formatKg(remaining)}`}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-bg-subtle">
+        <div
+          className={[
+            "h-full rounded-full transition-[width]",
+            isOverCapacity ? "bg-danger" : "bg-accent",
+          ].join(" ")}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+    </section>
+  )
+}
+
+function BagOfHoldingLimitPopup({
+  message,
+  onClose,
+}: {
+  message: string | null
+  onClose: () => void
+}) {
+  if (!message) return null
+
+  return (
+    <div className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-4">
+      <div className="w-full max-w-md rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg">
+        <div className="text-sm font-semibold text-textH">
+          Bolsa Mágica cheia
+        </div>
+        <p className="mt-2 text-sm leading-6 text-text">
+          {message}
+        </p>
+        <div className="mt-4 flex justify-end">
+          <Button size="sm" variant="secondary" onClick={onClose}>
+            Entendi
+          </Button>
+        </div>
+      </div>
+    </div>
   )
 }
 
