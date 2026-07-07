@@ -6771,7 +6771,7 @@
     },
     {
       "index": "gaseous-form",
-      "name": "Gaseous Form",
+      "name": "Forma Gasosa",
       "description": "Você transforma uma criatura voluntária que você toca, juntamente com tudo o que ela estiver vestindo e carregando, em uma nuvem nebulosa pela duração da magia. A magia termina se a criatura cair para 0 pontos de vida. Uma criatura incorpórea não é afetada.\n\nEnquanto estiver nessa forma, o único meio de locomoção do alvo é um deslocamento de voo de 3 metros. O alvo pode entrar e ocupar o espaço de outra criatura. O alvo tem resistência a dano não mágico e vantagem em testes de resistência de Força, Destreza e Constituição. O alvo pode passar por pequenos buracos, aberturas estreitas e até mesmo meras frestas, embora trate líquidos como se fossem superfícies sólidas. O alvo não pode cair e permanece pairando no ar mesmo atordoado ou incapacitado de alguma outra forma.\n\nEnquanto estiver na forma de uma nuvem nebulosa, o alvo não pode falar ou manipular objetos, e quaisquer objetos que estiver carregando ou segurando não podem ser soltos, usados ou manipulados de qualquer outra forma. O alvo não pode atacar ou conjurar magias.",
       "higherLevelText": "",
       "source": {
@@ -6779,7 +6779,7 @@
         "url": "/api/2014/spells/gaseous-form",
         "updatedAt": "2026-04-01T20:35:39.217Z"
       },
-      "displayName": "Gaseous Form",
+      "displayName": "Forma Gasosa",
       "homebrew": false,
       "slotLevel": 3,
       "school": "transmutation",
