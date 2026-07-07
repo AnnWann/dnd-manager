@@ -1,22 +1,34 @@
-import { CharacterTemplate } from "../models/characters/CharacterTemplate";
-import type { Player } from "../models/player/Player";
+import { CharacterTemplate } from "../models/characters/CharacterTemplate"
+import type { Player } from "../models/player/Player"
 
-export function newCharacterTemplate(name: string, owner: Player): CharacterTemplate {
+export function newCharacterTemplate(
+  name: string,
+  owner: Player,
+): CharacterTemplate {
   return CharacterTemplate.fromJSON({
     id: crypto.randomUUID(),
     name,
+    profile: {
+      traits: "",
+      history: "",
+      physicalAppearance: "",
+      relationships: [],
+    },
     sheet: {
       HP: {
-          max: 1,
-          current: 1,
-          temporary: 0,
-          hitDice: {}
+        max: 1,
+        current: 1,
+        temporary: 0,
+        hitDice: {},
       },
       stats: {
         armorClass: 10,
         mobility: 9,
         initiative: 0,
         passive_perception: 10,
+        exhaustion: 0,
+        inspiration: false,
+        experience: 0,
       },
       attributes: {
         str: 10,
@@ -26,20 +38,26 @@ export function newCharacterTemplate(name: string, owner: Player): CharacterTemp
         wis: 10,
         cha: 10,
       },
+      savingThrowProficiencies: {},
       skills: {},
+      proficiencies: [],
       race: {
-        race: 'human',
+        race: "human",
         naturalAbilities: [],
-        subrace: '',
+        subrace: "",
         attributeBonus: {
           str: 0,
           dex: 0,
           con: 0,
           int: 0,
           wis: 0,
-          cha: 0
+          cha: 0,
         },
-        proficiencies: []
+        proficiencies: [],
+        supplyConsumption: {
+          food: 1,
+          drink: 1,
+        },
       },
       type: "pc",
       arms: 2,
@@ -64,7 +82,7 @@ export function newCharacterTemplate(name: string, owner: Player): CharacterTemp
     },
     inventory: [],
     notes: [],
-    owner: owner,
-    visibility: "party",
+    owner,
+    visibility: "private",
   })
 }

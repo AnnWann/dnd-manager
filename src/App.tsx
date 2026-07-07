@@ -1,18 +1,33 @@
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  type Dispatch,
+  type SetStateAction,
+} from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 
 import {
   AppSidebar,
+  IconBackpack,
   IconCharacter,
-  IconSync,
+  IconCompendium,
+  IconInitiative,
   IconMagic,
+  IconNotes,
+  IconSync,
 } from "./components/AppSidebar"
-
-import { AppRouter } from "./Router"
+import { AppHeader } from "./components/AppTopBar"
 import { CharacterProvider } from "./contexts/characterContext"
-import { SyncProvider } from "./contexts/syncContext"
-import { useRemoteAppState } from "./lib/remoteState"
-import { TopBar } from "./components/AppTopBar"
+import { CreatureCompendiumProvider } from "./contexts/creatureCompendiumContext"
 import { MagicProvider } from "./contexts/magicContext"
+import { MissionProvider } from "./contexts/missionContext"
+import { PartyInventorySettingsProvider } from "./contexts/partyInventorySettingsContext"
+import { SyncProvider } from "./contexts/syncContext"
+import { normalizeAppStateInventory } from "./lib/normalizeAppStateInventory"
+import { type AppStateV1 } from "./lib/remoteState"
+import { useConcurrentRemoteAppState } from "./lib/remoteStateConcurrent"
+import { AppRouter } from "./Router"
 
 function App() {
   const navigate = useNavigate()
@@ -26,11 +41,36 @@ function App() {
     userKey,
     setUserKey,
     canSync,
-    state: appState,
-    setState: setAppState,
+    state: rawAppState,
+    setState: setRawAppState,
     status: syncStatus,
     pullFromServer,
-  } = useRemoteAppState()
+  } = useConcurrentRemoteAppState()
+
+  const appState = useMemo(
+    () => normalizeAppStateInventory(rawAppState),
+    [rawAppState],
+  )
+
+  const setAppState = useCallback<Dispatch<SetStateAction<AppStateV1>>>(
+    (action) => {
+      setRawAppState((previousRaw) => {
+        const previous = normalizeAppStateInventory(previousRaw)
+        const next =
+          typeof action === "function"
+            ? (action as (state: AppStateV1) => AppStateV1)(previous)
+            : action
+
+        return normalizeAppStateInventory(next)
+      })
+    },
+    [setRawAppState],
+  )
+
+  useEffect(() => {
+    if (appState === rawAppState) return
+    setRawAppState(appState)
+  }, [appState, rawAppState, setRawAppState])
 
   const sidebarItems = [
     {
@@ -42,9 +82,37 @@ function App() {
     {
       label: "Ficha",
       icon: <IconCharacter />,
-      active: location.pathname === "/character",
-      onClick: () => navigate("/character"),
+      active: location.pathname.startsWith("/character"),
+      onClick: () => navigate("/character/sheet"),
     },
+    {
+      label: "Inventário do grupo",
+      icon: <IconBackpack />,
+      active: location.pathname === "/party-inventory",
+      onClick: () => navigate("/party-inventory"),
+    },
+    {
+      label: "Missões",
+      icon: <IconNotes />,
+      active: location.pathname === "/missions",
+      onClick: () => navigate("/missions"),
+    },
+    ...(userRole === "master"
+      ? [
+          {
+            label: "Compêndio de Criaturas",
+            icon: <IconCompendium />,
+            active: location.pathname === "/creatures-compendium",
+            onClick: () => navigate("/creatures-compendium"),
+          },
+          {
+            label: "Iniciativa",
+            icon: <IconInitiative />,
+            active: location.pathname === "/initiative",
+            onClick: () => navigate("/initiative"),
+          },
+        ]
+      : []),
     {
       label: "Magia",
       icon: <IconMagic />,
@@ -67,31 +135,45 @@ function App() {
         syncStatus,
       }}
     >
-      <CharacterProvider
-        appState={appState}
+      <PartyInventorySettingsProvider
+        carryCapacity={appState.partyCarryCapacity ?? 0}
+        canEditCarryCapacity={userRole === "master"}
         setAppState={setAppState}
-        userRole={userRole}
-        userKey={userKey}
       >
-        <MagicProvider
-          spells={appState.spells ?? []}
-          setAppState={setAppState}
+        <MissionProvider
+          state={rawAppState}
+          setState={setRawAppState}
+          userRole={userRole}
+          userKey={userKey}
         >
-        <div className="min-h-svh bg-[color:var(--social-bg)] text-text">
-          <TopBar />
+          <CreatureCompendiumProvider>
+            <CharacterProvider
+              appState={appState}
+              setAppState={setAppState}
+              userRole={userRole}
+              userKey={userKey}
+            >
+              <MagicProvider
+                spells={appState.spells ?? []}
+                setAppState={setAppState}
+              >
+                <div className="flex h-svh max-w-full flex-col overflow-hidden bg-[color:var(--surface-app)] text-text">
+                  <AppHeader />
 
-          <div className="flex min-h-[calc(100svh-73px)]">
-            <AppSidebar items={sidebarItems} />
-
-            <main className="min-w-0 flex-1 overflow-auto">
-              <div className="px-4 py-6">
-                <AppRouter />
-              </div>
-            </main>
-          </div>
-        </div>
-        </MagicProvider>
-      </CharacterProvider>
+                  <div className="flex min-h-0 min-w-0 max-w-full flex-1 overflow-hidden">
+                    <AppSidebar items={sidebarItems} />
+                    <main className="min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto">
+                      <div className="w-full min-w-0 max-w-full overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6">
+                        <AppRouter />
+                      </div>
+                    </main>
+                  </div>
+                </div>
+              </MagicProvider>
+            </CharacterProvider>
+          </CreatureCompendiumProvider>
+        </MissionProvider>
+      </PartyInventorySettingsProvider>
     </SyncProvider>
   )
 }

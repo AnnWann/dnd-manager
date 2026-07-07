@@ -1,8 +1,11 @@
+import { Crosshair, Hand, Scale, Sparkles, Swords } from "lucide-react"
+
 import { Button } from "../../../components/ui/Button"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatBonusName, formatBonusValue } from "../../../lib/formatBonus"
 import { formatSigned } from "../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { getUsedArmsIncludingShield } from "../../../models/characters/characterEquipmentInteractions"
 import type { Weapon } from "../../../models/items/equipment/Weapon"
 import { EquipmentFeaturesList } from "./equipmentFeaturesList"
 
@@ -75,6 +78,7 @@ export function EquipmentWeaponsSection({
   updateCharacter,
 }: Props) {
   const weapons = character.get("equipment").weapons
+  const usedHands = getUsedArmsIncludingShield(character)
 
   function unequipWeapon(index: number) {
     updateCharacter(character.get("id"), (c) =>
@@ -83,23 +87,30 @@ export function EquipmentWeaponsSection({
   }
 
   return (
-    <div className="rounded-md border border-border p-3">
-      <div className="mb-3">
-        <div className="text-sm font-medium text-textH">
-          Armas
+    <section>
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-textH">
+            <Swords className="h-4 w-4 text-accent" />
+            Armas
+          </div>
+
+          <div className="mt-1 text-xs text-textMuted">
+            Equipamentos empunhados e seus recursos ativos.
+          </div>
         </div>
 
-        <div className="text-xs text-text">
-          {character.getUsedArms()}/{character.get("sheet").arms} braços usados
+        <div className="rounded-full border border-border bg-bg-subtle px-2.5 py-1 text-[11px] font-semibold text-text">
+          {usedHands}/{character.get("sheet").arms} mãos
         </div>
       </div>
 
       {weapons.length === 0 ? (
-        <div className="text-xs text-text">
+        <div className="rounded-xl border border-dashed border-border bg-bg-subtle px-4 py-6 text-center text-xs text-textMuted">
           Nenhuma arma equipada.
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="grid gap-3">
           {weapons.map((weapon, index) => {
             const modifierAttribute = weapon.modifierAttribute ?? "str"
             const attackBonus = weaponAttackBonus(character, weapon)
@@ -107,105 +118,136 @@ export function EquipmentWeaponsSection({
             const damageText = formatDie(weapon.damage)
 
             return (
-              <div
+              <article
                 key={`${weapon.id}-${index}`}
-                className="rounded-md border border-border p-3"
+                className="overflow-hidden rounded-xl border border-border bg-bg-subtle shadow-theme-sm"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-medium text-textH">
-                      {weapon.name || "Arma sem nome"}
+                <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-base font-semibold text-textH">
+                        {weapon.name || "Arma sem nome"}
+                      </h3>
+
+                      <span className="rounded-full bg-accentBg px-2 py-0.5 text-[10px] font-semibold text-accent">
+                        {weapon.proficient ? "Proficiente" : "Não proficiente"}
+                      </span>
+
+                      <span className="rounded-full border border-border bg-bg px-2 py-0.5 text-[10px] font-semibold text-textMuted">
+                        {weapon.twoHanded ? "Duas mãos" : "Uma mão"}
+                      </span>
                     </div>
 
-                    <div className="mt-1 text-xs text-text">
-                      Dano base: {damageText}
-                      {" • "}
-                      Atributo: {attributeShort(modifierAttribute)}
-                      {" • "}
-                      {weapon.proficient ? "Proficiente" : "Não proficiente"}
-                    </div>
-
-                    <div className="mt-1 text-xs text-text">
-                      Ataque: {formatSigned(attackBonus)}
-                      {" • "}
-                      Dano: {damageText}
-                      {damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""}
-                    </div>
-
-                    <div className="mt-1 text-xs text-text">
-                      Peso: {weapon.weight ?? 0}
-                      {" • "}
-                      {weapon.twoHanded ? "Duas mãos" : "Uma mão"}
-                    </div>
+                    {weapon.desc?.trim() ? (
+                      <p className="mt-2 max-w-3xl whitespace-pre-wrap text-xs leading-5 text-textMuted">
+                        {weapon.desc}
+                      </p>
+                    ) : null}
                   </div>
 
                   <Button
                     size="sm"
-                    variant="secondary"
+                    variant="ghost"
                     onClick={() => unequipWeapon(index)}
                   >
                     Desequipar
                   </Button>
                 </div>
 
-                {weapon.desc?.trim() ? (
-                  <div className="mt-3">
-                    <div className="text-xs font-medium text-textH">
-                      Descrição
+                <div className="grid grid-cols-2 gap-px border-y border-border bg-border sm:grid-cols-4">
+                  <WeaponStat
+                    icon={<Crosshair className="h-4 w-4" />}
+                    label="Ataque"
+                    value={formatSigned(attackBonus)}
+                  />
+
+                  <WeaponStat
+                    icon={<Swords className="h-4 w-4" />}
+                    label="Dano"
+                    value={`${damageText}${damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""}`}
+                  />
+
+                  <WeaponStat
+                    icon={<Sparkles className="h-4 w-4" />}
+                    label="Atributo"
+                    value={attributeShort(modifierAttribute)}
+                  />
+
+                  <WeaponStat
+                    icon={weapon.twoHanded ? <Hand className="h-4 w-4" /> : <Scale className="h-4 w-4" />}
+                    label="Peso"
+                    value={String(weapon.weight ?? 0)}
+                  />
+                </div>
+
+                <div className="p-4">
+                  {weapon.properties?.length ? (
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-textMuted">
+                        Propriedades
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {weapon.properties.map((property) => (
+                          <span
+                            key={property.id}
+                            title={property.desc}
+                            className="rounded-full border border-border bg-bg px-2.5 py-1 text-xs text-text"
+                          >
+                            {property.name}
+                          </span>
+                        ))}
+                      </div>
                     </div>
+                  ) : null}
 
-                    <div className="mt-1 whitespace-pre-wrap text-xs text-text">
-                      {weapon.desc}
-                    </div>
-                  </div>
-                ) : null}
+                  <WeaponBonusList weapon={weapon} />
 
-                {weapon.properties?.length ? (
-                  <div className="mt-3">
-                    <div className="text-xs font-medium text-textH">
-                      Propriedades
-                    </div>
+                  <EquipmentFeaturesList
+                    equipment={weapon}
+                    onUpdate={(updater) =>
+                      updateCharacter(character.get("id"), (c) => {
+                        const equipment = c.get("equipment")
+                        const currentWeapons = [...equipment.weapons]
 
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {weapon.properties.map((property) => (
-                        <span
-                          key={property.id}
-                          title={property.desc}
-                          className="rounded-md border border-border px-2 py-1 text-xs text-text"
-                        >
-                          {property.name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
+                        currentWeapons[index] = updater(currentWeapons[index])
 
-                <WeaponBonusList weapon={weapon} />
-                
-                <EquipmentFeaturesList
-                  equipment={weapon}
-                  onUpdate={(updater) =>
-                    updateCharacter(character.get("id"), (c) => {
-                      const equipment = c.get("equipment")
-                      const weapons = [...equipment.weapons]
-
-                      weapons[index] = updater(weapons[index])
-
-                      return c.with("equipment", {
-                        ...equipment,
-                        weapons,
+                        return c.with("equipment", {
+                          ...equipment,
+                          weapons: currentWeapons,
+                        })
                       })
-                    })
-                  }
-                />
-
-              </div>
-
-              
+                    }
+                  />
+                </div>
+              </article>
             )
           })}
         </div>
       )}
+    </section>
+  )
+}
+
+function WeaponStat({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string
+}) {
+  return (
+    <div className="bg-bg px-4 py-3">
+      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+        <span className="text-accent">{icon}</span>
+        {label}
+      </div>
+
+      <div className="mt-1 text-base font-bold text-textH">
+        {value}
+      </div>
     </div>
   )
 }
@@ -261,8 +303,8 @@ function WeaponBonusList({ weapon }: WeaponBonusListProps) {
   if (rows.length === 0) return null
 
   return (
-    <div className="mt-3">
-      <div className="text-xs font-medium text-textH">
+    <div className="mt-4">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-textMuted">
         Bônus
       </div>
 
@@ -270,7 +312,7 @@ function WeaponBonusList({ weapon }: WeaponBonusListProps) {
         {rows.map((row) => (
           <span
             key={row}
-            className="rounded-md border border-border px-2 py-1 text-xs text-text"
+            className="rounded-full bg-accentBg px-2.5 py-1 text-xs font-medium text-textH"
           >
             {row}
           </span>

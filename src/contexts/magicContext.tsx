@@ -1,13 +1,16 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react"
 import type { Spell } from "../models/magic/spells/Spell"
 import type { AppStateV1 } from "../lib/remoteState"
+import { normalizeSpellText } from "../lib/textNormalization"
 import spellData from "../data/spells.v1.json"
 import metamagicData from "../data/metamagics.v1.json"
-import type { Metamagic, MetamagicId } from "../models/magic/metamagic/Metamagic"
+import type {
+  Metamagic,
+  MetamagicId,
+} from "../models/magic/metamagic/Metamagic"
 
 const officialSpells = (spellData.spells as unknown[]).map((rawSpell) => {
   const { source: _source, ...spell } = rawSpell as Record<string, unknown>
-
   return spell as unknown as Spell
 })
 
@@ -20,12 +23,10 @@ type MagicContextValue = {
   spellByIndex: Map<string, Spell>
   getSpellByIndex: (spellIndex: string) => Spell | undefined
   getSpellsByIndexes: (spellIndexes: string[]) => Spell[]
-
   metamagics: Metamagic[]
   metamagicById: Map<string, Metamagic>
   getMetamagicById: (metamagicId: MetamagicId) => Metamagic | undefined
   getMetamagicsByIds: (metamagicIds: MetamagicId[]) => Metamagic[]
-
   saveSpell: (spell: Spell) => void
   deleteSpell: (spellIndex: string) => void
 }
@@ -43,27 +44,41 @@ export function MagicProvider({
   spells,
   setAppState,
 }: MagicProviderProps) {
-  const allSpells = useMemo(() => {
-    return [...officialSpells, ...spells]
-  }, [spells])
-
   const spellByIndex = useMemo(() => {
-    return new Map(allSpells.map((spell) => [spell.index, spell]))
-  }, [allSpells])
+    const map = new Map<string, Spell>()
 
+    for (const spell of officialSpells) {
+      const index = spell.index?.trim()
+      if (index) map.set(index, spell)
+    }
+
+    // Saved spells intentionally override an official spell with the same
+    // index, which supports edited/homebrew replacements without duplicates.
+    for (const rawSpell of spells) {
+      const spell = normalizeSpellText(rawSpell)
+      const index = spell.index?.trim()
+      if (index) map.set(index, spell)
+    }
+
+    return map
+  }, [spells])
+  const allSpells = useMemo(
+    () => Array.from(spellByIndex.values()),
+    [spellByIndex],
+  )
   const metamagics = useMemo(() => officialMetamagics, [])
-
-  const metamagicById = useMemo(() => {
-    return new Map(metamagics.map((metamagic) => [metamagic.id, metamagic]))
-  }, [metamagics])
+  const metamagicById = useMemo(
+    () => new Map(metamagics.map((metamagic) => [metamagic.id, metamagic])),
+    [metamagics],
+  )
 
   function getSpellByIndex(spellIndex: string) {
-    return spellByIndex.get(spellIndex)
+    return spellByIndex.get(spellIndex.trim())
   }
 
   function getSpellsByIndexes(spellIndexes: string[]) {
     return spellIndexes
-      .map((spellIndex) => spellByIndex.get(spellIndex))
+      .map((spellIndex) => spellByIndex.get(spellIndex.trim()))
       .filter((spell): spell is Spell => Boolean(spell))
   }
 
@@ -78,22 +93,26 @@ export function MagicProvider({
   }
 
   function saveSpell(spell: Spell) {
-    setAppState((prev) => ({
-      ...prev,
+    const normalizedSpell = normalizeSpellText(spell)
+
+    setAppState((previous) => ({
+      ...previous,
       spells: [
-        ...(prev.spells ?? []).filter(
-          (existing) => existing.index !== spell.index,
+        ...(previous.spells ?? []).filter(
+          (existing) => existing.index !== normalizedSpell.index,
         ),
-        spell,
+        normalizedSpell,
       ],
     }))
   }
 
   function deleteSpell(spellIndex: string) {
-    setAppState((prev) => ({
-      ...prev,
-      spells: (prev.spells ?? []).filter(
-        (existing) => existing.index !== spellIndex,
+    const normalizedIndex = spellIndex.trim()
+
+    setAppState((previous) => ({
+      ...previous,
+      spells: (previous.spells ?? []).filter(
+        (existing) => existing.index !== normalizedIndex,
       ),
     }))
   }
@@ -105,12 +124,10 @@ export function MagicProvider({
         spellByIndex,
         getSpellByIndex,
         getSpellsByIndexes,
-
         metamagics,
         metamagicById,
         getMetamagicById,
         getMetamagicsByIds,
-
         saveSpell,
         deleteSpell,
       }}
@@ -121,11 +138,9 @@ export function MagicProvider({
 }
 
 export function useMagicContext() {
-  const ctx = useContext(MagicContext)
-
-  if (!ctx) {
+  const context = useContext(MagicContext)
+  if (!context) {
     throw new Error("useMagicContext must be used inside MagicProvider")
   }
-
-  return ctx
+  return context
 }

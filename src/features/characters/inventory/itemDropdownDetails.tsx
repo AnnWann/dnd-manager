@@ -9,7 +9,10 @@ export function ItemDropdownDetails({
   item: Itemmable
   onUpdate: (updater: (item: Itemmable) => Itemmable) => void
 }) {
-  const equipment = item.kind === "equipment" ? (item as Equipment) : null
+  const equipment =
+    item.kind === "equipment" || item.kind === "shield"
+      ? (item as Equipment)
+      : null
 
   function updateAbilityCharge(abilityId: string, delta: number) {
     onUpdate((current) => {

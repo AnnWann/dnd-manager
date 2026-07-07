@@ -1,8 +1,8 @@
-import { Button } from "../../../components/ui/Button"
+import { Scale, Shield } from "lucide-react"
+
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Armor } from "../../../models/items/equipment/Armor"
-import type { Bonus } from "../../../models/items/equipment/EquipmentSlot"
-import { EquipmentFeaturesList } from "./equipmentFeaturesList"
+import { EquipmentItemCard } from "./equipmentItemCard"
 
 type Props = {
   character: CharacterTemplate
@@ -18,156 +18,61 @@ function armorTypeLabel(type: Armor["armorType"]) {
   return "Pesada"
 }
 
-function bonusTypeLabel(type: Bonus["type"]) {
-  if (type === "add") return "+"
-  if (type === "sub") return "-"
-  return "fixo"
-}
-
-function formatBonusValue(bonus: Bonus) {
-  if (bonus.type === "flat") return `${bonus.value}`
-  return `${bonusTypeLabel(bonus.type)}${bonus.value}`
-}
-
 export function EquipmentArmorSection({
   character,
   updateCharacter,
 }: Props) {
   const armor = character.get("equipment").armor
 
-  function unequipArmor() {
-    updateCharacter(character.get("id"), (c) => c.unequipArmor())
-  }
-
   return (
-    <div className="rounded-md border border-border p-3">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="text-sm font-medium text-textH">Armadura</div>
+    <section>
+      <div className="mb-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-textH">
+          <Shield className="h-4 w-4 text-accent" />
+          Armadura
+        </div>
 
-        {armor ? (
-          <Button size="sm" variant="secondary" onClick={unequipArmor}>
-            Desequipar
-          </Button>
-        ) : null}
+        <div className="mt-1 text-xs text-textMuted">
+          Proteção principal equipada pelo personagem.
+        </div>
       </div>
 
       {!armor ? (
-        <p className="text-xs text-text">Nenhuma armadura equipada.</p>
-      ) : (
-        <div className="grid gap-3">
-          <div>
-            <div className="text-sm font-semibold text-textH">
-              {armor.name || "Armadura sem nome"}
-            </div>
-
-            <div className="mt-1 text-xs text-text">
-              {armorTypeLabel(armor.armorType)} • Peso {armor.weight ?? 0}
-            </div>
-          </div>
-
-          {armor.desc?.trim() ? (
-            <div className="rounded-md border border-border p-3">
-              <div className="text-xs font-medium text-textH">Descrição</div>
-              <div className="mt-1 whitespace-pre-wrap text-xs text-text">
-                {armor.desc}
-              </div>
-            </div>
-          ) : null}
-
-          <EquipmentBonusList bonuses={armor.bonuses} />
-
-          <EquipmentFeaturesList
-            equipment={armor}
-            onUpdate={(updater) =>
-              updateCharacter(character.get("id"), (c) =>
-                c.with("equipment", {
-                  ...c.get("equipment"),
-                  armor: updater(c.get("equipment").armor!),
-                }),
-              )
-            }
-          />
+        <div className="rounded-xl border border-dashed border-border bg-bg-subtle px-4 py-6 text-center text-xs text-textMuted">
+          Nenhuma armadura equipada.
         </div>
+      ) : (
+        <EquipmentItemCard
+          item={armor}
+          fallbackName="Armadura sem nome"
+          badges={[armorTypeLabel(armor.armorType)]}
+          stats={[
+            {
+              icon: <Shield className="h-4 w-4" />,
+              label: "Tipo",
+              value: armorTypeLabel(armor.armorType),
+            },
+            {
+              icon: <Scale className="h-4 w-4" />,
+              label: "Peso",
+              value: String(armor.weight ?? 0),
+            },
+          ]}
+          onUnequip={() =>
+            updateCharacter(character.get("id"), (current) =>
+              current.unequipArmor(),
+            )
+          }
+          onUpdate={(updater) =>
+            updateCharacter(character.get("id"), (current) =>
+              current.with("equipment", {
+                ...current.get("equipment"),
+                armor: updater(current.get("equipment").armor!),
+              }),
+            )
+          }
+        />
       )}
-    </div>
-  )
-}
-
-type EquipmentBonusListProps = {
-  bonuses: Armor["bonuses"]
-}
-
-function EquipmentBonusList({ bonuses }: EquipmentBonusListProps) {
-  if (!bonuses) {
-    return <p className="text-xs text-text">Sem bônus.</p>
-  }
-
-  const rows: string[] = []
-
-  const normalBonusLabels: Array<{
-    key:
-      | "armorClass"
-      | "initiative"
-      | "maxHp"
-      | "temporaryHp"
-      | "passivePerception"
-      | "attackBonus"
-      | "speed"
-    label: string
-  }> = [
-    { key: "armorClass", label: "CA" },
-    { key: "initiative", label: "Iniciativa" },
-    { key: "maxHp", label: "HP Máx." },
-    { key: "temporaryHp", label: "HP Temp." },
-    { key: "passivePerception", label: "Percepção Passiva" },
-    { key: "attackBonus", label: "Ataque" },
-    { key: "speed", label: "Velocidade" },
-  ]
-
-  for (const field of normalBonusLabels) {
-    const value = bonuses[field.key]
-
-    if (!Array.isArray(value)) continue
-
-    for (const bonus of value) {
-      rows.push(`${field.label}: ${formatBonusValue(bonus)}`)
-    }
-  }
-
-  for (const entry of bonuses.attribute ?? []) {
-    rows.push(
-      `Atributo ${entry.attribute.toUpperCase()}: ${formatBonusValue(
-        entry.bonus,
-      )}`,
-    )
-  }
-
-  for (const entry of bonuses.attributeModifier ?? []) {
-    rows.push(
-      `Mod. ${entry.attribute.toUpperCase()}: ${formatBonusValue(
-        entry.bonus,
-      )}`,
-    )
-  }
-
-  if (rows.length === 0) {
-    return <p className="text-xs text-text">Sem bônus.</p>
-  }
-
-  return (
-    <div className="rounded-md border border-border p-3">
-      <div className="text-xs font-medium text-textH">Bônus</div>
-
-      <div className="mt-2 flex flex-wrap gap-2">
-        {rows.map((row) => (
-          <span
-            key={row}
-            className="rounded-md border border-border px-2 py-1 text-xs text-text"
-          >
-            {row}
-          </span>
-        ))}
-      </div>
-    </div>
+    </section>
   )
 }

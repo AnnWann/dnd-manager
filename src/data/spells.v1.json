@@ -4795,7 +4795,7 @@
     },
     {
       "index": "druidcraft",
-      "name": "Druidcraft",
+      "name": "Druidismo",
       "description": "Sussurrando aos espíritos da natureza, você cria um dos seguintes efeitos dentro do seu alcance:\n\n- Você cria um pequeno efeito sensorial inofensivo que prevê como estará o tempo no seu local pelas próximas 24 horas. O efeito pode se manifestar como um orbe dourado para céu limpo, uma nuvem para chuva, flocos de neve caindo para neve, e assim por diante. Este efeito persiste por 1 rodada.\n\n- Você instantaneamente faz uma flor desabrochar, uma vagem se abrir ou um broto de folha desabrochar.\n\n- Você cria um efeito sensorial instantâneo e inofensivo, como folhas caindo, uma rajada de vento, o som de um pequeno animal ou o leve cheiro de gambá. O efeito deve caber em um cubo de 1,5 metro.\n\n- Você instantaneamente acende ou apaga uma vela, uma tocha ou uma pequena fogueira.",
       "higherLevelText": "",
       "source": {
@@ -4803,7 +4803,7 @@
         "url": "/api/2014/spells/druidcraft",
         "updatedAt": "2026-04-01T20:35:39.217Z"
       },
-      "displayName": "Druidcraft",
+      "displayName": "Druidismo",
       "homebrew": false,
       "slotLevel": 0,
       "school": "transmutation",

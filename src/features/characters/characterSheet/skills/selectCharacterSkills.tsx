@@ -4,7 +4,6 @@ import type { CharacterTemplate } from "../../../../models/characters/CharacterT
 import type { Attribute } from "../../../../models/sheet/Attribute"
 import type { Skill, SkillProficiency } from "../../../../models/sheet/Skills"
 
-
 type Props = {
   character: CharacterTemplate
   updateCharacter: (
@@ -27,7 +26,7 @@ export function SelectSkillModule({
 }: Props) {
   const sheet = character.get("sheet")
   const proficiency = sheet.skills[skillKey] ?? "none"
-  const abilityMod = character.getAttributeModifier(ability)
+  const abilityMod = character.getEffectiveAttributeModifier(ability)
 
   const bonus =
     abilityMod +

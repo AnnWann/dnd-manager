@@ -3,78 +3,102 @@ import { Input } from "../../../../components/ui/Input"
 import { Select } from "../../../../components/ui/Select"
 import { attributeShort } from "../../../../lib/attributeShorts"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
-import { ATTRIBUTE_KEYS, type Attribute } from "../../../../models/sheet/Attribute"
-import type { CharacterClassInterface, ClassLevel, ClassName } from "../../../../models/sheet/Class"
+import {
+  getDerivedSorceryPointMaximum,
+  getSorceryPointPool,
+  setSorceryPointCurrent,
+} from "../../../../models/characters/characterSorceryPoints"
+import {
+  ATTRIBUTE_KEYS,
+  type Attribute,
+} from "../../../../models/sheet/Attribute"
+import type {
+  CharacterClassInterface,
+  ClassLevel,
+  ClassName,
+} from "../../../../models/sheet/Class"
 
-
-const CLASS_PT: Record<ClassName, string > = {
-  "artificer": "Artífice",
-  "barbarian": "Bárbaro",
-  "bard": "Bardo",
-  "cleric": "Clérigo",
-  "druid": "Druida",
-  "fighter": "Guerreiro",
-  "monk": "Monge",
-  "paladin": "Paladino",
-  "ranger": "Patrulheiro",
-  "rogue": "Ladino",
-  "sorcerer": "Feiticeiro",
-  "warlock": "Bruxo",
-  "wizard": "Mago",
+const CLASS_PT: Record<ClassName, string> = {
+  artificer: "Artífice",
+  barbarian: "Bárbaro",
+  bard: "Bardo",
+  cleric: "Clérigo",
+  druid: "Druida",
+  fighter: "Guerreiro",
+  monk: "Monge",
+  paladin: "Paladino",
+  ranger: "Patrulheiro",
+  rogue: "Ladino",
+  sorcerer: "Feiticeiro",
+  warlock: "Bruxo",
+  wizard: "Mago",
 }
 
 type Props = {
   character: CharacterTemplate
   classData: CharacterClassInterface
   classIndex: number
+  maxLevel: number
   updateCharacter: (
     characterId: string,
-    updater: (c: CharacterTemplate) => CharacterTemplate
+    updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
 }
 
-function clampLevel(value: number): ClassLevel {
-  return Math.max(1, Math.min(20, value)) as ClassLevel
+function clampLevel(value: number, maxLevel: number): ClassLevel {
+  const safeMaxLevel = Math.max(1, Math.min(20, Math.trunc(maxLevel) || 1))
+  return Math.max(1, Math.min(safeMaxLevel, value)) as ClassLevel
 }
 
 export function SelectClassModule({
   character,
   classData,
   classIndex,
-  updateCharacter
+  maxLevel,
+  updateCharacter,
 }: Props) {
   const canEditCasting =
     classData.className === "fighter" || classData.className === "rogue"
 
   function updateCharacterClasses(
-    updater: (classes: CharacterClassInterface[]) => CharacterClassInterface[],
-    ) {
-      updateCharacter(character.get("id"), (c) => {
-        const sheet = c.get("sheet")
-        const nextClasses = updater(sheet.classes ?? [])
+    updater: (
+      classes: CharacterClassInterface[],
+    ) => CharacterClassInterface[],
+  ) {
+    updateCharacter(character.get("id"), (current) => {
+      const previousPool = getSorceryPointPool(current)
+      const sheet = current.get("sheet")
+      const nextClasses = updater(sheet.classes ?? [])
+      const withClasses = current.withSheet("classes", nextClasses)
+      const nextMaximum = getDerivedSorceryPointMaximum(withClasses)
+      const spentPoints = Math.max(
+        0,
+        previousPool.max - previousPool.current,
+      )
+      const nextCurrent = Math.max(0, nextMaximum - spentPoints)
+      const syncedMagic = withClasses
+        .ensureMagic()
+        .syncMagicWithClasses()
 
-        return c
-          .withSheet("classes", nextClasses)
-          .ensureMagic()
-          .syncMagicWithClasses()
-      })
+      return setSorceryPointCurrent(syncedMagic, nextCurrent)
+    })
   }
 
   function updateClass(nextClass: CharacterClassInterface) {
     updateCharacterClasses((classes) => {
       const nextClasses = [...classes]
-
       nextClasses[classIndex] = nextClass
-
       return nextClasses
     })
   }
 
   function removeClass() {
     updateCharacterClasses((classes) =>
-      classes.filter((_, i) => i !== classIndex),
+      classes.filter((_, index) => index !== classIndex),
     )
   }
+
+  const safeMaxLevel = Math.max(1, Math.min(20, Math.trunc(maxLevel) || 1))
 
   return (
     <div className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 md:grid-cols-[1fr_100px_220px_220px_44px]">
@@ -91,12 +115,13 @@ export function SelectClassModule({
           type="number"
           className="mt-1 h-9 px-2"
           min={1}
-          max={20}
+          max={safeMaxLevel}
           value={classData.level}
-          onChange={(e) =>
+          title={`Máximo para esta classe: ${safeMaxLevel}`}
+          onChange={(event) =>
             updateClass({
               ...classData,
-              level: clampLevel(Number(e.target.value)),
+              level: clampLevel(Number(event.target.value), safeMaxLevel),
             })
           }
         />
@@ -108,8 +133,8 @@ export function SelectClassModule({
         <Select
           className="mt-1 h-9 px-2 py-1"
           value={classData.spellcastingProgression ?? "none"}
-          onChange={(e) => {
-            const value = e.target.value
+          onChange={(event) => {
+            const value = event.target.value
 
             updateClass({
               ...classData,
@@ -134,17 +159,17 @@ export function SelectClassModule({
           className="mt-1 h-9 px-2 py-1"
           value={classData.castingAttribute ?? ""}
           disabled={!classData.spellcastingProgression && !canEditCasting}
-          onChange={(e) =>
+          onChange={(event) =>
             updateClass({
               ...classData,
-              castingAttribute: e.target.value as Attribute,
+              castingAttribute: event.target.value as Attribute,
             })
           }
         >
           <option value="">Nenhum</option>
-          {ATTRIBUTE_KEYS.map((a) => (
-            <option key={a} value={a}>
-              {attributeShort(a)}
+          {ATTRIBUTE_KEYS.map((attribute) => (
+            <option key={attribute} value={attribute}>
+              {attributeShort(attribute)}
             </option>
           ))}
         </Select>
@@ -164,4 +189,3 @@ export function SelectClassModule({
     </div>
   )
 }
-

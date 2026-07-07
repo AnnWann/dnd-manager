@@ -1,7 +1,7 @@
 // models/characters/characterAbilities.ts
 
 import type { Ability } from "../abilities/Ability"
-import { getEquipmentAbilities, getEquippedItems } from "./characterEquipment"
+import { getEquipmentAbilities } from "./characterEquipment"
 import type { CharacterTemplate } from "./CharacterTemplate"
 
 export function addAbility(
@@ -98,7 +98,6 @@ export function getCharacterAbilities(
 
   return [...characterAbilities, ...equipmentAbilities]
 }
-
 
 export function restoreAbility(
   character: CharacterTemplate,

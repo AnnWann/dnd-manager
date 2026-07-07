@@ -1,13 +1,20 @@
 import type { CharacterTemplate } from "./CharacterTemplate"
 import type { Itemmable } from "../items/item"
+import {
+  prepareInventoryItemForInsert,
+  removeSingleInventoryItem,
+  updateSingleInventoryItem,
+} from "../items/inventoryIdentity"
 
 export function addInventoryItem(
   character: CharacterTemplate,
   item: Itemmable,
 ): CharacterTemplate {
+  const inventory = character.get("inventory")
+
   return character.with("inventory", [
-    ...character.get("inventory"),
-    item,
+    ...inventory,
+    prepareInventoryItemForInsert(item, inventory),
   ])
 }
 
@@ -18,8 +25,10 @@ export function updateInventoryItem(
 ): CharacterTemplate {
   return character.with(
     "inventory",
-    character.get("inventory").map((item) =>
-      item.id === itemId ? updater(item) : item,
+    updateSingleInventoryItem(
+      character.get("inventory"),
+      itemId,
+      updater,
     ),
   )
 }
@@ -30,9 +39,7 @@ export function removeInventoryItem(
 ): CharacterTemplate {
   return character.with(
     "inventory",
-    character.get("inventory").filter(
-      (item) => item.id !== itemId,
-    ),
+    removeSingleInventoryItem(character.get("inventory"), itemId),
   )
 }
 

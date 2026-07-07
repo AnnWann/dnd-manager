@@ -1,15 +1,25 @@
 import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
+
+import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
+import { Textarea } from "../../../components/ui/Textarea"
+import { normalizeAbilityText } from "../../../lib/textNormalization"
 import type {
   Ability,
   AbilityActionKind,
+  AbilityCategory,
   AbilityKind,
   Trigger,
   AbilityUsageCooldownUnit,
   AbilityUsageResetKind,
 } from "../../../models/abilities/Ability"
+import { BonusesFields } from "../inventory/equipmentBonusFields"
+import {
+  GrantedSpellsEditor,
+  type EditableSpellGrant,
+} from "../magic/grantedSpellsEditor"
 import {
   ABILITY_ACTION_OPTIONS,
   ABILITY_KIND_OPTIONS,
@@ -31,8 +41,11 @@ function createEmptyAbility(): Ability {
     name: "",
     description: "",
     kind: "active",
+    category: "general",
     actionKind: "action",
     trigger: "always",
+    grantedSpells: [],
+    bonuses: {},
   }
 }
 
@@ -42,65 +55,86 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
   )
 
   useEffect(() => {
-    if (open) {
-      setDraft(ability ?? createEmptyAbility())
-    }
+    if (open) setDraft(ability ?? createEmptyAbility())
   }, [open, ability])
 
   useEffect(() => {
     if (!open) return
-
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = "hidden"
-
     return () => {
       document.body.style.overflow = previousOverflow
     }
   }, [open])
 
   if (!open) return null
-
   const hasUsage = draft.usage !== undefined
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex h-screen w-screen items-start justify-center overflow-y-auto bg-black/40 p-4 pt-10">
-      <div className="w-full max-w-lg rounded-lg border border-border p-4 shadow-xl"
-          style={{ backgroundColor: "var(--bg)" }}>
-        <h2 className="text-sm font-medium text-textH">
-          {ability ? "Editar habilidade" : "Adicionar habilidade"}
-        </h2>
-
-        <div className="mt-4 grid gap-3">
+    <div className="fixed inset-0 z-[12000] flex h-screen w-screen items-start justify-center overflow-y-auto bg-black/55 p-4 pt-10 backdrop-blur-sm">
+      <div className="w-full max-w-2xl rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <label className="text-xs text-text">Nome</label>
-            <Input
-              className="mt-1"
-              value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            />
+            <h2 className="text-base font-semibold text-textH">
+              {ability ? "Editar habilidade" : "Adicionar habilidade"}
+            </h2>
+            <p className="mt-1 text-xs text-textMuted">
+              Configure categoria, comportamento, usos, bônus e magias concedidas.
+            </p>
           </div>
+          <Button size="sm" variant="ghost" onClick={onClose}>
+            Fechar
+          </Button>
+        </div>
 
-          <div>
-            <label className="text-xs text-text">Descrição</label>
+        <div className="mt-4 grid gap-4">
+          <label className="grid gap-1">
+            <span className="text-xs font-medium text-textH">Nome</span>
             <Input
-              className="mt-1"
-              value={draft.description ?? ""}
-              onChange={(e) =>
-                setDraft({ ...draft, description: e.target.value })
+              value={draft.name}
+              onChange={(event) =>
+                setDraft({ ...draft, name: event.target.value })
               }
             />
-          </div>
+          </label>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-text">Tipo</label>
+          <label className="grid gap-1">
+            <span className="text-xs font-medium text-textH">Descrição</span>
+            <Textarea
+              className="min-h-24"
+              value={draft.description ?? ""}
+              onChange={(event) =>
+                setDraft({ ...draft, description: event.target.value })
+              }
+            />
+          </label>
+
+          <div className="grid gap-2 md:grid-cols-3">
+            <label className="grid gap-1">
+              <span className="text-xs font-medium text-textH">Categoria</span>
               <Select
-                className="mt-1"
-                value={draft.kind ?? "active"}
-                onChange={(e) =>
+                value={draft.category ?? "general"}
+                onChange={(event) =>
                   setDraft({
                     ...draft,
-                    kind: e.target.value as AbilityKind,
+                    category: event.target.value as AbilityCategory,
+                  })
+                }
+              >
+                <option value="general">Habilidade</option>
+                <option value="invocation">Evocação</option>
+                <option value="feat">Talento</option>
+              </Select>
+            </label>
+
+            <label className="grid gap-1">
+              <span className="text-xs font-medium text-textH">Tipo</span>
+              <Select
+                value={draft.kind ?? "active"}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    kind: event.target.value as AbilityKind,
                   })
                 }
               >
@@ -110,18 +144,17 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                   </option>
                 ))}
               </Select>
-            </div>
+            </label>
 
-            <div>
-              <label className="text-xs text-text">Ação</label>
+            <label className="grid gap-1">
+              <span className="text-xs font-medium text-textH">Ação</span>
               <Select
-                className="mt-1"
                 value={draft.actionKind ?? "action"}
                 disabled={draft.kind === "passive"}
-                onChange={(e) =>
+                onChange={(event) =>
                   setDraft({
                     ...draft,
-                    actionKind: e.target.value as AbilityActionKind,
+                    actionKind: event.target.value as AbilityActionKind,
                   })
                 }
               >
@@ -131,18 +164,17 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                   </option>
                 ))}
               </Select>
-            </div>
+            </label>
           </div>
 
-          <div>
-            <label className="text-xs text-text">Gatilho</label>
+          <label className="grid gap-1">
+            <span className="text-xs font-medium text-textH">Gatilho</span>
             <Select
-              className="mt-1"
               value={draft.trigger ?? "always"}
-              onChange={(e) =>
+              onChange={(event) =>
                 setDraft({
                   ...draft,
-                  trigger: e.target.value as Trigger,
+                  trigger: event.target.value as Trigger,
                 })
               }
             >
@@ -152,161 +184,166 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                 </option>
               ))}
             </Select>
-          </div>
-
-          <label className="flex items-center gap-2 text-xs text-text">
-            <input
-              type="checkbox"
-              checked={hasUsage}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  usage: e.target.checked
-                    ? {
-                        max: 1,
-                        used: 0,
-                        reset: "shortRest",
-                      }
-                    : undefined,
-                })
-              }
-            />
-            Tem contador de usos
           </label>
 
-          {hasUsage && draft.usage ? (
-            <div className="grid grid-cols-2 gap-2 rounded-md border border-border p-3">
-              <div>
-                <label className="text-xs text-text">Máximo</label>
-                <Input
-                  type="number"
-                  min={1}
-                  className="mt-1"
-                  value={draft.usage.max}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      usage: {
-                        ...draft.usage!,
-                        max: Math.max(1, Number(e.target.value) || 1),
-                      },
-                    })
-                  }
-                />
-              </div>
+          <section className="rounded-xl border border-border bg-bg-subtle p-3">
+            <label className="flex items-center gap-2 text-xs font-medium text-textH">
+              <input
+                type="checkbox"
+                checked={hasUsage}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    usage: event.target.checked
+                      ? { max: 1, used: 0, reset: "shortRest" }
+                      : undefined,
+                  })
+                }
+              />
+              Tem contador de usos
+            </label>
 
-              <div>
-                <label className="text-xs text-text">Usado</label>
-                <Input
-                  type="number"
-                  min={0}
-                  className="mt-1"
-                  value={draft.usage.used}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      usage: {
-                        ...draft.usage!,
-                        used: Math.max(0, Number(e.target.value) || 0),
-                      },
-                    })
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-text">Reset</label>
-                <Select
-                  className="mt-1"
-                  value={draft.usage.reset}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      usage: {
-                        ...draft.usage!,
-                        reset: e.target.value as AbilityUsageResetKind,
-                      },
-                    })
-                  }
-                >
-                  {USAGE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              {draft.usage.reset === "cooldown" ? (
-                <>
-                  <div>
-                    <label className="text-xs text-text">Cooldown</label>
-                    <Input
-                      type="number"
-                      min={1}
-                      className="mt-1"
-                      value={draft.usage.cooldownAmount ?? 1}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          usage: {
-                            ...draft.usage!,
-                            cooldownAmount: Math.max(
-                              1,
-                              Number(e.target.value) || 1,
+            {hasUsage && draft.usage ? (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <label className="grid gap-1">
+                  <span className="text-xs text-textMuted">Máximo</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={draft.usage.max}
+                    onChange={(event) => {
+                      const max = Math.max(1, Number(event.target.value) || 1)
+                      setDraft({
+                        ...draft,
+                        usage: {
+                          ...draft.usage!,
+                          max,
+                          used: Math.min(draft.usage!.used, max),
+                        },
+                      })
+                    }}
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs text-textMuted">Usado</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={draft.usage.used}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        usage: {
+                          ...draft.usage!,
+                          used: Math.max(
+                            0,
+                            Math.min(
+                              draft.usage!.max,
+                              Number(event.target.value) || 0,
                             ),
-                          },
-                        })
-                      }
-                    />
-                  </div>
+                          ),
+                        },
+                      })
+                    }
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs text-textMuted">Reset</span>
+                  <Select
+                    value={draft.usage.reset}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        usage: {
+                          ...draft.usage!,
+                          reset: event.target.value as AbilityUsageResetKind,
+                        },
+                      })
+                    }
+                  >
+                    {USAGE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                {draft.usage.reset === "cooldown" ? (
+                  <>
+                    <label className="grid gap-1">
+                      <span className="text-xs text-textMuted">Cooldown</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={draft.usage.cooldownAmount ?? 1}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            usage: {
+                              ...draft.usage!,
+                              cooldownAmount: Math.max(
+                                1,
+                                Number(event.target.value) || 1,
+                              ),
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="grid gap-1">
+                      <span className="text-xs text-textMuted">Unidade</span>
+                      <Select
+                        value={draft.usage.cooldownUnit ?? "turns"}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            usage: {
+                              ...draft.usage!,
+                              cooldownUnit: event.target
+                                .value as AbilityUsageCooldownUnit,
+                            },
+                          })
+                        }
+                      >
+                        {COOLDOWN_UNIT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </label>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
 
-                  <div>
-                    <label className="text-xs text-text">Unidade</label>
-                    <Select
-                      className="mt-1"
-                      value={draft.usage.cooldownUnit ?? "turns"}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          usage: {
-                            ...draft.usage!,
-                            cooldownUnit:
-                              e.target.value as AbilityUsageCooldownUnit,
-                          },
-                        })
-                      }
-                    >
-                      {COOLDOWN_UNIT_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-                </>
-              ) : null}
-            </div>
-          ) : null}
+          <BonusesFields
+            bonuses={draft.bonuses ?? {}}
+            onChange={(bonuses) => setDraft({ ...draft, bonuses })}
+          />
+
+          <GrantedSpellsEditor
+            variant="ability"
+            grants={(draft.grantedSpells ?? []) as EditableSpellGrant[]}
+            abilityHasUsage={hasUsage}
+            onChange={(grantedSpells) =>
+              setDraft({ ...draft, grantedSpells })
+            }
+          />
         </div>
 
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            className="rounded-md border border-border px-3 py-1 text-xs text-text"
-            onClick={onClose}
-          >
+        <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
+          <Button variant="secondary" onClick={onClose}>
             Cancelar
-          </button>
-
-          <button
-            type="button"
-            className="rounded-md border border-border px-3 py-1 text-xs text-textH"
+          </Button>
+          <Button
+            variant="primary"
             disabled={!draft.name.trim()}
-            onClick={() => onSave(draft)}
+            onClick={() => onSave(normalizeAbilityText(draft))}
           >
             Salvar
-          </button>
+          </Button>
         </div>
       </div>
     </div>,

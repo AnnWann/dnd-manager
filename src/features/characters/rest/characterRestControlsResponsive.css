@@ -1,0 +1,61 @@
+.rest-controls-responsive [role="dialog"] {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: calc(100vh - 1rem);
+  max-height: calc(100vh - 1rem) !important;
+}
+
+.rest-controls-responsive [role="dialog"] > :nth-child(2) {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+.rest-controls-responsive [role="dialog"] > :last-child {
+  position: relative;
+  z-index: 1;
+  margin-right: -0.75rem;
+  margin-bottom: -0.75rem;
+  margin-left: -0.75rem;
+  padding: 0.75rem;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  background: inherit;
+}
+
+@supports (height: 100svh) {
+  .rest-controls-responsive [role="dialog"] {
+    height: calc(100svh - 1rem);
+    max-height: calc(100svh - 1rem) !important;
+  }
+}
+
+@supports (height: 100dvh) {
+  .rest-controls-responsive [role="dialog"] {
+    height: calc(100dvh - 1rem);
+    max-height: calc(100dvh - 1rem) !important;
+  }
+}
+
+@media (min-width: 640px) {
+  .rest-controls-responsive [role="dialog"] {
+    height: min(94vh, calc(100vh - 2rem));
+    max-height: min(94vh, calc(100vh - 2rem)) !important;
+  }
+
+  .rest-controls-responsive [role="dialog"] > :last-child {
+    margin-right: -1rem;
+    margin-bottom: -1rem;
+    margin-left: -1rem;
+    padding: 1rem;
+  }
+
+  @supports (height: 100dvh) {
+    .rest-controls-responsive [role="dialog"] {
+      height: min(94dvh, calc(100dvh - 2rem));
+      max-height: min(94dvh, calc(100dvh - 2rem)) !important;
+    }
+  }
+}

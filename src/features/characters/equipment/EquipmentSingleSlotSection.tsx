@@ -1,13 +1,12 @@
-// equipmentSingleSlotSection.tsx
+import { Scale, Shield } from "lucide-react"
 
-import { Button } from "../../../components/ui/Button"
-import { formatBonusName, formatBonusValue } from "../../../lib/formatBonus"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
-import { EquipmentFeaturesList } from "./equipmentFeaturesList"
+import { EquipmentItemCard } from "./equipmentItemCard"
 
 type SingleSlot =
   | "armor"
+  | "shield"
   | "helmet"
   | "gloves"
   | "boots"
@@ -19,28 +18,9 @@ type Props = {
   character: CharacterTemplate
   updateCharacter: (
     characterId: string,
-    updater: (c: CharacterTemplate) => CharacterTemplate
+    updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
 }
-
-type NormalBonusKey =
-  | "armorClass"
-  | "initiative"
-  | "maxHp"
-  | "temporaryHp"
-  | "passivePerception"
-  | "attackBonus"
-  | "speed"
-
-const NORMAL_BONUS_KEYS: NormalBonusKey[] = [
-  "armorClass",
-  "initiative",
-  "maxHp",
-  "temporaryHp",
-  "passivePerception",
-  "attackBonus",
-  "speed",
-]
 
 export function EquipmentSingleSlotSection({
   title,
@@ -50,127 +30,57 @@ export function EquipmentSingleSlotSection({
 }: Props) {
   const item = character.get("equipment")[slot] as Equipment | undefined
 
-  function unequip() {
-    updateCharacter(character.get("id"), (c) =>
-      c.unequip(slot),
-    )
-  }
-
   return (
-    <div className="rounded-md border border-border p-3">
-      <div className="mb-3 text-sm font-medium text-textH">
-        {title}
+    <section>
+      <div className="mb-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-textH">
+          <Shield className="h-4 w-4 text-accent" />
+          {title}
+        </div>
+
+        <div className="mt-1 text-xs text-textMuted">
+          Item atualmente equipado neste espaço.
+        </div>
       </div>
 
       {!item ? (
-        <div className="text-xs text-text">
+        <div className="rounded-xl border border-dashed border-border bg-bg-subtle px-4 py-6 text-center text-xs text-textMuted">
           Nenhum item equipado.
         </div>
       ) : (
-        <div className="rounded-md border border-border p-3">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="font-medium text-textH">
-                {item.name || "Item sem nome"}
-              </div>
+        <EquipmentItemCard
+          item={item}
+          fallbackName="Item sem nome"
+          badges={[title]}
+          stats={[
+            {
+              icon: <Shield className="h-4 w-4" />,
+              label: "Espaço",
+              value: title,
+            },
+            {
+              icon: <Scale className="h-4 w-4" />,
+              label: "Peso",
+              value: String(item.weight ?? 0),
+            },
+          ]}
+          onUnequip={() =>
+            updateCharacter(character.get("id"), (current) =>
+              current.unequip(slot),
+            )
+          }
+          onUpdate={(updater) =>
+            updateCharacter(character.get("id"), (current) => {
+              const equipment = current.get("equipment")
 
-              {item.desc?.trim() ? (
-                <div className="mt-1 text-xs text-text">
-                  {item.desc}
-                </div>
-              ) : null}
-
-              <div className="mt-2 text-xs text-text">
-                Peso: {item.weight ?? 0}
-              </div>
-            </div>
-
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={unequip}
-            >
-              Desequipar
-            </Button>
-          </div>
-
-          <EquipmentBonusList bonuses={item.bonuses} />
-
-          <EquipmentFeaturesList
-            equipment={item}
-            onUpdate={(updater) =>
-              updateCharacter(character.get("id"), (c) => {
-                const equipment = c.get("equipment")
-
-                return c.with("equipment", {
-                  ...equipment,
-                  [slot]: updater(equipment[slot]!),
-                })
+              return current.with("equipment", {
+                ...equipment,
+                [slot]: updater(equipment[slot] as Equipment),
               })
-            }
-          />
-        </div>
+            })
+          }
+        />
       )}
-    </div>
-  )
-}
-
-type EquipmentBonusListProps = {
-  bonuses: Equipment["bonuses"]
-}
-
-function EquipmentBonusList({ bonuses }: EquipmentBonusListProps) {
-  if (!bonuses) {
-    return null
-  }
-
-  const rows: string[] = []
-
-  for (const key of NORMAL_BONUS_KEYS) {
-    const value = bonuses[key]
-    if (!Array.isArray(value)) continue
-
-    for (const bonus of value) {
-      rows.push(`${formatBonusName(key)}: ${formatBonusValue(bonus)}`)
-    }
-  }
-
-  for (const entry of bonuses.attribute ?? []) {
-    rows.push(
-      `Atributo ${entry.attribute.toUpperCase()}: ${formatBonusValue(
-        entry.bonus,
-      )}`,
-    )
-  }
-
-  for (const entry of bonuses.attributeModifier ?? []) {
-    rows.push(
-      `Mod. ${entry.attribute.toUpperCase()}: ${formatBonusValue(
-        entry.bonus,
-      )}`,
-    )
-  }
-
-  if (rows.length === 0) {
-    return null
-  }
-
-  return (
-    <div className="mt-3">
-      <div className="mb-2 text-xs font-medium text-textH">
-        Bônus
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {rows.map((row) => (
-          <span
-            key={row}
-            className="rounded border border-border px-2 py-1 text-xs text-text"
-          >
-            {row}
-          </span>
-        ))}
-      </div>
-    </div>
+    </section>
   )
 }

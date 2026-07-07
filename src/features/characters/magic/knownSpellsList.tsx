@@ -1,15 +1,23 @@
-import { useMemo, useState } from "react"
+import { useState } from "react"
+
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
+import { CLASS_NAMES } from "../../../contexts/consts"
+import { useMagicContext } from "../../../contexts/magicContext"
+import { getCharacterGrantedSpells } from "../../../models/characters/characterGrantedSpells"
+import {
+  addSpellCastingDescription,
+  getSpellCastingDescriptions,
+  removeSpellCastingDescription,
+  updateSpellCastingDescription,
+} from "../../../models/characters/characterMagic"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import type { Spell } from "../../../models/magic/spells/Spell"
+import type { SpellSource } from "../../../models/magic/spells/SpellSource"
 import type {
   CharacterClassInterface,
   ClassName,
 } from "../../../models/sheet/Class"
 import { SpellCard } from "./spellCard"
-import { CLASS_NAMES } from "../../../contexts/consts"
-import { useMagicContext } from "../../../contexts/magicContext"
-import type { SpellSource } from "../../../models/magic/spells/SpellSource"
-import type { Spell } from "../../../models/magic/spells/Spell"
 
 type Props = {
   character: CharacterTemplate
@@ -20,7 +28,8 @@ type Props = {
 }
 
 type PreparedFilter = "all" | "prepared" | "not-prepared"
-type ClassFilter = "all" | ClassName
+type SourceTypeFilter = "all" | SpellSource["type"]
+type SpecificSourceFilter = "all" | string
 
 type SpellLimitInfo = {
   className: ClassName
@@ -28,74 +37,132 @@ type SpellLimitInfo = {
   reachedLimit?: boolean
 }
 
-type KnownSpellEntry = {
+type DisplaySpellEntry = {
+  key: string
   spell: Spell
   source: SpellSource
   prepared: boolean
+  alwaysPrepared: boolean
+  removable: boolean
+  accessLabel?: string
 }
+
+type SourceOption = {
+  key: string
+  label: string
+  type: SpellSource["type"]
+  count: number
+}
+
+const SOURCE_TYPE_ORDER: SpellSource["type"][] = [
+  "class",
+  "ability",
+  "feat",
+  "race",
+  "equipment",
+]
 
 export function KnownSpellsList({ character, updateCharacter }: Props) {
   const { getSpellByIndex } = useMagicContext()
-  const knownSpellEntries =
-    character.get("magic")?.spells.knownSpells ?? []
-
-  const spells = knownSpellEntries
-    .map((entry) => {
-      const spell = getSpellByIndex(entry.spells.id)
-      if (!spell) return null
-
-      return {
-        spell,
-        source: entry.source,
-        prepared: entry.spells.prepared,
-      }
-    })
-    .filter((entry): entry is {
-      spell: Spell
-      source: SpellSource
-      prepared: boolean
-    } => Boolean(entry))
-
-  const classes = character.get("sheet").classes ?? []
-
   const [preparedFilter, setPreparedFilter] =
     useState<PreparedFilter>("all")
-  const [classFilter, setClassFilter] = useState<ClassFilter>("all")
+  const [sourceTypeFilter, setSourceTypeFilter] =
+    useState<SourceTypeFilter>("all")
+  const [specificSourceFilter, setSpecificSourceFilter] =
+    useState<SpecificSourceFilter>("all")
+  const classes = character.get("sheet").classes ?? []
 
-  const spellLimits = getSpellClassLimits(character, spells)
+  const regularSpells: DisplaySpellEntry[] = []
 
-  const filteredSpells = useMemo(() => {
-    return spells.filter(({ spell, prepared, source }) => {
-      const matchesPrepared =
-        preparedFilter === "all" ||
-        (preparedFilter === "prepared" && prepared) ||
-        (preparedFilter === "not-prepared" && !prepared)
+  for (const entry of character.get("magic")?.spells.knownSpells ?? []) {
+    const spell = getSpellByIndex(entry.spells.id)
+    if (!spell) continue
 
-      const matchesClass =
-        classFilter === "all" ||
-        (source.type === "class" && source.name === classFilter)
+    const alwaysPrepared = isAlwaysAvailableSpell(
+      spell,
+      entry.source,
+      classes,
+    )
 
-      return matchesPrepared && matchesClass
+    regularSpells.push({
+      key: `known:${entry.source.type}:${entry.source.sourceId}:${spell.index}`,
+      spell,
+      source: entry.source,
+      prepared: alwaysPrepared || entry.spells.prepared,
+      alwaysPrepared,
+      removable: true,
     })
-  }, [spells, preparedFilter, classFilter])
+  }
 
-  function canPrepareSpell(entry: KnownSpellEntry): boolean {
-    if (entry.prepared) return true
+  const grantedSpells: DisplaySpellEntry[] = []
 
+  for (const entry of getCharacterGrantedSpells(character)) {
+    const spell = getSpellByIndex(entry.index)
+    if (!spell) continue
+
+    const remaining = entry.usage
+      ? Math.max(0, entry.usage.max - entry.usage.used)
+      : undefined
+
+    grantedSpells.push({
+      key: entry.key,
+      spell,
+      source: entry.source,
+      prepared: true,
+      alwaysPrepared: true,
+      removable: false,
+      accessLabel:
+        entry.castingMode === "known"
+          ? "Usa espaços normais"
+          : entry.usage
+            ? `Pela origem: ${remaining}/${entry.usage.max} usos`
+            : "Apenas pela origem",
+    })
+  }
+
+  const spells: DisplaySpellEntry[] = [
+    ...regularSpells,
+    ...grantedSpells,
+  ]
+  const spellLimits = getSpellClassLimits(character, regularSpells)
+  const sourceTypeOptions = getAvailableSourceTypes(spells)
+  const specificSourceOptions = getSpecificSourceOptions(
+    spells,
+    sourceTypeFilter,
+  )
+
+  const filteredSpells = spells.filter(({ prepared, source }) => {
+    const matchesPrepared =
+      preparedFilter === "all" ||
+      (preparedFilter === "prepared" && prepared) ||
+      (preparedFilter === "not-prepared" && !prepared)
+
+    const matchesSourceType =
+      sourceTypeFilter === "all" || source.type === sourceTypeFilter
+
+    const matchesSpecificSource =
+      specificSourceFilter === "all" ||
+      getSourceKey(source) === specificSourceFilter
+
+    return matchesPrepared && matchesSourceType && matchesSpecificSource
+  })
+
+  function canPrepareSpell(entry: DisplaySpellEntry): boolean {
+    if (entry.alwaysPrepared || entry.prepared) return true
     if (entry.source.type !== "class") return true
 
     const classData = classes.find(
       (classEntry) => classEntry.className === entry.source.name,
     )
-
     if (!classData?.knownSpells?.canPrepare) return true
 
     const limit = getPreparedSpellLimit(character, classData)
-
     if (limit === undefined) return true
 
-    const preparedCount = spells.filter(
+    const preparedCount = regularSpells.filter(
       (knownSpell) =>
+        knownSpell.spell.slotLevel > 0 &&
+        !knownSpell.alwaysPrepared &&
         knownSpell.prepared &&
         knownSpell.source.type === "class" &&
         knownSpell.source.name === entry.source.name,
@@ -104,32 +171,53 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     return preparedCount < limit
   }
 
-  function togglePrepared(spellIndex: string, prepared: boolean) {
-    const entry = spells.find(
-      (knownSpell) => knownSpell.spell.index === spellIndex,
-    )
+  function togglePrepared(entry: DisplaySpellEntry) {
+    if (entry.alwaysPrepared) return
+    if (!entry.prepared && !canPrepareSpell(entry)) return
 
-    if (!entry) return
-    if (!prepared && !canPrepareSpell(entry)) return
-
-    updateCharacter(character.get("id"), (c) =>
-      c.setSpellPrepared(spellIndex, !prepared),
+    updateCharacter(character.get("id"), (current) =>
+      current.setSpellPrepared(entry.spell.index, !entry.prepared),
     )
   }
 
-  function removeSpell(spellIndex: string) {
-    updateCharacter(character.get("id"), (c) => c.removeSpell(spellIndex))
+  function addCastingDescription(spellIndex: string) {
+    updateCharacter(character.get("id"), (current) =>
+      addSpellCastingDescription(current, spellIndex),
+    )
+  }
+
+  function changeCastingDescription(
+    spellIndex: string,
+    descriptionIndex: number,
+    description: string,
+  ) {
+    updateCharacter(character.get("id"), (current) =>
+      updateSpellCastingDescription(
+        current,
+        spellIndex,
+        descriptionIndex,
+        description,
+      ),
+    )
+  }
+
+  function removeCastingDescription(
+    spellIndex: string,
+    descriptionIndex: number,
+  ) {
+    updateCharacter(character.get("id"), (current) =>
+      removeSpellCastingDescription(current, spellIndex, descriptionIndex),
+    )
   }
 
   return (
     <Card>
       <CardHeader>
         <div className="text-sm font-semibold text-textH">
-          Magias conhecidas
+          Magias disponíveis
         </div>
-
         <div className="mt-1 text-xs text-text">
-          Magias adicionadas ao personagem.
+          Magias aprendidas por classes e concedidas por habilidades, talentos, raça e equipamentos equipados.
         </div>
 
         {spellLimits.length ? (
@@ -150,67 +238,137 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
           </div>
         ) : null}
 
-        <div className="mt-3 grid gap-2 md:grid-cols-2">
-          <select
-            className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
-            value={preparedFilter}
-            onChange={(e) =>
-              setPreparedFilter(e.target.value as PreparedFilter)
-            }
-          >
-            <option value="all">Todas as magias</option>
-            <option value="prepared">Apenas preparadas</option>
-            <option value="not-prepared">Apenas não preparadas</option>
-          </select>
+        <div className="mt-3 grid gap-2 md:grid-cols-3">
+          <label className="grid gap-1 text-[11px] text-textMuted">
+            Disponibilidade
+            <select
+              className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
+              value={preparedFilter}
+              onChange={(event) =>
+                setPreparedFilter(event.target.value as PreparedFilter)
+              }
+            >
+              <option value="all">Todas as magias</option>
+              <option value="prepared">Apenas disponíveis</option>
+              <option value="not-prepared">Apenas não preparadas</option>
+            </select>
+          </label>
 
-          <select
-            className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
-            value={classFilter}
-            onChange={(e) => setClassFilter(e.target.value as ClassFilter)}
-          >
-            <option value="all">Todas as classes</option>
+          <label className="grid gap-1 text-[11px] text-textMuted">
+            Forma de aquisição
+            <select
+              className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
+              value={sourceTypeFilter}
+              onChange={(event) => {
+                setSourceTypeFilter(event.target.value as SourceTypeFilter)
+                setSpecificSourceFilter("all")
+              }}
+            >
+              <option value="all">Todas as formas</option>
+              {sourceTypeOptions.map((type) => (
+                <option key={type} value={type}>
+                  {getSourceTypeLabel(type)}
+                </option>
+              ))}
+            </select>
+          </label>
 
-            {classes.map((classData) => (
-              <option
-                key={classData.className}
-                value={classData.className}
-              >
-                {CLASS_NAMES[classData.className]}
-              </option>
-            ))}
-          </select>
+          <label className="grid gap-1 text-[11px] text-textMuted">
+            Origem específica
+            <select
+              className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent disabled:opacity-60"
+              value={specificSourceFilter}
+              disabled={specificSourceOptions.length === 0}
+              onChange={(event) =>
+                setSpecificSourceFilter(event.target.value)
+              }
+            >
+              <option value="all">Todas as origens específicas</option>
+              {specificSourceOptions.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label} ({option.count})
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
+
+        {spells.length ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {sourceTypeOptions.map((type) => {
+              const count = spells.filter(
+                (entry) => entry.source.type === type,
+              ).length
+
+              return (
+                <span
+                  key={type}
+                  className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-[10px] text-textMuted"
+                >
+                  {getSourceTypeLabel(type)}: {count}
+                </span>
+              )
+            })}
+          </div>
+        ) : null}
       </CardHeader>
 
       <CardContent>
         {filteredSpells.length === 0 ? (
-          <p className="text-xs text-text">
-            Nenhuma magia encontrada.
-          </p>
+          <p className="text-xs text-text">Nenhuma magia encontrada.</p>
         ) : (
           <div className="grid gap-3">
             {filteredSpells
-              .toSorted((a, b) => {
-                const levelDiff = a.spell.slotLevel - b.spell.slotLevel
-                if (levelDiff !== 0) return levelDiff
+              .toSorted((left, right) => {
+                const levelDifference =
+                  left.spell.slotLevel - right.spell.slotLevel
+                if (levelDifference !== 0) return levelDifference
 
-                return (a.spell.displayName || a.spell.name).localeCompare(
-                  b.spell.displayName || b.spell.name,
+                return (left.spell.displayName || left.spell.name).localeCompare(
+                  right.spell.displayName || right.spell.name,
                   "pt-BR",
                 )
               })
-              .map(({ spell, prepared }) => (
+              .map((entry) => (
                 <SpellCard
-                  key={spell.index}
-                  spell={spell}
-                  prepared={prepared}
-                  source={character.getSpellSource(spell.index)}
-                  onTogglePrepared={() =>
-                    togglePrepared(spell.index, prepared)
+                  key={entry.key}
+                  spell={entry.spell}
+                  prepared={entry.prepared}
+                  source={entry.source}
+                  alwaysPrepared={entry.alwaysPrepared}
+                  accessLabel={entry.accessLabel}
+                  castingDescriptions={getSpellCastingDescriptions(
+                    character,
+                    entry.spell.index,
+                  )}
+                  onAddCastingDescription={() =>
+                    addCastingDescription(entry.spell.index)
                   }
-                  onRemove={() => removeSpell(spell.index)}
+                  onChangeCastingDescription={(index, description) =>
+                    changeCastingDescription(
+                      entry.spell.index,
+                      index,
+                      description,
+                    )
+                  }
+                  onRemoveCastingDescription={(index) =>
+                    removeCastingDescription(entry.spell.index, index)
+                  }
+                  onTogglePrepared={
+                    entry.alwaysPrepared
+                      ? undefined
+                      : () => togglePrepared(entry)
+                  }
+                  onRemove={
+                    entry.removable
+                      ? () =>
+                          updateCharacter(character.get("id"), (current) =>
+                            current.removeSpell(entry.spell.index),
+                          )
+                      : undefined
+                  }
                 />
-            ))}
+              ))}
           </div>
         )}
       </CardContent>
@@ -218,34 +376,115 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
   )
 }
 
+function getAvailableSourceTypes(
+  spells: DisplaySpellEntry[],
+): SpellSource["type"][] {
+  const present = new Set(spells.map((entry) => entry.source.type))
+  return SOURCE_TYPE_ORDER.filter((type) => present.has(type))
+}
+
+function getSpecificSourceOptions(
+  spells: DisplaySpellEntry[],
+  typeFilter: SourceTypeFilter,
+): SourceOption[] {
+  const options = new Map<string, SourceOption>()
+
+  for (const entry of spells) {
+    if (typeFilter !== "all" && entry.source.type !== typeFilter) continue
+
+    const key = getSourceKey(entry.source)
+    const existing = options.get(key)
+
+    if (existing) {
+      existing.count += 1
+      continue
+    }
+
+    options.set(key, {
+      key,
+      label: getSpecificSourceLabel(entry.source),
+      type: entry.source.type,
+      count: 1,
+    })
+  }
+
+  return Array.from(options.values()).toSorted((left, right) => {
+    const typeDifference =
+      SOURCE_TYPE_ORDER.indexOf(left.type) -
+      SOURCE_TYPE_ORDER.indexOf(right.type)
+    if (typeDifference !== 0) return typeDifference
+    return left.label.localeCompare(right.label, "pt-BR")
+  })
+}
+
+function getSourceKey(source: SpellSource): string {
+  return `${source.type}:${source.sourceId || source.name}`
+}
+
+function getSourceTypeLabel(type: SpellSource["type"]): string {
+  if (type === "class") return "Classes"
+  if (type === "ability") return "Habilidades"
+  if (type === "feat") return "Talentos"
+  if (type === "race") return "Raça"
+  return "Equipamentos"
+}
+
+function getSpecificSourceLabel(source: SpellSource): string {
+  if (source.type === "class") {
+    return `Classe: ${CLASS_NAMES[source.name as ClassName] ?? source.name}`
+  }
+  if (source.type === "ability") {
+    return `Habilidade: ${source.name || "Sem nome"}`
+  }
+  if (source.type === "feat") {
+    return `Talento: ${source.name || "Sem nome"}`
+  }
+  if (source.type === "race") {
+    return `Raça: ${source.name || "Sem nome"}`
+  }
+  return `Equipamento: ${source.name || "Sem nome"}`
+}
+
+function isAlwaysAvailableSpell(
+  spell: Spell,
+  source: SpellSource,
+  classes: CharacterClassInterface[],
+): boolean {
+  if (spell.slotLevel === 0) return true
+  if (source.type !== "class") return true
+
+  const classData = classes.find(
+    (entry) => entry.className === source.name,
+  )
+
+  if (!classData?.knownSpells) return true
+  return classData.knownSpells.mode === "limited"
+}
+
 function getSpellClassLimits(
   character: CharacterTemplate,
-  spells: KnownSpellEntry[],
+  spells: DisplaySpellEntry[],
 ): SpellLimitInfo[] {
   if (character.get("sheet").type !== "pc") return []
 
-  const classes = character.get("sheet").classes ?? []
-
-  return classes
+  return (character.get("sheet").classes ?? [])
     .map((classData): SpellLimitInfo | null => {
       const knownLimit = getClassKnownSpellLimit(classData)
-
       const known = spells.filter(
         (entry) =>
           entry.spell.slotLevel > 0 &&
           entry.source.type === "class" &&
           entry.source.name === classData.className,
       ).length
-
       const preparedLimit = getPreparedSpellLimit(character, classData)
-
       const prepared = spells.filter(
         (entry) =>
+          entry.spell.slotLevel > 0 &&
+          !entry.alwaysPrepared &&
           entry.prepared &&
           entry.source.type === "class" &&
           entry.source.name === classData.className,
       ).length
-
       const parts: string[] = []
 
       if (knownLimit !== undefined) {
@@ -261,7 +500,6 @@ function getSpellClassLimits(
       if (preparedLimit !== undefined) {
         parts.push(`${prepared}/${preparedLimit} preparadas`)
       }
-
       if (parts.length === 0) return null
 
       return {
@@ -278,27 +516,20 @@ function getClassKnownSpellLimit(
   classData: CharacterClassInterface,
 ): number | undefined {
   const knownSpells = classData.knownSpells
-
   if (!knownSpells) return undefined
-
   const override = knownSpells.overrides?.[classData.level]
   if (override !== undefined) return override
-
   return (
     knownSpells.baseAtLevel1 +
     Math.max(0, classData.level - 1) * knownSpells.perLevel
   )
 }
 
-function isLimitedKnownCaster(
-  classData: CharacterClassInterface,
-): boolean {
+function isLimitedKnownCaster(classData: CharacterClassInterface): boolean {
   return classData.knownSpells?.mode === "limited"
 }
 
-function isSpellbookCaster(
-  classData: CharacterClassInterface,
-): boolean {
+function isSpellbookCaster(classData: CharacterClassInterface): boolean {
   return classData.knownSpells?.mode === "spellbook"
 }
 
@@ -307,27 +538,19 @@ function getPreparedSpellLimit(
   classData: CharacterClassInterface,
 ): number | undefined {
   if (!classData.knownSpells) return undefined
-
   const mode = classData.knownSpells.mode
-
-  if (mode !== "prepared-only" && mode !== "spellbook") {
-    return undefined
-  }
-
+  if (mode !== "prepared-only" && mode !== "spellbook") return undefined
   const modifier = getCastingAttributeModifier(character, classData)
 
   switch (classData.className) {
     case "artificer":
       return Math.max(1, Math.floor(classData.level / 2) + modifier)
-
     case "cleric":
     case "druid":
     case "wizard":
       return Math.max(1, classData.level + modifier)
-
     case "paladin":
       return Math.max(1, Math.floor(classData.level / 2) + modifier)
-
     default:
       return undefined
   }
@@ -338,9 +561,5 @@ function getCastingAttributeModifier(
   classData: CharacterClassInterface,
 ): number {
   if (!classData.castingAttribute) return 0
-
-  const attributeValue =
-    character.get("sheet").attributes?.[classData.castingAttribute] ?? 10
-
-  return Math.floor((attributeValue - 10) / 2)
+  return character.getEffectiveAttributeModifier(classData.castingAttribute)
 }

@@ -1,5 +1,5 @@
-import * as React from 'react'
-import { cn } from '../../lib/cn'
+import * as React from "react"
+import { cn } from "../../lib/cn"
 
 export type CardProps = React.HTMLAttributes<HTMLDivElement>
 
@@ -7,7 +7,7 @@ export function Card({ className, ...props }: CardProps) {
   return (
     <div
       className={cn(
-        'rounded-xl border border-border border-t-2 border-t-accentBorder bg-bg shadow-theme ring-1 ring-border',
+        "min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-bg shadow-theme-sm",
         className,
       )}
       {...props}
@@ -16,9 +16,22 @@ export function Card({ className, ...props }: CardProps) {
 }
 
 export function CardHeader({ className, ...props }: CardProps) {
-  return <div className={cn('border-b border-border p-4', className)} {...props} />
+  return (
+    <div
+      className={cn(
+        "min-w-0 max-w-full border-b border-border p-4",
+        className,
+      )}
+      {...props}
+    />
+  )
 }
 
 export function CardContent({ className, ...props }: CardProps) {
-  return <div className={cn('p-4', className)} {...props} />
+  return (
+    <div
+      className={cn("min-w-0 max-w-full p-4", className)}
+      {...props}
+    />
+  )
 }

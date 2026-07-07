@@ -1,15 +1,33 @@
+import { useState } from "react"
+
+import { Button } from "../../../components/ui/Button"
+import { useCharacterContext } from "../../../contexts/characterContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { getEncumbranceInfo } from "../../../models/characters/characterEncumbrance"
+import {
+  equipInventoryItemWithRules,
+  pocketInventoryItemWithRules,
+} from "../../../models/characters/characterEquipmentInteractions"
+import {
+  BAG_OF_HOLDING_CAPACITY_KG,
+  getBagOfHoldingWeightKg,
+} from "../../../models/items/bagOfHolding"
 import type { Itemmable } from "../../../models/items/item"
+import { consumeInventoryItem } from "../../../models/items/itemConsumption"
+import { CharacterEncumbrancePanel } from "./characterEncumbrancePanel"
 import { InventoryEditor } from "./inventoryEditor"
+import { TransferItemDialog } from "./transferItemDialog"
 
 type Props = {
   character: CharacterTemplate
   updateCharacter: (
     characterId: string,
-    updater: (c: CharacterTemplate) => CharacterTemplate
+    updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
   canEditInventory: boolean
 }
+
+const BAG_CAPACITY_EPSILON = 0.000001
 
 export function newInventoryItem(): Itemmable {
   return {
@@ -24,20 +42,51 @@ export function newInventoryItem(): Itemmable {
   }
 }
 
-export function CharacterInventory({
+export function CharacterInventoryTab({
   character,
   updateCharacter,
 }: Props) {
-  const items = character.get("inventory") ?? []
+  const {
+    transferCharacters,
+    transferItem,
+    canTransferFromCharacter,
+    canViewCharacterDetails,
+  } = useCharacterContext()
+  const [transferringItem, setTransferringItem] =
+    useState<Itemmable | null>(null)
+  const [bagLimitMessage, setBagLimitMessage] = useState<string | null>(null)
 
-  const currentWeight = character.getWeight()
-  const encumbranceLimit = character.getEncumbranceLimit()
-  const heavyEncumbranceLimit = character.getHeavyEncumbranceLimit()
-  const carryingCapacity = character.getCarryingCapacity()
+  const items = character.get("inventory") ?? []
+  const encumbrance = getEncumbranceInfo(character)
+  const canTransfer = canTransferFromCharacter(character.get("id"))
+  const bagWeight = getBagOfHoldingWeightKg(items)
+
+  function wouldExceedBagCapacity(candidateItems: Itemmable[]): boolean {
+    const currentWeight = getBagOfHoldingWeightKg(items)
+    const candidateWeight = getBagOfHoldingWeightKg(candidateItems)
+
+    if (candidateWeight <= BAG_OF_HOLDING_CAPACITY_KG + BAG_CAPACITY_EPSILON) {
+      return false
+    }
+
+    if (candidateWeight <= currentWeight + BAG_CAPACITY_EPSILON) {
+      return false
+    }
+
+    const excess = candidateWeight - BAG_OF_HOLDING_CAPACITY_KG
+    setBagLimitMessage(
+      `A Bolsa Mágica suporta no máximo ${formatKg(BAG_OF_HOLDING_CAPACITY_KG)}. ` +
+        `Essa ação deixaria a bolsa com ${formatKg(candidateWeight)}, excedendo o limite em ${formatKg(excess)}.`,
+    )
+    return true
+  }
 
   function addItem(item: Itemmable) {
-    updateCharacter(character.get("id"), (c) =>
-      c.with("inventory", [...(c.get("inventory") ?? []), item]),
+    const candidateItems = [...items, item]
+    if (wouldExceedBagCapacity(candidateItems)) return
+
+    updateCharacter(character.get("id"), (current) =>
+      current.addInventoryItem(item),
     )
   }
 
@@ -45,49 +94,180 @@ export function CharacterInventory({
     itemId: string,
     updater: (item: Itemmable) => Itemmable,
   ) {
-    updateCharacter(character.get("id"), (c) =>
-      c.with(
-        "inventory",
-        (c.get("inventory") ?? []).map((item) =>
-          item.id === itemId ? updater(item) : item,
-        ),
-      ),
+    const candidateItems = items.map((item) =>
+      item.id === itemId ? updater(item) : item,
+    )
+    if (wouldExceedBagCapacity(candidateItems)) return
+
+    updateCharacter(character.get("id"), (current) =>
+      current.updateInventoryItem(itemId, updater),
     )
   }
 
   function removeItem(itemId: string) {
-    updateCharacter(character.get("id"), (c) =>
-      c.with(
+    updateCharacter(character.get("id"), (current) =>
+      current.removeInventoryItem(itemId),
+    )
+  }
+
+  function consumeItem(itemId: string) {
+    updateCharacter(character.get("id"), (current) =>
+      current.with(
         "inventory",
-        (c.get("inventory") ?? []).filter((item) => item.id !== itemId),
+        consumeInventoryItem(current.get("inventory"), itemId),
       ),
     )
   }
 
+  function toggleBagOfHolding(itemId: string) {
+    const candidateItems = items.map((item) =>
+      item.id === itemId
+        ? {
+            ...item,
+            insideBagOfHolding: !item.insideBagOfHolding,
+          }
+        : item,
+    )
+
+    if (wouldExceedBagCapacity(candidateItems)) return
+
+    updateCharacter(character.get("id"), (current) =>
+      current.toggleInventoryItemBagOfHolding(itemId),
+    )
+  }
+
   return (
-   <InventoryEditor
-      title={`Inventário pessoal: ${character.get("name")}`}
-      description={`Peso: ${currentWeight}/${carryingCapacity} • Sobrecarga: ${encumbranceLimit} • Sobrecarga pesada: ${heavyEncumbranceLimit}`}
-      items={items}
-      emptyMessage="Nenhum item encontrado."
-      onAddItem={addItem}
-      onUpdateItem={updateItem}
-      onRemoveItem={removeItem}
-      onEquipItem={(itemId) =>
-        updateCharacter(character.get("id"), (c) =>
-          c.equipInventoryItem(itemId),
-        )
-      }
-      onPocketItem={(itemId) =>
-        updateCharacter(character.get("id"), (c) =>
-          c.pocketInventoryItem(itemId),
-        )
-      }
-      onToggleBagOfHolding={(itemId) =>
-        updateCharacter(character.get("id"), (c) =>
-          c.toggleInventoryItemBagOfHolding(itemId),
-        )
-      }
-    />
+    <>
+      <div className="mb-4 grid gap-4">
+        <CharacterEncumbrancePanel character={character} />
+        <BagOfHoldingCounter weight={bagWeight} />
+      </div>
+
+      <InventoryEditor
+        title={`Inventário pessoal: ${character.get("name")}`}
+        description={`Peso carregado: ${formatKg(encumbrance.weight)} de ${formatKg(encumbrance.carryingCapacity)}.`}
+        items={items}
+        emptyMessage="Nenhum item encontrado."
+        onAddItem={addItem}
+        onUpdateItem={updateItem}
+        onRemoveItem={removeItem}
+        onConsumeItem={consumeItem}
+        onEquipItem={(itemId) =>
+          updateCharacter(character.get("id"), (current) =>
+            equipInventoryItemWithRules(current, itemId),
+          )
+        }
+        onPocketItem={(itemId) =>
+          updateCharacter(character.get("id"), (current) =>
+            pocketInventoryItemWithRules(current, itemId),
+          )
+        }
+        onToggleBagOfHolding={toggleBagOfHolding}
+        onTransferItem={canTransfer ? setTransferringItem : undefined}
+      />
+
+      <TransferItemDialog
+        open={transferringItem !== null}
+        item={transferringItem}
+        from={{
+          type: "character",
+          characterId: character.get("id"),
+        }}
+        characters={transferCharacters}
+        canViewCharacterDetails={canViewCharacterDetails}
+        onClose={() => setTransferringItem(null)}
+        onTransfer={transferItem}
+      />
+
+      <BagOfHoldingLimitPopup
+        message={bagLimitMessage}
+        onClose={() => setBagLimitMessage(null)}
+      />
+    </>
   )
+}
+
+function BagOfHoldingCounter({ weight }: { weight: number }) {
+  const remaining = Math.max(0, BAG_OF_HOLDING_CAPACITY_KG - weight)
+  const percentage = Math.min(100, Math.max(0, (weight / BAG_OF_HOLDING_CAPACITY_KG) * 100))
+  const isFull = weight >= BAG_OF_HOLDING_CAPACITY_KG - BAG_CAPACITY_EPSILON
+  const isOverCapacity = weight > BAG_OF_HOLDING_CAPACITY_KG + BAG_CAPACITY_EPSILON
+
+  return (
+    <section
+      className={[
+        "rounded-xl border bg-bg p-3 shadow-theme-sm",
+        isOverCapacity ? "border-danger" : "border-border",
+      ].join(" ")}
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="text-sm font-semibold text-textH">
+            Bolsa Mágica
+          </div>
+          <div className="mt-1 text-xs leading-5 text-text">
+            Capacidade RAW: {formatKg(BAG_OF_HOLDING_CAPACITY_KG)}.
+          </div>
+        </div>
+
+        <div className="text-left text-xs sm:text-right">
+          <div className={isOverCapacity ? "font-semibold text-danger" : "font-semibold text-textH"}>
+            {formatKg(weight)} / {formatKg(BAG_OF_HOLDING_CAPACITY_KG)}
+          </div>
+          <div className="mt-1 text-textMuted">
+            {isOverCapacity
+              ? `Excedeu em ${formatKg(weight - BAG_OF_HOLDING_CAPACITY_KG)}`
+              : isFull
+                ? "Bolsa cheia"
+                : `Restam ${formatKg(remaining)}`}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-bg-subtle">
+        <div
+          className={[
+            "h-full rounded-full transition-[width]",
+            isOverCapacity ? "bg-danger" : "bg-accent",
+          ].join(" ")}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+    </section>
+  )
+}
+
+function BagOfHoldingLimitPopup({
+  message,
+  onClose,
+}: {
+  message: string | null
+  onClose: () => void
+}) {
+  if (!message) return null
+
+  return (
+    <div className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-4">
+      <div className="w-full max-w-md rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg">
+        <div className="text-sm font-semibold text-textH">
+          Bolsa Mágica cheia
+        </div>
+        <p className="mt-2 text-sm leading-6 text-text">
+          {message}
+        </p>
+        <div className="mt-4 flex justify-end">
+          <Button size="sm" variant="secondary" onClick={onClose}>
+            Entendi
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function formatKg(value: number): string {
+  return `${value.toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })} kg`
 }

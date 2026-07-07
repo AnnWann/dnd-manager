@@ -1,43 +1,16 @@
-import type { Ability, Trigger, Usage } from "../../abilities/Ability"
-import type { Attribute } from "../../sheet/Attribute"
+import type { Ability, Usage } from "../../abilities/Ability"
+import type { BonusCollection } from "../../bonuses/Bonus"
+import type { SpellGrant } from "../../magic/spells/SpellGrant"
 import type { Item } from "../item"
 
-export type Equipment = Item & {
-  bonuses?: {
-    armorClass?: Bonus[]
-    initiative?: Bonus[]
-    maxHp?: Bonus[] 
-    temporaryHp?: Bonus[]
-    passivePerception?: Bonus[]
-    attackBonus?: Bonus[]
-    damageBonus?: Bonus[]
-    speed?: Bonus[]
-    attribute?: {
-      attribute: Attribute
-      bonus: Bonus
-    }[]
-    attributeModifier?: {
-      attribute: Attribute
-      bonus: Bonus
-    }[]
-    attack?: {
-      type: 'always' | 'equipment' | 'conditional'
-      condition?: Trigger | string
-      bonus: Bonus
-    }
-    damage?: {
-      type: 'always' | 'equipment' | 'conditional'
-      condition?: Trigger | string
-      bonus: Bonus
-    }
-  }
+export type { Bonus, BonusCollection } from "../../bonuses/Bonus"
 
-  abilities?: Ability[]
-
-  spells?: {index: string, usage: Usage}[]
+export type EquipmentSpellGrant = SpellGrant & {
+  usage: Usage
 }
 
-export type Bonus = {
-  type: 'add' | 'sub' | 'flat'
-  value: number
+export type Equipment = Item & {
+  bonuses?: BonusCollection
+  abilities?: Ability[]
+  spells?: EquipmentSpellGrant[]
 }

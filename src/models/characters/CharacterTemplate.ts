@@ -109,6 +109,9 @@ import {
   getEquipmentBonuses,
   getEquippedItems,
   getProficiencyBonus,
+  getSavingThrowBonus,
+  isSavingThrowProficient,
+  setSavingThrowProficiency,
   type StatBonusKey,
 } from "./characterStats"
 import {
@@ -134,11 +137,15 @@ import type { ClassName } from "../sheet/Class"
 import type { CharacterSpells } from "../magic/spells/CharacterSpells"
 import type { MetamagicId } from "../magic/metamagic/Metamagic"
 import type { SpellSource } from "../magic/spells/SpellSource"
+import type { Proficiency, ProficiencyCategory } from "../sheet/Proficiency"
+import { addProficiency, hasProficiency, removeProficiency, updateProficiency } from "./characterProficiencies"
+import type { CharacterProfile } from "./characterProfile"
 
 export type CharacterTemplateProps = {
   id: string,
   name: string
   sheet: Sheet
+  profile: CharacterProfile
   actionsPerTurn: ActionsPerTurn
   deathSaves?: {
     successes: number
@@ -179,7 +186,15 @@ export class CharacterTemplate {
     return new CharacterTemplate({
       id: props.id ?? crypto.randomUUID(),
       name: props.name ?? "Personagem",
-
+      profile: {
+        traits: props.profile?.traits ?? "",
+        history: props.profile?.history ?? "",
+        physicalAppearance: props.profile?.physicalAppearance ?? "",
+        imageUrl: props.profile?.imageUrl,
+        relationships: Array.isArray(props.profile?.relationships)
+          ? props.profile.relationships
+          : [],
+      },
       sheet: {
         HP: props.sheet?.HP ?? {
           max: 1,
@@ -201,20 +216,22 @@ export class CharacterTemplate {
           wis: 10,
           cha: 10,
         },
+        savingThrowProficiencies:
+          props.sheet?.savingThrowProficiencies ?? {},
+        proficiencies: Array.isArray(props.sheet?.proficiencies)
+          ? props.sheet.proficiencies
+          : [],
         skills: props.sheet?.skills ?? {},
-        race: props.sheet?.race ?? {
-          race: "human",
-          naturalAbilities: [],
-          subrace: "",
-          attributeBonus: {
-            str: 0,
-            dex: 0,
-            con: 0,
-            int: 0,
-            wis: 0,
-            cha: 0,
-          },
-          proficiencies: [],
+        race: {
+          race: props.sheet?.race?.race ?? "human",
+          subrace: props.sheet?.race?.subrace ?? "",
+          naturalAbilities: props.sheet?.race?.naturalAbilities ?? [],
+          attributeBonus: props.sheet?.race?.attributeBonus ?? {},
+          proficiencies: normalizeRaceProficiencies(
+            props.sheet?.race?.proficiencies,
+          ),
+          size: props.sheet?.race?.size ?? "medium",
+          speedBonus: props.sheet?.race?.speedBonus ?? 0,
         },
         type: props.sheet?.type ?? "pc",
         arms: props.sheet?.arms ?? 2,
@@ -427,6 +444,9 @@ export class CharacterTemplate {
   getEffectiveMobility(): number {return getEffectiveMobility(this)}
   applyBonus(baseValue: number, bonus: Bonus): number {return applyBonus(baseValue, bonus)}
   applyBonuses(baseValue: number, bonuses: Bonus[]): number {return applyBonuses(baseValue, bonuses)}
+  isSavingThrowProficient(attribute: Attribute): boolean {return isSavingThrowProficient(this, attribute)}
+  getSavingThrowBonus(attribute: Attribute): number {return getSavingThrowBonus(this, attribute)}
+  setSavingThrowProficiency(attribute: Attribute,proficient: boolean): CharacterTemplate {return setSavingThrowProficiency(this,attribute,proficient)}
   /**
    *
    * HP
@@ -449,6 +469,15 @@ export class CharacterTemplate {
   addDeathSaveFailure(): CharacterTemplate {return addDeathSaveFailure(this)}
   resetDeathSaves(): CharacterTemplate {return resetDeathSaves(this)}
   longRestHp(): CharacterTemplate {return longRestHp(this)}
+    /**
+   *
+   * PROFICIENCIES
+   *
+   */
+  addProficiency(proficiency: Proficiency): CharacterTemplate { return addProficiency(this, proficiency)}
+  updateProficiency( proficiency: Proficiency): CharacterTemplate { return updateProficiency(this, proficiency)}
+  removeProficiency(proficiencyId: string): CharacterTemplate {return removeProficiency(this, proficiencyId)}
+  hasProficiency(category: ProficiencyCategory,name: string): boolean {return hasProficiency(this, category, name)}
 
   getClassLevel(className: ClassName): number {
     return (
@@ -459,6 +488,49 @@ export class CharacterTemplate {
         ?.level ?? 0
     )
   }
+
+  withProfile<K extends keyof CharacterProfile>(
+    key: K,
+    value: CharacterProfile[K],
+  ): CharacterTemplate {
+    return this.withPatch({
+      profile: {
+        ...this.props.profile,
+        [key]: value,
+      },
+    })
+  }
 }
 
 
+
+
+function normalizeRaceProficiencies(
+  value: unknown,
+): Proficiency[] {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .map((entry) => {
+      if (typeof entry === "string") {
+        return {
+          id: crypto.randomUUID(),
+          name: entry,
+          category: "other" as const,
+        }
+      }
+
+      if (
+        entry &&
+        typeof entry === "object" &&
+        "id" in entry &&
+        "name" in entry &&
+        "category" in entry
+      ) {
+        return entry as Proficiency
+      }
+
+      return undefined
+    })
+    .filter((entry): entry is Proficiency => Boolean(entry))
+}

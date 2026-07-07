@@ -1,6 +1,7 @@
 import type { Armor } from "./equipment/Armor"
 import type { Equipment } from "./equipment/EquipmentSlot"
 import type { ConsumableItem, ThrowableItem } from "./equipment/PocketItem"
+import type { SupplyItem } from "./SupplyItem"
 import type { Weapon } from "./equipment/Weapon"
 
 export type EquipSlot =
@@ -8,6 +9,8 @@ export type EquipSlot =
   | "helmet"
   | "gloves"
   | "boots"
+  | "cape"
+  | "shield"
   | "weapon"
   | "ring"
 
@@ -16,6 +19,15 @@ export type ItemKind =
   | "equipment"
   | "consumable"
   | "throwable"
+  | "supply"
+  | "ammunition"
+  | "tool"
+  | "focus"
+  | "instrument"
+  | "pack"
+  | "gear"
+  | "currency"
+  | "shield"
 
 export type Item = {
   id: string
@@ -41,3 +53,4 @@ export type Itemmable =
   | Armor
   | ConsumableItem
   | ThrowableItem
+  | SupplyItem

@@ -1,36 +1,76 @@
-// src/contexts/characterContext.tsx
-
 import {
   createContext,
   useContext,
   useEffect,
   useMemo,
   useState,
+  type Dispatch,
   type ReactNode,
+  type SetStateAction,
 } from "react"
 
-import { CharacterTemplate } from "../models/characters/CharacterTemplate"
-import type { Player } from "../models/player/Player"
 import { newCharacterTemplate } from "../lib/newCharacterTemplate"
 import type { AppStateV1 } from "../lib/remoteState"
+import {
+  CharacterTemplate,
+  type CharacterTemplateProps,
+} from "../models/characters/CharacterTemplate"
+import {
+  applyRecordedGameOperation,
+} from "../models/game/applyGameOperation"
+import {
+  createGameOperationRecord,
+  type GameOperation,
+  type GameOperationRecord,
+  type InventoryLocation,
+  type TransferItemOperationRequest,
+} from "../models/game/GameOperation"
+import type { Itemmable } from "../models/items/item"
+import type { Player } from "../models/player/Player"
+import type { LongRestSupplySelection } from "../models/supplies/partySupply"
+
+export type { InventoryLocation } from "../models/game/GameOperation"
+
+export type TransferItemRequest = TransferItemOperationRequest
 
 export type CharacterContextValue = {
   activeCharacter?: CharacterTemplate
   visibleCharacters: CharacterTemplate[]
-
+  transferCharacters: CharacterTemplate[]
+  partyInventory: Itemmable[]
+  operationLog: GameOperationRecord[]
+  dispatchGameOperation: (operation: GameOperation) => void
   updateCharacter: (
     characterId: string,
     updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
-
+  setCharacterCurrentHp: (characterId: string, value: number) => void
+  setCharacterTemporaryHp: (characterId: string, value: number) => void
+  damageCharacter: (characterId: string, amount: number) => void
+  healCharacter: (characterId: string, amount: number) => void
+  useCharacterAbility: (characterId: string, abilityId: string) => void
+  restoreCharacterAbility: (characterId: string, abilityId: string) => void
+  resetCharacterAbility: (characterId: string, abilityId: string) => void
+  completeLongRest: (
+    characterId: string,
+    selection: LongRestSupplySelection[],
+  ) => void
   addCharacter: () => void
+  importCharacter: (rawCharacter: unknown) => CharacterTemplate
   deleteCharacter: (id: string) => void
   setSelectedCharacterId: (id: string) => void
-
+  addPartyItem: (item: Itemmable) => void
+  updatePartyItem: (
+    itemId: string,
+    updater: (item: Itemmable) => Itemmable,
+  ) => void
+  removePartyItem: (itemId: string) => void
+  transferItem: (request: TransferItemRequest) => void
+  canTransferFromCharacter: (characterId: string) => boolean
+  canViewCharacterDetails: (characterId: string) => boolean
   canAssignOwners: boolean
   canEditCharacterType: boolean
   knownPlayerKeys: string[]
-
   getOwner: (ownerId: string) => Player
   createOwner: (ownerName: string) => Player
 }
@@ -38,7 +78,7 @@ export type CharacterContextValue = {
 type CharacterProviderProps = {
   children: ReactNode
   appState: AppStateV1
-  setAppState: React.Dispatch<React.SetStateAction<any>>
+  setAppState: Dispatch<SetStateAction<AppStateV1>>
   userRole: "master" | "player"
   userKey: string
 }
@@ -56,25 +96,25 @@ export function CharacterProvider({
 
   const characters = useMemo(
     () =>
-      appState.characters.map((c: any) =>
-        c instanceof CharacterTemplate
-          ? c
-          : CharacterTemplate.fromJSON(c),
+      appState.characters.map((character) =>
+        character instanceof CharacterTemplate
+          ? character
+          : CharacterTemplate.fromJSON(character),
       ),
     [appState.characters],
   )
 
   const canAssignOwners = userRole === "master"
   const canEditCharacterType = userRole === "master"
+  const normalizedUserKey = userKey.trim()
+  const actorId = normalizedUserKey || userRole
 
   const playersById = useMemo(() => {
     const map = new Map<string, Player>()
-
     for (const character of characters) {
       const owner = character.get("owner")
       if (owner?.id) map.set(owner.id, owner)
     }
-
     return map
   }, [characters])
 
@@ -82,7 +122,7 @@ export function CharacterProvider({
     return playersById.get(ownerId) ?? {
       id: ownerId,
       name: ownerId,
-      role: 'player'
+      role: "player",
     }
   }
 
@@ -90,39 +130,62 @@ export function CharacterProvider({
     return {
       id: ownerName.trim() || crypto.randomUUID(),
       name: ownerName.trim() || "Novo jogador",
-      role: 'player'
+      role: "player",
     }
   }
 
   const knownPlayerKeys = useMemo(() => {
     const keys = new Set<string>()
-
     for (const character of characters) {
       const ownerId = character.get("owner")?.id?.trim()
       if (ownerId) keys.add(ownerId)
     }
+    if (normalizedUserKey) keys.add(normalizedUserKey)
+    return Array.from(keys).sort((left, right) => left.localeCompare(right))
+  }, [characters, normalizedUserKey])
 
-    const currentUserKey = userKey.trim()
-    if (currentUserKey) keys.add(currentUserKey)
+  function canViewCharacterDetails(characterId: string): boolean {
+    const character = characters.find(
+      (entry) => entry.get("id") === characterId,
+    )
+    if (!character) return false
+    if (userRole === "master") return true
 
-    return Array.from(keys).sort((a, b) => a.localeCompare(b))
-  }, [characters, userKey])
+    const isOwned =
+      character.get("owner")?.id?.trim() === normalizedUserKey
+    return isOwned || character.get("visibility") === "party"
+  }
 
   const visibleCharacters = useMemo(() => {
     if (userRole === "master") return characters
+    if (!normalizedUserKey) return []
 
-    const key = userKey.trim()
-    if (!key) return []
+    return characters.filter((character) => {
+      const isOwned =
+        character.get("owner")?.id?.trim() === normalizedUserKey
+      return isOwned || character.get("visibility") === "party"
+    })
+  }, [characters, normalizedUserKey, userRole])
 
-    return characters.filter(
-      (character) => character.get("owner")?.id?.trim() === key,
-    )
-  }, [characters, userKey, userRole])
+  const transferCharacters = useMemo(() => {
+    if (userRole === "master") return characters
+
+    return characters.filter((character) => {
+      const isOwned =
+        character.get("owner")?.id?.trim() === normalizedUserKey
+      return isOwned || character.get("visibility") !== "master"
+    })
+  }, [characters, normalizedUserKey, userRole])
 
   const activeCharacter = useMemo(
     () =>
-      visibleCharacters.find((c) => c.get("id") === selectedCharacterId) ??
-      visibleCharacters.find((c) => c.get("id") === appState.activeCharacterId) ??
+      visibleCharacters.find(
+        (character) => character.get("id") === selectedCharacterId,
+      ) ??
+      visibleCharacters.find(
+        (character) =>
+          character.get("id") === appState.activeCharacterId,
+      ) ??
       visibleCharacters[0],
     [appState.activeCharacterId, selectedCharacterId, visibleCharacters],
   )
@@ -134,8 +197,13 @@ export function CharacterProvider({
     }
 
     const resolved =
-      visibleCharacters.find((c) => c.get("id") === selectedCharacterId) ??
-      visibleCharacters.find((c) => c.get("id") === appState.activeCharacterId) ??
+      visibleCharacters.find(
+        (character) => character.get("id") === selectedCharacterId,
+      ) ??
+      visibleCharacters.find(
+        (character) =>
+          character.get("id") === appState.activeCharacterId,
+      ) ??
       visibleCharacters[0]
 
     if (resolved && resolved.get("id") !== selectedCharacterId) {
@@ -146,38 +214,136 @@ export function CharacterProvider({
   useEffect(() => {
     if (characters.length > 0) return
 
-    const character = newCharacterTemplate("Meu personagem", getOwner(userKey))
+    const character = newCharacterTemplate(
+      "Meu personagem",
+      getOwner(userKey),
+    )
 
-    setAppState((prev: any) => ({
-      ...prev,
-      characters: [character.toJSON()],
-      activeCharacterId: character.get("id"),
-    }))
-
+    setAppState((previous) =>
+      applyRecordedGameOperation(
+        previous,
+        createGameOperationRecord(
+          {
+            type: "character.add",
+            character: character.toJSON(),
+            select: true,
+          },
+          actorId,
+        ),
+      ),
+    )
     setSelectedCharacterId(character.get("id"))
-  }, [characters.length, setAppState, userKey])
+  }, [actorId, characters.length, setAppState, userKey])
+
+  function dispatchGameOperation(operation: GameOperation) {
+    setAppState((previous) =>
+      applyRecordedGameOperation(
+        previous,
+        createGameOperationRecord(operation, actorId),
+      ),
+    )
+  }
 
   function updateCharacter(
     characterId: string,
     updater: (c: CharacterTemplate) => CharacterTemplate,
   ) {
-    setAppState((prev: AppStateV1) => ({
-      ...prev,
-      characters: prev.characters.map((rawCharacter) => {
-        const character =
-          rawCharacter instanceof CharacterTemplate
-            ? rawCharacter
-            : CharacterTemplate.fromJSON(rawCharacter)
+    setAppState((previous) => {
+      const rawCharacter = previous.characters.find(
+        (entry) => entry.id === characterId,
+      )
+      if (!rawCharacter) return previous
 
-        if (character.get("id") !== characterId) {
-          return character.toJSON()
-        }
+      const character = CharacterTemplate.fromJSON(rawCharacter)
+      const nextCharacter = updater(character)
 
-        const nextCharacter = updater(character)
+      return applyRecordedGameOperation(
+        previous,
+        createGameOperationRecord(
+          {
+            type: "character.replace",
+            characterId,
+            character: nextCharacter.toJSON(),
+          },
+          actorId,
+        ),
+      )
+    })
+  }
 
-        return nextCharacter.toJSON()
-      }),
-    }))
+  function setCharacterCurrentHp(characterId: string, value: number) {
+    dispatchGameOperation({ type: "character.hp.set", characterId, value })
+  }
+
+  function setCharacterTemporaryHp(characterId: string, value: number) {
+    dispatchGameOperation({
+      type: "character.hp.temporary.set",
+      characterId,
+      value,
+    })
+  }
+
+  function damageCharacter(characterId: string, amount: number) {
+    dispatchGameOperation({ type: "character.hp.damage", characterId, amount })
+  }
+
+  function healCharacter(characterId: string, amount: number) {
+    dispatchGameOperation({ type: "character.hp.heal", characterId, amount })
+  }
+
+  function useCharacterAbility(characterId: string, abilityId: string) {
+    dispatchGameOperation({
+      type: "character.ability.use",
+      characterId,
+      abilityId,
+    })
+  }
+
+  function restoreCharacterAbility(characterId: string, abilityId: string) {
+    dispatchGameOperation({
+      type: "character.ability.restore",
+      characterId,
+      abilityId,
+    })
+  }
+
+  function resetCharacterAbility(characterId: string, abilityId: string) {
+    dispatchGameOperation({
+      type: "character.ability.reset",
+      characterId,
+      abilityId,
+    })
+  }
+
+  function completeLongRest(
+    characterId: string,
+    selection: LongRestSupplySelection[],
+  ) {
+    setAppState((previous) => {
+      const rawCharacter = previous.characters.find(
+        (entry) => entry.id === characterId,
+      )
+      if (!rawCharacter) return previous
+
+      const restedCharacter = CharacterTemplate.fromJSON(rawCharacter)
+      const canRest =
+        userRole === "master" ||
+        restedCharacter.get("owner")?.id?.trim() === normalizedUserKey
+
+      if (!canRest) return previous
+
+      return applyRecordedGameOperation(
+        previous,
+        createGameOperationRecord(
+          {
+            type: "character.longRest.complete",
+            characterId,
+            selection,
+          },
+          actorId,
+        ),
+      )
+    })
   }
 
   function addCharacter() {
@@ -186,31 +352,141 @@ export function CharacterProvider({
       getOwner(userKey),
     )
 
-    setAppState((prev: any) => ({
-      ...prev,
-      characters: [...prev.characters, character.toJSON()],
-      activeCharacterId: character.get("id"),
-    }))
-
+    dispatchGameOperation({
+      type: "character.add",
+      character: character.toJSON(),
+      select: true,
+    })
     setSelectedCharacterId(character.get("id"))
   }
 
-  function deleteCharacter(characterId: string) {
-    setAppState((prev: AppStateV1) => ({
-      ...prev,
-      characters: prev.characters.filter((rawCharacter) => {
-        const character =
-          rawCharacter instanceof CharacterTemplate
-            ? rawCharacter
-            : CharacterTemplate.fromJSON(rawCharacter)
+  function importCharacter(rawCharacter: unknown): CharacterTemplate {
+    if (
+      !rawCharacter ||
+      typeof rawCharacter !== "object" ||
+      Array.isArray(rawCharacter)
+    ) {
+      throw new Error("O arquivo não contém um personagem válido.")
+    }
 
-        return character.get("id") !== characterId
-      }),
-    }))
+    const restored = CharacterTemplate.fromJSON(
+      rawCharacter as Partial<CharacterTemplateProps>,
+    )
+    const importedOwner =
+      userRole === "master"
+        ? restored.get("owner")
+        : getOwner(userKey)
+    const imported = restored.withPatch({
+      id: crypto.randomUUID(),
+      owner: importedOwner,
+    })
+
+    dispatchGameOperation({
+      type: "character.add",
+      character: imported.toJSON(),
+      select: true,
+    })
+    setSelectedCharacterId(imported.get("id"))
+    return imported
+  }
+
+  function deleteCharacter(characterId: string) {
+    dispatchGameOperation({ type: "character.delete", characterId })
 
     setSelectedCharacterId((current) =>
       current === characterId ? "" : current,
     )
+  }
+
+  function addPartyItem(item: Itemmable) {
+    dispatchGameOperation({ type: "party.item.add", item })
+  }
+
+  function updatePartyItem(
+    itemId: string,
+    updater: (item: Itemmable) => Itemmable,
+  ) {
+    setAppState((previous) => {
+      const item = (previous.partyInventory ?? []).find(
+        (entry) => entry.id === itemId,
+      )
+      if (!item) return previous
+
+      return applyRecordedGameOperation(
+        previous,
+        createGameOperationRecord(
+          {
+            type: "party.item.update",
+            itemId,
+            item: updater(item),
+          },
+          actorId,
+        ),
+      )
+    })
+  }
+
+  function removePartyItem(itemId: string) {
+    dispatchGameOperation({ type: "party.item.remove", itemId })
+  }
+
+  function canTransferFromCharacter(characterId: string): boolean {
+    if (userRole === "master") return true
+
+    return characters.some(
+      (character) =>
+        character.get("id") === characterId &&
+        character.get("owner")?.id?.trim() === normalizedUserKey,
+    )
+  }
+
+  function transferItem(request: TransferItemRequest) {
+    if (locationKey(request.from) === locationKey(request.to)) return
+
+    setAppState((previous) => {
+      const characterById = new Map(
+        previous.characters.map((rawCharacter) => [
+          rawCharacter.id,
+          CharacterTemplate.fromJSON(rawCharacter),
+        ]),
+      )
+
+      if (
+        request.from.type === "character" &&
+        !canUseCharacterAsSource(
+          characterById.get(request.from.characterId),
+          userRole,
+          normalizedUserKey,
+        )
+      ) {
+        return previous
+      }
+
+      if (
+        request.to.type === "character" &&
+        !canUseCharacterAsTarget(
+          characterById.get(request.to.characterId),
+          userRole,
+          normalizedUserKey,
+        )
+      ) {
+        return previous
+      }
+
+      return applyRecordedGameOperation(
+        previous,
+        createGameOperationRecord(
+          {
+            type: "inventory.item.transfer",
+            request: {
+              ...request,
+              destinationItemId: crypto.randomUUID(),
+            },
+          },
+          actorId,
+        ),
+      )
+    })
   }
 
   return (
@@ -218,10 +494,29 @@ export function CharacterProvider({
       value={{
         activeCharacter,
         visibleCharacters,
+        transferCharacters,
+        partyInventory: appState.partyInventory ?? [],
+        operationLog: appState.operations ?? [],
+        dispatchGameOperation,
         updateCharacter,
+        setCharacterCurrentHp,
+        setCharacterTemporaryHp,
+        damageCharacter,
+        healCharacter,
+        useCharacterAbility,
+        restoreCharacterAbility,
+        resetCharacterAbility,
+        completeLongRest,
         addCharacter,
+        importCharacter,
         deleteCharacter,
         setSelectedCharacterId,
+        addPartyItem,
+        updatePartyItem,
+        removePartyItem,
+        transferItem,
+        canTransferFromCharacter,
+        canViewCharacterDetails,
         canAssignOwners,
         canEditCharacterType,
         knownPlayerKeys,
@@ -234,14 +529,39 @@ export function CharacterProvider({
   )
 }
 
+function locationKey(location: InventoryLocation): string {
+  return location.type === "party"
+    ? "party"
+    : `character:${location.characterId}`
+}
+
+function canUseCharacterAsSource(
+  character: CharacterTemplate | undefined,
+  userRole: "master" | "player",
+  userKey: string,
+): boolean {
+  if (!character) return false
+  if (userRole === "master") return true
+
+  return character.get("owner")?.id?.trim() === userKey
+}
+
+function canUseCharacterAsTarget(
+  character: CharacterTemplate | undefined,
+  userRole: "master" | "player",
+  userKey: string,
+): boolean {
+  if (!character) return false
+  if (userRole === "master") return true
+
+  const isOwned = character.get("owner")?.id?.trim() === userKey
+  return isOwned || character.get("visibility") !== "master"
+}
+
 export function useCharacterContext() {
-  const ctx = useContext(CharacterContext)
-
-  if (!ctx) {
-    throw new Error(
-      "useCharacterContext must be used inside CharacterProvider",
-    )
+  const context = useContext(CharacterContext)
+  if (!context) {
+    throw new Error("useCharacterContext must be used inside CharacterProvider")
   }
-
-  return ctx
+  return context
 }

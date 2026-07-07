@@ -1,5 +1,3 @@
-
-
 export type Race =
   | 'aarakocra'
   | 'aasimar'
@@ -22,6 +20,7 @@ export type Race =
   | 'goblin'
   | 'goliath'
   | 'half-elf'
+  | 'half-giant'
   | 'half-orc'
   | 'halfling'
   | 'harengon'

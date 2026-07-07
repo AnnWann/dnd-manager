@@ -25,44 +25,34 @@ export function GroupHitDice({ character, updateCharacter }: Props) {
 
   return (
     <div className="col-span-2 lg:col-span-3">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 text-xs font-medium text-textH hover:opacity-80"
-      >
-        <span>{open ? "▼" : "▶"}</span>
-        <span>Dados de Vida</span>
-      </button>
-
-      {open && (
-        <div className="mt-2 flex flex-col gap-2">
-          {hitDiceEntries.map(([side, hd]) => (
-            <HitDiceRow
-              key={side}
-              side={side}
-              hitDice={hd}
-              character={character}
-              updateCharacter={updateCharacter}
-            />
-          ))}
-
-          <button
-            type="button"
-            className="mt-2 w-fit rounded-md border border-border px-2 py-1 text-xs text-text"
-            onClick={() => setDialogOpen(true)}
-          >
-            + Adicionar
-          </button>
-
-          <AddHitDiceDialog
-            open={dialogOpen}
-            onClose={() => setDialogOpen(false)}
-            onAdd={(die) =>
-              updateCharacter(character.get("id"), (c) => c.addDice(die))
-            }
+      <div className="mt-2 flex flex-col gap-2">
+        {hitDiceEntries.map(([side, hd]) => (
+          <HitDiceRow
+            key={side}
+            side={side}
+            hitDice={hd}
+            character={character}
+            updateCharacter={updateCharacter}
           />
-        </div>
-      )}
+        ))}
+
+        <button
+          type="button"
+          className="mt-2 w-fit rounded-md border border-border px-2 py-1 text-xs text-text"
+          onClick={() => setDialogOpen(true)}
+        >
+          + Adicionar
+        </button>
+
+        <AddHitDiceDialog
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+          onAdd={(die) =>
+            updateCharacter(character.get("id"), (c) => c.addDice(die))
+          }
+        />
+      </div>
+
     </div>
   )
 }

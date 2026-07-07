@@ -1,4 +1,6 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
+
 import { Button } from "../../../components/ui/Button"
 import {
   CASTING_TIME_NAMES,
@@ -9,11 +11,19 @@ import type { Spell } from "../../../models/magic/spells/Spell"
 import type { SpellSource } from "../../../models/magic/spells/SpellSource"
 import type { ClassName } from "../../../models/sheet/Class"
 
+const MAX_CASTING_DESCRIPTIONS = 5
+const MAX_CASTING_DESCRIPTION_LENGTH = 800
+
 type Props = {
   spell: Spell
   prepared?: boolean
   source?: SpellSource
   alwaysPrepared?: boolean
+  accessLabel?: string
+  castingDescriptions?: string[]
+  onAddCastingDescription?: () => void
+  onChangeCastingDescription?: (index: number, description: string) => void
+  onRemoveCastingDescription?: (index: number) => void
   onEdit?: () => void
   onRemove?: () => void
   onTogglePrepared?: () => void
@@ -24,96 +34,84 @@ export function SpellCard({
   prepared = false,
   source,
   alwaysPrepared = false,
+  accessLabel,
+  castingDescriptions = [],
+  onAddCastingDescription,
+  onChangeCastingDescription,
+  onRemoveCastingDescription,
   onEdit,
   onRemove,
   onTogglePrepared,
 }: Props) {
   const [isViewOpen, setIsViewOpen] = useState(false)
+  const [castingDescriptionsOpen, setCastingDescriptionsOpen] = useState(
+    castingDescriptions.length > 0,
+  )
+  const [draftCastingDescriptions, setDraftCastingDescriptions] =
+    useState(castingDescriptions)
+  const castingDescriptionsKey = castingDescriptions.join("\u0000")
+  const canTogglePrepared = Boolean(onTogglePrepared) && !alwaysPrepared
+  const canEditCastingDescriptions = Boolean(
+    onAddCastingDescription &&
+      onChangeCastingDescription &&
+      onRemoveCastingDescription,
+  )
+  const canAddCastingDescription =
+    canEditCastingDescriptions &&
+    castingDescriptions.length < MAX_CASTING_DESCRIPTIONS
+  const material = spell.material?.trim()
 
-  return (
-    <>
-      <div className="rounded-2xl border border-border bg-bg p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-textH">
-              {spell.displayName || spell.name}
-            </div>
+  useEffect(() => {
+    setDraftCastingDescriptions(castingDescriptions)
+  }, [spell.index, castingDescriptionsKey])
 
-            <div className="mt-1 flex flex-wrap gap-2 text-xs text-text">
-              <span>Nível {spell.slotLevel}</span>
-              <span>{MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}</span>
-              <span>{formatCastingTime(spell)}</span>
-              <span>{formatRange(spell)}</span>
-              {formatAreaTiles(spell) ? <span>{formatAreaTiles(spell)}</span> : null}
-              <span>{formatSpellOrigin(source)}</span>
-              {spell.concentration ? <span>Concentração</span> : null}
-              {alwaysPrepared ? (
-                <span>Sempre preparada</span>
-              ) : prepared ? (
-                <span>Preparada</span>
-              ) : (
-                <span>Não preparada</span>
-              )}
-            </div>
-          </div>
+  function setDraftCastingDescription(index: number, description: string) {
+    const nextDescription = description.slice(0, MAX_CASTING_DESCRIPTION_LENGTH)
+    setDraftCastingDescriptions((current) => {
+      const next = [...current]
+      next[index] = nextDescription
+      return next
+    })
+  }
 
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setIsViewOpen(true)}
-            >
-              Visualizar
-            </Button>
+  function commitCastingDescription(index: number) {
+    const draft = draftCastingDescriptions[index] ?? ""
+    if ((castingDescriptions[index] ?? "") === draft) return
+    onChangeCastingDescription?.(index, draft)
+  }
 
-            {onTogglePrepared && !alwaysPrepared ? (
-              <Button size="sm" variant="secondary" onClick={onTogglePrepared}>
-                {prepared ? "Despreparar" : "Preparar"}
-              </Button>
-            ) : null}
-
-            {onEdit ? (
-              <Button size="sm" variant="secondary" onClick={onEdit}>
-                Editar
-              </Button>
-            ) : null}
-
-            {onRemove ? (
-              <Button size="sm" variant="ghost" onClick={onRemove}>
-                Remover
-              </Button>
-            ) : null}
-          </div>
-        </div>
-
-        {spell.description?.trim() ? (
-          <div className="mt-3 line-clamp-3 whitespace-pre-wrap break-words text-xs leading-5 text-text">
-            {spell.description}
-          </div>
-        ) : null}
-      </div>
-
-      {isViewOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-bg shadow-xl">
-            <div className="flex items-center justify-between border-b border-accentBorder p-4">
-              <div>
-                <h2 className="font-heading text-lg text-textH">
+  const spellModal = isViewOpen
+    ? createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[12000] flex h-screen w-screen items-center justify-center overflow-y-auto bg-black/80 p-3 sm:p-4"
+        >
+          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-bg shadow-xl">
+            <div className="flex flex-col gap-3 border-b border-accentBorder p-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h2 className="break-words font-heading text-lg text-textH">
                   {spell.displayName || spell.name}
                 </h2>
 
-                <div className="mt-1 flex flex-wrap gap-2 text-xs text-text">
-                  <span>Nível {spell.slotLevel}</span>
-                  <span>{MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}</span>
-                  <span>{formatCastingTime(spell)}</span>
-                  <span>{formatRange(spell)}</span>
-                  <span>{formatSpellOrigin(source)}</span>
-                  {spell.concentration ? <span>Concentração</span> : null}
-                  {spell.ritual ? <span>Ritual</span> : null}
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-xs leading-5 text-text">
+                  <SpellMeta>
+                    {spell.slotLevel === 0 ? "Truque" : `Nível ${spell.slotLevel}`}
+                  </SpellMeta>
+                  <SpellMeta>
+                    {MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}
+                  </SpellMeta>
+                  <SpellMeta>{formatCastingTime(spell)}</SpellMeta>
+                  <SpellMeta>{formatRange(spell)}</SpellMeta>
+                  <SpellMeta>{formatSpellOrigin(source)}</SpellMeta>
+                  {accessLabel ? <SpellMeta>{accessLabel}</SpellMeta> : null}
+                  {spell.concentration ? <SpellMeta>Concentração</SpellMeta> : null}
+                  {spell.ritual ? <SpellMeta>Ritual</SpellMeta> : null}
                 </div>
               </div>
 
               <Button
+                className="w-full sm:w-auto"
                 variant="secondary"
                 size="sm"
                 onClick={() => setIsViewOpen(false)}
@@ -123,11 +121,61 @@ export function SpellCard({
             </div>
 
             <div className="grid gap-4 p-4 text-sm text-text">
-              <section>
-                <h3 className="text-sm font-semibold text-textH">
-                  Descrição
-                </h3>
+              {castingDescriptions.length > 0 ? (
+                <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                  <h3 className="text-sm font-semibold text-textH">
+                    Como o personagem conjura
+                  </h3>
+                  <div className="mt-2 grid gap-2">
+                    {castingDescriptions.map((description, index) => (
+                      <p
+                        key={index}
+                        className="whitespace-pre-wrap break-words rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-6"
+                      >
+                        {description || "Descrição vazia."}
+                      </p>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
 
+              <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                <h3 className="text-sm font-semibold text-textH">
+                  Componentes
+                </h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {getSpellComponents(spell).length ? (
+                    getSpellComponents(spell).map((component) => (
+                      <span
+                        key={component}
+                        className="rounded-full border border-accentBorder bg-accentBg px-2.5 py-1 text-xs font-medium text-textH"
+                      >
+                        {formatComponentLong(component)}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-textMuted">
+                      Nenhum componente informado.
+                    </span>
+                  )}
+                </div>
+
+                {material ? (
+                  <div className="mt-3 text-xs leading-5 text-text">
+                    <span className="font-semibold text-textH">
+                      Componente material:
+                    </span>{" "}
+                    {material}
+                  </div>
+                ) : getSpellComponents(spell).includes("M") ? (
+                  <div className="mt-3 text-xs text-textMuted">
+                    A magia exige componente material, mas o material específico não foi informado.
+                  </div>
+                ) : null}
+              </section>
+
+              <section>
+                <h3 className="text-sm font-semibold text-textH">Descrição</h3>
                 <div className="mt-2 whitespace-pre-wrap break-words leading-6">
                   {spell.description?.trim() || "Sem descrição."}
                 </div>
@@ -137,7 +185,6 @@ export function SpellCard({
                 <h3 className="text-sm font-semibold text-textH">
                   Próximos níveis
                 </h3>
-
                 <div className="mt-2 whitespace-pre-wrap break-words leading-6">
                   {spell.higherLevelText?.trim() ||
                     "Sem efeito adicional em níveis superiores."}
@@ -145,96 +192,293 @@ export function SpellCard({
               </section>
             </div>
           </div>
+        </div>,
+        document.body,
+      )
+    : null
+
+  return (
+    <>
+      <article className="rounded-2xl border border-border bg-bg p-4">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <h3 className="break-words text-base font-semibold leading-snug text-textH sm:text-sm">
+              {spell.displayName || spell.name}
+            </h3>
+
+            <div className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1.5 text-xs leading-5 text-text">
+              <SpellMeta>
+                {spell.slotLevel === 0 ? "Truque" : `Nível ${spell.slotLevel}`}
+              </SpellMeta>
+              <SpellMeta>
+                {MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}
+              </SpellMeta>
+              <SpellMeta>{formatCastingTime(spell)}</SpellMeta>
+              <SpellMeta>{formatRange(spell)}</SpellMeta>
+              <SpellMeta className="font-medium text-textH">
+                {formatComponentsCompact(spell)}
+              </SpellMeta>
+              {formatAreaTiles(spell) ? (
+                <SpellMeta>{formatAreaTiles(spell)}</SpellMeta>
+              ) : null}
+              <SpellMeta>{formatSpellOrigin(source)}</SpellMeta>
+              {accessLabel ? (
+                <SpellMeta className="font-semibold text-accent">
+                  {accessLabel}
+                </SpellMeta>
+              ) : null}
+              {spell.concentration ? <SpellMeta>Concentração</SpellMeta> : null}
+              {alwaysPrepared ? (
+                <SpellMeta>Sempre disponível</SpellMeta>
+              ) : prepared ? (
+                <SpellMeta>Preparada</SpellMeta>
+              ) : (
+                <SpellMeta>Não preparada</SpellMeta>
+              )}
+            </div>
+          </div>
+
+          <div className="flex w-full flex-wrap gap-2 border-t border-border pt-3 sm:w-auto sm:shrink-0 sm:justify-end sm:border-0 sm:pt-0">
+            <Button
+              className="flex-1 sm:flex-none"
+              size="sm"
+              variant="secondary"
+              onClick={() => setIsViewOpen(true)}
+            >
+              Visualizar
+            </Button>
+
+            {canTogglePrepared ? (
+              <Button
+                className="flex-1 sm:flex-none"
+                size="sm"
+                variant="secondary"
+                onClick={onTogglePrepared}
+              >
+                {prepared ? "Despreparar" : "Preparar"}
+              </Button>
+            ) : null}
+
+            {onEdit ? (
+              <Button
+                className="flex-1 sm:flex-none"
+                size="sm"
+                variant="secondary"
+                onClick={onEdit}
+              >
+                Editar
+              </Button>
+            ) : null}
+
+            {onRemove ? (
+              <Button
+                className="flex-1 sm:flex-none"
+                size="sm"
+                variant="ghost"
+                onClick={onRemove}
+              >
+                Remover
+              </Button>
+            ) : null}
+          </div>
         </div>
-      ) : null}
+
+        {material ? (
+          <div className="mt-3 rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs leading-5 text-text">
+            <span className="font-semibold text-textH">Material:</span>{" "}
+            {material}
+          </div>
+        ) : null}
+
+        {spell.description?.trim() ? (
+          <p className="mt-3 line-clamp-3 whitespace-pre-wrap break-words text-xs leading-5 text-text">
+            {spell.description}
+          </p>
+        ) : null}
+
+        <details
+          className="mt-3 rounded-xl border border-border bg-bg-subtle p-3"
+          open={castingDescriptionsOpen}
+          onToggle={(event) =>
+            setCastingDescriptionsOpen(event.currentTarget.open)
+          }
+        >
+          <summary className="cursor-pointer text-xs font-semibold text-textH">
+            Como o personagem conjura
+            {castingDescriptions.length > 0
+              ? ` (${castingDescriptions.length})`
+              : ""}
+          </summary>
+
+          <div className="mt-3 grid gap-3">
+            <p className="text-xs leading-5 text-textMuted">
+              Anote variações visuais, gestos, frases ou efeitos recorrentes dessa magia no personagem.
+            </p>
+
+            {draftCastingDescriptions.length > 0 ? (
+              <div className="grid gap-2">
+                {draftCastingDescriptions.map((description, index) => (
+                  <div key={index} className="grid gap-2">
+                    {canEditCastingDescriptions ? (
+                      <textarea
+                        className="min-h-20 w-full resize-y rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-5 text-textH outline-none transition-colors placeholder:text-textMuted focus:border-accent focus:ring-2 focus:ring-accent/25"
+                        value={description}
+                        maxLength={MAX_CASTING_DESCRIPTION_LENGTH}
+                        placeholder="Ex.: a lâmina brilha em fogo azul antes do impacto..."
+                        onChange={(event) =>
+                          setDraftCastingDescription(
+                            index,
+                            event.target.value,
+                          )
+                        }
+                        onBlur={() => commitCastingDescription(index)}
+                      />
+                    ) : (
+                      <p className="whitespace-pre-wrap break-words rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-5 text-text">
+                        {description || "Descrição vazia."}
+                      </p>
+                    )}
+
+                    {canEditCastingDescriptions ? (
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => onRemoveCastingDescription?.(index)}
+                        >
+                          Remover descrição
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-textMuted">
+                Nenhuma descrição personalizada ainda.
+              </p>
+            )}
+
+            {canAddCastingDescription ? (
+              <div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={onAddCastingDescription}
+                >
+                  + Adicionar descrição
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        </details>
+      </article>
+
+      {spellModal}
     </>
   )
 }
 
+function SpellMeta({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <span className={`min-w-0 break-words ${className}`}>
+      {children}
+    </span>
+  )
+}
+
+function getSpellComponents(spell: Spell): Array<"V" | "S" | "M"> {
+  if (!Array.isArray(spell.components)) return []
+
+  const order: Array<"V" | "S" | "M"> = ["V", "S", "M"]
+  return order.filter((component) => spell.components.includes(component))
+}
+
+function formatComponentsCompact(spell: Spell): string {
+  const components = getSpellComponents(spell)
+  return components.length
+    ? `Componentes: ${components.join(", ")}`
+    : "Componentes: nenhum"
+}
+
+function formatComponentLong(component: "V" | "S" | "M"): string {
+  if (component === "V") return "V — Verbal"
+  if (component === "S") return "S — Somático"
+  return "M — Material"
+}
+
 function formatCastingTime(spell: Spell): string {
   const castingTime = spell.castingTime
-
-  if (castingTime.type === "special") {
-    return castingTime.special || "Especial"
-  }
-
+  if (castingTime.type === "special") return castingTime.special || "Especial"
   if (castingTime.type === "reaction") {
     return castingTime.reactionWhen
       ? `Reação: ${castingTime.reactionWhen}`
       : "Reação"
   }
-
   if (castingTime.value === 1) {
     return `1 ${CASTING_TIME_NAMES[castingTime.type]}`
   }
-
   return `${castingTime.value} ${CASTING_TIME_NAMES[castingTime.type]}s`
 }
 
 function formatRange(spell: Spell): string {
   const { range } = spell
-
   if (range.origin === "self") return "Pessoal"
   if (range.origin === "touch") return "Toque"
-
   const base = `${range.distance} m`
-
   if (!range.area) return base
-
   return `${base}, ${formatAreaShape(range.area.shape)} de ${range.area.size} m`
 }
 
 function formatAreaShape(shape: NonNullable<Spell["range"]["area"]>["shape"]) {
-  switch (shape) {
-    case "circle":
-      return "círculo"
-    case "square":
-      return "quadrado"
-    case "cone":
-      return "cone"
-    case "line":
-      return "linha"
-    default:
-      return shape
+  const names = {
+    circle: "círculo",
+    square: "quadrado",
+    cone: "cone",
+    line: "linha",
   }
+  return names[shape] ?? shape
 }
 
 function formatSpellOrigin(source?: SpellSource): string {
   if (!source) return "Origem não definida"
-
   if (source.type === "class") {
     return `Origem: ${CLASS_NAMES[source.name as ClassName] ?? source.name}`
   }
-
   if (source.type === "feat") {
     return source.name ? `Origem: Talento (${source.name})` : "Origem: Talento"
   }
-
   if (source.type === "ability") {
     return source.name
       ? `Origem: Habilidade (${source.name})`
       : "Origem: Habilidade"
   }
-
+  if (source.type === "race") {
+    return source.name ? `Origem: Raça (${source.name})` : "Origem: Raça"
+  }
+  if (source.type === "equipment") {
+    return source.name
+      ? `Origem: Equipamento (${source.name})`
+      : "Origem: Equipamento"
+  }
   return "Origem não definida"
 }
 
 function formatAreaTiles(spell: Spell): string | null {
   const area = spell.range.area
   if (!area) return null
-
-  const tileSizeM = 1.5
-  const sizeInTiles = area.size / tileSizeM
-
+  const sizeInTiles = area.size / 1.5
   if (area.shape === "circle") {
-    const tiles = Math.round(Math.PI * sizeInTiles * sizeInTiles)
-    return `Ocupa aproximadamente ${tiles} quadrados de 1,5 m`
+    return `Ocupa aproximadamente ${Math.round(Math.PI * sizeInTiles * sizeInTiles)} quadrados de 1,5 m`
   }
-
   if (area.shape === "square") {
-    const tiles = Math.round(sizeInTiles * sizeInTiles)
-    return `Ocupa aproximadamente ${tiles} quadrados de 1,5 m`
+    return `Ocupa aproximadamente ${Math.round(sizeInTiles * sizeInTiles)} quadrados de 1,5 m`
   }
-
   return null
 }

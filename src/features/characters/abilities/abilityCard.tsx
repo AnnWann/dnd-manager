@@ -1,7 +1,10 @@
 import { useState } from "react"
+
 import { Button } from "../../../components/ui/Button"
+import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
 import type { Ability } from "../../../models/abilities/Ability"
+import { flattenBonuses } from "../inventory/equipmentBonusFields"
 import {
   ABILITY_ACTION_OPTIONS,
   ABILITY_TRIGGER_OPTIONS,
@@ -11,6 +14,7 @@ import {
 
 type Props = {
   ability: Ability
+  sourceLabel?: string
   onEdit?: () => void
   onRemove?: () => void
   onUse?: () => void
@@ -23,34 +27,41 @@ function summaryLabel(ability: Ability) {
 
   if (!usage) {
     return ability.kind === "passive"
-      ? `${kindLabel} • ${ABILITY_TRIGGER_OPTIONS.find((o) => o.value === (ability.trigger ?? "always"))?.label ?? "Sempre"}`
-      : `${kindLabel} • ${ABILITY_ACTION_OPTIONS.find((o) => o.value === (ability.actionKind ?? "action"))?.label ?? "Ação"}`
+      ? `${kindLabel} • ${ABILITY_TRIGGER_OPTIONS.find((option) => option.value === (ability.trigger ?? "always"))?.label ?? "Sempre"}`
+      : `${kindLabel} • ${ABILITY_ACTION_OPTIONS.find((option) => option.value === (ability.actionKind ?? "action"))?.label ?? "Ação"}`
   }
 
   if (usage.reset === "cooldown") {
     const amount = Math.max(1, Math.trunc(usage.cooldownAmount ?? 1) || 1)
     const unit =
-      COOLDOWN_UNIT_OPTIONS.find((o) => o.value === (usage.cooldownUnit ?? "turns"))?.label ??
-      "Turnos"
+      COOLDOWN_UNIT_OPTIONS.find(
+        (option) => option.value === (usage.cooldownUnit ?? "turns"),
+      )?.label ?? "Turnos"
 
     return `${kindLabel} • Cooldown • ${amount} ${unit.toLowerCase()}`
   }
 
-  return `${kindLabel} • ${USAGE_OPTIONS.find((o) => o.value === usage.reset)?.label ?? "Sem uso"}`
+  return `${kindLabel} • ${USAGE_OPTIONS.find((option) => option.value === usage.reset)?.label ?? "Sem uso"}`
 }
 
 export function AbilityCard({
   ability,
+  sourceLabel,
   onEdit,
   onRemove,
   onUse,
   onRestore,
 }: Props) {
+  const { getSpellByIndex } = useMagicContext()
   const [expanded, setExpanded] = useState(false)
-
   const usage = ability.usage
   const remaining = usage ? Math.max(0, usage.max - usage.used) : null
   const description = ability.description?.trim() ?? ""
+  const grantedSpells = (ability.grantedSpells ?? []).map((grant) => ({
+    grant,
+    spell: getSpellByIndex(grant.index),
+  }))
+  const bonusEntries = flattenBonuses(ability.bonuses ?? {})
 
   return (
     <div
@@ -71,6 +82,12 @@ export function AbilityCard({
           <span className="rounded-full border border-border bg-[color:color-mix(in_srgb,var(--social-bg)_70%,transparent)] px-2 py-0.5 text-[11px] font-medium text-text">
             {usage ? summaryLabel(ability) : "Sem contador"}
           </span>
+
+          {sourceLabel ? (
+            <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[11px] font-medium text-textH">
+              {sourceLabel}
+            </span>
+          ) : null}
         </div>
 
         {description ? (
@@ -89,7 +106,7 @@ export function AbilityCard({
               <button
                 type="button"
                 className="mt-1 text-xs font-medium text-textH hover:opacity-80"
-                onClick={() => setExpanded((v) => !v)}
+                onClick={() => setExpanded((current) => !current)}
               >
                 {expanded ? "Ver menos" : "Ver mais"}
               </button>
@@ -97,12 +114,49 @@ export function AbilityCard({
           </div>
         ) : null}
 
+        {bonusEntries.length > 0 ? (
+          <div className="mt-3">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+              Bônus concedidos
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {bonusEntries.map((entry) => (
+                <span
+                  key={entry.id}
+                  className="rounded-full bg-accentBg px-2.5 py-1 text-[11px] font-medium text-textH"
+                >
+                  {entry.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {grantedSpells.length > 0 ? (
+          <div className="mt-3">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+              Magias concedidas
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {grantedSpells.map(({ grant, spell }) => (
+                <span
+                  key={grant.index}
+                  className="rounded-full bg-accentBg px-2.5 py-1 text-[11px] font-medium text-textH"
+                >
+                  {spell?.displayName || spell?.name || grant.index}
+                  {grant.castingMode === "known"
+                    ? " • espaços normais"
+                    : " • pela habilidade"}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-2 text-xs text-text">
           {usage ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span>
-                {remaining}/{usage.max} usos restantes
-              </span>
+              <span>{remaining}/{usage.max} usos restantes</span>
               <span>Gastos {usage.used}</span>
             </div>
           ) : (
@@ -113,9 +167,7 @@ export function AbilityCard({
 
       <div className="flex flex-wrap gap-2 md:justify-end">
         {onEdit ? (
-          <Button size="sm" variant="secondary" onClick={onEdit}>
-            Editar
-          </Button>
+          <Button size="sm" variant="secondary" onClick={onEdit}>Editar</Button>
         ) : null}
 
         {ability.kind === "active" && usage && onUse ? (
@@ -144,9 +196,7 @@ export function AbilityCard({
         ) : null}
 
         {onRemove ? (
-          <Button size="sm" variant="ghost" onClick={onRemove}>
-            Remover
-          </Button>
+          <Button size="sm" variant="ghost" onClick={onRemove}>Remover</Button>
         ) : null}
       </div>
     </div>

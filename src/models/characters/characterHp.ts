@@ -1,8 +1,7 @@
-// models/characters/characterHp.ts
-
-import type { CharacterTemplate } from "./CharacterTemplate"
 import type { Die, DieSides } from "../dice/Die"
 import type { HP } from "../sheet/HP"
+import type { CharacterTemplate } from "./CharacterTemplate"
+import { applyBonuses, getCharacterBonuses } from "./characterStats"
 
 export function withHp<K extends keyof HP>(
   character: CharacterTemplate,
@@ -23,25 +22,19 @@ export function withHp<K extends keyof HP>(
 export function getEffectiveMaxHp(
   character: CharacterTemplate,
 ): number {
-  const baseMaxHp = character.get("sheet").HP.max
-
-  const bonuses = character
-    .getEquippedItems()
-    .flatMap((item) => item.bonuses?.maxHp ?? [])
-
-  return applyBonuses(baseMaxHp, bonuses)
+  return applyBonuses(
+    character.get("sheet").HP.max,
+    getCharacterBonuses(character, "maxHp"),
+  )
 }
 
 export function getEffectiveTemporaryHp(
   character: CharacterTemplate,
 ): number {
-  const baseTemporaryHp = character.get("sheet").HP.temporary
-
-  const bonuses = character
-    .getEquippedItems()
-    .flatMap((item) => item.bonuses?.temporaryHp ?? [])
-
-  return applyBonuses(baseTemporaryHp, bonuses)
+  return applyBonuses(
+    character.get("sheet").HP.temporary,
+    getCharacterBonuses(character, "temporaryHp"),
+  )
 }
 
 export function setCurrentHp(
@@ -94,7 +87,6 @@ export function takeDamage(
 
   if (temporary > 0) {
     const absorbed = Math.min(temporary, remainingDamage)
-
     temporary -= absorbed
     remainingDamage -= absorbed
   }
@@ -171,9 +163,7 @@ export function spendHitDie(
   const hitDice = character.get("sheet").HP.hitDice
   const currentDie = hitDice[side]
 
-  if (!currentDie || currentDie.current.quantity <= 0) {
-    return character
-  }
+  if (!currentDie || currentDie.current.quantity <= 0) return character
 
   return withHp(character, "hitDice", {
     ...hitDice,
@@ -194,9 +184,7 @@ export function restoreHitDie(
   const hitDice = character.get("sheet").HP.hitDice
   const currentDie = hitDice[side]
 
-  if (!currentDie) {
-    return character
-  }
+  if (!currentDie) return character
 
   return withHp(character, "hitDice", {
     ...hitDice,
@@ -294,25 +282,6 @@ export function longRestHp(
       },
     }),
   )
-}
-
-function applyBonuses(
-  baseValue: number,
-  bonuses: Array<{
-    type: "add" | "sub" | "flat"
-    value: number
-  }>,
-): number {
-  const flatBonus = bonuses.find((bonus) => bonus.type === "flat")
-
-  if (flatBonus) return flatBonus.value
-
-  return bonuses.reduce((total, bonus) => {
-    if (bonus.type === "add") return total + bonus.value
-    if (bonus.type === "sub") return total - bonus.value
-
-    return total
-  }, baseValue)
 }
 
 function clamp(value: number, min: number, max: number): number {

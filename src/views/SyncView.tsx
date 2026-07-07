@@ -2,6 +2,7 @@ import { Button } from "../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../components/ui/Card"
 import { Input } from "../components/ui/Input"
 import { useSyncContext } from "../contexts/syncContext"
+import { confirmAndResetLocalAppData } from "../lib/resetLocalAppData"
 
 export function SyncView() {
   const {
@@ -100,6 +101,31 @@ export function SyncView() {
               </div>
             ) : null}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="text-sm font-semibold text-textH">
+            Recuperação deste dispositivo
+          </div>
+          <div className="mt-1 text-xs leading-5 text-text">
+            Use isto quando o app ficar preso em um estado antigo, trocar de usuário incorretamente ou não conseguir mais sincronizar.
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-xl border border-warning bg-warningBg p-3 text-xs leading-5 text-warning">
+            A limpeza remove apenas os dados locais deste navegador: estado salvo,
+            chave de sincronização, nome do jogador, papel, cache e registro do
+            aplicativo. O conteúdo remoto da sessão não é apagado.
+          </div>
+          <Button
+            className="mt-3 w-full sm:w-auto"
+            variant="secondary"
+            onClick={confirmAndResetLocalAppData}
+          >
+            Limpar tudo neste dispositivo
+          </Button>
         </CardContent>
       </Card>
     </div>

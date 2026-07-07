@@ -1,11 +1,17 @@
+import type { BonusCollection } from "../bonuses/Bonus"
+import type { SpellGrant } from "../magic/spells/SpellGrant"
+
 export interface Ability {
   id: string
   name: string
   description?: string
   usage?: Usage
   kind?: AbilityKind
+  category?: AbilityCategory
   actionKind?: AbilityActionKind
   trigger?: Trigger
+  grantedSpells?: SpellGrant[]
+  bonuses?: BonusCollection
 }
 
 export interface Usage {
@@ -16,6 +22,8 @@ export interface Usage {
   cooldownUnit?: AbilityUsageCooldownUnit
   cooldownRemaining?: number
 }
+
+export type AbilityCategory = 'general' | 'invocation' | 'feat'
 
 export type AbilityUsageResetKind = 'turn' | 'cooldown' | 'shortRest' | 'longRest' | 'limited' | 'spellSlot'
 
