@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { EquipmentArmorSection } from "./equipmentArmorSection"
+import { EquipmentAttunementSection } from "./equipmentAttunementSection"
 import { EquipmentPocketsSection } from "./EquipmentPocketSection"
 import { EquipmentRingsSection } from "./equipmentRingSection"
 import { EquipmentSingleSlotSection } from "./EquipmentSingleSlotSection"
@@ -21,12 +22,17 @@ export function CharacterEquipmentTab({ character, updateCharacter }: Props) {
       <CardHeader>
         <div className="text-sm font-semibold text-textH">Equipamento</div>
         <div className="mt-1 text-xs text-text">
-          Itens equipados, escudo, armas, anéis e bolsos.
+          Itens equipados, escudo, armas, anéis, bolsos e sintonias.
         </div>
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
         <EquipmentSummary character={character} />
+
+        <EquipmentAttunementSection
+          character={character}
+          updateCharacter={updateCharacter}
+        />
 
         <EquipmentArmorSection
           character={character}
