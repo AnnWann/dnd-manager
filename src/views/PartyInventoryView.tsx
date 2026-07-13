@@ -16,6 +16,7 @@ import { TransferItemDialog } from "../features/characters/inventory/transferIte
 import { formatRaceName } from "../lib/raceNames"
 import type { Itemmable } from "../models/items/item"
 import { consumeItemQuantity } from "../models/items/itemConsumption"
+import { getItemStackWeightKg } from "../models/items/itemWeight"
 import {
   calculatePartySupplies,
   STANDARD_PORTIONS_PER_BARREL,
@@ -49,8 +50,7 @@ export function PartyInventoryView() {
   ).length
 
   const totalWeight = partyInventory.reduce(
-    (total, item) =>
-      total + (item.weight ?? 0) * (item.quantity ?? 1),
+    (total, item) => total + getItemStackWeightKg(item),
     0,
   )
   const hasCapacity = carryCapacity > 0
