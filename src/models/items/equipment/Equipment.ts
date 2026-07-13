@@ -17,4 +17,7 @@ export type CharacterEquipment = {
 
   // itens carregados no bolso, mas sem bônus ativo
   pockets: PocketItem[]
+
+  // IDs dos itens mágicos sintonizados. O item continua no inventário.
+  attunedItemIds?: string[]
 }
