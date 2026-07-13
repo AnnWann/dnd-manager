@@ -1,18 +1,12 @@
 import type { Itemmable } from "./item"
+import { getItemStackWeightKg } from "./itemWeight"
 
 export const BAG_OF_HOLDING_CAPACITY_KG = 226
-
-export function getItemWeightKg(item: Pick<Itemmable, "weight" | "quantity">): number {
-  const weight = Math.max(0, Number(item.weight) || 0)
-  const quantity = Math.max(0, Number(item.quantity ?? 1) || 0)
-
-  return weight * quantity
-}
 
 export function getBagOfHoldingWeightKg(items: Itemmable[]): number {
   return items.reduce(
     (total, item) =>
-      item.insideBagOfHolding ? total + getItemWeightKg(item) : total,
+      item.insideBagOfHolding ? total + getItemStackWeightKg(item) : total,
     0,
   )
 }
