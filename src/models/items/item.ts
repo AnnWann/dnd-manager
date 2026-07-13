@@ -45,6 +45,7 @@ export type Item = {
 
   magicItem?: boolean
   requiresAttunement?: boolean
+  attuned?: boolean
 
   insideBagOfHolding?: boolean
 }
