@@ -25,69 +25,56 @@ export function updateInventoryItem(
   itemId: string,
   updater: (item: Itemmable) => Itemmable,
 ): CharacterTemplate {
-  const inventory = updateSingleInventoryItem(
-    character.get("inventory"),
-    itemId,
-    updater,
-  )
-  const updatedItem = inventory.find((item) => item.id === itemId)
-  const equipment = character.get("equipment")
-  const shouldRemainAttuned =
-    updatedItem?.magicItem === true && updatedItem.requiresAttunement === true
+  return character.with(
+    "inventory",
+    updateSingleInventoryItem(character.get("inventory"), itemId, (item) => {
+      const updatedItem = updater(item)
+      const canRemainAttuned =
+        updatedItem.magicItem === true &&
+        updatedItem.requiresAttunement === true
 
-  return character
-    .with("inventory", inventory)
-    .with("equipment", {
-      ...equipment,
-      attunedItemIds: shouldRemainAttuned
-        ? equipment.attunedItemIds ?? []
-        : (equipment.attunedItemIds ?? []).filter((id) => id !== itemId),
-    })
+      return canRemainAttuned
+        ? updatedItem
+        : {
+            ...updatedItem,
+            attuned: false,
+          }
+    }),
+  )
 }
 
 export function removeInventoryItem(
   character: CharacterTemplate,
   itemId: string,
 ): CharacterTemplate {
-  const equipment = character.get("equipment")
-
-  return character
-    .with(
-      "inventory",
-      removeSingleInventoryItem(character.get("inventory"), itemId),
-    )
-    .with("equipment", {
-      ...equipment,
-      attunedItemIds: (equipment.attunedItemIds ?? []).filter(
-        (id) => id !== itemId,
-      ),
-    })
+  return character.with(
+    "inventory",
+    removeSingleInventoryItem(character.get("inventory"), itemId),
+  )
 }
 
 export function toggleInventoryItemAttunement(
   character: CharacterTemplate,
   itemId: string,
 ): CharacterTemplate {
-  const item = character
-    .get("inventory")
-    .find((entry) => entry.id === itemId)
+  const inventory = character.get("inventory")
+  const item = inventory.find((entry) => entry.id === itemId)
 
   if (!item?.magicItem || !item.requiresAttunement) return character
 
-  const equipment = character.get("equipment")
-  const attunedItemIds = equipment.attunedItemIds ?? []
-  const isAttuned = attunedItemIds.includes(itemId)
+  const attunedCount = inventory.filter((entry) => entry.attuned === true).length
 
-  if (!isAttuned && attunedItemIds.length >= MAX_ATTUNED_ITEMS) {
+  if (!item.attuned && attunedCount >= MAX_ATTUNED_ITEMS) {
     return character
   }
 
-  return character.with("equipment", {
-    ...equipment,
-    attunedItemIds: isAttuned
-      ? attunedItemIds.filter((id) => id !== itemId)
-      : [...attunedItemIds, itemId],
-  })
+  return character.with(
+    "inventory",
+    updateSingleInventoryItem(inventory, itemId, (current) => ({
+      ...current,
+      attuned: !current.attuned,
+    })),
+  )
 }
 
 export function sendInventoryItemToBagOfHolding(
