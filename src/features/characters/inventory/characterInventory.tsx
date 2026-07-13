@@ -42,6 +42,7 @@ export function newInventoryItem(): Itemmable {
     kind: "common",
     magicItem: false,
     requiresAttunement: false,
+    attuned: false,
   }
 }
 
@@ -63,7 +64,9 @@ export function CharacterInventoryTab({
   const encumbrance = getEncumbranceInfo(character)
   const canTransfer = canTransferFromCharacter(character.get("id"))
   const bagWeight = getBagOfHoldingWeightKg(items)
-  const attunedItemIds = character.get("equipment").attunedItemIds ?? []
+  const attunedItemIds = items
+    .filter((item) => item.attuned === true)
+    .map((item) => item.id)
 
   function wouldExceedBagCapacity(candidateItems: Itemmable[]): boolean {
     const currentWeight = getBagOfHoldingWeightKg(items)
