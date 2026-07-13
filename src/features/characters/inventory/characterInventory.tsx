@@ -8,6 +8,7 @@ import {
   equipInventoryItemWithRules,
   pocketInventoryItemWithRules,
 } from "../../../models/characters/characterEquipmentInteractions"
+import { toggleInventoryItemAttunement } from "../../../models/characters/characterInventory"
 import {
   BAG_OF_HOLDING_CAPACITY_KG,
   getBagOfHoldingWeightKg,
@@ -39,6 +40,9 @@ export function newInventoryItem(): Itemmable {
     weight: 0,
     pocketable: false,
     kind: "common",
+    magicItem: false,
+    requiresAttunement: false,
+    attuned: false,
   }
 }
 
@@ -60,6 +64,9 @@ export function CharacterInventoryTab({
   const encumbrance = getEncumbranceInfo(character)
   const canTransfer = canTransferFromCharacter(character.get("id"))
   const bagWeight = getBagOfHoldingWeightKg(items)
+  const attunedItemIds = items
+    .filter((item) => item.attuned === true)
+    .map((item) => item.id)
 
   function wouldExceedBagCapacity(candidateItems: Itemmable[]): boolean {
     const currentWeight = getBagOfHoldingWeightKg(items)
@@ -163,6 +170,12 @@ export function CharacterInventoryTab({
           )
         }
         onToggleBagOfHolding={toggleBagOfHolding}
+        onToggleAttunement={(itemId) =>
+          updateCharacter(character.get("id"), (current) =>
+            toggleInventoryItemAttunement(current, itemId),
+          )
+        }
+        attunedItemIds={attunedItemIds}
         onTransferItem={canTransfer ? setTransferringItem : undefined}
       />
 
@@ -189,9 +202,13 @@ export function CharacterInventoryTab({
 
 function BagOfHoldingCounter({ weight }: { weight: number }) {
   const remaining = Math.max(0, BAG_OF_HOLDING_CAPACITY_KG - weight)
-  const percentage = Math.min(100, Math.max(0, (weight / BAG_OF_HOLDING_CAPACITY_KG) * 100))
+  const percentage = Math.min(
+    100,
+    Math.max(0, (weight / BAG_OF_HOLDING_CAPACITY_KG) * 100),
+  )
   const isFull = weight >= BAG_OF_HOLDING_CAPACITY_KG - BAG_CAPACITY_EPSILON
-  const isOverCapacity = weight > BAG_OF_HOLDING_CAPACITY_KG + BAG_CAPACITY_EPSILON
+  const isOverCapacity =
+    weight > BAG_OF_HOLDING_CAPACITY_KG + BAG_CAPACITY_EPSILON
 
   return (
     <section
@@ -202,16 +219,20 @@ function BagOfHoldingCounter({ weight }: { weight: number }) {
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="text-sm font-semibold text-textH">
-            Bolsa Mágica
-          </div>
+          <div className="text-sm font-semibold text-textH">Bolsa Mágica</div>
           <div className="mt-1 text-xs leading-5 text-text">
             Capacidade RAW: {formatKg(BAG_OF_HOLDING_CAPACITY_KG)}.
           </div>
         </div>
 
         <div className="text-left text-xs sm:text-right">
-          <div className={isOverCapacity ? "font-semibold text-danger" : "font-semibold text-textH"}>
+          <div
+            className={
+              isOverCapacity
+                ? "font-semibold text-danger"
+                : "font-semibold text-textH"
+            }
+          >
             {formatKg(weight)} / {formatKg(BAG_OF_HOLDING_CAPACITY_KG)}
           </div>
           <div className="mt-1 text-textMuted">
@@ -252,9 +273,7 @@ function BagOfHoldingLimitPopup({
         <div className="text-sm font-semibold text-textH">
           Bolsa Mágica cheia
         </div>
-        <p className="mt-2 text-sm leading-6 text-text">
-          {message}
-        </p>
+        <p className="mt-2 text-sm leading-6 text-text">{message}</p>
         <div className="mt-4 flex justify-end">
           <Button size="sm" variant="secondary" onClick={onClose}>
             Entendi

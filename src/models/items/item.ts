@@ -43,6 +43,10 @@ export type Item = {
   equippable?: boolean
   equipSlot?: EquipSlot
 
+  magicItem?: boolean
+  requiresAttunement?: boolean
+  attuned?: boolean
+
   insideBagOfHolding?: boolean
 }
 

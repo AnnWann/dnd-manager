@@ -36,6 +36,8 @@ type Props = {
   onEquipItem?: (itemId: string) => void
   onPocketItem?: (itemId: string) => void
   onToggleBagOfHolding?: (itemId: string) => void
+  onToggleAttunement?: (itemId: string) => void
+  attunedItemIds?: string[]
   onTransferItem?: (item: Itemmable) => void
   transferLabel?: string
 }
@@ -50,6 +52,8 @@ type InventoryFilter =
   | "boots"
   | "ring"
   | "bagOfHolding"
+  | "magicItem"
+  | "requiresAttunement"
 
 const ITEM_KIND_LABELS: Record<ItemKind, string> = {
   common: "Comum",
@@ -67,11 +71,10 @@ const ITEM_KIND_LABELS: Record<ItemKind, string> = {
   shield: "Escudo",
 }
 
-const INVENTORY_FILTERS: Array<{
-  value: InventoryFilter
-  label: string
-}> = [
+const INVENTORY_FILTERS: Array<{ value: InventoryFilter; label: string }> = [
   { value: "all", label: "Todos" },
+  { value: "magicItem", label: "Itens mágicos" },
+  { value: "requiresAttunement", label: "Exigem sintonia" },
   { value: "common", label: "Comuns" },
   { value: "supply", label: "Suprimentos" },
   { value: "equipment", label: "Equipamentos" },
@@ -115,6 +118,10 @@ function matchesInventoryFilter(
 ): boolean {
   if (filter === "all") return true
   if (filter === "bagOfHolding") return item.insideBagOfHolding === true
+  if (filter === "magicItem") return item.magicItem === true
+  if (filter === "requiresAttunement") {
+    return item.magicItem === true && item.requiresAttunement === true
+  }
 
   if (
     filter === "weapon" ||
@@ -142,6 +149,8 @@ export function InventoryEditor({
   onEquipItem,
   onPocketItem,
   onToggleBagOfHolding,
+  onToggleAttunement,
+  attunedItemIds = [],
   onTransferItem,
   transferLabel = "Transferir",
 }: Props) {
@@ -168,7 +177,6 @@ export function InventoryEditor({
               {description}
             </div>
           </div>
-
           <Button
             className="w-full sm:w-auto"
             size="sm"
@@ -216,6 +224,7 @@ export function InventoryEditor({
             {filteredItems.map((item, index) => {
               const itemKey = `${item.id}-${index}`
               const isOpen = openItemKey === itemKey
+              const isAttuned = attunedItemIds.includes(item.id)
 
               return (
                 <article
@@ -232,10 +241,16 @@ export function InventoryEditor({
                     className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
                   >
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-textH">
-                        {item.name || "Item sem nome"}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate text-sm font-medium text-textH">
+                          {item.name || "Item sem nome"}
+                        </span>
+                        {item.magicItem ? <ItemBadge label="Mágico" /> : null}
+                        {item.requiresAttunement ? (
+                          <ItemBadge label="Requer sintonia" />
+                        ) : null}
+                        {isAttuned ? <ItemBadge label="Sintonizado" /> : null}
                       </div>
-
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text">
                         <span>{inventoryItemTypeLabel(item)}</span>
                         <span>Qtd. {item.quantity ?? 1}</span>
@@ -245,7 +260,6 @@ export function InventoryEditor({
                         ) : null}
                       </div>
                     </div>
-
                     <span className="shrink-0 text-xs text-text">
                       {isOpen ? "▼" : "▶"}
                     </span>
@@ -261,6 +275,18 @@ export function InventoryEditor({
                         >
                           Editar
                         </Button>
+
+                        {item.magicItem &&
+                        item.requiresAttunement &&
+                        onToggleAttunement ? (
+                          <Button
+                            size="sm"
+                            variant={isAttuned ? "primary" : "secondary"}
+                            onClick={() => onToggleAttunement(item.id)}
+                          >
+                            {isAttuned ? "Desfazer sintonia" : "Sintonizar"}
+                          </Button>
+                        ) : null}
 
                         {isConsumableItemKind(item) && onConsumeItem ? (
                           <Button
@@ -284,7 +310,7 @@ export function InventoryEditor({
                           </Button>
                         ) : null}
 
-                        {canGoToPocket(item) && onPocketItem ? (
+                        {canItemGoInPocket(item) && onPocketItem ? (
                           <Button
                             size="sm"
                             variant="secondary"
@@ -327,9 +353,7 @@ export function InventoryEditor({
 
                       <ItemDropdownDetails
                         item={item}
-                        onUpdate={(updater) =>
-                          onUpdateItem(item.id, updater)
-                        }
+                        onUpdate={(updater) => onUpdateItem(item.id, updater)}
                       />
                     </div>
                   ) : null}
@@ -373,6 +397,14 @@ export function InventoryEditor({
   )
 }
 
+function ItemBadge({ label }: { label: string }) {
+  return (
+    <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] font-medium text-textH">
+      {label}
+    </span>
+  )
+}
+
 function CurrencyWallet({
   items,
   onAddItem,
@@ -399,11 +431,9 @@ function CurrencyWallet({
         <div>
           <div className="text-sm font-semibold text-textH">Moedas</div>
           <div className="mt-1 text-xs leading-5 text-textMuted">
-            Valores monetários ficam separados do restante dos itens para evitar
-            misturar dinheiro com equipamento comum.
+            Valores monetários ficam separados do restante dos itens.
           </div>
         </div>
-
         <Button
           className="w-full sm:w-auto"
           size="sm"
@@ -417,14 +447,10 @@ function CurrencyWallet({
       {items.length ? (
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item) => (
-            <div
-              key={item.id}
-              className="rounded-lg border border-border bg-bg p-3"
-            >
+            <div key={item.id} className="rounded-lg border border-border bg-bg p-3">
               <div className="truncate text-sm font-medium text-textH">
                 {item.name || "Moedas"}
               </div>
-
               <label className="mt-2 grid gap-1.5">
                 <span className="text-[11px] text-textMuted">Quantidade</span>
                 <Input
@@ -432,34 +458,18 @@ function CurrencyWallet({
                   min={0}
                   step="any"
                   value={item.quantity ?? 0}
-                  onChange={(event) => {
-                    const quantity = Math.max(
-                      0,
-                      Number(event.target.value) || 0,
-                    )
+                  onChange={(event) =>
                     onUpdateItem(item.id, (current) => ({
                       ...current,
-                      quantity,
+                      quantity: Math.max(0, Number(event.target.value) || 0),
                     }))
-                  }}
+                  }
                 />
               </label>
-
-              {item.notes?.trim() ? (
-                <div className="mt-2 whitespace-pre-wrap text-xs text-text">
-                  {item.notes}
-                </div>
-              ) : null}
-
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => onEditItem(item)}
-                >
+                <Button size="sm" variant="secondary" onClick={() => onEditItem(item)}>
                   Editar
                 </Button>
-
                 {onTransferItem ? (
                   <Button
                     size="sm"
@@ -469,23 +479,14 @@ function CurrencyWallet({
                     {transferLabel}
                   </Button>
                 ) : null}
-
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => onRemoveItem(item.id)}
-                >
+                <Button size="sm" variant="ghost" onClick={() => onRemoveItem(item.id)}>
                   Remover
                 </Button>
               </div>
             </div>
           ))}
         </div>
-      ) : (
-        <p className="mt-3 text-xs text-textMuted">
-          Nenhuma moeda registrada.
-        </p>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -500,6 +501,8 @@ function newCurrencyItem(): Itemmable {
     weight: 0,
     pocketable: true,
     kind: "currency",
+    magicItem: false,
+    requiresAttunement: false,
     insideBagOfHolding: false,
   })
 }
@@ -534,7 +537,6 @@ function inventoryItemTypeLabel(item: Itemmable): string {
     if (item.equipSlot === "weapon") return "Arma"
     if (item.equipSlot === "ring") return "Anel"
   }
-
   return ITEM_KIND_LABELS[item.kind ?? "common"]
 }
 
@@ -542,10 +544,6 @@ function formatSupplySummary(item: SupplyItem): string {
   const units = Math.max(0, item.supplyUnitsPerItem ?? 0)
   const label = item.supplyUnitLabel?.trim() || "unidades"
   return `${units} ${label}/item`
-}
-
-function canGoToPocket(item: Itemmable): boolean {
-  return canItemGoInPocket(item)
 }
 
 function ItemKindButtons({
@@ -603,20 +601,14 @@ function ItemEditPopup({
 
   const automaticPocket = isAutomaticallyPocketableKind(draft.kind)
   const blockedFromPocket =
-    draft.kind === "supply" ||
-    draft.kind === "pack" ||
-    draft.kind === "shield"
+    draft.kind === "supply" || draft.kind === "pack" || draft.kind === "shield"
 
   return (
     <div className="fixed inset-0 z-[10000] flex max-w-[100vw] items-center justify-center overflow-x-hidden bg-black/65 p-2 backdrop-blur-sm sm:p-4">
       <div className="grid max-h-[calc(100dvh-1rem)] w-full min-w-0 max-w-3xl gap-4 overflow-y-auto rounded-xl border border-border bg-bg-elevated p-3 shadow-theme-lg sm:p-4">
         <div className="flex min-w-0 items-center justify-between gap-3">
-          <h2 className="break-words text-sm font-semibold text-textH">
-            {title}
-          </h2>
-          <Button size="sm" variant="secondary" onClick={onClose}>
-            Fechar
-          </Button>
+          <h2 className="break-words text-sm font-semibold text-textH">{title}</h2>
+          <Button size="sm" variant="secondary" onClick={onClose}>Fechar</Button>
         </div>
 
         <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_90px_110px]">
@@ -625,15 +617,11 @@ function ItemEditPopup({
             <Input
               value={draft.name}
               onChange={(event) =>
-                patch((current) => ({
-                  ...current,
-                  name: event.target.value,
-                }))
+                patch((current) => ({ ...current, name: event.target.value }))
               }
               placeholder="Nome do item"
             />
           </label>
-
           <label className="grid min-w-0 gap-2">
             <span className="text-xs text-text">Qtd.</span>
             <Input
@@ -649,7 +637,6 @@ function ItemEditPopup({
               }
             />
           </label>
-
           <label className="grid min-w-0 gap-2">
             <span className="text-xs text-text">Peso</span>
             <Input
@@ -670,11 +657,53 @@ function ItemEditPopup({
             <span className="text-xs text-text">Tipo</span>
             <ItemKindButtons
               value={draft.kind ?? "common"}
-              onChange={(kind) =>
-                patch((current) => updateItemKind(current, kind))
-              }
+              onChange={(kind) => patch((current) => updateItemKind(current, kind))}
             />
           </div>
+
+          <label className="flex items-start gap-2 rounded-lg border border-border bg-bg-subtle p-3 text-xs text-text md:col-span-3">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={draft.magicItem === true}
+              onChange={(event) =>
+                patch((current) => ({
+                  ...current,
+                  magicItem: event.target.checked,
+                  requiresAttunement: event.target.checked
+                    ? current.requiresAttunement ?? false
+                    : false,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-textH">Item mágico</span>
+              <span className="mt-0.5 block text-textMuted">
+                Permite filtrar o item como mágico e habilita a opção de exigir sintonia.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-2 rounded-lg border border-border bg-bg-subtle p-3 text-xs text-text md:col-span-3">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={draft.requiresAttunement === true}
+              disabled={!draft.magicItem}
+              onChange={(event) =>
+                patch((current) => ({
+                  ...current,
+                  requiresAttunement: event.target.checked,
+                }))
+              }
+            />
+            <span>
+              <span className="font-medium text-textH">Requer sintonia</span>
+              <span className="mt-0.5 block text-textMuted">
+                O item poderá ocupar um dos três espaços de sintonia do personagem.
+              </span>
+            </span>
+          </label>
 
           <label className="flex items-start gap-2 rounded-lg border border-border bg-bg-subtle p-3 text-xs text-text md:col-span-3">
             <input
@@ -683,10 +712,7 @@ function ItemEditPopup({
               checked={canItemGoInPocket(draft)}
               disabled={automaticPocket || blockedFromPocket}
               onChange={(event) =>
-                patch((current) => ({
-                  ...current,
-                  pocketable: event.target.checked,
-                }))
+                patch((current) => ({ ...current, pocketable: event.target.checked }))
               }
             />
             <span>
@@ -696,7 +722,7 @@ function ItemEditPopup({
                   ? "Esta categoria sempre pode ser guardada no bolso."
                   : blockedFromPocket
                     ? "Esta categoria não pode ser colocada no bolso."
-                    : "Marque para permitir que este item específico seja colocado no bolso."}
+                    : "Marque para permitir que este item seja colocado no bolso."}
               </span>
             </span>
           </label>
@@ -707,24 +733,17 @@ function ItemEditPopup({
               rows={2}
               value={draft.desc ?? ""}
               onChange={(event) =>
-                patch((current) => ({
-                  ...current,
-                  desc: event.target.value,
-                }))
+                patch((current) => ({ ...current, desc: event.target.value }))
               }
             />
           </label>
-
           <label className="grid min-w-0 gap-2 md:col-span-3">
             <span className="text-xs text-text">Notas</span>
             <Textarea
               rows={2}
               value={draft.notes ?? ""}
               onChange={(event) =>
-                patch((current) => ({
-                  ...current,
-                  notes: event.target.value,
-                }))
+                patch((current) => ({ ...current, notes: event.target.value }))
               }
             />
           </label>
@@ -744,9 +763,7 @@ function ItemEditPopup({
         </div>
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button size="sm" variant="secondary" onClick={onClose}>
-            Cancelar
-          </Button>
+          <Button size="sm" variant="secondary" onClick={onClose}>Cancelar</Button>
           <Button
             size="sm"
             variant="primary"
