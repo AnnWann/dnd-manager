@@ -1,4 +1,5 @@
 import type { CharacterTemplate } from "./CharacterTemplate"
+import { getItemStackWeightKg } from "../items/itemWeight"
 
 export const POUNDS_TO_KILOGRAMS = 0.45359237
 
@@ -17,33 +18,25 @@ export type EncumbranceInfo = {
   speedPenalty: number
 }
 
-function itemWeight(item: {
-  weight?: number
-  quantity?: number
-} | undefined): number {
-  if (!item) return 0
-  return Math.max(0, item.weight ?? 0) * Math.max(0, item.quantity ?? 1)
-}
-
 export function getCarriedWeightKg(character: CharacterTemplate): number {
   const equipment = character.get("equipment")
 
   const equippedWeight =
-    itemWeight(equipment.armor) +
-    itemWeight(equipment.shield) +
-    itemWeight(equipment.boots) +
-    itemWeight(equipment.gloves) +
-    itemWeight(equipment.helmet) +
-    itemWeight(equipment.cape) +
-    equipment.rings.reduce((total, item) => total + itemWeight(item), 0) +
-    equipment.weapons.reduce((total, item) => total + itemWeight(item), 0) +
-    equipment.pockets.reduce((total, item) => total + itemWeight(item), 0)
+    getItemStackWeightKg(equipment.armor) +
+    getItemStackWeightKg(equipment.shield) +
+    getItemStackWeightKg(equipment.boots) +
+    getItemStackWeightKg(equipment.gloves) +
+    getItemStackWeightKg(equipment.helmet) +
+    getItemStackWeightKg(equipment.cape) +
+    equipment.rings.reduce((total, item) => total + getItemStackWeightKg(item), 0) +
+    equipment.weapons.reduce((total, item) => total + getItemStackWeightKg(item), 0) +
+    equipment.pockets.reduce((total, item) => total + getItemStackWeightKg(item), 0)
 
   const inventoryWeight = character
     .get("inventory")
     .reduce(
       (total, item) =>
-        item.insideBagOfHolding ? total : total + itemWeight(item),
+        item.insideBagOfHolding ? total : total + getItemStackWeightKg(item),
       0,
     )
 
