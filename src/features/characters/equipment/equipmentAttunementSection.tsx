@@ -1,6 +1,9 @@
 import { Button } from "../../../components/ui/Button"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import { toggleInventoryItemAttunement } from "../../../models/characters/characterInventory"
+import {
+  getCharacterCarriedItems,
+  toggleInventoryItemAttunement,
+} from "../../../models/characters/characterInventory"
 
 type Props = {
   character: CharacterTemplate
@@ -14,7 +17,7 @@ export function EquipmentAttunementSection({
   character,
   updateCharacter,
 }: Props) {
-  const attunedItems = (character.get("inventory") ?? [])
+  const attunedItems = getCharacterCarriedItems(character)
     .filter((item) => item.attuned === true)
     .slice(0, 3)
   const slots = Array.from({ length: 3 }, (_, index) => attunedItems[index])
@@ -26,8 +29,9 @@ export function EquipmentAttunementSection({
           Itens mágicos sintonizados
         </div>
         <div className="text-xs leading-5 text-textMuted">
-          A sintonia não equipa o item. Ela apenas ocupa um dos três espaços de
-          sintonia do personagem.
+          A sintonia não depende de o item estar equipado ou guardado no
+          inventário. Ela apenas ocupa um dos três espaços de sintonia do
+          personagem.
         </div>
       </div>
 
