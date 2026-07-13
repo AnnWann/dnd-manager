@@ -14,13 +14,9 @@ export function EquipmentAttunementSection({
   character,
   updateCharacter,
 }: Props) {
-  const inventory = character.get("inventory") ?? []
-  const attunedItemIds = character.get("equipment").attunedItemIds ?? []
-  const attunedItems = attunedItemIds
-    .map((itemId) => inventory.find((item) => item.id === itemId))
-    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+  const attunedItems = (character.get("inventory") ?? [])
+    .filter((item) => item.attuned === true)
     .slice(0, 3)
-
   const slots = Array.from({ length: 3 }, (_, index) => attunedItems[index])
 
   return (
@@ -51,9 +47,7 @@ export function EquipmentAttunementSection({
                   {item.name || "Item sem nome"}
                 </div>
                 <div className="mt-1 text-xs text-textMuted">
-                  {item.requiresAttunement
-                    ? "Item mágico sintonizado"
-                    : "Sintonia inválida"}
+                  Item mágico sintonizado
                 </div>
                 <Button
                   className="mt-3"
