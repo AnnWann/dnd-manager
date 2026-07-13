@@ -8,6 +8,25 @@ import {
 
 export const MAX_ATTUNED_ITEMS = 3
 
+export function getCharacterCarriedItems(
+  character: CharacterTemplate,
+): Itemmable[] {
+  const equipment = character.get("equipment")
+
+  return [
+    ...character.get("inventory"),
+    equipment.armor,
+    equipment.boots,
+    equipment.helmet,
+    equipment.gloves,
+    equipment.cape,
+    equipment.shield,
+    ...equipment.rings,
+    ...equipment.weapons,
+    ...equipment.pockets,
+  ].filter((item): item is Itemmable => Boolean(item))
+}
+
 export function addInventoryItem(
   character: CharacterTemplate,
   item: Itemmable,
@@ -57,24 +76,63 @@ export function toggleInventoryItemAttunement(
   character: CharacterTemplate,
   itemId: string,
 ): CharacterTemplate {
-  const inventory = character.get("inventory")
-  const item = inventory.find((entry) => entry.id === itemId)
+  const item = getCharacterCarriedItems(character).find(
+    (entry) => entry.id === itemId,
+  )
 
   if (!item?.magicItem || !item.requiresAttunement) return character
 
-  const attunedCount = inventory.filter((entry) => entry.attuned === true).length
+  const attunedCount = getCharacterCarriedItems(character).filter(
+    (entry) => entry.attuned === true,
+  ).length
 
   if (!item.attuned && attunedCount >= MAX_ATTUNED_ITEMS) {
     return character
   }
 
-  return character.with(
-    "inventory",
-    updateSingleInventoryItem(inventory, itemId, (current) => ({
-      ...current,
-      attuned: !current.attuned,
-    })),
-  )
+  const inventory = character.get("inventory")
+  if (inventory.some((entry) => entry.id === itemId)) {
+    return character.with(
+      "inventory",
+      updateSingleInventoryItem(inventory, itemId, (current) => ({
+        ...current,
+        attuned: !current.attuned,
+      })),
+    )
+  }
+
+  const equipment = character.get("equipment")
+
+  return character.with("equipment", {
+    ...equipment,
+    armor: patchItemAttunement(equipment.armor, itemId),
+    boots: patchItemAttunement(equipment.boots, itemId),
+    helmet: patchItemAttunement(equipment.helmet, itemId),
+    gloves: patchItemAttunement(equipment.gloves, itemId),
+    cape: patchItemAttunement(equipment.cape, itemId),
+    shield: patchItemAttunement(equipment.shield, itemId),
+    rings: equipment.rings.map((entry) =>
+      patchItemAttunement(entry, itemId),
+    ),
+    weapons: equipment.weapons.map((entry) =>
+      patchItemAttunement(entry, itemId),
+    ),
+    pockets: equipment.pockets.map((entry) =>
+      patchItemAttunement(entry, itemId),
+    ),
+  })
+}
+
+function patchItemAttunement<T extends Itemmable | undefined>(
+  item: T,
+  itemId: string,
+): T {
+  if (!item || item.id !== itemId) return item
+
+  return {
+    ...item,
+    attuned: !item.attuned,
+  } as T
 }
 
 export function sendInventoryItemToBagOfHolding(
