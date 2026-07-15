@@ -169,13 +169,25 @@ function FieldRow({ definition, field, onChange, onRemove }: { definition: Custo
 }
 
 function OptionListEditor({ options, onChange }: { options: CustomSelectOption[]; onChange: (options: CustomSelectOption[]) => void }) {
+  const [advanced, setAdvanced] = useState(false)
+
   function addOption() {
     const index = options.length + 1
-    onChange([...options, { label: `Opção ${index}`, value: `option-${index}` }])
+    const label = `Opção ${index}`
+    onChange([...options, { label, value: uniqueOptionValue(slugify(label), options) }])
   }
 
-  function updateOption(index: number, patch: Partial<CustomSelectOption>) {
-    onChange(options.map((option, optionIndex) => optionIndex === index ? { ...option, ...patch } : option))
+  function updateLabel(index: number, label: string) {
+    const current = options[index]
+    const shouldFollowLabel = !current.value || current.value === slugify(current.label) || /^option-\d+$/.test(current.value)
+    const value = shouldFollowLabel
+      ? uniqueOptionValue(slugify(label), options, index)
+      : current.value
+    onChange(options.map((option, optionIndex) => optionIndex === index ? { ...option, label, value } : option))
+  }
+
+  function updateValue(index: number, value: string) {
+    onChange(options.map((option, optionIndex) => optionIndex === index ? { ...option, value: slugify(value) } : option))
   }
 
   function removeOption(index: number) {
@@ -183,18 +195,23 @@ function OptionListEditor({ options, onChange }: { options: CustomSelectOption[]
   }
 
   return <section className="mt-3 rounded-lg border border-border p-3">
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h4 className="text-sm font-medium text-textH">Opções</h4>
-        <p className="mt-1 text-xs text-text">O rótulo aparece na ficha; o valor é usado internamente e em automações.</p>
+        <p className="mt-1 text-xs text-text">Adicione os nomes que poderão ser escolhidos na ficha.</p>
       </div>
-      <Button primary onClick={addOption}><Plus className="h-4 w-4" /> Adicionar opção</Button>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => setAdvanced((value) => !value)} className="rounded-lg border border-border px-3 py-2 text-xs text-text hover:bg-accentBg">
+          {advanced ? 'Ocultar opções avançadas' : 'Opções avançadas'}
+        </button>
+        <Button primary onClick={addOption}><Plus className="h-4 w-4" /> Adicionar opção</Button>
+      </div>
     </div>
     <div className="mt-3 grid gap-2">
       {options.map((option, index) => (
-        <div key={`option-row-${index}`} className="grid gap-2 rounded-lg border border-border p-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-          <Input label="Rótulo" value={option.label} onChange={(label) => updateOption(index, { label })} />
-          <Input label="Valor" value={option.value} onChange={(value) => updateOption(index, { value: slugify(value) })} />
+        <div key={`option-row-${index}`} className={`grid gap-2 rounded-lg border border-border p-2 ${advanced ? 'md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]' : 'md:grid-cols-[minmax(0,1fr)_auto]'}`}>
+          <Input label={`Opção ${index + 1}`} value={option.label} onChange={(label) => updateLabel(index, label)} />
+          {advanced ? <Input label="Identificador interno" value={option.value} onChange={(value) => updateValue(index, value)} /> : null}
           <div className="flex items-end">
             <IconButton title="Remover opção" onClick={() => removeOption(index)}><Trash2 className="h-4 w-4" /></IconButton>
           </div>
@@ -297,9 +314,9 @@ function validateDefinition(definition: CustomSystemDefinition): string {
   if (ids.length !== new Set(ids).size) return 'IDs de campos e recursos não podem se repetir.'
   for (const field of definition.fields) {
     if (field.type === 'select' || field.type === 'multiSelect') {
-      if (field.options.some((option) => !option.label.trim() || !option.value.trim())) return `Todas as opções de “${field.name}” precisam de rótulo e valor.`
+      if (field.options.some((option) => !option.label.trim() || !option.value.trim())) return `Todas as opções de “${field.name}” precisam de nome.`
       const values = field.options.map((option) => option.value)
-      if (values.length !== new Set(values).size) return `Os valores das opções de “${field.name}” não podem se repetir.`
+      if (values.length !== new Set(values).size) return `Os identificadores das opções de “${field.name}” não podem se repetir.`
     }
     if (field.type !== 'formula') continue
     const formulaError = validateCustomFormula(field.formula, definition)
@@ -312,6 +329,14 @@ function validateDefinition(definition: CustomSystemDefinition): string {
   }
   return ''
 }
-function slugify(value: string): string { return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') }
+function uniqueOptionValue(base: string, options: CustomSelectOption[], ignoredIndex = -1): string {
+  const normalized = base || 'opcao'
+  const used = new Set(options.filter((_, index) => index !== ignoredIndex).map((option) => option.value))
+  if (!used.has(normalized)) return normalized
+  let suffix = 2
+  while (used.has(`${normalized}-${suffix}`)) suffix += 1
+  return `${normalized}-${suffix}`
+}
+function slugify(value: string): string { return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') }
 function optionalNumber(value: string): number | undefined { if (!value.trim()) return undefined; const parsed = Number(value); return Number.isFinite(parsed) ? parsed : undefined }
 function formatStatus(status: ReturnType<typeof useCustomSystemsContext>['status']): string { if (status.kind === 'loading') return 'Carregando…'; if (status.kind === 'saving') return 'Salvando…'; if (status.kind === 'synced') return 'Sincronizado'; if (status.kind === 'error') return status.message; return 'Aguardando sincronização' }
