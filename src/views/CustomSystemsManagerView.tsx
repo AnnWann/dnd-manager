@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Copy, Plus, RefreshCw, Save, Settings2, Trash2 } from 'lucide-react'
 import { useCustomSystemsContext } from '../contexts/customSystemsContext'
 import { useSyncContext } from '../contexts/syncContext'
+import { FormulaVariablePicker } from '../features/customSystems/FormulaVariablePicker'
 import {
   listCustomFormulaVariables,
   validateCustomFormula,
@@ -70,12 +71,20 @@ export function CustomSystemsManagerView() {
     <div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)]">
       <aside className="rounded-xl border border-border bg-bg p-3">
         <div className="flex items-center justify-between gap-2">
-          <div><h1 className="font-semibold text-textH">Sistemas personalizados</h1><p className="text-xs text-text">Definições sincronizadas</p></div>
+          <div>
+            <h1 className="font-semibold text-textH">Sistemas personalizados</h1>
+            <p className="text-xs text-text">Definições sincronizadas</p>
+          </div>
           <IconButton title="Criar sistema" onClick={createSystem}><Plus className="h-4 w-4" /></IconButton>
         </div>
         <div className="mt-3 grid gap-2">
           {systems.definitions.map((definition) => (
-            <button key={definition.id} type="button" onClick={() => setSelectedId(definition.id)} className={`rounded-lg border px-3 py-2 text-left ${selectedId === definition.id ? 'border-accent bg-accentBg' : 'border-border hover:bg-accentBg'}`}>
+            <button
+              key={definition.id}
+              type="button"
+              onClick={() => setSelectedId(definition.id)}
+              className={`rounded-lg border px-3 py-2 text-left ${selectedId === definition.id ? 'border-accent bg-accentBg' : 'border-border hover:bg-accentBg'}`}
+            >
               <div className="truncate text-sm font-medium text-textH">{definition.name}</div>
               <div className="mt-1 flex justify-between gap-2 text-[11px] text-text"><span className="truncate">{definition.id}</span><span>v{definition.version}</span></div>
             </button>
@@ -158,19 +167,19 @@ function FieldRow({ definition, field, onChange, onRemove }: { definition: Custo
 function FormulaEditor({ definition, formula, resultType, onChange }: { definition: CustomSystemDefinition; formula: string; resultType: 'number' | 'text' | 'boolean'; onChange: (formula: string, resultType: 'number' | 'text' | 'boolean') => void }) {
   const variables = listCustomFormulaVariables(definition)
   const error = formula.trim() ? validateCustomFormula(formula, definition) : 'Informe uma expressão.'
+  const append = (path: string) => onChange(`${formula}${formula.trim() ? ' ' : ''}${path}`, resultType)
 
   return <div className="mt-3 rounded-lg border border-accentBorder bg-accentBg/30 p-3">
     <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)]">
       <Select label="Tipo do resultado" value={resultType} options={['number','text','boolean']} onChange={(value) => onChange(formula, value as 'number' | 'text' | 'boolean')} />
       <Input label="Expressão" value={formula} onChange={(value) => onChange(value, resultType)} />
     </div>
-    <div className="mt-3 text-xs font-medium text-textH">Variáveis disponíveis</div>
-    <div className="mt-2 flex flex-wrap gap-2">
-      {variables.length ? variables.map((variable) => <button key={variable.path} type="button" onClick={() => onChange(`${formula}${formula.trim() ? ' ' : ''}${variable.path}`, resultType)} className="rounded border border-border bg-bg px-2 py-1 font-mono text-[11px] text-text hover:border-accent" title={variable.label}>{variable.path}</button>) : <span className="text-xs text-text">Crie campos ou recursos antes de montar a fórmula.</span>}
+    <div className="mt-3">
+      <FormulaVariablePicker variables={variables} onSelect={append} />
     </div>
     <div className="mt-3 text-xs text-text">Funções: <code>min</code>, <code>max</code>, <code>round</code>, <code>floor</code>, <code>ceil</code>, <code>abs</code>, <code>clamp</code> e <code>if</code>.</div>
     <div className={`mt-2 text-xs ${error ? 'text-red-300' : 'text-emerald-300'}`}>{error ?? 'Fórmula válida.'}</div>
-    <div className="mt-2 rounded border border-border bg-bg px-3 py-2 font-mono text-xs text-text">Exemplo: <code>field.nivel + resource.folego.current</code></div>
+    <div className="mt-2 rounded border border-border bg-bg px-3 py-2 font-mono text-xs text-text">Exemplo: <code>character.class.fighter.level + character.attributeModifier.con</code></div>
   </div>
 }
 
@@ -181,6 +190,8 @@ function ResourcesEditor({ draft, setDraft }: Pick<EditorProps, 'draft' | 'setDr
 }
 
 function ResourceRow({ definition, resource, onChange, onRemove }: { definition: CustomSystemDefinition; resource: CustomResourceDefinition; onChange: (resource: CustomResourceDefinition) => void; onRemove: () => void }) {
+  const formula = resource.maximumFormula ?? ''
+  const variables = listCustomFormulaVariables(definition)
   return <article className="rounded-lg border border-border p-3">
     <div className="grid gap-3 md:grid-cols-4">
       <Input label="Nome" value={resource.name} onChange={(name) => onChange({ ...resource, name })} />
@@ -192,17 +203,17 @@ function ResourceRow({ definition, resource, onChange, onRemove }: { definition:
       <Input label="Valor inicial" type="number" value={String(resource.initialValue ?? '')} onChange={(value) => onChange({ ...resource, initialValue: optionalNumber(value) })} />
     </div>
     <div className="mt-3 rounded-lg border border-border p-3">
-      <Input label="Fórmula do máximo" value={resource.maximumFormula ?? ''} onChange={(value) => onChange({ ...resource, maximumFormula: value || undefined })} />
-      <VariableButtons definition={definition} formula={resource.maximumFormula ?? ''} onChange={(maximumFormula) => onChange({ ...resource, maximumFormula })} />
-      {resource.maximumFormula ? <div className={`mt-2 text-xs ${validateCustomFormula(resource.maximumFormula, definition) ? 'text-red-300' : 'text-emerald-300'}`}>{validateCustomFormula(resource.maximumFormula, definition) ?? 'Fórmula válida.'}</div> : null}
+      <Input label="Fórmula do máximo" value={formula} onChange={(value) => onChange({ ...resource, maximumFormula: value || undefined })} />
+      <div className="mt-2">
+        <FormulaVariablePicker
+          variables={variables}
+          onSelect={(path) => onChange({ ...resource, maximumFormula: `${formula}${formula.trim() ? ' ' : ''}${path}` })}
+        />
+      </div>
+      {formula ? <div className={`mt-2 text-xs ${validateCustomFormula(formula, definition) ? 'text-red-300' : 'text-emerald-300'}`}>{validateCustomFormula(formula, definition) ?? 'Fórmula válida.'}</div> : null}
     </div>
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><div className="flex gap-4 text-xs text-text"><Check label="Ajuste manual" checked={Boolean(resource.allowManualAdjustment)} onChange={(checked) => onChange({ ...resource, allowManualAdjustment: checked })} /><Check label="Temporário" checked={Boolean(resource.allowTemporaryValue)} onChange={(checked) => onChange({ ...resource, allowTemporaryValue: checked })} /></div><Button danger onClick={onRemove}><Trash2 className="h-4 w-4" /> Remover</Button></div>
   </article>
-}
-
-function VariableButtons({ definition, formula, onChange }: { definition: CustomSystemDefinition; formula: string; onChange: (formula: string) => void }) {
-  const variables = listCustomFormulaVariables(definition)
-  return <div className="mt-2 flex flex-wrap gap-2">{variables.map((variable) => <button key={variable.path} type="button" onClick={() => onChange(`${formula}${formula.trim() ? ' ' : ''}${variable.path}`)} className="rounded border border-border px-2 py-1 font-mono text-[11px] text-text hover:border-accent">{variable.path}</button>)}</div>
 }
 
 function AdvancedEditor({ draft, setDraft }: Pick<EditorProps, 'draft' | 'setDraft'>) {
@@ -252,13 +263,13 @@ function validateDefinition(definition: CustomSystemDefinition): string {
   if (ids.length !== new Set(ids).size) return 'IDs de campos e recursos não podem se repetir.'
   for (const field of definition.fields) {
     if (field.type !== 'formula') continue
-    const error = validateCustomFormula(field.formula, definition)
-    if (error) return `Fórmula de “${field.name}”: ${error}`
+    const formulaError = validateCustomFormula(field.formula, definition)
+    if (formulaError) return `Fórmula de “${field.name}”: ${formulaError}`
   }
   for (const resource of definition.resources) {
     if (!resource.maximumFormula) continue
-    const error = validateCustomFormula(resource.maximumFormula, definition)
-    if (error) return `Máximo de “${resource.name}”: ${error}`
+    const formulaError = validateCustomFormula(resource.maximumFormula, definition)
+    if (formulaError) return `Máximo de “${resource.name}”: ${formulaError}`
   }
   return ''
 }
