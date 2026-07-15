@@ -1,5 +1,7 @@
-import { CharacterTemplate } from '../../models/characters/CharacterTemplate'
-import type { Sheet } from '../../models/sheet/Sheet'
+import {
+  CharacterTemplate,
+  type CharacterTemplateProps,
+} from '../../models/characters/CharacterTemplate'
 import type { CharacterCustomSystemState } from '../../models/customSystems/CustomSystemDefinition'
 import { evaluateCustomFormula } from './CustomFormulaEngineWithCharacter'
 
@@ -60,20 +62,33 @@ function installPatch(): void {
   if (installed) return
   installed = true
 
-  const originalWithSheet = CharacterTemplate.prototype.withSheet
+  const originalWithPatch = CharacterTemplate.prototype.withPatch
 
-  CharacterTemplate.prototype.withSheet = function <K extends keyof Sheet>(
-    key: K,
-    value: Sheet[K],
+  CharacterTemplate.prototype.withPatch = function (
+    patch: Partial<CharacterTemplateProps>,
   ): CharacterTemplate {
-    if (key !== 'customSystems' || !Array.isArray(value)) {
-      return originalWithSheet.call(this, key, value)
-    }
+    const updated = originalWithPatch.call(this, patch)
+    const systems = updated.get('sheet').customSystems
+    if (!Array.isArray(systems) || systems.length === 0) return updated
 
-    const recalculated = (value as CharacterCustomSystemState[]).map((state) =>
-      recalculateCustomSystemState(state, this),
-    ) as Sheet[K]
+    const recalculated = systems.map((state) =>
+      recalculateCustomSystemState(state, updated),
+    )
 
-    return originalWithSheet.call(this, key, recalculated)
+    if (sameSystemStates(systems, recalculated)) return updated
+
+    return originalWithPatch.call(updated, {
+      sheet: {
+        ...updated.get('sheet'),
+        customSystems: recalculated,
+      },
+    })
   }
+}
+
+function sameSystemStates(
+  left: CharacterCustomSystemState[],
+  right: CharacterCustomSystemState[],
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
 }
