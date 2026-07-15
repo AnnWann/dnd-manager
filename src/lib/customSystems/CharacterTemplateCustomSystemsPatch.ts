@@ -2,6 +2,7 @@ import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from '../../models/characters/CharacterTemplate'
+import { recalculateCustomSystemState } from './CustomFormulaRuntimePatch'
 
 let installed = false
 
@@ -10,7 +11,7 @@ let installed = false
  *
  * CharacterTemplate.fromJSON rebuilds the sheet property-by-property. Until
  * customSystems is handled directly by that model, this wrapper preserves the
- * already-normalized custom state instead of silently discarding it.
+ * already-normalized custom state and refreshes derived formula values.
  */
 export function installCharacterCustomSystemsSerializationPatch(): void {
   if (installed) return
@@ -26,7 +27,10 @@ export function installCharacterCustomSystemsSerializationPatch(): void {
 
     if (!Array.isArray(customSystems)) return restored
 
-    return restored.withSheet('customSystems', customSystems)
+    return restored.withSheet(
+      'customSystems',
+      customSystems.map(recalculateCustomSystemState),
+    )
   }
 }
 
