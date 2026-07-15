@@ -1,6 +1,7 @@
 import type { AppStateV1 } from "./remoteState"
 import { normalizeInventoryItemIds } from "../models/items/inventoryIdentity"
 import type { Itemmable } from "../models/items/item"
+import { preserveCharacterCustomSystems } from "./customSystems/CustomSystemPersistence"
 
 export function normalizeAppStateInventory(
   state: AppStateV1,
@@ -22,10 +23,22 @@ export function normalizeAppStateInventory(
       },
     )
 
-    if (inventory === character.inventory) return character
+    const customSystems = preserveCharacterCustomSystems({
+      ...character,
+      inventory,
+    })
+
+    if (customSystems.value !== character) changed = true
+
+    if (
+      inventory === character.inventory &&
+      customSystems.value === character
+    ) {
+      return character
+    }
 
     return {
-      ...character,
+      ...customSystems.value,
       inventory,
     }
   })
