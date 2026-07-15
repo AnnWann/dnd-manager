@@ -1,7 +1,7 @@
 import { CharacterTemplate } from '../../models/characters/CharacterTemplate'
 import type { Sheet } from '../../models/sheet/Sheet'
 import type { CharacterCustomSystemState } from '../../models/customSystems/CustomSystemDefinition'
-import { evaluateCustomFormula } from './CustomFormulaEngine'
+import { evaluateCustomFormula } from './CustomFormulaEngineWithCharacter'
 
 let installed = false
 let resolveDefinition: ((systemId: string) => import('../../models/customSystems/CustomSystemDefinition').CustomSystemDefinition | undefined) | undefined
@@ -15,6 +15,7 @@ export function configureCustomFormulaRuntime(
 
 export function recalculateCustomSystemState(
   state: CharacterCustomSystemState,
+  character?: CharacterTemplate,
 ): CharacterCustomSystemState {
   const definition = resolveDefinition?.(state.systemId)
   if (!definition) return state
@@ -27,10 +28,14 @@ export function recalculateCustomSystemState(
     ),
   }
 
-  // Resolve resource maximum formulas first so formula fields can reference them.
   for (const resource of definition.resources) {
     if (!resource.maximumFormula) continue
-    const result = evaluateCustomFormula(resource.maximumFormula, definition, next)
+    const result = evaluateCustomFormula(
+      resource.maximumFormula,
+      definition,
+      next,
+      character,
+    )
     if (!result.ok || typeof result.value !== 'number') continue
     next.resources[resource.id] = {
       ...(next.resources[resource.id] ?? { current: resource.initialValue ?? 0 }),
@@ -38,11 +43,9 @@ export function recalculateCustomSystemState(
     }
   }
 
-  // Formula fields are recalculated in definition order. A formula may reference
-  // a previously declared formula field.
   for (const field of definition.fields) {
     if (field.type !== 'formula') continue
-    const result = evaluateCustomFormula(field.formula, definition, next)
+    const result = evaluateCustomFormula(field.formula, definition, next, character)
     if (!result.ok) {
       delete next.fields[field.id]
       continue
@@ -67,8 +70,8 @@ function installPatch(): void {
       return originalWithSheet.call(this, key, value)
     }
 
-    const recalculated = (value as CharacterCustomSystemState[]).map(
-      recalculateCustomSystemState,
+    const recalculated = (value as CharacterCustomSystemState[]).map((state) =>
+      recalculateCustomSystemState(state, this),
     ) as Sheet[K]
 
     return originalWithSheet.call(this, key, recalculated)
