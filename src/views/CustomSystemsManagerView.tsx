@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Copy, Plus, RefreshCw, Save, Settings2, Trash2 } from 'lucide-react'
 import { useCustomSystemsContext } from '../contexts/customSystemsContext'
 import { useSyncContext } from '../contexts/syncContext'
+import {
+  listCustomFormulaVariables,
+  validateCustomFormula,
+} from '../lib/customSystems'
 import type { CustomFieldDefinition } from '../models/customSystems/CustomFieldDefinition'
 import type { CustomResourceDefinition } from '../models/customSystems/CustomResourceDefinition'
 import type { CustomSystemDefinition } from '../models/customSystems/CustomSystemDefinition'
@@ -133,11 +137,11 @@ function GeneralEditor({ draft, setDraft }: Pick<EditorProps, 'draft' | 'setDraf
 
 function FieldsEditor({ draft, setDraft }: Pick<EditorProps, 'draft' | 'setDraft'>) {
   return <Collection title="Campos" onAdd={() => setDraft({ ...draft, fields: [...draft.fields, newField()] })} empty="Nenhum campo criado.">
-    {draft.fields.map((field, index) => <FieldRow key={`${field.id}-${index}`} field={field} onChange={(next) => setDraft({ ...draft, fields: draft.fields.map((entry, i) => i === index ? next : entry) })} onRemove={() => setDraft({ ...draft, fields: draft.fields.filter((_, i) => i !== index) })} />)}
+    {draft.fields.map((field, index) => <FieldRow key={`${field.id}-${index}`} definition={draft} field={field} onChange={(next) => setDraft({ ...draft, fields: draft.fields.map((entry, i) => i === index ? next : entry) })} onRemove={() => setDraft({ ...draft, fields: draft.fields.filter((_, i) => i !== index) })} />)}
   </Collection>
 }
 
-function FieldRow({ field, onChange, onRemove }: { field: CustomFieldDefinition; onChange: (field: CustomFieldDefinition) => void; onRemove: () => void }) {
+function FieldRow({ definition, field, onChange, onRemove }: { definition: CustomSystemDefinition; field: CustomFieldDefinition; onChange: (field: CustomFieldDefinition) => void; onRemove: () => void }) {
   return <article className="rounded-lg border border-border p-3">
     <div className="grid gap-3 md:grid-cols-4">
       <Input label="Nome" value={field.name} onChange={(name) => onChange({ ...field, name })} />
@@ -146,17 +150,37 @@ function FieldRow({ field, onChange, onRemove }: { field: CustomFieldDefinition;
       <Select label="Permissão" value={field.editPermission ?? 'ownerAndMaster'} options={['ownerAndMaster','owner','masterOnly','automaticOnly']} onChange={(value) => onChange({ ...field, editPermission: value as CustomFieldDefinition['editPermission'] })} />
     </div>
     {(field.type === 'select' || field.type === 'multiSelect') ? <div className="mt-3"><Input label="Opções separadas por vírgula" value={field.options.map((option) => option.value).join(', ')} onChange={(value) => onChange({ ...field, options: value.split(',').map((entry) => entry.trim()).filter(Boolean).map((entry) => ({ value: entry, label: entry })) })} /></div> : null}
+    {field.type === 'formula' ? <FormulaEditor definition={definition} formula={field.formula} resultType={field.resultType} onChange={(formula, resultType) => onChange({ ...field, formula, resultType })} /> : null}
     <div className="mt-3 flex justify-end"><Button danger onClick={onRemove}><Trash2 className="h-4 w-4" /> Remover</Button></div>
   </article>
 }
 
+function FormulaEditor({ definition, formula, resultType, onChange }: { definition: CustomSystemDefinition; formula: string; resultType: 'number' | 'text' | 'boolean'; onChange: (formula: string, resultType: 'number' | 'text' | 'boolean') => void }) {
+  const variables = listCustomFormulaVariables(definition)
+  const error = formula.trim() ? validateCustomFormula(formula, definition) : 'Informe uma expressão.'
+
+  return <div className="mt-3 rounded-lg border border-accentBorder bg-accentBg/30 p-3">
+    <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)]">
+      <Select label="Tipo do resultado" value={resultType} options={['number','text','boolean']} onChange={(value) => onChange(formula, value as 'number' | 'text' | 'boolean')} />
+      <Input label="Expressão" value={formula} onChange={(value) => onChange(value, resultType)} />
+    </div>
+    <div className="mt-3 text-xs font-medium text-textH">Variáveis disponíveis</div>
+    <div className="mt-2 flex flex-wrap gap-2">
+      {variables.length ? variables.map((variable) => <button key={variable.path} type="button" onClick={() => onChange(`${formula}${formula.trim() ? ' ' : ''}${variable.path}`, resultType)} className="rounded border border-border bg-bg px-2 py-1 font-mono text-[11px] text-text hover:border-accent" title={variable.label}>{variable.path}</button>) : <span className="text-xs text-text">Crie campos ou recursos antes de montar a fórmula.</span>}
+    </div>
+    <div className="mt-3 text-xs text-text">Funções: <code>min</code>, <code>max</code>, <code>round</code>, <code>floor</code>, <code>ceil</code>, <code>abs</code>, <code>clamp</code> e <code>if</code>.</div>
+    <div className={`mt-2 text-xs ${error ? 'text-red-300' : 'text-emerald-300'}`}>{error ?? 'Fórmula válida.'}</div>
+    <div className="mt-2 rounded border border-border bg-bg px-3 py-2 font-mono text-xs text-text">Exemplo: <code>field.nivel + resource.folego.current</code></div>
+  </div>
+}
+
 function ResourcesEditor({ draft, setDraft }: Pick<EditorProps, 'draft' | 'setDraft'>) {
   return <Collection title="Recursos" onAdd={() => setDraft({ ...draft, resources: [...draft.resources, newResource()] })} empty="Nenhum recurso criado.">
-    {draft.resources.map((resource, index) => <ResourceRow key={`${resource.id}-${index}`} resource={resource} onChange={(next) => setDraft({ ...draft, resources: draft.resources.map((entry, i) => i === index ? next : entry) })} onRemove={() => setDraft({ ...draft, resources: draft.resources.filter((_, i) => i !== index) })} />)}
+    {draft.resources.map((resource, index) => <ResourceRow key={`${resource.id}-${index}`} definition={draft} resource={resource} onChange={(next) => setDraft({ ...draft, resources: draft.resources.map((entry, i) => i === index ? next : entry) })} onRemove={() => setDraft({ ...draft, resources: draft.resources.filter((_, i) => i !== index) })} />)}
   </Collection>
 }
 
-function ResourceRow({ resource, onChange, onRemove }: { resource: CustomResourceDefinition; onChange: (resource: CustomResourceDefinition) => void; onRemove: () => void }) {
+function ResourceRow({ definition, resource, onChange, onRemove }: { definition: CustomSystemDefinition; resource: CustomResourceDefinition; onChange: (resource: CustomResourceDefinition) => void; onRemove: () => void }) {
   return <article className="rounded-lg border border-border p-3">
     <div className="grid gap-3 md:grid-cols-4">
       <Input label="Nome" value={resource.name} onChange={(name) => onChange({ ...resource, name })} />
@@ -164,12 +188,21 @@ function ResourceRow({ resource, onChange, onRemove }: { resource: CustomResourc
       <Select label="Tipo" value={resource.type} options={['number','checkboxes','dicePool','charges']} onChange={(value) => onChange({ ...resource, type: value as CustomResourceDefinition['type'] })} />
       <Select label="Permissão" value={resource.editPermission ?? 'ownerAndMaster'} options={['ownerAndMaster','owner','masterOnly','automaticOnly']} onChange={(value) => onChange({ ...resource, editPermission: value as CustomResourceDefinition['editPermission'] })} />
       <Input label="Mínimo" type="number" value={String(resource.minimum ?? '')} onChange={(value) => onChange({ ...resource, minimum: optionalNumber(value) })} />
-      <Input label="Máximo" type="number" value={String(resource.maximum ?? '')} onChange={(value) => onChange({ ...resource, maximum: optionalNumber(value) })} />
-      <Input label="Fórmula do máximo" value={resource.maximumFormula ?? ''} onChange={(value) => onChange({ ...resource, maximumFormula: value || undefined })} />
+      <Input label="Máximo fixo" type="number" value={String(resource.maximum ?? '')} onChange={(value) => onChange({ ...resource, maximum: optionalNumber(value) })} />
       <Input label="Valor inicial" type="number" value={String(resource.initialValue ?? '')} onChange={(value) => onChange({ ...resource, initialValue: optionalNumber(value) })} />
+    </div>
+    <div className="mt-3 rounded-lg border border-border p-3">
+      <Input label="Fórmula do máximo" value={resource.maximumFormula ?? ''} onChange={(value) => onChange({ ...resource, maximumFormula: value || undefined })} />
+      <VariableButtons definition={definition} formula={resource.maximumFormula ?? ''} onChange={(maximumFormula) => onChange({ ...resource, maximumFormula })} />
+      {resource.maximumFormula ? <div className={`mt-2 text-xs ${validateCustomFormula(resource.maximumFormula, definition) ? 'text-red-300' : 'text-emerald-300'}`}>{validateCustomFormula(resource.maximumFormula, definition) ?? 'Fórmula válida.'}</div> : null}
     </div>
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><div className="flex gap-4 text-xs text-text"><Check label="Ajuste manual" checked={Boolean(resource.allowManualAdjustment)} onChange={(checked) => onChange({ ...resource, allowManualAdjustment: checked })} /><Check label="Temporário" checked={Boolean(resource.allowTemporaryValue)} onChange={(checked) => onChange({ ...resource, allowTemporaryValue: checked })} /></div><Button danger onClick={onRemove}><Trash2 className="h-4 w-4" /> Remover</Button></div>
   </article>
+}
+
+function VariableButtons({ definition, formula, onChange }: { definition: CustomSystemDefinition; formula: string; onChange: (formula: string) => void }) {
+  const variables = listCustomFormulaVariables(definition)
+  return <div className="mt-2 flex flex-wrap gap-2">{variables.map((variable) => <button key={variable.path} type="button" onClick={() => onChange(`${formula}${formula.trim() ? ' ' : ''}${variable.path}`)} className="rounded border border-border px-2 py-1 font-mono text-[11px] text-text hover:border-accent">{variable.path}</button>)}</div>
 }
 
 function AdvancedEditor({ draft, setDraft }: Pick<EditorProps, 'draft' | 'setDraft'>) {
@@ -211,7 +244,24 @@ function convertFieldType(field: CustomFieldDefinition, type: CustomFieldDefinit
   if (type === 'formula') return { ...base, type: 'formula', formula: '', resultType: 'number', editPermission: 'automaticOnly' }
   return { ...base, type }
 }
-function validateDefinition(definition: CustomSystemDefinition): string { if (!definition.id.trim()) return 'O sistema precisa de um ID.'; if (!definition.name.trim()) return 'O sistema precisa de um nome.'; const ids = [...definition.fields.map((entry) => entry.id), ...definition.resources.map((entry) => entry.id)]; if (ids.some((id) => !id.trim())) return 'Campos e recursos precisam de IDs.'; if (ids.length !== new Set(ids).size) return 'IDs de campos e recursos não podem se repetir.'; return '' }
+function validateDefinition(definition: CustomSystemDefinition): string {
+  if (!definition.id.trim()) return 'O sistema precisa de um ID.'
+  if (!definition.name.trim()) return 'O sistema precisa de um nome.'
+  const ids = [...definition.fields.map((entry) => entry.id), ...definition.resources.map((entry) => entry.id)]
+  if (ids.some((id) => !id.trim())) return 'Campos e recursos precisam de IDs.'
+  if (ids.length !== new Set(ids).size) return 'IDs de campos e recursos não podem se repetir.'
+  for (const field of definition.fields) {
+    if (field.type !== 'formula') continue
+    const error = validateCustomFormula(field.formula, definition)
+    if (error) return `Fórmula de “${field.name}”: ${error}`
+  }
+  for (const resource of definition.resources) {
+    if (!resource.maximumFormula) continue
+    const error = validateCustomFormula(resource.maximumFormula, definition)
+    if (error) return `Máximo de “${resource.name}”: ${error}`
+  }
+  return ''
+}
 function slugify(value: string): string { return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') }
 function optionalNumber(value: string): number | undefined { if (!value.trim()) return undefined; const parsed = Number(value); return Number.isFinite(parsed) ? parsed : undefined }
 function formatStatus(status: ReturnType<typeof useCustomSystemsContext>['status']): string { if (status.kind === 'loading') return 'Carregando…'; if (status.kind === 'saving') return 'Salvando…'; if (status.kind === 'synced') return 'Sincronizado'; if (status.kind === 'error') return status.message; return 'Aguardando sincronização' }
