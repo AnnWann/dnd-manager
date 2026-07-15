@@ -7,7 +7,10 @@ import {
   listCustomFormulaVariables,
   validateCustomFormula,
 } from '../lib/customSystems'
-import type { CustomFieldDefinition } from '../models/customSystems/CustomFieldDefinition'
+import type {
+  CustomFieldDefinition,
+  CustomSelectOption,
+} from '../models/customSystems/CustomFieldDefinition'
 import type { CustomResourceDefinition } from '../models/customSystems/CustomResourceDefinition'
 import type { CustomSystemDefinition } from '../models/customSystems/CustomSystemDefinition'
 
@@ -49,19 +52,20 @@ export function CustomSystemsManagerView() {
     const validation = validateDefinition(draft)
     if (validation) return setError(validation)
     systems.saveDefinition(draft)
+    setSelectedId(draft.id)
     setError('')
   }
 
   function deleteSystem() {
     if (!draft) return
     if (!window.confirm(`Remover o sistema “${draft.name}”? O estado dos personagens continuará preservado.`)) return
-    systems.removeDefinition(draft.id)
+    systems.removeDefinition(selectedId || draft.id)
     setSelectedId('')
   }
 
   function duplicateSystem() {
     if (!draft) return
-    const copy = systems.duplicateDefinition(draft.id)
+    const copy = systems.duplicateDefinition(selectedId || draft.id)
     if (!copy) return
     setSelectedId(copy.id)
     setDraft(structuredClone(copy))
@@ -146,7 +150,7 @@ function GeneralEditor({ draft, setDraft }: Pick<EditorProps, 'draft' | 'setDraf
 
 function FieldsEditor({ draft, setDraft }: Pick<EditorProps, 'draft' | 'setDraft'>) {
   return <Collection title="Campos" onAdd={() => setDraft({ ...draft, fields: [...draft.fields, newField()] })} empty="Nenhum campo criado.">
-    {draft.fields.map((field, index) => <FieldRow key={`${field.id}-${index}`} definition={draft} field={field} onChange={(next) => setDraft({ ...draft, fields: draft.fields.map((entry, i) => i === index ? next : entry) })} onRemove={() => setDraft({ ...draft, fields: draft.fields.filter((_, i) => i !== index) })} />)}
+    {draft.fields.map((field, index) => <FieldRow key={`field-row-${index}`} definition={draft} field={field} onChange={(next) => setDraft({ ...draft, fields: draft.fields.map((entry, i) => i === index ? next : entry) })} onRemove={() => setDraft({ ...draft, fields: draft.fields.filter((_, i) => i !== index) })} />)}
   </Collection>
 }
 
@@ -158,10 +162,47 @@ function FieldRow({ definition, field, onChange, onRemove }: { definition: Custo
       <Select label="Tipo" value={field.type} options={['text','richText','number','boolean','select','multiSelect','dice','reference','formula']} onChange={(type) => onChange(convertFieldType(field, type as CustomFieldDefinition['type']))} />
       <Select label="Permissão" value={field.editPermission ?? 'ownerAndMaster'} options={['ownerAndMaster','owner','masterOnly','automaticOnly']} onChange={(value) => onChange({ ...field, editPermission: value as CustomFieldDefinition['editPermission'] })} />
     </div>
-    {(field.type === 'select' || field.type === 'multiSelect') ? <div className="mt-3"><Input label="Opções separadas por vírgula" value={field.options.map((option) => option.value).join(', ')} onChange={(value) => onChange({ ...field, options: value.split(',').map((entry) => entry.trim()).filter(Boolean).map((entry) => ({ value: entry, label: entry })) })} /></div> : null}
+    {(field.type === 'select' || field.type === 'multiSelect') ? <OptionListEditor options={field.options} onChange={(options) => onChange({ ...field, options })} /> : null}
     {field.type === 'formula' ? <FormulaEditor definition={definition} formula={field.formula} resultType={field.resultType} onChange={(formula, resultType) => onChange({ ...field, formula, resultType })} /> : null}
     <div className="mt-3 flex justify-end"><Button danger onClick={onRemove}><Trash2 className="h-4 w-4" /> Remover</Button></div>
   </article>
+}
+
+function OptionListEditor({ options, onChange }: { options: CustomSelectOption[]; onChange: (options: CustomSelectOption[]) => void }) {
+  function addOption() {
+    const index = options.length + 1
+    onChange([...options, { label: `Opção ${index}`, value: `option-${index}` }])
+  }
+
+  function updateOption(index: number, patch: Partial<CustomSelectOption>) {
+    onChange(options.map((option, optionIndex) => optionIndex === index ? { ...option, ...patch } : option))
+  }
+
+  function removeOption(index: number) {
+    onChange(options.filter((_, optionIndex) => optionIndex !== index))
+  }
+
+  return <section className="mt-3 rounded-lg border border-border p-3">
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <h4 className="text-sm font-medium text-textH">Opções</h4>
+        <p className="mt-1 text-xs text-text">O rótulo aparece na ficha; o valor é usado internamente e em automações.</p>
+      </div>
+      <Button primary onClick={addOption}><Plus className="h-4 w-4" /> Adicionar opção</Button>
+    </div>
+    <div className="mt-3 grid gap-2">
+      {options.map((option, index) => (
+        <div key={`option-row-${index}`} className="grid gap-2 rounded-lg border border-border p-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <Input label="Rótulo" value={option.label} onChange={(label) => updateOption(index, { label })} />
+          <Input label="Valor" value={option.value} onChange={(value) => updateOption(index, { value: slugify(value) })} />
+          <div className="flex items-end">
+            <IconButton title="Remover opção" onClick={() => removeOption(index)}><Trash2 className="h-4 w-4" /></IconButton>
+          </div>
+        </div>
+      ))}
+      {options.length === 0 ? <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-text">Nenhuma opção adicionada.</div> : null}
+    </div>
+  </section>
 }
 
 function FormulaEditor({ definition, formula, resultType, onChange }: { definition: CustomSystemDefinition; formula: string; resultType: 'number' | 'text' | 'boolean'; onChange: (formula: string, resultType: 'number' | 'text' | 'boolean') => void }) {
@@ -174,9 +215,7 @@ function FormulaEditor({ definition, formula, resultType, onChange }: { definiti
       <Select label="Tipo do resultado" value={resultType} options={['number','text','boolean']} onChange={(value) => onChange(formula, value as 'number' | 'text' | 'boolean')} />
       <Input label="Expressão" value={formula} onChange={(value) => onChange(value, resultType)} />
     </div>
-    <div className="mt-3">
-      <FormulaVariablePicker variables={variables} onSelect={append} />
-    </div>
+    <div className="mt-3"><FormulaVariablePicker variables={variables} onSelect={append} /></div>
     <div className="mt-3 text-xs text-text">Funções: <code>min</code>, <code>max</code>, <code>round</code>, <code>floor</code>, <code>ceil</code>, <code>abs</code>, <code>clamp</code> e <code>if</code>.</div>
     <div className={`mt-2 text-xs ${error ? 'text-red-300' : 'text-emerald-300'}`}>{error ?? 'Fórmula válida.'}</div>
     <div className="mt-2 rounded border border-border bg-bg px-3 py-2 font-mono text-xs text-text">Exemplo: <code>character.class.fighter.level + character.attributeModifier.con</code></div>
@@ -185,7 +224,7 @@ function FormulaEditor({ definition, formula, resultType, onChange }: { definiti
 
 function ResourcesEditor({ draft, setDraft }: Pick<EditorProps, 'draft' | 'setDraft'>) {
   return <Collection title="Recursos" onAdd={() => setDraft({ ...draft, resources: [...draft.resources, newResource()] })} empty="Nenhum recurso criado.">
-    {draft.resources.map((resource, index) => <ResourceRow key={`${resource.id}-${index}`} definition={draft} resource={resource} onChange={(next) => setDraft({ ...draft, resources: draft.resources.map((entry, i) => i === index ? next : entry) })} onRemove={() => setDraft({ ...draft, resources: draft.resources.filter((_, i) => i !== index) })} />)}
+    {draft.resources.map((resource, index) => <ResourceRow key={`resource-row-${index}`} definition={draft} resource={resource} onChange={(next) => setDraft({ ...draft, resources: draft.resources.map((entry, i) => i === index ? next : entry) })} onRemove={() => setDraft({ ...draft, resources: draft.resources.filter((_, i) => i !== index) })} />)}
   </Collection>
 }
 
@@ -204,12 +243,7 @@ function ResourceRow({ definition, resource, onChange, onRemove }: { definition:
     </div>
     <div className="mt-3 rounded-lg border border-border p-3">
       <Input label="Fórmula do máximo" value={formula} onChange={(value) => onChange({ ...resource, maximumFormula: value || undefined })} />
-      <div className="mt-2">
-        <FormulaVariablePicker
-          variables={variables}
-          onSelect={(path) => onChange({ ...resource, maximumFormula: `${formula}${formula.trim() ? ' ' : ''}${path}` })}
-        />
-      </div>
+      <div className="mt-2"><FormulaVariablePicker variables={variables} onSelect={(path) => onChange({ ...resource, maximumFormula: `${formula}${formula.trim() ? ' ' : ''}${path}` })} /></div>
       {formula ? <div className={`mt-2 text-xs ${validateCustomFormula(formula, definition) ? 'text-red-300' : 'text-emerald-300'}`}>{validateCustomFormula(formula, definition) ?? 'Fórmula válida.'}</div> : null}
     </div>
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><div className="flex gap-4 text-xs text-text"><Check label="Ajuste manual" checked={Boolean(resource.allowManualAdjustment)} onChange={(checked) => onChange({ ...resource, allowManualAdjustment: checked })} /><Check label="Temporário" checked={Boolean(resource.allowTemporaryValue)} onChange={(checked) => onChange({ ...resource, allowTemporaryValue: checked })} /></div><Button danger onClick={onRemove}><Trash2 className="h-4 w-4" /> Remover</Button></div>
@@ -262,6 +296,11 @@ function validateDefinition(definition: CustomSystemDefinition): string {
   if (ids.some((id) => !id.trim())) return 'Campos e recursos precisam de IDs.'
   if (ids.length !== new Set(ids).size) return 'IDs de campos e recursos não podem se repetir.'
   for (const field of definition.fields) {
+    if (field.type === 'select' || field.type === 'multiSelect') {
+      if (field.options.some((option) => !option.label.trim() || !option.value.trim())) return `Todas as opções de “${field.name}” precisam de rótulo e valor.`
+      const values = field.options.map((option) => option.value)
+      if (values.length !== new Set(values).size) return `Os valores das opções de “${field.name}” não podem se repetir.`
+    }
     if (field.type !== 'formula') continue
     const formulaError = validateCustomFormula(field.formula, definition)
     if (formulaError) return `Fórmula de “${field.name}”: ${formulaError}`
