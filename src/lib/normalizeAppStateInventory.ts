@@ -23,17 +23,11 @@ export function normalizeAppStateInventory(
       },
     )
 
-    const customSystems = preserveCharacterCustomSystems({
-      ...character,
-      inventory,
-    })
+    const customSystems = preserveCharacterCustomSystems(character)
+    const customSystemsChanged = customSystems.value !== character
+    if (customSystemsChanged) changed = true
 
-    if (customSystems.value !== character) changed = true
-
-    if (
-      inventory === character.inventory &&
-      customSystems.value === character
-    ) {
+    if (inventory === character.inventory && !customSystemsChanged) {
       return character
     }
 
