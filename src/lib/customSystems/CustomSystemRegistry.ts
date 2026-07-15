@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
+import './CharacterTemplateCustomSystemsPatch'
 
 const definitions = new Map<string, CustomSystemDefinition>()
 const listeners = new Set<() => void>()
