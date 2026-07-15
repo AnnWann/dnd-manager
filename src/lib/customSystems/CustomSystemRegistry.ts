@@ -1,4 +1,7 @@
 import { useSyncExternalStore } from 'react'
+import type { CustomAbilityTypeDefinition } from '../../models/customSystems/CustomAbilityDefinition'
+import type { CustomFieldDefinition } from '../../models/customSystems/CustomFieldDefinition'
+import type { CustomResourceDefinition } from '../../models/customSystems/CustomResourceDefinition'
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
 import './CharacterTemplateCustomSystemsPatch'
 
@@ -16,13 +19,14 @@ function emitChange(): void {
 export function registerCustomSystemDefinition(
   definition: CustomSystemDefinition,
 ): () => void {
-  definitions.set(definition.id, definition)
+  const normalized = withMasterOverride(definition)
+  definitions.set(normalized.id, normalized)
   emitChange()
 
   return () => {
-    const current = definitions.get(definition.id)
-    if (current === definition) {
-      definitions.delete(definition.id)
+    const current = definitions.get(normalized.id)
+    if (current === normalized) {
+      definitions.delete(normalized.id)
       emitChange()
     }
   }
@@ -33,7 +37,8 @@ export function setCustomSystemDefinitions(
 ): void {
   definitions.clear()
   for (const definition of nextDefinitions) {
-    definitions.set(definition.id, definition)
+    const normalized = withMasterOverride(definition)
+    definitions.set(normalized.id, normalized)
   }
   emitChange()
 }
@@ -57,4 +62,52 @@ export function useCustomSystemDefinitions(): CustomSystemDefinition[] {
     getCustomSystemDefinitions,
     getCustomSystemDefinitions,
   )
+}
+
+/**
+ * The DM is the campaign authority and must be able to correct character data.
+ *
+ * The domain actor still uses `master`, so owner-only definitions are exposed to
+ * the character editor as owner-and-master. `automaticOnly` remains protected.
+ * The persisted definition is not mutated; this is only the runtime definition
+ * consumed by character sheets.
+ */
+function withMasterOverride(
+  definition: CustomSystemDefinition,
+): CustomSystemDefinition {
+  return {
+    ...definition,
+    fields: definition.fields.map(withFieldMasterOverride),
+    resources: definition.resources.map(withResourceMasterOverride),
+    abilityTypes: definition.abilityTypes.map(withAbilityTypeMasterOverride),
+  }
+}
+
+function withFieldMasterOverride(
+  field: CustomFieldDefinition,
+): CustomFieldDefinition {
+  if (field.editPermission !== 'owner') return field
+  return {
+    ...field,
+    editPermission: 'ownerAndMaster',
+  }
+}
+
+function withResourceMasterOverride(
+  resource: CustomResourceDefinition,
+): CustomResourceDefinition {
+  if (resource.editPermission !== 'owner') return resource
+  return {
+    ...resource,
+    editPermission: 'ownerAndMaster',
+  }
+}
+
+function withAbilityTypeMasterOverride(
+  abilityType: CustomAbilityTypeDefinition,
+): CustomAbilityTypeDefinition {
+  return {
+    ...abilityType,
+    fields: abilityType.fields.map(withFieldMasterOverride),
+  }
 }
