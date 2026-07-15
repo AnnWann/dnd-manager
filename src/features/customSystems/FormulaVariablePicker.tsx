@@ -13,6 +13,60 @@ type VariableTree = {
   variables: CustomFormulaVariable[]
 }
 
+const SEGMENT_LABELS: Record<string, string> = {
+  character: 'Personagem',
+  field: 'Campos',
+  resource: 'Recursos',
+  hp: 'Pontos de vida',
+  attribute: 'Atributos',
+  attributeModifier: 'Modificadores de atributo',
+  save: 'Testes de resistência',
+  class: 'Classes',
+  skill: 'Perícias',
+  current: 'Atual',
+  maximum: 'Máximo',
+  temporary: 'Temporário',
+  level: 'Nível',
+  present: 'Possui a classe',
+  str: 'Força',
+  dex: 'Destreza',
+  con: 'Constituição',
+  int: 'Inteligência',
+  wis: 'Sabedoria',
+  cha: 'Carisma',
+  artificer: 'Artífice',
+  barbarian: 'Bárbaro',
+  bard: 'Bardo',
+  cleric: 'Clérigo',
+  druid: 'Druida',
+  fighter: 'Guerreiro',
+  monk: 'Monge',
+  paladin: 'Paladino',
+  ranger: 'Patrulheiro',
+  rogue: 'Ladino',
+  sorcerer: 'Feiticeiro',
+  warlock: 'Bruxo',
+  wizard: 'Mago',
+  acrobatics: 'Acrobacia',
+  animalHandling: 'Adestrar animais',
+  arcana: 'Arcanismo',
+  athletics: 'Atletismo',
+  deception: 'Enganação',
+  history: 'História',
+  insight: 'Intuição',
+  intimidation: 'Intimidação',
+  investigation: 'Investigação',
+  medicine: 'Medicina',
+  nature: 'Natureza',
+  perception: 'Percepção',
+  performance: 'Atuação',
+  persuasion: 'Persuasão',
+  religion: 'Religião',
+  sleightOfHand: 'Prestidigitação',
+  stealth: 'Furtividade',
+  survival: 'Sobrevivência',
+}
+
 export function FormulaVariablePicker({
   variables,
   onSelect,
@@ -36,7 +90,13 @@ export function FormulaVariablePicker({
     if (!term) return []
     return activeVariables.filter((entry) =>
       entry.path.toLocaleLowerCase('pt-BR').includes(term) ||
-      entry.label.toLocaleLowerCase('pt-BR').includes(term),
+      entry.label.toLocaleLowerCase('pt-BR').includes(term) ||
+      entry.path
+        .split('.')
+        .map(translateSegment)
+        .join(' ')
+        .toLocaleLowerCase('pt-BR')
+        .includes(term),
     )
   }, [activeVariables, search])
 
@@ -135,7 +195,7 @@ export function FormulaVariablePicker({
                             onClick={() => setSegments(segments.slice(0, index + 1))}
                             className="rounded px-1.5 py-1 hover:bg-accentBg"
                           >
-                            {segment}
+                            {translateSegment(segment)}
                           </button>
                         </span>
                       ))}
@@ -157,7 +217,8 @@ export function FormulaVariablePicker({
                             className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 text-left hover:border-accent hover:bg-accentBg"
                           >
                             <div>
-                              <div className="font-mono text-sm text-textH">{segment}</div>
+                              <div className="text-sm font-medium text-textH">{translateSegment(segment)}</div>
+                              <div className="mt-1 font-mono text-[11px] text-text">{segment}</div>
                               <div className="mt-1 text-[11px] text-text">{countVariables(child)} variável(is)</div>
                             </div>
                             <ChevronRight className="h-4 w-4 text-text" />
@@ -237,7 +298,7 @@ function VariableList({
         >
           <div className="font-medium text-textH">{variable.label}</div>
           <div className="mt-1 break-all font-mono text-xs text-text">{variable.path}</div>
-          <div className="mt-1 text-[11px] uppercase tracking-wide text-text">{variable.valueType}</div>
+          <div className="mt-1 text-[11px] uppercase tracking-wide text-text">{translateValueType(variable.valueType)}</div>
         </button>
       ))}
     </div>
@@ -282,4 +343,19 @@ function countVariables(node: VariableTree): number {
   let total = node.variables.length
   for (const child of node.children.values()) total += countVariables(child)
   return total
+}
+
+function translateSegment(segment: string): string {
+  return SEGMENT_LABELS[segment] ?? humanizeSegment(segment)
+}
+
+function humanizeSegment(segment: string): string {
+  const spaced = segment.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]+/g, ' ')
+  return spaced.charAt(0).toLocaleUpperCase('pt-BR') + spaced.slice(1)
+}
+
+function translateValueType(valueType: CustomFormulaVariable['valueType']): string {
+  if (valueType === 'number') return 'Número'
+  if (valueType === 'boolean') return 'Verdadeiro/Falso'
+  return 'Texto'
 }
