@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom"
 
 import { CharacterView } from "./views/CharacterView"
 import { CreaturesCompendiumView } from "./views/CreaturesCompendiumView"
+import { CustomSystemsManagerView } from "./views/CustomSystemsManagerView"
 import { InitiativeView } from "./views/InitiativeView"
 import { MagicView } from "./views/MagicView"
 import { MissionsView } from "./views/MissionsView"
@@ -18,6 +19,7 @@ export function AppRouter() {
       <Route path="/party-inventory" element={<PartyInventoryView />} />
       <Route path="/missions" element={<MissionsView />} />
       <Route path="/creatures-compendium" element={<CreaturesCompendiumView />} />
+      <Route path="/custom-systems" element={<CustomSystemsManagerView />} />
       <Route path="/initiative" element={<InitiativeView />} />
       <Route path="/magic" element={<MagicView />} />
     </Routes>
