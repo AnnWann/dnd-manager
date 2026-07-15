@@ -134,16 +134,8 @@ export function CharacterCreationWizard(props: Props) {
             1,
             Math.min(20, Math.trunc(Number(initialClass.level) || 1)),
           )
-          const progressionDraft = configuredCharacter
-            .withSheet("classes", [])
-            .withSheet("HP", {
-              max: 0,
-              current: 0,
-              temporary: 0,
-              hitDice: {},
-            })
 
-          onCreate(progressionDraft, {
+          onCreate(configuredCharacter, {
             className: initialClass.className,
             targetLevel,
           })
