@@ -20,6 +20,7 @@ import {
 import { AppHeader } from "./components/AppTopBar"
 import { CharacterProvider } from "./contexts/characterContext"
 import { CreatureCompendiumProvider } from "./contexts/creatureCompendiumContext"
+import { CustomSystemsProvider } from "./contexts/customSystemsContext"
 import { MagicProvider } from "./contexts/magicContext"
 import { MissionProvider } from "./contexts/missionContext"
 import { PartyInventorySettingsProvider } from "./contexts/partyInventorySettingsContext"
@@ -106,6 +107,12 @@ function App() {
             onClick: () => navigate("/creatures-compendium"),
           },
           {
+            label: "Sistemas personalizados",
+            icon: <IconCompendium />,
+            active: location.pathname === "/custom-systems",
+            onClick: () => navigate("/custom-systems"),
+          },
+          {
             label: "Iniciativa",
             icon: <IconInitiative />,
             active: location.pathname === "/initiative",
@@ -135,45 +142,47 @@ function App() {
         syncStatus,
       }}
     >
-      <PartyInventorySettingsProvider
-        carryCapacity={appState.partyCarryCapacity ?? 0}
-        canEditCarryCapacity={userRole === "master"}
-        setAppState={setAppState}
-      >
-        <MissionProvider
-          state={rawAppState}
-          setState={setRawAppState}
-          userRole={userRole}
-          userKey={userKey}
+      <CustomSystemsProvider>
+        <PartyInventorySettingsProvider
+          carryCapacity={appState.partyCarryCapacity ?? 0}
+          canEditCarryCapacity={userRole === "master"}
+          setAppState={setAppState}
         >
-          <CreatureCompendiumProvider>
-            <CharacterProvider
-              appState={appState}
-              setAppState={setAppState}
-              userRole={userRole}
-              userKey={userKey}
-            >
-              <MagicProvider
-                spells={appState.spells ?? []}
+          <MissionProvider
+            state={rawAppState}
+            setState={setRawAppState}
+            userRole={userRole}
+            userKey={userKey}
+          >
+            <CreatureCompendiumProvider>
+              <CharacterProvider
+                appState={appState}
                 setAppState={setAppState}
+                userRole={userRole}
+                userKey={userKey}
               >
-                <div className="flex h-svh max-w-full flex-col overflow-hidden bg-[color:var(--surface-app)] text-text">
-                  <AppHeader />
+                <MagicProvider
+                  spells={appState.spells ?? []}
+                  setAppState={setAppState}
+                >
+                  <div className="flex h-svh max-w-full flex-col overflow-hidden bg-[color:var(--surface-app)] text-text">
+                    <AppHeader />
 
-                  <div className="flex min-h-0 min-w-0 max-w-full flex-1 overflow-hidden">
-                    <AppSidebar items={sidebarItems} />
-                    <main className="min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto">
-                      <div className="w-full min-w-0 max-w-full overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6">
-                        <AppRouter />
-                      </div>
-                    </main>
+                    <div className="flex min-h-0 min-w-0 max-w-full flex-1 overflow-hidden">
+                      <AppSidebar items={sidebarItems} />
+                      <main className="min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto">
+                        <div className="w-full min-w-0 max-w-full overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6">
+                          <AppRouter />
+                        </div>
+                      </main>
+                    </div>
                   </div>
-                </div>
-              </MagicProvider>
-            </CharacterProvider>
-          </CreatureCompendiumProvider>
-        </MissionProvider>
-      </PartyInventorySettingsProvider>
+                </MagicProvider>
+              </CharacterProvider>
+            </CreatureCompendiumProvider>
+          </MissionProvider>
+        </PartyInventorySettingsProvider>
+      </CustomSystemsProvider>
     </SyncProvider>
   )
 }
