@@ -4,10 +4,13 @@ import type { CustomFieldDefinition } from '../../models/customSystems/CustomFie
 import type { CustomResourceDefinition } from '../../models/customSystems/CustomResourceDefinition'
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
 import './CharacterTemplateCustomSystemsPatch'
+import { configureCustomFormulaRuntime } from './CustomFormulaRuntimePatch'
 
 const definitions = new Map<string, CustomSystemDefinition>()
 const listeners = new Set<() => void>()
 let snapshot: CustomSystemDefinition[] = []
+
+configureCustomFormulaRuntime((systemId) => definitions.get(systemId))
 
 function emitChange(): void {
   snapshot = Array.from(definitions.values()).sort((left, right) =>
