@@ -30,8 +30,15 @@ type CustomSystemsContextValue = {
   reload: () => Promise<void>
 }
 
+type ApiSnapshot = {
+  error?: string
+  definitions?: CustomSystemDefinition[]
+  revision?: number
+}
+
 const CustomSystemsContext = createContext<CustomSystemsContextValue | null>(null)
 const SAVE_DELAY = 600
+const MAX_CONFLICT_RETRIES = 4
 
 export function CustomSystemsProvider({ children }: { children: ReactNode }) {
   const { syncKey, userRole, userKey } = useSyncContext()
@@ -47,37 +54,42 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
     setCustomSystemDefinitions(definitions)
   }, [definitions])
 
-  const persist = useCallback(async (nextDefinitions: CustomSystemDefinition[]) => {
+  const persist = useCallback(async (requestedDefinitions: CustomSystemDefinition[]) => {
     if (!canSync || !canManage) return
     setStatus({ kind: 'saving' })
 
-    const response = await fetch(`/api/custom-systems?key=${encodeURIComponent(syncKey)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        definitions: nextDefinitions,
-        expectedRevision: revisionRef.current,
-        clientId: userKey.trim() || clientIdRef.current,
-      }),
-    })
-    const data = await response.json().catch(() => ({})) as {
-      error?: string
-      definitions?: CustomSystemDefinition[]
-      revision?: number
-    }
+    let candidate = normalizeDefinitions(requestedDefinitions)
+    let expectedRevision = revisionRef.current
 
-    if (response.status === 409) {
-      const remote = normalizeDefinitions(data.definitions)
+    for (let attempt = 0; attempt < MAX_CONFLICT_RETRIES; attempt += 1) {
+      const response = await fetch(`/api/custom-systems?key=${encodeURIComponent(syncKey)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          definitions: candidate,
+          expectedRevision,
+          clientId: userKey.trim() || clientIdRef.current,
+        }),
+      })
+      const data = await response.json().catch(() => ({})) as ApiSnapshot
+
+      if (response.status === 409) {
+        const remote = normalizeDefinitions(data.definitions)
+        expectedRevision = Math.max(0, Math.trunc(Number(data.revision) || 0))
+        revisionRef.current = expectedRevision
+        candidate = mergeDefinitions(remote, candidate)
+        setDefinitions(candidate)
+        continue
+      }
+
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`)
       revisionRef.current = Math.max(0, Math.trunc(Number(data.revision) || 0))
-      const merged = mergeDefinitions(remote, nextDefinitions)
-      setDefinitions(merged)
-      await persist(merged)
+      setDefinitions(candidate)
+      setStatus({ kind: 'synced', at: Date.now() })
       return
     }
 
-    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`)
-    revisionRef.current = Math.max(0, Math.trunc(Number(data.revision) || 0))
-    setStatus({ kind: 'synced', at: Date.now() })
+    throw new Error('Muitos conflitos simultâneos. As alterações locais foram preservadas; tente salvar novamente.')
   }, [canManage, canSync, syncKey, userKey])
 
   const schedulePersist = useCallback((nextDefinitions: CustomSystemDefinition[]) => {
@@ -105,11 +117,7 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
       const response = await fetch(`/api/custom-systems?key=${encodeURIComponent(syncKey)}`, {
         cache: 'no-store',
       })
-      const data = await response.json() as {
-        error?: string
-        definitions?: CustomSystemDefinition[]
-        revision?: number
-      }
+      const data = await response.json().catch(() => ({})) as ApiSnapshot
       if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`)
       const normalized = normalizeDefinitions(data.definitions)
       revisionRef.current = Math.max(0, Math.trunc(Number(data.revision) || 0))
@@ -150,9 +158,10 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
     },
     saveDefinition: (definition) => {
       update((current) => {
-        const index = current.findIndex((entry) => entry.id === definition.id)
-        if (index < 0) return [...current, definition]
-        return current.map((entry, entryIndex) => entryIndex === index ? definition : entry)
+        const exists = current.some((entry) => entry.id === definition.id)
+        return exists
+          ? current.map((entry) => entry.id === definition.id ? definition : entry)
+          : [...current, definition]
       })
     },
     removeDefinition: (systemId) => {
@@ -161,7 +170,7 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
     duplicateDefinition: (systemId) => {
       const source = definitions.find((entry) => entry.id === systemId)
       if (!source) return undefined
-      const copy = {
+      const copy: CustomSystemDefinition = {
         ...structuredClone(source),
         id: `${source.id}-copy-${Date.now().toString(36)}`,
         name: `${source.name} (cópia)`,
@@ -183,9 +192,8 @@ export function useCustomSystemsContext(): CustomSystemsContextValue {
 }
 
 function createEmptyDefinition(): CustomSystemDefinition {
-  const id = `system-${crypto.randomUUID()}`
   return {
-    id,
+    id: `system-${crypto.randomUUID()}`,
     name: 'Novo sistema',
     description: '',
     version: 1,
@@ -223,10 +231,7 @@ function normalizeDefinitions(value: unknown): CustomSystemDefinition[] {
   return Array.from(result.values()).sort((left, right) => left.name.localeCompare(right.name))
 }
 
-function mergeDefinitions(
-  remote: CustomSystemDefinition[],
-  local: CustomSystemDefinition[],
-): CustomSystemDefinition[] {
+function mergeDefinitions(remote: CustomSystemDefinition[], local: CustomSystemDefinition[]): CustomSystemDefinition[] {
   const merged = new Map(remote.map((definition) => [definition.id, definition]))
   for (const definition of local) merged.set(definition.id, definition)
   return normalizeDefinitions(Array.from(merged.values()))
