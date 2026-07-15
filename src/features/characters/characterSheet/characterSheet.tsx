@@ -10,7 +10,7 @@ import { GroupStats } from "./character_info/components/stats/GroupStats"
 import { AttributeCalculators } from "./attributeCalculators"
 import { CharacterConditions } from "./characterConditions"
 import { SavingThrows } from "./savingThrows"
-import { CustomSystemsTab } from "../customSystems/CustomSystemsTab"
+import { CustomSystemsTabWithLibrary } from "../customSystems/CustomSystemsTabWithLibrary"
 
 type Props = {
   character: CharacterTemplate
@@ -48,20 +48,9 @@ export function CharacterSheetTab({
         createOwner={createOwner}
       />
 
-      <GroupHP
-        character={character}
-        updateCharacter={updateCharacter}
-      />
-
-      <GroupStats
-        character={character}
-        updateCharacter={updateCharacter}
-      />
-
-      <CharacterConditions
-        character={character}
-        updateCharacter={updateCharacter}
-      />
+      <GroupHP character={character} updateCharacter={updateCharacter} />
+      <GroupStats character={character} updateCharacter={updateCharacter} />
+      <CharacterConditions character={character} updateCharacter={updateCharacter} />
 
       <div
         className={
@@ -71,33 +60,20 @@ export function CharacterSheetTab({
         }
       >
         <div className="grid gap-4">
-          <Attributes
-            character={character}
-            updateCharacter={updateCharacter}
-          />
-
-          <SavingThrows
-            character={character}
-            updateCharacter={updateCharacter}
-          />
+          <Attributes character={character} updateCharacter={updateCharacter} />
+          <SavingThrows character={character} updateCharacter={updateCharacter} />
         </div>
 
-        <Skills
-          character={character}
-          updateCharacter={updateCharacter}
-        />
+        <Skills character={character} updateCharacter={updateCharacter} />
 
         {showActionEconomy ? (
-          <GroupActions
-            character={character}
-            updateCharacter={updateCharacter}
-          />
+          <GroupActions character={character} updateCharacter={updateCharacter} />
         ) : null}
       </div>
 
       <AttributeCalculators character={character} />
 
-      <CustomSystemsTab
+      <CustomSystemsTabWithLibrary
         character={character}
         updateCharacter={updateCharacter}
         actor={canAssignOwners ? "master" : "owner"}
