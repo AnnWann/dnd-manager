@@ -1,5 +1,6 @@
 import type { CharacterTemplate } from '../../models/characters/CharacterTemplate'
 import type { Attribute } from '../../models/sheet/Attribute'
+import type { ClassName } from '../../models/sheet/Class'
 import type { Skill } from '../../models/sheet/Skills'
 import type { CustomFormulaVariable } from './CustomFormulaEngine'
 
@@ -18,6 +19,22 @@ const ATTRIBUTES: Array<{ id: Attribute; label: string }> = [
   { id: 'int', label: 'Inteligência' },
   { id: 'wis', label: 'Sabedoria' },
   { id: 'cha', label: 'Carisma' },
+]
+
+const CLASSES: Array<{ id: ClassName; label: string }> = [
+  { id: 'artificer', label: 'Artífice' },
+  { id: 'barbarian', label: 'Bárbaro' },
+  { id: 'bard', label: 'Bardo' },
+  { id: 'cleric', label: 'Clérigo' },
+  { id: 'druid', label: 'Druida' },
+  { id: 'fighter', label: 'Guerreiro' },
+  { id: 'monk', label: 'Monge' },
+  { id: 'paladin', label: 'Paladino' },
+  { id: 'ranger', label: 'Patrulheiro' },
+  { id: 'rogue', label: 'Ladino' },
+  { id: 'sorcerer', label: 'Feiticeiro' },
+  { id: 'warlock', label: 'Bruxo' },
+  { id: 'wizard', label: 'Mago' },
 ]
 
 const SKILLS: SkillDefinition[] = [
@@ -48,6 +65,15 @@ export function listCharacterFormulaVariables(): CustomFormulaVariable[] {
     variable(`character.save.${id}`, `${label} — salvamento`),
   ])
 
+  const classes = CLASSES.flatMap(({ id, label }) => [
+    variable(`character.class.${id}.level`, `${label} — nível`),
+    {
+      path: `character.class.${id}.present`,
+      label: `${label} — possui a classe`,
+      valueType: 'boolean' as const,
+    },
+  ])
+
   const skills = SKILLS.map(({ id, label }) =>
     variable(`character.skill.${id}`, `${label} — bônus`),
   )
@@ -69,6 +95,7 @@ export function listCharacterFormulaVariables(): CustomFormulaVariable[] {
       valueType: 'boolean',
     },
     ...attributes,
+    ...classes,
     ...skills,
   ]
 }
@@ -102,6 +129,12 @@ export function getCharacterFormulaValues(
     values[`character.attributeModifier.${id}`] =
       character.getEffectiveAttributeModifier(id)
     values[`character.save.${id}`] = character.getSavingThrowBonus(id)
+  }
+
+  for (const { id } of CLASSES) {
+    const level = Math.max(0, Number(character.getClassLevel(id)) || 0)
+    values[`character.class.${id}.level`] = level
+    values[`character.class.${id}.present`] = level > 0
   }
 
   for (const skill of SKILLS) {
