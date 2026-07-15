@@ -5,7 +5,6 @@ import type { CustomSystemId, CustomSystemVersion, JsonValue } from "./CustomGen
 import type { CustomPanelDefinition } from "./CustomPanelDefinition"
 import type { CustomResourceDefinition } from "./CustomResourceDefinition"
 
-
 export interface CustomSystemDefinition {
   id: CustomSystemId
   name: string
@@ -38,6 +37,8 @@ export interface CustomResourceState {
 export interface CustomAbilityInstance {
   id: string
   abilityTypeId: string
+  /** ID da entrada na biblioteca do mestre, quando a habilidade foi aprendida da lista. */
+  predefinedAbilityId?: string
   values: Record<string, JsonValue>
   usage?: CustomAbilityUsageState
   enabled?: boolean
