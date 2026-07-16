@@ -1,5 +1,6 @@
 import type { CharacterType } from "../characters/CharacterType"
 import type { CharacterCondition } from "../characters/CharacterCondition"
+import type { CharacterCustomSystemState } from "../customSystems/CustomSystem"
 import type { Proficiency } from "./Proficiency"
 import type { CharacterRace } from "../races/CharacterRace"
 import type { CharacterAttribute } from "./CharacterAttribute"
@@ -34,6 +35,9 @@ export type Sheet = {
   classes?: CharacterClassInterface[]
   race: CharacterRace
   type: CharacterType
+
+  customSystems?: CharacterCustomSystemState[]
+  hiddenCharacterTabs?: string[]
 
   arms: number
 }

@@ -1,8 +1,9 @@
-import { useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { Download, Upload } from "lucide-react"
 
 import { Button } from "../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../components/ui/Card"
+import { useCharacterContext } from "../../contexts/characterContext"
 import { useMagicContext } from "../../contexts/magicContext"
 import type { Ability } from "../../models/abilities/Ability"
 import { getCharacterGrantedSpells } from "../../models/characters/characterGrantedSpells"
@@ -42,25 +43,47 @@ export function CharacterSelector({
   disableDelete,
   showOwnerBadge,
 }: Props) {
+  const { setSelectedCharacterId } = useCharacterContext()
   const { getSpellByIndex, spellByIndex, saveSpell } = useMagicContext()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [importError, setImportError] = useState("")
+  const [selectedCharacterId, setLocalSelectedCharacterId] = useState(
+    activeCharacter.get("id"),
+  )
+  const [openCandidateId, setOpenCandidateId] = useState("")
 
-  function exportActiveCharacter() {
+  const selectedCharacter = useMemo(
+    () =>
+      characters.find(
+        (character) => character.get("id") === selectedCharacterId,
+      ) ?? activeCharacter,
+    [activeCharacter, characters, selectedCharacterId],
+  )
+
+  function selectOrOpenCharacter(characterId: string) {
+    if (openCandidateId === characterId) {
+      setOpenCandidateId("")
+      setActiveCharacterId(characterId)
+      return
+    }
+
+    setLocalSelectedCharacterId(characterId)
+    setSelectedCharacterId(characterId)
+    setOpenCandidateId(characterId)
+  }
+
+  function exportSelectedCharacter() {
     const referencedSpellIndexes =
-      collectReferencedSpellIndexes(activeCharacter)
+      collectReferencedSpellIndexes(selectedCharacter)
 
     const homebrewSpells = Array.from(referencedSpellIndexes)
       .map((spellIndex) => getSpellByIndex(spellIndex))
-      .filter(
-        (spell): spell is Spell =>
-          Boolean(spell?.homebrew),
-      )
+      .filter((spell): spell is Spell => Boolean(spell?.homebrew))
 
     const bundle: CharacterExportBundle = {
       format: "dnd-manager-character",
       version: 2,
-      character: activeCharacter.toJSON(),
+      character: selectedCharacter.toJSON(),
       homebrewSpells,
     }
 
@@ -69,7 +92,7 @@ export function CharacterSelector({
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement("a")
     const safeName =
-      activeCharacter
+      selectedCharacter
         .get("name")
         .trim()
         .replace(/[^a-zA-Z0-9À-ÿ_-]+/g, "-")
@@ -98,7 +121,11 @@ export function CharacterSelector({
         saveSpell(spell)
       }
 
-      importCharacter(bundle.character)
+      const imported = importCharacter(bundle.character)
+      const importedId = imported.get("id")
+      setLocalSelectedCharacterId(importedId)
+      setSelectedCharacterId(importedId)
+      setOpenCandidateId(importedId)
       setImportError("")
     } catch (error) {
       setImportError(
@@ -111,30 +138,39 @@ export function CharacterSelector({
     }
   }
 
-  function confirmDeleteActiveCharacter() {
+  function confirmDeleteSelectedCharacter() {
     if (disableDelete) return
 
-    const characterName = activeCharacter.get("name").trim() || "personagem ativo"
+    const characterName =
+      selectedCharacter.get("name").trim() || "personagem selecionado"
     const confirmed = window.confirm(
       `Tem certeza que deseja excluir permanentemente “${characterName}”?\n\nEssa ação não pode ser desfeita. Exporte o JSON antes se quiser manter uma cópia.`,
     )
 
-    if (confirmed) deleteActiveCharacter()
+    if (confirmed) {
+      setSelectedCharacterId(selectedCharacter.get("id"))
+      deleteActiveCharacter()
+      setOpenCandidateId("")
+    }
   }
 
   return (
     <Card>
       <CardHeader>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm font-semibold text-textH">
-            Personagens
+          <div>
+            <div className="text-sm font-semibold text-textH">Personagens</div>
+            <p className="mt-1 text-xs text-text">
+              Clique uma vez para selecionar e novamente para abrir a ficha.
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
               variant="secondary"
-              onClick={exportActiveCharacter}
+              onClick={exportSelectedCharacter}
+              title={`Exportar ${selectedCharacter.get("name")}`}
             >
               <Download className="h-4 w-4" />
               Exportar JSON
@@ -180,7 +216,8 @@ export function CharacterSelector({
             const sheet = character.get("sheet")
             const visibility = character.get("visibility")
             const owner = character.get("owner")
-            const isActive = id === activeCharacter.get("id")
+            const isSelected = id === selectedCharacter.get("id")
+            const isReadyToOpen = openCandidateId === id
             const classes = sheet.classes ?? []
             const level = classes.reduce(
               (total, entry) => total + (entry.level ?? 0),
@@ -194,12 +231,13 @@ export function CharacterSelector({
             return (
               <button
                 key={id}
+                type="button"
                 className={
-                  isActive
+                  isSelected
                     ? "flex w-full items-center justify-between rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-left"
                     : "flex w-full items-center justify-between rounded-lg border border-border bg-bg px-3 py-2 text-left hover:bg-[color:var(--social-bg)]"
                 }
-                onClick={() => setActiveCharacterId(id)}
+                onClick={() => selectOrOpenCharacter(id)}
               >
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium text-textH">
@@ -219,7 +257,11 @@ export function CharacterSelector({
                           : `Player: ${owner?.name?.trim() || "sem nome"}`,
                       )
                     : null}
-                  {isActive ? badge("Ativo") : null}
+                  {isReadyToOpen
+                    ? badge("Clique novamente para abrir")
+                    : isSelected
+                      ? badge("Selecionado")
+                      : null}
                 </div>
               </button>
             )
@@ -230,15 +272,15 @@ export function CharacterSelector({
           <Button
             className="w-full"
             variant="secondary"
-            onClick={confirmDeleteActiveCharacter}
+            onClick={confirmDeleteSelectedCharacter}
             disabled={disableDelete}
             title={
               disableDelete
                 ? "Mantenha pelo menos 1 personagem"
-                : "Excluir personagem ativo"
+                : "Excluir personagem selecionado"
             }
           >
-            Excluir personagem ativo
+            Excluir personagem selecionado
           </Button>
         </div>
       </CardContent>
@@ -359,7 +401,6 @@ function parseCharacterExport(parsed: unknown): {
     }
   }
 
-  // Backward compatibility with character-only JSON exports.
   return {
     character: parsed,
     homebrewSpells: [],

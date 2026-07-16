@@ -1,6 +1,7 @@
 import { Select } from "../../../../../components/ui/Select"
 import type { CharacterTemplate } from "../../../../../models/characters/CharacterTemplate"
 
+type CharacterVisibility = "private" | "party" | "master"
 
 type Props = {
   character: CharacterTemplate
@@ -15,30 +16,22 @@ export function SelectCharacterVisibility({
   updateCharacter,
 }: Props) {
   return (
-    <div className="w-full md:w-[320px]">
-      <label className="text-xs text-text">
-        Visibilidade
-      </label>
+    <div className="min-w-0 w-full">
+      <label className="text-xs text-text">Visibilidade</label>
 
       <Select
-        className="mt-1"
-        value={character.get('visibility') ?? 'Privado'}
-        onChange={(e) =>
-          updateCharacter(character.get('id'), (c) => c.with('visibility', stringToVisibility(e.target.value)))
+        className="mt-1 w-full"
+        value={character.get("visibility") ?? "private"}
+        onChange={(event) =>
+          updateCharacter(character.get("id"), (current) =>
+            current.with("visibility", event.target.value as CharacterVisibility),
+          )
         }
       >
-        <option value="player">Privado</option>
-        <option value="master">Equipe</option>
+        <option value="private">Privado</option>
+        <option value="party">Grupo</option>
         <option value="master">Mestre</option>
       </Select>
     </div>
   )
-}
-
-function stringToVisibility(s: string): 'private' | 'party' | 'master' {
-  switch(s){
-    case 'Equipe': return 'party'
-    case 'Mestre': return 'master'
-    default: return 'private'
-  }
 }

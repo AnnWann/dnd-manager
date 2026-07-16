@@ -1,14 +1,9 @@
 import { useState } from "react"
-import type { Player } from "../../../../models/player/Player"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
 
 import { Button } from "../../../../components/ui/Button"
 import { Input } from "../../../../components/ui/Input"
 import { trimSingleLine } from "../../../../lib/textNormalization"
-import { SelectCharacterOwner } from "./components/selectCharacterOwner"
-import { SelectCharacterType } from "./components/selectCharacterType"
-import { SelectCharacterUniqueness } from "./components/selectCharacterUniqueness"
-import { SelectCharacterVisibility } from "./components/selectCharacterVisibility"
 import { CLASS_NAMES } from "../../../../contexts/consts"
 import { Classes } from "../classes/class"
 import { CharacterExperience } from "../characterExperience"
@@ -19,21 +14,11 @@ type Props = {
     characterId: string,
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) => void
-  canAssignOwners: boolean
-  canEditCharacterType: boolean
-  playerKeys: string[]
-  getOwner: (ownerId: string) => Player
-  createOwner: (ownerName: string) => Player
 }
 
 export function CharacterIdentity({
   character,
   updateCharacter,
-  canAssignOwners,
-  canEditCharacterType,
-  playerKeys,
-  getOwner,
-  createOwner,
 }: Props) {
   const [classEditorOpen, setClassEditorOpen] = useState(false)
   const classes = character.get("sheet").classes ?? []
@@ -122,42 +107,6 @@ export function CharacterIdentity({
           updateCharacter={updateCharacter}
         />
       </div>
-
-      {(canAssignOwners || canEditCharacterType) && (
-        <details className="mt-4 border-t border-border pt-3">
-          <summary className="cursor-pointer text-xs font-medium text-text">
-            Configuração do personagem
-          </summary>
-
-          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <SelectCharacterType
-              character={character}
-              updateCharacter={updateCharacter}
-              canEditCharacterType={canEditCharacterType}
-            />
-
-            {canAssignOwners && (
-              <>
-                <SelectCharacterVisibility
-                  character={character}
-                  updateCharacter={updateCharacter}
-                />
-                <SelectCharacterOwner
-                  character={character}
-                  updateCharacter={updateCharacter}
-                  playerKeys={playerKeys}
-                  getOwner={getOwner}
-                  createOwner={createOwner}
-                />
-                <SelectCharacterUniqueness
-                  character={character}
-                  updateCharacter={updateCharacter}
-                />
-              </>
-            )}
-          </div>
-        </details>
-      )}
 
       <ClassEditorModal
         open={classEditorOpen}

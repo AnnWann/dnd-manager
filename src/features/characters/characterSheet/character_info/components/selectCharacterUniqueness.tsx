@@ -1,6 +1,5 @@
 import type { CharacterTemplate } from "../../../../../models/characters/CharacterTemplate"
 
-
 type Props = {
   character: CharacterTemplate
   updateCharacter: (
@@ -9,24 +8,23 @@ type Props = {
   ) => void
 }
 
-export function SelectCharacterUniqueness ({
+export function SelectCharacterUniqueness({
   character,
   updateCharacter,
 }: Props) {
   return (
-    <div className="w-full md:w-[320px]">
-      <label className="flex items-center gap-2">
+    <div className="flex min-w-0 w-full items-start pt-1 xl:pt-6">
+      <label className="flex items-center gap-2 text-xs text-text">
         <input
           type="checkbox"
-          checked={character.get('unique')}
-          onChange={(e) =>
-            updateCharacter(character.get('id'), (c) => c.with('unique', e.target.checked))
+          checked={character.get("unique")}
+          onChange={(event) =>
+            updateCharacter(character.get("id"), (current) =>
+              current.with("unique", event.target.checked),
+            )
           }
         />
-
-        <span className="text-xs text-text">
-          Personagem Único
-        </span>
+        Personagem único
       </label>
     </div>
   )

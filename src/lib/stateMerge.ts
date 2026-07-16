@@ -205,6 +205,7 @@ function resolveIdentity(
 
   const candidates: Array<(value: Record<string, unknown>) => string> = [
     (value) => stringKey("id", value.id),
+    (value) => stringKey("systemId", value.systemId),
     (value) => stringKey("index", value.index),
     (value) => stringKey("className", value.className),
     (value) => compositeKey("category:name", value.category, value.name),

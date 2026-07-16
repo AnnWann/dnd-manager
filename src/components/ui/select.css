@@ -1,0 +1,75 @@
+/*
+ * Shared select styling.
+ *
+ * The application still contains legacy/native <select> elements alongside
+ * the React Select component. These global rules keep both implementations
+ * visually consistent until every legacy screen is migrated.
+ */
+select {
+  color: var(--text-primary);
+  background-color: var(--surface-primary);
+  border-color: var(--border-subtle);
+  color-scheme: dark light;
+}
+
+select:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+select:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+select:disabled {
+  color: var(--text-muted);
+  background-color: var(--surface-secondary);
+  opacity: 0.7;
+}
+
+select option,
+select optgroup {
+  color: var(--text-primary);
+  background-color: var(--surface-elevated);
+}
+
+select option:checked {
+  color: var(--text-on-accent);
+  background: var(--accent);
+}
+
+select option:disabled {
+  color: var(--text-muted);
+}
+
+/* The custom-system generator historically uses input-base for native selects. */
+select.input-base {
+  min-height: 2.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 2.5rem 0.5rem 0.75rem;
+  color: var(--text-primary);
+  background-color: var(--surface-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+select.input-base[multiple] {
+  padding-right: 0.75rem;
+  background-image: none;
+}
+
+select.input-base[multiple] option {
+  margin-block: 0.125rem;
+  border-radius: 0.375rem;
+  padding: 0.4rem 0.55rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  select,
+  select.input-base,
+  select option,
+  select optgroup {
+    color-scheme: dark;
+  }
+}
