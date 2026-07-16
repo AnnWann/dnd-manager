@@ -1,4 +1,5 @@
 import { Plus, Trash2 } from 'lucide-react'
+import { Select as UiSelect } from '../../components/ui/Select'
 import type { Attribute } from '../../models/sheet/Attribute'
 import type { ClassName } from '../../models/sheet/Class'
 import type { ProficiencyCategory } from '../../models/sheet/Proficiency'
@@ -65,10 +66,10 @@ export function CustomSystemRequirementsEditor({ draft, setDraft }: Props) {
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <label className="grid gap-1">
           <span className="label">Como combinar os requisitos</span>
-          <select className="input-base" value={config.match} onChange={(event) => update({ match: event.target.value as 'all' | 'any' })}>
+          <UiSelect value={config.match} onChange={(event) => update({ match: event.target.value as 'all' | 'any' })}>
             <option value="all">Cumprir todos os requisitos</option>
             <option value="any">Cumprir pelo menos um requisito</option>
-          </select>
+          </UiSelect>
         </label>
         <div className="rounded-lg border border-border px-3 py-2 text-sm text-text">
           {config.enabled
@@ -120,7 +121,7 @@ function RequirementRow({ requirement, definition, onChange, onRemove }: {
     </div>
 
     {requirement.type === 'class' ? <div className="grid gap-3 md:grid-cols-3">
-      <Select label="Classe" value={requirement.className} options={CLASSES} labels={CLASSES.map(classLabel)} onChange={(value) => onChange({ ...requirement, className: value as ClassName })} />
+      <SelectField label="Classe" value={requirement.className} options={CLASSES} labels={CLASSES.map(classLabel)} onChange={(value) => onChange({ ...requirement, className: value as ClassName })} />
       <Input label="Nível mínimo" type="number" value={String(requirement.minimumLevel ?? 1)} onChange={(value) => onChange({ ...requirement, minimumLevel: clampLevel(value) })} />
       <Input label="Subclasse opcional" value={requirement.subclassName ?? ''} onChange={(value) => onChange({ ...requirement, subclassName: value || undefined })} />
     </div> : null}
@@ -128,19 +129,19 @@ function RequirementRow({ requirement, definition, onChange, onRemove }: {
     {requirement.type === 'totalLevel' ? <Input label="Nível total mínimo" type="number" value={String(requirement.minimumLevel)} onChange={(value) => onChange({ ...requirement, minimumLevel: clampLevel(value) })} /> : null}
 
     {requirement.type === 'proficiency' ? <div className="grid gap-3 md:grid-cols-3">
-      <Select label="Categoria" value={requirement.category ?? ''} options={['', ...PROFICIENCY_CATEGORIES]} labels={['Qualquer categoria', ...PROFICIENCY_CATEGORIES.map(proficiencyLabel)]} onChange={(value) => onChange({ ...requirement, category: (value || undefined) as ProficiencyCategory | undefined })} />
+      <SelectField label="Categoria" value={requirement.category ?? ''} options={['', ...PROFICIENCY_CATEGORIES]} labels={['Qualquer categoria', ...PROFICIENCY_CATEGORIES.map(proficiencyLabel)]} onChange={(value) => onChange({ ...requirement, category: (value || undefined) as ProficiencyCategory | undefined })} />
       <Input label="Nome da proficiência" value={requirement.name ?? ''} onChange={(value) => onChange({ ...requirement, name: value || undefined })} />
       <Input label="ID opcional" value={requirement.proficiencyId ?? ''} onChange={(value) => onChange({ ...requirement, proficiencyId: value || undefined })} />
     </div> : null}
 
     {requirement.type === 'ability' ? <div className="grid gap-3 md:grid-cols-3">
-      <Select label="Origem" value={requirement.source ?? 'any'} options={['any','character','custom']} labels={['Qualquer habilidade','Habilidades padrão','Sistemas personalizados']} onChange={(value) => onChange({ ...requirement, source: value as 'any' | 'character' | 'custom' })} />
+      <SelectField label="Origem" value={requirement.source ?? 'any'} options={['any','character','custom']} labels={['Qualquer habilidade','Habilidades padrão','Sistemas personalizados']} onChange={(value) => onChange({ ...requirement, source: value as 'any' | 'character' | 'custom' })} />
       <Input label="Nome da habilidade" value={requirement.name ?? ''} onChange={(value) => onChange({ ...requirement, name: value || undefined })} />
       <Input label="ID opcional" value={requirement.abilityId ?? ''} onChange={(value) => onChange({ ...requirement, abilityId: value || undefined })} />
     </div> : null}
 
     {requirement.type === 'attribute' ? <div className="grid gap-3 md:grid-cols-3">
-      <Select label="Atributo" value={requirement.attribute} options={ATTRIBUTES} labels={ATTRIBUTES.map(attributeLabel)} onChange={(value) => onChange({ ...requirement, attribute: value as Attribute })} />
+      <SelectField label="Atributo" value={requirement.attribute} options={ATTRIBUTES} labels={ATTRIBUTES.map(attributeLabel)} onChange={(value) => onChange({ ...requirement, attribute: value as Attribute })} />
       <Input label="Valor mínimo" type="number" value={String(requirement.minimumValue)} onChange={(value) => onChange({ ...requirement, minimumValue: Number(value) || 0 })} />
       <label className="flex items-end gap-2 pb-2 text-sm text-textH"><input type="checkbox" checked={Boolean(requirement.useModifier)} onChange={(event) => onChange({ ...requirement, useModifier: event.target.checked })} /> Usar modificador em vez do valor</label>
     </div> : null}
@@ -164,7 +165,7 @@ function FormulaRequirement({ requirement, definition, onChange }: {
 
 function AddButton({ children, onClick }: { children: string; onClick: () => void }) { return <button type="button" onClick={onClick} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-xs text-textH hover:bg-accentBg"><Plus className="h-3.5 w-3.5" /> {children}</button> }
 function Input({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (value: string) => void; type?: string }) { return <label className="grid gap-1"><span className="label">{label}</span><input className="input-base" type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label> }
-function Select({ label, value, options, labels, onChange }: { label: string; value: string; options: readonly string[]; labels: string[]; onChange: (value: string) => void }) { return <label className="grid gap-1"><span className="label">{label}</span><select className="input-base" value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option, index) => <option key={option || 'empty'} value={option}>{labels[index] ?? option}</option>)}</select></label> }
+function SelectField({ label, value, options, labels, onChange }: { label: string; value: string; options: readonly string[]; labels: string[]; onChange: (value: string) => void }) { return <label className="grid gap-1"><span className="label">{label}</span><UiSelect value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option, index) => <option key={option || 'empty'} value={option}>{labels[index] ?? option}</option>)}</UiSelect></label> }
 function clampLevel(value: string): number { return Math.max(1, Math.min(20, Math.trunc(Number(value) || 1))) }
 function typeLabel(type: CustomSystemInstallationRequirement['type']): string { return ({ class: 'Classe', totalLevel: 'Nível total', proficiency: 'Proficiência', ability: 'Habilidade', attribute: 'Atributo', formula: 'Fórmula' })[type] }
 function classLabel(value: string): string { return ({ artificer:'Artífice',barbarian:'Bárbaro',bard:'Bardo',cleric:'Clérigo',druid:'Druida',fighter:'Guerreiro',monk:'Monge',paladin:'Paladino',ranger:'Patrulheiro',rogue:'Ladino',sorcerer:'Feiticeiro',warlock:'Bruxo',wizard:'Mago' } as Record<string,string>)[value] ?? value }
