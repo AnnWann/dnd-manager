@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { BookOpen, Eye, EyeOff, Plus, Search, Settings2, Trash2, X } from 'lucide-react'
+import { BookOpen, Eye, EyeOff, Play, Plus, Search, Settings2, Trash2, X } from 'lucide-react'
 import { Select } from '../../../components/ui/Select'
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
 import type {
@@ -12,6 +12,7 @@ import type {
   CustomSystemDefinition,
 } from '../../../models/customSystems/CustomSystemDefinition'
 import {
+  activateCustomAbility,
   addCustomAbility,
   countCustomAbilities,
   createAutomaticallyInstalledCustomSystemState,
@@ -105,6 +106,7 @@ export function CustomSystemsTabWithLibrary({
       return <div key={state.systemId} className="grid gap-3">
         {definition ? <CustomAbilityProgressPanel
           character={character}
+          definitions={definitions}
           definition={definition}
           state={state}
           updateCharacter={updateCharacter}
@@ -125,18 +127,23 @@ export function CustomSystemsTabWithLibrary({
 
 function CustomAbilityProgressPanel({
   character,
+  definitions,
   definition,
   state,
   updateCharacter,
 }: {
   character: CharacterTemplate
+  definitions: CustomSystemDefinition[]
   definition: CustomSystemDefinition
   state: CharacterCustomSystemState
   updateCharacter: Props['updateCharacter']
 }) {
   const [error, setError] = useState('')
-  const configurableTypes = definition.abilityTypes.filter((type) => type.acquisition && type.acquisition.mode !== 'granted')
-  if (!configurableTypes.length || !state.abilities.length) return null
+  const [message, setMessage] = useState('')
+  const abilityTypes = definition.abilityTypes.filter((type) =>
+    state.abilities.some((ability) => ability.abilityTypeId === type.id),
+  )
+  if (!abilityTypes.length || !state.abilities.length) return null
 
   function replaceState(next: CharacterCustomSystemState) {
     updateCharacter(character.get('id'), (current) => {
@@ -148,20 +155,34 @@ function CustomAbilityProgressPanel({
   function run(operation: () => CharacterCustomSystemState) {
     try {
       setError('')
+      setMessage('')
       replaceState(operation())
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Não foi possível alterar a habilidade.')
     }
   }
 
+  function useAbility(ability: CustomAbilityInstance, type: CustomAbilityTypeDefinition) {
+    try {
+      setError('')
+      const next = activateCustomAbility(character, definitions, definition.id, ability.id)
+      updateCharacter(character.get('id'), () => next)
+      setMessage(`${abilityTitle(type, ability)} foi usada.`)
+    } catch (caught) {
+      setMessage('')
+      setError(caught instanceof Error ? caught.message : 'Não foi possível usar a habilidade.')
+    }
+  }
+
   return <section className="rounded-xl border border-border bg-bg p-4">
     <div>
-      <h3 className="font-semibold text-textH">Aprendizado e preparo</h3>
-      <p className="mt-1 text-xs text-text">Gerencie quais habilidades o personagem conhece e mantém preparadas.</p>
+      <h3 className="font-semibold text-textH">Habilidades</h3>
+      <p className="mt-1 text-xs text-text">Aprenda, prepare e use habilidades com custos, gerações de recursos e usos configurados pelo mestre.</p>
     </div>
     {error ? <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">{error}</div> : null}
+    {message ? <div className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-300">{message}</div> : null}
     <div className="mt-4 grid gap-4">
-      {configurableTypes.map((type) => {
+      {abilityTypes.map((type) => {
         const abilities = state.abilities.filter((ability) => ability.abilityTypeId === type.id)
         if (!abilities.length) return null
         const learnedLimit = getCustomAbilityLimit(definition, state, type, 'learned', character)
@@ -177,10 +198,25 @@ function CustomAbilityProgressPanel({
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             {abilities.map((ability) => {
               const availability = getCustomAbilityAvailability(type, ability)
-              return <div key={ability.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
-                <div>
-                  <div className="text-sm font-medium text-textH">{abilityTitle(type, ability)}</div>
-                  <div className="mt-1 text-[11px] text-text">{availability.canUse ? 'Disponível para uso' : availability.learned ? 'Não preparada' : 'Não aprendida'}</div>
+              const maximum = ability.usage?.maximum
+              const remaining = maximum === undefined ? undefined : Math.max(0, maximum - (ability.usage?.used ?? 0))
+              return <div key={ability.id} className="grid gap-3 rounded-lg border border-border px-3 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-textH">{abilityTitle(type, ability)}</div>
+                    <div className="mt-1 text-[11px] text-text">
+                      {availability.canUse ? 'Disponível para uso' : availability.learned ? 'Não preparada' : 'Não aprendida'}
+                      {remaining !== undefined ? ` · ${remaining} uso(s) restante(s)` : ''}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!availability.canUse || remaining === 0}
+                    onClick={() => useAbility(ability, type)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-accent px-3 py-2 text-xs font-medium text-textH hover:bg-accentBg disabled:cursor-not-allowed disabled:border-border disabled:opacity-50"
+                  >
+                    <Play className="h-3.5 w-3.5" /> Usar
+                  </button>
                 </div>
                 <div className="flex flex-wrap gap-3 text-xs text-textH">
                   {usesLearned(type) ? <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={availability.learned} onChange={(event) => run(() => setCustomAbilityLearned(definition, state, ability.id, event.target.checked, character))} /> Aprendida</label> : null}
