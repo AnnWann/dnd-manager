@@ -10,6 +10,7 @@ import {
   CustomSystemResourcesEditor,
   validateCustomSystemDefinition,
 } from '../features/customSystems/CustomSystemCoreEditors'
+import { CustomSystemPlacementEditor } from '../features/customSystems/CustomSystemPlacementEditor'
 import { CustomSystemRequirementsEditor } from '../features/customSystems/CustomSystemRequirementsEditor'
 import { readLocalStorageJson, removeLocalStorage, writeLocalStorageJson } from '../lib/storage'
 import type { CustomSystemDefinition } from '../models/customSystems/CustomSystemDefinition'
@@ -171,7 +172,10 @@ export function CustomSystemEditorView() {
       {savedMessage && !error ? <div className="mx-4 mt-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-300">{savedMessage}</div> : null}
 
       <div className="p-4 sm:p-5">
-        {activeTab === 'general' ? <CustomSystemGeneralEditor draft={draft} setDraft={setDraft} /> : null}
+        {activeTab === 'general' ? <>
+          <CustomSystemGeneralEditor draft={draft} setDraft={setDraft} />
+          <CustomSystemPlacementEditor draft={draft} setDraft={setDraft} />
+        </> : null}
         {activeTab === 'fields' ? <CustomSystemFieldsEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'resources' ? <CustomSystemResourcesEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'requirements' ? <CustomSystemRequirementsEditor draft={draft} setDraft={setDraft} /> : null}
