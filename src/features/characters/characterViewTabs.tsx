@@ -33,7 +33,7 @@ type Props = {
   tabs?: CharacterViewTabDefinition[]
 }
 
-export const CHARACTER_TABS: CharacterViewTabDefinition[] = [
+export const CHARACTER_TABS: Array<CharacterViewTabDefinition & { key: CharacterTab }> = [
   { key: "sheet", label: "Ficha", icon: ScrollText },
   { key: "abilities", label: "Habilidades", icon: Sparkles },
   { key: "spellsList", label: "Magias", icon: WandSparkles },
