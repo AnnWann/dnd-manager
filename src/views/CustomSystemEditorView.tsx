@@ -3,6 +3,7 @@ import { ArrowLeft, Copy, Download, Save, Trash2 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useCustomSystemsContext } from '../contexts/customSystemsContext'
 import { AdvancedSystemEditors } from '../features/customSystems/AdvancedSystemEditors'
+import { CustomAbilityConfigurationEditor } from '../features/customSystems/CustomAbilityConfigurationEditor'
 import { CustomAbilityLibraryEditor } from '../features/customSystems/CustomAbilityLibraryEditor'
 import {
   CustomSystemFieldsEditor,
@@ -19,7 +20,7 @@ import { CustomSystemRequirementsEditor } from '../features/customSystems/Custom
 import { readLocalStorageJson, removeLocalStorage, writeLocalStorageJson } from '../lib/storage'
 import type { CustomSystemDefinition } from '../models/customSystems/CustomSystemDefinition'
 
-export type CustomSystemEditorTab = 'general' | 'fields' | 'resources' | 'requirements' | 'library' | 'advanced'
+export type CustomSystemEditorTab = 'general' | 'fields' | 'resources' | 'abilities' | 'requirements' | 'library' | 'advanced'
 
 type LocalCustomSystemDraft = {
   schema: 'dndmm.custom-system-draft'
@@ -34,6 +35,7 @@ const TABS: Array<{ id: CustomSystemEditorTab; label: string }> = [
   { id: 'general', label: 'Geral' },
   { id: 'fields', label: 'Campos' },
   { id: 'resources', label: 'Recursos' },
+  { id: 'abilities', label: 'Habilidades' },
   { id: 'requirements', label: 'Requisitos' },
   { id: 'library', label: 'Biblioteca de habilidades' },
   { id: 'advanced', label: 'Avançado' },
@@ -186,6 +188,7 @@ export function CustomSystemEditorView() {
         </div> : null}
         {activeTab === 'fields' ? <CustomSystemFieldsEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'resources' ? <CustomSystemResourcesEditor draft={draft} setDraft={setDraft} /> : null}
+        {activeTab === 'abilities' ? <CustomAbilityConfigurationEditor draft={draft} setDraft={setDraft} definitions={systems.definitions} /> : null}
         {activeTab === 'requirements' ? <CustomSystemRequirementsEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'library' ? <CustomAbilityLibraryEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'advanced' ? <AdvancedSystemEditors draft={draft} setDraft={setDraft} /> : null}
