@@ -174,7 +174,7 @@ export function CustomSystemEditorView() {
       <div className="p-4 sm:p-5">
         {activeTab === 'general' ? <>
           <CustomSystemGeneralEditor draft={draft} setDraft={setDraft} />
-          <CustomSystemPlacementEditor draft={draft} setDraft={setDraft} />
+          <CustomSystemPlacementEditor draft={draft} setDraft={setDraft} definitions={systems.definitions} />
         </> : null}
         {activeTab === 'fields' ? <CustomSystemFieldsEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'resources' ? <CustomSystemResourcesEditor draft={draft} setDraft={setDraft} /> : null}
