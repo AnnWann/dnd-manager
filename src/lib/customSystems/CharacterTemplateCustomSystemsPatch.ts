@@ -7,11 +7,8 @@ import { recalculateCustomSystemState } from './CustomFormulaRuntimePatch'
 let installed = false
 
 /**
- * Compatibility patch for the current CharacterTemplate deserializer.
- *
- * CharacterTemplate.fromJSON rebuilds the sheet property-by-property. Until
- * customSystems is handled directly by that model, this wrapper preserves the
- * already-normalized custom state and refreshes derived formula values.
+ * Compatibility patch for sheet properties that are not yet rebuilt directly
+ * by CharacterTemplate.fromJSON.
  */
 export function installCharacterCustomSystemsSerializationPatch(): void {
   if (installed) return
@@ -22,15 +19,27 @@ export function installCharacterCustomSystemsSerializationPatch(): void {
   CharacterTemplate.fromJSON = (
     props: Partial<CharacterTemplateProps>,
   ): CharacterTemplate => {
-    const restored = originalFromJSON(props)
+    let restored = originalFromJSON(props)
     const customSystems = props.sheet?.customSystems
+    const hiddenCharacterTabs = props.sheet?.hiddenCharacterTabs
 
-    if (!Array.isArray(customSystems)) return restored
+    if (Array.isArray(customSystems)) {
+      restored = restored.withSheet(
+        'customSystems',
+        customSystems.map(recalculateCustomSystemState),
+      )
+    }
 
-    return restored.withSheet(
-      'customSystems',
-      customSystems.map(recalculateCustomSystemState),
-    )
+    if (Array.isArray(hiddenCharacterTabs)) {
+      restored = restored.withSheet(
+        'hiddenCharacterTabs',
+        hiddenCharacterTabs.filter(
+          (entry): entry is string => typeof entry === 'string',
+        ),
+      )
+    }
+
+    return restored
   }
 }
 
