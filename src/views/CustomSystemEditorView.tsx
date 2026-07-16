@@ -11,9 +11,19 @@ import {
   validateCustomSystemDefinition,
 } from '../features/customSystems/CustomSystemCoreEditors'
 import { CustomSystemRequirementsEditor } from '../features/customSystems/CustomSystemRequirementsEditor'
+import { readLocalStorageJson, removeLocalStorage, writeLocalStorageJson } from '../lib/storage'
 import type { CustomSystemDefinition } from '../models/customSystems/CustomSystemDefinition'
 
 export type CustomSystemEditorTab = 'general' | 'fields' | 'resources' | 'requirements' | 'library' | 'advanced'
+
+type LocalCustomSystemDraft = {
+  schema: 'dndmm.custom-system-draft'
+  version: 1
+  systemId: string
+  draft: CustomSystemDefinition
+  baseDefinition: CustomSystemDefinition
+  savedAt: number
+}
 
 const TABS: Array<{ id: CustomSystemEditorTab; label: string }> = [
   { id: 'general', label: 'Geral' },
@@ -33,10 +43,14 @@ export function CustomSystemEditorView() {
   const [draft, setDraft] = useState<CustomSystemDefinition | null>(null)
   const [error, setError] = useState('')
   const [savedMessage, setSavedMessage] = useState('')
+  const [restoredDraft, setRestoredDraft] = useState(false)
 
   useEffect(() => {
     if (!definition) return
-    setDraft(structuredClone(definition))
+    const cached = readDraft(systemId)
+    const hasUnsavedCachedChanges = cached && !definitionsEqual(cached.draft, cached.baseDefinition)
+    setDraft(structuredClone(hasUnsavedCachedChanges ? cached.draft : definition))
+    setRestoredDraft(Boolean(hasUnsavedCachedChanges))
     setError('')
   }, [definition, systemId])
 
@@ -45,11 +59,20 @@ export function CustomSystemEditorView() {
     navigate(editorPath(systemId, activeTab), { replace: true })
   }, [activeTab, navigate, systemId, tab])
 
-  const dirty = useMemo(() => Boolean(draft && definition && JSON.stringify(draft) !== JSON.stringify(definition)), [definition, draft])
+  const dirty = useMemo(() => Boolean(draft && definition && !definitionsEqual(draft, definition)), [definition, draft])
 
   useEffect(() => {
     if (dirty) setSavedMessage('')
   }, [dirty])
+
+  useEffect(() => {
+    if (!draft || !definition || !systemId) return
+    if (!dirty) {
+      removeDraft(systemId)
+      return
+    }
+    writeDraft(systemId, draft, definition)
+  }, [definition, dirty, draft, systemId])
 
   if (!systems.canManage) {
     return <Message title="Sistemas personalizados">Apenas o mestre pode editar sistemas da campanha.</Message>
@@ -69,7 +92,7 @@ export function CustomSystemEditorView() {
   }
 
   function goBack() {
-    if (dirty && !window.confirm('Há alterações não salvas. Voltar para a lista mesmo assim?')) return
+    if (dirty && !window.confirm('Há alterações não salvas. Elas continuarão guardadas neste dispositivo. Voltar para a lista?')) return
     navigate('/custom-systems')
   }
 
@@ -89,8 +112,11 @@ export function CustomSystemEditorView() {
     }
 
     systems.saveDefinition(draft, systemId)
+    removeDraft(systemId)
+    if (draft.id !== systemId) removeDraft(draft.id)
+    setRestoredDraft(false)
     setError('')
-    setSavedMessage('Sistema salvo. As alterações estão sendo sincronizadas.')
+    setSavedMessage('Sistema salvo localmente. A sincronização remota continuará em segundo plano.')
     if (draft.id !== systemId) navigate(editorPath(draft.id, activeTab), { replace: true })
   }
 
@@ -102,6 +128,7 @@ export function CustomSystemEditorView() {
 
   function removeSystem() {
     if (!window.confirm(`Remover o sistema “${draft.name}”? O estado já salvo nos personagens continuará preservado.`)) return
+    removeDraft(systemId)
     systems.removeDefinition(systemId)
     navigate('/custom-systems', { replace: true })
   }
@@ -113,7 +140,11 @@ export function CustomSystemEditorView() {
           <button type="button" onClick={goBack} title="Voltar para sistemas" className="rounded-lg border border-border p-2 text-textH hover:bg-accentBg"><ArrowLeft className="h-4 w-4" /></button>
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accentBorder bg-accentBg text-lg">{draft.icon || <Settings2 className="h-5 w-5 text-accent" />}</div>
           <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2"><h1 className="truncate text-xl font-semibold text-textH">{draft.name}</h1>{dirty ? <span className="shrink-0 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-300">Não salvo</span> : null}</div>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h1 className="truncate text-xl font-semibold text-textH">{draft.name}</h1>
+              {dirty ? <span className="shrink-0 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-300">Não salvo</span> : null}
+              {restoredDraft && dirty ? <span className="shrink-0 rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[11px] text-textH">Rascunho restaurado</span> : null}
+            </div>
             <p className="mt-1 truncate text-xs text-text"><code>{systemId}</code> · v{draft.version}</p>
           </div>
         </div>
@@ -157,6 +188,35 @@ function isEditorTab(value: string | undefined): value is CustomSystemEditorTab 
 
 function editorPath(systemId: string, tab: CustomSystemEditorTab): string {
   return `/custom-systems/${encodeURIComponent(systemId)}/${tab}`
+}
+
+function draftStorageKey(systemId: string): string {
+  return `dndmm.customSystemDraft.v1.${encodeURIComponent(systemId)}`
+}
+
+function readDraft(systemId: string): LocalCustomSystemDraft | undefined {
+  const cached = readLocalStorageJson<LocalCustomSystemDraft>(draftStorageKey(systemId))
+  if (cached?.schema !== 'dndmm.custom-system-draft' || cached.version !== 1 || cached.systemId !== systemId) return undefined
+  return cached
+}
+
+function writeDraft(systemId: string, draft: CustomSystemDefinition, baseDefinition: CustomSystemDefinition): void {
+  writeLocalStorageJson(draftStorageKey(systemId), {
+    schema: 'dndmm.custom-system-draft',
+    version: 1,
+    systemId,
+    draft,
+    baseDefinition,
+    savedAt: Date.now(),
+  } satisfies LocalCustomSystemDraft)
+}
+
+function removeDraft(systemId: string): void {
+  removeLocalStorage(draftStorageKey(systemId))
+}
+
+function definitionsEqual(left: CustomSystemDefinition, right: CustomSystemDefinition): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
 }
 
 function exportDefinition(definition: CustomSystemDefinition) {
