@@ -6,7 +6,7 @@ import type {
   CustomSystemExistingCharacterTab,
 } from '../../models/customSystems/CustomSystemDefinition'
 
-const EXISTING_TABS: Array<{ value: CustomSystemExistingCharacterTab; label: string }> = [
+export const EXISTING_CHARACTER_TABS: Array<{ value: CustomSystemExistingCharacterTab; label: string }> = [
   { value: 'sheet', label: 'Ficha' },
   { value: 'abilities', label: 'Habilidades' },
   { value: 'spellsList', label: 'Magias' },
@@ -31,14 +31,14 @@ export function getCustomSystemPlacement(
     return {
       mode: 'newTab',
       tabLabel: placement.tabLabel?.trim() || undefined,
+      relativeToTab: isExistingTab(placement.relativeToTab) ? placement.relativeToTab : 'proficiencies',
+      position: placement.position === 'before' ? 'before' : 'after',
     }
   }
   if (placement?.mode === 'existingTab') {
     return {
       mode: 'existingTab',
-      targetTab: EXISTING_TABS.some((entry) => entry.value === placement.targetTab)
-        ? placement.targetTab
-        : 'sheet',
+      targetTab: isExistingTab(placement.targetTab) ? placement.targetTab : 'sheet',
       position: placement.position === 'before' ? 'before' : 'after',
     }
   }
@@ -86,7 +86,7 @@ export function CustomSystemPlacementEditor({
     <div className="mt-4 grid gap-3 md:grid-cols-2">
       <button
         type="button"
-        onClick={() => setPlacement({ mode: 'newTab', tabLabel: draft.name })}
+        onClick={() => setPlacement({ mode: 'newTab', tabLabel: draft.name, relativeToTab: 'proficiencies', position: 'after' })}
         className={`rounded-xl border p-4 text-left transition-colors ${placement.mode === 'newTab' ? 'border-accent bg-accentBg' : 'border-border hover:bg-bg'}`}
       >
         <PanelTop className="h-5 w-5 text-accent" />
@@ -105,16 +105,38 @@ export function CustomSystemPlacementEditor({
       </button>
     </div>
 
-    {placement.mode === 'newTab' ? <div className="mt-4 grid gap-1 md:max-w-md">
-      <label className="label" htmlFor="custom-system-tab-label">Nome da aba</label>
-      <input
-        id="custom-system-tab-label"
-        className="input-base"
-        value={placement.tabLabel ?? ''}
-        placeholder={draft.name}
-        onChange={(event) => setPlacement({ mode: 'newTab', tabLabel: event.target.value || undefined })}
-      />
-      <span className="text-xs text-text">Quando vazio, usa o nome do sistema.</span>
+    {placement.mode === 'newTab' ? <div className="mt-4 grid gap-4 md:grid-cols-3">
+      <label className="grid gap-1">
+        <span className="label">Nome da aba</span>
+        <input
+          className="input-base"
+          value={placement.tabLabel ?? ''}
+          placeholder={draft.name}
+          onChange={(event) => setPlacement({ ...placement, tabLabel: event.target.value || undefined })}
+        />
+        <span className="text-xs text-text">Quando vazio, usa o nome do sistema.</span>
+      </label>
+
+      <label className="grid gap-1">
+        <span className="label">Aba de referência</span>
+        <Select
+          value={placement.relativeToTab ?? 'proficiencies'}
+          onChange={(event) => setPlacement({ ...placement, relativeToTab: event.target.value as CustomSystemExistingCharacterTab })}
+        >
+          {EXISTING_CHARACTER_TABS.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}
+        </Select>
+      </label>
+
+      <label className="grid gap-1">
+        <span className="label">Posição da nova aba</span>
+        <Select
+          value={placement.position ?? 'after'}
+          onChange={(event) => setPlacement({ ...placement, position: event.target.value as 'before' | 'after' })}
+        >
+          <option value="before">Antes da aba de referência</option>
+          <option value="after">Depois da aba de referência</option>
+        </Select>
+      </label>
     </div> : <div className="mt-4 grid gap-4 md:grid-cols-2">
       <label className="grid gap-1">
         <span className="label">Aba de destino</span>
@@ -122,7 +144,7 @@ export function CustomSystemPlacementEditor({
           value={placement.targetTab}
           onChange={(event) => setPlacement({ ...placement, targetTab: event.target.value as CustomSystemExistingCharacterTab })}
         >
-          {EXISTING_TABS.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}
+          {EXISTING_CHARACTER_TABS.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}
         </Select>
       </label>
 
@@ -138,4 +160,8 @@ export function CustomSystemPlacementEditor({
       </label>
     </div>}
   </section>
+}
+
+function isExistingTab(value: unknown): value is CustomSystemExistingCharacterTab {
+  return EXISTING_CHARACTER_TABS.some((entry) => entry.value === value)
 }
