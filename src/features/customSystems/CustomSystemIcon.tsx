@@ -24,67 +24,40 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-export type CustomSystemIconId =
-  | 'settings'
-  | 'swords'
-  | 'shield'
-  | 'target'
-  | 'sparkles'
-  | 'wand'
-  | 'flame'
-  | 'zap'
-  | 'book'
-  | 'dices'
-  | 'heart'
-  | 'brain'
-  | 'activity'
-  | 'eye'
-  | 'footprints'
-  | 'crown'
-  | 'gem'
-  | 'skull'
-  | 'leaf'
-  | 'sun'
-  | 'moon'
-  | 'star'
-
 type CustomSystemIconOption = {
-  id: CustomSystemIconId
+  id: string
+  value: string
   label: string
   icon: LucideIcon
 }
 
 export const CUSTOM_SYSTEM_ICON_OPTIONS: CustomSystemIconOption[] = [
-  { id: 'settings', label: 'Sistema', icon: Settings2 },
-  { id: 'swords', label: 'Combate', icon: Swords },
-  { id: 'shield', label: 'Defesa', icon: Shield },
-  { id: 'target', label: 'Precisão', icon: Target },
-  { id: 'sparkles', label: 'Magia', icon: Sparkles },
-  { id: 'wand', label: 'Feitiçaria', icon: WandSparkles },
-  { id: 'flame', label: 'Fogo', icon: Flame },
-  { id: 'zap', label: 'Energia', icon: Zap },
-  { id: 'book', label: 'Conhecimento', icon: BookOpen },
-  { id: 'dices', label: 'Dados', icon: Dices },
-  { id: 'heart', label: 'Vida', icon: Heart },
-  { id: 'brain', label: 'Mente', icon: Brain },
-  { id: 'activity', label: 'Condição', icon: Activity },
-  { id: 'eye', label: 'Percepção', icon: Eye },
-  { id: 'footprints', label: 'Movimento', icon: Footprints },
-  { id: 'crown', label: 'Autoridade', icon: Crown },
-  { id: 'gem', label: 'Recurso', icon: Gem },
-  { id: 'skull', label: 'Morte', icon: Skull },
-  { id: 'leaf', label: 'Natureza', icon: Leaf },
-  { id: 'sun', label: 'Luz', icon: Sun },
-  { id: 'moon', label: 'Noite', icon: Moon },
-  { id: 'star', label: 'Especial', icon: Star },
+  { id: 'settings', value: '⚙️', label: 'Sistema', icon: Settings2 },
+  { id: 'swords', value: '⚔️', label: 'Combate', icon: Swords },
+  { id: 'shield', value: '🛡️', label: 'Defesa', icon: Shield },
+  { id: 'target', value: '🎯', label: 'Precisão', icon: Target },
+  { id: 'sparkles', value: '✨', label: 'Magia', icon: Sparkles },
+  { id: 'wand', value: '🪄', label: 'Feitiçaria', icon: WandSparkles },
+  { id: 'flame', value: '🔥', label: 'Fogo', icon: Flame },
+  { id: 'zap', value: '⚡', label: 'Energia', icon: Zap },
+  { id: 'book', value: '📖', label: 'Conhecimento', icon: BookOpen },
+  { id: 'dices', value: '🎲', label: 'Dados', icon: Dices },
+  { id: 'heart', value: '❤️', label: 'Vida', icon: Heart },
+  { id: 'brain', value: '🧠', label: 'Mente', icon: Brain },
+  { id: 'activity', value: '📈', label: 'Condição', icon: Activity },
+  { id: 'eye', value: '👁️', label: 'Percepção', icon: Eye },
+  { id: 'footprints', value: '👣', label: 'Movimento', icon: Footprints },
+  { id: 'crown', value: '👑', label: 'Autoridade', icon: Crown },
+  { id: 'gem', value: '💎', label: 'Recurso', icon: Gem },
+  { id: 'skull', value: '💀', label: 'Morte', icon: Skull },
+  { id: 'leaf', value: '🍃', label: 'Natureza', icon: Leaf },
+  { id: 'sun', value: '☀️', label: 'Luz', icon: Sun },
+  { id: 'moon', value: '🌙', label: 'Noite', icon: Moon },
+  { id: 'star', value: '⭐', label: 'Especial', icon: Star },
 ]
 
-const ICONS_BY_ID = new Map(
-  CUSTOM_SYSTEM_ICON_OPTIONS.map((option) => [option.id, option.icon]),
-)
-
 export function getCustomSystemIconComponent(icon?: string): LucideIcon {
-  return ICONS_BY_ID.get(normalizeIconId(icon)) ?? Settings2
+  return findIconOption(icon)?.icon ?? Settings2
 }
 
 export function CustomSystemIcon({
@@ -94,10 +67,11 @@ export function CustomSystemIcon({
   icon?: string
   className?: string
 }) {
-  const normalized = normalizeIconId(icon)
-  const Icon = ICONS_BY_ID.get(normalized)
-
-  if (Icon) return <Icon className={className} aria-hidden="true" />
+  const option = findIconOption(icon)
+  if (option) {
+    const Icon = option.icon
+    return <Icon className={className} aria-hidden="true" />
+  }
 
   if (icon?.trim()) {
     return (
@@ -117,22 +91,22 @@ export function CustomSystemIconPicker({
   value?: string
   onChange: (icon: string | undefined) => void
 }) {
-  const selected = normalizeIconId(value)
-  const isLegacyValue = Boolean(value?.trim() && !ICONS_BY_ID.has(selected))
+  const selected = findIconOption(value)
+  const isLegacyValue = Boolean(value?.trim() && !selected)
 
   return (
     <fieldset className="grid gap-3 md:col-span-2">
       <div>
         <legend className="label">Ícone do sistema</legend>
         <p className="mt-1 text-xs text-text">
-          O ícone aparece no catálogo, no editor e na aba do personagem.
+          O ícone aparece no catálogo, no editor e no conteúdo do personagem.
         </p>
       </div>
 
       <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-11">
         {CUSTOM_SYSTEM_ICON_OPTIONS.map((option) => {
           const Icon = option.icon
-          const active = selected === option.id
+          const active = selected?.id === option.id
 
           return (
             <button
@@ -141,7 +115,7 @@ export function CustomSystemIconPicker({
               title={option.label}
               aria-label={option.label}
               aria-pressed={active}
-              onClick={() => onChange(option.id)}
+              onClick={() => onChange(option.value)}
               className={`flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border px-2 py-2 text-center transition-colors ${
                 active
                   ? 'border-accent bg-accentBg text-textH'
@@ -166,7 +140,7 @@ export function CustomSystemIconPicker({
 
         {isLegacyValue ? (
           <span className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs text-text">
-            Ícone antigo preservado: <CustomSystemIcon icon={value} className="h-4 w-4" />
+            Ícone personalizado preservado: <CustomSystemIcon icon={value} className="h-4 w-4" />
           </span>
         ) : null}
       </div>
@@ -174,9 +148,11 @@ export function CustomSystemIconPicker({
   )
 }
 
-function normalizeIconId(icon?: string): CustomSystemIconId | '' {
-  const normalized = icon?.trim().replace(/^lucide:/, '') ?? ''
-  return ICONS_BY_ID.has(normalized as CustomSystemIconId)
-    ? (normalized as CustomSystemIconId)
-    : ''
+function findIconOption(icon?: string): CustomSystemIconOption | undefined {
+  const normalized = icon?.trim().replace(/^lucide:/, '')
+  if (!normalized) return undefined
+
+  return CUSTOM_SYSTEM_ICON_OPTIONS.find(
+    (option) => option.id === normalized || option.value === normalized,
+  )
 }
