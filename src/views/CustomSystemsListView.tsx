@@ -154,6 +154,12 @@ function normalizeImportedDefinition(value: unknown): CustomSystemDefinition | u
   if (!isRecord(value)) return undefined
   const id = typeof value.id === 'string' ? value.id.trim() : ''
   if (!id) return undefined
+
+  const automaticInstallation = normalizeAutomaticInstallation(value.automaticInstallation)
+  const characterPlacement = isRecord(value.characterPlacement)
+    ? value.characterPlacement as unknown as CustomSystemDefinition['characterPlacement']
+    : automaticInstallation?.characterPlacement
+
   return {
     id,
     name: typeof value.name === 'string' && value.name.trim() ? value.name.trim() : id,
@@ -166,7 +172,25 @@ function normalizeImportedDefinition(value: unknown): CustomSystemDefinition | u
     panels: Array.isArray(value.panels) ? value.panels as CustomSystemDefinition['panels'] : [],
     automations: Array.isArray(value.automations) ? value.automations as CustomSystemDefinition['automations'] : [],
     tags: Array.isArray(value.tags) ? value.tags.filter((tag): tag is string => typeof tag === 'string') : [],
-    automaticInstallation: isRecord(value.automaticInstallation) ? value.automaticInstallation as CustomSystemDefinition['automaticInstallation'] : undefined,
+    automaticInstallation,
+    characterPlacement,
+  }
+}
+
+function normalizeAutomaticInstallation(value: unknown): CustomSystemDefinition['automaticInstallation'] {
+  if (!isRecord(value)) return undefined
+  if (typeof value.enabled !== 'boolean') return undefined
+  if (value.match !== 'all' && value.match !== 'any') return undefined
+
+  return {
+    enabled: value.enabled,
+    match: value.match,
+    requirements: Array.isArray(value.requirements)
+      ? value.requirements as CustomSystemDefinition['automaticInstallation'] extends { requirements: infer T } ? T : never
+      : [],
+    characterPlacement: isRecord(value.characterPlacement)
+      ? value.characterPlacement as unknown as NonNullable<CustomSystemDefinition['automaticInstallation']>['characterPlacement']
+      : undefined,
   }
 }
 
