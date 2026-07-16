@@ -1,4 +1,3 @@
-import type { Player } from "../../../models/player/Player"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 
 import { Attributes } from "./attributes"
@@ -11,7 +10,6 @@ import { AttributeCalculators } from "./attributeCalculators"
 import { CharacterConditions } from "./characterConditions"
 import { SavingThrows } from "./savingThrows"
 
-
 type Props = {
   character: CharacterTemplate
   updateCharacter: (
@@ -19,20 +17,12 @@ type Props = {
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) => void
   canAssignOwners: boolean
-  canEditCharacterType: boolean
-  playerKeys: string[]
-  getOwner: (ownerId: string) => Player
-  createOwner: (ownerName: string) => Player
 }
 
 export function CharacterSheetTab({
   character,
   updateCharacter,
   canAssignOwners,
-  canEditCharacterType,
-  playerKeys,
-  getOwner,
-  createOwner,
 }: Props) {
   const showActionEconomy = canAssignOwners
 
@@ -41,11 +31,6 @@ export function CharacterSheetTab({
       <CharacterIdentity
         character={character}
         updateCharacter={updateCharacter}
-        canAssignOwners={canAssignOwners}
-        canEditCharacterType={canEditCharacterType}
-        playerKeys={playerKeys}
-        getOwner={getOwner}
-        createOwner={createOwner}
       />
 
       <GroupHP character={character} updateCharacter={updateCharacter} />
