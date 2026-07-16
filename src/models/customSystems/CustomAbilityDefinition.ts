@@ -11,6 +11,7 @@ export interface CustomAbilityTypeDefinition {
   fields: CustomFieldDefinition[]
   display: CustomAbilityDisplayDefinition
   activation?: CustomAbilityActivationDefinition
+  acquisition?: CustomAbilityAcquisitionDefinition
   visibility?: CustomCondition
   /** Biblioteca definida pelo mestre. O jogador escolhe entradas desta lista para aprender/adicionar. */
   predefinedAbilities?: CustomPredefinedAbilityDefinition[]
@@ -22,6 +23,9 @@ export interface CustomPredefinedAbilityDefinition {
   id: string
   values: Record<string, JsonValue>
   description?: string
+  /** Permite sobrescrever o comportamento padrão do tipo para uma habilidade específica. */
+  activation?: CustomAbilityActivationDefinition
+  acquisition?: Partial<CustomAbilityAcquisitionDefinition>
 }
 
 export interface CustomAbilityDisplayDefinition {
@@ -31,14 +35,47 @@ export interface CustomAbilityDisplayDefinition {
   badgeFieldIds?: string[]
 }
 
+export interface CustomAbilityAcquisitionDefinition {
+  /** Concedida: sempre disponível. Aprendida: precisa ser adquirida. Preparada: escolhida após adquirir. */
+  mode: 'granted' | 'learned' | 'prepared' | 'learnedAndPrepared'
+  learnedLimit?: number
+  learnedLimitFormula?: FormulaExpression
+  preparedLimit?: number
+  preparedLimitFormula?: FormulaExpression
+  defaultLearned?: boolean
+  defaultPrepared?: boolean
+  preparationReset?: 'manual' | 'shortRest' | 'longRest'
+}
+
 export interface CustomAbilityActivationDefinition {
   kind?: AbilityKind
   actionKind?: AbilityActionKind
   actionKindFieldId?: string
   trigger?: Trigger
   triggerFieldId?: string
+  /** @deprecated Use resourceChanges com operation='spend'. */
   resourceCosts?: CustomResourceCostDefinition[]
+  resourceChanges?: CustomAbilityResourceChangeDefinition[]
   usage?: CustomUsageDefinition
+}
+
+export type CustomAbilityResourceReference =
+  | {
+      source: 'native'
+      resource: 'hitPoints' | 'temporaryHitPoints' | 'inspiration' | 'exhaustion'
+    }
+  | {
+      source: 'customSystem'
+      systemId: string
+      resourceId: string
+    }
+
+export interface CustomAbilityResourceChangeDefinition {
+  id: string
+  target: CustomAbilityResourceReference
+  operation: 'spend' | 'gain' | 'set'
+  amount?: number
+  formula?: FormulaExpression
 }
 
 export interface CustomResourceCostDefinition {
@@ -48,6 +85,7 @@ export interface CustomResourceCostDefinition {
 }
 
 export interface CustomUsageDefinition {
+  mode?: 'unlimited' | 'limited'
   maximum?: number
   maximumFormula?: FormulaExpression
   reset: CustomUsageResetKind
