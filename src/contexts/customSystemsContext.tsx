@@ -24,7 +24,8 @@ type CustomSystemsContextValue = {
   status: SyncStatus
   canManage: boolean
   createDefinition: () => CustomSystemDefinition
-  saveDefinition: (definition: CustomSystemDefinition) => void
+  saveDefinition: (definition: CustomSystemDefinition, previousId?: string) => void
+  saveDefinitions: (definitions: CustomSystemDefinition[]) => void
   removeDefinition: (systemId: string) => void
   duplicateDefinition: (systemId: string) => CustomSystemDefinition | undefined
   reload: () => Promise<void>
@@ -156,12 +157,22 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
       update((current) => [...current, definition])
       return definition
     },
-    saveDefinition: (definition) => {
+    saveDefinition: (definition, previousId) => {
       update((current) => {
-        const exists = current.some((entry) => entry.id === definition.id)
+        const withoutPrevious = previousId && previousId !== definition.id
+          ? current.filter((entry) => entry.id !== previousId)
+          : current
+        const exists = withoutPrevious.some((entry) => entry.id === definition.id)
         return exists
-          ? current.map((entry) => entry.id === definition.id ? definition : entry)
-          : [...current, definition]
+          ? withoutPrevious.map((entry) => entry.id === definition.id ? definition : entry)
+          : [...withoutPrevious, definition]
+      })
+    },
+    saveDefinitions: (incoming) => {
+      update((current) => {
+        const merged = new Map(current.map((definition) => [definition.id, definition]))
+        for (const definition of incoming) merged.set(definition.id, definition)
+        return [...merged.values()]
       })
     },
     removeDefinition: (systemId) => {
@@ -226,6 +237,7 @@ function normalizeDefinitions(value: unknown): CustomSystemDefinition[] {
       panels: Array.isArray(raw.panels) ? raw.panels : [],
       automations: Array.isArray(raw.automations) ? raw.automations : [],
       tags: Array.isArray(raw.tags) ? raw.tags.filter((tag): tag is string => typeof tag === 'string') : [],
+      automaticInstallation: raw.automaticInstallation,
     })
   }
   return Array.from(result.values()).sort((left, right) => left.name.localeCompare(right.name))
