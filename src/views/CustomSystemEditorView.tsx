@@ -16,11 +16,12 @@ import {
   CustomSystemIconPicker,
 } from '../features/customSystems/CustomSystemIcon'
 import { CustomSystemPlacementEditor } from '../features/customSystems/CustomSystemPlacementEditor'
+import { CustomSystemPreviewEditor } from '../features/customSystems/CustomSystemPreviewEditor'
 import { CustomSystemRequirementsEditor } from '../features/customSystems/CustomSystemRequirementsEditor'
 import { readLocalStorageJson, removeLocalStorage, writeLocalStorageJson } from '../lib/storage'
 import type { CustomSystemDefinition } from '../models/customSystems/CustomSystemDefinition'
 
-export type CustomSystemEditorTab = 'general' | 'fields' | 'resources' | 'abilities' | 'requirements' | 'library' | 'advanced'
+export type CustomSystemEditorTab = 'general' | 'fields' | 'resources' | 'abilities' | 'requirements' | 'library' | 'preview' | 'advanced'
 
 type LocalCustomSystemDraft = {
   schema: 'dndmm.custom-system-draft'
@@ -38,6 +39,7 @@ const TABS: Array<{ id: CustomSystemEditorTab; label: string }> = [
   { id: 'abilities', label: 'Habilidades' },
   { id: 'requirements', label: 'Requisitos' },
   { id: 'library', label: 'Biblioteca de habilidades' },
+  { id: 'preview', label: 'Pré-visualização' },
   { id: 'advanced', label: 'Avançado' },
 ]
 
@@ -191,6 +193,7 @@ export function CustomSystemEditorView() {
         {activeTab === 'abilities' ? <CustomAbilityConfigurationEditor draft={draft} setDraft={setDraft} definitions={systems.definitions} /> : null}
         {activeTab === 'requirements' ? <CustomSystemRequirementsEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'library' ? <CustomAbilityLibraryEditor draft={draft} setDraft={setDraft} /> : null}
+        {activeTab === 'preview' ? <CustomSystemPreviewEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'advanced' ? <AdvancedSystemEditors draft={draft} setDraft={setDraft} /> : null}
       </div>
     </section>
