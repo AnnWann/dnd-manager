@@ -8,6 +8,8 @@ import type {
 import { createCharacterCustomSystemState } from './CustomSystemState'
 import { evaluateCustomFormula } from './CustomFormulaEngineWithCharacter'
 
+const PREDEFINED_ABILITY_MARKER = '__predefinedAbilityId'
+
 export type CustomSystemRequirementResult = {
   matches: boolean
   matched: number
@@ -92,7 +94,13 @@ function evaluateRequirement(
       matchesIdentity(ability.id, ability.name, requirement.abilityId, requirement.name),
     )
     const customMatch = customAbilities.some((ability) => {
-      if (requirement.abilityId?.trim() && ability.id !== requirement.abilityId && ability.predefinedAbilityId !== requirement.abilityId) return false
+      const predefinedId = ability.values[PREDEFINED_ABILITY_MARKER]
+      const matchesRequestedId =
+        !requirement.abilityId?.trim() ||
+        ability.id === requirement.abilityId ||
+        predefinedId === requirement.abilityId
+      if (!matchesRequestedId) return false
+
       if (requirement.name?.trim()) {
         const stringValues = Object.values(ability.values).filter((value): value is string => typeof value === 'string')
         if (!stringValues.some((value) => normalize(value) === normalize(requirement.name ?? ''))) return false
@@ -113,6 +121,7 @@ function evaluateRequirement(
     try {
       const state = createCharacterCustomSystemState(definition)
       const result = evaluateCustomFormula(requirement.formula, definition, state, character)
+      if (!result.ok) return false
       return result.value === true || (typeof result.value === 'number' && result.value !== 0)
     } catch {
       return false
