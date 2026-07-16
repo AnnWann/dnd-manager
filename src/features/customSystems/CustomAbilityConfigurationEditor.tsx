@@ -1,5 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { Select } from '../../components/ui/Select'
+import { listCustomFormulaVariables, validateCustomFormula } from '../../lib/customSystems'
 import type {
   CustomAbilityAcquisitionDefinition,
   CustomAbilityResourceChangeDefinition,
@@ -7,6 +8,7 @@ import type {
   CustomUsageResetKind,
 } from '../../models/customSystems/CustomAbilityDefinition'
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
+import { FormulaVariablePicker } from './FormulaVariablePicker'
 
 const NATIVE_RESOURCES = [
   { value: 'hitPoints', label: 'Pontos de vida' },
@@ -125,12 +127,24 @@ function AbilityTypeRules({
 
             {usesLearnedState(acquisition.mode) ? <>
               <NumberField label="Limite aprendido" value={acquisition.learnedLimit} onChange={(learnedLimit) => setAcquisition({ learnedLimit })} placeholder="Sem limite" />
-              <TextField label="Fórmula do limite aprendido" value={acquisition.learnedLimitFormula ?? ''} onChange={(learnedLimitFormula) => setAcquisition({ learnedLimitFormula: learnedLimitFormula || undefined })} placeholder="Ex.: character.level + 2" />
+              <FormulaField
+                label="Fórmula do limite aprendido"
+                definition={currentSystem}
+                value={acquisition.learnedLimitFormula ?? ''}
+                onChange={(learnedLimitFormula) => setAcquisition({ learnedLimitFormula: learnedLimitFormula || undefined })}
+                placeholder="Ex.: character.level + 2"
+              />
             </> : null}
 
             {usesPreparedState(acquisition.mode) ? <>
               <NumberField label="Limite preparado" value={acquisition.preparedLimit} onChange={(preparedLimit) => setAcquisition({ preparedLimit })} placeholder="Sem limite" />
-              <TextField label="Fórmula do limite preparado" value={acquisition.preparedLimitFormula ?? ''} onChange={(preparedLimitFormula) => setAcquisition({ preparedLimitFormula: preparedLimitFormula || undefined })} placeholder="Ex.: character.proficiencyBonus" />
+              <FormulaField
+                label="Fórmula do limite preparado"
+                definition={currentSystem}
+                value={acquisition.preparedLimitFormula ?? ''}
+                onChange={(preparedLimitFormula) => setAcquisition({ preparedLimitFormula: preparedLimitFormula || undefined })}
+                placeholder="Ex.: character.proficiencyBonus"
+              />
               <SelectField
                 label="Alterar preparo"
                 value={acquisition.preparationReset ?? 'manual'}
@@ -167,7 +181,13 @@ function AbilityTypeRules({
             />
             {(usage.mode ?? (usage.maximum !== undefined ? 'limited' : 'unlimited')) === 'limited' ? <>
               <NumberField label="Máximo fixo" value={usage.maximum} onChange={(maximum) => setUsage({ maximum })} placeholder="Opcional" />
-              <TextField label="Fórmula do máximo" value={usage.maximumFormula ?? ''} onChange={(maximumFormula) => setUsage({ maximumFormula: maximumFormula || undefined })} placeholder="Ex.: character.proficiencyBonus" />
+              <FormulaField
+                label="Fórmula do máximo"
+                definition={currentSystem}
+                value={usage.maximumFormula ?? ''}
+                onChange={(maximumFormula) => setUsage({ maximumFormula: maximumFormula || undefined })}
+                placeholder="Ex.: character.proficiencyBonus"
+              />
               <SelectField
                 label="Recuperação"
                 value={usage.reset}
@@ -287,7 +307,15 @@ function ResourceChangeRow({
         </>}
 
         <NumberField label="Quantidade" value={change.amount} onChange={(amount) => onChange({ ...change, amount })} placeholder="1" />
-        <TextField label="Fórmula opcional" value={change.formula ?? ''} onChange={(formula) => onChange({ ...change, formula: formula || undefined })} placeholder="Substitui a quantidade fixa" />
+      </div>
+      <div className="mt-3">
+        <FormulaField
+          label="Fórmula opcional"
+          definition={currentSystem}
+          value={change.formula ?? ''}
+          onChange={(formula) => onChange({ ...change, formula: formula || undefined })}
+          placeholder="Substitui a quantidade fixa"
+        />
       </div>
       <div className="mt-3 flex justify-end">
         <button type="button" onClick={onRemove} className="inline-flex items-center gap-2 rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10">
@@ -296,6 +324,43 @@ function ResourceChangeRow({
       </div>
     </article>
   )
+}
+
+function FormulaField({
+  label,
+  definition,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string
+  definition: CustomSystemDefinition
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+}) {
+  const variables = listCustomFormulaVariables(definition)
+  const error = value.trim() ? validateCustomFormula(value, definition) : undefined
+
+  return <div className="rounded-lg border border-accentBorder bg-accentBg/30 p-3">
+    <label className="grid min-w-0 gap-1">
+      <span className="label">{label}</span>
+      <input
+        className="input-base font-mono"
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <FormulaVariablePicker
+        variables={variables}
+        onSelect={(path) => onChange(`${value}${value.trim() ? ' ' : ''}${path}`)}
+      />
+      <span className="text-xs text-text">Funções: <code>min</code>, <code>max</code>, <code>round</code>, <code>floor</code>, <code>ceil</code>, <code>abs</code>, <code>clamp</code> e <code>if</code>.</span>
+    </div>
+    {value.trim() ? <div className={`mt-2 text-xs ${error ? 'text-red-300' : 'text-emerald-300'}`}>{error ?? 'Fórmula válida.'}</div> : null}
+  </div>
 }
 
 function normalizeAcquisition(value?: CustomAbilityAcquisitionDefinition): CustomAbilityAcquisitionDefinition {
