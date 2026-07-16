@@ -28,7 +28,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           className={cn(
             [
               "h-10 w-full min-w-0 max-w-full appearance-none rounded-lg border px-3 pr-10",
-              "bg-bg text-sm text-textH",
+              "bg-bg text-sm font-medium text-textH",
               "shadow-theme-sm",
               "transition-[background-color,border-color,box-shadow]",
               "duration-150",
@@ -50,6 +50,13 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
               "aria-invalid:ring-danger/20",
               "aria-invalid:focus-visible:border-danger",
               "aria-invalid:focus-visible:ring-danger/25",
+
+              // Browsers render the opened native list outside the normal Tailwind
+              // cascade. Explicit option colors keep it readable in dark themes.
+              "[&>option]:bg-[#1b1821]",
+              "[&>option]:text-[#f7f2ff]",
+              "[&>option]:font-medium",
+              "[&>option:disabled]:text-[#8f8799]",
             ].join(" "),
             className,
           )}
