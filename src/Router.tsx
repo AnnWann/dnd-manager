@@ -16,7 +16,16 @@ import { SyncView } from "./views/SyncView"
 export function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/character" replace />} />
+      <Route
+        path="/"
+        element={
+          <Navigate
+            to="/character"
+            replace
+            state={{ autoOpenLast: true }}
+          />
+        }
+      />
       <Route path="/sync" element={<SyncView />} />
       <Route path="/character" element={<CharacterIndexView />} />
       <Route path="/character/:characterId" element={<CharacterDetailView />} />
