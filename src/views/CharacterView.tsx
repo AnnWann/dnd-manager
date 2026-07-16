@@ -7,7 +7,7 @@ import {
   type CSSProperties,
   type TouchEvent,
 } from "react"
-import { Settings2 } from "lucide-react"
+import { Settings2, SlidersHorizontal } from "lucide-react"
 import { useNavigate, useParams } from "react-router-dom"
 import { CharacterAbilitiesTab } from "../features/characters/abilities/characterAbilities"
 import { CharacterSelector } from "../features/characters/characterSelector"
@@ -30,7 +30,7 @@ import { CharacterRestControls } from "../features/characters/rest/characterRest
 import { CharacterCreationWizard } from "../features/characters/creation/characterCreationWizardV5"
 import { ensureCharacterBackgroundFromHistory } from "../features/characters/creation/inferCharacterBackground"
 import {
-  CustomSystemsManagementPanel,
+  CustomSystemsManagementModal,
   CustomSystemsRuntime,
   CustomSystemsTabWithLibrary,
   isActiveSystemState,
@@ -38,7 +38,10 @@ import {
 import { getCustomSystemPlacement } from "../features/customSystems/CustomSystemPlacementEditor"
 import { useCustomSystemDefinitions } from "../lib/customSystems/CustomSystemRegistry"
 import type { CustomSystemActor } from "../lib/customSystems"
-import type { CustomSystemExistingCharacterTab } from "../models/customSystems/CustomSystemDefinition"
+import type {
+  CustomSystemDefinition,
+  CustomSystemExistingCharacterTab,
+} from "../models/customSystems/CustomSystemDefinition"
 import type { Player } from "../models/player/Player"
 
 const TAB_SWIPE_MIN_DISTANCE = 88
@@ -80,26 +83,22 @@ export function CharacterView() {
   const activeCustomSystemDefinitions = useMemo(() => {
     if (!activeCharacter) return []
     const states = activeCharacter.get("sheet").customSystems ?? []
-    const activeIds = new Set(states.filter(isActiveSystemState).map((state) => state.systemId))
-    return customSystemDefinitions.filter((definition) => activeIds.has(definition.id))
+    const activeIds = new Set(
+      states.filter(isActiveSystemState).map((state) => state.systemId),
+    )
+    return customSystemDefinitions.filter((definition) =>
+      activeIds.has(definition.id),
+    )
   }, [activeCharacter, customSystemDefinitions])
 
-  const characterTabs = useMemo<CharacterViewTabDefinition[]>(() => {
-    const customTabs = activeCustomSystemDefinitions
-      .filter((definition) => getCustomSystemPlacement(definition).mode === "newTab")
-      .map((definition) => {
-        const placement = getCustomSystemPlacement(definition)
-        return {
-          key: customSystemTabKey(definition.id),
-          label: placement.mode === "newTab" ? placement.tabLabel || definition.name : definition.name,
-          icon: Settings2,
-        }
-      })
-    return [...CHARACTER_TABS, ...customTabs]
-  }, [activeCustomSystemDefinitions])
+  const characterTabs = useMemo<CharacterViewTabDefinition[]>(
+    () => buildCharacterTabs(activeCustomSystemDefinitions),
+    [activeCustomSystemDefinitions],
+  )
 
   const activeTab = normalizeCharacterViewTab(tab, characterTabs)
   const [creationOpen, setCreationOpen] = useState(false)
+  const [systemsManagerOpen, setSystemsManagerOpen] = useState(false)
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [swipeDragging, setSwipeDragging] = useState(false)
   const [tabPanelMinHeight, setTabPanelMinHeight] = useState(0)
@@ -136,6 +135,10 @@ export function CharacterView() {
     }
   }, [characterTabs, navigate, tab])
 
+  useEffect(() => {
+    setSystemsManagerOpen(false)
+  }, [activeCharacter])
+
   useLayoutEffect(() => {
     lockTabPanelHeight()
   }, [activeTab])
@@ -145,7 +148,9 @@ export function CharacterView() {
   }
 
   function setAdjacentTab(direction: "previous" | "next") {
-    const activeIndex = characterTabs.findIndex((entry) => entry.key === activeTab)
+    const activeIndex = characterTabs.findIndex(
+      (entry) => entry.key === activeTab,
+    )
     if (activeIndex < 0) return
 
     const nextIndex = direction === "next" ? activeIndex + 1 : activeIndex - 1
@@ -161,7 +166,9 @@ export function CharacterView() {
     const content = tabContentRef.current
     if (!content) return
 
-    const nextHeight = Math.ceil(Math.max(content.scrollHeight, content.offsetHeight))
+    const nextHeight = Math.ceil(
+      Math.max(content.scrollHeight, content.offsetHeight),
+    )
     if (nextHeight > 0) {
       setTabPanelMinHeight((current) => Math.max(current, nextHeight))
     }
@@ -221,7 +228,9 @@ export function CharacterView() {
     }
 
     setSwipeDragging(true)
-    setSwipeOffset(getSwipePreviewOffset(deltaX, activeTab, characterTabs))
+    setSwipeOffset(
+      getSwipePreviewOffset(deltaX, activeTab, characterTabs),
+    )
   }
 
   function handleSwipeEnd(event: TouchEvent<HTMLDivElement>) {
@@ -275,8 +284,12 @@ export function CharacterView() {
     return (
       <>
         <div className="mx-auto w-full max-w-xl rounded-xl border border-accentBorder bg-bg p-4">
-          <div className="text-sm font-semibold text-textH">Nenhum personagem visível</div>
-          <div className="mt-1 text-xs text-text">Você ainda não tem um personagem associado a este jogador.</div>
+          <div className="text-sm font-semibold text-textH">
+            Nenhum personagem visível
+          </div>
+          <div className="mt-1 text-xs text-text">
+            Você ainda não tem um personagem associado a este jogador.
+          </div>
           <button
             type="button"
             className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accentText"
@@ -304,7 +317,10 @@ export function CharacterView() {
     deleteCharacter(activeCharacter.get("id"))
   }
 
-  const swipeProgress = Math.min(1, Math.abs(swipeOffset) / TAB_SWIPE_MAX_PREVIEW_OFFSET)
+  const swipeProgress = Math.min(
+    1,
+    Math.abs(swipeOffset) / TAB_SWIPE_MAX_PREVIEW_OFFSET,
+  )
   const tabPanelStyle: CSSProperties = {
     minHeight: tabPanelMinHeight > 0 ? `${tabPanelMinHeight}px` : undefined,
   }
@@ -336,18 +352,36 @@ export function CharacterView() {
 
   return (
     <div className="flex flex-col gap-4">
-      <CustomSystemsRuntime character={activeCharacter} updateCharacter={updateCharacter} />
-
-      <CharacterSelector
-        characters={characters}
-        activeCharacter={activeCharacter}
-        addCharacter={() => setCreationOpen(true)}
-        importCharacter={importCharacter}
-        setActiveCharacterId={setSelectedCharacterId}
-        deleteActiveCharacter={deleteActiveCharacter}
-        disableDelete={characters.length <= 1}
-        showOwnerBadge={canAssignOwners}
+      <CustomSystemsRuntime
+        character={activeCharacter}
+        updateCharacter={updateCharacter}
       />
+
+      <div className="grid gap-2">
+        <CharacterSelector
+          characters={characters}
+          activeCharacter={activeCharacter}
+          addCharacter={() => setCreationOpen(true)}
+          importCharacter={importCharacter}
+          setActiveCharacterId={setSelectedCharacterId}
+          deleteActiveCharacter={deleteActiveCharacter}
+          disableDelete={characters.length <= 1}
+          showOwnerBadge={canAssignOwners}
+        />
+
+        {canAssignOwners ? (
+          <div className="flex justify-end px-1">
+            <button
+              type="button"
+              onClick={() => setSystemsManagerOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg px-3 py-2 text-sm font-medium text-textH shadow-theme-sm hover:bg-accentBg"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Configurar sistemas de {activeCharacter.get("name") || "personagem"}
+            </button>
+          </div>
+        ) : null}
+      </div>
 
       <CharacterRestControls
         character={activeCharacter}
@@ -395,19 +429,31 @@ export function CharacterView() {
           )}
 
           {activeTab === "race" && (
-            <CharacterRaceTab character={activeCharacter} updateCharacter={updateCharacter} />
+            <CharacterRaceTab
+              character={activeCharacter}
+              updateCharacter={updateCharacter}
+            />
           )}
 
           {activeTab === "profile" && (
-            <CharacterProfileTab character={activeCharacter} updateCharacter={updateCharacter} />
+            <CharacterProfileTab
+              character={activeCharacter}
+              updateCharacter={updateCharacter}
+            />
           )}
 
           {activeTab === "abilities" && (
-            <CharacterAbilitiesTab character={activeCharacter} updateCharacter={updateCharacter} />
+            <CharacterAbilitiesTab
+              character={activeCharacter}
+              updateCharacter={updateCharacter}
+            />
           )}
 
           {activeTab === "equipment" && (
-            <CharacterEquipmentTab character={activeCharacter} updateCharacter={updateCharacter} />
+            <CharacterEquipmentTab
+              character={activeCharacter}
+              updateCharacter={updateCharacter}
+            />
           )}
 
           {activeTab === "inventory" && (
@@ -419,11 +465,17 @@ export function CharacterView() {
           )}
 
           {activeTab === "spellsList" && (
-            <CharacterMagicTab character={activeCharacter} updateCharacter={updateCharacter} />
+            <CharacterMagicTab
+              character={activeCharacter}
+              updateCharacter={updateCharacter}
+            />
           )}
 
           {activeTab === "proficiencies" && (
-            <CharacterProficienciesTab character={activeCharacter} updateCharacter={updateCharacter} />
+            <CharacterProficienciesTab
+              character={activeCharacter}
+              updateCharacter={updateCharacter}
+            />
           )}
 
           {placedAfter}
@@ -436,31 +488,63 @@ export function CharacterView() {
               systemIds={[customTabSystemId]}
             />
           ) : null}
-
-          {activeTab === "sheet" ? (
-            <CustomSystemsManagementPanel
-              character={activeCharacter}
-              updateCharacter={updateCharacter}
-              actor={actor}
-            />
-          ) : null}
         </div>
       </div>
+
+      <CustomSystemsManagementModal
+        character={activeCharacter}
+        updateCharacter={updateCharacter}
+        actor={actor}
+        open={systemsManagerOpen}
+        onClose={() => setSystemsManagerOpen(false)}
+      />
 
       {creationWizard}
     </div>
   )
 }
 
+function buildCharacterTabs(
+  definitions: CustomSystemDefinition[],
+): CharacterViewTabDefinition[] {
+  const before = new Map<CustomSystemExistingCharacterTab, CharacterViewTabDefinition[]>()
+  const after = new Map<CustomSystemExistingCharacterTab, CharacterViewTabDefinition[]>()
+
+  for (const definition of definitions) {
+    const placement = getCustomSystemPlacement(definition)
+    if (placement.mode !== "newTab") continue
+
+    const anchor = placement.relativeToTab ?? "proficiencies"
+    const bucket = (placement.position ?? "after") === "before" ? before : after
+    const entries = bucket.get(anchor) ?? []
+    entries.push({
+      key: customSystemTabKey(definition.id),
+      label: placement.tabLabel || definition.name,
+      icon: Settings2,
+    })
+    bucket.set(anchor, entries)
+  }
+
+  return CHARACTER_TABS.flatMap((tab) => [
+    ...(before.get(tab.key) ?? []),
+    tab,
+    ...(after.get(tab.key) ?? []),
+  ])
+}
+
 function getPlacedSystemIds(
-  definitions: ReturnType<typeof useCustomSystemDefinitions>,
+  definitions: CustomSystemDefinition[],
   targetTab: CustomSystemExistingCharacterTab,
   position: "before" | "after",
 ): string[] {
   return definitions
     .filter((definition) => {
       const placement = getCustomSystemPlacement(definition)
-      return placement.mode === "existingTab" && placement.targetTab === targetTab && placement.position === position
+      return (
+        placement.mode === "existingTab" &&
+        placement.targetTab === targetTab &&
+        placement.position === position
+      )
     })
     .map((definition) => definition.id)
 }
@@ -475,19 +559,29 @@ function readCustomSystemTabId(tab: string): string | undefined {
     : undefined
 }
 
-function getSwipePreviewOffset(deltaX: number, activeTab: string, tabs: CharacterViewTabDefinition[]): number {
-  const activeIndex = tabs.findIndex((tab) => tab.key === activeTab)
+function getSwipePreviewOffset(
+  deltaX: number,
+  activeTab: string,
+  tabs: CharacterViewTabDefinition[],
+): number {
+  const activeIndex = tabs.findIndex((entry) => entry.key === activeTab)
   const isAtFirstTab = activeIndex <= 0
   const isAtLastTab = activeIndex >= tabs.length - 1
   const blockedByEdge = deltaX > 0 ? isAtFirstTab : isAtLastTab
   const resistance = blockedByEdge ? 0.22 : 0.72
   const direction = Math.sign(deltaX) || 1
-  const resisted = Math.min(Math.abs(deltaX) * resistance, TAB_SWIPE_MAX_PREVIEW_OFFSET)
+  const resisted = Math.min(
+    Math.abs(deltaX) * resistance,
+    TAB_SWIPE_MAX_PREVIEW_OFFSET,
+  )
   return direction * resisted
 }
 
-function normalizeCharacterViewTab(value: string | undefined, tabs: CharacterViewTabDefinition[]): string {
-  return value && tabs.some((tab) => tab.key === value) ? value : "sheet"
+function normalizeCharacterViewTab(
+  value: string | undefined,
+  tabs: CharacterViewTabDefinition[],
+): string {
+  return value && tabs.some((entry) => entry.key === value) ? value : "sheet"
 }
 
 function isCharacterTab(value: string): value is CharacterTab {
