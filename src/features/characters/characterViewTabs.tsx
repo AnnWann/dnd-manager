@@ -11,6 +11,11 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+import {
+  getCustomSystemIconComponent,
+} from "../customSystems/CustomSystemIcon"
+import { useCustomSystemDefinitions } from "../../lib/customSystems/CustomSystemRegistry"
+
 export type CharacterTab =
   | "sheet"
   | "race"
@@ -50,6 +55,7 @@ export function CharacterViewTabs({
   tabs = CHARACTER_TABS,
 }: Props) {
   const activeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const customSystemDefinitions = useCustomSystemDefinitions()
 
   useEffect(() => {
     activeButtonRef.current?.scrollIntoView({
@@ -66,7 +72,12 @@ export function CharacterViewTabs({
     >
       <div className="flex min-w-max snap-x snap-mandatory gap-1 sm:gap-2 lg:min-w-0">
         {tabs.map((tab) => {
-          const TabIcon = tab.icon
+          const customSystem = customSystemDefinitions.find(
+            (definition) => definition.id === tab.key,
+          )
+          const TabIcon = customSystem
+            ? getCustomSystemIconComponent(customSystem.icon)
+            : tab.icon
           const isActive = activeTab === tab.key
 
           return (
