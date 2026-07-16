@@ -21,8 +21,21 @@ export interface CustomSystemDefinition {
   automations: CustomAutomationDefinition[]
   automaticInstallation?: CustomSystemAutomaticInstallation
   characterPlacement?: CustomSystemCharacterPlacement
+  presentation?: CustomSystemPresentationDefinition
   tags?: string[]
 }
+
+export interface CustomSystemPresentationDefinition {
+  items: CustomSystemPresentationItem[]
+}
+
+export interface CustomSystemPresentationItem {
+  key: string
+  hiddenForPlayer?: boolean
+  hiddenForMaster?: boolean
+}
+
+export type CustomSystemPresentationItemKind = 'field' | 'resource' | 'ability'
 
 export type CustomSystemExistingCharacterTab =
   | 'sheet'

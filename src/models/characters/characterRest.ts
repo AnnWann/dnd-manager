@@ -4,6 +4,7 @@ import type { CharacterEquipment } from "../items/equipment/Equipment"
 import type { Equipment } from "../items/equipment/EquipmentSlot"
 import type { Itemmable } from "../items/item"
 import type { HP } from "../sheet/HP"
+import { applyCustomSystemRestRecovery } from "../../lib/customSystems"
 import type { CharacterTemplate } from "./CharacterTemplate"
 
 type HitDiceConsumption = Partial<Record<DieSides, number>>
@@ -27,17 +28,19 @@ export function takeShortRest(
     }
   }
 
+  nextCharacter = applyCustomSystemRestRecovery(nextCharacter, "short", 1)
   return nextCharacter.heal(Math.max(0, Math.trunc(healing)))
 }
 
 export function takeLongRest(
   character: CharacterTemplate,
 ): CharacterTemplate {
-  return resetRestResources(
+  const rested = resetRestResources(
     recoverLongRestHp(character, 1),
     "long",
     1,
   )
+  return applyCustomSystemRestRecovery(rested, "long", 1)
 }
 
 export function takePartialLongRest(
@@ -45,7 +48,7 @@ export function takePartialLongRest(
 ): CharacterTemplate {
   const currentExhaustion = character.get("sheet").stats.exhaustion ?? 0
 
-  return resetRestResources(
+  const rested = resetRestResources(
     recoverLongRestHp(character, 0.5),
     "long",
     0.5,
@@ -53,6 +56,8 @@ export function takePartialLongRest(
     "exhaustion",
     Math.min(6, currentExhaustion + 1),
   )
+
+  return applyCustomSystemRestRecovery(rested, "long", 0.5)
 }
 
 function recoverLongRestHp(
