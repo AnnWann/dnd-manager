@@ -57,8 +57,8 @@ const MAX_CONFLICT_RETRIES = 4
 export function CustomSystemsProvider({ children }: { children: ReactNode }) {
   const { syncKey, userRole, userKey } = useSyncContext()
   const initialSnapshotRef = useRef<LocalCustomSystemsSnapshot | null>(null)
-  if (!initialSnapshotRef.current) initialSnapshotRef.current = readLocalSnapshot()
-  const initialSnapshot = initialSnapshotRef.current
+  const initialSnapshot = initialSnapshotRef.current ?? readLocalSnapshot()
+  initialSnapshotRef.current = initialSnapshot
 
   const [definitions, setDefinitions] = useState<CustomSystemDefinition[]>(initialSnapshot.definitions)
   const [status, setStatus] = useState<SyncStatus>({ kind: 'idle' })
@@ -142,12 +142,14 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
 
           if (response.status === 409) {
             const remote = normalizeDefinitions(data.definitions)
+            const previousBase = baseDefinitionsRef.current
             expectedRevision = Math.max(0, Math.trunc(Number(data.revision) || 0))
             revisionRef.current = expectedRevision
+
+            let merged = mergeDefinitionSnapshots(previousBase, candidate, remote)
+            merged = mergeDefinitionSnapshots(candidate, definitionsRef.current, merged)
             baseDefinitionsRef.current = remote
-            candidate = mergeDefinitions(remote, candidate)
-            candidate = mergeDefinitions(candidate, definitionsRef.current)
-            applyLocalDefinitions(candidate, true)
+            candidate = applyLocalDefinitions(merged, true)
             continue
           }
 
@@ -202,10 +204,16 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
 
       const remote = normalizeDefinitions(data.definitions)
       const local = normalizeDefinitions(definitionsRef.current)
-      const hasLocalChanges = dirtyRef.current || !definitionsEqual(local, baseDefinitionsRef.current)
-      const next = hasLocalChanges ? mergeDefinitions(remote, local) : remote
+      const remoteRevision = Math.max(0, Math.trunc(Number(data.revision) || 0))
+      const remoteIsUninitialized = remoteRevision === 0 && remote.length === 0 && local.length > 0
+      const hasLocalChanges = remoteIsUninitialized || dirtyRef.current || !definitionsEqual(local, baseDefinitionsRef.current)
+      const next = remoteIsUninitialized
+        ? local
+        : hasLocalChanges
+          ? mergeDefinitionSnapshots(baseDefinitionsRef.current, local, remote)
+          : remote
 
-      revisionRef.current = Math.max(0, Math.trunc(Number(data.revision) || 0))
+      revisionRef.current = remoteRevision
       baseDefinitionsRef.current = remote
       hydratedRef.current = true
       const stillDirty = !definitionsEqual(next, remote)
@@ -345,10 +353,35 @@ function normalizeDefinitions(value: unknown): CustomSystemDefinition[] {
   return Array.from(result.values()).sort((left, right) => left.name.localeCompare(right.name))
 }
 
-function mergeDefinitions(remote: CustomSystemDefinition[], local: CustomSystemDefinition[]): CustomSystemDefinition[] {
-  const merged = new Map(remote.map((definition) => [definition.id, definition]))
-  for (const definition of local) merged.set(definition.id, definition)
-  return normalizeDefinitions(Array.from(merged.values()))
+function mergeDefinitionSnapshots(
+  base: CustomSystemDefinition[],
+  local: CustomSystemDefinition[],
+  remote: CustomSystemDefinition[],
+): CustomSystemDefinition[] {
+  const baseMap = new Map(normalizeDefinitions(base).map((definition) => [definition.id, definition]))
+  const localMap = new Map(normalizeDefinitions(local).map((definition) => [definition.id, definition]))
+  const remoteMap = new Map(normalizeDefinitions(remote).map((definition) => [definition.id, definition]))
+  const ids = new Set([...baseMap.keys(), ...localMap.keys(), ...remoteMap.keys()])
+  const merged: CustomSystemDefinition[] = []
+
+  for (const id of ids) {
+    const baseDefinition = baseMap.get(id)
+    const localDefinition = localMap.get(id)
+    const remoteDefinition = remoteMap.get(id)
+    const localChanged = !definitionEqual(localDefinition, baseDefinition)
+
+    if (localChanged) {
+      if (localDefinition) merged.push(localDefinition)
+    } else if (remoteDefinition) {
+      merged.push(remoteDefinition)
+    }
+  }
+
+  return normalizeDefinitions(merged)
+}
+
+function definitionEqual(left: CustomSystemDefinition | undefined, right: CustomSystemDefinition | undefined): boolean {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null)
 }
 
 function definitionsEqual(left: CustomSystemDefinition[], right: CustomSystemDefinition[]): boolean {
