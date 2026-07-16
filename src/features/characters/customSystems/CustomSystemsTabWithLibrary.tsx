@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BookOpen, Plus, Search, X } from 'lucide-react'
+import { BookOpen, Eye, EyeOff, Plus, Search, Settings2, Trash2, X } from 'lucide-react'
 import { Select } from '../../../components/ui/Select'
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
 import type { CustomPredefinedAbilityDefinition } from '../../../models/customSystems/CustomAbilityDefinition'
@@ -7,6 +7,8 @@ import type { CharacterCustomSystemState, CustomAbilityInstance, CustomSystemDef
 import {
   addCustomAbility,
   createAutomaticallyInstalledCustomSystemState,
+  createCharacterCustomSystemState,
+  setCustomSystemEnabled,
   shouldAutomaticallyInstallCustomSystem,
   type CustomSystemActor,
 } from '../../../lib/customSystems'
@@ -14,6 +16,7 @@ import { useCustomSystemDefinitions } from '../../../lib/customSystems/CustomSys
 import { CustomSystemsTab } from './CustomSystemsTab'
 
 const PREDEFINED_MARKER = '__predefinedAbilityId'
+const SUPPRESSED_SYSTEM_MARKER = '__customSystemSuppressed'
 
 type Props = {
   character: CharacterTemplate
@@ -21,11 +24,13 @@ type Props = {
   actor: CustomSystemActor
 }
 
-export function CustomSystemsTabWithLibrary(props: Props) {
-  const { character, updateCharacter } = props
+type PlacementProps = Props & {
+  systemIds?: string[]
+}
+
+export function CustomSystemsRuntime({ character, updateCharacter }: Pick<Props, 'character' | 'updateCharacter'>) {
   const definitions = useCustomSystemDefinitions()
-  const states = character.get('sheet').customSystems ?? []
-  const [open, setOpen] = useState(false)
+  const states = (character.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
 
   const automaticDefinitions = useMemo(
     () => definitions.filter((definition) =>
@@ -37,20 +42,39 @@ export function CustomSystemsTabWithLibrary(props: Props) {
 
   useEffect(() => {
     if (!automaticDefinitions.length) return
-    const ids = new Set(automaticDefinitions.map((definition) => definition.id))
     updateCharacter(character.get('id'), (current) => {
-      const currentStates = current.get('sheet').customSystems ?? []
+      const currentStates = (current.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
       const existingIds = new Set(currentStates.map((state) => state.systemId))
       const additions = automaticDefinitions
-        .filter((definition) => ids.has(definition.id) && !existingIds.has(definition.id))
+        .filter((definition) => !existingIds.has(definition.id))
         .map(createAutomaticallyInstalledCustomSystemState)
       if (!additions.length) return current
       return current.withSheet('customSystems', [...currentStates, ...additions])
     })
   }, [automaticDefinitions, character, updateCharacter])
 
+  return null
+}
+
+export function CustomSystemsTabWithLibrary({
+  character,
+  updateCharacter,
+  actor,
+  systemIds,
+}: PlacementProps) {
+  const definitions = useCustomSystemDefinitions()
+  const states = (character.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
+  const [open, setOpen] = useState(false)
+  const allowedIds = systemIds ? new Set(systemIds) : undefined
+  const activeStates = states.filter((state) =>
+    isActiveSystemState(state) && (!allowedIds || allowedIds.has(state.systemId)),
+  )
+
+  if (!activeStates.length) return null
+
+  const visibleCharacter = character.withSheet('customSystems', activeStates)
   const installedDefinitions = definitions.filter((definition) =>
-    states.some((state) => state.systemId === definition.id),
+    activeStates.some((state) => state.systemId === definition.id),
   )
   const hasLibraryEntries = installedDefinitions.some((definition) =>
     definition.abilityTypes.some((type) => (type.predefinedAbilities?.length ?? 0) > 0),
@@ -63,22 +87,102 @@ export function CustomSystemsTabWithLibrary(props: Props) {
       </button>
     </div> : null}
 
-    <CustomSystemsTab {...props} />
-    {open ? <AbilityLibraryModal {...props} onClose={() => setOpen(false)} /> : null}
+    <CustomSystemsTab
+      character={visibleCharacter}
+      updateCharacter={updateCharacter}
+      actor={actor}
+    />
+    {open ? <AbilityLibraryModal character={character} updateCharacter={updateCharacter} actor={actor} systemIds={systemIds} onClose={() => setOpen(false)} /> : null}
   </div>
 }
 
-function AbilityLibraryModal({ character, updateCharacter, actor, onClose }: Props & { onClose: () => void }) {
+export function CustomSystemsManagementPanel({ character, updateCharacter, actor }: Props) {
   const definitions = useCustomSystemDefinitions()
-  const states = character.get('sheet').customSystems ?? []
+  const states = (character.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
+  if (actor !== 'master') return null
+
+  const active = states.filter(isActiveSystemState)
+  const disabled = states.filter((state) => state.enabled === false && !isSuppressedSystemState(state))
+  const suppressed = states.filter(isSuppressedSystemState)
+  const available = definitions.filter((definition) =>
+    !states.some((state) => state.systemId === definition.id && !isSuppressedSystemState(state)),
+  )
+
+  function updateStates(updater: (current: CharacterCustomSystemState[]) => CharacterCustomSystemState[]) {
+    updateCharacter(character.get('id'), (current) => {
+      const currentStates = (current.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
+      return current.withSheet('customSystems', updater(currentStates))
+    })
+  }
+
+  function disable(systemId: string) {
+    updateStates((current) => current.map((state) => state.systemId === systemId ? setCustomSystemEnabled(state, false) : state))
+  }
+
+  function enable(systemId: string) {
+    updateStates((current) => current.map((state) => state.systemId === systemId ? setCustomSystemEnabled(state, true) : state))
+  }
+
+  function remove(state: CharacterCustomSystemState) {
+    const definition = definitions.find((entry) => entry.id === state.systemId)
+    const name = definition?.name ?? state.systemId
+    if (!window.confirm(`Remover “${name}” desta ficha? Campos, recursos e habilidades desse sistema serão apagados.`)) return
+    const marker = createSuppressedSystemState(state)
+    updateStates((current) => current.map((entry) => entry.systemId === state.systemId ? marker : entry))
+  }
+
+  function install(definition: CustomSystemDefinition) {
+    const next: CharacterCustomSystemState = {
+      ...createCharacterCustomSystemState(definition),
+      installationSource: 'master',
+    }
+    updateStates((current) => {
+      const exists = current.some((state) => state.systemId === definition.id)
+      return exists
+        ? current.map((state) => state.systemId === definition.id ? next : state)
+        : [...current, next]
+    })
+  }
+
+  if (!active.length && !disabled.length && !available.length && !suppressed.length) return null
+
+  return <section className="rounded-xl border border-border bg-bg p-4">
+    <div className="flex items-start gap-3">
+      <div className="rounded-lg border border-accentBorder bg-accentBg p-2 text-accent"><Settings2 className="h-5 w-5" /></div>
+      <div><h3 className="font-semibold text-textH">Sistemas da ficha</h3><p className="mt-1 text-xs text-text">Controle quais sistemas estão ativos neste personagem.</p></div>
+    </div>
+
+    <div className="mt-4 grid gap-3">
+      {active.map((state) => <SystemManagementRow key={state.systemId} name={definitionName(definitions, state.systemId)} status="Ativo">
+        <SmallAction onClick={() => disable(state.systemId)}><EyeOff className="h-4 w-4" /> Desabilitar</SmallAction>
+        <SmallAction danger onClick={() => remove(state)}><Trash2 className="h-4 w-4" /> Remover</SmallAction>
+      </SystemManagementRow>)}
+
+      {disabled.map((state) => <SystemManagementRow key={state.systemId} name={definitionName(definitions, state.systemId)} status="Desabilitado">
+        <SmallAction onClick={() => enable(state.systemId)}><Eye className="h-4 w-4" /> Reativar</SmallAction>
+        <SmallAction danger onClick={() => remove(state)}><Trash2 className="h-4 w-4" /> Remover</SmallAction>
+      </SystemManagementRow>)}
+
+      {available.map((definition) => <SystemManagementRow key={definition.id} name={definition.name} status={suppressed.some((state) => state.systemId === definition.id) ? 'Removido desta ficha' : 'Disponível'}>
+        <SmallAction onClick={() => install(definition)}><Plus className="h-4 w-4" /> {suppressed.some((state) => state.systemId === definition.id) ? 'Reinstalar' : 'Adicionar'}</SmallAction>
+      </SystemManagementRow>)}
+    </div>
+  </section>
+}
+
+function AbilityLibraryModal({ character, updateCharacter, actor, systemIds, onClose }: PlacementProps & { onClose: () => void }) {
+  const definitions = useCustomSystemDefinitions()
+  const states = (character.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
+  const allowedIds = systemIds ? new Set(systemIds) : undefined
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
 
   const entries = useMemo(() => definitions.flatMap((definition) => {
-    const state = states.find((entry) => entry.systemId === definition.id)
+    if (allowedIds && !allowedIds.has(definition.id)) return []
+    const state = states.find((entry) => entry.systemId === definition.id && isActiveSystemState(entry))
     if (!state) return []
     return definition.abilityTypes.flatMap((type) => (type.predefinedAbilities ?? []).map((preset) => ({ definition, state, type, preset })))
-  }), [definitions, states])
+  }), [allowedIds, definitions, states])
 
   const typeOptions = useMemo(() => Array.from(new Map(entries.map((entry) => [`${entry.definition.id}:${entry.type.id}`, { id: `${entry.definition.id}:${entry.type.id}`, label: `${entry.type.name} — ${entry.definition.name}` }])).values()), [entries])
   const filtered = entries.filter((entry) => {
@@ -104,7 +208,7 @@ function AbilityLibraryModal({ character, updateCharacter, actor, onClose }: Pro
     }
     const next = addCustomAbility(definition, state, ability, actor)
     updateCharacter(character.get('id'), (current) => {
-      const currentStates = current.get('sheet').customSystems ?? []
+      const currentStates = (current.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
       return current.withSheet('customSystems', currentStates.map((entry) => entry.systemId === next.systemId ? next : entry))
     })
   }
@@ -144,7 +248,46 @@ function AbilityLibraryModal({ character, updateCharacter, actor, onClose }: Pro
   </div>
 }
 
+function SystemManagementRow({ name, status, children }: { name: string; status: string; children: React.ReactNode }) {
+  return <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
+    <div><div className="font-medium text-textH">{name}</div><div className="mt-1 text-xs text-text">{status}</div></div>
+    <div className="flex flex-wrap gap-2">{children}</div>
+  </div>
+}
+
+function SmallAction({ children, onClick, danger }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
+  return <button type="button" onClick={onClick} className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${danger ? 'border-red-500/40 text-red-300 hover:bg-red-500/10' : 'border-border text-textH hover:bg-accentBg'}`}>{children}</button>
+}
+
+function createSuppressedSystemState(state: CharacterCustomSystemState): CharacterCustomSystemState {
+  return {
+    systemId: state.systemId,
+    systemVersion: state.systemVersion,
+    enabled: false,
+    fields: { [SUPPRESSED_SYSTEM_MARKER]: true },
+    resources: {},
+    abilities: [],
+    installationSource: state.installationSource,
+  }
+}
+
+export function isSuppressedSystemState(state: CharacterCustomSystemState): boolean {
+  return state.fields[SUPPRESSED_SYSTEM_MARKER] === true
+}
+
+export function isActiveSystemState(state: CharacterCustomSystemState): boolean {
+  return state.enabled !== false && !isSuppressedSystemState(state)
+}
+
+function definitionName(definitions: CustomSystemDefinition[], systemId: string): string {
+  return definitions.find((definition) => definition.id === systemId)?.name ?? systemId
+}
+
 function hasPreset(state: CharacterCustomSystemState, typeId: string, presetId: string): boolean {
   return state.abilities.some((ability) => ability.abilityTypeId === typeId && (ability.predefinedAbilityId === presetId || ability.values[PREDEFINED_MARKER] === presetId))
 }
-function presetTitle(titleFieldId: string, preset: CustomPredefinedAbilityDefinition): string { const value = preset.values[titleFieldId]; return typeof value === 'string' && value.trim() ? value : preset.id }
+
+function presetTitle(titleFieldId: string, preset: CustomPredefinedAbilityDefinition): string {
+  const value = preset.values[titleFieldId]
+  return typeof value === 'string' && value.trim() ? value : preset.id
+}
