@@ -35,14 +35,8 @@ export type CustomSystemExistingCharacterTab =
   | 'proficiencies'
 
 export type CustomSystemPlacementReference =
-  | {
-      type: 'standardTab'
-      tab: CustomSystemExistingCharacterTab
-    }
-  | {
-      type: 'system'
-      systemId: string
-    }
+  | { type: 'standardTab'; tab: CustomSystemExistingCharacterTab }
+  | { type: 'system'; systemId: string }
 
 export type CustomSystemEmbeddedReference =
   | { type: 'content' }
@@ -134,6 +128,8 @@ export interface CustomAbilityInstance {
   values: Record<string, JsonValue>
   usage?: CustomAbilityUsageState
   enabled?: boolean
+  learned?: boolean
+  prepared?: boolean
 }
 
 export interface CustomAbilityUsageState {
