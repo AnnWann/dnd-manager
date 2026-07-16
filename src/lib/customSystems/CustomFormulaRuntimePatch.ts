@@ -2,6 +2,8 @@ import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from '../../models/characters/CharacterTemplate'
+import type { CustomNumericOperation, CustomSystemEventType } from '../../models/customSystems/CustomAutomationDefinition'
+import type { CustomResourceDefinition, CustomResourceRecoveryRule } from '../../models/customSystems/CustomResourceDefinition'
 import type { CharacterCustomSystemState } from '../../models/customSystems/CustomSystemDefinition'
 import { evaluateCustomFormula } from './CustomFormulaEngineWithCharacter'
 
@@ -32,6 +34,11 @@ export function recalculateCustomSystemState(
 
   for (const resource of definition.resources) {
     if (!resource.maximumFormula) continue
+    const mode = resource.maximumMode ?? 'formula'
+    const currentState = next.resources[resource.id]
+    const hasManualOverride = mode === 'formulaWithOverride' && currentState?.maximum !== undefined
+    if (mode === 'manual' || hasManualOverride) continue
+
     const result = evaluateCustomFormula(
       resource.maximumFormula,
       definition,
@@ -40,8 +47,9 @@ export function recalculateCustomSystemState(
     )
     if (!result.ok || typeof result.value !== 'number') continue
     next.resources[resource.id] = {
-      ...(next.resources[resource.id] ?? { current: resource.initialValue ?? 0 }),
+      ...(currentState ?? { current: resource.initialValue ?? 0 }),
       maximum: result.value,
+      current: Math.min(currentState?.current ?? resource.initialValue ?? 0, result.value),
     }
   }
 
@@ -56,6 +64,119 @@ export function recalculateCustomSystemState(
   }
 
   return next
+}
+
+export function applyCustomSystemRestRecovery(
+  character: CharacterTemplate,
+  restKind: 'short' | 'long',
+  recoveryFraction = 1,
+): CharacterTemplate {
+  const systems = character.get('sheet').customSystems ?? []
+  if (!systems.length) return character
+
+  const event: CustomSystemEventType = restKind === 'short'
+    ? 'shortRestCompleted'
+    : 'longRestCompleted'
+
+  const recovered = systems.map((state) => {
+    const definition = resolveDefinition?.(state.systemId)
+    if (!definition || state.enabled === false) return state
+
+    let next: CharacterCustomSystemState = {
+      ...state,
+      fields: { ...state.fields },
+      resources: Object.fromEntries(
+        Object.entries(state.resources).map(([id, resource]) => [id, { ...resource }]),
+      ),
+      abilities: state.abilities.map((ability) => ({
+        ...ability,
+        values: { ...ability.values },
+        usage: ability.usage ? { ...ability.usage } : undefined,
+      })),
+    }
+
+    for (const resource of definition.resources) {
+      const rules = (resource.recoveryRules ?? []).filter((rule) =>
+        rule.enabled !== false && rule.event === event,
+      )
+      for (const rule of rules) {
+        next = applyRecoveryRule(character, definition, next, resource, rule, recoveryFraction)
+      }
+    }
+
+    return next
+  })
+
+  return character.withSheet('customSystems', recovered)
+}
+
+function applyRecoveryRule(
+  character: CharacterTemplate,
+  definition: import('../../models/customSystems/CustomSystemDefinition').CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  resource: CustomResourceDefinition,
+  rule: CustomResourceRecoveryRule,
+  recoveryFraction: number,
+): CharacterCustomSystemState {
+  const currentState = state.resources[resource.id]
+  if (!currentState) return state
+  const target = rule.target ?? 'current'
+  const current = target === 'temporary' ? currentState.temporary ?? 0 : currentState.current
+  const maximum = currentState.maximum ?? resource.maximum
+  const scale = rule.scaleWithRestFraction === false ? 1 : Math.max(0, Math.min(1, recoveryFraction))
+  const amount = resolveRecoveryAmount(rule, definition, state, character)
+  const nextValue = applyRecoveryOperation(current, maximum, rule.operation, amount, scale)
+  const normalized = target === 'temporary'
+    ? Math.max(0, nextValue)
+    : clamp(nextValue, resource.minimum, maximum)
+
+  return {
+    ...state,
+    resources: {
+      ...state.resources,
+      [resource.id]: target === 'temporary'
+        ? { ...currentState, temporary: normalized }
+        : { ...currentState, current: normalized },
+    },
+  }
+}
+
+function resolveRecoveryAmount(
+  rule: CustomResourceRecoveryRule,
+  definition: import('../../models/customSystems/CustomSystemDefinition').CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  character: CharacterTemplate,
+): number {
+  if (rule.formula?.trim()) {
+    const result = evaluateCustomFormula(rule.formula, definition, state, character)
+    if (result.ok && typeof result.value === 'number' && Number.isFinite(result.value)) {
+      return result.value
+    }
+  }
+  return rule.value ?? 0
+}
+
+function applyRecoveryOperation(
+  current: number,
+  maximum: number | undefined,
+  operation: CustomNumericOperation,
+  amount: number,
+  fraction: number,
+): number {
+  if (operation === 'resetToMaximum') {
+    if (maximum === undefined) return current
+    const missing = Math.max(0, maximum - current)
+    return current + Math.ceil(missing * fraction)
+  }
+  if (operation === 'add') return current + amount * fraction
+  if (operation === 'subtract') return current - amount * fraction
+  if (operation === 'multiply') return current * (fraction >= 1 ? amount : 1 + ((amount - 1) * fraction))
+  return fraction >= 1 ? amount : current + ((amount - current) * fraction)
+}
+
+function clamp(value: number, minimum?: number, maximum?: number): number {
+  const lower = minimum === undefined ? value : Math.max(minimum, value)
+  return maximum === undefined ? lower : Math.min(maximum, lower)
 }
 
 function installPatch(): void {
