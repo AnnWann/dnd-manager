@@ -79,6 +79,7 @@ export function CharacterView() {
   const customSystemDefinitions = useCustomSystemDefinitions()
   const { tab } = useParams<{ tab?: string }>()
   const navigate = useNavigate()
+  const activeCharacterId = activeCharacter?.get("id")
 
   const activeCustomSystemDefinitions = useMemo(() => {
     if (!activeCharacter) return []
@@ -137,7 +138,7 @@ export function CharacterView() {
 
   useEffect(() => {
     setSystemsManagerOpen(false)
-  }, [activeCharacter])
+  }, [activeCharacterId])
 
   useLayoutEffect(() => {
     lockTabPanelHeight()
