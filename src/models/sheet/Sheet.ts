@@ -37,6 +37,7 @@ export type Sheet = {
   type: CharacterType
 
   customSystems?: CharacterCustomSystemState[]
+  hiddenCharacterTabs?: string[]
 
   arms: number
 }
