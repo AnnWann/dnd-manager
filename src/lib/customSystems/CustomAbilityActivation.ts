@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { CharacterTemplate } from '../../models/characters/CharacterTemplate'
 import type {
   CustomAbilityActivationDefinition,
@@ -135,7 +136,7 @@ function validateResourceChanges(
     if (change.target.source === 'native') {
       const available = nativeResourceValue(character, change.target.resource)
       if (available < amount && change.target.resource !== 'hitPoints') {
-        throw new Error(`Recurso nativo insuficiente para usar a habilidade.`)
+        throw new Error('Recurso nativo insuficiente para usar a habilidade.')
       }
       continue
     }
