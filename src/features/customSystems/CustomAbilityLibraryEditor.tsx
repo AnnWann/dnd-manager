@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
+import { Select } from '../../components/ui/Select'
 import type {
   CustomAbilityTypeDefinition,
   CustomPredefinedAbilityDefinition,
@@ -117,7 +118,7 @@ export function CustomAbilityLibraryEditor({
 
 function PresetField({ field, value, onChange }: { field: CustomFieldDefinition; value: JsonValue | undefined; onChange: (value: JsonValue) => void }) {
   if (field.type === 'boolean') return <label className="flex items-center gap-2 self-end rounded-lg border border-border px-3 py-2"><input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} /> <span className="text-sm text-textH">{field.name}</span></label>
-  if (field.type === 'select') return <label className="grid gap-1"><span className="label">{field.name}</span><select className="input-base" value={typeof value === 'string' ? value : ''} onChange={(event) => onChange(event.target.value)}><option value="">Selecione</option>{field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+  if (field.type === 'select') return <label className="grid gap-1"><span className="label">{field.name}</span><Select value={typeof value === 'string' ? value : ''} onChange={(event) => onChange(event.target.value)}><option value="">Selecione</option>{field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></label>
   if (field.type === 'multiSelect') {
     const selected = Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []
     return <fieldset className="rounded-lg border border-border p-3"><legend className="px-1 text-xs text-text">{field.name}</legend>{field.options.map((option) => <label key={option.value} className="mr-3 inline-flex items-center gap-1 text-sm text-textH"><input type="checkbox" checked={selected.includes(option.value)} onChange={(event) => onChange(event.target.checked ? [...selected, option.value] : selected.filter((entry) => entry !== option.value))} /> {option.label}</label>)}</fieldset>
