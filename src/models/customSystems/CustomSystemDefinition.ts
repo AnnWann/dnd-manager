@@ -38,6 +38,8 @@ export type CustomSystemCharacterPlacement =
   | {
       mode: 'newTab'
       tabLabel?: string
+      relativeToTab?: CustomSystemExistingCharacterTab
+      position?: 'before' | 'after'
     }
   | {
       mode: 'existingTab'
