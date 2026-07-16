@@ -21,10 +21,23 @@ export type { CustomFormulaResult, CustomFormulaVariable }
 export function listCustomFormulaVariables(
   definition: CustomSystemDefinition,
 ): CustomFormulaVariable[] {
-  return [
+  const calculatedFieldVariables: CustomFormulaVariable[] = definition.fields
+    .filter((field) => field.type === 'formula')
+    .map((field) => ({
+      path: `field.${field.id}`,
+      label: `${field.name} — calculado`,
+      valueType: field.resultType,
+    }))
+
+  const variables = [
     ...listCharacterFormulaVariables(),
     ...listBaseFormulaVariables(definition),
+    ...calculatedFieldVariables,
   ]
+
+  return Array.from(
+    new Map(variables.map((variable) => [variable.path, variable])).values(),
+  )
 }
 
 export function evaluateCustomFormula(
