@@ -26,7 +26,7 @@ export const DEFAULT_CUSTOM_SYSTEM_PLACEMENT: CustomSystemCharacterPlacement = {
 export function getCustomSystemPlacement(
   definition: CustomSystemDefinition,
 ): CustomSystemCharacterPlacement {
-  const placement = definition.characterPlacement
+  const placement = definition.characterPlacement ?? definition.automaticInstallation?.characterPlacement
   if (placement?.mode === 'newTab') {
     return {
       mode: 'newTab',
@@ -55,7 +55,19 @@ export function CustomSystemPlacementEditor({
   const placement = getCustomSystemPlacement(draft)
 
   function setPlacement(next: CustomSystemCharacterPlacement) {
-    setDraft({ ...draft, characterPlacement: next })
+    const automaticInstallation = draft.automaticInstallation ?? {
+      enabled: false,
+      match: 'all' as const,
+      requirements: [],
+    }
+    setDraft({
+      ...draft,
+      characterPlacement: next,
+      automaticInstallation: {
+        ...automaticInstallation,
+        characterPlacement: next,
+      },
+    })
   }
 
   return <section className="mt-5 rounded-xl border border-border bg-bg-subtle p-4">
