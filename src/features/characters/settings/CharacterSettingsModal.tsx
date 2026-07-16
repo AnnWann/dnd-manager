@@ -1,6 +1,15 @@
-import { Eye, EyeOff, Settings2, X } from 'lucide-react'
+import { Eye, EyeOff, Plus, Settings2, Trash2, X } from 'lucide-react'
 import type { Player } from '../../../models/player/Player'
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
+import type {
+  CharacterCustomSystemState,
+  CustomSystemDefinition,
+} from '../../../models/customSystems/CustomSystemDefinition'
+import {
+  createCharacterCustomSystemState,
+  setCustomSystemEnabled,
+} from '../../../lib/customSystems'
+import { useCustomSystemDefinitions } from '../../../lib/customSystems/CustomSystemRegistry'
 import {
   CHARACTER_TABS,
   type CharacterTab,
@@ -9,7 +18,12 @@ import { SelectCharacterOwner } from '../characterSheet/character_info/component
 import { SelectCharacterType } from '../characterSheet/character_info/components/selectCharacterType'
 import { SelectCharacterUniqueness } from '../characterSheet/character_info/components/selectCharacterUniqueness'
 import { SelectCharacterVisibility } from '../characterSheet/character_info/components/selectCharacterVisibility'
-import { CustomSystemsManagementPanel } from '../customSystems/CustomSystemsTabWithLibrary'
+import {
+  isActiveSystemState,
+  isSuppressedSystemState,
+} from '../customSystems/CustomSystemsTabWithLibrary'
+
+const SUPPRESSED_SYSTEM_MARKER = '__customSystemSuppressed'
 
 const HIDEABLE_TABS = CHARACTER_TABS.filter(
   (tab) => tab.key !== 'sheet',
@@ -41,9 +55,24 @@ export function CharacterSettingsModal({
   getOwner,
   createOwner,
 }: Props) {
+  const definitions = useCustomSystemDefinitions()
+
   if (!open || !canAssignOwners) return null
 
   const hiddenTabs = new Set(character.get('sheet').hiddenCharacterTabs ?? [])
+  const states = (character.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
+  const activeSystems = states.filter(isActiveSystemState)
+  const hiddenSystems = states.filter(
+    (state) => state.enabled === false && !isSuppressedSystemState(state),
+  )
+  const removedSystems = states.filter(isSuppressedSystemState)
+  const availableSystems = definitions.filter(
+    (definition) =>
+      !states.some(
+        (state) =>
+          state.systemId === definition.id && !isSuppressedSystemState(state),
+      ),
+  )
 
   function setTabVisible(tab: CharacterTab, visible: boolean) {
     updateCharacter(character.get('id'), (current) => {
@@ -58,6 +87,73 @@ export function CharacterSettingsModal({
         'hiddenCharacterTabs',
         Array.from(currentHidden),
       )
+    })
+  }
+
+  function updateSystemStates(
+    updater: (
+      current: CharacterCustomSystemState[],
+    ) => CharacterCustomSystemState[],
+  ) {
+    updateCharacter(character.get('id'), (current) => {
+      const currentStates = (current.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
+      return current.withSheet('customSystems', updater(currentStates))
+    })
+  }
+
+  function hideSystem(systemId: string) {
+    updateSystemStates((current) =>
+      current.map((state) =>
+        state.systemId === systemId
+          ? setCustomSystemEnabled(state, false)
+          : state,
+      ),
+    )
+  }
+
+  function showSystem(systemId: string) {
+    updateSystemStates((current) =>
+      current.map((state) =>
+        state.systemId === systemId
+          ? setCustomSystemEnabled(state, true)
+          : state,
+      ),
+    )
+  }
+
+  function removeSystem(state: CharacterCustomSystemState) {
+    const name = systemName(definitions, state.systemId)
+    if (
+      !window.confirm(
+        `Remover “${name}” desta ficha? Campos, recursos e habilidades desse sistema serão apagados.`,
+      )
+    ) {
+      return
+    }
+
+    const marker = createSuppressedSystemState(state)
+    updateSystemStates((current) =>
+      current.map((entry) =>
+        entry.systemId === state.systemId ? marker : entry,
+      ),
+    )
+  }
+
+  function installSystem(definition: CustomSystemDefinition) {
+    const next: CharacterCustomSystemState = {
+      ...createCharacterCustomSystemState(definition),
+      installationSource: 'master',
+    }
+
+    updateSystemStates((current) => {
+      const exists = current.some(
+        (state) => state.systemId === definition.id,
+      )
+      return exists
+        ? current.map((state) =>
+            state.systemId === definition.id ? next : state,
+          )
+        : [...current, next]
     })
   }
 
@@ -173,12 +269,140 @@ export function CharacterSettingsModal({
           </div>
         </section>
 
-        <CustomSystemsManagementPanel
-          character={character}
-          updateCharacter={updateCharacter}
-          actor="master"
-        />
+        <section className="rounded-xl border border-border bg-bg p-4">
+          <h3 className="font-semibold text-textH">Sistemas da ficha</h3>
+          <p className="mt-1 text-xs text-text">
+            Adicione, esconda, reative ou remova sistemas deste personagem.
+          </p>
+
+          <div className="mt-4 grid gap-3">
+            {activeSystems.map((state) => (
+              <SystemRow
+                key={state.systemId}
+                name={systemName(definitions, state.systemId)}
+                status="Visível na ficha"
+              >
+                <SmallAction onClick={() => hideSystem(state.systemId)}>
+                  <EyeOff className="h-4 w-4" /> Esconder
+                </SmallAction>
+                <SmallAction danger onClick={() => removeSystem(state)}>
+                  <Trash2 className="h-4 w-4" /> Remover
+                </SmallAction>
+              </SystemRow>
+            ))}
+
+            {hiddenSystems.map((state) => (
+              <SystemRow
+                key={state.systemId}
+                name={systemName(definitions, state.systemId)}
+                status="Escondido, com dados preservados"
+              >
+                <SmallAction onClick={() => showSystem(state.systemId)}>
+                  <Eye className="h-4 w-4" /> Mostrar
+                </SmallAction>
+                <SmallAction danger onClick={() => removeSystem(state)}>
+                  <Trash2 className="h-4 w-4" /> Remover
+                </SmallAction>
+              </SystemRow>
+            ))}
+
+            {availableSystems.map((definition) => {
+              const wasRemoved = removedSystems.some(
+                (state) => state.systemId === definition.id,
+              )
+              return (
+                <SystemRow
+                  key={definition.id}
+                  name={definition.name}
+                  status={
+                    wasRemoved
+                      ? 'Removido desta ficha'
+                      : 'Disponível para adicionar'
+                  }
+                >
+                  <SmallAction onClick={() => installSystem(definition)}>
+                    <Plus className="h-4 w-4" />
+                    {wasRemoved ? 'Reinstalar' : 'Adicionar'}
+                  </SmallAction>
+                </SystemRow>
+              )
+            })}
+
+            {!activeSystems.length &&
+            !hiddenSystems.length &&
+            !availableSystems.length ? (
+              <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-text">
+                Nenhum sistema disponível.
+              </div>
+            ) : null}
+          </div>
+        </section>
       </section>
     </div>
   )
+}
+
+function SystemRow({
+  name,
+  status,
+  children,
+}: {
+  name: string
+  status: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
+      <div>
+        <div className="font-medium text-textH">{name}</div>
+        <div className="mt-1 text-xs text-text">{status}</div>
+      </div>
+      <div className="flex flex-wrap gap-2">{children}</div>
+    </div>
+  )
+}
+
+function SmallAction({
+  children,
+  onClick,
+  danger,
+}: {
+  children: React.ReactNode
+  onClick: () => void
+  danger?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
+        danger
+          ? 'border-red-500/40 text-red-300 hover:bg-red-500/10'
+          : 'border-border text-textH hover:bg-accentBg'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function createSuppressedSystemState(
+  state: CharacterCustomSystemState,
+): CharacterCustomSystemState {
+  return {
+    systemId: state.systemId,
+    systemVersion: state.systemVersion,
+    enabled: false,
+    fields: { [SUPPRESSED_SYSTEM_MARKER]: true },
+    resources: {},
+    abilities: [],
+    installationSource: state.installationSource,
+  }
+}
+
+function systemName(
+  definitions: CustomSystemDefinition[],
+  systemId: string,
+): string {
+  return definitions.find((definition) => definition.id === systemId)?.name ?? systemId
 }
