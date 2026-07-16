@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BookOpen, Plus, Search, X } from 'lucide-react'
+import { Select } from '../../../components/ui/Select'
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
 import type { CustomPredefinedAbilityDefinition } from '../../../models/customSystems/CustomAbilityDefinition'
 import type { CharacterCustomSystemState, CustomAbilityInstance, CustomSystemDefinition } from '../../../models/customSystems/CustomSystemDefinition'
@@ -116,7 +117,10 @@ function AbilityLibraryModal({ character, updateCharacter, actor, onClose }: Pro
       </header>
       <div className="grid gap-3 border-b border-border p-3 md:grid-cols-[minmax(0,1fr)_260px]">
         <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2"><Search className="h-4 w-4 text-text" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Pesquisar habilidade" className="min-w-0 flex-1 bg-transparent text-sm text-textH outline-none" autoFocus /></label>
-        <select className="input-base" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}><option value="">Todos os tipos</option>{typeOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
+        <Select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Filtrar por tipo de habilidade">
+          <option value="">Todos os tipos</option>
+          {typeOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+        </Select>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         <div className="grid gap-3 md:grid-cols-2">
