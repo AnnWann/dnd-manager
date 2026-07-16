@@ -7,7 +7,7 @@ import {
   type CSSProperties,
   type TouchEvent,
 } from "react"
-import { Settings2, SlidersHorizontal } from "lucide-react"
+import { ArrowLeft, Settings2 } from "lucide-react"
 import { useNavigate, useParams } from "react-router-dom"
 import { CharacterAbilitiesTab } from "../features/characters/abilities/characterAbilities"
 import { CharacterSelector } from "../features/characters/characterSelector"
@@ -29,8 +29,8 @@ import { CharacterProfileTab } from "../features/characters/profile/characterPro
 import { CharacterRestControls } from "../features/characters/rest/characterRestControlsV2"
 import { CharacterCreationWizard } from "../features/characters/creation/characterCreationWizardV5"
 import { ensureCharacterBackgroundFromHistory } from "../features/characters/creation/inferCharacterBackground"
+import { CharacterSettingsModal } from "../features/characters/settings/CharacterSettingsModal"
 import {
-  CustomSystemsManagementModal,
   CustomSystemsRuntime,
   CustomSystemsTabWithLibrary,
   isActiveSystemState,
@@ -50,7 +50,7 @@ const TAB_SWIPE_MAX_PREVIEW_OFFSET = 96
 const TAB_SWIPE_MAX_DURATION_MS = 850
 const TAB_SWIPE_HORIZONTAL_DOMINANCE = 1.8
 const TAB_SWIPE_PREVIEW_DOMINANCE = 1.35
-const CUSTOM_SYSTEM_TAB_PREFIX = "custom-system-"
+const CONTENT_ANCHOR = "__standard-content__"
 
 type SwipeState = {
   startX: number
@@ -77,34 +77,28 @@ export function CharacterView() {
   } = useCharacterContext()
   const { userKey } = useSyncContext()
   const customSystemDefinitions = useCustomSystemDefinitions()
-  const { tab } = useParams<{ tab?: string }>()
+  const { characterId, tab } = useParams<{
+    characterId?: string
+    tab?: string
+  }>()
   const navigate = useNavigate()
-  const activeCharacterId = activeCharacter?.get("id")
 
-  const activeCustomSystemDefinitions = useMemo(() => {
-    if (!activeCharacter) return []
-    const states = activeCharacter.get("sheet").customSystems ?? []
-    const activeIds = new Set(
-      states.filter(isActiveSystemState).map((state) => state.systemId),
-    )
-    return customSystemDefinitions.filter((definition) =>
-      activeIds.has(definition.id),
-    )
-  }, [activeCharacter, customSystemDefinitions])
+  const routeCharacter = characterId
+    ? characters.find((character) => character.get("id") === characterId)
+    : undefined
 
-  const characterTabs = useMemo<CharacterViewTabDefinition[]>(
-    () => buildCharacterTabs(activeCustomSystemDefinitions),
-    [activeCustomSystemDefinitions],
-  )
-
-  const activeTab = normalizeCharacterViewTab(tab, characterTabs)
   const [creationOpen, setCreationOpen] = useState(false)
-  const [systemsManagerOpen, setSystemsManagerOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [swipeDragging, setSwipeDragging] = useState(false)
   const [tabPanelMinHeight, setTabPanelMinHeight] = useState(0)
   const swipeRef = useRef<SwipeState | null>(null)
   const tabContentRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!routeCharacter) return
+    setSelectedCharacterId(routeCharacter.get("id"))
+  }, [routeCharacter, setSelectedCharacterId])
 
   const owners = useMemo(
     () => playerKeys.map((key) => getOwner(key)),
@@ -113,39 +107,70 @@ export function CharacterView() {
 
   const defaultOwner = useMemo(() => {
     const normalizedUserKey = userKey.trim()
-
-    if (normalizedUserKey) {
-      return getOwner(normalizedUserKey)
-    }
+    if (normalizedUserKey) return getOwner(normalizedUserKey)
 
     return (
+      routeCharacter?.get("owner") ??
       activeCharacter?.get("owner") ??
       owners[0] ??
       createOwner("Jogador local")
     )
-  }, [activeCharacter, createOwner, getOwner, owners, userKey])
+  }, [activeCharacter, createOwner, getOwner, owners, routeCharacter, userKey])
 
   const wizardOwners = useMemo(
     () => uniqueOwners([defaultOwner, ...owners]),
     [defaultOwner, owners],
   )
 
-  useEffect(() => {
-    if (tab && !characterTabs.some((entry) => entry.key === tab)) {
-      navigate("/character/sheet", { replace: true })
-    }
-  }, [characterTabs, navigate, tab])
+  const activeCustomSystemDefinitions = useMemo(() => {
+    if (!routeCharacter) return []
+    const states = routeCharacter.get("sheet").customSystems ?? []
+    const activeIds = new Set(
+      states.filter(isActiveSystemState).map((state) => state.systemId),
+    )
+    return customSystemDefinitions.filter((definition) =>
+      activeIds.has(definition.id),
+    )
+  }, [customSystemDefinitions, routeCharacter])
+
+  const hiddenStandardTabs = useMemo(
+    () => new Set(routeCharacter?.get("sheet").hiddenCharacterTabs ?? []),
+    [routeCharacter],
+  )
+
+  const visibleStandardTabs = useMemo(
+    () =>
+      CHARACTER_TABS.filter(
+        (entry) =>
+          entry.key === "sheet" || !hiddenStandardTabs.has(entry.key),
+      ),
+    [hiddenStandardTabs],
+  )
+
+  const characterTabs = useMemo<CharacterViewTabDefinition[]>(
+    () =>
+      orderCharacterTabs(
+        visibleStandardTabs,
+        activeCustomSystemDefinitions,
+      ),
+    [activeCustomSystemDefinitions, visibleStandardTabs],
+  )
+
+  const activeTab = normalizeCharacterViewTab(tab, characterTabs)
 
   useEffect(() => {
-    setSystemsManagerOpen(false)
-  }, [activeCharacterId])
+    if (!routeCharacter || !characterId) return
+    if (tab === activeTab) return
+    navigate(characterPath(characterId, activeTab), { replace: true })
+  }, [activeTab, characterId, navigate, routeCharacter, tab])
 
   useLayoutEffect(() => {
     lockTabPanelHeight()
   }, [activeTab])
 
   function setActiveTab(nextTab: string, replace = false) {
-    navigate(`/character/${encodeURIComponent(nextTab)}`, { replace })
+    if (!characterId) return
+    navigate(characterPath(characterId, nextTab), { replace })
   }
 
   function setAdjacentTab(direction: "previous" | "next") {
@@ -156,11 +181,10 @@ export function CharacterView() {
 
     const nextIndex = direction === "next" ? activeIndex + 1 : activeIndex - 1
     const nextTab = characterTabs[nextIndex]?.key
+    if (!nextTab) return
 
-    if (nextTab) {
-      lockTabPanelHeight()
-      setActiveTab(nextTab)
-    }
+    lockTabPanelHeight()
+    setActiveTab(nextTab)
   }
 
   function lockTabPanelHeight() {
@@ -184,12 +208,7 @@ export function CharacterView() {
     resetSwipePreview()
     lockTabPanelHeight()
 
-    if (event.touches.length !== 1) {
-      swipeRef.current = null
-      return
-    }
-
-    if (shouldIgnoreTabSwipe(event.target)) {
+    if (event.touches.length !== 1 || shouldIgnoreTabSwipe(event.target)) {
       swipeRef.current = null
       return
     }
@@ -219,11 +238,10 @@ export function CharacterView() {
       return
     }
 
-    const shouldShowPreview =
-      absX >= TAB_SWIPE_PREVIEW_DISTANCE &&
-      absX >= absY * TAB_SWIPE_PREVIEW_DOMINANCE
-
-    if (!shouldShowPreview) {
+    if (
+      absX < TAB_SWIPE_PREVIEW_DISTANCE ||
+      absX < absY * TAB_SWIPE_PREVIEW_DOMINANCE
+    ) {
       resetSwipePreview()
       return
     }
@@ -254,14 +272,13 @@ export function CharacterView() {
     const absX = Math.abs(deltaX)
     const absY = Math.abs(deltaY)
     const duration = Date.now() - swipe.startedAt
-    const isDeliberateHorizontalSwipe =
+    const deliberate =
       absX >= TAB_SWIPE_MIN_DISTANCE &&
       absX >= absY * TAB_SWIPE_HORIZONTAL_DOMINANCE &&
       duration <= TAB_SWIPE_MAX_DURATION_MS
 
     resetSwipePreview()
-    if (!isDeliberateHorizontalSwipe) return
-    setAdjacentTab(deltaX < 0 ? "next" : "previous")
+    if (deliberate) setAdjacentTab(deltaX < 0 ? "next" : "previous")
   }
 
   const creationWizard = (
@@ -274,49 +291,98 @@ export function CharacterView() {
       onClose={() => setCreationOpen(false)}
       onCreate={(character) => {
         setCreationOpen(false)
-        const preparedCharacter = ensureCharacterBackgroundFromHistory(character)
-        importCharacter(preparedCharacter.toJSON())
-        setActiveTab("profile", true)
+        const prepared = ensureCharacterBackgroundFromHistory(character)
+        const imported = importCharacter(prepared.toJSON())
+        navigate(characterPath(imported.get("id"), "profile"), {
+          replace: true,
+        })
       }}
     />
   )
 
-  if (!activeCharacter) {
+  if (!characterId) {
+    if (!activeCharacter) {
+      return (
+        <>
+          <div className="mx-auto w-full max-w-xl rounded-xl border border-accentBorder bg-bg p-4">
+            <div className="text-sm font-semibold text-textH">
+              Nenhum personagem visível
+            </div>
+            <div className="mt-1 text-xs text-text">
+              Você ainda não tem um personagem associado a este jogador.
+            </div>
+            <button
+              type="button"
+              className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accentText"
+              onClick={() => setCreationOpen(true)}
+            >
+              Criar personagem
+            </button>
+          </div>
+          {creationWizard}
+        </>
+      )
+    }
+
     return (
       <>
-        <div className="mx-auto w-full max-w-xl rounded-xl border border-accentBorder bg-bg p-4">
-          <div className="text-sm font-semibold text-textH">
-            Nenhum personagem visível
-          </div>
-          <div className="mt-1 text-xs text-text">
-            Você ainda não tem um personagem associado a este jogador.
-          </div>
-          <button
-            type="button"
-            className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accentText"
-            onClick={() => setCreationOpen(true)}
-          >
-            Criar personagem
-          </button>
-        </div>
+        <CharacterSelector
+          characters={characters}
+          activeCharacter={activeCharacter}
+          addCharacter={() => setCreationOpen(true)}
+          importCharacter={(raw) => {
+            const imported = importCharacter(raw)
+            navigate(characterPath(imported.get("id"), "sheet"))
+            return imported
+          }}
+          setActiveCharacterId={(id) => {
+            setSelectedCharacterId(id)
+            navigate(characterPath(id, "sheet"))
+          }}
+          deleteActiveCharacter={() =>
+            deleteCharacter(activeCharacter.get("id"))
+          }
+          disableDelete={characters.length <= 1}
+          showOwnerBadge={canAssignOwners}
+        />
         {creationWizard}
       </>
     )
   }
 
+  if (!routeCharacter) {
+    return (
+      <section className="mx-auto max-w-xl rounded-xl border border-border bg-bg p-6 text-center">
+        <h1 className="text-lg font-semibold text-textH">
+          Personagem não encontrado
+        </h1>
+        <p className="mt-2 text-sm text-text">
+          Esta ficha não existe ou não está visível para este jogador.
+        </p>
+        <button
+          type="button"
+          className="mt-4 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-textH hover:bg-accentBg"
+          onClick={() => navigate("/character")}
+        >
+          <ArrowLeft className="h-4 w-4" /> Selecionar personagem
+        </button>
+      </section>
+    )
+  }
+
   const actor: CustomSystemActor = canAssignOwners ? "master" : "owner"
   const activeStaticTab = isCharacterTab(activeTab) ? activeTab : undefined
-  const customTabSystemId = readCustomSystemTabId(activeTab)
-  const beforeSystemIds = activeStaticTab
-    ? getPlacedSystemIds(activeCustomSystemDefinitions, activeStaticTab, "before")
-    : []
-  const afterSystemIds = activeStaticTab
-    ? getPlacedSystemIds(activeCustomSystemDefinitions, activeStaticTab, "after")
-    : []
+  const customTabSystemId = activeCustomSystemDefinitions.some(
+    (definition) =>
+      definition.id === activeTab &&
+      getCustomSystemPlacement(definition).mode === "newTab",
+  )
+    ? activeTab
+    : undefined
 
-  const deleteActiveCharacter = () => {
-    deleteCharacter(activeCharacter.get("id"))
-  }
+  const embedded = activeStaticTab
+    ? orderEmbeddedSystems(activeCustomSystemDefinitions, activeStaticTab)
+    : { before: [], after: [] }
 
   const swipeProgress = Math.min(
     1,
@@ -333,59 +399,64 @@ export function CharacterView() {
       : "transform 160ms ease-out, opacity 160ms ease-out",
   }
 
-  const placedBefore = beforeSystemIds.length ? (
+  const placedBefore = embedded.before.length ? (
     <CustomSystemsTabWithLibrary
-      character={activeCharacter}
+      character={routeCharacter}
       updateCharacter={updateCharacter}
       actor={actor}
-      systemIds={beforeSystemIds}
+      systemIds={embedded.before}
     />
   ) : null
 
-  const placedAfter = afterSystemIds.length ? (
+  const placedAfter = embedded.after.length ? (
     <CustomSystemsTabWithLibrary
-      character={activeCharacter}
+      character={routeCharacter}
       updateCharacter={updateCharacter}
       actor={actor}
-      systemIds={afterSystemIds}
+      systemIds={embedded.after}
     />
   ) : null
 
   return (
     <div className="flex flex-col gap-4">
       <CustomSystemsRuntime
-        character={activeCharacter}
+        character={routeCharacter}
         updateCharacter={updateCharacter}
       />
 
-      <div className="grid gap-2">
-        <CharacterSelector
-          characters={characters}
-          activeCharacter={activeCharacter}
-          addCharacter={() => setCreationOpen(true)}
-          importCharacter={importCharacter}
-          setActiveCharacterId={setSelectedCharacterId}
-          deleteActiveCharacter={deleteActiveCharacter}
-          disableDelete={characters.length <= 1}
-          showOwnerBadge={canAssignOwners}
-        />
+      <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
+        <button
+          type="button"
+          onClick={() => navigate("/character")}
+          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-textH hover:bg-accentBg"
+        >
+          <ArrowLeft className="h-4 w-4" /> Selecionar personagem
+        </button>
+
+        <div className="min-w-0 flex-1 text-center sm:text-left">
+          <div className="truncate font-semibold text-textH">
+            {routeCharacter.get("name")}
+          </div>
+          <div className="truncate text-xs text-text">
+            {routeCharacter.get("id")}
+          </div>
+        </div>
 
         {canAssignOwners ? (
-          <div className="flex justify-end px-1">
-            <button
-              type="button"
-              onClick={() => setSystemsManagerOpen(true)}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg px-3 py-2 text-sm font-medium text-textH shadow-theme-sm hover:bg-accentBg"
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-              Configurar sistemas de {activeCharacter.get("name") || "personagem"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            title="Configurações do personagem"
+            aria-label="Configurações do personagem"
+            className="rounded-lg border border-border p-2.5 text-textH hover:bg-accentBg"
+          >
+            <Settings2 className="h-5 w-5" />
+          </button>
         ) : null}
-      </div>
+      </header>
 
       <CharacterRestControls
-        character={activeCharacter}
+        character={routeCharacter}
         partyInventory={partyInventory}
         updateCharacter={updateCharacter}
         completeLongRest={completeLongRest}
@@ -417,73 +488,69 @@ export function CharacterView() {
         >
           {placedBefore}
 
-          {activeTab === "sheet" && (
+          {activeTab === "sheet" ? (
             <CharacterSheetTab
-              character={activeCharacter}
+              character={routeCharacter}
               updateCharacter={updateCharacter}
               canAssignOwners={canAssignOwners}
-              canEditCharacterType={canEditCharacterType}
-              playerKeys={playerKeys}
-              getOwner={getOwner}
-              createOwner={createOwner}
             />
-          )}
+          ) : null}
 
-          {activeTab === "race" && (
+          {activeTab === "race" ? (
             <CharacterRaceTab
-              character={activeCharacter}
+              character={routeCharacter}
               updateCharacter={updateCharacter}
             />
-          )}
+          ) : null}
 
-          {activeTab === "profile" && (
+          {activeTab === "profile" ? (
             <CharacterProfileTab
-              character={activeCharacter}
+              character={routeCharacter}
               updateCharacter={updateCharacter}
             />
-          )}
+          ) : null}
 
-          {activeTab === "abilities" && (
+          {activeTab === "abilities" ? (
             <CharacterAbilitiesTab
-              character={activeCharacter}
+              character={routeCharacter}
               updateCharacter={updateCharacter}
             />
-          )}
+          ) : null}
 
-          {activeTab === "equipment" && (
+          {activeTab === "equipment" ? (
             <CharacterEquipmentTab
-              character={activeCharacter}
+              character={routeCharacter}
               updateCharacter={updateCharacter}
             />
-          )}
+          ) : null}
 
-          {activeTab === "inventory" && (
+          {activeTab === "inventory" ? (
             <CharacterInventoryTab
-              character={activeCharacter}
+              character={routeCharacter}
               updateCharacter={updateCharacter}
               canEditInventory={canEditCharacterType}
             />
-          )}
+          ) : null}
 
-          {activeTab === "spellsList" && (
+          {activeTab === "spellsList" ? (
             <CharacterMagicTab
-              character={activeCharacter}
+              character={routeCharacter}
               updateCharacter={updateCharacter}
             />
-          )}
+          ) : null}
 
-          {activeTab === "proficiencies" && (
+          {activeTab === "proficiencies" ? (
             <CharacterProficienciesTab
-              character={activeCharacter}
+              character={routeCharacter}
               updateCharacter={updateCharacter}
             />
-          )}
+          ) : null}
 
           {placedAfter}
 
           {customTabSystemId ? (
             <CustomSystemsTabWithLibrary
-              character={activeCharacter}
+              character={routeCharacter}
               updateCharacter={updateCharacter}
               actor={actor}
               systemIds={[customTabSystemId]}
@@ -492,12 +559,16 @@ export function CharacterView() {
         </div>
       </div>
 
-      <CustomSystemsManagementModal
-        character={activeCharacter}
+      <CharacterSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        character={routeCharacter}
         updateCharacter={updateCharacter}
-        actor={actor}
-        open={systemsManagerOpen}
-        onClose={() => setSystemsManagerOpen(false)}
+        canAssignOwners={canAssignOwners}
+        canEditCharacterType={canEditCharacterType}
+        playerKeys={playerKeys}
+        getOwner={getOwner}
+        createOwner={createOwner}
       />
 
       {creationWizard}
@@ -505,59 +576,134 @@ export function CharacterView() {
   )
 }
 
-function buildCharacterTabs(
+function orderCharacterTabs(
+  standardTabs: Array<CharacterViewTabDefinition & { key: CharacterTab }>,
   definitions: CustomSystemDefinition[],
 ): CharacterViewTabDefinition[] {
-  const before = new Map<CustomSystemExistingCharacterTab, CharacterViewTabDefinition[]>()
-  const after = new Map<CustomSystemExistingCharacterTab, CharacterViewTabDefinition[]>()
+  const result: CharacterViewTabDefinition[] = [...standardTabs]
+  const pending = definitions
+    .filter((definition) => getCustomSystemPlacement(definition).mode === "newTab")
+    .filter((definition) => !result.some((tab) => tab.key === definition.id))
 
-  for (const definition of definitions) {
-    const placement = getCustomSystemPlacement(definition)
-    if (placement.mode !== "newTab") continue
+  const unresolved = [...pending]
+  let madeProgress = true
 
-    const anchor = placement.relativeToTab ?? "proficiencies"
-    const bucket = (placement.position ?? "after") === "before" ? before : after
-    const entries = bucket.get(anchor) ?? []
-    entries.push({
-      key: customSystemTabKey(definition.id),
-      label: placement.tabLabel || definition.name,
-      icon: Settings2,
-    })
-    bucket.set(anchor, entries)
+  while (unresolved.length && madeProgress) {
+    madeProgress = false
+
+    for (let index = unresolved.length - 1; index >= 0; index -= 1) {
+      const definition = unresolved[index]
+      const placement = getCustomSystemPlacement(definition)
+      if (placement.mode !== "newTab") {
+        unresolved.splice(index, 1)
+        continue
+      }
+
+      const reference = placement.reference ?? {
+        type: "standardTab" as const,
+        tab: placement.relativeToTab ?? "sheet",
+      }
+      let anchorKey =
+        reference.type === "system" ? reference.systemId : reference.tab
+
+      if (!result.some((entry) => entry.key === anchorKey)) {
+        if (reference.type === "standardTab" && anchorKey !== "sheet") {
+          anchorKey = "sheet"
+        } else {
+          continue
+        }
+      }
+
+      const anchorIndex = result.findIndex((entry) => entry.key === anchorKey)
+      const insertionIndex =
+        placement.position === "before" ? anchorIndex : anchorIndex + 1
+
+      result.splice(insertionIndex, 0, {
+        key: definition.id,
+        label: placement.tabLabel || definition.name,
+        icon: Settings2,
+      })
+      unresolved.splice(index, 1)
+      madeProgress = true
+    }
   }
 
-  return CHARACTER_TABS.flatMap((tab) => [
-    ...(before.get(tab.key) ?? []),
-    tab,
-    ...(after.get(tab.key) ?? []),
-  ])
+  for (const definition of unresolved.reverse()) {
+    const placement = getCustomSystemPlacement(definition)
+    result.push({
+      key: definition.id,
+      label:
+        placement.mode === "newTab"
+          ? placement.tabLabel || definition.name
+          : definition.name,
+      icon: Settings2,
+    })
+  }
+
+  return result
 }
 
-function getPlacedSystemIds(
+function orderEmbeddedSystems(
   definitions: CustomSystemDefinition[],
   targetTab: CustomSystemExistingCharacterTab,
-  position: "before" | "after",
-): string[] {
-  return definitions
-    .filter((definition) => {
+): { before: string[]; after: string[] } {
+  const candidates = definitions.filter((definition) => {
+    const placement = getCustomSystemPlacement(definition)
+    return placement.mode === "existingTab" && placement.targetTab === targetTab
+  })
+
+  const sequence = [CONTENT_ANCHOR]
+  const unresolved = [...candidates]
+  let madeProgress = true
+
+  while (unresolved.length && madeProgress) {
+    madeProgress = false
+
+    for (let index = unresolved.length - 1; index >= 0; index -= 1) {
+      const definition = unresolved[index]
       const placement = getCustomSystemPlacement(definition)
-      return (
-        placement.mode === "existingTab" &&
-        placement.targetTab === targetTab &&
-        placement.position === position
+      if (placement.mode !== "existingTab") {
+        unresolved.splice(index, 1)
+        continue
+      }
+
+      const reference = placement.reference ?? { type: "content" as const }
+      const anchor =
+        reference.type === "system" ? reference.systemId : CONTENT_ANCHOR
+      const anchorIndex = sequence.indexOf(anchor)
+      if (anchorIndex < 0) continue
+
+      sequence.splice(
+        placement.position === "before" ? anchorIndex : anchorIndex + 1,
+        0,
+        definition.id,
       )
-    })
-    .map((definition) => definition.id)
+      unresolved.splice(index, 1)
+      madeProgress = true
+    }
+  }
+
+  for (const definition of unresolved.reverse()) {
+    const placement = getCustomSystemPlacement(definition)
+    const contentIndex = sequence.indexOf(CONTENT_ANCHOR)
+    sequence.splice(
+      placement.mode === "existingTab" && placement.position === "before"
+        ? contentIndex
+        : contentIndex + 1,
+      0,
+      definition.id,
+    )
+  }
+
+  const contentIndex = sequence.indexOf(CONTENT_ANCHOR)
+  return {
+    before: sequence.slice(0, contentIndex),
+    after: sequence.slice(contentIndex + 1),
+  }
 }
 
-function customSystemTabKey(systemId: string): string {
-  return `${CUSTOM_SYSTEM_TAB_PREFIX}${systemId}`
-}
-
-function readCustomSystemTabId(tab: string): string | undefined {
-  return tab.startsWith(CUSTOM_SYSTEM_TAB_PREFIX)
-    ? tab.slice(CUSTOM_SYSTEM_TAB_PREFIX.length)
-    : undefined
+function characterPath(characterId: string, tab: string): string {
+  return `/character/${encodeURIComponent(characterId)}/${encodeURIComponent(tab)}`
 }
 
 function getSwipePreviewOffset(
@@ -565,7 +711,7 @@ function getSwipePreviewOffset(
   activeTab: string,
   tabs: CharacterViewTabDefinition[],
 ): number {
-  const activeIndex = tabs.findIndex((entry) => entry.key === activeTab)
+  const activeIndex = tabs.findIndex((tab) => tab.key === activeTab)
   const isAtFirstTab = activeIndex <= 0
   const isAtLastTab = activeIndex >= tabs.length - 1
   const blockedByEdge = deltaX > 0 ? isAtFirstTab : isAtLastTab
@@ -582,7 +728,8 @@ function normalizeCharacterViewTab(
   value: string | undefined,
   tabs: CharacterViewTabDefinition[],
 ): string {
-  return value && tabs.some((entry) => entry.key === value) ? value : "sheet"
+  if (value && tabs.some((tab) => tab.key === value)) return value
+  return tabs[0]?.key ?? "sheet"
 }
 
 function isCharacterTab(value: string): value is CharacterTab {
