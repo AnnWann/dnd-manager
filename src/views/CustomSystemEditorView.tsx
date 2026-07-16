@@ -98,27 +98,29 @@ export function CustomSystemEditorView() {
   }
 
   function saveSystem() {
-    const validation = validateCustomSystemDefinition(draft)
+    if (!draft) return
+    const currentDraft = draft
+    const validation = validateCustomSystemDefinition(currentDraft)
     if (validation) {
       setError(validation)
       setSavedMessage('')
       return
     }
 
-    const collision = systems.definitions.some((entry) => entry.id === draft.id && entry.id !== systemId)
+    const collision = systems.definitions.some((entry) => entry.id === currentDraft.id && entry.id !== systemId)
     if (collision) {
-      setError(`Já existe outro sistema com o ID “${draft.id}”.`)
+      setError(`Já existe outro sistema com o ID “${currentDraft.id}”.`)
       setSavedMessage('')
       return
     }
 
-    systems.saveDefinition(draft, systemId)
+    systems.saveDefinition(currentDraft, systemId)
     removeDraft(systemId)
-    if (draft.id !== systemId) removeDraft(draft.id)
+    if (currentDraft.id !== systemId) removeDraft(currentDraft.id)
     setRestoredDraft(false)
     setError('')
     setSavedMessage('Sistema salvo localmente. A sincronização remota continuará em segundo plano.')
-    if (draft.id !== systemId) navigate(editorPath(draft.id, activeTab), { replace: true })
+    if (currentDraft.id !== systemId) navigate(editorPath(currentDraft.id, activeTab), { replace: true })
   }
 
   function duplicateSystem() {
@@ -128,6 +130,7 @@ export function CustomSystemEditorView() {
   }
 
   function removeSystem() {
+    if (!draft) return
     if (!window.confirm(`Remover o sistema “${draft.name}”? O estado já salvo nos personagens continuará preservado.`)) return
     removeDraft(systemId)
     systems.removeDefinition(systemId)
