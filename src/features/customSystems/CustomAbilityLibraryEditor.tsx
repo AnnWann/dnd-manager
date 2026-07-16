@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import type {
   CustomAbilityTypeDefinition,
@@ -7,6 +7,7 @@ import type {
 import type { CustomFieldDefinition } from '../../models/customSystems/CustomFieldDefinition'
 import type { JsonValue } from '../../models/customSystems/CustomGenerals'
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
+import { CustomSystemRequirementsEditor } from './CustomSystemRequirementsEditor'
 
 export function CustomAbilityLibraryEditor({
   draft,
@@ -59,56 +60,63 @@ export function CustomAbilityLibraryEditor({
     setAbilityIndex(Math.max(0, abilityIndex - 1))
   }
 
-  if (!draft.abilityTypes.length) {
-    return <Empty>Crie primeiro um tipo de habilidade na aba Avançado.</Empty>
-  }
+  return <div className="grid gap-6">
+    <CustomSystemRequirementsEditor draft={draft} setDraft={setDraft} />
 
-  return <div className="grid gap-4 xl:grid-cols-[240px_280px_minmax(0,1fr)]">
-    <aside className="rounded-xl border border-border p-3">
-      <h3 className="font-medium text-textH">Tipos</h3>
-      <p className="mt-1 text-xs text-text">Escolha a categoria da biblioteca.</p>
-      <div className="mt-3 grid gap-2">
-        {draft.abilityTypes.map((entry, index) => <button key={`type-${index}`} type="button" onClick={() => { setTypeIndex(index); setAbilityIndex(0) }} className={`rounded-lg border px-3 py-2 text-left text-sm ${index === typeIndex ? 'border-accent bg-accentBg text-textH' : 'border-border text-text'}`}>
-          {entry.name}
-          <span className="mt-1 block text-[11px]">{entry.predefinedAbilities?.length ?? 0} habilidade(s)</span>
-        </button>)}
+    <section>
+      <div className="mb-3">
+        <h3 className="font-semibold text-textH">Biblioteca de habilidades</h3>
+        <p className="mt-1 text-sm text-text">Cadastre habilidades prontas que o jogador poderá adicionar ao personagem.</p>
       </div>
-    </aside>
 
-    <aside className="rounded-xl border border-border p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div><h3 className="font-medium text-textH">Biblioteca</h3><p className="mt-1 text-xs text-text">Habilidades disponíveis aos jogadores.</p></div>
-        <button type="button" onClick={addAbility} className="rounded-lg border border-accent p-2 text-accent" title="Adicionar habilidade"><Plus className="h-4 w-4" /></button>
-      </div>
-      <div className="mt-3 grid gap-2">
-        {abilities.map((entry, index) => <button key={`preset-${index}`} type="button" onClick={() => setAbilityIndex(index)} className={`rounded-lg border px-3 py-2 text-left ${index === abilityIndex ? 'border-accent bg-accentBg' : 'border-border'}`}>
-          <div className="text-sm font-medium text-textH">{presetTitle(type, entry)}</div>
-          <div className="mt-1 truncate font-mono text-[11px] text-text">{entry.id}</div>
-        </button>)}
-        {!abilities.length ? <Empty>Adicione a primeira habilidade deste tipo.</Empty> : null}
-      </div>
-    </aside>
-
-    <main className="min-w-0 rounded-xl border border-border p-4">
-      {type && ability ? <div className="grid gap-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><h3 className="font-semibold text-textH">Editar habilidade</h3><p className="mt-1 text-xs text-text">Estes valores serão copiados quando o jogador adicionar a habilidade.</p></div>
-          <button type="button" onClick={removeAbility} className="inline-flex items-center gap-2 rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-300"><Trash2 className="h-4 w-4" /> Remover</button>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <Input label="ID estável" value={ability.id} onChange={(id) => replaceAbility({ ...ability, id: slugify(id) })} />
-          <Input label="Observação do mestre" value={ability.description ?? ''} onChange={(description) => replaceAbility({ ...ability, description: description || undefined })} />
-        </div>
-        <section className="rounded-lg border border-border p-3">
-          <h4 className="text-sm font-medium text-textH">Dados da habilidade</h4>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            {type.fields.filter((field) => field.type !== 'formula').map((field) => <PresetField key={field.id} field={field} value={ability.values[field.id]} onChange={(value) => replaceAbility({ ...ability, values: { ...ability.values, [field.id]: value } })} />)}
+      {!draft.abilityTypes.length ? <Empty>Crie primeiro um tipo de habilidade na aba Avançado.</Empty> : <div className="grid gap-4 xl:grid-cols-[240px_280px_minmax(0,1fr)]">
+        <aside className="rounded-xl border border-border p-3">
+          <h3 className="font-medium text-textH">Tipos</h3>
+          <p className="mt-1 text-xs text-text">Escolha a categoria da biblioteca.</p>
+          <div className="mt-3 grid gap-2">
+            {draft.abilityTypes.map((entry, index) => <button key={`type-${index}`} type="button" onClick={() => { setTypeIndex(index); setAbilityIndex(0) }} className={`rounded-lg border px-3 py-2 text-left text-sm ${index === typeIndex ? 'border-accent bg-accentBg text-textH' : 'border-border text-text'}`}>
+              {entry.name}
+              <span className="mt-1 block text-[11px]">{entry.predefinedAbilities?.length ?? 0} habilidade(s)</span>
+            </button>)}
           </div>
-          {!type.fields.some((field) => field.type !== 'formula') ? <p className="mt-3 text-sm text-text">Este tipo ainda não possui campos editáveis.</p> : null}
-        </section>
-        <label className="flex items-center gap-2 text-sm text-textH"><input type="checkbox" checked={Boolean(type.allowCustomCreation)} onChange={(event) => replaceType({ ...type, allowCustomCreation: event.target.checked })} /> Permitir que o jogador crie habilidades fora da biblioteca</label>
-      </div> : <Empty>Selecione ou adicione uma habilidade.</Empty>}
-    </main>
+        </aside>
+
+        <aside className="rounded-xl border border-border p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div><h3 className="font-medium text-textH">Biblioteca</h3><p className="mt-1 text-xs text-text">Habilidades disponíveis aos jogadores.</p></div>
+            <button type="button" onClick={addAbility} className="rounded-lg border border-accent p-2 text-accent" title="Adicionar habilidade"><Plus className="h-4 w-4" /></button>
+          </div>
+          <div className="mt-3 grid gap-2">
+            {abilities.map((entry, index) => <button key={`preset-${index}`} type="button" onClick={() => setAbilityIndex(index)} className={`rounded-lg border px-3 py-2 text-left ${index === abilityIndex ? 'border-accent bg-accentBg' : 'border-border'}`}>
+              <div className="text-sm font-medium text-textH">{presetTitle(type, entry)}</div>
+              <div className="mt-1 truncate font-mono text-[11px] text-text">{entry.id}</div>
+            </button>)}
+            {!abilities.length ? <Empty>Adicione a primeira habilidade deste tipo.</Empty> : null}
+          </div>
+        </aside>
+
+        <main className="min-w-0 rounded-xl border border-border p-4">
+          {type && ability ? <div className="grid gap-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div><h3 className="font-semibold text-textH">Editar habilidade</h3><p className="mt-1 text-xs text-text">Estes valores serão copiados quando o jogador adicionar a habilidade.</p></div>
+              <button type="button" onClick={removeAbility} className="inline-flex items-center gap-2 rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-300"><Trash2 className="h-4 w-4" /> Remover</button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Input label="ID estável" value={ability.id} onChange={(id) => replaceAbility({ ...ability, id: slugify(id) })} />
+              <Input label="Observação do mestre" value={ability.description ?? ''} onChange={(description) => replaceAbility({ ...ability, description: description || undefined })} />
+            </div>
+            <section className="rounded-lg border border-border p-3">
+              <h4 className="text-sm font-medium text-textH">Dados da habilidade</h4>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {type.fields.filter((field) => field.type !== 'formula').map((field) => <PresetField key={field.id} field={field} value={ability.values[field.id]} onChange={(value) => replaceAbility({ ...ability, values: { ...ability.values, [field.id]: value } })} />)}
+              </div>
+              {!type.fields.some((field) => field.type !== 'formula') ? <p className="mt-3 text-sm text-text">Este tipo ainda não possui campos editáveis.</p> : null}
+            </section>
+            <label className="flex items-center gap-2 text-sm text-textH"><input type="checkbox" checked={Boolean(type.allowCustomCreation)} onChange={(event) => replaceType({ ...type, allowCustomCreation: event.target.checked })} /> Permitir que o jogador crie habilidades fora da biblioteca</label>
+          </div> : <Empty>Selecione ou adicione uma habilidade.</Empty>}
+        </main>
+      </div>}
+    </section>
   </div>
 }
 
