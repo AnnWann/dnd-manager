@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { BookOpen, Eye, EyeOff, Plus, Search, Settings2, Trash2, X } from 'lucide-react'
 import { Select } from '../../../components/ui/Select'
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
@@ -40,18 +40,21 @@ export function CustomSystemsRuntime({ character, updateCharacter }: Pick<Props,
     [character, definitions, states],
   )
 
-  useEffect(() => {
-    if (!automaticDefinitions.length) return
-    updateCharacter(character.get('id'), (current) => {
-      const currentStates = (current.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
-      const existingIds = new Set(currentStates.map((state) => state.systemId))
-      const additions = automaticDefinitions
-        .filter((definition) => !existingIds.has(definition.id))
-        .map(createAutomaticallyInstalledCustomSystemState)
-      if (!additions.length) return current
-      return current.withSheet('customSystems', [...currentStates, ...additions])
+  useMemo(() => automaticDefinitions, [automaticDefinitions])
+
+  if (automaticDefinitions.length) {
+    queueMicrotask(() => {
+      updateCharacter(character.get('id'), (current) => {
+        const currentStates = (current.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
+        const existingIds = new Set(currentStates.map((state) => state.systemId))
+        const additions = automaticDefinitions
+          .filter((definition) => !existingIds.has(definition.id))
+          .map(createAutomaticallyInstalledCustomSystemState)
+        if (!additions.length) return current
+        return current.withSheet('customSystems', [...currentStates, ...additions])
+      })
     })
-  }, [automaticDefinitions, character, updateCharacter])
+  }
 
   return null
 }
@@ -65,14 +68,13 @@ export function CustomSystemsTabWithLibrary({
   const definitions = useCustomSystemDefinitions()
   const states = (character.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
   const [open, setOpen] = useState(false)
-  const allowedIds = systemIds ? new Set(systemIds) : undefined
+  const allowedIds = useMemo(() => systemIds ? new Set(systemIds) : undefined, [systemIds])
   const activeStates = states.filter((state) =>
     isActiveSystemState(state) && (!allowedIds || allowedIds.has(state.systemId)),
   )
 
   if (!activeStates.length) return null
 
-  const visibleCharacter = character.withSheet('customSystems', activeStates)
   const installedDefinitions = definitions.filter((definition) =>
     activeStates.some((state) => state.systemId === definition.id),
   )
@@ -87,19 +89,34 @@ export function CustomSystemsTabWithLibrary({
       </button>
     </div> : null}
 
-    <CustomSystemsTab
-      character={visibleCharacter}
-      updateCharacter={updateCharacter}
-      actor={actor}
-    />
+    {activeStates.map((state) => {
+      const visibleCharacter = character.withSheet('customSystems', [state])
+      return <div
+        key={state.systemId}
+        className="[&>div]:!grid-cols-1 [&>div>aside]:hidden"
+      >
+        <CustomSystemsTab
+          character={visibleCharacter}
+          updateCharacter={updateCharacter}
+          actor={actor}
+        />
+      </div>
+    })}
+
     {open ? <AbilityLibraryModal character={character} updateCharacter={updateCharacter} actor={actor} systemIds={systemIds} onClose={() => setOpen(false)} /> : null}
   </div>
 }
 
-export function CustomSystemsManagementPanel({ character, updateCharacter, actor }: Props) {
+export function CustomSystemsManagementModal({
+  character,
+  updateCharacter,
+  actor,
+  open,
+  onClose,
+}: Props & { open: boolean; onClose: () => void }) {
   const definitions = useCustomSystemDefinitions()
   const states = (character.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
-  if (actor !== 'master') return null
+  if (!open || actor !== 'master') return null
 
   const active = states.filter(isActiveSystemState)
   const disabled = states.filter((state) => state.enabled === false && !isSuppressedSystemState(state))
@@ -144,36 +161,55 @@ export function CustomSystemsManagementPanel({ character, updateCharacter, actor
     })
   }
 
-  if (!active.length && !disabled.length && !available.length && !suppressed.length) return null
+  return <div
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="custom-systems-management-title"
+    onMouseDown={(event) => { if (event.currentTarget === event.target) onClose() }}
+  >
+    <section className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-bg shadow-2xl">
+      <header className="flex items-start justify-between gap-3 border-b border-border p-4">
+        <div className="flex items-start gap-3">
+          <div className="rounded-lg border border-accentBorder bg-accentBg p-2 text-accent"><Settings2 className="h-5 w-5" /></div>
+          <div>
+            <h2 id="custom-systems-management-title" className="font-semibold text-textH">Sistemas da ficha</h2>
+            <p className="mt-1 text-xs text-text">Adicione, esconda, reative ou remova sistemas deste personagem.</p>
+          </div>
+        </div>
+        <button type="button" onClick={onClose} className="rounded-lg p-2 text-text hover:bg-accentBg" aria-label="Fechar"><X className="h-5 w-5" /></button>
+      </header>
 
-  return <section className="rounded-xl border border-border bg-bg p-4">
-    <div className="flex items-start gap-3">
-      <div className="rounded-lg border border-accentBorder bg-accentBg p-2 text-accent"><Settings2 className="h-5 w-5" /></div>
-      <div><h3 className="font-semibold text-textH">Sistemas da ficha</h3><p className="mt-1 text-xs text-text">Controle quais sistemas estão ativos neste personagem.</p></div>
-    </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div className="grid gap-3">
+          {active.map((state) => <SystemManagementRow key={state.systemId} name={definitionName(definitions, state.systemId)} status="Visível na ficha">
+            <SmallAction onClick={() => disable(state.systemId)}><EyeOff className="h-4 w-4" /> Esconder</SmallAction>
+            <SmallAction danger onClick={() => remove(state)}><Trash2 className="h-4 w-4" /> Remover</SmallAction>
+          </SystemManagementRow>)}
 
-    <div className="mt-4 grid gap-3">
-      {active.map((state) => <SystemManagementRow key={state.systemId} name={definitionName(definitions, state.systemId)} status="Ativo">
-        <SmallAction onClick={() => disable(state.systemId)}><EyeOff className="h-4 w-4" /> Desabilitar</SmallAction>
-        <SmallAction danger onClick={() => remove(state)}><Trash2 className="h-4 w-4" /> Remover</SmallAction>
-      </SystemManagementRow>)}
+          {disabled.map((state) => <SystemManagementRow key={state.systemId} name={definitionName(definitions, state.systemId)} status="Escondido, com dados preservados">
+            <SmallAction onClick={() => enable(state.systemId)}><Eye className="h-4 w-4" /> Mostrar</SmallAction>
+            <SmallAction danger onClick={() => remove(state)}><Trash2 className="h-4 w-4" /> Remover</SmallAction>
+          </SystemManagementRow>)}
 
-      {disabled.map((state) => <SystemManagementRow key={state.systemId} name={definitionName(definitions, state.systemId)} status="Desabilitado">
-        <SmallAction onClick={() => enable(state.systemId)}><Eye className="h-4 w-4" /> Reativar</SmallAction>
-        <SmallAction danger onClick={() => remove(state)}><Trash2 className="h-4 w-4" /> Remover</SmallAction>
-      </SystemManagementRow>)}
+          {available.map((definition) => {
+            const wasRemoved = suppressed.some((state) => state.systemId === definition.id)
+            return <SystemManagementRow key={definition.id} name={definition.name} status={wasRemoved ? 'Removido desta ficha' : 'Disponível para adicionar'}>
+              <SmallAction onClick={() => install(definition)}><Plus className="h-4 w-4" /> {wasRemoved ? 'Reinstalar' : 'Adicionar'}</SmallAction>
+            </SystemManagementRow>
+          })}
 
-      {available.map((definition) => <SystemManagementRow key={definition.id} name={definition.name} status={suppressed.some((state) => state.systemId === definition.id) ? 'Removido desta ficha' : 'Disponível'}>
-        <SmallAction onClick={() => install(definition)}><Plus className="h-4 w-4" /> {suppressed.some((state) => state.systemId === definition.id) ? 'Reinstalar' : 'Adicionar'}</SmallAction>
-      </SystemManagementRow>)}
-    </div>
-  </section>
+          {!active.length && !disabled.length && !available.length ? <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-text">Nenhum sistema disponível.</div> : null}
+        </div>
+      </div>
+    </section>
+  </div>
 }
 
 function AbilityLibraryModal({ character, updateCharacter, actor, systemIds, onClose }: PlacementProps & { onClose: () => void }) {
   const definitions = useCustomSystemDefinitions()
   const states = (character.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
-  const allowedIds = systemIds ? new Set(systemIds) : undefined
+  const allowedIds = useMemo(() => systemIds ? new Set(systemIds) : undefined, [systemIds])
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
 
@@ -248,14 +284,14 @@ function AbilityLibraryModal({ character, updateCharacter, actor, systemIds, onC
   </div>
 }
 
-function SystemManagementRow({ name, status, children }: { name: string; status: string; children: React.ReactNode }) {
+function SystemManagementRow({ name, status, children }: { name: string; status: string; children: ReactNode }) {
   return <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
     <div><div className="font-medium text-textH">{name}</div><div className="mt-1 text-xs text-text">{status}</div></div>
     <div className="flex flex-wrap gap-2">{children}</div>
   </div>
 }
 
-function SmallAction({ children, onClick, danger }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
+function SmallAction({ children, onClick, danger }: { children: ReactNode; onClick: () => void; danger?: boolean }) {
   return <button type="button" onClick={onClick} className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${danger ? 'border-red-500/40 text-red-300 hover:bg-red-500/10' : 'border-border text-textH hover:bg-accentBg'}`}>{children}</button>
 }
 
