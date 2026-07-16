@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ArrowLeft, Copy, Download, Save, Settings2, Trash2 } from 'lucide-react'
+import { ArrowLeft, Copy, Download, Save, Trash2 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useCustomSystemsContext } from '../contexts/customSystemsContext'
 import { AdvancedSystemEditors } from '../features/customSystems/AdvancedSystemEditors'
@@ -10,6 +10,10 @@ import {
   CustomSystemResourcesEditor,
   validateCustomSystemDefinition,
 } from '../features/customSystems/CustomSystemCoreEditors'
+import {
+  CustomSystemIcon,
+  CustomSystemIconPicker,
+} from '../features/customSystems/CustomSystemIcon'
 import { CustomSystemPlacementEditor } from '../features/customSystems/CustomSystemPlacementEditor'
 import { CustomSystemRequirementsEditor } from '../features/customSystems/CustomSystemRequirementsEditor'
 import { readLocalStorageJson, removeLocalStorage, writeLocalStorageJson } from '../lib/storage'
@@ -142,7 +146,7 @@ export function CustomSystemEditorView() {
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border p-4">
         <div className="flex min-w-0 items-center gap-3">
           <button type="button" onClick={goBack} title="Voltar para sistemas" className="rounded-lg border border-border p-2 text-textH hover:bg-accentBg"><ArrowLeft className="h-4 w-4" /></button>
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accentBorder bg-accentBg text-lg">{draft.icon || <Settings2 className="h-5 w-5 text-accent" />}</div>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accentBorder bg-accentBg text-lg text-accent"><CustomSystemIcon icon={draft.icon} className="h-5 w-5" /></div>
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <h1 className="truncate text-xl font-semibold text-textH">{draft.name}</h1>
@@ -175,10 +179,11 @@ export function CustomSystemEditorView() {
       {savedMessage && !error ? <div className="mx-4 mt-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-300">{savedMessage}</div> : null}
 
       <div className="p-4 sm:p-5">
-        {activeTab === 'general' ? <>
+        {activeTab === 'general' ? <div className="grid gap-5">
           <CustomSystemGeneralEditor draft={draft} setDraft={setDraft} />
+          <CustomSystemIconPicker value={draft.icon} onChange={(icon) => setDraft({ ...draft, icon })} />
           <CustomSystemPlacementEditor draft={draft} setDraft={setDraft} definitions={systems.definitions} />
-        </> : null}
+        </div> : null}
         {activeTab === 'fields' ? <CustomSystemFieldsEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'resources' ? <CustomSystemResourcesEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'requirements' ? <CustomSystemRequirementsEditor draft={draft} setDraft={setDraft} /> : null}
