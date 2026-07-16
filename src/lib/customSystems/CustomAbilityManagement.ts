@@ -10,6 +10,10 @@ import type {
 } from '../../models/customSystems/CustomSystemDefinition'
 import { evaluateCustomFormula } from './CustomFormulaEngineWithCharacter'
 
+type AbilityTypeWithPartialAcquisition = Omit<CustomAbilityTypeDefinition, 'acquisition'> & {
+  acquisition?: Partial<CustomAbilityAcquisitionDefinition>
+}
+
 export type CustomAbilityAvailability = {
   learned: boolean
   prepared: boolean
@@ -18,7 +22,7 @@ export type CustomAbilityAvailability = {
 }
 
 export function initializeCustomAbilityProgress(
-  type: CustomAbilityTypeDefinition,
+  type: AbilityTypeWithPartialAcquisition,
   ability: CustomAbilityInstance,
 ): CustomAbilityInstance {
   const acquisition = normalizeAcquisition(type.acquisition)
@@ -37,7 +41,7 @@ export function initializeCustomAbilityProgress(
 }
 
 export function getCustomAbilityAvailability(
-  type: CustomAbilityTypeDefinition,
+  type: AbilityTypeWithPartialAcquisition,
   ability: CustomAbilityInstance,
 ): CustomAbilityAvailability {
   const acquisition = normalizeAcquisition(type.acquisition)
@@ -68,9 +72,7 @@ export function setCustomAbilityLearned(
   const acquisition = normalizeAcquisition(type.acquisition)
 
   if (acquisition.mode === 'granted' || acquisition.mode === 'prepared') return state
-  if (learned) {
-    assertLimit(definition, state, type, 'learned', character)
-  }
+  if (learned) assertLimit(definition, state, type, 'learned', character)
 
   return replaceAbility(state, abilityId, {
     ...ability,
@@ -93,9 +95,7 @@ export function setCustomAbilityPrepared(
 
   if (acquisition.mode === 'granted' || acquisition.mode === 'learned') return state
   if (!availability.learned) throw new Error('A habilidade precisa ser aprendida antes de ser preparada.')
-  if (prepared) {
-    assertLimit(definition, state, type, 'prepared', character)
-  }
+  if (prepared) assertLimit(definition, state, type, 'prepared', character)
 
   return replaceAbility(state, abilityId, { ...ability, prepared })
 }
@@ -143,12 +143,16 @@ function assertLimit(
   }
 }
 
-function normalizeAcquisition(value?: CustomAbilityAcquisitionDefinition): CustomAbilityAcquisitionDefinition {
-  return value ?? {
-    mode: 'learned',
-    defaultLearned: true,
-    defaultPrepared: false,
-    preparationReset: 'manual',
+function normalizeAcquisition(value?: Partial<CustomAbilityAcquisitionDefinition>): CustomAbilityAcquisitionDefinition {
+  return {
+    mode: value?.mode ?? 'learned',
+    learnedLimit: value?.learnedLimit,
+    learnedLimitFormula: value?.learnedLimitFormula,
+    preparedLimit: value?.preparedLimit,
+    preparedLimitFormula: value?.preparedLimitFormula,
+    defaultLearned: value?.defaultLearned ?? true,
+    defaultPrepared: value?.defaultPrepared ?? false,
+    preparationReset: value?.preparationReset ?? 'manual',
   }
 }
 
