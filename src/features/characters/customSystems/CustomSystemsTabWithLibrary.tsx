@@ -1,9 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { BookOpen, Plus, Search, X } from 'lucide-react'
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
 import type { CustomPredefinedAbilityDefinition } from '../../../models/customSystems/CustomAbilityDefinition'
 import type { CharacterCustomSystemState, CustomAbilityInstance, CustomSystemDefinition } from '../../../models/customSystems/CustomSystemDefinition'
-import { addCustomAbility, type CustomSystemActor } from '../../../lib/customSystems'
+import {
+  addCustomAbility,
+  createAutomaticallyInstalledCustomSystemState,
+  shouldAutomaticallyInstallCustomSystem,
+  type CustomSystemActor,
+} from '../../../lib/customSystems'
 import { useCustomSystemDefinitions } from '../../../lib/customSystems/CustomSystemRegistry'
 import { CustomSystemsTab } from './CustomSystemsTab'
 
@@ -16,13 +21,47 @@ type Props = {
 }
 
 export function CustomSystemsTabWithLibrary(props: Props) {
+  const { character, updateCharacter } = props
+  const definitions = useCustomSystemDefinitions()
+  const states = character.get('sheet').customSystems ?? []
   const [open, setOpen] = useState(false)
+
+  const automaticDefinitions = useMemo(
+    () => definitions.filter((definition) =>
+      !states.some((state) => state.systemId === definition.id) &&
+      shouldAutomaticallyInstallCustomSystem(definition, character),
+    ),
+    [character, definitions, states],
+  )
+
+  useEffect(() => {
+    if (!automaticDefinitions.length) return
+    const ids = new Set(automaticDefinitions.map((definition) => definition.id))
+    updateCharacter(character.get('id'), (current) => {
+      const currentStates = current.get('sheet').customSystems ?? []
+      const existingIds = new Set(currentStates.map((state) => state.systemId))
+      const additions = automaticDefinitions
+        .filter((definition) => ids.has(definition.id) && !existingIds.has(definition.id))
+        .map(createAutomaticallyInstalledCustomSystemState)
+      if (!additions.length) return current
+      return current.withSheet('customSystems', [...currentStates, ...additions])
+    })
+  }, [automaticDefinitions, character, updateCharacter])
+
+  const installedDefinitions = definitions.filter((definition) =>
+    states.some((state) => state.systemId === definition.id),
+  )
+  const hasLibraryEntries = installedDefinitions.some((definition) =>
+    definition.abilityTypes.some((type) => (type.predefinedAbilities?.length ?? 0) > 0),
+  )
+
   return <div className="grid gap-4">
-    <div className="flex justify-end">
+    {hasLibraryEntries ? <div className="flex justify-end">
       <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-accent bg-accentBg px-3 py-2 text-sm font-medium text-textH">
         <BookOpen className="h-4 w-4" /> Adicionar da biblioteca
       </button>
-    </div>
+    </div> : null}
+
     <CustomSystemsTab {...props} />
     {open ? <AbilityLibraryModal {...props} onClose={() => setOpen(false)} /> : null}
   </div>
@@ -51,14 +90,15 @@ function AbilityLibraryModal({ character, updateCharacter, actor, onClose }: Pro
 
   function learn(definition: CustomSystemDefinition, state: CharacterCustomSystemState, typeId: string, preset: CustomPredefinedAbilityDefinition) {
     if (hasPreset(state, typeId, preset.id)) return
+    const abilityType = definition.abilityTypes.find((entry) => entry.id === typeId)
     const ability: CustomAbilityInstance = {
       id: crypto.randomUUID(),
       abilityTypeId: typeId,
       predefinedAbilityId: preset.id,
       values: { ...preset.values, [PREDEFINED_MARKER]: preset.id },
       enabled: true,
-      usage: definition.abilityTypes.find((entry) => entry.id === typeId)?.activation?.usage
-        ? { used: 0, maximum: definition.abilityTypes.find((entry) => entry.id === typeId)?.activation?.usage?.maximum }
+      usage: abilityType?.activation?.usage
+        ? { used: 0, maximum: abilityType.activation.usage.maximum }
         : undefined,
     }
     const next = addCustomAbility(definition, state, ability, actor)
