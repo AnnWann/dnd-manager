@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { createPortal } from "react-dom"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
 
 import { Button } from "../../../../components/ui/Button"
@@ -132,14 +133,22 @@ function ClassEditorModal({
   ) => void
   onClose: () => void
 }) {
-  if (!open) return null
+  if (!open || typeof document === "undefined") return null
 
-  return (
-    <div className="fixed inset-0 z-[10000] flex max-w-[100vw] items-start justify-center overflow-y-auto overflow-x-hidden bg-black/65 p-2 pt-3 backdrop-blur-sm sm:items-center sm:p-4">
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[10000] flex items-center justify-center overflow-hidden bg-black/65 p-3 backdrop-blur-sm sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="class-editor-title"
+      onMouseDown={(event) => {
+        if (event.currentTarget === event.target) onClose()
+      }}
+    >
       <div className="grid max-h-[calc(100dvh-1.5rem)] w-full min-w-0 max-w-5xl gap-4 overflow-y-auto rounded-xl border border-border bg-bg-elevated p-3 shadow-theme-lg sm:max-h-[calc(100dvh-2rem)] sm:p-4">
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div>
-            <h2 className="break-words text-sm font-semibold text-textH">
+            <h2 id="class-editor-title" className="break-words text-sm font-semibold text-textH">
               Editar classes
             </h2>
             <p className="mt-1 text-xs leading-5 text-textMuted">
@@ -155,6 +164,7 @@ function ClassEditorModal({
 
         <Classes character={character} updateCharacter={updateCharacter} />
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
