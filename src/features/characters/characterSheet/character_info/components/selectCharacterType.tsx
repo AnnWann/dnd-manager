@@ -11,31 +11,31 @@ type Props = {
   canEditCharacterType: boolean
 }
 
-export function SelectCharacterType ({
+export function SelectCharacterType({
   character,
   updateCharacter,
-  canEditCharacterType  
+  canEditCharacterType,
 }: Props) {
-  const type = character.get('sheet').type
+  const type = character.get("sheet").type
+
   return (
-    <div className="w-full md:w-[320px]">
-      <label className="text-xs text-text">
-        Tipo
-      </label>
+    <div className="min-w-0 w-full">
+      <label className="text-xs text-text">Tipo</label>
 
       <Select
-        className="mt-1"
+        className="mt-1 w-full"
         value={type}
         disabled={!canEditCharacterType}
-        onChange={(e) =>
-          canEditCharacterType
-            ?
-          updateCharacter(character.get('id'), (c) => c.withSheet('type', e.target.value as CharacterType)) : undefined
-        } 
+        onChange={(event) => {
+          if (!canEditCharacterType) return
+          updateCharacter(character.get("id"), (current) =>
+            current.withSheet("type", event.target.value as CharacterType),
+          )
+        }}
       >
-        {(canEditCharacterType ? CHARACTER_TYPES : [type]).map((t) => (
-          <option key={t} value={t}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+        {(canEditCharacterType ? CHARACTER_TYPES : [type]).map((entry) => (
+          <option key={entry} value={entry}>
+            {entry.charAt(0).toUpperCase() + entry.slice(1)}
           </option>
         ))}
       </Select>
