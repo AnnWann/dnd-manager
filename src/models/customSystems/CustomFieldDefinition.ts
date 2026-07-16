@@ -54,6 +54,7 @@ export interface CustomSelectFieldDefinition extends CustomFieldBase {
   options: CustomSelectOption[]
   minimumSelections?: number
   maximumSelections?: number
+  placeholder?: string
 }
 
 export interface CustomDiceFieldDefinition extends CustomFieldBase {
@@ -71,7 +72,7 @@ export interface CustomFormulaFieldDefinition extends CustomFieldBase {
   type: 'formula'
   formula: FormulaExpression
   resultType: 'number' | 'text' | 'boolean'
-  editPermission?: 'automaticOnly'
+  editPermission?: CustomSystemEditPermission
 }
 
 export type CustomFieldDefinition =
