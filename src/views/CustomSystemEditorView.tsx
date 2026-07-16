@@ -47,6 +47,10 @@ export function CustomSystemEditorView() {
 
   const dirty = useMemo(() => Boolean(draft && definition && JSON.stringify(draft) !== JSON.stringify(definition)), [definition, draft])
 
+  useEffect(() => {
+    if (dirty) setSavedMessage('')
+  }, [dirty])
+
   if (!systems.canManage) {
     return <Message title="Sistemas personalizados">Apenas o mestre pode editar sistemas da campanha.</Message>
   }
