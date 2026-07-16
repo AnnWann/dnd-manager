@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { BookOpen, Eye, EyeOff, Plus, Search, Settings2, Trash2, X } from 'lucide-react'
 import { Select } from '../../../components/ui/Select'
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
@@ -40,21 +40,18 @@ export function CustomSystemsRuntime({ character, updateCharacter }: Pick<Props,
     [character, definitions, states],
   )
 
-  useMemo(() => automaticDefinitions, [automaticDefinitions])
-
-  if (automaticDefinitions.length) {
-    queueMicrotask(() => {
-      updateCharacter(character.get('id'), (current) => {
-        const currentStates = (current.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
-        const existingIds = new Set(currentStates.map((state) => state.systemId))
-        const additions = automaticDefinitions
-          .filter((definition) => !existingIds.has(definition.id))
-          .map(createAutomaticallyInstalledCustomSystemState)
-        if (!additions.length) return current
-        return current.withSheet('customSystems', [...currentStates, ...additions])
-      })
+  useEffect(() => {
+    if (!automaticDefinitions.length) return
+    updateCharacter(character.get('id'), (current) => {
+      const currentStates = (current.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
+      const existingIds = new Set(currentStates.map((state) => state.systemId))
+      const additions = automaticDefinitions
+        .filter((definition) => !existingIds.has(definition.id))
+        .map(createAutomaticallyInstalledCustomSystemState)
+      if (!additions.length) return current
+      return current.withSheet('customSystems', [...currentStates, ...additions])
     })
-  }
+  }, [automaticDefinitions, character, updateCharacter])
 
   return null
 }
