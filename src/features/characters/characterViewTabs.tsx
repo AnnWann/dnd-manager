@@ -21,16 +21,19 @@ export type CharacterTab =
   | "inventory"
   | "spellsList"
 
-type Props = {
-  activeTab: CharacterTab
-  setActiveTab: (tab: CharacterTab) => void
-}
-
-export const CHARACTER_TABS: Array<{
-  key: CharacterTab
+export type CharacterViewTabDefinition = {
+  key: string
   label: string
   icon: LucideIcon
-}> = [
+}
+
+type Props = {
+  activeTab: string
+  setActiveTab: (tab: string) => void
+  tabs?: CharacterViewTabDefinition[]
+}
+
+export const CHARACTER_TABS: CharacterViewTabDefinition[] = [
   { key: "sheet", label: "Ficha", icon: ScrollText },
   { key: "abilities", label: "Habilidades", icon: Sparkles },
   { key: "spellsList", label: "Magias", icon: WandSparkles },
@@ -44,6 +47,7 @@ export const CHARACTER_TABS: Array<{
 export function CharacterViewTabs({
   activeTab,
   setActiveTab,
+  tabs = CHARACTER_TABS,
 }: Props) {
   const activeButtonRef = useRef<HTMLButtonElement | null>(null)
 
@@ -61,7 +65,7 @@ export function CharacterViewTabs({
       className="overflow-x-auto overscroll-x-contain rounded-xl border border-border bg-bg p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       <div className="flex min-w-max snap-x snap-mandatory gap-1 sm:gap-2 lg:min-w-0">
-        {CHARACTER_TABS.map((tab) => {
+        {tabs.map((tab) => {
           const TabIcon = tab.icon
           const isActive = activeTab === tab.key
 
