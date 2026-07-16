@@ -10,7 +10,7 @@ import { GroupStats } from "./character_info/components/stats/GroupStats"
 import { AttributeCalculators } from "./attributeCalculators"
 import { CharacterConditions } from "./characterConditions"
 import { SavingThrows } from "./savingThrows"
-import { CustomSystemsTabWithLibrary } from "../customSystems/CustomSystemsTabWithLibrary"
+
 
 type Props = {
   character: CharacterTemplate
@@ -72,12 +72,6 @@ export function CharacterSheetTab({
       </div>
 
       <AttributeCalculators character={character} />
-
-      <CustomSystemsTabWithLibrary
-        character={character}
-        updateCharacter={updateCharacter}
-        actor={canAssignOwners ? "master" : "owner"}
-      />
     </div>
   )
 }
