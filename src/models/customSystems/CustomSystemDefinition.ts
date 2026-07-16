@@ -49,6 +49,7 @@ export interface CustomSystemAutomaticInstallation {
   enabled: boolean
   match: 'all' | 'any'
   requirements: CustomSystemInstallationRequirement[]
+  characterPlacement?: CustomSystemCharacterPlacement
 }
 
 export type CustomSystemInstallationRequirement =
