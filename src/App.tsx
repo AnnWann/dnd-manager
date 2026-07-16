@@ -109,7 +109,7 @@ function App() {
           {
             label: "Sistemas personalizados",
             icon: <IconCompendium />,
-            active: location.pathname === "/custom-systems",
+            active: location.pathname.startsWith("/custom-systems"),
             onClick: () => navigate("/custom-systems"),
           },
           {
