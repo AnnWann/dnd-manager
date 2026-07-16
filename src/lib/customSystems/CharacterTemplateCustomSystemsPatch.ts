@@ -26,7 +26,9 @@ export function installCharacterCustomSystemsSerializationPatch(): void {
     if (Array.isArray(customSystems)) {
       restored = restored.withSheet(
         'customSystems',
-        customSystems.map(recalculateCustomSystemState),
+        customSystems.map((state) =>
+          recalculateCustomSystemState(state, restored),
+        ),
       )
     }
 
