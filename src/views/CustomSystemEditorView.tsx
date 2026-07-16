@@ -5,6 +5,7 @@ import { useCustomSystemsContext } from '../contexts/customSystemsContext'
 import { AdvancedSystemEditors } from '../features/customSystems/AdvancedSystemEditors'
 import { CustomAbilityConfigurationEditor } from '../features/customSystems/CustomAbilityConfigurationEditor'
 import { CustomAbilityLibraryEditor } from '../features/customSystems/CustomAbilityLibraryEditor'
+import { CustomResourceBehaviorEditor } from '../features/customSystems/CustomResourceBehaviorEditor'
 import {
   CustomSystemFieldsEditor,
   CustomSystemGeneralEditor,
@@ -189,7 +190,10 @@ export function CustomSystemEditorView() {
           <CustomSystemPlacementEditor draft={draft} setDraft={setDraft} definitions={systems.definitions} />
         </div> : null}
         {activeTab === 'fields' ? <CustomSystemFieldsEditor draft={draft} setDraft={setDraft} /> : null}
-        {activeTab === 'resources' ? <CustomSystemResourcesEditor draft={draft} setDraft={setDraft} /> : null}
+        {activeTab === 'resources' ? <div>
+          <CustomSystemResourcesEditor draft={draft} setDraft={setDraft} />
+          <CustomResourceBehaviorEditor draft={draft} setDraft={setDraft} />
+        </div> : null}
         {activeTab === 'abilities' ? <CustomAbilityConfigurationEditor draft={draft} setDraft={setDraft} definitions={systems.definitions} /> : null}
         {activeTab === 'requirements' ? <CustomSystemRequirementsEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'library' ? <CustomAbilityLibraryEditor draft={draft} setDraft={setDraft} /> : null}
