@@ -34,17 +34,34 @@ export type CustomSystemExistingCharacterTab =
   | 'profile'
   | 'proficiencies'
 
+export type CustomSystemPlacementReference =
+  | {
+      type: 'standardTab'
+      tab: CustomSystemExistingCharacterTab
+    }
+  | {
+      type: 'system'
+      systemId: string
+    }
+
+export type CustomSystemEmbeddedReference =
+  | { type: 'content' }
+  | { type: 'system'; systemId: string }
+
 export type CustomSystemCharacterPlacement =
   | {
       mode: 'newTab'
       tabLabel?: string
-      relativeToTab?: CustomSystemExistingCharacterTab
+      reference?: CustomSystemPlacementReference
       position?: 'before' | 'after'
+      /** @deprecated Compatibility with definitions created before system anchors. */
+      relativeToTab?: CustomSystemExistingCharacterTab
     }
   | {
       mode: 'existingTab'
       targetTab: CustomSystemExistingCharacterTab
       position: 'before' | 'after'
+      reference?: CustomSystemEmbeddedReference
     }
 
 export interface CustomSystemAutomaticInstallation {
