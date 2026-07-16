@@ -20,8 +20,30 @@ export interface CustomSystemDefinition {
   panels: CustomPanelDefinition[]
   automations: CustomAutomationDefinition[]
   automaticInstallation?: CustomSystemAutomaticInstallation
+  characterPlacement?: CustomSystemCharacterPlacement
   tags?: string[]
 }
+
+export type CustomSystemExistingCharacterTab =
+  | 'sheet'
+  | 'abilities'
+  | 'spellsList'
+  | 'equipment'
+  | 'inventory'
+  | 'race'
+  | 'profile'
+  | 'proficiencies'
+
+export type CustomSystemCharacterPlacement =
+  | {
+      mode: 'newTab'
+      tabLabel?: string
+    }
+  | {
+      mode: 'existingTab'
+      targetTab: CustomSystemExistingCharacterTab
+      position: 'before' | 'after'
+    }
 
 export interface CustomSystemAutomaticInstallation {
   enabled: boolean
