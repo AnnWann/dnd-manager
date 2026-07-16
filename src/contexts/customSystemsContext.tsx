@@ -10,6 +10,7 @@ import {
 } from 'react'
 import type { CustomSystemDefinition } from '../models/customSystems/CustomSystemDefinition'
 import { setCustomSystemDefinitions } from '../lib/customSystems'
+import { readLocalStorageJson, writeLocalStorageJson } from '../lib/storage'
 import { useSyncContext } from './syncContext'
 
 type SyncStatus =
@@ -37,116 +38,217 @@ type ApiSnapshot = {
   revision?: number
 }
 
+type LocalCustomSystemsSnapshot = {
+  schema: 'dndmm.custom-systems-local'
+  version: 1
+  definitions: CustomSystemDefinition[]
+  baseDefinitions: CustomSystemDefinition[]
+  revision: number
+  dirty: boolean
+  savedAt: number
+}
+
 const CustomSystemsContext = createContext<CustomSystemsContextValue | null>(null)
+const LOCAL_STATE_KEY = 'dndmm.customSystems.v1'
 const SAVE_DELAY = 600
+const RETRY_DELAY = 5000
 const MAX_CONFLICT_RETRIES = 4
 
 export function CustomSystemsProvider({ children }: { children: ReactNode }) {
   const { syncKey, userRole, userKey } = useSyncContext()
-  const [definitions, setDefinitions] = useState<CustomSystemDefinition[]>([])
+  const initialSnapshotRef = useRef<LocalCustomSystemsSnapshot | null>(null)
+  if (!initialSnapshotRef.current) initialSnapshotRef.current = readLocalSnapshot()
+  const initialSnapshot = initialSnapshotRef.current
+
+  const [definitions, setDefinitions] = useState<CustomSystemDefinition[]>(initialSnapshot.definitions)
   const [status, setStatus] = useState<SyncStatus>({ kind: 'idle' })
-  const revisionRef = useRef(0)
+  const definitionsRef = useRef(initialSnapshot.definitions)
+  const baseDefinitionsRef = useRef(initialSnapshot.baseDefinitions)
+  const revisionRef = useRef(initialSnapshot.revision)
+  const dirtyRef = useRef(initialSnapshot.dirty)
+  const hydratedRef = useRef(false)
+  const savingRef = useRef(false)
   const saveTimerRef = useRef<number | null>(null)
+  const flushRef = useRef<() => Promise<void>>(async () => undefined)
+  const syncKeyRef = useRef(syncKey)
   const clientIdRef = useRef(readClientId())
   const canSync = syncKey.trim().length >= 12
   const canManage = userRole === 'master'
 
   useEffect(() => {
+    syncKeyRef.current = syncKey
+  }, [syncKey])
+
+  useEffect(() => {
     setCustomSystemDefinitions(definitions)
   }, [definitions])
 
-  const persist = useCallback(async (requestedDefinitions: CustomSystemDefinition[]) => {
-    if (!canSync || !canManage) return
-    setStatus({ kind: 'saving' })
+  const saveLocalSnapshot = useCallback(() => {
+    writeLocalSnapshot({
+      definitions: definitionsRef.current,
+      baseDefinitions: baseDefinitionsRef.current,
+      revision: revisionRef.current,
+      dirty: dirtyRef.current,
+    })
+  }, [])
 
-    let candidate = normalizeDefinitions(requestedDefinitions)
-    let expectedRevision = revisionRef.current
+  const applyLocalDefinitions = useCallback((value: unknown, dirty: boolean) => {
+    const normalized = normalizeDefinitions(value)
+    definitionsRef.current = normalized
+    dirtyRef.current = dirty
+    setDefinitions(normalized)
+    writeLocalSnapshot({
+      definitions: normalized,
+      baseDefinitions: baseDefinitionsRef.current,
+      revision: revisionRef.current,
+      dirty,
+    })
+    return normalized
+  }, [])
 
-    for (let attempt = 0; attempt < MAX_CONFLICT_RETRIES; attempt += 1) {
-      const response = await fetch(`/api/custom-systems?key=${encodeURIComponent(syncKey)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          definitions: candidate,
-          expectedRevision,
-          clientId: userKey.trim() || clientIdRef.current,
-        }),
-      })
-      const data = await response.json().catch(() => ({})) as ApiSnapshot
-
-      if (response.status === 409) {
-        const remote = normalizeDefinitions(data.definitions)
-        expectedRevision = Math.max(0, Math.trunc(Number(data.revision) || 0))
-        revisionRef.current = expectedRevision
-        candidate = mergeDefinitions(remote, candidate)
-        setDefinitions(candidate)
-        continue
-      }
-
-      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`)
-      revisionRef.current = Math.max(0, Math.trunc(Number(data.revision) || 0))
-      setDefinitions(candidate)
-      setStatus({ kind: 'synced', at: Date.now() })
-      return
-    }
-
-    throw new Error('Muitos conflitos simultâneos. As alterações locais foram preservadas; tente salvar novamente.')
-  }, [canManage, canSync, syncKey, userKey])
-
-  const schedulePersist = useCallback((nextDefinitions: CustomSystemDefinition[]) => {
+  const schedulePersist = useCallback((delay = SAVE_DELAY) => {
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
     saveTimerRef.current = window.setTimeout(() => {
-      void persist(nextDefinitions).catch((error) => {
-        setStatus({
-          kind: 'error',
-          message: error instanceof Error ? error.message : 'Falha ao salvar sistemas.',
-        })
+      saveTimerRef.current = null
+      void flushRef.current()
+    }, delay)
+  }, [])
+
+  const flushPersist = useCallback(async () => {
+    if (!canSync || !canManage || !dirtyRef.current) return
+    if (savingRef.current) return
+    savingRef.current = true
+
+    try {
+      while (dirtyRef.current && syncKeyRef.current.trim().length >= 12) {
+        let candidate = normalizeDefinitions(definitionsRef.current)
+        let expectedRevision = revisionRef.current
+        let saved = false
+        setStatus({ kind: 'saving' })
+
+        for (let attempt = 0; attempt < MAX_CONFLICT_RETRIES; attempt += 1) {
+          const keyAtStart = syncKeyRef.current
+          const response = await fetch(`/api/custom-systems?key=${encodeURIComponent(keyAtStart)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              definitions: candidate,
+              expectedRevision,
+              clientId: userKey.trim() || clientIdRef.current,
+            }),
+          })
+          const data = await response.json().catch(() => ({})) as ApiSnapshot
+          if (syncKeyRef.current !== keyAtStart) return
+
+          if (response.status === 409) {
+            const remote = normalizeDefinitions(data.definitions)
+            expectedRevision = Math.max(0, Math.trunc(Number(data.revision) || 0))
+            revisionRef.current = expectedRevision
+            baseDefinitionsRef.current = remote
+            candidate = mergeDefinitions(remote, candidate)
+            candidate = mergeDefinitions(candidate, definitionsRef.current)
+            applyLocalDefinitions(candidate, true)
+            continue
+          }
+
+          if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`)
+
+          revisionRef.current = Math.max(0, Math.trunc(Number(data.revision) || 0))
+          baseDefinitionsRef.current = candidate
+          dirtyRef.current = !definitionsEqual(definitionsRef.current, candidate)
+          saveLocalSnapshot()
+          saved = true
+
+          if (!dirtyRef.current) setStatus({ kind: 'synced', at: Date.now() })
+          break
+        }
+
+        if (!saved) {
+          throw new Error('Muitos conflitos simultâneos. As alterações locais continuam salvas neste dispositivo.')
+        }
+      }
+    } catch (error) {
+      dirtyRef.current = true
+      saveLocalSnapshot()
+      setStatus({
+        kind: 'error',
+        message: `${error instanceof Error ? error.message : 'Falha ao sincronizar sistemas.'} Os dados locais foram preservados.`,
       })
-    }, SAVE_DELAY)
-  }, [persist])
+    } finally {
+      savingRef.current = false
+      if (dirtyRef.current && navigator.onLine && canSync && canManage) schedulePersist(RETRY_DELAY)
+    }
+  }, [applyLocalDefinitions, canManage, canSync, saveLocalSnapshot, schedulePersist, userKey])
+
+  flushRef.current = flushPersist
 
   const reload = useCallback(async () => {
     if (!canSync) {
-      setDefinitions([])
-      revisionRef.current = 0
+      hydratedRef.current = false
       setStatus({ kind: 'idle' })
+      saveLocalSnapshot()
       return
     }
 
     setStatus({ kind: 'loading' })
     try {
-      const response = await fetch(`/api/custom-systems?key=${encodeURIComponent(syncKey)}`, {
+      const keyAtStart = syncKey
+      const response = await fetch(`/api/custom-systems?key=${encodeURIComponent(keyAtStart)}`, {
         cache: 'no-store',
       })
       const data = await response.json().catch(() => ({})) as ApiSnapshot
+      if (syncKeyRef.current !== keyAtStart) return
       if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`)
-      const normalized = normalizeDefinitions(data.definitions)
+
+      const remote = normalizeDefinitions(data.definitions)
+      const local = normalizeDefinitions(definitionsRef.current)
+      const hasLocalChanges = dirtyRef.current || !definitionsEqual(local, baseDefinitionsRef.current)
+      const next = hasLocalChanges ? mergeDefinitions(remote, local) : remote
+
       revisionRef.current = Math.max(0, Math.trunc(Number(data.revision) || 0))
-      setDefinitions(normalized)
-      setStatus({ kind: 'synced', at: Date.now() })
+      baseDefinitionsRef.current = remote
+      hydratedRef.current = true
+      const stillDirty = !definitionsEqual(next, remote)
+      applyLocalDefinitions(next, stillDirty)
+
+      if (stillDirty && canManage) {
+        setStatus({ kind: 'saving' })
+        schedulePersist(0)
+      } else {
+        setStatus({ kind: 'synced', at: Date.now() })
+      }
     } catch (error) {
       setStatus({
         kind: 'error',
-        message: error instanceof Error ? error.message : 'Falha ao carregar sistemas.',
+        message: `${error instanceof Error ? error.message : 'Falha ao carregar sistemas.'} Exibindo a cópia salva neste dispositivo.`,
       })
     }
-  }, [canSync, syncKey])
+  }, [applyLocalDefinitions, canManage, canSync, saveLocalSnapshot, schedulePersist, syncKey])
 
   useEffect(() => {
+    hydratedRef.current = false
     void reload()
-    return () => {
-      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
+
+    const handleOnline = () => {
+      if (dirtyRef.current && canManage) schedulePersist(0)
+      else void reload()
     }
-  }, [reload])
+    window.addEventListener('online', handleOnline)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
+      saveLocalSnapshot()
+    }
+  }, [canManage, reload, saveLocalSnapshot, schedulePersist, syncKey])
 
   const update = useCallback((updater: (current: CustomSystemDefinition[]) => CustomSystemDefinition[]) => {
     if (!canManage) return
-    setDefinitions((current) => {
-      const next = normalizeDefinitions(updater(current))
-      schedulePersist(next)
-      return next
-    })
-  }, [canManage, schedulePersist])
+    const next = normalizeDefinitions(updater(definitionsRef.current))
+    applyLocalDefinitions(next, true)
+    if (canSync) schedulePersist()
+    else setStatus({ kind: 'idle' })
+  }, [applyLocalDefinitions, canManage, canSync, schedulePersist])
 
   const value = useMemo<CustomSystemsContextValue>(() => ({
     definitions,
@@ -179,7 +281,7 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
       update((current) => current.filter((entry) => entry.id !== systemId))
     },
     duplicateDefinition: (systemId) => {
-      const source = definitions.find((entry) => entry.id === systemId)
+      const source = definitionsRef.current.find((entry) => entry.id === systemId)
       if (!source) return undefined
       const copy: CustomSystemDefinition = {
         ...structuredClone(source),
@@ -247,6 +349,61 @@ function mergeDefinitions(remote: CustomSystemDefinition[], local: CustomSystemD
   const merged = new Map(remote.map((definition) => [definition.id, definition]))
   for (const definition of local) merged.set(definition.id, definition)
   return normalizeDefinitions(Array.from(merged.values()))
+}
+
+function definitionsEqual(left: CustomSystemDefinition[], right: CustomSystemDefinition[]): boolean {
+  return JSON.stringify(normalizeDefinitions(left)) === JSON.stringify(normalizeDefinitions(right))
+}
+
+function readLocalSnapshot(): LocalCustomSystemsSnapshot {
+  const stored = readLocalStorageJson<LocalCustomSystemsSnapshot | CustomSystemDefinition[]>(LOCAL_STATE_KEY)
+
+  if (Array.isArray(stored)) {
+    const definitions = normalizeDefinitions(stored)
+    return {
+      schema: 'dndmm.custom-systems-local',
+      version: 1,
+      definitions,
+      baseDefinitions: [],
+      revision: 0,
+      dirty: definitions.length > 0,
+      savedAt: Date.now(),
+    }
+  }
+
+  if (stored?.schema === 'dndmm.custom-systems-local' && stored.version === 1) {
+    return {
+      schema: 'dndmm.custom-systems-local',
+      version: 1,
+      definitions: normalizeDefinitions(stored.definitions),
+      baseDefinitions: normalizeDefinitions(stored.baseDefinitions),
+      revision: Math.max(0, Math.trunc(Number(stored.revision) || 0)),
+      dirty: Boolean(stored.dirty),
+      savedAt: Number.isFinite(stored.savedAt) ? stored.savedAt : Date.now(),
+    }
+  }
+
+  return {
+    schema: 'dndmm.custom-systems-local',
+    version: 1,
+    definitions: [],
+    baseDefinitions: [],
+    revision: 0,
+    dirty: false,
+    savedAt: Date.now(),
+  }
+}
+
+function writeLocalSnapshot(snapshot: Pick<LocalCustomSystemsSnapshot, 'definitions' | 'baseDefinitions' | 'revision' | 'dirty'>): void {
+  writeLocalStorageJson(LOCAL_STATE_KEY, {
+    schema: 'dndmm.custom-systems-local',
+    version: 1,
+    definitions: normalizeDefinitions(snapshot.definitions),
+    baseDefinitions: normalizeDefinitions(snapshot.baseDefinitions),
+    revision: Math.max(0, Math.trunc(Number(snapshot.revision) || 0)),
+    dirty: Boolean(snapshot.dirty),
+    savedAt: Date.now(),
+  } satisfies LocalCustomSystemsSnapshot)
 }
 
 function readClientId(): string {
