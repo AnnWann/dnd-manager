@@ -30,10 +30,7 @@ export function evaluateAutomaticInstallation(
     label: describeRequirement(requirement),
   }))
   const matched = details.filter((entry) => entry.matches).length
-  const matches = config.match === 'any'
-    ? matched > 0
-    : matched === details.length
-
+  const matches = config.match === 'any' ? matched > 0 : matched === details.length
   return { matches, matched, total: details.length, details }
 }
 
@@ -58,10 +55,10 @@ function evaluateRequirement(
   definition: CustomSystemDefinition,
   character: CharacterTemplate,
 ): boolean {
+  const classes = character.get('sheet').classes ?? []
+
   if (requirement.type === 'class') {
-    const matchingClass = character.get('sheet').classes.find(
-      (entry) => entry.className === requirement.className,
-    )
+    const matchingClass = classes.find((entry) => entry.className === requirement.className)
     if (!matchingClass) return false
     if ((matchingClass.level ?? 0) < (requirement.minimumLevel ?? 1)) return false
     if (requirement.subclassName?.trim()) {
@@ -71,13 +68,12 @@ function evaluateRequirement(
   }
 
   if (requirement.type === 'totalLevel') {
-    const total = character.get('sheet').classes.reduce((sum, entry) => sum + (entry.level ?? 0), 0)
+    const total = classes.reduce((sum, entry) => sum + (entry.level ?? 0), 0)
     return total >= requirement.minimumLevel
   }
 
   if (requirement.type === 'proficiency') {
-    const proficiencies = getAllProficiencies(character)
-    return proficiencies.some((proficiency) => {
+    return getAllProficiencies(character).some((proficiency) => {
       if (requirement.proficiencyId?.trim() && proficiency.id !== requirement.proficiencyId) return false
       if (requirement.name?.trim() && normalize(proficiency.name) !== normalize(requirement.name)) return false
       if (requirement.category && proficiency.category !== requirement.category) return false
@@ -96,12 +92,12 @@ function evaluateRequirement(
       matchesIdentity(ability.id, ability.name, requirement.abilityId, requirement.name),
     )
     const customMatch = customAbilities.some((ability) => {
-      const system = character.get('sheet').customSystems?.find((state) => state.abilities.some((entry) => entry.id === ability.id))
-      const systemDefinition = system?.systemId === definition.id ? definition : undefined
-      const type = systemDefinition?.abilityTypes.find((entry) => entry.id === ability.abilityTypeId)
-      const titleValue = type ? ability.values[type.display.titleFieldId] : undefined
-      const title = typeof titleValue === 'string' ? titleValue : ''
-      return matchesIdentity(ability.id, title, requirement.abilityId, requirement.name)
+      if (requirement.abilityId?.trim() && ability.id !== requirement.abilityId && ability.predefinedAbilityId !== requirement.abilityId) return false
+      if (requirement.name?.trim()) {
+        const stringValues = Object.values(ability.values).filter((value): value is string => typeof value === 'string')
+        if (!stringValues.some((value) => normalize(value) === normalize(requirement.name ?? ''))) return false
+      }
+      return Boolean(requirement.abilityId?.trim() || requirement.name?.trim())
     })
     return standardMatch || customMatch
   }
@@ -128,20 +124,11 @@ function evaluateRequirement(
 
 function getAllProficiencies(character: CharacterTemplate): Proficiency[] {
   const sheet = character.get('sheet')
-  const combined = [
-    ...(sheet.proficiencies ?? []),
-    ...(sheet.race?.proficiencies ?? []),
-  ]
-  const unique = new Map(combined.map((entry) => [entry.id, entry]))
-  return [...unique.values()]
+  const combined = [...(sheet.proficiencies ?? []), ...(sheet.race.proficiencies ?? [])]
+  return [...new Map(combined.map((entry) => [entry.id, entry])).values()]
 }
 
-function matchesIdentity(
-  actualId: string,
-  actualName: string,
-  expectedId?: string,
-  expectedName?: string,
-): boolean {
+function matchesIdentity(actualId: string, actualName: string, expectedId?: string, expectedName?: string): boolean {
   if (expectedId?.trim() && actualId !== expectedId) return false
   if (expectedName?.trim() && normalize(actualName) !== normalize(expectedName)) return false
   return Boolean(expectedId?.trim() || expectedName?.trim())
@@ -152,9 +139,7 @@ function normalize(value: string): string {
 }
 
 export function describeRequirement(requirement: CustomSystemInstallationRequirement): string {
-  if (requirement.type === 'class') {
-    return `${requirement.className} nível ${requirement.minimumLevel ?? 1}${requirement.subclassName ? ` (${requirement.subclassName})` : ''}`
-  }
+  if (requirement.type === 'class') return `${requirement.className} nível ${requirement.minimumLevel ?? 1}${requirement.subclassName ? ` (${requirement.subclassName})` : ''}`
   if (requirement.type === 'totalLevel') return `Nível total ${requirement.minimumLevel}+`
   if (requirement.type === 'proficiency') return requirement.name || requirement.proficiencyId || requirement.category || 'Proficiência'
   if (requirement.type === 'ability') return requirement.name || requirement.abilityId || 'Habilidade'
