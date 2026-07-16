@@ -4,6 +4,7 @@ import { useCustomSystemsContext } from '../contexts/customSystemsContext'
 import { useSyncContext } from '../contexts/syncContext'
 import { AdvancedSystemEditors } from '../features/customSystems/AdvancedSystemEditors'
 import { CustomAbilityLibraryEditor } from '../features/customSystems/CustomAbilityLibraryEditor'
+import { CustomSystemRequirementsEditor } from '../features/customSystems/CustomSystemRequirementsEditor'
 import { FormulaVariablePicker } from '../features/customSystems/FormulaVariablePicker'
 import { listCustomFormulaVariables, validateCustomFormula } from '../lib/customSystems'
 import type { CustomFieldDefinition, CustomSelectOption } from '../models/customSystems/CustomFieldDefinition'
@@ -39,12 +40,12 @@ export function CustomSystemsManagerView() {
 
 type EditorProps = { draft: CustomSystemDefinition; setDraft: (definition: CustomSystemDefinition) => void; error: string; onSave: () => void; onDelete: () => void; onDuplicate: () => void }
 function SystemEditor({ draft, setDraft, error, onSave, onDelete, onDuplicate }: EditorProps) {
-  const [tab, setTab] = useState<'general' | 'fields' | 'resources' | 'library' | 'advanced'>('general')
+  const [tab, setTab] = useState<'general' | 'fields' | 'resources' | 'requirements' | 'library' | 'advanced'>('general')
   return <section className="min-w-0 rounded-xl border border-border bg-bg">
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4"><div className="flex items-center gap-2"><Settings2 className="h-5 w-5 text-accent" /><div><h2 className="text-lg font-semibold text-textH">{draft.name}</h2><p className="text-xs text-text">Edite o rascunho e salve para sincronizar.</p></div></div><div className="flex flex-wrap gap-2"><Button onClick={onDuplicate}><Copy className="h-4 w-4" /> Duplicar</Button><Button danger onClick={onDelete}><Trash2 className="h-4 w-4" /> Remover</Button><Button primary onClick={onSave}><Save className="h-4 w-4" /> Salvar</Button></div></header>
-    <nav className="flex overflow-x-auto border-b border-border p-2">{([['general','Geral'],['fields','Campos'],['resources','Recursos'],['library','Biblioteca de habilidades'],['advanced','Avançado']] as const).map(([key,label]) => <button key={key} type="button" onClick={() => setTab(key)} className={`rounded-lg px-3 py-2 text-sm ${tab === key ? 'bg-accentBg font-medium text-textH' : 'text-text'}`}>{label}</button>)}</nav>
+    <nav className="flex overflow-x-auto border-b border-border p-2">{([['general','Geral'],['fields','Campos'],['resources','Recursos'],['requirements','Requisitos'],['library','Biblioteca de habilidades'],['advanced','Avançado']] as const).map(([key,label]) => <button key={key} type="button" onClick={() => setTab(key)} className={`rounded-lg px-3 py-2 text-sm ${tab === key ? 'bg-accentBg font-medium text-textH' : 'text-text'}`}>{label}</button>)}</nav>
     {error ? <div className="m-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">{error}</div> : null}
-    <div className="p-4">{tab === 'general' ? <GeneralEditor draft={draft} setDraft={setDraft} /> : null}{tab === 'fields' ? <FieldsEditor draft={draft} setDraft={setDraft} /> : null}{tab === 'resources' ? <ResourcesEditor draft={draft} setDraft={setDraft} /> : null}{tab === 'library' ? <CustomAbilityLibraryEditor draft={draft} setDraft={setDraft} /> : null}{tab === 'advanced' ? <AdvancedSystemEditors draft={draft} setDraft={setDraft} /> : null}</div>
+    <div className="p-4">{tab === 'general' ? <GeneralEditor draft={draft} setDraft={setDraft} /> : null}{tab === 'fields' ? <FieldsEditor draft={draft} setDraft={setDraft} /> : null}{tab === 'resources' ? <ResourcesEditor draft={draft} setDraft={setDraft} /> : null}{tab === 'requirements' ? <CustomSystemRequirementsEditor draft={draft} setDraft={setDraft} /> : null}{tab === 'library' ? <CustomAbilityLibraryEditor draft={draft} setDraft={setDraft} /> : null}{tab === 'advanced' ? <AdvancedSystemEditors draft={draft} setDraft={setDraft} /> : null}</div>
   </section>
 }
 
