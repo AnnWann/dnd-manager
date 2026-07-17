@@ -11,7 +11,6 @@ import type {
 import {
   adjustCustomResource,
   createCharacterCustomSystemState,
-  createCustomAbility,
   isPresentationItemVisible,
   listCustomSystemPresentationItems,
   removeCustomAbility,
@@ -224,13 +223,20 @@ function AbilityTypeSection({ definition, state, abilityTypeId, actor, onRun }: 
   const abilities = state.abilities.filter((ability) => ability.abilityTypeId === abilityTypeId)
   if (!abilityType) return null
 
+  function openAbilityLibrary() {
+    const trigger = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.includes('Adicionar da biblioteca'),
+    )
+    trigger?.click()
+  }
+
   return <section className="rounded-xl border border-border bg-bg p-4">
     <div className="mb-3 flex items-center justify-between gap-3">
       <div>
         <h3 className="text-sm font-semibold text-textH">{abilityType.name}</h3>
         {abilityType.description ? <p className="mt-1 text-xs text-text">{abilityType.description}</p> : null}
       </div>
-      {actor !== 'automation' ? <button type="button" onClick={() => onRun(() => createCustomAbility(definition, state, abilityType.id, crypto.randomUUID(), actor))} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-textH hover:bg-[color:var(--social-bg)]"><Plus className="h-4 w-4" /> Adicionar</button> : null}
+      {actor !== 'automation' ? <button type="button" onClick={openAbilityLibrary} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-textH hover:bg-[color:var(--social-bg)]"><Plus className="h-4 w-4" /> Adicionar</button> : null}
     </div>
     <div className="grid gap-3">
       {!abilities.length ? <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-text">Nenhuma habilidade cadastrada.</div> : abilities.map((ability) => <AbilityEditor key={ability.id} definition={definition} ability={ability} state={state} actor={actor} onRun={onRun} />)}
