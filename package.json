@@ -10,6 +10,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "db:migrate": "node scripts/migrate-relational.mjs",
     "spells:fetch": "node scripts/build-spells-json.mjs --force"
   },
   "dependencies": {
@@ -36,7 +37,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-react-refresh": "^0.5.2",
+    "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^17.4.0",
     "postcss": "^8.5.10",
     "tailwindcss": "^4.2.2",
