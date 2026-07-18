@@ -30,34 +30,41 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       spells: list(body.spells),
       systems: list(body.systems),
     }
-    const payloadHash = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex')
-    const checkpoint = await sql`
-      SELECT payload_hash AS hash
-      FROM relational_sync_checkpoints
-      WHERE campaign_id = ${campaignId}::uuid
-    ` as unknown as Array<{ hash: string }>
+    const chunkMode = body.mode === 'chunk'
+    let payloadHash: string | undefined
 
-    if (checkpoint[0]?.hash === payloadHash) {
-      return sendJson(res, 200, { ok: true, skipped: true, payloadHash })
+    if (!chunkMode) {
+      payloadHash = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex')
+      const checkpoint = await sql`
+        SELECT payload_hash AS hash
+        FROM relational_sync_checkpoints
+        WHERE campaign_id = ${campaignId}::uuid
+      ` as unknown as Array<{ hash: string }>
+
+      if (checkpoint[0]?.hash === payloadHash) {
+        return sendJson(res, 200, { ok: true, skipped: true, payloadHash })
+      }
     }
 
     const characters = await migrateCharacters(sql, campaignId, snapshot.characters)
     const spells = await migrateSpells(sql, campaignId, snapshot.spells)
     const systems = await migrateSystems(sql, campaignId, snapshot.systems)
 
-    await sql`
-      INSERT INTO relational_sync_checkpoints (campaign_id, payload_hash, migrated_at, migrated_by)
-      VALUES (${campaignId}::uuid, ${payloadHash}, NOW(), ${text(body.userKey, 200) ?? null})
-      ON CONFLICT (campaign_id)
-      DO UPDATE SET payload_hash = EXCLUDED.payload_hash,
-                    migrated_at = NOW(),
-                    migrated_by = EXCLUDED.migrated_by
-    `
+    if (!chunkMode && payloadHash) {
+      await sql`
+        INSERT INTO relational_sync_checkpoints (campaign_id, payload_hash, migrated_at, migrated_by)
+        VALUES (${campaignId}::uuid, ${payloadHash}, NOW(), ${text(body.userKey, 200) ?? null})
+        ON CONFLICT (campaign_id)
+        DO UPDATE SET payload_hash = EXCLUDED.payload_hash,
+                      migrated_at = NOW(),
+                      migrated_by = EXCLUDED.migrated_by
+      `
+    }
 
     return sendJson(res, 200, {
       ok: true,
       skipped: false,
-      payloadHash,
+      ...(payloadHash ? { payloadHash } : {}),
       migrated: { characters, spells, systems },
     })
   } catch (error) {
