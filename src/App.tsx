@@ -25,6 +25,7 @@ import { MagicProvider } from "./contexts/magicContext"
 import { MissionProvider } from "./contexts/missionContext"
 import { PartyInventorySettingsProvider } from "./contexts/partyInventorySettingsContext"
 import { SyncProvider } from "./contexts/syncContext"
+import { RelationalMigrationBridge } from "./features/sync/RelationalMigrationBridge"
 import { normalizeAppStateInventory } from "./lib/normalizeAppStateInventory"
 import { type AppStateV1 } from "./lib/remoteState"
 import { useConcurrentRemoteAppState } from "./lib/remoteStateConcurrent"
@@ -144,6 +145,7 @@ function App() {
       }}
     >
       <CustomSystemsProvider>
+        <RelationalMigrationBridge state={appState} />
         <PartyInventorySettingsProvider
           carryCapacity={appState.partyCarryCapacity ?? 0}
           canEditCarryCapacity={userRole === "master"}
