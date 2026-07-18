@@ -143,7 +143,7 @@ function App() {
         syncStatus,
       }}
     >
-      <CustomSystemsProvider>
+      <CustomSystemsProvider appState={appState} setAppState={setAppState}>
         <PartyInventorySettingsProvider
           carryCapacity={appState.partyCarryCapacity ?? 0}
           canEditCarryCapacity={userRole === "master"}
