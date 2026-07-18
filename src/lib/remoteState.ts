@@ -13,6 +13,7 @@ import {
 } from '../models/game/GameOperation'
 import type { Itemmable } from '../models/items/item'
 import type { Spell } from '../models/magic/spells/Spell'
+import type { CustomSystemDefinition } from '../models/customSystems/CustomSystemDefinition'
 import { normalizeAppStateInventory } from './normalizeAppStateInventory'
 import { readLocalStorageJson, writeLocalStorageJson } from './storage'
 import { mergeAppStates } from './stateMerge'
@@ -34,6 +35,8 @@ export type AppStateV1 = {
   partyCarryCapacity?: number
   /** Optional: reusable homebrew spell definitions keyed by hb:... index (synced across devices). */
   spells?: Spell[]
+  /** Campaign-scoped custom system definitions, shared across devices. */
+  customSystemDefinitions?: CustomSystemDefinition[]
 }
 
 const LOCAL_STATE_KEY = 'dndmm.appState.v1'
@@ -80,6 +83,7 @@ function defaultState(): AppStateV1 {
     partyInventory: [],
     partyCarryCapacity: 0,
     spells: [],
+    customSystemDefinitions: [],
     entityVersions: {},
     operations: [],
   }
@@ -406,92 +410,41 @@ export function useRemoteAppState() {
 
         const local = normalizeState(stateRef.current)
         const previousBase = baseStateRef.current
-
-        if (!snapshot.state) {
-          hydratedFromRemote.current = true
-          revisionRef.current = 0
-          baseStateRef.current = defaultState()
-          dirtyRef.current = true
-          scheduleSave(0)
-          if (showLoading) setStatus({ kind: 'saving' })
-          return
-        }
-
-        const remote = normalizeState(snapshot.state)
-        const hasLocalChanges =
-          hydratedFromRemote.current && !statesEqual(local, previousBase)
-        const next = hasLocalChanges
+        const remote = normalizeState(snapshot.state ?? defaultState())
+        const next = hydratedFromRemote.current
           ? mergeAppStates(previousBase, local, remote)
-          : {
-              ...remote,
-              activeCharacterId: local.activeCharacterId,
-            }
+          : remote
 
-        hydratedFromRemote.current = true
         revisionRef.current = snapshot.revision
         baseStateRef.current = remote
+        hydratedFromRemote.current = true
         stateRef.current = next
         setState(next)
-
-        if (!statesEqual(next, remote)) {
-          dirtyRef.current = true
-          scheduleSave(0)
-        } else {
-          setStatus({ kind: 'synced', at: Date.now() })
-        }
+        setStatus({ kind: 'synced', at: Date.now() })
       } catch (error) {
         setStatus({
           kind: 'error',
-          message:
-            error instanceof Error ? error.message : 'Falha ao carregar.',
+          message: error instanceof Error ? error.message : 'Falha ao carregar.',
         })
       }
     },
-    [canSync, scheduleSave, syncKey],
+    [canSync, syncKey],
   )
 
-  const pullFromServer = useCallback(
-    async () => synchronizeFromServer(true),
-    [synchronizeFromServer],
-  )
+  const pullFromServer = useCallback(async () => {
+    await synchronizeFromServer(true)
+  }, [synchronizeFromServer])
 
   useEffect(() => {
-    hydratedFromRemote.current = false
-    revisionRef.current = 0
-    baseStateRef.current = stateRef.current
-    dirtyRef.current = false
-
-    if (!canSync) return
-    const timer = window.setTimeout(() => {
-      void synchronizeFromServer(true)
-    }, 0)
-
-    return () => window.clearTimeout(timer)
-  }, [canSync, syncKey, synchronizeFromServer])
+    void synchronizeFromServer(true)
+  }, [synchronizeFromServer])
 
   useEffect(() => {
     if (!canSync) return
-
     const poll = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        void synchronizeFromServer(false)
-      }
+      if (document.visibilityState === 'visible') void synchronizeFromServer(false)
     }, POLL_INTERVAL_MS)
-
-    const refresh = () => {
-      if (document.visibilityState === 'visible') {
-        void synchronizeFromServer(false)
-      }
-    }
-
-    window.addEventListener('focus', refresh)
-    document.addEventListener('visibilitychange', refresh)
-
-    return () => {
-      window.clearInterval(poll)
-      window.removeEventListener('focus', refresh)
-      document.removeEventListener('visibilitychange', refresh)
-    }
+    return () => window.clearInterval(poll)
   }, [canSync, synchronizeFromServer])
 
   return {
@@ -511,10 +464,7 @@ export function useRemoteAppState() {
 
 function normalizeState(state: unknown): AppStateV1 {
   try {
-    if (!state || typeof state !== 'object') {
-      return defaultState()
-    }
-
+    if (!state || typeof state !== 'object') return defaultState()
     const raw = state as Partial<AppStateV1>
     const parsedCapacity = Number(raw.partyCarryCapacity)
     const parsedStateVersion = Number(raw.stateVersion)
@@ -531,17 +481,14 @@ function normalizeState(state: unknown): AppStateV1 {
       operations: normalizeGameOperationLog(raw.operations),
       characters: Array.isArray(raw.characters) ? raw.characters : [],
       activeCharacterId:
-        typeof raw.activeCharacterId === 'string'
-          ? raw.activeCharacterId
-          : '',
-      partyInventory: Array.isArray(raw.partyInventory)
-        ? raw.partyInventory
-        : [],
+        typeof raw.activeCharacterId === 'string' ? raw.activeCharacterId : '',
+      partyInventory: Array.isArray(raw.partyInventory) ? raw.partyInventory : [],
       partyCarryCapacity:
-        Number.isFinite(parsedCapacity) && parsedCapacity >= 0
-          ? parsedCapacity
-          : 0,
+        Number.isFinite(parsedCapacity) && parsedCapacity >= 0 ? parsedCapacity : 0,
       spells: Array.isArray(raw.spells) ? raw.spells : [],
+      customSystemDefinitions: Array.isArray(raw.customSystemDefinitions)
+        ? raw.customSystemDefinitions
+        : [],
     })
   } catch {
     return defaultState()
@@ -552,9 +499,7 @@ function normalizeEntityVersions(
   value: unknown,
 ): Record<string, GameEntityMetadata> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
-
   const result: Record<string, GameEntityMetadata> = {}
-
   for (const [key, entry] of Object.entries(value)) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue
     const metadata = entry as GameEntityMetadata
@@ -570,10 +515,14 @@ function normalizeEntityVersions(
         typeof metadata.updatedBy === 'string' ? metadata.updatedBy : undefined,
     }
   }
-
   return result
 }
 
 function statesEqual(left: AppStateV1, right: AppStateV1): boolean {
-  return JSON.stringify(left) === JSON.stringify(right)
+  return JSON.stringify(withoutLocalPreferences(left)) ===
+    JSON.stringify(withoutLocalPreferences(right))
+}
+
+function withoutLocalPreferences(state: AppStateV1): AppStateV1 {
+  return { ...state, activeCharacterId: '' }
 }
