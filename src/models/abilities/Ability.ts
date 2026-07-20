@@ -12,6 +12,8 @@ export interface Ability {
   trigger?: Trigger
   grantedSpells?: SpellGrant[]
   bonuses?: BonusCollection
+  /** Permite desativar modificadores sem remover a habilidade. Passivas permanecem ativas. */
+  modifiersActive?: boolean
 }
 
 export interface Usage {

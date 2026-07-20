@@ -46,6 +46,7 @@ function createEmptyAbility(): Ability {
     trigger: "always",
     grantedSpells: [],
     bonuses: {},
+    modifiersActive: true,
   }
 }
 
@@ -317,6 +318,16 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
               </div>
             ) : null}
           </section>
+
+          <label className="flex items-center gap-2 rounded-xl border border-border bg-bg-subtle p-3 text-xs font-medium text-textH">
+            <input
+              type="checkbox"
+              checked={draft.kind === "passive" || draft.modifiersActive !== false}
+              disabled={draft.kind === "passive"}
+              onChange={(event) => setDraft({ ...draft, modifiersActive: event.target.checked })}
+            />
+            Manter modificadores desta habilidade ativos
+          </label>
 
           <BonusesFields
             bonuses={draft.bonuses ?? {}}

@@ -1,5 +1,6 @@
 import type { Ability } from "../abilities/Ability"
 import type { Bonus, NormalBonusKey } from "../bonuses/Bonus"
+import { evaluateCharacterSheetFormula } from "../../lib/customSystems/CharacterSheetFormula"
 import type { Armor } from "../items/equipment/Armor"
 import type { Equipment } from "../items/equipment/EquipmentSlot"
 import type { Weapon } from "../items/equipment/Weapon"
@@ -7,6 +8,7 @@ import type { Attribute } from "../sheet/Attribute"
 import type { Sheet } from "../sheet/Sheet"
 import type { CharacterTemplate } from "./CharacterTemplate"
 import { getEncumbranceSpeedPenalty } from "./characterEncumbrance"
+import { getCharacterConditions } from "./characterConditionStorage"
 
 export type StatBonusKey =
   | "armorClass"
@@ -71,25 +73,37 @@ export function getActiveAbilities(
     ...getEquippedItems(character).flatMap(
       (item) => item.abilities ?? [],
     ),
-  ]
+  ].filter(
+    (ability) => ability.kind === "passive" || ability.modifiersActive !== false,
+  )
 }
 
 export function getEquipmentBonuses(
   character: CharacterTemplate,
   key: NormalBonusKey,
 ): Bonus[] {
-  return getEquippedItems(character).flatMap(
-    (item) => item.bonuses?.[key] ?? [],
-  )
+  return getEquippedItems(character)
+    .flatMap((item) => item.bonuses?.[key] ?? [])
+    .map((bonus) => resolveBonus(character, bonus))
 }
 
 export function getAbilityBonuses(
   character: CharacterTemplate,
   key: NormalBonusKey,
 ): Bonus[] {
-  return getActiveAbilities(character).flatMap(
-    (ability) => ability.bonuses?.[key] ?? [],
-  )
+  return getActiveAbilities(character)
+    .flatMap((ability) => ability.bonuses?.[key] ?? [])
+    .map((bonus) => resolveBonus(character, bonus))
+}
+
+export function getConditionBonuses(
+  character: CharacterTemplate,
+  key: NormalBonusKey,
+): Bonus[] {
+  return getCharacterConditions(character)
+    .filter(isConditionActive)
+    .flatMap((condition) => condition.bonuses?.[key] ?? [])
+    .map((bonus) => resolveBonus(character, bonus))
 }
 
 export function getCharacterBonuses(
@@ -99,6 +113,7 @@ export function getCharacterBonuses(
   return [
     ...getEquipmentBonuses(character, key),
     ...getAbilityBonuses(character, key),
+    ...getConditionBonuses(character, key),
   ]
 }
 
@@ -115,16 +130,23 @@ export function getEffectiveAttribute(
   const equipmentBonuses = getEquippedItems(character)
     .flatMap((item) => item.bonuses?.attribute ?? [])
     .filter((entry) => entry.attribute === attribute)
-    .map((entry) => entry.bonus)
+    .map((entry) => resolveBonus(character, entry.bonus))
 
   const abilityBonuses = getActiveAbilities(character)
     .flatMap((ability) => ability.bonuses?.attribute ?? [])
     .filter((entry) => entry.attribute === attribute)
-    .map((entry) => entry.bonus)
+    .map((entry) => resolveBonus(character, entry.bonus))
+
+  const conditionBonuses = getCharacterConditions(character)
+    .filter(isConditionActive)
+    .flatMap((condition) => condition.bonuses?.attribute ?? [])
+    .filter((entry) => entry.attribute === attribute)
+    .map((entry) => resolveBonus(character, entry.bonus))
 
   return applyBonuses(baseValue, [
     ...equipmentBonuses,
     ...abilityBonuses,
+    ...conditionBonuses,
   ])
 }
 
@@ -139,16 +161,23 @@ export function getEffectiveAttributeModifier(
   const equipmentBonuses = getEquippedItems(character)
     .flatMap((item) => item.bonuses?.attributeModifier ?? [])
     .filter((entry) => entry.attribute === attribute)
-    .map((entry) => entry.bonus)
+    .map((entry) => resolveBonus(character, entry.bonus))
 
   const abilityBonuses = getActiveAbilities(character)
     .flatMap((ability) => ability.bonuses?.attributeModifier ?? [])
     .filter((entry) => entry.attribute === attribute)
-    .map((entry) => entry.bonus)
+    .map((entry) => resolveBonus(character, entry.bonus))
+
+  const conditionBonuses = getCharacterConditions(character)
+    .filter(isConditionActive)
+    .flatMap((condition) => condition.bonuses?.attributeModifier ?? [])
+    .filter((entry) => entry.attribute === attribute)
+    .map((entry) => resolveBonus(character, entry.bonus))
 
   return applyBonuses(baseModifier, [
     ...equipmentBonuses,
     ...abilityBonuses,
+    ...conditionBonuses,
   ])
 }
 
@@ -298,7 +327,10 @@ export function getEffectiveWeaponAttackBonus(
   baseValue: number,
 ): number {
   const weaponAttackBonus = weapon.bonuses?.attack?.bonus
-  const weaponGeneralBonuses = weapon.bonuses?.attackBonus ?? []
+    ? resolveBonus(character, weapon.bonuses.attack.bonus)
+    : undefined
+  const weaponGeneralBonuses = (weapon.bonuses?.attackBonus ?? [])
+    .map((bonus) => resolveBonus(character, bonus))
   const abilityBonuses = getAbilityBonuses(character, "attackBonus")
 
   return applyBonuses(baseValue, [
@@ -314,7 +346,10 @@ export function getEffectiveWeaponDamageBonus(
   baseValue: number,
 ): number {
   const weaponDamageBonus = weapon.bonuses?.damage?.bonus
-  const weaponGeneralBonuses = weapon.bonuses?.damageBonus ?? []
+    ? resolveBonus(character, weapon.bonuses.damage.bonus)
+    : undefined
+  const weaponGeneralBonuses = (weapon.bonuses?.damageBonus ?? [])
+    .map((bonus) => resolveBonus(character, bonus))
   const abilityBonuses = getAbilityBonuses(character, "damageBonus")
 
   return applyBonuses(baseValue, [
@@ -322,6 +357,28 @@ export function getEffectiveWeaponDamageBonus(
     ...abilityBonuses,
     ...(weaponDamageBonus ? [weaponDamageBonus] : []),
   ])
+}
+
+export function resolveBonus(
+  character: CharacterTemplate,
+  bonus: Bonus,
+): Bonus {
+  if (!bonus.formula?.trim()) return bonus
+  const evaluated = evaluateCharacterSheetFormula(bonus.formula, character)
+  return evaluated === undefined ? bonus : { ...bonus, value: evaluated }
+}
+
+function isConditionActive(
+  condition: ReturnType<typeof getCharacterConditions>[number],
+): boolean {
+  if (typeof condition.duration.remaining === "number" && condition.duration.remaining <= 0) {
+    return false
+  }
+  if (condition.duration.expiresAt) {
+    const expiresAt = Date.parse(condition.duration.expiresAt)
+    if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) return false
+  }
+  return true
 }
 
 export function applyBonus(baseValue: number, bonus: Bonus): number {

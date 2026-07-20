@@ -2,7 +2,11 @@ import type { Attribute } from "../sheet/Attribute"
 
 export type Bonus = {
   type: "add" | "sub" | "flat"
+  /** Fallback numérico e compatibilidade com bônus antigos. */
   value: number
+  /** Fórmula recalculada com as variáveis atuais da ficha. */
+  formula?: string
+  label?: string
 }
 
 export type BonusCollection = {

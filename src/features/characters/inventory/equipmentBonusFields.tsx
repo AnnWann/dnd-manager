@@ -12,6 +12,9 @@ import type {
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
 import type { Itemmable } from "../../../models/items/item"
 import type { Attribute } from "../../../models/sheet/Attribute"
+import { FormulaVariablePicker } from "../../customSystems/FormulaVariablePicker"
+import { listCharacterFormulaVariables } from "../../../lib/customSystems/CharacterFormulaVariables"
+import { validateCharacterSheetFormula } from "../../../lib/customSystems/CharacterSheetFormula"
 
 const ATTRIBUTES: Array<{ value: Attribute; label: string }> = [
   { value: "str", label: "FOR" },
@@ -184,9 +187,10 @@ export function flattenBonuses(
 }
 
 function formatBonus(bonus: Bonus): string {
-  if (bonus.type === "flat") return `fixo ${bonus.value}`
-  if (bonus.type === "sub") return `-${Math.abs(bonus.value)}`
-  return `+${bonus.value}`
+  const value = bonus.formula?.trim() || String(bonus.value)
+  if (bonus.type === "flat") return `definir ${value}`
+  if (bonus.type === "sub") return `- (${value})`
+  return `+ (${value})`
 }
 
 function AddBonusDialog({
@@ -206,17 +210,22 @@ function AddBonusDialog({
   const [attribute, setAttribute] = useState<Attribute>("str")
   const [type, setType] = useState<Bonus["type"]>("add")
   const [value, setValue] = useState(1)
+  const [useFormula, setUseFormula] = useState(false)
+  const [formula, setFormula] = useState("")
 
   if (!open) return null
 
   const needsAttribute =
     target === "attribute" || target === "attributeModifier"
+  const formulaError = useFormula ? validateCharacterSheetFormula(formula) : undefined
 
   function close() {
     setTarget("armorClass")
     setAttribute("str")
     setType("add")
     setValue(1)
+    setUseFormula(false)
+    setFormula("")
     onClose()
   }
 
@@ -269,30 +278,70 @@ function AddBonusDialog({
             </label>
           ) : null}
 
+          <label className="flex items-center gap-2 text-xs font-medium text-textH">
+            <input
+              type="checkbox"
+              checked={useFormula}
+              onChange={(event) => setUseFormula(event.target.checked)}
+            />
+            Calcular o valor por fórmula
+          </label>
+
           <div className="grid grid-cols-[1fr_120px] gap-2">
             <label className="grid gap-1">
               <span className="text-xs font-medium text-textH">Operação</span>
               <Select value={type} onChange={(event) => setType(event.target.value as Bonus["type"])}>
                 <option value="add">Somar</option>
                 <option value="sub">Subtrair</option>
-                <option value="flat">Definir valor fixo</option>
+                <option value="flat">Definir valor</option>
               </Select>
             </label>
-            <label className="grid gap-1">
-              <span className="text-xs font-medium text-textH">Valor</span>
-              <Input type="number" value={value} onChange={(event) => setValue(Number(event.target.value) || 0)} />
-            </label>
+            {!useFormula ? (
+              <label className="grid gap-1">
+                <span className="text-xs font-medium text-textH">Valor</span>
+                <Input type="number" value={value} onChange={(event) => setValue(Number(event.target.value) || 0)} />
+              </label>
+            ) : null}
           </div>
+
+          {useFormula ? (
+            <div className="grid gap-2">
+              <label className="grid gap-1">
+                <span className="text-xs font-medium text-textH">Fórmula</span>
+                <Input
+                  value={formula}
+                  placeholder="Ex.: character.level * 2 + character.proficiencyBonus"
+                  onChange={(event) => setFormula(event.target.value)}
+                />
+              </label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <FormulaVariablePicker
+                  variables={listCharacterFormulaVariables()}
+                  onSelect={(path) => setFormula((current) => current ? current + " " + path : path)}
+                />
+                {formulaError ? (
+                  <span className="text-xs text-danger">{formulaError}</span>
+                ) : (
+                  <span className="text-xs text-success">Fórmula válida</span>
+                )}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-border pt-4">
           <Button variant="secondary" onClick={close}>Cancelar</Button>
           <Button
             variant="primary"
+            disabled={Boolean(formulaError)}
             onClick={() => onAdd({
               target,
               attribute,
-              bonus: { type, value: Math.abs(value) },
+              bonus: {
+                type,
+                value: Math.abs(value),
+                formula: useFormula ? formula.trim() : undefined,
+              },
             })}
           >
             Adicionar

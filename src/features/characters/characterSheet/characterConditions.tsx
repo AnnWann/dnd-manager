@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
+import { BonusesFields } from "../inventory/equipmentBonusFields"
 import type { CharacterCondition, ConditionDurationType } from "../../../models/characters/CharacterCondition"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
@@ -490,6 +491,14 @@ function ConditionDialog({
             </span>
           </label>
 
+          <div className="sm:col-span-2">
+            <BonusesFields
+              bonuses={draft.bonuses ?? {}}
+              description="Modificadores aplicados enquanto esta condição estiver ativa e não expirada."
+              onChange={(bonuses) => patch({ bonuses })}
+            />
+          </div>
+
           <label className="grid gap-1.5 sm:col-span-2">
             <span className="text-xs text-text">Etiquetas</span>
             <Input
@@ -571,6 +580,7 @@ function createCondition(): CharacterCondition {
     source: "",
     notes: "",
     tags: [],
+    bonuses: {},
     createdAt: new Date().toISOString(),
     duration: {
       type: "rounds",

@@ -124,7 +124,7 @@ export function FormulaVariablePicker({
 
       {open ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3"
+          className="fixed inset-0 z-[13000] flex items-center justify-center bg-black/60 p-3"
           role="dialog"
           aria-modal="true"
           aria-label="Selecionar variável da fórmula"
