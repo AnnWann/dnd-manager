@@ -1,3 +1,4 @@
+import type { BonusCollection } from "../bonuses/Bonus"
 import type { CharacterTemplate } from "./CharacterTemplate"
 import type {
   CharacterCondition,
@@ -135,6 +136,7 @@ function normalizeCondition(value: unknown): CharacterCondition {
     tags: Array.isArray(raw.tags)
       ? raw.tags.map(readString).filter(Boolean)
       : [],
+    bonuses: normalizeBonuses(raw.bonuses),
     duration: normalizeDuration(raw.duration),
     createdAt: readString(raw.createdAt) || new Date().toISOString(),
     sourceCharacterId: optionalString(raw.sourceCharacterId),
@@ -216,6 +218,10 @@ function readString(value: unknown): string {
 function optionalString(value: unknown): string | undefined {
   const parsed = readString(value)
   return parsed || undefined
+}
+
+function normalizeBonuses(value: unknown): BonusCollection | undefined {
+  return isRecord(value) ? (value as BonusCollection) : undefined
 }
 
 function readOptionalNumber(value: unknown): number | undefined {

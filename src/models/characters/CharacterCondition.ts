@@ -1,3 +1,5 @@
+import type { BonusCollection } from "../bonuses/Bonus"
+
 export type ConditionDurationType =
   | "rounds"
   | "turns"
@@ -39,6 +41,7 @@ export type CharacterCondition = {
   source: string
   notes: string
   tags: string[]
+  bonuses?: BonusCollection
   duration: CharacterConditionDuration
   createdAt: string
 
