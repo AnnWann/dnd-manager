@@ -7,6 +7,12 @@ on:
     paths:
       - scripts/apply-formula-sheet-modifiers.mjs
       - .github/workflows/apply-formula-sheet-modifiers.yml
+  pull_request:
+    branches:
+      - master
+    paths:
+      - scripts/apply-formula-sheet-modifiers.mjs
+      - .github/workflows/apply-formula-sheet-modifiers.yml
 
 permissions:
   contents: write
