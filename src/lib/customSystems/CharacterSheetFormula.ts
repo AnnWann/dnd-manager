@@ -109,7 +109,7 @@ function replaceIdentifier(
   identifier: string,
   replacement: string,
 ): string {
-  const escaped = identifier.replace(/[.*+?^${}()|[\]\]/g, '\$&')
+  const escaped = identifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const pattern = new RegExp(
     '(^|[^A-Za-z0-9_.-])' + escaped + '(?=$|[^A-Za-z0-9_.-])',
     'g',
