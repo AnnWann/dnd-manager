@@ -34,12 +34,6 @@ jobs:
       - name: Apply implementation
         run: node scripts/apply-formula-sheet-modifiers.mjs
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build
-        run: npm run build
-
       - name: Commit generated implementation
         run: |
           git config user.name "github-actions[bot]"
@@ -47,7 +41,13 @@ jobs:
           git add src
           if git diff --cached --quiet; then
             echo "No generated changes to commit."
-            exit 0
+          else
+            git commit -m "feat: add formula-based sheet modifiers [skip ci]"
+            git push origin HEAD:feature/formula-sheet-modifiers
           fi
-          git commit -m "feat: add formula-based sheet modifiers [skip ci]"
-          git push origin HEAD:feature/formula-sheet-modifiers
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build
+        run: npm run build
