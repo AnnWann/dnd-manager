@@ -1,49 +1,36 @@
-name: Apply formula sheet modifiers
+name: Validate formula sheet modifiers
 
 on:
   push:
     branches:
       - feature/formula-sheet-modifiers
     paths:
+      - src/**
       - scripts/apply-formula-sheet-modifiers.mjs
       - .github/workflows/apply-formula-sheet-modifiers.yml
   pull_request:
     branches:
       - master
-    paths:
-      - scripts/apply-formula-sheet-modifiers.mjs
-      - .github/workflows/apply-formula-sheet-modifiers.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  apply:
-    if: github.actor != 'github-actions[bot]'
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feature/formula-sheet-modifiers
-          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Apply implementation
-        run: node scripts/apply-formula-sheet-modifiers.mjs
-
-      - name: Commit generated implementation
+      - name: Ensure implementation exists
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src
-          if git diff --cached --quiet; then
-            echo "No generated changes to commit."
-          else
-            git commit -m "feat: add formula-based sheet modifiers [skip ci]"
-            git push origin HEAD:feature/formula-sheet-modifiers
+          if [ ! -f src/lib/customSystems/CharacterSheetFormula.ts ]; then
+            node scripts/apply-formula-sheet-modifiers.mjs
           fi
 
       - name: Install dependencies
