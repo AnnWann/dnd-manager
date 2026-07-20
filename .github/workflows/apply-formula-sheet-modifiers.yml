@@ -6,7 +6,6 @@ on:
       - feature/formula-sheet-modifiers
     paths:
       - src/**
-      - scripts/apply-formula-sheet-modifiers.mjs
       - .github/workflows/apply-formula-sheet-modifiers.yml
   pull_request:
     branches:
@@ -20,18 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: feature/formula-sheet-modifiers
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Ensure implementation exists
-        run: |
-          if [ ! -f src/lib/customSystems/CharacterSheetFormula.ts ]; then
-            node scripts/apply-formula-sheet-modifiers.mjs
-          fi
 
       - name: Install dependencies
         run: npm install
