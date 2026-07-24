@@ -1,7 +1,17 @@
-import type { CharacterTemplate } from "./CharacterTemplate"
+import type { CreatureSize } from "../races/CharacterRace"
 import { getItemStackWeightKg } from "../items/itemWeight"
+import type { CharacterTemplate } from "./CharacterTemplate"
 
 export const POUNDS_TO_KILOGRAMS = 0.45359237
+
+const CREATURE_SIZE_CAPACITY_MULTIPLIER: Record<CreatureSize, number> = {
+  tiny: 0.5,
+  small: 1,
+  medium: 1,
+  large: 2,
+  huge: 4,
+  gargantuan: 8,
+}
 
 export type EncumbranceState =
   | "normal"
@@ -16,6 +26,23 @@ export type EncumbranceInfo = {
   carryingCapacity: number
   state: EncumbranceState
   speedPenalty: number
+}
+
+export function getCreatureSizeCapacityMultiplier(
+  size: CreatureSize | undefined,
+): number {
+  return CREATURE_SIZE_CAPACITY_MULTIPLIER[size ?? "medium"]
+}
+
+function getStrengthWeightLimitKg(
+  character: CharacterTemplate,
+  poundsPerStrengthPoint: number,
+): number {
+  const strength = Math.max(0, character.getEffectiveAttribute("str"))
+  const size = character.get("sheet").race.size
+  const sizeMultiplier = getCreatureSizeCapacityMultiplier(size)
+
+  return strength * poundsPerStrengthPoint * sizeMultiplier * POUNDS_TO_KILOGRAMS
 }
 
 export function getCarriedWeightKg(character: CharacterTemplate): number {
@@ -46,19 +73,19 @@ export function getCarriedWeightKg(character: CharacterTemplate): number {
 export function getEncumbranceLimitKg(
   character: CharacterTemplate,
 ): number {
-  return Math.max(0, character.getEffectiveAttribute("str")) * 5 * POUNDS_TO_KILOGRAMS
+  return getStrengthWeightLimitKg(character, 5)
 }
 
 export function getHeavyEncumbranceLimitKg(
   character: CharacterTemplate,
 ): number {
-  return Math.max(0, character.getEffectiveAttribute("str")) * 10 * POUNDS_TO_KILOGRAMS
+  return getStrengthWeightLimitKg(character, 10)
 }
 
 export function getCarryingCapacityKg(
   character: CharacterTemplate,
 ): number {
-  return Math.max(0, character.getEffectiveAttribute("str")) * 15 * POUNDS_TO_KILOGRAMS
+  return getStrengthWeightLimitKg(character, 15)
 }
 
 export function getEncumbranceInfo(
