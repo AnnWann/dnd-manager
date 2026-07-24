@@ -29,9 +29,30 @@ export const DEFAULT_CUSTOM_SYSTEM_PLACEMENT: CustomSystemCharacterPlacement = {
   position: 'after',
 }
 
+const ABILITIES_TAB_SYSTEM_TYPE_IDS = new Set([
+  'tec_marcial',
+  'tecnica_marcial',
+  'martial_technique',
+])
+
+function isAbilitiesTabSystem(definition: CustomSystemDefinition): boolean {
+  return definition.abilityTypes.some((abilityType) =>
+    ABILITIES_TAB_SYSTEM_TYPE_IDS.has(abilityType.id.trim().toLocaleLowerCase()),
+  )
+}
+
 export function getCustomSystemPlacement(
   definition: CustomSystemDefinition,
 ): CustomSystemCharacterPlacement {
+  if (isAbilitiesTabSystem(definition)) {
+    return {
+      mode: 'existingTab',
+      targetTab: 'abilities',
+      reference: { type: 'content' },
+      position: 'after',
+    }
+  }
+
   const placement =
     definition.characterPlacement ??
     definition.automaticInstallation?.characterPlacement
