@@ -148,9 +148,10 @@ export function CharacterEncumbrancePanel({ character }: Props) {
       ) : null}
 
       <p className="mt-3 text-[11px] leading-4 text-textMuted">
-        Os limites usam a regra de 5, 10 e 15 libras por ponto de Força,
-        convertida para quilogramas. Itens dentro da Bolsa de Carga não entram no
-        peso carregado.
+        Os limites usam 5, 10 e 15 libras por ponto de Força, convertidas para
+        quilogramas e ajustadas pelo tamanho: Minúsculo ×0,5; Pequeno e Médio ×1;
+        Grande ×2; Enorme ×4; Colossal ×8. Itens dentro da Bolsa de Carga não
+        entram no peso carregado.
       </p>
     </section>
   )
