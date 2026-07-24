@@ -27,24 +27,64 @@ const FULL_CASTER_SLOTS: Record<number, Partial<Record<MagicCircleLevel, number>
   20: { 1: 4, 2: 3, 3: 3, 4: 3, 5: 3, 6: 2, 7: 2, 8: 1, 9: 1 },
 }
 
+function getSingleClassCasterLevel(
+  classData: CharacterClassInterface,
+): number {
+  if (classData.spellcastingProgression === "full") {
+    return classData.level
+  }
+
+  if (classData.spellcastingProgression === "half") {
+    if (classData.className !== "artificer" && classData.level < 2) {
+      return 0
+    }
+
+    return Math.ceil(classData.level / 2)
+  }
+
+  if (classData.spellcastingProgression === "third") {
+    return classData.level < 3 ? 0 : Math.ceil(classData.level / 3)
+  }
+
+  return 0
+}
+
+function getMulticlassCasterLevelContribution(
+  classData: CharacterClassInterface,
+): number {
+  if (classData.spellcastingProgression === "full") {
+    return classData.level
+  }
+
+  if (classData.spellcastingProgression === "half") {
+    return classData.className === "artificer"
+      ? Math.ceil(classData.level / 2)
+      : Math.floor(classData.level / 2)
+  }
+
+  if (classData.spellcastingProgression === "third") {
+    return Math.floor(classData.level / 3)
+  }
+
+  return 0
+}
+
 export function getCasterLevel(classes: CharacterClassInterface[]): number {
-  return classes.reduce((total, classData) => {
-    if (classData.className === "warlock") return total
+  const spellcastingClasses = classes.filter(
+    (classData) =>
+      classData.className !== "warlock" &&
+      classData.spellcastingProgression !== undefined,
+  )
 
-    if (classData.spellcastingProgression === "full") {
-      return total + classData.level
-    }
+  if (spellcastingClasses.length === 1) {
+    return getSingleClassCasterLevel(spellcastingClasses[0])
+  }
 
-    if (classData.spellcastingProgression === "half") {
-      return total + Math.floor(classData.level / 2)
-    }
-
-    if (classData.spellcastingProgression === "third") {
-      return total + Math.floor(classData.level / 3)
-    }
-
-    return total
-  }, 0)
+  return spellcastingClasses.reduce(
+    (total, classData) =>
+      total + getMulticlassCasterLevelContribution(classData),
+    0,
+  )
 }
 
 export function deriveLeveledSlotsFromClasses(
