@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { BookOpen, Eye, EyeOff, Play, Plus, Search, Settings2, Trash2, X } from 'lucide-react'
+import {
+  BookOpen,
+  Eye,
+  EyeOff,
+  Plus,
+  Search,
+  Settings2,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { Select } from '../../../components/ui/Select'
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
 import type {
@@ -12,16 +21,10 @@ import type {
   CustomSystemDefinition,
 } from '../../../models/customSystems/CustomSystemDefinition'
 import {
-  activateCustomAbility,
   addCustomAbility,
-  countCustomAbilities,
   createAutomaticallyInstalledCustomSystemState,
   createCharacterCustomSystemState,
-  getCustomAbilityAvailability,
-  getCustomAbilityLimit,
   initializeCustomAbilityProgress,
-  setCustomAbilityLearned,
-  setCustomAbilityPrepared,
   setCustomSystemEnabled,
   shouldAutomaticallyInstallCustomSystem,
   type CustomSystemActor,
@@ -34,7 +37,10 @@ const SUPPRESSED_SYSTEM_MARKER = '__customSystemSuppressed'
 
 type Props = {
   character: CharacterTemplate
-  updateCharacter: (characterId: string, updater: (character: CharacterTemplate) => CharacterTemplate) => void
+  updateCharacter: (
+    characterId: string,
+    updater: (character: CharacterTemplate) => CharacterTemplate,
+  ) => void
   actor: CustomSystemActor
 }
 
@@ -42,26 +48,33 @@ type PlacementProps = Props & {
   systemIds?: string[]
 }
 
-export function CustomSystemsRuntime({ character, updateCharacter }: Pick<Props, 'character' | 'updateCharacter'>) {
+export function CustomSystemsRuntime({
+  character,
+  updateCharacter,
+}: Pick<Props, 'character' | 'updateCharacter'>) {
   const definitions = useCustomSystemDefinitions()
   const states = (character.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
 
   const automaticDefinitions = useMemo(
-    () => definitions.filter((definition) =>
-      !states.some((state) => state.systemId === definition.id) &&
-      shouldAutomaticallyInstallCustomSystem(definition, character),
-    ),
+    () =>
+      definitions.filter(
+        (definition) =>
+          !states.some((state) => state.systemId === definition.id) &&
+          shouldAutomaticallyInstallCustomSystem(definition, character),
+      ),
     [character, definitions, states],
   )
 
   useEffect(() => {
     if (!automaticDefinitions.length) return
+
     updateCharacter(character.get('id'), (current) => {
       const currentStates = (current.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
       const existingIds = new Set(currentStates.map((state) => state.systemId))
       const additions = automaticDefinitions
         .filter((definition) => !existingIds.has(definition.id))
         .map(createAutomaticallyInstalledCustomSystemState)
+
       if (!additions.length) return current
       return current.withSheet('customSystems', [...currentStates, ...additions])
     })
@@ -79,9 +92,14 @@ export function CustomSystemsTabWithLibrary({
   const definitions = useCustomSystemDefinitions()
   const states = (character.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
   const [open, setOpen] = useState(false)
-  const allowedIds = useMemo(() => systemIds ? new Set(systemIds) : undefined, [systemIds])
-  const activeStates = states.filter((state) =>
-    isActiveSystemState(state) && (!allowedIds || allowedIds.has(state.systemId)),
+  const allowedIds = useMemo(
+    () => (systemIds ? new Set(systemIds) : undefined),
+    [systemIds],
+  )
+  const activeStates = states.filter(
+    (state) =>
+      isActiveSystemState(state) &&
+      (!allowedIds || allowedIds.has(state.systemId)),
   )
 
   if (!activeStates.length) return null
@@ -90,145 +108,53 @@ export function CustomSystemsTabWithLibrary({
     activeStates.some((state) => state.systemId === definition.id),
   )
   const hasLibraryEntries = installedDefinitions.some((definition) =>
-    definition.abilityTypes.some((type) => (type.predefinedAbilities?.length ?? 0) > 0),
+    definition.abilityTypes.some(
+      (type) => (type.predefinedAbilities?.length ?? 0) > 0,
+    ),
   )
 
-  return <div className="grid gap-4">
-    {hasLibraryEntries ? <div className="flex justify-end">
-      <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-accent bg-accentBg px-3 py-2 text-sm font-medium text-textH">
-        <BookOpen className="h-4 w-4" /> Adicionar da biblioteca
-      </button>
-    </div> : null}
-
-    {activeStates.map((state) => {
-      const definition = definitions.find((entry) => entry.id === state.systemId)
-      const visibleCharacter = character.withSheet('customSystems', [state])
-      return <div key={state.systemId} className="grid gap-3">
-        {definition ? <CustomAbilityProgressPanel
-          character={character}
-          definitions={definitions}
-          definition={definition}
-          state={state}
-          updateCharacter={updateCharacter}
-        /> : null}
-        <div className="[&>div]:!grid-cols-1 [&>div>aside]:hidden">
-          <CustomSystemsTab
-            character={visibleCharacter}
-            updateCharacter={updateCharacter}
-            actor={actor}
-          />
+  return (
+    <div className="grid gap-4">
+      {hasLibraryEntries ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-accent bg-accentBg px-3 py-2 text-sm font-medium text-textH"
+          >
+            <BookOpen className="h-4 w-4" /> Adicionar da biblioteca
+          </button>
         </div>
-      </div>
-    })}
+      ) : null}
 
-    {open ? <AbilityLibraryModal character={character} updateCharacter={updateCharacter} actor={actor} systemIds={systemIds} onClose={() => setOpen(false)} /> : null}
-  </div>
-}
+      {activeStates.map((state) => {
+        const visibleCharacter = character.withSheet('customSystems', [state])
 
-function CustomAbilityProgressPanel({
-  character,
-  definitions,
-  definition,
-  state,
-  updateCharacter,
-}: {
-  character: CharacterTemplate
-  definitions: CustomSystemDefinition[]
-  definition: CustomSystemDefinition
-  state: CharacterCustomSystemState
-  updateCharacter: Props['updateCharacter']
-}) {
-  const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
-  const abilityTypes = definition.abilityTypes.filter((type) =>
-    state.abilities.some((ability) => ability.abilityTypeId === type.id),
-  )
-  if (!abilityTypes.length || !state.abilities.length) return null
-
-  function replaceState(next: CharacterCustomSystemState) {
-    updateCharacter(character.get('id'), (current) => {
-      const currentStates = (current.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
-      return current.withSheet('customSystems', currentStates.map((entry) => entry.systemId === next.systemId ? next : entry))
-    })
-  }
-
-  function run(operation: () => CharacterCustomSystemState) {
-    try {
-      setError('')
-      setMessage('')
-      replaceState(operation())
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Não foi possível alterar a habilidade.')
-    }
-  }
-
-  function useAbility(ability: CustomAbilityInstance, type: CustomAbilityTypeDefinition) {
-    try {
-      setError('')
-      const next = activateCustomAbility(character, definitions, definition.id, ability.id)
-      updateCharacter(character.get('id'), () => next)
-      setMessage(`${abilityTitle(type, ability)} foi usada.`)
-    } catch (caught) {
-      setMessage('')
-      setError(caught instanceof Error ? caught.message : 'Não foi possível usar a habilidade.')
-    }
-  }
-
-  return <section className="rounded-xl border border-border bg-bg p-4">
-    <div>
-      <h3 className="font-semibold text-textH">Habilidades</h3>
-      <p className="mt-1 text-xs text-text">Aprenda, prepare e use habilidades com custos, gerações de recursos e usos configurados pelo mestre.</p>
-    </div>
-    {error ? <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">{error}</div> : null}
-    {message ? <div className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-300">{message}</div> : null}
-    <div className="mt-4 grid gap-4">
-      {abilityTypes.map((type) => {
-        const abilities = state.abilities.filter((ability) => ability.abilityTypeId === type.id)
-        if (!abilities.length) return null
-        const learnedLimit = getCustomAbilityLimit(definition, state, type, 'learned', character)
-        const preparedLimit = getCustomAbilityLimit(definition, state, type, 'prepared', character)
-        return <section key={type.id} className="rounded-lg border border-border p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <strong className="text-sm text-textH">{type.name}</strong>
-            <div className="flex flex-wrap gap-2 text-xs text-text">
-              {usesLearned(type) ? <span>Aprendidas: {countCustomAbilities(state, type.id, 'learned')}{learnedLimit === undefined ? '' : `/${learnedLimit}`}</span> : null}
-              {usesPrepared(type) ? <span>Preparadas: {countCustomAbilities(state, type.id, 'prepared')}{preparedLimit === undefined ? '' : `/${preparedLimit}`}</span> : null}
-            </div>
+        return (
+          <div
+            key={state.systemId}
+            className="[&>div]:!grid-cols-1 [&>div>aside]:hidden"
+          >
+            <CustomSystemsTab
+              character={visibleCharacter}
+              updateCharacter={updateCharacter}
+              actor={actor}
+            />
           </div>
-          <div className="mt-3 grid gap-2 md:grid-cols-2">
-            {abilities.map((ability) => {
-              const availability = getCustomAbilityAvailability(type, ability)
-              const maximum = ability.usage?.maximum
-              const remaining = maximum === undefined ? undefined : Math.max(0, maximum - (ability.usage?.used ?? 0))
-              return <div key={ability.id} className="grid gap-3 rounded-lg border border-border px-3 py-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-textH">{abilityTitle(type, ability)}</div>
-                    <div className="mt-1 text-[11px] text-text">
-                      {availability.canUse ? 'Disponível para uso' : availability.learned ? 'Não preparada' : 'Não aprendida'}
-                      {remaining !== undefined ? ` · ${remaining} uso(s) restante(s)` : ''}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={!availability.canUse || remaining === 0}
-                    onClick={() => useAbility(ability, type)}
-                    className="inline-flex items-center gap-2 rounded-lg border border-accent px-3 py-2 text-xs font-medium text-textH hover:bg-accentBg disabled:cursor-not-allowed disabled:border-border disabled:opacity-50"
-                  >
-                    <Play className="h-3.5 w-3.5" /> Usar
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-3 text-xs text-textH">
-                  {usesLearned(type) ? <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={availability.learned} onChange={(event) => run(() => setCustomAbilityLearned(definition, state, ability.id, event.target.checked, character))} /> Aprendida</label> : null}
-                  {usesPrepared(type) ? <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={availability.prepared} disabled={!availability.learned} onChange={(event) => run(() => setCustomAbilityPrepared(definition, state, ability.id, event.target.checked, character))} /> Preparada</label> : null}
-                </div>
-              </div>
-            })}
-          </div>
-        </section>
+        )
       })}
+
+      {open ? (
+        <AbilityLibraryModal
+          character={character}
+          updateCharacter={updateCharacter}
+          actor={actor}
+          systemIds={systemIds}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
     </div>
-  </section>
+  )
 }
 
 export function CustomSystemsManagementModal({
@@ -243,13 +169,21 @@ export function CustomSystemsManagementModal({
   if (!open || actor !== 'master') return null
 
   const active = states.filter(isActiveSystemState)
-  const disabled = states.filter((state) => state.enabled === false && !isSuppressedSystemState(state))
+  const disabled = states.filter(
+    (state) => state.enabled === false && !isSuppressedSystemState(state),
+  )
   const suppressed = states.filter(isSuppressedSystemState)
-  const available = definitions.filter((definition) =>
-    !states.some((state) => state.systemId === definition.id && !isSuppressedSystemState(state)),
+  const available = definitions.filter(
+    (definition) =>
+      !states.some(
+        (state) =>
+          state.systemId === definition.id && !isSuppressedSystemState(state),
+      ),
   )
 
-  function updateStates(updater: (current: CharacterCustomSystemState[]) => CharacterCustomSystemState[]) {
+  function updateStates(
+    updater: (current: CharacterCustomSystemState[]) => CharacterCustomSystemState[],
+  ) {
     updateCharacter(character.get('id'), (current) => {
       const currentStates = (current.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
       return current.withSheet('customSystems', updater(currentStates))
@@ -257,19 +191,44 @@ export function CustomSystemsManagementModal({
   }
 
   function disable(systemId: string) {
-    updateStates((current) => current.map((state) => state.systemId === systemId ? setCustomSystemEnabled(state, false) : state))
+    updateStates((current) =>
+      current.map((state) =>
+        state.systemId === systemId
+          ? setCustomSystemEnabled(state, false)
+          : state,
+      ),
+    )
   }
 
   function enable(systemId: string) {
-    updateStates((current) => current.map((state) => state.systemId === systemId ? setCustomSystemEnabled(state, true) : state))
+    updateStates((current) =>
+      current.map((state) =>
+        state.systemId === systemId
+          ? setCustomSystemEnabled(state, true)
+          : state,
+      ),
+    )
   }
 
   function remove(state: CharacterCustomSystemState) {
-    const definition = definitions.find((entry) => entry.id === state.systemId)
+    const definition = definitions.find(
+      (entry) => entry.id === state.systemId,
+    )
     const name = definition?.name ?? state.systemId
-    if (!window.confirm(`Remover “${name}” desta ficha? Campos, recursos e habilidades desse sistema serão apagados.`)) return
+    if (
+      !window.confirm(
+        `Remover “${name}” desta ficha? Campos, recursos e habilidades desse sistema serão apagados.`,
+      )
+    ) {
+      return
+    }
+
     const marker = createSuppressedSystemState(state)
-    updateStates((current) => current.map((entry) => entry.systemId === state.systemId ? marker : entry))
+    updateStates((current) =>
+      current.map((entry) =>
+        entry.systemId === state.systemId ? marker : entry,
+      ),
+    )
   }
 
   function install(definition: CustomSystemDefinition) {
@@ -277,58 +236,201 @@ export function CustomSystemsManagementModal({
       ...createCharacterCustomSystemState(definition),
       installationSource: 'master',
     }
+
     updateStates((current) => {
       const exists = current.some((state) => state.systemId === definition.id)
       return exists
-        ? current.map((state) => state.systemId === definition.id ? next : state)
+        ? current.map((state) =>
+            state.systemId === definition.id ? next : state,
+          )
         : [...current, next]
     })
   }
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3" role="dialog" aria-modal="true" aria-labelledby="custom-systems-management-title" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose() }}>
-    <section className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-bg shadow-2xl">
-      <header className="flex items-start justify-between gap-3 border-b border-border p-4">
-        <div className="flex items-start gap-3">
-          <div className="rounded-lg border border-accentBorder bg-accentBg p-2 text-accent"><Settings2 className="h-5 w-5" /></div>
-          <div><h2 id="custom-systems-management-title" className="font-semibold text-textH">Sistemas da ficha</h2><p className="mt-1 text-xs text-text">Adicione, esconda, reative ou remova sistemas deste personagem.</p></div>
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="custom-systems-management-title"
+      onMouseDown={(event) => {
+        if (event.currentTarget === event.target) onClose()
+      }}
+    >
+      <section className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-bg shadow-2xl">
+        <header className="flex items-start justify-between gap-3 border-b border-border p-4">
+          <div className="flex items-start gap-3">
+            <div className="rounded-lg border border-accentBorder bg-accentBg p-2 text-accent">
+              <Settings2 className="h-5 w-5" />
+            </div>
+            <div>
+              <h2
+                id="custom-systems-management-title"
+                className="font-semibold text-textH"
+              >
+                Sistemas da ficha
+              </h2>
+              <p className="mt-1 text-xs text-text">
+                Adicione, esconda, reative ou remova sistemas deste personagem.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-text hover:bg-accentBg"
+            aria-label="Fechar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="grid gap-3">
+            {active.map((state) => (
+              <SystemManagementRow
+                key={state.systemId}
+                name={definitionName(definitions, state.systemId)}
+                status="Visível na ficha"
+              >
+                <SmallAction onClick={() => disable(state.systemId)}>
+                  <EyeOff className="h-4 w-4" /> Esconder
+                </SmallAction>
+                <SmallAction danger onClick={() => remove(state)}>
+                  <Trash2 className="h-4 w-4" /> Remover
+                </SmallAction>
+              </SystemManagementRow>
+            ))}
+
+            {disabled.map((state) => (
+              <SystemManagementRow
+                key={state.systemId}
+                name={definitionName(definitions, state.systemId)}
+                status="Escondido, com dados preservados"
+              >
+                <SmallAction onClick={() => enable(state.systemId)}>
+                  <Eye className="h-4 w-4" /> Mostrar
+                </SmallAction>
+                <SmallAction danger onClick={() => remove(state)}>
+                  <Trash2 className="h-4 w-4" /> Remover
+                </SmallAction>
+              </SystemManagementRow>
+            ))}
+
+            {available.map((definition) => {
+              const wasRemoved = suppressed.some(
+                (state) => state.systemId === definition.id,
+              )
+
+              return (
+                <SystemManagementRow
+                  key={definition.id}
+                  name={definition.name}
+                  status={
+                    wasRemoved
+                      ? 'Removido desta ficha'
+                      : 'Disponível para adicionar'
+                  }
+                >
+                  <SmallAction onClick={() => install(definition)}>
+                    <Plus className="h-4 w-4" />
+                    {wasRemoved ? 'Reinstalar' : 'Adicionar'}
+                  </SmallAction>
+                </SystemManagementRow>
+              )
+            })}
+
+            {!active.length && !disabled.length && !available.length ? (
+              <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-text">
+                Nenhum sistema disponível.
+              </div>
+            ) : null}
+          </div>
         </div>
-        <button type="button" onClick={onClose} className="rounded-lg p-2 text-text hover:bg-accentBg" aria-label="Fechar"><X className="h-5 w-5" /></button>
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto p-4"><div className="grid gap-3">
-        {active.map((state) => <SystemManagementRow key={state.systemId} name={definitionName(definitions, state.systemId)} status="Visível na ficha"><SmallAction onClick={() => disable(state.systemId)}><EyeOff className="h-4 w-4" /> Esconder</SmallAction><SmallAction danger onClick={() => remove(state)}><Trash2 className="h-4 w-4" /> Remover</SmallAction></SystemManagementRow>)}
-        {disabled.map((state) => <SystemManagementRow key={state.systemId} name={definitionName(definitions, state.systemId)} status="Escondido, com dados preservados"><SmallAction onClick={() => enable(state.systemId)}><Eye className="h-4 w-4" /> Mostrar</SmallAction><SmallAction danger onClick={() => remove(state)}><Trash2 className="h-4 w-4" /> Remover</SmallAction></SystemManagementRow>)}
-        {available.map((definition) => { const wasRemoved = suppressed.some((state) => state.systemId === definition.id); return <SystemManagementRow key={definition.id} name={definition.name} status={wasRemoved ? 'Removido desta ficha' : 'Disponível para adicionar'}><SmallAction onClick={() => install(definition)}><Plus className="h-4 w-4" /> {wasRemoved ? 'Reinstalar' : 'Adicionar'}</SmallAction></SystemManagementRow> })}
-        {!active.length && !disabled.length && !available.length ? <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-text">Nenhum sistema disponível.</div> : null}
-      </div></div>
-    </section>
-  </div>
+      </section>
+    </div>
+  )
 }
 
-function AbilityLibraryModal({ character, updateCharacter, actor, systemIds, onClose }: PlacementProps & { onClose: () => void }) {
+function AbilityLibraryModal({
+  character,
+  updateCharacter,
+  actor,
+  systemIds,
+  onClose,
+}: PlacementProps & { onClose: () => void }) {
   const definitions = useCustomSystemDefinitions()
   const states = (character.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
-  const allowedIds = useMemo(() => systemIds ? new Set(systemIds) : undefined, [systemIds])
+  const allowedIds = useMemo(
+    () => (systemIds ? new Set(systemIds) : undefined),
+    [systemIds],
+  )
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [error, setError] = useState('')
 
-  const entries = useMemo(() => definitions.flatMap((definition) => {
-    if (allowedIds && !allowedIds.has(definition.id)) return []
-    const state = states.find((entry) => entry.systemId === definition.id && isActiveSystemState(entry))
-    if (!state) return []
-    return definition.abilityTypes.flatMap((type) => (type.predefinedAbilities ?? []).map((preset) => ({ definition, state, type, preset })))
-  }), [allowedIds, definitions, states])
+  const entries = useMemo(
+    () =>
+      definitions.flatMap((definition) => {
+        if (allowedIds && !allowedIds.has(definition.id)) return []
+        const state = states.find(
+          (entry) =>
+            entry.systemId === definition.id && isActiveSystemState(entry),
+        )
+        if (!state) return []
 
-  const typeOptions = useMemo(() => Array.from(new Map(entries.map((entry) => [`${entry.definition.id}:${entry.type.id}`, { id: `${entry.definition.id}:${entry.type.id}`, label: `${entry.type.name} — ${entry.definition.name}` }])).values()), [entries])
+        return definition.abilityTypes.flatMap((type) =>
+          (type.predefinedAbilities ?? []).map((preset) => ({
+            definition,
+            state,
+            type,
+            preset,
+          })),
+        )
+      }),
+    [allowedIds, definitions, states],
+  )
+
+  const typeOptions = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          entries.map((entry) => [
+            `${entry.definition.id}:${entry.type.id}`,
+            {
+              id: `${entry.definition.id}:${entry.type.id}`,
+              label: `${entry.type.name} — ${entry.definition.name}`,
+            },
+          ]),
+        ).values(),
+      ),
+    [entries],
+  )
+
   const filtered = entries.filter((entry) => {
     const title = presetTitle(entry.type.display.titleFieldId, entry.preset)
     const term = search.trim().toLocaleLowerCase('pt-BR')
-    const matchesSearch = !term || title.toLocaleLowerCase('pt-BR').includes(term) || entry.type.name.toLocaleLowerCase('pt-BR').includes(term) || entry.preset.description?.toLocaleLowerCase('pt-BR').includes(term)
-    return matchesSearch && (!typeFilter || typeFilter === `${entry.definition.id}:${entry.type.id}`)
+    const matchesSearch =
+      !term ||
+      title.toLocaleLowerCase('pt-BR').includes(term) ||
+      entry.type.name.toLocaleLowerCase('pt-BR').includes(term) ||
+      entry.preset.description?.toLocaleLowerCase('pt-BR').includes(term)
+
+    return (
+      matchesSearch &&
+      (!typeFilter ||
+        typeFilter === `${entry.definition.id}:${entry.type.id}`)
+    )
   })
 
-  function learn(definition: CustomSystemDefinition, state: CharacterCustomSystemState, type: CustomAbilityTypeDefinition, preset: CustomPredefinedAbilityDefinition) {
+  function learn(
+    definition: CustomSystemDefinition,
+    state: CharacterCustomSystemState,
+    type: CustomAbilityTypeDefinition,
+    preset: CustomPredefinedAbilityDefinition,
+  ) {
     if (hasPreset(state, type.id, preset.id)) return
+
     try {
       setError('')
       const usageDefinition = preset.activation?.usage ?? type.activation?.usage
@@ -338,75 +440,253 @@ function AbilityLibraryModal({ character, updateCharacter, actor, systemIds, onC
         predefinedAbilityId: preset.id,
         values: { ...preset.values, [PREDEFINED_MARKER]: preset.id },
         enabled: true,
-        usage: usageDefinition && (usageDefinition.mode ?? 'limited') === 'limited'
-          ? { used: 0, maximum: usageDefinition.maximum }
-          : undefined,
+        usage:
+          usageDefinition && (usageDefinition.mode ?? 'limited') === 'limited'
+            ? { used: 0, maximum: usageDefinition.maximum }
+            : undefined,
       }
-      ability = initializeCustomAbilityProgress({ ...type, acquisition: { ...type.acquisition, ...preset.acquisition } }, ability)
+
+      ability = initializeCustomAbilityProgress(
+        {
+          ...type,
+          acquisition: { ...type.acquisition, ...preset.acquisition },
+        },
+        ability,
+      )
       const next = addCustomAbility(definition, state, ability, actor)
+
       updateCharacter(character.get('id'), (current) => {
         const currentStates = (current.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
-        return current.withSheet('customSystems', currentStates.map((entry) => entry.systemId === next.systemId ? next : entry))
+        return current.withSheet(
+          'customSystems',
+          currentStates.map((entry) =>
+            entry.systemId === next.systemId ? next : entry,
+          ),
+        )
       })
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Não foi possível adicionar a habilidade.')
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Não foi possível adicionar a habilidade.',
+      )
     }
   }
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3" role="dialog" aria-modal="true" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose() }}>
-    <section className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-border bg-bg shadow-2xl">
-      <header className="flex items-center justify-between gap-3 border-b border-border p-4"><div><h2 className="font-semibold text-textH">Biblioteca de habilidades</h2><p className="mt-1 text-xs text-text">Escolha habilidades disponibilizadas pelo mestre para este personagem.</p></div><button type="button" onClick={onClose} className="rounded-lg p-2 text-text hover:bg-accentBg" aria-label="Fechar"><X className="h-5 w-5" /></button></header>
-      <div className="grid gap-3 border-b border-border p-3 md:grid-cols-[minmax(0,1fr)_260px]"><label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2"><Search className="h-4 w-4 text-text" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Pesquisar habilidade" className="min-w-0 flex-1 bg-transparent text-sm text-textH outline-none" autoFocus /></label><Select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Filtrar por tipo de habilidade"><option value="">Todos os tipos</option>{typeOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</Select></div>
-      {error ? <div className="mx-3 mt-3 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">{error}</div> : null}
-      <div className="min-h-0 flex-1 overflow-y-auto p-3"><div className="grid gap-3 md:grid-cols-2">
-        {filtered.map(({ definition, state, type, preset }) => { const learned = hasPreset(state, type.id, preset.id); return <article key={`${definition.id}:${type.id}:${preset.id}`} className="rounded-xl border border-border p-4"><div className="flex items-start justify-between gap-3"><div><div className="font-medium text-textH">{presetTitle(type.display.titleFieldId, preset)}</div><div className="mt-1 text-xs text-text">{type.name} · {definition.name}</div></div>{type.icon ? <span className="text-xl" aria-hidden="true">{type.icon}</span> : null}</div>{preset.description ? <p className="mt-3 text-sm text-text">{preset.description}</p> : null}<button type="button" disabled={learned} onClick={() => learn(definition, state, type, preset)} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-accent px-3 py-2 text-sm font-medium text-textH disabled:border-border disabled:opacity-60">{learned ? 'Já adicionada' : <><Plus className="h-4 w-4" /> Adicionar ao personagem</>}</button></article> })}
-      </div>{!filtered.length ? <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-text">Nenhuma habilidade disponível com esses filtros.</div> : null}</div>
-    </section>
-  </div>
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(event) => {
+        if (event.currentTarget === event.target) onClose()
+      }}
+    >
+      <section className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-border bg-bg shadow-2xl">
+        <header className="flex items-center justify-between gap-3 border-b border-border p-4">
+          <div>
+            <h2 className="font-semibold text-textH">Biblioteca de habilidades</h2>
+            <p className="mt-1 text-xs text-text">
+              Escolha habilidades disponibilizadas pelo mestre para este personagem.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-text hover:bg-accentBg"
+            aria-label="Fechar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </header>
+
+        <div className="grid gap-3 border-b border-border p-3 md:grid-cols-[minmax(0,1fr)_260px]">
+          <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2">
+            <Search className="h-4 w-4 text-text" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Pesquisar habilidade"
+              className="min-w-0 flex-1 bg-transparent text-sm text-textH outline-none"
+              autoFocus
+            />
+          </label>
+          <Select
+            value={typeFilter}
+            onChange={(event) => setTypeFilter(event.target.value)}
+            aria-label="Filtrar por tipo de habilidade"
+          >
+            <option value="">Todos os tipos</option>
+            {typeOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        {error ? (
+          <div className="mx-3 mt-3 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <div className="grid gap-3 md:grid-cols-2">
+            {filtered.map(({ definition, state, type, preset }) => {
+              const learned = hasPreset(state, type.id, preset.id)
+
+              return (
+                <article
+                  key={`${definition.id}:${type.id}:${preset.id}`}
+                  className="rounded-xl border border-border p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-medium text-textH">
+                        {presetTitle(type.display.titleFieldId, preset)}
+                      </div>
+                      <div className="mt-1 text-xs text-text">
+                        {type.name} · {definition.name}
+                      </div>
+                    </div>
+                    {type.icon ? (
+                      <span className="text-xl" aria-hidden="true">
+                        {type.icon}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {preset.description ? (
+                    <p className="mt-3 text-sm text-text">
+                      {preset.description}
+                    </p>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    disabled={learned}
+                    onClick={() => learn(definition, state, type, preset)}
+                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-accent px-3 py-2 text-sm font-medium text-textH disabled:border-border disabled:opacity-60"
+                  >
+                    {learned ? (
+                      'Já adicionada'
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4" /> Adicionar ao personagem
+                      </>
+                    )}
+                  </button>
+                </article>
+              )
+            })}
+          </div>
+
+          {!filtered.length ? (
+            <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-text">
+              Nenhuma habilidade disponível com esses filtros.
+            </div>
+          ) : null}
+        </div>
+      </section>
+    </div>
+  )
 }
 
-function usesLearned(type: CustomAbilityTypeDefinition) {
-  return type.acquisition?.mode === 'learned' || type.acquisition?.mode === 'learnedAndPrepared'
+function SystemManagementRow({
+  name,
+  status,
+  children,
+}: {
+  name: string
+  status: string
+  children: ReactNode
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
+      <div>
+        <div className="font-medium text-textH">{name}</div>
+        <div className="mt-1 text-xs text-text">{status}</div>
+      </div>
+      <div className="flex flex-wrap gap-2">{children}</div>
+    </div>
+  )
 }
 
-function usesPrepared(type: CustomAbilityTypeDefinition) {
-  return type.acquisition?.mode === 'prepared' || type.acquisition?.mode === 'learnedAndPrepared'
+function SmallAction({
+  children,
+  onClick,
+  danger,
+}: {
+  children: ReactNode
+  onClick: () => void
+  danger?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${
+        danger
+          ? 'border-red-500/40 text-red-300 hover:bg-red-500/10'
+          : 'border-border text-textH hover:bg-accentBg'
+      }`}
+    >
+      {children}
+    </button>
+  )
 }
 
-function abilityTitle(type: CustomAbilityTypeDefinition, ability: CustomAbilityInstance) {
-  const value = ability.values[type.display.titleFieldId]
-  return typeof value === 'string' && value.trim() ? value : type.name
+function createSuppressedSystemState(
+  state: CharacterCustomSystemState,
+): CharacterCustomSystemState {
+  return {
+    systemId: state.systemId,
+    systemVersion: state.systemVersion,
+    enabled: false,
+    fields: { [SUPPRESSED_SYSTEM_MARKER]: true },
+    resources: {},
+    abilities: [],
+    installationSource: state.installationSource,
+  }
 }
 
-function SystemManagementRow({ name, status, children }: { name: string; status: string; children: ReactNode }) {
-  return <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"><div><div className="font-medium text-textH">{name}</div><div className="mt-1 text-xs text-text">{status}</div></div><div className="flex flex-wrap gap-2">{children}</div></div>
-}
-
-function SmallAction({ children, onClick, danger }: { children: ReactNode; onClick: () => void; danger?: boolean }) {
-  return <button type="button" onClick={onClick} className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${danger ? 'border-red-500/40 text-red-300 hover:bg-red-500/10' : 'border-border text-textH hover:bg-accentBg'}`}>{children}</button>
-}
-
-function createSuppressedSystemState(state: CharacterCustomSystemState): CharacterCustomSystemState {
-  return { systemId: state.systemId, systemVersion: state.systemVersion, enabled: false, fields: { [SUPPRESSED_SYSTEM_MARKER]: true }, resources: {}, abilities: [], installationSource: state.installationSource }
-}
-
-export function isSuppressedSystemState(state: CharacterCustomSystemState): boolean {
+export function isSuppressedSystemState(
+  state: CharacterCustomSystemState,
+): boolean {
   return state.fields[SUPPRESSED_SYSTEM_MARKER] === true
 }
 
-export function isActiveSystemState(state: CharacterCustomSystemState): boolean {
+export function isActiveSystemState(
+  state: CharacterCustomSystemState,
+): boolean {
   return state.enabled !== false && !isSuppressedSystemState(state)
 }
 
-function definitionName(definitions: CustomSystemDefinition[], systemId: string): string {
+function definitionName(
+  definitions: CustomSystemDefinition[],
+  systemId: string,
+): string {
   return definitions.find((definition) => definition.id === systemId)?.name ?? systemId
 }
 
-function hasPreset(state: CharacterCustomSystemState, typeId: string, presetId: string): boolean {
-  return state.abilities.some((ability) => ability.abilityTypeId === typeId && (ability.predefinedAbilityId === presetId || ability.values[PREDEFINED_MARKER] === presetId))
+function hasPreset(
+  state: CharacterCustomSystemState,
+  typeId: string,
+  presetId: string,
+): boolean {
+  return state.abilities.some(
+    (ability) =>
+      ability.abilityTypeId === typeId &&
+      (ability.predefinedAbilityId === presetId ||
+        ability.values[PREDEFINED_MARKER] === presetId),
+  )
 }
 
-function presetTitle(titleFieldId: string, preset: CustomPredefinedAbilityDefinition): string {
+function presetTitle(
+  titleFieldId: string,
+  preset: CustomPredefinedAbilityDefinition,
+): string {
   const value = preset.values[titleFieldId]
   return typeof value === 'string' && value.trim() ? value : preset.id
 }
