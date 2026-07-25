@@ -109,8 +109,36 @@ function withResourceMasterOverride(
 function withAbilityTypeMasterOverride(
   abilityType: CustomAbilityTypeDefinition,
 ): CustomAbilityTypeDefinition {
+  const fields = abilityType.fields.map(withFieldMasterOverride)
+  const configuredTitleFieldId = abilityType.display.titleFieldId?.trim()
+  const titleFieldId =
+    configuredTitleFieldId || inferAbilityTitleFieldId(fields) || ''
+
   return {
     ...abilityType,
-    fields: abilityType.fields.map(withFieldMasterOverride),
+    fields,
+    display: {
+      ...abilityType.display,
+      titleFieldId,
+    },
   }
+}
+
+function inferAbilityTitleFieldId(
+  fields: CustomFieldDefinition[],
+): string | undefined {
+  const titleNames = new Set(['nome', 'name', 'titulo', 'title'])
+
+  return (
+    fields.find((field) => titleNames.has(normalizeFieldName(field.id))) ??
+    fields.find((field) => titleNames.has(normalizeFieldName(field.name)))
+  )?.id
+}
+
+function normalizeFieldName(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
 }
