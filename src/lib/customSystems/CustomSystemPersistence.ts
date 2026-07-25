@@ -258,6 +258,7 @@ function normalizeAbility(value: unknown): CustomAbilityInstance | undefined {
   const abilityTypeId = readNonEmptyString(value.abilityTypeId)
   if (!id || !abilityTypeId) return undefined
 
+  const predefinedAbilityId = readNonEmptyString(value.predefinedAbilityId)
   const values: Record<string, JsonValue> = {}
   if (isRecord(value.values)) {
     for (const [fieldId, fieldValue] of Object.entries(value.values).slice(
@@ -280,9 +281,12 @@ function normalizeAbility(value: unknown): CustomAbilityInstance | undefined {
   return {
     id,
     abilityTypeId,
+    ...(predefinedAbilityId ? { predefinedAbilityId } : {}),
     values,
     ...(usage ? { usage } : {}),
     ...(typeof value.enabled === 'boolean' ? { enabled: value.enabled } : {}),
+    ...(typeof value.learned === 'boolean' ? { learned: value.learned } : {}),
+    ...(typeof value.prepared === 'boolean' ? { prepared: value.prepared } : {}),
   }
 }
 
