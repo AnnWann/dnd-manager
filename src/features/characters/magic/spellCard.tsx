@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 
 import { Button } from "../../../components/ui/Button"
@@ -65,6 +65,17 @@ export function SpellCard({
     setDraftCastingDescriptions(castingDescriptions)
   }, [spell.index, castingDescriptionsKey])
 
+  useEffect(() => {
+    if (!isViewOpen) return
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsViewOpen(false)
+    }
+
+    window.addEventListener("keydown", closeOnEscape)
+    return () => window.removeEventListener("keydown", closeOnEscape)
+  }, [isViewOpen])
+
   function setDraftCastingDescription(index: number, description: string) {
     const nextDescription = description.slice(0, MAX_CASTING_DESCRIPTION_LENGTH)
     setDraftCastingDescriptions((current) => {
@@ -85,28 +96,34 @@ export function SpellCard({
         <div
           role="dialog"
           aria-modal="true"
+          aria-label={`Detalhes de ${spell.displayName || spell.name}`}
           className="fixed inset-0 z-[12000] flex h-screen w-screen items-center justify-center overflow-y-auto bg-black/80 p-3 sm:p-4"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) setIsViewOpen(false)
+          }}
         >
-          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-bg shadow-xl">
+          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto rounded-2xl bg-bg shadow-xl">
             <div className="flex flex-col gap-3 border-b border-accentBorder p-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <h2 className="break-words font-heading text-lg text-textH">
                   {spell.displayName || spell.name}
                 </h2>
+                {spell.displayName && spell.displayName !== spell.name ? (
+                  <div className="mt-1 text-xs text-textMuted">
+                    Nome original: {spell.name}
+                  </div>
+                ) : null}
 
                 <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-xs leading-5 text-text">
-                  <SpellMeta>
-                    {spell.slotLevel === 0 ? "Truque" : `Nível ${spell.slotLevel}`}
-                  </SpellMeta>
+                  <SpellMeta>{formatSpellLevel(spell)}</SpellMeta>
                   <SpellMeta>
                     {MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}
                   </SpellMeta>
-                  <SpellMeta>{formatCastingTime(spell)}</SpellMeta>
-                  <SpellMeta>{formatRange(spell)}</SpellMeta>
                   <SpellMeta>{formatSpellOrigin(source)}</SpellMeta>
+                  <SpellMeta>
+                    {formatPreparationStatus(prepared, alwaysPrepared)}
+                  </SpellMeta>
                   {accessLabel ? <SpellMeta>{accessLabel}</SpellMeta> : null}
-                  {spell.concentration ? <SpellMeta>Concentração</SpellMeta> : null}
-                  {spell.ritual ? <SpellMeta>Ritual</SpellMeta> : null}
                 </div>
               </div>
 
@@ -121,23 +138,77 @@ export function SpellCard({
             </div>
 
             <div className="grid gap-4 p-4 text-sm text-text">
-              {castingDescriptions.length > 0 ? (
-                <section className="rounded-xl border border-border bg-bg-subtle p-3">
-                  <h3 className="text-sm font-semibold text-textH">
-                    Como o personagem conjura
-                  </h3>
-                  <div className="mt-2 grid gap-2">
-                    {castingDescriptions.map((description, index) => (
-                      <p
-                        key={index}
-                        className="whitespace-pre-wrap break-words rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-6"
-                      >
-                        {description || "Descrição vazia."}
-                      </p>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
+              <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                <h3 className="text-sm font-semibold text-textH">
+                  Informações da magia
+                </h3>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  <DetailItem label="Nível" value={formatSpellLevel(spell)} />
+                  <DetailItem
+                    label="Escola"
+                    value={MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}
+                  />
+                  <DetailItem
+                    label="Tempo de conjuração"
+                    value={formatCastingTime(spell)}
+                  />
+                  <DetailItem label="Alcance" value={formatRange(spell)} />
+                  <DetailItem label="Duração" value={formatDuration(spell)} />
+                  <DetailItem label="Alvo" value={formatTargeting(spell)} />
+                  <DetailItem label="Área" value={formatArea(spell)} />
+                  <DetailItem
+                    label="Ataque ou resistência"
+                    value={formatAttackAndSave(spell)}
+                  />
+                  <DetailItem
+                    label="Rolagens"
+                    value={formatRollModes(spell)}
+                  />
+                  <DetailItem
+                    label="Dano base"
+                    value={formatDamageDice(spell)}
+                  />
+                  <DetailItem
+                    label="Componentes"
+                    value={formatComponentsCompact(spell).replace(
+                      "Componentes: ",
+                      "",
+                    )}
+                  />
+                  <DetailItem
+                    label="Concentração"
+                    value={spell.concentration ? "Sim" : "Não"}
+                  />
+                  <DetailItem
+                    label="Ritual"
+                    value={spell.ritual ? "Sim" : "Não"}
+                  />
+                  <DetailItem label="Classes" value={formatClasses(spell)} />
+                  <DetailItem label="Origem" value={formatSpellOrigin(source)} />
+                  <DetailItem
+                    label="Disponibilidade"
+                    value={
+                      accessLabel ||
+                      formatPreparationStatus(prepared, alwaysPrepared)
+                    }
+                  />
+                  {source ? (
+                    <DetailItem
+                      label="Atributo de conjuração"
+                      value={source.attribute.toUpperCase()}
+                    />
+                  ) : null}
+                  {source?.extendedList ? (
+                    <DetailItem label="Lista expandida" value="Sim" />
+                  ) : null}
+                  {formatAreaTiles(spell) ? (
+                    <DetailItem
+                      label="Área no grid"
+                      value={formatAreaTiles(spell) || ""}
+                    />
+                  ) : null}
+                </div>
+              </section>
 
               <section className="rounded-xl border border-border bg-bg-subtle p-3">
                 <h3 className="text-sm font-semibold text-textH">
@@ -174,6 +245,35 @@ export function SpellCard({
                 ) : null}
               </section>
 
+              {castingDescriptions.length > 0 ? (
+                <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                  <h3 className="text-sm font-semibold text-textH">
+                    Como o personagem conjura
+                  </h3>
+                  <div className="mt-2 grid gap-2">
+                    {castingDescriptions.map((description, index) => (
+                      <p
+                        key={index}
+                        className="whitespace-pre-wrap break-words rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-6"
+                      >
+                        {description || "Descrição vazia."}
+                      </p>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {spell.headcanon?.trim() ? (
+                <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                  <h3 className="text-sm font-semibold text-textH">
+                    Interpretação do personagem
+                  </h3>
+                  <div className="mt-2 whitespace-pre-wrap break-words leading-6">
+                    {spell.headcanon}
+                  </div>
+                </section>
+              ) : null}
+
               <section>
                 <h3 className="text-sm font-semibold text-textH">Descrição</h3>
                 <div className="mt-2 whitespace-pre-wrap break-words leading-6">
@@ -183,13 +283,34 @@ export function SpellCard({
 
               <section>
                 <h3 className="text-sm font-semibold text-textH">
-                  Próximos níveis
+                  Em níveis superiores
                 </h3>
                 <div className="mt-2 whitespace-pre-wrap break-words leading-6">
                   {spell.higherLevelText?.trim() ||
                     "Sem efeito adicional em níveis superiores."}
                 </div>
               </section>
+
+              {Array.isArray(spell.effects) && spell.effects.length > 0 ? (
+                <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                  <h3 className="text-sm font-semibold text-textH">
+                    Efeitos estruturados
+                  </h3>
+                  <div className="mt-2 grid gap-2">
+                    {spell.effects.map((effect, index) => (
+                      <div
+                        key={index}
+                        className="rounded-lg border border-border bg-bg px-3 py-2 text-xs leading-5"
+                      >
+                        <span className="font-semibold text-textH">
+                          Efeito {index + 1}:
+                        </span>{" "}
+                        {formatEffect(effect)}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
             </div>
           </div>
         </div>,
@@ -207,14 +328,13 @@ export function SpellCard({
             </h3>
 
             <div className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1.5 text-xs leading-5 text-text">
-              <SpellMeta>
-                {spell.slotLevel === 0 ? "Truque" : `Nível ${spell.slotLevel}`}
-              </SpellMeta>
+              <SpellMeta>{formatSpellLevel(spell)}</SpellMeta>
               <SpellMeta>
                 {MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}
               </SpellMeta>
               <SpellMeta>{formatCastingTime(spell)}</SpellMeta>
               <SpellMeta>{formatRange(spell)}</SpellMeta>
+              <SpellMeta>{formatDuration(spell)}</SpellMeta>
               <SpellMeta className="font-medium text-textH">
                 {formatComponentsCompact(spell)}
               </SpellMeta>
@@ -228,13 +348,9 @@ export function SpellCard({
                 </SpellMeta>
               ) : null}
               {spell.concentration ? <SpellMeta>Concentração</SpellMeta> : null}
-              {alwaysPrepared ? (
-                <SpellMeta>Sempre disponível</SpellMeta>
-              ) : prepared ? (
-                <SpellMeta>Preparada</SpellMeta>
-              ) : (
-                <SpellMeta>Não preparada</SpellMeta>
-              )}
+              <SpellMeta>
+                {formatPreparationStatus(prepared, alwaysPrepared)}
+              </SpellMeta>
             </div>
           </div>
 
@@ -379,11 +495,22 @@ export function SpellCard({
   )
 }
 
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-bg px-3 py-2">
+      <div className="text-[10px] font-medium uppercase tracking-wide text-textMuted">
+        {label}
+      </div>
+      <div className="mt-1 break-words text-sm text-textH">{value}</div>
+    </div>
+  )
+}
+
 function SpellMeta({
   children,
   className = "",
 }: {
-  children: React.ReactNode
+  children: ReactNode
   className?: string
 }) {
   return (
@@ -398,6 +525,10 @@ function getSpellComponents(spell: Spell): Array<"V" | "S" | "M"> {
 
   const order: Array<"V" | "S" | "M"> = ["V", "S", "M"]
   return order.filter((component) => spell.components.includes(component))
+}
+
+function formatSpellLevel(spell: Spell): string {
+  return spell.slotLevel === 0 ? "Truque" : `${spell.slotLevel}º círculo`
 }
 
 function formatComponentsCompact(spell: Spell): string {
@@ -421,22 +552,93 @@ function formatCastingTime(spell: Spell): string {
       ? `Reação: ${castingTime.reactionWhen}`
       : "Reação"
   }
-  if (castingTime.value === 1) {
-    return `1 ${CASTING_TIME_NAMES[castingTime.type]}`
-  }
-  return `${castingTime.value} ${CASTING_TIME_NAMES[castingTime.type]}s`
+  const label = CASTING_TIME_NAMES[castingTime.type] ?? castingTime.type
+  return castingTime.value === 1
+    ? `1 ${label}`
+    : `${castingTime.value} ${label}s`
 }
 
 function formatRange(spell: Spell): string {
   const { range } = spell
   if (range.origin === "self") return "Pessoal"
   if (range.origin === "touch") return "Toque"
-  const base = `${range.distance} m`
+
+  const originLabels: Record<string, string> = {
+    point: "Ponto",
+    target: "Alvo",
+    ally: "Aliado",
+    enemy: "Inimigo",
+  }
+  const origin = originLabels[range.origin] ?? range.origin
+  const base = range.distance > 0 ? `${origin}, ${range.distance} m` : origin
   if (!range.area) return base
-  return `${base}, ${formatAreaShape(range.area.shape)} de ${range.area.size} m`
+  return `${base}; ${formatAreaShape(range.area.shape)} de ${range.area.size} m`
 }
 
-function formatAreaShape(shape: NonNullable<Spell["range"]["area"]>["shape"]) {
+function formatDuration(spell: Spell): string {
+  const { value, unit } = spell.duration
+  const labels: Record<string, [string, string]> = {
+    instantaneous: ["Instantânea", "Instantânea"],
+    turn: ["turno", "turnos"],
+    minute: ["minuto", "minutos"],
+    hour: ["hora", "horas"],
+    day: ["dia", "dias"],
+    "short rest": ["Até o próximo descanso curto", "Até o próximo descanso curto"],
+    "long rest": ["Até o próximo descanso longo", "Até o próximo descanso longo"],
+    permanent: ["Permanente", "Permanente"],
+  }
+  const [singular, plural] = labels[unit] ?? [unit, unit]
+
+  if (
+    unit === "instantaneous" ||
+    unit === "short rest" ||
+    unit === "long rest" ||
+    unit === "permanent"
+  ) {
+    return singular
+  }
+  if (value <= 0) return singular
+  return `${value} ${value === 1 ? singular : plural}`
+}
+
+function formatTargeting(spell: Spell): string {
+  const target = spell.targeting
+  const selfSuffix = target.targetsSelf ? "; pode afetar o conjurador" : ""
+
+  if (target.kind === "self") return "Pessoal"
+  if (target.kind === "single-creature") return `Uma criatura${selfSuffix}`
+  if (target.kind === "multiple-creatures") {
+    const count = target.targetCount
+      ? `${target.targetCount} criaturas`
+      : "Múltiplas criaturas"
+    return `${count}${
+      target.canTargetMoreAtHigherLevels
+        ? "; mais alvos em níveis superiores"
+        : ""
+    }${selfSuffix}`
+  }
+  if (target.kind === "area") return formatArea(spell)
+  if (target.kind === "object") return "Objeto"
+  return "Especial"
+}
+
+function formatArea(spell: Spell): string {
+  const area = spell.range.area
+  if (area) return `${formatAreaShape(area.shape)} de ${area.size} m`
+
+  if (spell.targeting.affectsArea) {
+    if (spell.targeting.areaShape && spell.targeting.areaSize) {
+      return `${formatAreaShape(spell.targeting.areaShape)} de ${
+        spell.targeting.areaSize
+      } m`
+    }
+    return "Área especial"
+  }
+
+  return "Não se aplica"
+}
+
+function formatAreaShape(shape: "circle" | "square" | "cone" | "line") {
   const names = {
     circle: "círculo",
     square: "quadrado",
@@ -446,26 +648,68 @@ function formatAreaShape(shape: NonNullable<Spell["range"]["area"]>["shape"]) {
   return names[shape] ?? shape
 }
 
+function formatAttackAndSave(spell: Spell): string {
+  const parts: string[] = []
+  if (spell.targeting.hasAttackRoll) parts.push("Jogada de ataque mágico")
+  if (spell.targeting.hasSavingThrow) {
+    parts.push(
+      spell.targeting.savingThrowAttribute
+        ? `Teste de resistência de ${spell.targeting.savingThrowAttribute.toUpperCase()}`
+        : "Teste de resistência",
+    )
+  }
+  return parts.length ? parts.join("; ") : "Nenhum"
+}
+
+function formatRollModes(spell: Spell): string {
+  if (!spell.rollMode.length) return "Nenhuma"
+  const labels = {
+    attack: "Ataque",
+    save: "Resistência",
+    skill: "Perícia",
+  }
+  return spell.rollMode.map((mode) => labels[mode] ?? mode).join(", ")
+}
+
+function formatDamageDice(spell: Spell): string {
+  if (!spell.damageDice) return "Não informado"
+  return `${spell.damageDice.quantity}${spell.damageDice.sides}`
+}
+
+function formatClasses(spell: Spell): string {
+  if (!spell.classes.length) return "Nenhuma classe padrão"
+  return spell.classes
+    .map((className) => CLASS_NAMES[className] ?? className)
+    .join(", ")
+}
+
+function formatPreparationStatus(
+  prepared: boolean,
+  alwaysPrepared: boolean,
+): string {
+  if (alwaysPrepared) return "Sempre disponível"
+  return prepared ? "Preparada" : "Não preparada"
+}
+
 function formatSpellOrigin(source?: SpellSource): string {
   if (!source) return "Origem não definida"
   if (source.type === "class") {
-    return `Origem: ${CLASS_NAMES[source.name as ClassName] ?? source.name}`
+    const className = CLASS_NAMES[source.name as ClassName] ?? source.name
+    return source.extendedList
+      ? `Classe: ${className} — lista expandida`
+      : `Classe: ${className}`
   }
   if (source.type === "feat") {
-    return source.name ? `Origem: Talento (${source.name})` : "Origem: Talento"
+    return source.name ? `Talento: ${source.name}` : "Talento"
   }
   if (source.type === "ability") {
-    return source.name
-      ? `Origem: Habilidade (${source.name})`
-      : "Origem: Habilidade"
+    return source.name ? `Habilidade: ${source.name}` : "Habilidade"
   }
   if (source.type === "race") {
-    return source.name ? `Origem: Raça (${source.name})` : "Origem: Raça"
+    return source.name ? `Raça: ${source.name}` : "Raça"
   }
   if (source.type === "equipment") {
-    return source.name
-      ? `Origem: Equipamento (${source.name})`
-      : "Origem: Equipamento"
+    return source.name ? `Equipamento: ${source.name}` : "Equipamento"
   }
   return "Origem não definida"
 }
@@ -475,10 +719,65 @@ function formatAreaTiles(spell: Spell): string | null {
   if (!area) return null
   const sizeInTiles = area.size / 1.5
   if (area.shape === "circle") {
-    return `Ocupa aproximadamente ${Math.round(Math.PI * sizeInTiles * sizeInTiles)} quadrados de 1,5 m`
+    return `Aproximadamente ${Math.round(
+      Math.PI * sizeInTiles * sizeInTiles,
+    )} quadrados de 1,5 m`
   }
   if (area.shape === "square") {
-    return `Ocupa aproximadamente ${Math.round(sizeInTiles * sizeInTiles)} quadrados de 1,5 m`
+    return `Aproximadamente ${Math.round(
+      sizeInTiles * sizeInTiles,
+    )} quadrados de 1,5 m`
   }
-  return null
+  if (area.shape === "line") {
+    return `Linha de aproximadamente ${Math.max(
+      1,
+      Math.round(sizeInTiles),
+    )} quadrados`
+  }
+  return `Cone de ${area.size} m`
+}
+
+function formatEffect(effect: Spell["effects"][number]): string {
+  const data = effect as unknown as Record<string, unknown>
+  const parts: string[] = []
+
+  if (typeof data.target === "string" && data.target.trim()) {
+    parts.push(`alvo: ${data.target}`)
+  }
+  const rollDice = formatUnknownDie(data.rollDice)
+  if (rollDice) parts.push(`rolagem: ${rollDice}`)
+  if (Array.isArray(data.rollAppliesTo) && data.rollAppliesTo.length) {
+    parts.push(`aplica-se a: ${data.rollAppliesTo.map(String).join(", ")}`)
+  }
+  if (typeof data.attribute === "string") {
+    parts.push(`atributo: ${data.attribute.toUpperCase()}`)
+  }
+  if (typeof data.condition === "string") {
+    parts.push(`condição: ${data.condition}`)
+  }
+  if (typeof data.value === "number") {
+    const operation =
+      typeof data.operation === "string" ? ` (${data.operation})` : ""
+    parts.push(`valor: ${data.value}${operation}`)
+  }
+  if (typeof data.when === "string") parts.push(`quando: ${data.when}`)
+  const damageDice = formatUnknownDie(data.damageDice)
+  if (damageDice) parts.push(`dano: ${damageDice}`)
+  if (typeof data.directionText === "string" && data.directionText.trim()) {
+    parts.push(`movimento: ${data.directionText}`)
+  }
+  if (typeof data.type === "string") parts.push(`tipo: ${data.type}`)
+
+  return parts.length ? parts.join("; ") : "Dados adicionais não informados."
+}
+
+function formatUnknownDie(value: unknown): string | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined
+  }
+  const die = value as Record<string, unknown>
+  if (typeof die.quantity !== "number" || typeof die.sides !== "string") {
+    return undefined
+  }
+  return `${die.quantity}${die.sides}`
 }
