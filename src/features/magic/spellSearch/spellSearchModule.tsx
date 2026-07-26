@@ -50,6 +50,7 @@ export function SpellSearchModule({ onEditSpell }: Props) {
   const [spellToView, setSpellToView] = useState<Spell | null>(null)
   const [selectedCharacterId, setSelectedCharacterId] = useState("")
   const [selectedSource, setSelectedSource] = useState<SpellAddSource>("")
+  const [extendedList, setExtendedList] = useState(false)
 
 
 
@@ -109,10 +110,11 @@ export function SpellSearchModule({ onEditSpell }: Props) {
     concentrationFilter,
   ])
 
- function openAddSpellModal(spell: Spell) {
+  function openAddSpellModal(spell: Spell) {
     setSpellToAdd(spell)
     setSelectedCharacterId(activeCharacter?.get("id") ?? "")
     setSelectedSource("")
+    setExtendedList(false)
     setAddSpellError("")
   }
 
@@ -120,8 +122,9 @@ export function SpellSearchModule({ onEditSpell }: Props) {
     setSpellToAdd(null)
     setSelectedCharacterId("")
     setSelectedSource("")
+    setExtendedList(false)
     setAddSpellError("")
-  } 
+  }
 
   function addSpellToSelectedCharacter() {
     if (!spellToAdd || !selectedCharacterId || !selectedSource) return
@@ -134,9 +137,9 @@ export function SpellSearchModule({ onEditSpell }: Props) {
 
     const className = getSelectedClassName(selectedSource)
 
-    if (className && !canClassUseSpell(spellToAdd, className)) {
+    if (className && !canClassUseSpell(spellToAdd, className) && !extendedList) {
       setAddSpellError(
-        `${CLASS_NAMES[className]} não pode aprender ${spellToAdd.displayName || spellToAdd.name}.`,
+        `${spellToAdd.displayName || spellToAdd.name} não pertence à lista de ${CLASS_NAMES[className]}. Ative “Lista expandida” para adicioná-la a essa classe.`,
       )
       return
     }
@@ -163,7 +166,7 @@ export function SpellSearchModule({ onEditSpell }: Props) {
       const usesPreparation = classUsesPreparation(classData)
 
       return character.addSpell({
-        source: getSpellSource(selectedSource, character),
+        source: getSpellSource(selectedSource, character, extendedList),
         spells: {
           id: spellToAdd.index,
           prepared: !usesPreparation,
@@ -179,6 +182,12 @@ export function SpellSearchModule({ onEditSpell }: Props) {
 
   const selectedCharacter = characterList.find(
     (character) => character.get("id") === selectedCharacterId,
+  )
+  const selectedClassName = getSelectedClassName(selectedSource)
+  const requiresExtendedList = Boolean(
+    spellToAdd &&
+      selectedClassName &&
+      !canClassUseSpell(spellToAdd, selectedClassName),
   )
 
   return (
@@ -430,6 +439,7 @@ export function SpellSearchModule({ onEditSpell }: Props) {
                   onChange={(e) => {
                     setSelectedCharacterId(e.target.value)
                     setSelectedSource("")
+                    setExtendedList(false)
                     setAddSpellError("")
                   }}
                 >
@@ -454,6 +464,7 @@ export function SpellSearchModule({ onEditSpell }: Props) {
                   value={selectedSource}
                   onChange={(e) => {
                     setSelectedSource(e.target.value as SpellAddSource)
+                    setExtendedList(false)
                     setAddSpellError("")
                   }}
                   disabled={!selectedCharacter}
@@ -475,6 +486,34 @@ export function SpellSearchModule({ onEditSpell }: Props) {
                 </select>
               </label>
 
+              {selectedClassName ? (
+                <label className="flex items-start gap-3 rounded-xl border border-border bg-bg-subtle px-3 py-3 text-sm text-text">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 accent-accent"
+                    checked={extendedList}
+                    onChange={(event) => {
+                      setExtendedList(event.target.checked)
+                      setAddSpellError("")
+                    }}
+                  />
+                  <span className="grid gap-1">
+                    <span className="font-semibold text-textH">
+                      Lista expandida
+                    </span>
+                    <span className="text-xs leading-5 text-textMuted">
+                      Adiciona a magia à lista da classe selecionada mesmo quando ela pertence originalmente a outra classe. Ela continua usando o atributo, preparo e limites dessa classe.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
+
+              {requiresExtendedList && !extendedList ? (
+                <div className="rounded-xl border border-accentBorder bg-accentBg px-3 py-2 text-xs leading-5 text-textH">
+                  Esta magia não faz parte da lista normal de {selectedClassName ? CLASS_NAMES[selectedClassName] : "esta classe"}. Ative “Lista expandida” para adicioná-la.
+                </div>
+              ) : null}
+
               {addSpellError ? (
                 <div className="rounded-xl border border-accentBorder bg-bg px-3 py-2 text-xs text-accent">
                   {addSpellError}
@@ -488,7 +527,11 @@ export function SpellSearchModule({ onEditSpell }: Props) {
 
                 <Button
                   onClick={addSpellToSelectedCharacter}
-                  disabled={!selectedCharacterId || !selectedSource}
+                  disabled={
+                    !selectedCharacterId ||
+                    !selectedSource ||
+                    (requiresExtendedList && !extendedList)
+                  }
                 >
                   Adicionar
                 </Button>
@@ -772,6 +815,7 @@ function getSelectedClassName(source: SpellAddSource): ClassName | undefined {
 function getSpellSource(
   source: SpellAddSource,
   character: CharacterTemplate,
+  extendedList: boolean,
 ): SpellSource {
   const className = getSelectedClassName(source)
 
@@ -785,6 +829,7 @@ function getSpellSource(
       name: className,
       sourceId: className,
       attribute: classData?.castingAttribute ?? "cha",
+      ...(extendedList ? { extendedList: true } : {}),
     }
   }
 
