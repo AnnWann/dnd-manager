@@ -6,4 +6,5 @@ export type SpellSource = {
   name: string
   attribute: Attribute
   sourceId: string
+  extendedList?: boolean
 }
