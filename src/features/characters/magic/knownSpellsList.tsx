@@ -17,6 +17,7 @@ import type {
   CharacterClassInterface,
   ClassName,
 } from "../../../models/sheet/Class"
+import { CompactSpellCard } from "./compactSpellCard"
 import { SpellCard } from "./spellCard"
 
 type Props = {
@@ -30,6 +31,7 @@ type Props = {
 type PreparedFilter = "all" | "prepared" | "not-prepared"
 type SourceTypeFilter = "all" | SpellSource["type"]
 type SpecificSourceFilter = "all" | string
+type ListViewMode = "detailed" | "compact"
 
 type SpellLimitInfo = {
   className: ClassName
@@ -70,6 +72,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     useState<SourceTypeFilter>("all")
   const [specificSourceFilter, setSpecificSourceFilter] =
     useState<SpecificSourceFilter>("all")
+  const [viewMode, setViewMode] = useState<ListViewMode>("detailed")
   const classes = character.get("sheet").classes ?? []
 
   const regularSpells: DisplaySpellEntry[] = []
@@ -210,6 +213,16 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     )
   }
 
+  const sortedSpells = filteredSpells.toSorted((left, right) => {
+    const levelDifference = left.spell.slotLevel - right.spell.slotLevel
+    if (levelDifference !== 0) return levelDifference
+
+    return (left.spell.displayName || left.spell.name).localeCompare(
+      right.spell.displayName || right.spell.name,
+      "pt-BR",
+    )
+  })
+
   return (
     <Card>
       <CardHeader>
@@ -238,7 +251,21 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
           </div>
         ) : null}
 
-        <div className="mt-3 grid gap-2 md:grid-cols-3">
+        <div className="mt-3 grid gap-2 md:grid-cols-4">
+          <label className="grid gap-1 text-[11px] text-textMuted">
+            Visualização
+            <select
+              className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
+              value={viewMode}
+              onChange={(event) =>
+                setViewMode(event.target.value as ListViewMode)
+              }
+            >
+              <option value="detailed">Completa</option>
+              <option value="compact">Simplificada</option>
+            </select>
+          </label>
+
           <label className="grid gap-1 text-[11px] text-textMuted">
             Disponibilidade
             <select
@@ -314,22 +341,31 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       </CardHeader>
 
       <CardContent>
-        {filteredSpells.length === 0 ? (
+        {sortedSpells.length === 0 ? (
           <p className="text-xs text-text">Nenhuma magia encontrada.</p>
         ) : (
-          <div className="grid gap-3">
-            {filteredSpells
-              .toSorted((left, right) => {
-                const levelDifference =
-                  left.spell.slotLevel - right.spell.slotLevel
-                if (levelDifference !== 0) return levelDifference
+          <div className={viewMode === "compact" ? "grid gap-2" : "grid gap-3"}>
+            {sortedSpells.map((entry) => {
+              const castingDescriptions = getSpellCastingDescriptions(
+                character,
+                entry.spell.index,
+              )
 
-                return (left.spell.displayName || left.spell.name).localeCompare(
-                  right.spell.displayName || right.spell.name,
-                  "pt-BR",
+              if (viewMode === "compact") {
+                return (
+                  <CompactSpellCard
+                    key={entry.key}
+                    spell={entry.spell}
+                    source={entry.source}
+                    prepared={entry.prepared}
+                    alwaysPrepared={entry.alwaysPrepared}
+                    accessLabel={entry.accessLabel}
+                    castingDescriptions={castingDescriptions}
+                  />
                 )
-              })
-              .map((entry) => (
+              }
+
+              return (
                 <SpellCard
                   key={entry.key}
                   spell={entry.spell}
@@ -337,10 +373,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
                   source={entry.source}
                   alwaysPrepared={entry.alwaysPrepared}
                   accessLabel={entry.accessLabel}
-                  castingDescriptions={getSpellCastingDescriptions(
-                    character,
-                    entry.spell.index,
-                  )}
+                  castingDescriptions={castingDescriptions}
                   onAddCastingDescription={() =>
                     addCastingDescription(entry.spell.index)
                   }
@@ -368,7 +401,8 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
                       : undefined
                   }
                 />
-              ))}
+              )
+            })}
           </div>
         )}
       </CardContent>
