@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { CLASS_NAMES } from "../../../contexts/consts"
@@ -33,6 +33,13 @@ type SourceTypeFilter = "all" | SpellSource["type"]
 type SpecificSourceFilter = "all" | string
 type ListViewMode = "detailed" | "compact"
 
+type SpellListPreferences = {
+  preparedFilter: PreparedFilter
+  sourceTypeFilter: SourceTypeFilter
+  specificSourceFilter: SpecificSourceFilter
+  viewMode: ListViewMode
+}
+
 type SpellLimitInfo = {
   className: ClassName
   label: string
@@ -64,16 +71,30 @@ const SOURCE_TYPE_ORDER: SpellSource["type"][] = [
   "equipment",
 ]
 
+const DEFAULT_SPELL_LIST_PREFERENCES: SpellListPreferences = {
+  preparedFilter: "all",
+  sourceTypeFilter: "all",
+  specificSourceFilter: "all",
+  viewMode: "detailed",
+}
+
 export function KnownSpellsList({ character, updateCharacter }: Props) {
   const { getSpellByIndex } = useMagicContext()
-  const [preparedFilter, setPreparedFilter] =
-    useState<PreparedFilter>("all")
-  const [sourceTypeFilter, setSourceTypeFilter] =
-    useState<SourceTypeFilter>("all")
-  const [specificSourceFilter, setSpecificSourceFilter] =
-    useState<SpecificSourceFilter>("all")
-  const [viewMode, setViewMode] = useState<ListViewMode>("detailed")
+  const characterId = character.get("id")
+  const [preferences, setPreferences] = useState<SpellListPreferences>(() =>
+    loadSpellListPreferences(characterId),
+  )
+  const {
+    preparedFilter,
+    sourceTypeFilter,
+    specificSourceFilter,
+    viewMode,
+  } = preferences
   const classes = character.get("sheet").classes ?? []
+
+  useEffect(() => {
+    saveSpellListPreferences(characterId, preferences)
+  }, [characterId, preferences])
 
   const regularSpells: DisplaySpellEntry[] = []
 
@@ -129,10 +150,19 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
   ]
   const spellLimits = getSpellClassLimits(character, regularSpells)
   const sourceTypeOptions = getAvailableSourceTypes(spells)
+  const effectiveSourceTypeFilter =
+    sourceTypeFilter === "all" || sourceTypeOptions.includes(sourceTypeFilter)
+      ? sourceTypeFilter
+      : "all"
   const specificSourceOptions = getSpecificSourceOptions(
     spells,
-    sourceTypeFilter,
+    effectiveSourceTypeFilter,
   )
+  const effectiveSpecificSourceFilter =
+    specificSourceFilter === "all" ||
+    specificSourceOptions.some((option) => option.key === specificSourceFilter)
+      ? specificSourceFilter
+      : "all"
 
   const filteredSpells = spells.filter(({ prepared, source }) => {
     const matchesPrepared =
@@ -141,11 +171,12 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       (preparedFilter === "not-prepared" && !prepared)
 
     const matchesSourceType =
-      sourceTypeFilter === "all" || source.type === sourceTypeFilter
+      effectiveSourceTypeFilter === "all" ||
+      source.type === effectiveSourceTypeFilter
 
     const matchesSpecificSource =
-      specificSourceFilter === "all" ||
-      getSourceKey(source) === specificSourceFilter
+      effectiveSpecificSourceFilter === "all" ||
+      getSourceKey(source) === effectiveSpecificSourceFilter
 
     return matchesPrepared && matchesSourceType && matchesSpecificSource
   })
@@ -178,13 +209,13 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     if (entry.alwaysPrepared) return
     if (!entry.prepared && !canPrepareSpell(entry)) return
 
-    updateCharacter(character.get("id"), (current) =>
+    updateCharacter(characterId, (current) =>
       current.setSpellPrepared(entry.spell.index, !entry.prepared),
     )
   }
 
   function addCastingDescription(spellIndex: string) {
-    updateCharacter(character.get("id"), (current) =>
+    updateCharacter(characterId, (current) =>
       addSpellCastingDescription(current, spellIndex),
     )
   }
@@ -194,7 +225,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     descriptionIndex: number,
     description: string,
   ) {
-    updateCharacter(character.get("id"), (current) =>
+    updateCharacter(characterId, (current) =>
       updateSpellCastingDescription(
         current,
         spellIndex,
@@ -208,7 +239,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     spellIndex: string,
     descriptionIndex: number,
   ) {
-    updateCharacter(character.get("id"), (current) =>
+    updateCharacter(characterId, (current) =>
       removeSpellCastingDescription(current, spellIndex, descriptionIndex),
     )
   }
@@ -258,7 +289,10 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
               className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
               value={viewMode}
               onChange={(event) =>
-                setViewMode(event.target.value as ListViewMode)
+                setPreferences((current) => ({
+                  ...current,
+                  viewMode: event.target.value as ListViewMode,
+                }))
               }
             >
               <option value="detailed">Completa</option>
@@ -272,7 +306,10 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
               className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
               value={preparedFilter}
               onChange={(event) =>
-                setPreparedFilter(event.target.value as PreparedFilter)
+                setPreferences((current) => ({
+                  ...current,
+                  preparedFilter: event.target.value as PreparedFilter,
+                }))
               }
             >
               <option value="all">Todas as magias</option>
@@ -285,11 +322,14 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
             Forma de aquisição
             <select
               className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
-              value={sourceTypeFilter}
-              onChange={(event) => {
-                setSourceTypeFilter(event.target.value as SourceTypeFilter)
-                setSpecificSourceFilter("all")
-              }}
+              value={effectiveSourceTypeFilter}
+              onChange={(event) =>
+                setPreferences((current) => ({
+                  ...current,
+                  sourceTypeFilter: event.target.value as SourceTypeFilter,
+                  specificSourceFilter: "all",
+                }))
+              }
             >
               <option value="all">Todas as formas</option>
               {sourceTypeOptions.map((type) => (
@@ -304,10 +344,13 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
             Origem específica
             <select
               className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent disabled:opacity-60"
-              value={specificSourceFilter}
+              value={effectiveSpecificSourceFilter}
               disabled={specificSourceOptions.length === 0}
               onChange={(event) =>
-                setSpecificSourceFilter(event.target.value)
+                setPreferences((current) => ({
+                  ...current,
+                  specificSourceFilter: event.target.value,
+                }))
               }
             >
               <option value="all">Todas as origens específicas</option>
@@ -395,7 +438,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
                   onRemove={
                     entry.removable
                       ? () =>
-                          updateCharacter(character.get("id"), (current) =>
+                          updateCharacter(characterId, (current) =>
                             current.removeSpell(entry.spell.index),
                           )
                       : undefined
@@ -408,6 +451,70 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       </CardContent>
     </Card>
   )
+}
+
+function loadSpellListPreferences(characterId: string): SpellListPreferences {
+  if (typeof window === "undefined") return DEFAULT_SPELL_LIST_PREFERENCES
+
+  try {
+    const raw = window.localStorage.getItem(getSpellListStorageKey(characterId))
+    if (!raw) return DEFAULT_SPELL_LIST_PREFERENCES
+
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+
+    return {
+      preparedFilter: isPreparedFilter(parsed.preparedFilter)
+        ? parsed.preparedFilter
+        : DEFAULT_SPELL_LIST_PREFERENCES.preparedFilter,
+      sourceTypeFilter: isSourceTypeFilter(parsed.sourceTypeFilter)
+        ? parsed.sourceTypeFilter
+        : DEFAULT_SPELL_LIST_PREFERENCES.sourceTypeFilter,
+      specificSourceFilter:
+        typeof parsed.specificSourceFilter === "string"
+          ? parsed.specificSourceFilter
+          : DEFAULT_SPELL_LIST_PREFERENCES.specificSourceFilter,
+      viewMode: isListViewMode(parsed.viewMode)
+        ? parsed.viewMode
+        : DEFAULT_SPELL_LIST_PREFERENCES.viewMode,
+    }
+  } catch {
+    return DEFAULT_SPELL_LIST_PREFERENCES
+  }
+}
+
+function saveSpellListPreferences(
+  characterId: string,
+  preferences: SpellListPreferences,
+) {
+  if (typeof window === "undefined") return
+
+  try {
+    window.localStorage.setItem(
+      getSpellListStorageKey(characterId),
+      JSON.stringify(preferences),
+    )
+  } catch {
+    // Storage can be unavailable in private or restricted browser contexts.
+  }
+}
+
+function getSpellListStorageKey(characterId: string): string {
+  return `dnd-manager:character-spell-list:${characterId}`
+}
+
+function isPreparedFilter(value: unknown): value is PreparedFilter {
+  return value === "all" || value === "prepared" || value === "not-prepared"
+}
+
+function isSourceTypeFilter(value: unknown): value is SourceTypeFilter {
+  return (
+    value === "all" ||
+    SOURCE_TYPE_ORDER.includes(value as SpellSource["type"])
+  )
+}
+
+function isListViewMode(value: unknown): value is ListViewMode {
+  return value === "detailed" || value === "compact"
 }
 
 function getAvailableSourceTypes(
