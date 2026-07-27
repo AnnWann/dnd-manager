@@ -1,6 +1,12 @@
 // features/characters/spells/CharacterSpellsModule.tsx
 
-import { useMemo, useState } from "react"
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { Card, CardHeader } from "../../../components/ui/Card"
@@ -22,6 +28,18 @@ type Props = {
   ) => void
 }
 
+const SPELL_LIST_CONTROL_KEYS = {
+  "Visualização": "viewMode",
+  "Disponibilidade": "preparedFilter",
+  "Forma de aquisição": "sourceTypeFilter",
+  "Origem específica": "specificSourceFilter",
+} as const
+
+type SpellListControlKey =
+  (typeof SPELL_LIST_CONTROL_KEYS)[keyof typeof SPELL_LIST_CONTROL_KEYS]
+
+type PersistedSpellListControls = Partial<Record<SpellListControlKey, string>>
+
 export function CharacterMagicTab({
   character,
   updateCharacter,
@@ -29,6 +47,8 @@ export function CharacterMagicTab({
   const { visibleCharacters } = useCharacterContext()
   const { getSpellByIndex } = useMagicContext()
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle")
+  const spellListContainerRef = useRef<HTMLDivElement | null>(null)
+  const characterId = character.get("id")
   const sorcererLevel = getSorcererLevel(character)
   const hasSorcererResources = sorcererLevel >= 2
   const spellListText = useMemo(
@@ -36,6 +56,8 @@ export function CharacterMagicTab({
     [getSpellByIndex, visibleCharacters],
   )
   const canCopySpellList = spellListText.trim().length > 0
+
+  useSpellListFilterPersistence(spellListContainerRef, characterId)
 
   async function copyAllSpellLists() {
     if (!canCopySpellList) return
@@ -104,13 +126,134 @@ export function CharacterMagicTab({
           updateCharacter={updateCharacter}
         />
 
-        <KnownSpellsList
-          character={character}
-          updateCharacter={updateCharacter}
-        />
+        <div ref={spellListContainerRef}>
+          <KnownSpellsList
+            character={character}
+            updateCharacter={updateCharacter}
+          />
+        </div>
       </Card>
     </div>
   )
+}
+
+function useSpellListFilterPersistence(
+  containerRef: RefObject<HTMLDivElement | null>,
+  characterId: string,
+) {
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || typeof window === "undefined") return
+
+    const storageKey = `dnd-manager:character-spell-list:${characterId}`
+    let restoring = false
+    let restoreFrame = 0
+    let specificSourceFrame = 0
+
+    function readPersistedControls(): PersistedSpellListControls {
+      try {
+        const raw = window.localStorage.getItem(storageKey)
+        if (!raw) return {}
+
+        const parsed = JSON.parse(raw)
+        return parsed && typeof parsed === "object"
+          ? (parsed as PersistedSpellListControls)
+          : {}
+      } catch {
+        return {}
+      }
+    }
+
+    function getControlKey(select: HTMLSelectElement): SpellListControlKey | undefined {
+      const label = select.closest("label")
+      const labelText = label?.textContent?.trim() ?? ""
+
+      for (const [labelPrefix, key] of Object.entries(SPELL_LIST_CONTROL_KEYS)) {
+        if (labelText.startsWith(labelPrefix)) return key
+      }
+
+      return undefined
+    }
+
+    function findControl(key: SpellListControlKey): HTMLSelectElement | undefined {
+      return Array.from(container.querySelectorAll<HTMLSelectElement>("select")).find(
+        (select) => getControlKey(select) === key,
+      )
+    }
+
+    function applyValue(key: SpellListControlKey, value: string | undefined) {
+      if (!value) return
+
+      const select = findControl(key)
+      if (!select || select.value === value) return
+
+      const hasOption = Array.from(select.options).some(
+        (option) => option.value === value,
+      )
+      if (!hasOption) return
+
+      select.value = value
+      select.dispatchEvent(new Event("change", { bubbles: true }))
+    }
+
+    function persistCurrentControls() {
+      const next: PersistedSpellListControls = {}
+
+      for (const select of container.querySelectorAll<HTMLSelectElement>("select")) {
+        const key = getControlKey(select)
+        if (key) next[key] = select.value
+      }
+
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(next))
+      } catch {
+        // Storage can be unavailable in private or restricted browser contexts.
+      }
+    }
+
+    function restoreControls() {
+      if (restoring) return
+      restoring = true
+
+      const persisted = readPersistedControls()
+      applyValue("viewMode", persisted.viewMode)
+      applyValue("preparedFilter", persisted.preparedFilter)
+      applyValue("sourceTypeFilter", persisted.sourceTypeFilter)
+
+      window.cancelAnimationFrame(specificSourceFrame)
+      specificSourceFrame = window.requestAnimationFrame(() => {
+        applyValue("specificSourceFilter", persisted.specificSourceFilter)
+        restoring = false
+      })
+    }
+
+    function scheduleRestore() {
+      window.cancelAnimationFrame(restoreFrame)
+      restoreFrame = window.requestAnimationFrame(restoreControls)
+    }
+
+    function handleChange(event: Event) {
+      if (restoring) return
+      const target = event.target
+      if (!(target instanceof HTMLSelectElement) || !container.contains(target)) {
+        return
+      }
+      if (!getControlKey(target)) return
+      persistCurrentControls()
+    }
+
+    const observer = new MutationObserver(scheduleRestore)
+    observer.observe(container, { childList: true, subtree: true })
+    container.addEventListener("change", handleChange)
+    scheduleRestore()
+
+    return () => {
+      observer.disconnect()
+      container.removeEventListener("change", handleChange)
+      window.cancelAnimationFrame(restoreFrame)
+      window.cancelAnimationFrame(specificSourceFrame)
+    }
+  }, [characterId, containerRef])
 }
 
 function buildAllCharacterSpellList(
