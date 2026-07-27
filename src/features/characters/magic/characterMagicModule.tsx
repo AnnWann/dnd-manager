@@ -38,7 +38,14 @@ const SPELL_LIST_CONTROL_KEYS = {
 type SpellListControlKey =
   (typeof SPELL_LIST_CONTROL_KEYS)[keyof typeof SPELL_LIST_CONTROL_KEYS]
 
-type PersistedSpellListControls = Partial<Record<SpellListControlKey, string>>
+type PersistedSpellListControls = Record<SpellListControlKey, string>
+
+const DEFAULT_SPELL_LIST_CONTROLS: PersistedSpellListControls = {
+  viewMode: "detailed",
+  preparedFilter: "all",
+  sourceTypeFilter: "all",
+  specificSourceFilter: "all",
+}
 
 export function CharacterMagicTab({
   character,
@@ -146,30 +153,36 @@ function useSpellListFilterPersistence(
     if (!container || typeof window === "undefined") return
 
     const storageKey = `dnd-manager:character-spell-list:${characterId}`
-    let restoring = false
-    let restoreFrame = 0
+    let restoring = true
     let specificSourceFrame = 0
+    let persistFrame = 0
 
     function readPersistedControls(): PersistedSpellListControls {
       try {
         const raw = window.localStorage.getItem(storageKey)
-        if (!raw) return {}
+        if (!raw) return DEFAULT_SPELL_LIST_CONTROLS
 
         const parsed = JSON.parse(raw)
-        return parsed && typeof parsed === "object"
-          ? (parsed as PersistedSpellListControls)
-          : {}
+        if (!parsed || typeof parsed !== "object") {
+          return DEFAULT_SPELL_LIST_CONTROLS
+        }
+
+        return {
+          ...DEFAULT_SPELL_LIST_CONTROLS,
+          ...(parsed as Partial<PersistedSpellListControls>),
+        }
       } catch {
-        return {}
+        return DEFAULT_SPELL_LIST_CONTROLS
       }
     }
 
     function getControlKey(select: HTMLSelectElement): SpellListControlKey | undefined {
-      const label = select.closest("label")
-      const labelText = label?.textContent?.trim() ?? ""
+      const labelText = select.closest("label")?.textContent?.trim() ?? ""
 
       for (const [labelPrefix, key] of Object.entries(SPELL_LIST_CONTROL_KEYS)) {
-        if (labelText.startsWith(labelPrefix)) return key
+        if (labelText.startsWith(labelPrefix)) {
+          return key as SpellListControlKey
+        }
       }
 
       return undefined
@@ -181,23 +194,27 @@ function useSpellListFilterPersistence(
       )
     }
 
-    function applyValue(key: SpellListControlKey, value: string | undefined) {
-      if (!value) return
-
+    function applyValue(
+      key: SpellListControlKey,
+      desiredValue: string,
+      fallbackValue: string,
+    ) {
       const select = findControl(key)
-      if (!select || select.value === value) return
+      if (!select) return
 
-      const hasOption = Array.from(select.options).some(
-        (option) => option.value === value,
-      )
-      if (!hasOption) return
+      const optionValues = Array.from(select.options).map((option) => option.value)
+      const nextValue = optionValues.includes(desiredValue)
+        ? desiredValue
+        : fallbackValue
 
-      select.value = value
+      if (!optionValues.includes(nextValue) || select.value === nextValue) return
+
+      select.value = nextValue
       select.dispatchEvent(new Event("change", { bubbles: true }))
     }
 
     function persistCurrentControls() {
-      const next: PersistedSpellListControls = {}
+      const next = { ...DEFAULT_SPELL_LIST_CONTROLS }
 
       for (const select of container.querySelectorAll<HTMLSelectElement>("select")) {
         const key = getControlKey(select)
@@ -211,47 +228,39 @@ function useSpellListFilterPersistence(
       }
     }
 
-    function restoreControls() {
-      if (restoring) return
-      restoring = true
-
-      const persisted = readPersistedControls()
-      applyValue("viewMode", persisted.viewMode)
-      applyValue("preparedFilter", persisted.preparedFilter)
-      applyValue("sourceTypeFilter", persisted.sourceTypeFilter)
-
-      window.cancelAnimationFrame(specificSourceFrame)
-      specificSourceFrame = window.requestAnimationFrame(() => {
-        applyValue("specificSourceFilter", persisted.specificSourceFilter)
-        restoring = false
-      })
-    }
-
-    function scheduleRestore() {
-      window.cancelAnimationFrame(restoreFrame)
-      restoreFrame = window.requestAnimationFrame(restoreControls)
+    function schedulePersist() {
+      window.cancelAnimationFrame(persistFrame)
+      persistFrame = window.requestAnimationFrame(persistCurrentControls)
     }
 
     function handleChange(event: Event) {
       if (restoring) return
+
       const target = event.target
       if (!(target instanceof HTMLSelectElement) || !container.contains(target)) {
         return
       }
       if (!getControlKey(target)) return
-      persistCurrentControls()
+
+      schedulePersist()
     }
 
-    const observer = new MutationObserver(scheduleRestore)
-    observer.observe(container, { childList: true, subtree: true })
     container.addEventListener("change", handleChange)
-    scheduleRestore()
+
+    const persisted = readPersistedControls()
+    applyValue("viewMode", persisted.viewMode, "detailed")
+    applyValue("preparedFilter", persisted.preparedFilter, "all")
+    applyValue("sourceTypeFilter", persisted.sourceTypeFilter, "all")
+
+    specificSourceFrame = window.requestAnimationFrame(() => {
+      applyValue("specificSourceFilter", persisted.specificSourceFilter, "all")
+      restoring = false
+    })
 
     return () => {
-      observer.disconnect()
       container.removeEventListener("change", handleChange)
-      window.cancelAnimationFrame(restoreFrame)
       window.cancelAnimationFrame(specificSourceFrame)
+      window.cancelAnimationFrame(persistFrame)
     }
   }, [characterId, containerRef])
 }
