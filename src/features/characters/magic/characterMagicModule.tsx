@@ -105,6 +105,7 @@ export function CharacterMagicTab({
         />
 
         <KnownSpellsList
+          key={character.get("id")}
           character={character}
           updateCharacter={updateCharacter}
         />
