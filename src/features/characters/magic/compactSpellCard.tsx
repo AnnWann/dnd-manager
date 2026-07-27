@@ -1,10 +1,8 @@
 import { useRef } from "react"
 
 import { Button } from "../../../components/ui/Button"
-import { CLASS_NAMES } from "../../../contexts/consts"
 import type { Spell } from "../../../models/magic/spells/Spell"
 import type { SpellSource } from "../../../models/magic/spells/SpellSource"
-import type { ClassName } from "../../../models/sheet/Class"
 import { SpellCard } from "./spellCard"
 
 type Props = {
@@ -25,6 +23,7 @@ export function CompactSpellCard({
   castingDescriptions = [],
 }: Props) {
   const hiddenCardRef = useRef<HTMLDivElement | null>(null)
+  const spellName = spell.displayName || spell.name
 
   function openDetails() {
     hiddenCardRef.current
@@ -34,33 +33,32 @@ export function CompactSpellCard({
 
   return (
     <>
-      <article className="grid gap-3 rounded-xl border border-border bg-bg px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] sm:items-center">
-        <div className="min-w-0">
-          <div className="text-[10px] font-medium uppercase tracking-wide text-textMuted sm:hidden">
-            Nome
-          </div>
-          <div className="break-words text-sm font-semibold text-textH">
-            {spell.displayName || spell.name}
-          </div>
+      <article className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-bg px-3 py-2">
+        <div
+          className="min-w-0 flex-1 truncate text-sm font-semibold text-textH"
+          title={spellName}
+        >
+          {spellName}
         </div>
 
-        <div className="min-w-0">
-          <div className="text-[10px] font-medium uppercase tracking-wide text-textMuted sm:hidden">
-            Nível
-          </div>
-          <div className="text-sm text-text">{formatSpellLevel(spell)}</div>
+        <span className="shrink-0 text-xs text-textMuted" aria-hidden="true">
+          —
+        </span>
+
+        <div className="shrink-0 whitespace-nowrap text-xs text-text">
+          {formatSpellLevel(spell)}
         </div>
 
-        <div className="min-w-0">
-          <div className="text-[10px] font-medium uppercase tracking-wide text-textMuted sm:hidden">
-            Origem
-          </div>
-          <div className="break-words text-sm text-text">
-            {formatSpellOrigin(source)}
-          </div>
-        </div>
+        <span className="shrink-0 text-xs text-textMuted" aria-hidden="true">
+          —
+        </span>
 
-        <Button size="sm" variant="secondary" onClick={openDetails}>
+        <Button
+          className="shrink-0"
+          size="sm"
+          variant="secondary"
+          onClick={openDetails}
+        >
           Visualizar
         </Button>
       </article>
@@ -80,28 +78,5 @@ export function CompactSpellCard({
 }
 
 function formatSpellLevel(spell: Spell): string {
-  return spell.slotLevel === 0 ? "Truque" : `${spell.slotLevel}º círculo`
-}
-
-function formatSpellOrigin(source: SpellSource): string {
-  if (source.type === "class") {
-    const className = CLASS_NAMES[source.name as ClassName] ?? source.name
-    return source.extendedList
-      ? `Classe: ${className} (lista expandida)`
-      : `Classe: ${className}`
-  }
-
-  if (source.type === "ability") {
-    return `Habilidade: ${source.name || "Sem nome"}`
-  }
-
-  if (source.type === "feat") {
-    return `Talento: ${source.name || "Sem nome"}`
-  }
-
-  if (source.type === "race") {
-    return `Raça: ${source.name || "Sem nome"}`
-  }
-
-  return `Equipamento: ${source.name || "Sem nome"}`
+  return spell.slotLevel === 0 ? "Truque" : `Nível ${spell.slotLevel}`
 }
