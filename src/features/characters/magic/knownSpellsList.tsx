@@ -113,7 +113,12 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       classes,
     )
     const prepared = alwaysPrepared || entry.spells.prepared
-    const availableAsRitual = spell.ritual
+    const availableAsRitual = canCastAsRitual(
+      spell,
+      entry.source,
+      prepared,
+      classes,
+    )
 
     regularSpells.push({
       key: `known:${entry.source.type}:${entry.source.sourceId}:${spell.index}`,
@@ -294,8 +299,8 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
         </div>
         <div className="mt-1 text-xs text-text">
           Magias aprendidas por classes e concedidas por habilidades, talentos,
-          raça e equipamentos equipados. Magias de ritual também contam como
-          disponíveis e são identificadas separadamente.
+          raça e equipamentos equipados. Rituais preparados são identificados,
+          e magos também podem acessar rituais não preparados do grimório.
         </div>
 
         {spellLimits.length ? (
@@ -451,6 +456,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
                     source={entry.source}
                     prepared={entry.prepared}
                     alwaysPrepared={entry.alwaysPrepared}
+                    availableAsRitual={entry.availableAsRitual}
                     accessLabel={entry.accessLabel}
                     castingDescriptions={castingDescriptions}
                   />
@@ -500,6 +506,20 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       </CardContent>
     </Card>
   )
+}
+
+function canCastAsRitual(
+  spell: Spell,
+  source: SpellSource,
+  prepared: boolean,
+  classes: CharacterClassInterface[],
+): boolean {
+  if (!spell.ritual) return false
+  if (prepared) return true
+  if (source.type !== "class" || source.name !== "wizard") return false
+
+  const wizardClass = classes.find((entry) => entry.className === "wizard")
+  return wizardClass?.knownSpells?.mode === "spellbook"
 }
 
 function isSpellAvailable(entry: DisplaySpellEntry): boolean {

@@ -14,6 +14,7 @@ type Props = {
   source: SpellSource
   prepared: boolean
   alwaysPrepared: boolean
+  availableAsRitual: boolean
   accessLabel?: string
   castingDescriptions?: string[]
 }
@@ -23,6 +24,7 @@ export function CompactSpellCard({
   source,
   prepared,
   alwaysPrepared,
+  availableAsRitual,
   accessLabel,
   castingDescriptions = [],
 }: Props) {
@@ -87,7 +89,7 @@ export function CompactSpellCard({
           {formatSpellLevel(spell)}
         </div>
 
-        {spell.ritual ? (
+        {availableAsRitual ? (
           <span
             className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded border border-accentBorder bg-accentBg px-1 text-[10px] font-bold text-accent"
             title="Disponível como ritual"
