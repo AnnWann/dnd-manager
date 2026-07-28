@@ -29,6 +29,7 @@ import {
 } from "../features/creatures/creatureCompendiumIO"
 import {
   createCompendiumCreature,
+  creatureFeatureSearchText,
   type CompendiumCreature,
   type CreatureSide,
 } from "../models/creatures/CompendiumCreature"
@@ -51,14 +52,21 @@ export function CreaturesCompendiumView() {
     useState<CompendiumCreature>()
 
   const filteredCreatures = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase()
+    const normalizedQuery = normalizeSearchText(query)
 
     return creatures.filter((creature) => {
+      const featureText = creatureFeatureSearchText([
+        ...creature.traits,
+        ...creature.actions,
+        ...creature.bonusActions,
+        ...creature.reactions,
+        ...creature.legendaryActions,
+      ])
+      const searchableText = normalizeSearchText(
+        `${creature.name} ${creature.category} ${featureText}`,
+      )
       const matchesQuery =
-        !normalizedQuery ||
-        creature.name.toLocaleLowerCase().includes(normalizedQuery) ||
-        creature.category.toLocaleLowerCase().includes(normalizedQuery) ||
-        creature.actions.toLocaleLowerCase().includes(normalizedQuery)
+        !normalizedQuery || searchableText.includes(normalizedQuery)
       const matchesSide =
         sideFilter === "all" || creature.defaultSide === sideFilter
 
@@ -123,8 +131,8 @@ export function CreaturesCompendiumView() {
               </span>
             </div>
             <p className="mt-2 max-w-3xl text-sm text-text">
-              Fichas enxutas para o mestre: estatísticas de combate, ações,
-              notas e uma imagem opcional da ficha original.
+              Fichas enxutas para o mestre: estatísticas de combate, habilidades,
+              ações, notas e uma imagem opcional da ficha original.
             </p>
           </div>
 
@@ -151,7 +159,7 @@ export function CreaturesCompendiumView() {
               className="pl-9"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Buscar por nome, categoria ou ação…"
+              placeholder="Buscar por nome, categoria ou habilidade…"
             />
           </label>
 
@@ -288,7 +296,11 @@ function CreatureCard({
               ) : null}
             </div>
             <p className="mt-1 truncate text-xs text-textMuted">
-              {[creature.size, creature.category, creature.challengeRating && `ND ${creature.challengeRating}`]
+              {[
+                creature.size,
+                creature.category,
+                creature.challengeRating && `ND ${creature.challengeRating}`,
+              ]
                 .filter(Boolean)
                 .join(" • ")}
             </p>
@@ -302,12 +314,26 @@ function CreatureCard({
           <MiniStat label="DES" value={String(creature.abilityScores.dex)} />
         </div>
 
-        {creature.actions.trim() ? (
-          <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-5 text-text">
-            {creature.actions}
-          </p>
+        {creature.actions.length > 0 ? (
+          <div className="grid gap-1.5">
+            {creature.actions.slice(0, 3).map((action) => (
+              <p
+                key={action.id}
+                className="truncate text-sm leading-5 text-text"
+                title={`${action.name}${action.description ? ` — ${action.description}` : ""}`}
+              >
+                <span className="font-semibold text-textH">{action.name}</span>
+                {action.description ? ` — ${action.description}` : ""}
+              </p>
+            ))}
+            {creature.actions.length > 3 ? (
+              <span className="text-xs text-textMuted">
+                +{creature.actions.length - 3} ação(ões)
+              </span>
+            ) : null}
+          </div>
         ) : (
-          <p className="text-sm text-textMuted">Sem ações resumidas.</p>
+          <p className="text-sm text-textMuted">Sem ações adicionadas.</p>
         )}
       </button>
 
@@ -351,6 +377,13 @@ function MiniStat({ label, value }: { label: string; value: string }) {
       <div className="mt-0.5 text-sm font-semibold text-textH">{value}</div>
     </div>
   )
+}
+
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase()
 }
 
 function display(value: number | undefined): string {
