@@ -26,6 +26,15 @@ export function CompactAbilityCard({
   const abilityName = ability.name || "Habilidade sem nome"
   const kindLabel = ability.kind === "passive" ? "Passiva" : "Ativa"
   const compactLabel = sourceLabel ? `${kindLabel} • ${sourceLabel}` : kindLabel
+  const usage = ability.usage
+  const remaining = usage ? Math.max(0, usage.max - usage.used) : null
+  const canUse = ability.kind === "active" && Boolean(usage && onUse)
+  const canRestore = Boolean(
+    usage &&
+      usage.reset !== "limited" &&
+      usage.reset !== "spellSlot" &&
+      onRestore,
+  )
 
   useEffect(() => {
     if (!open) return
@@ -53,15 +62,44 @@ export function CompactAbilityCard({
         </span>
 
         <div
-          className="max-w-[42%] shrink-0 truncate whitespace-nowrap text-xs text-text"
+          className="max-w-[32%] shrink-0 truncate whitespace-nowrap text-xs text-text"
           title={compactLabel}
         >
           {compactLabel}
         </div>
 
-        <span className="shrink-0 text-xs text-textMuted" aria-hidden="true">
-          —
-        </span>
+        {usage ? (
+          <div
+            className="shrink-0 whitespace-nowrap text-xs text-textMuted"
+            title={`${remaining}/${usage.max} usos restantes`}
+          >
+            {remaining}/{usage.max}
+          </div>
+        ) : null}
+
+        {canUse ? (
+          <Button
+            className="shrink-0"
+            size="sm"
+            variant="secondary"
+            disabled={remaining !== null && remaining <= 0}
+            onClick={onUse}
+          >
+            Usar
+          </Button>
+        ) : null}
+
+        {canRestore ? (
+          <Button
+            className="shrink-0"
+            size="sm"
+            variant="secondary"
+            disabled={!usage || usage.used <= 0}
+            onClick={onRestore}
+          >
+            Restaurar
+          </Button>
+        ) : null}
 
         <Button
           className="shrink-0"
