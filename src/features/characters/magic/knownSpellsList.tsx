@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
+import { Input } from "../../../components/ui/Input"
 import { CLASS_NAMES } from "../../../contexts/consts"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { getCharacterGrantedSpells } from "../../../models/characters/characterGrantedSpells"
@@ -34,6 +35,7 @@ type SpecificSourceFilter = "all" | string
 type ListViewMode = "detailed" | "compact"
 
 type SpellListPreferences = {
+  searchQuery: string
   preparedFilter: PreparedFilter
   sourceTypeFilter: SourceTypeFilter
   specificSourceFilter: SpecificSourceFilter
@@ -72,6 +74,7 @@ const SOURCE_TYPE_ORDER: SpellSource["type"][] = [
 ]
 
 const DEFAULT_SPELL_LIST_PREFERENCES: SpellListPreferences = {
+  searchQuery: "",
   preparedFilter: "all",
   sourceTypeFilter: "all",
   specificSourceFilter: "all",
@@ -85,6 +88,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     loadSpellListPreferences(characterId),
   )
   const {
+    searchQuery,
     preparedFilter,
     sourceTypeFilter,
     specificSourceFilter,
@@ -163,8 +167,16 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     specificSourceOptions.some((option) => option.key === specificSourceFilter)
       ? specificSourceFilter
       : "all"
+  const normalizedSearchQuery = normalizeSearchText(searchQuery)
 
-  const filteredSpells = spells.filter(({ prepared, source }) => {
+  const filteredSpells = spells.filter(({ spell, prepared, source }) => {
+    const matchesName =
+      !normalizedSearchQuery ||
+      normalizeSearchText(spell.displayName || spell.name).includes(
+        normalizedSearchQuery,
+      ) ||
+      normalizeSearchText(spell.name).includes(normalizedSearchQuery)
+
     const matchesPrepared =
       preparedFilter === "all" ||
       (preparedFilter === "prepared" && prepared) ||
@@ -178,7 +190,12 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       effectiveSpecificSourceFilter === "all" ||
       getSourceKey(source) === effectiveSpecificSourceFilter
 
-    return matchesPrepared && matchesSourceType && matchesSpecificSource
+    return (
+      matchesName &&
+      matchesPrepared &&
+      matchesSourceType &&
+      matchesSpecificSource
+    )
   })
 
   function canPrepareSpell(entry: DisplaySpellEntry): boolean {
@@ -281,6 +298,21 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
             ))}
           </div>
         ) : null}
+
+        <label className="mt-3 grid gap-1 text-[11px] text-textMuted">
+          Buscar magia
+          <Input
+            value={searchQuery}
+            placeholder="Digite o nome da magia"
+            aria-label="Buscar magia pelo nome"
+            onChange={(event) =>
+              setPreferences((current) => ({
+                ...current,
+                searchQuery: event.target.value,
+              }))
+            }
+          />
+        </label>
 
         <div className="mt-3 grid gap-2 md:grid-cols-4">
           <label className="grid gap-1 text-[11px] text-textMuted">
@@ -463,6 +495,10 @@ function loadSpellListPreferences(characterId: string): SpellListPreferences {
     const parsed = JSON.parse(raw) as Record<string, unknown>
 
     return {
+      searchQuery:
+        typeof parsed.searchQuery === "string"
+          ? parsed.searchQuery
+          : DEFAULT_SPELL_LIST_PREFERENCES.searchQuery,
       preparedFilter: isPreparedFilter(parsed.preparedFilter)
         ? parsed.preparedFilter
         : DEFAULT_SPELL_LIST_PREFERENCES.preparedFilter,
@@ -515,6 +551,14 @@ function isSourceTypeFilter(value: unknown): value is SourceTypeFilter {
 
 function isListViewMode(value: unknown): value is ListViewMode {
   return value === "detailed" || value === "compact"
+}
+
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .trim()
 }
 
 function getAvailableSourceTypes(
