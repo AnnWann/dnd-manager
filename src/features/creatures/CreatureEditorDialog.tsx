@@ -2,6 +2,7 @@ import {
   ClipboardPaste,
   FileImage,
   ImagePlus,
+  Plus,
   Trash2,
 } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react"
@@ -12,9 +13,12 @@ import { Modal } from "../../components/ui/Modal"
 import { Textarea } from "../../components/ui/Textarea"
 import { uploadImage } from "../../lib/uploadImage"
 import {
+  createCreatureFeature,
   normalizeCompendiumCreature,
   type CompendiumCreature,
   type CreatureAbilityScores,
+  type CreatureFeature,
+  type CreatureFeatureField,
   type CreatureSide,
 } from "../../models/creatures/CompendiumCreature"
 
@@ -26,6 +30,22 @@ type CreatureEditorDialogProps = {
 
 const selectClassName =
   "h-10 w-full rounded-lg border border-border bg-bg px-3 text-sm text-textH shadow-theme-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/25"
+
+const FEATURE_GROUPS: Array<{
+  field: CreatureFeatureField
+  label: string
+  singular: string
+}> = [
+  { field: "traits", label: "Traços e habilidades", singular: "traço" },
+  { field: "actions", label: "Ações", singular: "ação" },
+  { field: "bonusActions", label: "Ações bônus", singular: "ação bônus" },
+  { field: "reactions", label: "Reações", singular: "reação" },
+  {
+    field: "legendaryActions",
+    label: "Ações lendárias",
+    singular: "ação lendária",
+  },
+]
 
 export function CreatureEditorDialog({
   creature,
@@ -60,6 +80,13 @@ export function CreatureEditorDialog({
         [attribute]: value,
       },
     }))
+  }
+
+  function patchFeatureGroup(
+    field: CreatureFeatureField,
+    features: CreatureFeature[],
+  ) {
+    setDraft((current) => ({ ...current, [field]: features }))
   }
 
   async function handleCreatureImage(file: File | undefined) {
@@ -118,7 +145,14 @@ export function CreatureEditorDialog({
   function save() {
     const name = draft.name.trim()
     if (!name) return
-    onSave({ ...draft, name, updatedAt: Date.now() })
+
+    onSave(
+      normalizeCompendiumCreature({
+        ...draft,
+        name,
+        updatedAt: Date.now(),
+      }),
+    )
   }
 
   return (
@@ -139,8 +173,8 @@ export function CreatureEditorDialog({
                 Preencher criatura com JSON
               </h3>
               <p className="mt-1 text-xs text-textMuted">
-                Cole um objeto criado manualmente ou por uma IA para preencher o
-                formulário. O identificador desta criatura será preservado.
+                Habilidades e ações usam listas de objetos com nome e descrição.
+                Textos antigos continuam sendo migrados automaticamente.
               </p>
             </div>
 
@@ -160,8 +194,8 @@ export function CreatureEditorDialog({
             <div className="mt-4 grid gap-3 border-t border-border pt-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs text-textMuted">
-                  Aceita um objeto único, uma lista com uma criatura ou
-                  blocos cercados por <code>```json</code>.
+                  Aceita um objeto único, uma lista com uma criatura ou blocos
+                  cercados por <code>```json</code>.
                 </span>
                 <Button
                   size="sm"
@@ -180,7 +214,7 @@ export function CreatureEditorDialog({
                   setJsonText(event.target.value)
                   setJsonError(undefined)
                 }}
-                placeholder={'{\n  "name": "Goblin",\n  "armorClass": 15,\n  "maxHp": 7,\n  "imageUrl": "https://..."\n}'}
+                placeholder={JSON_PLACEHOLDER}
                 autoFocus
               />
 
@@ -277,31 +311,24 @@ export function CreatureEditorDialog({
                 />
               </Field>
 
-              <Field label="Categoria">
-                <Input
-                  value={draft.category}
-                  placeholder="Monstro, humanoide, morto-vivo…"
-                  onChange={(event) => patch({ category: event.target.value })}
-                />
-              </Field>
-
-              <Field label="Tamanho">
-                <Input
-                  value={draft.size}
-                  placeholder="Médio"
-                  onChange={(event) => patch({ size: event.target.value })}
-                />
-              </Field>
-
-              <Field label="Nível de desafio">
-                <Input
-                  value={draft.challengeRating}
-                  placeholder="Ex.: 5"
-                  onChange={(event) =>
-                    patch({ challengeRating: event.target.value })
-                  }
-                />
-              </Field>
+              <TextInput
+                label="Categoria"
+                value={draft.category}
+                placeholder="Monstro, humanoide, morto-vivo…"
+                onChange={(category) => patch({ category })}
+              />
+              <TextInput
+                label="Tamanho"
+                value={draft.size}
+                placeholder="Médio"
+                onChange={(size) => patch({ size })}
+              />
+              <TextInput
+                label="Nível de desafio"
+                value={draft.challengeRating}
+                placeholder="Ex.: 5"
+                onChange={(challengeRating) => patch({ challengeRating })}
+              />
 
               <Field label="Lado padrão">
                 <select
@@ -352,13 +379,12 @@ export function CreatureEditorDialog({
               min={0}
               onChange={(value) => patch({ maxHp: value })}
             />
-            <Field label="Deslocamento">
-              <Input
-                value={draft.speed}
-                placeholder="9 m"
-                onChange={(event) => patch({ speed: event.target.value })}
-              />
-            </Field>
+            <TextInput
+              label="Deslocamento"
+              value={draft.speed}
+              placeholder="9 m"
+              onChange={(speed) => patch({ speed })}
+            />
             <NumberField
               label="Percepção passiva"
               value={draft.passivePerception}
@@ -385,46 +411,46 @@ export function CreatureEditorDialog({
         <section className="rounded-xl border border-border bg-bg-subtle p-4">
           <SectionTitle title="Referência rápida" />
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <TextField
+            <TextInput
               label="Testes de resistência"
               value={draft.savingThrows}
               placeholder="DES +5, SAB +3"
               onChange={(savingThrows) => patch({ savingThrows })}
             />
-            <TextField
+            <TextInput
               label="Perícias"
               value={draft.skills}
               placeholder="Percepção +5, Furtividade +7"
               onChange={(skills) => patch({ skills })}
             />
-            <TextField
+            <TextInput
               label="Vulnerabilidades"
               value={draft.vulnerabilities}
               onChange={(vulnerabilities) => patch({ vulnerabilities })}
             />
-            <TextField
+            <TextInput
               label="Resistências"
               value={draft.resistances}
               onChange={(resistances) => patch({ resistances })}
             />
-            <TextField
+            <TextInput
               label="Imunidades"
               value={draft.immunities}
               onChange={(immunities) => patch({ immunities })}
             />
-            <TextField
+            <TextInput
               label="Imunidades a condições"
               value={draft.conditionImmunities}
               onChange={(conditionImmunities) =>
                 patch({ conditionImmunities })
               }
             />
-            <TextField
+            <TextInput
               label="Sentidos"
               value={draft.senses}
               onChange={(senses) => patch({ senses })}
             />
-            <TextField
+            <TextInput
               label="Idiomas"
               value={draft.languages}
               onChange={(languages) => patch({ languages })}
@@ -434,41 +460,35 @@ export function CreatureEditorDialog({
 
         <section className="rounded-xl border border-border bg-bg-subtle p-4">
           <SectionTitle
-            title="Ações e notas"
-            description="Texto livre para manter o criador rápido e confortável para o mestre."
+            title="Habilidades e ações"
+            description="Adicione cada traço, ação ou reação separadamente, com nome e descrição próprios."
           />
-          <div className="mt-4 grid gap-3 lg:grid-cols-2">
-            <LongText
-              label="Traços"
-              value={draft.traits}
-              onChange={(traits) => patch({ traits })}
-            />
-            <LongText
-              label="Ações"
-              value={draft.actions}
-              onChange={(actions) => patch({ actions })}
-            />
-            <LongText
-              label="Ações bônus"
-              value={draft.bonusActions}
-              onChange={(bonusActions) => patch({ bonusActions })}
-            />
-            <LongText
-              label="Reações"
-              value={draft.reactions}
-              onChange={(reactions) => patch({ reactions })}
-            />
-            <LongText
-              label="Ações lendárias"
-              value={draft.legendaryActions}
-              onChange={(legendaryActions) => patch({ legendaryActions })}
-            />
-            <LongText
-              label="Notas de combate"
-              value={draft.combatNotes}
-              onChange={(combatNotes) => patch({ combatNotes })}
-            />
+
+          <div className="mt-4 grid gap-4">
+            {FEATURE_GROUPS.map((group) => (
+              <FeatureListEditor
+                key={group.field}
+                label={group.label}
+                singular={group.singular}
+                features={draft[group.field]}
+                onChange={(features) =>
+                  patchFeatureGroup(group.field, features)
+                }
+              />
+            ))}
           </div>
+        </section>
+
+        <section className="rounded-xl border border-border bg-bg-subtle p-4">
+          <SectionTitle
+            title="Notas de combate"
+            description="Observações gerais que não representam uma habilidade independente."
+          />
+          <Textarea
+            className="mt-4 min-h-32"
+            value={draft.combatNotes}
+            onChange={(event) => patch({ combatNotes: event.target.value })}
+          />
         </section>
       </div>
 
@@ -479,6 +499,107 @@ export function CreatureEditorDialog({
         </Button>
       </div>
     </Modal>
+  )
+}
+
+function FeatureListEditor({
+  label,
+  singular,
+  features,
+  onChange,
+}: {
+  label: string
+  singular: string
+  features: CreatureFeature[]
+  onChange: (features: CreatureFeature[]) => void
+}) {
+  function patchFeature(id: string, patch: Partial<CreatureFeature>) {
+    onChange(
+      features.map((feature) =>
+        feature.id === id ? { ...feature, ...patch } : feature,
+      ),
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-bg p-3 sm:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h4 className="text-sm font-semibold text-textH">{label}</h4>
+          <p className="mt-0.5 text-xs text-textMuted">
+            {features.length} {features.length === 1 ? "entrada" : "entradas"}
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() =>
+            onChange([
+              ...features,
+              createCreatureFeature({ name: `Novo ${singular}` }),
+            ])
+          }
+        >
+          <Plus className="h-4 w-4" />
+          Adicionar {singular}
+        </Button>
+      </div>
+
+      {features.length > 0 ? (
+        <div className="mt-3 grid gap-3">
+          {features.map((feature, index) => (
+            <article
+              key={feature.id}
+              className="rounded-lg border border-border bg-bg-subtle p-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-textMuted">
+                  {index + 1}. {feature.name.trim() || `Sem nome`}
+                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  title={`Remover ${singular}`}
+                  onClick={() =>
+                    onChange(features.filter((entry) => entry.id !== feature.id))
+                  }
+                >
+                  <Trash2 className="h-4 w-4 text-danger" />
+                </Button>
+              </div>
+
+              <div className="mt-2 grid gap-3">
+                <Field label="Nome">
+                  <Input
+                    value={feature.name}
+                    placeholder={`Nome do ${singular}`}
+                    onChange={(event) =>
+                      patchFeature(feature.id, { name: event.target.value })
+                    }
+                  />
+                </Field>
+                <Field label="Descrição">
+                  <Textarea
+                    className="min-h-24"
+                    value={feature.description}
+                    placeholder="Descreva o efeito, ativação, alcance e demais regras."
+                    onChange={(event) =>
+                      patchFeature(feature.id, {
+                        description: event.target.value,
+                      })
+                    }
+                  />
+                </Field>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-3 rounded-lg border border-dashed border-border px-3 py-5 text-center text-xs text-textMuted">
+          Nenhuma entrada adicionada.
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -541,7 +662,7 @@ function NumberField({
   )
 }
 
-function TextField({
+function TextInput({
   label,
   value,
   placeholder,
@@ -557,26 +678,6 @@ function TextField({
       <Input
         value={value}
         placeholder={placeholder}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </Field>
-  )
-}
-
-function LongText({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-}) {
-  return (
-    <Field label={label}>
-      <Textarea
-        className="min-h-32"
-        value={value}
         onChange={(event) => onChange(event.target.value)}
       />
     </Field>
@@ -637,3 +738,25 @@ function optionalNumber(value: string): number | undefined {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : undefined
 }
+
+const JSON_PLACEHOLDER = `{
+  "name": "Goblin",
+  "armorClass": 15,
+  "maxHp": 7,
+  "traits": [
+    {
+      "name": "Escapada Ágil",
+      "description": "O goblin pode usar Desengajar ou Esconder como ação bônus."
+    }
+  ],
+  "actions": [
+    {
+      "name": "Cimitarra",
+      "description": "Ataque corpo a corpo com arma: +4 para atingir."
+    }
+  ],
+  "bonusActions": [],
+  "reactions": [],
+  "legendaryActions": [],
+  "imageUrl": "https://..."
+}`
