@@ -1,6 +1,7 @@
 import { useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
+import { Input } from "../../../components/ui/Input"
 import { useCharacterContext } from "../../../contexts/characterContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getEncumbranceInfo } from "../../../models/characters/characterEncumbrance"
@@ -59,8 +60,17 @@ export function CharacterInventoryTab({
   const [transferringItem, setTransferringItem] =
     useState<Itemmable | null>(null)
   const [bagLimitMessage, setBagLimitMessage] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
 
   const items = character.get("inventory") ?? []
+  const normalizedSearchQuery = normalizeSearchText(searchQuery)
+  const visibleItems = normalizedSearchQuery
+    ? items.filter((item) =>
+        normalizeSearchText(item.name || "Item sem nome").includes(
+          normalizedSearchQuery,
+        ),
+      )
+    : items
   const encumbrance = getEncumbranceInfo(character)
   const canTransfer = canTransferFromCharacter(character.get("id"))
   const bagWeight = getBagOfHoldingWeightKg(items)
@@ -150,11 +160,25 @@ export function CharacterInventoryTab({
         <BagOfHoldingCounter weight={bagWeight} />
       </div>
 
+      <label className="mb-3 grid gap-1 text-[11px] text-textMuted">
+        Buscar item
+        <Input
+          value={searchQuery}
+          placeholder="Digite o nome do item"
+          aria-label="Buscar item pelo nome"
+          onChange={(event) => setSearchQuery(event.target.value)}
+        />
+      </label>
+
       <InventoryEditor
         title={`Inventário pessoal: ${character.get("name")}`}
         description={`Peso carregado: ${formatKg(encumbrance.weight)} de ${formatKg(encumbrance.carryingCapacity)}.`}
-        items={items}
-        emptyMessage="Nenhum item encontrado."
+        items={visibleItems}
+        emptyMessage={
+          normalizedSearchQuery
+            ? "Nenhum item corresponde à busca."
+            : "Nenhum item encontrado."
+        }
         onAddItem={addItem}
         onUpdateItem={updateItem}
         onRemoveItem={removeItem}
@@ -282,6 +306,14 @@ function BagOfHoldingLimitPopup({
       </div>
     </div>
   )
+}
+
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .trim()
 }
 
 function formatKg(value: number): string {
