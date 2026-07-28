@@ -3,7 +3,10 @@ import { useEffect, useState } from "react"
 
 import { Button } from "../../components/ui/Button"
 import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
-import type { CompendiumCreature } from "../../models/creatures/CompendiumCreature"
+import type {
+  CompendiumCreature,
+  CreatureFeature,
+} from "../../models/creatures/CompendiumCreature"
 import type {
   InitiativeEntry,
   InitiativeSide,
@@ -11,7 +14,8 @@ import type {
 
 export type QuickSheetSection = {
   title: string
-  content: string
+  content?: string
+  entries?: CreatureFeature[]
 }
 
 export type CombatQuickSheetData = {
@@ -185,15 +189,52 @@ function QuickSheetSummary({ data }: { data: CombatQuickSheetData }) {
       </div>
 
       {data.sections
-        .filter((section) => section.content.trim())
-        .map((section) => (
-          <InfoBlock
-            key={section.title}
-            title={section.title}
-            content={section.content}
-          />
-        ))}
+        .filter(sectionHasContent)
+        .map((section) =>
+          section.entries?.length ? (
+            <FeatureSection
+              key={section.title}
+              title={section.title}
+              entries={section.entries}
+            />
+          ) : (
+            <InfoBlock
+              key={section.title}
+              title={section.title}
+              content={section.content ?? ""}
+            />
+          ),
+        )}
     </div>
+  )
+}
+
+function FeatureSection({
+  title,
+  entries,
+}: {
+  title: string
+  entries: CreatureFeature[]
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-bg-subtle p-4">
+      <h4 className="text-sm font-semibold text-textH">{title}</h4>
+      <div className="mt-3 grid gap-2">
+        {entries.map((entry) => (
+          <article
+            key={entry.id}
+            className="rounded-lg border border-border bg-bg px-3 py-3"
+          >
+            <h5 className="text-sm font-semibold text-textH">{entry.name}</h5>
+            {entry.description.trim() ? (
+              <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-text">
+                {entry.description}
+              </p>
+            ) : null}
+          </article>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -281,11 +322,11 @@ export function quickSheetFromCompendiumCreature(
     languages: creature.languages,
     conditions: entry?.conditions.map((condition) => condition.name),
     sections: [
-      { title: "Traços", content: creature.traits },
-      { title: "Ações", content: creature.actions },
-      { title: "Ações bônus", content: creature.bonusActions },
-      { title: "Reações", content: creature.reactions },
-      { title: "Ações lendárias", content: creature.legendaryActions },
+      { title: "Traços e habilidades", entries: creature.traits },
+      { title: "Ações", entries: creature.actions },
+      { title: "Ações bônus", entries: creature.bonusActions },
+      { title: "Reações", entries: creature.reactions },
+      { title: "Ações lendárias", entries: creature.legendaryActions },
       { title: "Notas de combate", content: creature.combatNotes },
     ],
   }
@@ -379,6 +420,10 @@ export function quickSheetFromInitiativeEntry(
     conditions: entry.conditions.map((condition) => condition.name),
     sections: [],
   }
+}
+
+function sectionHasContent(section: QuickSheetSection): boolean {
+  return Boolean(section.content?.trim() || section.entries?.length)
 }
 
 function formatAbilities(
