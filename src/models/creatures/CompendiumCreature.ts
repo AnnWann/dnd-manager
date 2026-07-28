@@ -9,6 +9,19 @@ export type CreatureAbilityScores = {
   cha: number
 }
 
+export type CreatureFeature = {
+  id: string
+  name: string
+  description: string
+}
+
+export type CreatureFeatureField =
+  | "traits"
+  | "actions"
+  | "bonusActions"
+  | "reactions"
+  | "legendaryActions"
+
 export type CompendiumCreature = {
   id: string
   name: string
@@ -34,11 +47,11 @@ export type CompendiumCreature = {
   senses: string
   languages: string
 
-  traits: string
-  actions: string
-  bonusActions: string
-  reactions: string
-  legendaryActions: string
+  traits: CreatureFeature[]
+  actions: CreatureFeature[]
+  bonusActions: CreatureFeature[]
+  reactions: CreatureFeature[]
+  legendaryActions: CreatureFeature[]
   combatNotes: string
 
   /**
@@ -68,6 +81,16 @@ const DEFAULT_ABILITY_SCORES: CreatureAbilityScores = {
   cha: 10,
 }
 
+export function createCreatureFeature(
+  patch: Partial<CreatureFeature> = {},
+): CreatureFeature {
+  return {
+    id: patch.id?.trim() || crypto.randomUUID(),
+    name: patch.name ?? "",
+    description: patch.description ?? "",
+  }
+}
+
 export function createCompendiumCreature(
   patch: Partial<CompendiumCreature> = {},
 ): CompendiumCreature {
@@ -95,11 +118,14 @@ export function createCompendiumCreature(
     conditionImmunities: patch.conditionImmunities ?? "",
     senses: patch.senses ?? "",
     languages: patch.languages ?? "",
-    traits: patch.traits ?? "",
-    actions: patch.actions ?? "",
-    bonusActions: patch.bonusActions ?? "",
-    reactions: patch.reactions ?? "",
-    legendaryActions: patch.legendaryActions ?? "",
+    traits: normalizeCreatureFeatures(patch.traits, "Traço"),
+    actions: normalizeCreatureFeatures(patch.actions, "Ação"),
+    bonusActions: normalizeCreatureFeatures(patch.bonusActions, "Ação bônus"),
+    reactions: normalizeCreatureFeatures(patch.reactions, "Reação"),
+    legendaryActions: normalizeCreatureFeatures(
+      patch.legendaryActions,
+      "Ação lendária",
+    ),
     combatNotes: patch.combatNotes ?? "",
     sheetImageUrl: patch.sheetImageUrl,
     createdAt: finiteNumber(patch.createdAt, now),
@@ -116,6 +142,7 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
 
   const now = Date.now()
   const abilityScores = asRecord(value.abilityScores)
+  const featureGroups = asRecord(value.features)
 
   return {
     id: stringValue(value.id).trim() || crypto.randomUUID(),
@@ -146,11 +173,26 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
     conditionImmunities: stringValue(value.conditionImmunities),
     senses: stringValue(value.senses),
     languages: stringValue(value.languages),
-    traits: stringValue(value.traits),
-    actions: stringValue(value.actions),
-    bonusActions: stringValue(value.bonusActions),
-    reactions: stringValue(value.reactions),
-    legendaryActions: stringValue(value.legendaryActions),
+    traits: normalizeCreatureFeatures(
+      value.traits ?? featureGroups?.traits,
+      "Traço",
+    ),
+    actions: normalizeCreatureFeatures(
+      value.actions ?? featureGroups?.actions,
+      "Ação",
+    ),
+    bonusActions: normalizeCreatureFeatures(
+      value.bonusActions ?? featureGroups?.bonusActions,
+      "Ação bônus",
+    ),
+    reactions: normalizeCreatureFeatures(
+      value.reactions ?? featureGroups?.reactions,
+      "Reação",
+    ),
+    legendaryActions: normalizeCreatureFeatures(
+      value.legendaryActions ?? featureGroups?.legendaryActions,
+      "Ação lendária",
+    ),
     combatNotes: stringValue(value.combatNotes),
     sheetImageUrl:
       optionalStringValue(value.imageUrl) ??
@@ -198,9 +240,94 @@ export function duplicateCompendiumCreature(
     ...creature,
     id: crypto.randomUUID(),
     name: `${creature.name} (cópia)`,
+    traits: duplicateFeatures(creature.traits),
+    actions: duplicateFeatures(creature.actions),
+    bonusActions: duplicateFeatures(creature.bonusActions),
+    reactions: duplicateFeatures(creature.reactions),
+    legendaryActions: duplicateFeatures(creature.legendaryActions),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
+}
+
+export function creatureFeatureSearchText(
+  features: CreatureFeature[],
+): string {
+  return features
+    .map((feature) => `${feature.name} ${feature.description}`)
+    .join(" ")
+}
+
+function duplicateFeatures(features: CreatureFeature[]): CreatureFeature[] {
+  return features.map((feature) => ({
+    ...feature,
+    id: crypto.randomUUID(),
+  }))
+}
+
+function normalizeCreatureFeatures(
+  value: unknown,
+  fallbackName: string,
+): CreatureFeature[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry, index) => {
+      if (typeof entry === "string") {
+        return normalizeLegacyFeatureText(entry, fallbackName, index)
+      }
+
+      const record = asRecord(entry)
+      if (!record) return []
+      const name = stringValue(record.name ?? record.title).trim()
+      const description = stringValue(
+        record.description ?? record.desc ?? record.text,
+      ).trim()
+      if (!name && !description) return []
+
+      return [
+        createCreatureFeature({
+          id: stringValue(record.id).trim() || undefined,
+          name: name || `${fallbackName} ${index + 1}`,
+          description,
+        }),
+      ]
+    })
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(/\n\s*\n/g)
+      .flatMap((block, index) =>
+        normalizeLegacyFeatureText(block, fallbackName, index),
+      )
+  }
+
+  return []
+}
+
+function normalizeLegacyFeatureText(
+  text: string,
+  fallbackName: string,
+  index: number,
+): CreatureFeature[] {
+  const trimmed = text.trim()
+  if (!trimmed) return []
+
+  const namedBlock = trimmed.match(/^([^\n.]{1,100})\.\s+([\s\S]+)$/)
+  if (namedBlock) {
+    return [
+      createCreatureFeature({
+        name: namedBlock[1].trim(),
+        description: namedBlock[2].trim(),
+      }),
+    ]
+  }
+
+  return [
+    createCreatureFeature({
+      name: `${fallbackName} ${index + 1}`,
+      description: trimmed,
+    }),
+  ]
 }
 
 function normalizeAbilityScores(
