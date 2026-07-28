@@ -132,7 +132,7 @@ jobs:
 
           rm -f .github/ritual-fix-trigger
 
-      - run: npm ci
+      - run: npm install --package-lock=false --no-audit --no-fund
       - run: npm run build
 
       - name: Commit correction to PR branch
