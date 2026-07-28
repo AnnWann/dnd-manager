@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 
+import { MarkdownText } from "../../../components/ui/MarkdownText"
 import { Button } from "../../../components/ui/Button"
 import {
   CASTING_TIME_NAMES,
@@ -60,6 +61,7 @@ export function SpellCard({
     canEditCastingDescriptions &&
     castingDescriptions.length < MAX_CASTING_DESCRIPTIONS
   const material = spell.material?.trim()
+  const spellName = spell.displayName || spell.name
 
   useEffect(() => {
     setDraftCastingDescriptions(castingDescriptions)
@@ -96,18 +98,19 @@ export function SpellCard({
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={`Detalhes de ${spell.displayName || spell.name}`}
-          className="fixed inset-0 z-[12000] flex h-screen w-screen items-center justify-center overflow-y-auto bg-black/80 p-3 sm:p-4"
+          aria-label={`Detalhes de ${spellName}`}
+          className="fixed inset-0 z-[12000] flex h-screen w-screen items-center justify-center bg-black/80 p-3 sm:p-4"
           onMouseDown={(event) => {
             if (event.currentTarget === event.target) setIsViewOpen(false)
           }}
         >
-          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-3xl overflow-y-auto rounded-2xl bg-bg shadow-xl">
-            <div className="flex flex-col gap-3 border-b border-accentBorder p-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-bg shadow-xl sm:max-h-[calc(100dvh-2rem)]">
+            <header className="sticky top-0 z-20 flex shrink-0 flex-col gap-3 border-b border-accentBorder bg-bg/95 p-4 backdrop-blur sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <h2 className="break-words font-heading text-lg text-textH">
-                  {spell.displayName || spell.name}
+                  {spellName}
                 </h2>
+
                 {spell.displayName && spell.displayName !== spell.name ? (
                   <div className="mt-1 text-xs text-textMuted">
                     Nome original: {spell.name}
@@ -128,189 +131,201 @@ export function SpellCard({
               </div>
 
               <Button
-                className="w-full sm:w-auto"
+                className="w-full shrink-0 sm:w-auto"
                 variant="secondary"
                 size="sm"
                 onClick={() => setIsViewOpen(false)}
               >
                 Fechar
               </Button>
-            </div>
+            </header>
 
-            <div className="grid gap-4 p-4 text-sm text-text">
-              <section className="rounded-xl border border-border bg-bg-subtle p-3">
-                <h3 className="text-sm font-semibold text-textH">
-                  Informações da magia
-                </h3>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  <DetailItem label="Nível" value={formatSpellLevel(spell)} />
-                  <DetailItem
-                    label="Escola"
-                    value={MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}
-                  />
-                  <DetailItem
-                    label="Tempo de conjuração"
-                    value={formatCastingTime(spell)}
-                  />
-                  <DetailItem label="Alcance" value={formatRange(spell)} />
-                  <DetailItem label="Duração" value={formatDuration(spell)} />
-                  <DetailItem label="Alvo" value={formatTargeting(spell)} />
-                  <DetailItem label="Área" value={formatArea(spell)} />
-                  <DetailItem
-                    label="Ataque ou resistência"
-                    value={formatAttackAndSave(spell)}
-                  />
-                  <DetailItem
-                    label="Rolagens"
-                    value={formatRollModes(spell)}
-                  />
-                  <DetailItem
-                    label="Dano base"
-                    value={formatDamageDice(spell)}
-                  />
-                  <DetailItem
-                    label="Componentes"
-                    value={formatComponentsCompact(spell).replace(
-                      "Componentes: ",
-                      "",
-                    )}
-                  />
-                  <DetailItem
-                    label="Concentração"
-                    value={spell.concentration ? "Sim" : "Não"}
-                  />
-                  <DetailItem
-                    label="Ritual"
-                    value={spell.ritual ? "Sim" : "Não"}
-                  />
-                  <DetailItem label="Classes" value={formatClasses(spell)} />
-                  <DetailItem label="Origem" value={formatSpellOrigin(source)} />
-                  <DetailItem
-                    label="Disponibilidade"
-                    value={
-                      accessLabel ||
-                      formatPreparationStatus(prepared, alwaysPrepared)
-                    }
-                  />
-                  {source ? (
-                    <DetailItem
-                      label="Atributo de conjuração"
-                      value={source.attribute.toUpperCase()}
-                    />
-                  ) : null}
-                  {source?.extendedList ? (
-                    <DetailItem label="Lista expandida" value="Sim" />
-                  ) : null}
-                  {formatAreaTiles(spell) ? (
-                    <DetailItem
-                      label="Área no grid"
-                      value={formatAreaTiles(spell) || ""}
-                    />
-                  ) : null}
-                </div>
-              </section>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <div className="grid gap-4 p-4 text-sm text-text">
+                <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                  <h3 className="text-sm font-semibold text-textH">
+                    Informações da magia
+                  </h3>
 
-              <section className="rounded-xl border border-border bg-bg-subtle p-3">
-                <h3 className="text-sm font-semibold text-textH">
-                  Componentes
-                </h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {getSpellComponents(spell).length ? (
-                    getSpellComponents(spell).map((component) => (
-                      <span
-                        key={component}
-                        className="rounded-full border border-accentBorder bg-accentBg px-2.5 py-1 text-xs font-medium text-textH"
-                      >
-                        {formatComponentLong(component)}
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    <DetailItem label="Nível" value={formatSpellLevel(spell)} />
+                    <DetailItem
+                      label="Escola"
+                      value={MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}
+                    />
+                    <DetailItem
+                      label="Tempo de conjuração"
+                      value={formatCastingTime(spell)}
+                    />
+                    <DetailItem label="Alcance" value={formatRange(spell)} />
+                    <DetailItem label="Duração" value={formatDuration(spell)} />
+                    <DetailItem label="Alvo" value={formatTargeting(spell)} />
+                    <DetailItem label="Área" value={formatArea(spell)} />
+                    <DetailItem
+                      label="Ataque ou resistência"
+                      value={formatAttackAndSave(spell)}
+                    />
+                    <DetailItem
+                      label="Rolagens"
+                      value={formatRollModes(spell)}
+                    />
+                    <DetailItem
+                      label="Dano base"
+                      value={formatDamageDice(spell)}
+                    />
+                    <DetailItem
+                      label="Componentes"
+                      value={formatComponentsCompact(spell).replace(
+                        "Componentes: ",
+                        "",
+                      )}
+                    />
+                    <DetailItem
+                      label="Concentração"
+                      value={spell.concentration ? "Sim" : "Não"}
+                    />
+                    <DetailItem
+                      label="Ritual"
+                      value={spell.ritual ? "Sim" : "Não"}
+                    />
+                    <DetailItem label="Classes" value={formatClasses(spell)} />
+                    <DetailItem
+                      label="Origem"
+                      value={formatSpellOrigin(source)}
+                    />
+                    <DetailItem
+                      label="Disponibilidade"
+                      value={
+                        accessLabel ||
+                        formatPreparationStatus(prepared, alwaysPrepared)
+                      }
+                    />
+                    {source ? (
+                      <DetailItem
+                        label="Atributo de conjuração"
+                        value={source.attribute.toUpperCase()}
+                      />
+                    ) : null}
+                    {source?.extendedList ? (
+                      <DetailItem label="Lista expandida" value="Sim" />
+                    ) : null}
+                    {formatAreaTiles(spell) ? (
+                      <DetailItem
+                        label="Área no grid"
+                        value={formatAreaTiles(spell) || ""}
+                      />
+                    ) : null}
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                  <h3 className="text-sm font-semibold text-textH">
+                    Componentes
+                  </h3>
+
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {getSpellComponents(spell).length ? (
+                      getSpellComponents(spell).map((component) => (
+                        <span
+                          key={component}
+                          className="rounded-full border border-accentBorder bg-accentBg px-2.5 py-1 text-xs font-medium text-textH"
+                        >
+                          {formatComponentLong(component)}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-textMuted">
+                        Nenhum componente informado.
                       </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-textMuted">
-                      Nenhum componente informado.
-                    </span>
-                  )}
-                </div>
+                    )}
+                  </div>
 
-                {material ? (
-                  <div className="mt-3 text-xs leading-5 text-text">
-                    <span className="font-semibold text-textH">
-                      Componente material:
-                    </span>{" "}
-                    {material}
-                  </div>
-                ) : getSpellComponents(spell).includes("M") ? (
-                  <div className="mt-3 text-xs text-textMuted">
-                    A magia exige componente material, mas o material específico não foi informado.
-                  </div>
+                  {material ? (
+                    <div className="mt-3 text-xs leading-5 text-text">
+                      <span className="font-semibold text-textH">
+                        Componente material:
+                      </span>{" "}
+                      {material}
+                    </div>
+                  ) : getSpellComponents(spell).includes("M") ? (
+                    <div className="mt-3 text-xs text-textMuted">
+                      A magia exige componente material, mas o material específico
+                      não foi informado.
+                    </div>
+                  ) : null}
+                </section>
+
+                {castingDescriptions.length > 0 ? (
+                  <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                    <h3 className="text-sm font-semibold text-textH">
+                      Como o personagem conjura
+                    </h3>
+                    <div className="mt-2 grid gap-2">
+                      {castingDescriptions.map((description, index) => (
+                        <MarkdownText
+                          key={index}
+                          text={description}
+                          emptyFallback="Descrição vazia."
+                          className="rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-6"
+                        />
+                      ))}
+                    </div>
+                  </section>
                 ) : null}
-              </section>
 
-              {castingDescriptions.length > 0 ? (
-                <section className="rounded-xl border border-border bg-bg-subtle p-3">
-                  <h3 className="text-sm font-semibold text-textH">
-                    Como o personagem conjura
-                  </h3>
-                  <div className="mt-2 grid gap-2">
-                    {castingDescriptions.map((description, index) => (
-                      <p
-                        key={index}
-                        className="whitespace-pre-wrap break-words rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-6"
-                      >
-                        {description || "Descrição vazia."}
-                      </p>
-                    ))}
-                  </div>
+                {spell.headcanon?.trim() ? (
+                  <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                    <h3 className="text-sm font-semibold text-textH">
+                      Interpretação do personagem
+                    </h3>
+                    <MarkdownText
+                      text={spell.headcanon}
+                      className="mt-2 leading-6"
+                    />
+                  </section>
+                ) : null}
+
+                <section>
+                  <h3 className="text-sm font-semibold text-textH">Descrição</h3>
+                  <MarkdownText
+                    text={spell.description}
+                    emptyFallback="Sem descrição."
+                    className="mt-2 leading-6"
+                  />
                 </section>
-              ) : null}
 
-              {spell.headcanon?.trim() ? (
-                <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                <section>
                   <h3 className="text-sm font-semibold text-textH">
-                    Interpretação do personagem
+                    Em níveis superiores
                   </h3>
-                  <div className="mt-2 whitespace-pre-wrap break-words leading-6">
-                    {spell.headcanon}
-                  </div>
+                  <MarkdownText
+                    text={spell.higherLevelText}
+                    emptyFallback="Sem efeito adicional em níveis superiores."
+                    className="mt-2 leading-6"
+                  />
                 </section>
-              ) : null}
 
-              <section>
-                <h3 className="text-sm font-semibold text-textH">Descrição</h3>
-                <div className="mt-2 whitespace-pre-wrap break-words leading-6">
-                  {spell.description?.trim() || "Sem descrição."}
-                </div>
-              </section>
-
-              <section>
-                <h3 className="text-sm font-semibold text-textH">
-                  Em níveis superiores
-                </h3>
-                <div className="mt-2 whitespace-pre-wrap break-words leading-6">
-                  {spell.higherLevelText?.trim() ||
-                    "Sem efeito adicional em níveis superiores."}
-                </div>
-              </section>
-
-              {Array.isArray(spell.effects) && spell.effects.length > 0 ? (
-                <section className="rounded-xl border border-border bg-bg-subtle p-3">
-                  <h3 className="text-sm font-semibold text-textH">
-                    Efeitos estruturados
-                  </h3>
-                  <div className="mt-2 grid gap-2">
-                    {spell.effects.map((effect, index) => (
-                      <div
-                        key={index}
-                        className="rounded-lg border border-border bg-bg px-3 py-2 text-xs leading-5"
-                      >
-                        <span className="font-semibold text-textH">
-                          Efeito {index + 1}:
-                        </span>{" "}
-                        {formatEffect(effect)}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
+                {Array.isArray(spell.effects) && spell.effects.length > 0 ? (
+                  <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                    <h3 className="text-sm font-semibold text-textH">
+                      Efeitos estruturados
+                    </h3>
+                    <div className="mt-2 grid gap-2">
+                      {spell.effects.map((effect, index) => (
+                        <div
+                          key={index}
+                          className="rounded-lg border border-border bg-bg px-3 py-2 text-xs leading-5"
+                        >
+                          <span className="font-semibold text-textH">
+                            Efeito {index + 1}:
+                          </span>{" "}
+                          {formatEffect(effect)}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>,
@@ -324,7 +339,7 @@ export function SpellCard({
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
             <h3 className="break-words text-base font-semibold leading-snug text-textH sm:text-sm">
-              {spell.displayName || spell.name}
+              {spellName}
             </h3>
 
             <div className="mt-2 flex min-w-0 flex-wrap gap-x-3 gap-y-1.5 text-xs leading-5 text-text">
@@ -408,7 +423,7 @@ export function SpellCard({
 
         {spell.description?.trim() ? (
           <p className="mt-3 line-clamp-3 whitespace-pre-wrap break-words text-xs leading-5 text-text">
-            {spell.description}
+            {stripMarkdownForPreview(spell.description)}
           </p>
         ) : null}
 
@@ -428,7 +443,8 @@ export function SpellCard({
 
           <div className="mt-3 grid gap-3">
             <p className="text-xs leading-5 text-textMuted">
-              Anote variações visuais, gestos, frases ou efeitos recorrentes dessa magia no personagem.
+              Anote variações visuais, gestos, frases ou efeitos recorrentes dessa
+              magia no personagem.
             </p>
 
             {draftCastingDescriptions.length > 0 ? (
@@ -442,17 +458,16 @@ export function SpellCard({
                         maxLength={MAX_CASTING_DESCRIPTION_LENGTH}
                         placeholder="Ex.: a lâmina brilha em fogo azul antes do impacto..."
                         onChange={(event) =>
-                          setDraftCastingDescription(
-                            index,
-                            event.target.value,
-                          )
+                          setDraftCastingDescription(index, event.target.value)
                         }
                         onBlur={() => commitCastingDescription(index)}
                       />
                     ) : (
-                      <p className="whitespace-pre-wrap break-words rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-5 text-text">
-                        {description || "Descrição vazia."}
-                      </p>
+                      <MarkdownText
+                        text={description}
+                        emptyFallback="Descrição vazia."
+                        className="rounded-lg border border-border bg-bg px-3 py-2 text-sm leading-5 text-text"
+                      />
                     )}
 
                     {canEditCastingDescriptions ? (
@@ -520,6 +535,19 @@ function SpellMeta({
   )
 }
 
+function stripMarkdownForPreview(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^>\s?/gm, "")
+    .replace(/^[-+*]\s+/gm, "")
+    .replace(/^\d+\.\s+/gm, "")
+    .replace(/(\*\*\*|___)(.*?)\1/g, "$2")
+    .replace(/(\*\*|__)(.*?)\1/g, "$2")
+    .replace(/([*_])(.*?)\1/g, "$2")
+    .replace(/~~(.*?)~~/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+}
+
 function getSpellComponents(spell: Spell): Array<"V" | "S" | "M"> {
   if (!Array.isArray(spell.components)) return []
 
@@ -580,17 +608,28 @@ function formatDuration(spell: Spell): string {
   const labels: Record<string, [string, string]> = {
     instantaneous: ["Instantânea", "Instantânea"],
     turn: ["turno", "turnos"],
+    round: ["rodada", "rodadas"],
     minute: ["minuto", "minutos"],
     hour: ["hora", "horas"],
     day: ["dia", "dias"],
-    "short rest": ["Até o próximo descanso curto", "Até o próximo descanso curto"],
-    "long rest": ["Até o próximo descanso longo", "Até o próximo descanso longo"],
+    special: ["Especial", "Especial"],
+    untilDispelled: ["Até ser dissipada", "Até ser dissipada"],
+    "short rest": [
+      "Até o próximo descanso curto",
+      "Até o próximo descanso curto",
+    ],
+    "long rest": [
+      "Até o próximo descanso longo",
+      "Até o próximo descanso longo",
+    ],
     permanent: ["Permanente", "Permanente"],
   }
   const [singular, plural] = labels[unit] ?? [unit, unit]
 
   if (
     unit === "instantaneous" ||
+    unit === "special" ||
+    unit === "untilDispelled" ||
     unit === "short rest" ||
     unit === "long rest" ||
     unit === "permanent"
@@ -663,7 +702,7 @@ function formatAttackAndSave(spell: Spell): string {
 
 function formatRollModes(spell: Spell): string {
   if (!spell.rollMode.length) return "Nenhuma"
-  const labels = {
+  const labels: Record<string, string> = {
     attack: "Ataque",
     save: "Resistência",
     skill: "Perícia",
