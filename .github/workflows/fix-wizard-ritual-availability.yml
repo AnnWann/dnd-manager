@@ -1,0 +1,136 @@
+name: Fix wizard ritual availability
+
+on:
+  push:
+    paths:
+      - ".github/workflows/fix-wizard-ritual-availability.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Restrict unprepared ritual availability to wizards
+        shell: python
+        run: |
+          from pathlib import Path
+
+          known_path = Path("src/features/characters/magic/knownSpellsList.tsx")
+          known = known_path.read_text()
+
+          old = """    const prepared = alwaysPrepared || entry.spells.prepared
+    const availableAsRitual = spell.ritual
+"""
+          new = """    const prepared = alwaysPrepared || entry.spells.prepared
+    const availableAsRitual = canCastAsRitual(
+      spell,
+      entry.source,
+      prepared,
+      classes,
+    )
+"""
+          if old not in known:
+              raise SystemExit("ritual availability assignment not found")
+          known = known.replace(old, new, 1)
+
+          old = """          Magias aprendidas por classes e concedidas por habilidades, talentos,
+          raça e equipamentos equipados. Magias de ritual também contam como
+          disponíveis e são identificadas separadamente.
+"""
+          new = """          Magias aprendidas por classes e concedidas por habilidades, talentos,
+          raça e equipamentos equipados. Rituais preparados são identificados,
+          e magos também podem acessar rituais não preparados do grimório.
+"""
+          if old not in known:
+              raise SystemExit("spell list description not found")
+          known = known.replace(old, new, 1)
+
+          old = """                    alwaysPrepared={entry.alwaysPrepared}
+                    accessLabel={entry.accessLabel}
+"""
+          new = """                    alwaysPrepared={entry.alwaysPrepared}
+                    availableAsRitual={entry.availableAsRitual}
+                    accessLabel={entry.accessLabel}
+"""
+          if old not in known:
+              raise SystemExit("compact spell props not found")
+          known = known.replace(old, new, 1)
+
+          marker = """function isSpellAvailable(entry: DisplaySpellEntry): boolean {
+  return entry.prepared || entry.alwaysPrepared || entry.availableAsRitual
+}
+"""
+          helper = """function canCastAsRitual(
+  spell: Spell,
+  source: SpellSource,
+  prepared: boolean,
+  classes: CharacterClassInterface[],
+): boolean {
+  if (!spell.ritual) return false
+  if (prepared) return true
+  if (source.type !== \"class\" || source.name !== \"wizard\") return false
+
+  const wizardClass = classes.find((entry) => entry.className === \"wizard\")
+  return wizardClass?.knownSpells?.mode === \"spellbook\"
+}
+
+""" + marker
+          if marker not in known:
+              raise SystemExit("spell availability helper marker not found")
+          known = known.replace(marker, helper, 1)
+          known_path.write_text(known)
+
+          compact_path = Path("src/features/characters/magic/compactSpellCard.tsx")
+          compact = compact_path.read_text()
+
+          old = """  alwaysPrepared: boolean
+  accessLabel?: string
+"""
+          new = """  alwaysPrepared: boolean
+  availableAsRitual: boolean
+  accessLabel?: string
+"""
+          if old not in compact:
+              raise SystemExit("compact props type not found")
+          compact = compact.replace(old, new, 1)
+
+          old = """  alwaysPrepared,
+  accessLabel,
+"""
+          new = """  alwaysPrepared,
+  availableAsRitual,
+  accessLabel,
+"""
+          if old not in compact:
+              raise SystemExit("compact props destructuring not found")
+          compact = compact.replace(old, new, 1)
+
+          old = """        {spell.ritual ? (
+"""
+          new = """        {availableAsRitual ? (
+"""
+          if old not in compact:
+              raise SystemExit("compact ritual badge condition not found")
+          compact = compact.replace(old, new, 1)
+          compact_path.write_text(compact)
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Commit correction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/features/characters/magic/knownSpellsList.tsx src/features/characters/magic/compactSpellCard.tsx
+          git commit -m "restrict unprepared ritual access to wizards"
+          git push
