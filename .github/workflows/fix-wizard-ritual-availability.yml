@@ -21,70 +21,71 @@ jobs:
           cache: npm
 
       - name: Restrict unprepared ritual availability to wizards
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           known_path = Path("src/features/characters/magic/knownSpellsList.tsx")
           known = known_path.read_text()
 
           old = """    const prepared = alwaysPrepared || entry.spells.prepared
-    const availableAsRitual = spell.ritual
-"""
+              const availableAsRitual = spell.ritual
+          """
           new = """    const prepared = alwaysPrepared || entry.spells.prepared
-    const availableAsRitual = canCastAsRitual(
-      spell,
-      entry.source,
-      prepared,
-      classes,
-    )
-"""
+              const availableAsRitual = canCastAsRitual(
+                spell,
+                entry.source,
+                prepared,
+                classes,
+              )
+          """
           if old not in known:
               raise SystemExit("ritual availability assignment not found")
           known = known.replace(old, new, 1)
 
           old = """          Magias aprendidas por classes e concedidas por habilidades, talentos,
-          raça e equipamentos equipados. Magias de ritual também contam como
-          disponíveis e são identificadas separadamente.
-"""
+                    raça e equipamentos equipados. Magias de ritual também contam como
+                    disponíveis e são identificadas separadamente.
+          """
           new = """          Magias aprendidas por classes e concedidas por habilidades, talentos,
-          raça e equipamentos equipados. Rituais preparados são identificados,
-          e magos também podem acessar rituais não preparados do grimório.
-"""
+                    raça e equipamentos equipados. Rituais preparados são identificados,
+                    e magos também podem acessar rituais não preparados do grimório.
+          """
           if old not in known:
               raise SystemExit("spell list description not found")
           known = known.replace(old, new, 1)
 
           old = """                    alwaysPrepared={entry.alwaysPrepared}
-                    accessLabel={entry.accessLabel}
-"""
+                              accessLabel={entry.accessLabel}
+          """
           new = """                    alwaysPrepared={entry.alwaysPrepared}
-                    availableAsRitual={entry.availableAsRitual}
-                    accessLabel={entry.accessLabel}
-"""
+                              availableAsRitual={entry.availableAsRitual}
+                              accessLabel={entry.accessLabel}
+          """
           if old not in known:
               raise SystemExit("compact spell props not found")
           known = known.replace(old, new, 1)
 
           marker = """function isSpellAvailable(entry: DisplaySpellEntry): boolean {
-  return entry.prepared || entry.alwaysPrepared || entry.availableAsRitual
-}
-"""
+            return entry.prepared || entry.alwaysPrepared || entry.availableAsRitual
+          }
+          """
           helper = """function canCastAsRitual(
-  spell: Spell,
-  source: SpellSource,
-  prepared: boolean,
-  classes: CharacterClassInterface[],
-): boolean {
-  if (!spell.ritual) return false
-  if (prepared) return true
-  if (source.type !== \"class\" || source.name !== \"wizard\") return false
+            spell: Spell,
+            source: SpellSource,
+            prepared: boolean,
+            classes: CharacterClassInterface[],
+          ): boolean {
+            if (!spell.ritual) return false
+            if (prepared) return true
+            if (source.type !== \"class\" || source.name !== \"wizard\") return false
 
-  const wizardClass = classes.find((entry) => entry.className === \"wizard\")
-  return wizardClass?.knownSpells?.mode === \"spellbook\"
-}
+            const wizardClass = classes.find((entry) => entry.className === \"wizard\")
+            return wizardClass?.knownSpells?.mode === \"spellbook\"
+          }
 
-""" + marker
+          """ + marker
           if marker not in known:
               raise SystemExit("spell availability helper marker not found")
           known = known.replace(marker, helper, 1)
@@ -94,35 +95,36 @@ jobs:
           compact = compact_path.read_text()
 
           old = """  alwaysPrepared: boolean
-  accessLabel?: string
-"""
+            accessLabel?: string
+          """
           new = """  alwaysPrepared: boolean
-  availableAsRitual: boolean
-  accessLabel?: string
-"""
+            availableAsRitual: boolean
+            accessLabel?: string
+          """
           if old not in compact:
               raise SystemExit("compact props type not found")
           compact = compact.replace(old, new, 1)
 
           old = """  alwaysPrepared,
-  accessLabel,
-"""
+            accessLabel,
+          """
           new = """  alwaysPrepared,
-  availableAsRitual,
-  accessLabel,
-"""
+            availableAsRitual,
+            accessLabel,
+          """
           if old not in compact:
               raise SystemExit("compact props destructuring not found")
           compact = compact.replace(old, new, 1)
 
           old = """        {spell.ritual ? (
-"""
+          """
           new = """        {availableAsRitual ? (
-"""
+          """
           if old not in compact:
               raise SystemExit("compact ritual badge condition not found")
           compact = compact.replace(old, new, 1)
           compact_path.write_text(compact)
+          PY
 
       - run: npm ci
       - run: npm run build
