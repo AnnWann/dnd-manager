@@ -49,56 +49,62 @@ export function CompactAbilityCard({
 
   return (
     <>
-      <article className="flex min-w-0 items-center gap-2 rounded-xl border border-border bg-bg px-3 py-2">
-        <div
-          className="min-w-0 flex-1 truncate text-sm font-semibold text-textH"
-          title={abilityName}
-        >
-          {abilityName}
-        </div>
-
-        <span className="shrink-0 text-xs text-textMuted" aria-hidden="true">
-          —
-        </span>
-
-        <div
-          className="max-w-[32%] shrink-0 truncate whitespace-nowrap text-xs text-text"
-          title={compactLabel}
-        >
-          {compactLabel}
-        </div>
-
-        {usage ? (
+      <article className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-border bg-bg px-3 py-2 sm:flex sm:flex-nowrap">
+        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
           <div
-            className="shrink-0 whitespace-nowrap text-xs text-textMuted"
-            title={`${remaining}/${usage.max} usos restantes`}
+            className="min-w-0 flex-1 truncate text-sm font-semibold text-textH"
+            title={abilityName}
           >
-            {remaining}/{usage.max}
+            {abilityName}
           </div>
-        ) : null}
 
-        {canUse ? (
-          <Button
-            className="shrink-0"
-            size="sm"
-            variant="secondary"
-            disabled={remaining !== null && remaining <= 0}
-            onClick={onUse}
-          >
-            Usar
-          </Button>
-        ) : null}
+          <span className="shrink-0 text-xs text-textMuted" aria-hidden="true">
+            —
+          </span>
 
-        {canRestore ? (
-          <Button
-            className="shrink-0"
-            size="sm"
-            variant="secondary"
-            disabled={!usage || usage.used <= 0}
-            onClick={onRestore}
+          <div
+            className="max-w-[32%] shrink-0 truncate whitespace-nowrap text-xs text-text"
+            title={compactLabel}
           >
-            Restaurar
-          </Button>
+            {compactLabel}
+          </div>
+
+          {usage ? (
+            <div
+              className="shrink-0 whitespace-nowrap text-xs text-textMuted"
+              title={`${remaining}/${usage.max} usos restantes`}
+            >
+              {remaining}/{usage.max}
+            </div>
+          ) : null}
+        </div>
+
+        {canUse || canRestore ? (
+          <div className="col-span-2 flex min-w-0 gap-2 sm:contents">
+            {canUse ? (
+              <Button
+                className="min-w-0 flex-1 sm:flex-none sm:shrink-0"
+                size="sm"
+                variant="secondary"
+                disabled={remaining !== null && remaining <= 0}
+                onClick={onUse}
+              >
+                Usar
+              </Button>
+            ) : null}
+
+            {canRestore ? (
+              <Button
+                className="min-w-0 flex-1 sm:flex-none sm:shrink-0"
+                size="sm"
+                variant="secondary"
+                disabled={!usage || usage.used <= 0}
+                onClick={onRestore}
+              >
+                Restaurar
+              </Button>
+            ) : null}
+          </div>
         ) : null}
 
         <Button
@@ -125,10 +131,16 @@ export function CompactAbilityCard({
               <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-bg shadow-xl sm:max-h-[calc(100dvh-2rem)]">
                 <header className="flex shrink-0 items-start justify-between gap-3 border-b border-accentBorder bg-bg/95 p-4 backdrop-blur">
                   <div className="min-w-0">
-                    <h2 className="truncate font-heading text-lg text-textH" title={abilityName}>
+                    <h2
+                      className="truncate font-heading text-lg text-textH"
+                      title={abilityName}
+                    >
                       {abilityName}
                     </h2>
-                    <div className="mt-1 truncate text-xs text-textMuted" title={compactLabel}>
+                    <div
+                      className="mt-1 truncate text-xs text-textMuted"
+                      title={compactLabel}
+                    >
                       {compactLabel}
                     </div>
                   </div>
