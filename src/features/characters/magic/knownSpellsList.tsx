@@ -54,6 +54,7 @@ type DisplaySpellEntry = {
   source: SpellSource
   prepared: boolean
   alwaysPrepared: boolean
+  availableAsRitual: boolean
   removable: boolean
   accessLabel?: string
 }
@@ -111,14 +112,22 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       entry.source,
       classes,
     )
+    const prepared = alwaysPrepared || entry.spells.prepared
+    const availableAsRitual = spell.ritual
 
     regularSpells.push({
       key: `known:${entry.source.type}:${entry.source.sourceId}:${spell.index}`,
       spell,
       source: entry.source,
-      prepared: alwaysPrepared || entry.spells.prepared,
+      prepared,
       alwaysPrepared,
+      availableAsRitual,
       removable: true,
+      accessLabel: availableAsRitual
+        ? prepared
+          ? "Ritual"
+          : "Disponível como ritual"
+        : undefined,
     })
   }
 
@@ -131,6 +140,12 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     const remaining = entry.usage
       ? Math.max(0, entry.usage.max - entry.usage.used)
       : undefined
+    const originAccessLabel =
+      entry.castingMode === "known"
+        ? "Usa espaços normais"
+        : entry.usage
+          ? `Pela origem: ${remaining}/${entry.usage.max} usos`
+          : "Apenas pela origem"
 
     grantedSpells.push({
       key: entry.key,
@@ -138,13 +153,11 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       source: entry.source,
       prepared: true,
       alwaysPrepared: true,
+      availableAsRitual: spell.ritual,
       removable: false,
-      accessLabel:
-        entry.castingMode === "known"
-          ? "Usa espaços normais"
-          : entry.usage
-            ? `Pela origem: ${remaining}/${entry.usage.max} usos`
-            : "Apenas pela origem",
+      accessLabel: spell.ritual
+        ? `${originAccessLabel} • Ritual`
+        : originAccessLabel,
     })
   }
 
@@ -169,7 +182,8 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       : "all"
   const normalizedSearchQuery = normalizeSearchText(searchQuery)
 
-  const filteredSpells = spells.filter(({ spell, prepared, source }) => {
+  const filteredSpells = spells.filter((entry) => {
+    const { spell, source } = entry
     const matchesName =
       !normalizedSearchQuery ||
       normalizeSearchText(spell.displayName || spell.name).includes(
@@ -177,10 +191,11 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       ) ||
       normalizeSearchText(spell.name).includes(normalizedSearchQuery)
 
+    const available = isSpellAvailable(entry)
     const matchesPrepared =
       preparedFilter === "all" ||
-      (preparedFilter === "prepared" && prepared) ||
-      (preparedFilter === "not-prepared" && !prepared)
+      (preparedFilter === "prepared" && available) ||
+      (preparedFilter === "not-prepared" && !available)
 
     const matchesSourceType =
       effectiveSourceTypeFilter === "all" ||
@@ -278,7 +293,9 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
           Magias disponíveis
         </div>
         <div className="mt-1 text-xs text-text">
-          Magias aprendidas por classes e concedidas por habilidades, talentos, raça e equipamentos equipados.
+          Magias aprendidas por classes e concedidas por habilidades, talentos,
+          raça e equipamentos equipados. Magias de ritual também contam como
+          disponíveis e são identificadas separadamente.
         </div>
 
         {spellLimits.length ? (
@@ -346,7 +363,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
             >
               <option value="all">Todas as magias</option>
               <option value="prepared">Apenas disponíveis</option>
-              <option value="not-prepared">Apenas não preparadas</option>
+              <option value="not-prepared">Apenas indisponíveis</option>
             </select>
           </label>
 
@@ -483,6 +500,10 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       </CardContent>
     </Card>
   )
+}
+
+function isSpellAvailable(entry: DisplaySpellEntry): boolean {
+  return entry.prepared || entry.alwaysPrepared || entry.availableAsRitual
 }
 
 function loadSpellListPreferences(characterId: string): SpellListPreferences {

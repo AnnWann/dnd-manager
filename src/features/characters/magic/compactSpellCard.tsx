@@ -87,6 +87,16 @@ export function CompactSpellCard({
           {formatSpellLevel(spell)}
         </div>
 
+        {spell.ritual ? (
+          <span
+            className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded border border-accentBorder bg-accentBg px-1 text-[10px] font-bold text-accent"
+            title="Disponível como ritual"
+            aria-label="Disponível como ritual"
+          >
+            R
+          </span>
+        ) : null}
+
         <span className="shrink-0 text-xs text-textMuted" aria-hidden="true">
           —
         </span>
