@@ -1,6 +1,6 @@
 // features/characters/spells/CharacterSpellsModule.tsx
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { Card, CardHeader } from "../../../components/ui/Card"
@@ -9,7 +9,12 @@ import { useMagicContext } from "../../../contexts/magicContext"
 import { getCharacterGrantedSpells } from "../../../models/characters/characterGrantedSpells"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getSorcererLevel } from "../../../models/characters/characterSorceryPoints"
+import type { CharacterSpells } from "../../../models/magic/spells/CharacterSpells"
 import type { Spell } from "../../../models/magic/spells/Spell"
+import type {
+  CharacterClassInterface,
+  ClassName,
+} from "../../../models/sheet/Class"
 import { KnownSpellsList } from "./knownSpellsList"
 import { MetamagicModule } from "./metamagicModule"
 import { SpellSlotsEditor } from "./slots"
@@ -22,12 +27,20 @@ type Props = {
   ) => void
 }
 
+type KnownSpellEntry = CharacterSpells["knownSpells"][number]
+
+const DIVINE_PREPARED_CLASSES: readonly ClassName[] = [
+  "cleric",
+  "druid",
+  "paladin",
+]
+
 export function CharacterMagicTab({
   character,
   updateCharacter,
 }: Props) {
   const { visibleCharacters } = useCharacterContext()
-  const { getSpellByIndex } = useMagicContext()
+  const { spells, getSpellByIndex } = useMagicContext()
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle")
   const sorcererLevel = getSorcererLevel(character)
   const hasSorcererResources = sorcererLevel >= 2
@@ -36,6 +49,21 @@ export function CharacterMagicTab({
     [getSpellByIndex, visibleCharacters],
   )
   const canCopySpellList = spellListText.trim().length > 0
+
+  useEffect(() => {
+    const missingSpells = getMissingDivineClassSpells(character, spells)
+    if (missingSpells.length === 0) return
+
+    updateCharacter(character.get("id"), (current) => {
+      let nextCharacter = current
+
+      for (const spellEntry of missingSpells) {
+        nextCharacter = nextCharacter.addSpell(spellEntry)
+      }
+
+      return nextCharacter
+    })
+  }, [character, spells, updateCharacter])
 
   async function copyAllSpellLists() {
     if (!canCopySpellList) return
@@ -112,6 +140,79 @@ export function CharacterMagicTab({
       </Card>
     </div>
   )
+}
+
+function getMissingDivineClassSpells(
+  character: CharacterTemplate,
+  availableSpells: Spell[],
+): KnownSpellEntry[] {
+  const knownSpellIds = new Set(
+    (character.get("magic")?.spells.knownSpells ?? []).map(
+      (entry) => entry.spells.id,
+    ),
+  )
+  const missingSpells: KnownSpellEntry[] = []
+  const classes = character.get("sheet").classes ?? []
+
+  for (const classData of classes) {
+    if (!isDivinePreparedCaster(classData)) continue
+
+    const maximumSpellLevel = getMaximumDivineSpellLevel(classData)
+    if (maximumSpellLevel < 1) continue
+
+    for (const spell of availableSpells) {
+      if (
+        knownSpellIds.has(spell.index) ||
+        spell.slotLevel < 1 ||
+        spell.slotLevel > maximumSpellLevel ||
+        !spell.classes.includes(classData.className)
+      ) {
+        continue
+      }
+
+      missingSpells.push({
+        source: {
+          type: "class",
+          name: classData.className,
+          sourceId: classData.className,
+          attribute:
+            classData.castingAttribute ??
+            (classData.className === "paladin" ? "cha" : "wis"),
+        },
+        spells: {
+          id: spell.index,
+          prepared: false,
+        },
+      })
+      knownSpellIds.add(spell.index)
+    }
+  }
+
+  return missingSpells
+}
+
+function isDivinePreparedCaster(
+  classData: CharacterClassInterface,
+): classData is CharacterClassInterface & {
+  className: "cleric" | "druid" | "paladin"
+} {
+  return (
+    DIVINE_PREPARED_CLASSES.includes(classData.className) &&
+    classData.knownSpells?.mode === "prepared-only"
+  )
+}
+
+function getMaximumDivineSpellLevel(
+  classData: CharacterClassInterface & {
+    className: "cleric" | "druid" | "paladin"
+  },
+): number {
+  if (classData.className === "paladin") {
+    if (classData.level < 2) return 0
+    return Math.min(5, Math.ceil(classData.level / 4))
+  }
+
+  return Math.min(9, Math.ceil(classData.level / 2))
 }
 
 function buildAllCharacterSpellList(
