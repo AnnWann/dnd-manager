@@ -8,7 +8,6 @@ import {
 
 const CREATURE_PACK_FORMAT = "dnd-manager-creature-pack"
 const CREATURE_PACK_VERSION = 1
-
 const JSON_MIME = "application/json"
 const ZIP_MIME = "application/zip"
 
@@ -76,11 +75,21 @@ export function getCreatureJsonTemplate(): string {
       conditionImmunities: "",
       senses: "",
       languages: "",
-      traits: "",
-      actions: "",
-      bonusActions: "",
-      reactions: "",
-      legendaryActions: "",
+      traits: [
+        {
+          name: "Nome do traço",
+          description: "Descrição completa do traço ou habilidade.",
+        },
+      ],
+      actions: [
+        {
+          name: "Nome da ação",
+          description: "Descrição completa da ação.",
+        },
+      ],
+      bonusActions: [],
+      reactions: [],
+      legendaryActions: [],
       combatNotes: "",
       imageUrl: "",
     },
@@ -139,9 +148,6 @@ export async function downloadCreaturePackZip(
         const asset = await fetchImageAsset(creature.sheetImageUrl)
         imagePath = `images/${baseName}.${asset.extension}`
         portable.imagePath = imagePath
-
-        // A ZIP deve ser autocontido. O JSON da criatura referencia o arquivo
-        // relativo do pack em vez de depender da URL remota original.
         delete portable.imageUrl
         zip.file(imagePath, asset.blob)
       } catch {
@@ -175,6 +181,7 @@ export async function downloadCreaturePackZip(
       "",
       "Importe este arquivo ZIP pela página Compêndio de Criaturas.",
       "As criaturas ficam em /creatures e suas imagens em /images.",
+      "Traços, ações, ações bônus, reações e ações lendárias são listas de objetos com name e description.",
       "Cada JSON usa imagePath para referenciar a imagem correspondente dentro do pack.",
       "Ao importar, o aplicativo descompacta a imagem, envia-a novamente e grava a nova URL na criatura.",
       "Também é possível editar os arquivos JSON manualmente antes da importação.",
