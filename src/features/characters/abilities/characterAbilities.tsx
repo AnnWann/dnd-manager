@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
@@ -8,6 +8,7 @@ import type { Ability } from "../../../models/abilities/Ability"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { AbilityCard } from "./abilityCard"
 import { AbilityDialog } from "./abilityDialog"
+import { CompactAbilityCard } from "./compactAbilityCard"
 
 type Props = {
   character: CharacterTemplate
@@ -39,6 +40,9 @@ type AbilitySourceFilter =
   | "feat"
 
 type AbilityKindFilter = "all" | "active" | "passive"
+type AbilityListViewMode = "detailed" | "compact"
+
+const ABILITY_LIST_VIEW_STORAGE_KEY = "dnd-manager:ability-list-view"
 
 export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   const [editingAbility, setEditingAbility] = useState<Ability | null>(null)
@@ -47,6 +51,13 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
     useState<AbilitySourceFilter>("all")
   const [kindFilter, setKindFilter] = useState<AbilityKindFilter>("all")
   const [search, setSearch] = useState("")
+  const [viewMode, setViewMode] = useState<AbilityListViewMode>(
+    loadAbilityListViewMode,
+  )
+
+  useEffect(() => {
+    saveAbilityListViewMode(viewMode)
+  }, [viewMode])
 
   const raceAbilities: RaceAbility[] = (
     character.get("sheet").race.naturalAbilities ?? []
@@ -197,12 +208,23 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
             </Button>
           </div>
 
-          <div className="mt-4 grid gap-2 md:grid-cols-[1fr_190px_150px]">
+          <div className="mt-4 grid gap-2 md:grid-cols-[minmax(220px,1fr)_150px_190px_150px]">
             <Input
               value={search}
               placeholder="Buscar habilidade..."
               onChange={(event) => setSearch(event.target.value)}
             />
+
+            <Select
+              value={viewMode}
+              aria-label="Visualização das habilidades"
+              onChange={(event) =>
+                setViewMode(event.target.value as AbilityListViewMode)
+              }
+            >
+              <option value="detailed">Completa</option>
+              <option value="compact">Simplificada</option>
+            </Select>
 
             <Select
               value={sourceFilter}
@@ -240,34 +262,45 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               Nenhuma habilidade corresponde aos filtros selecionados.
             </p>
           ) : (
-            <div className="grid gap-3">
+            <div className={viewMode === "compact" ? "grid gap-2" : "grid gap-3"}>
               {filteredAbilities.map((ability) => {
                 const equipmentAbility = isEquipmentAbility(ability)
                 const raceAbility = isRaceAbility(ability)
                 const grantedAbility = equipmentAbility || raceAbility
-                const categoryLabel = getCategoryLabel(ability)
+                const sourceLabel = getAbilitySourceLabel(
+                  ability,
+                  equipmentAbility,
+                  raceAbility,
+                  weaponIds,
+                )
+                const editAbility = grantedAbility
+                  ? undefined
+                  : () => setEditingAbility(ability)
+                const deleteAbility = grantedAbility
+                  ? undefined
+                  : () => removeAbility(ability.id)
+
+                if (viewMode === "compact") {
+                  return (
+                    <CompactAbilityCard
+                      key={ability.id}
+                      ability={ability}
+                      sourceLabel={sourceLabel}
+                      onEdit={editAbility}
+                      onRemove={deleteAbility}
+                      onUse={() => useAbility(ability.id)}
+                      onRestore={() => restoreAbility(ability.id)}
+                    />
+                  )
+                }
 
                 return (
                   <AbilityCard
                     key={ability.id}
                     ability={ability}
-                    sourceLabel={
-                      equipmentAbility
-                        ? `${weaponIds.has(ability.sourceItemId) ? "Arma" : "Equipamento"}: ${ability.sourceItemName}`
-                        : raceAbility
-                          ? "Raça"
-                          : categoryLabel
-                    }
-                    onEdit={
-                      grantedAbility
-                        ? undefined
-                        : () => setEditingAbility(ability)
-                    }
-                    onRemove={
-                      grantedAbility
-                        ? undefined
-                        : () => removeAbility(ability.id)
-                    }
+                    sourceLabel={sourceLabel}
+                    onEdit={editAbility}
+                    onRemove={deleteAbility}
                     onUse={() => useAbility(ability.id)}
                     onRestore={() => restoreAbility(ability.id)}
                   />
@@ -291,10 +324,46 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   )
 }
 
+function getAbilitySourceLabel(
+  ability: Ability,
+  equipmentAbility: boolean,
+  raceAbility: boolean,
+  weaponIds: Set<string>,
+): string | undefined {
+  if (equipmentAbility && isEquipmentAbility(ability)) {
+    return `${weaponIds.has(ability.sourceItemId) ? "Arma" : "Equipamento"}: ${ability.sourceItemName}`
+  }
+
+  if (raceAbility) return "Raça"
+  return getCategoryLabel(ability)
+}
+
 function getCategoryLabel(ability: Ability): string | undefined {
   if (ability.category === "invocation") return "Evocação"
   if (ability.category === "feat") return "Talento"
   return undefined
+}
+
+function loadAbilityListViewMode(): AbilityListViewMode {
+  if (typeof window === "undefined") return "detailed"
+
+  try {
+    return window.localStorage.getItem(ABILITY_LIST_VIEW_STORAGE_KEY) === "compact"
+      ? "compact"
+      : "detailed"
+  } catch {
+    return "detailed"
+  }
+}
+
+function saveAbilityListViewMode(viewMode: AbilityListViewMode) {
+  if (typeof window === "undefined") return
+
+  try {
+    window.localStorage.setItem(ABILITY_LIST_VIEW_STORAGE_KEY, viewMode)
+  } catch {
+    // Storage may be unavailable in private or restricted browser contexts.
+  }
 }
 
 function updateRaceAbilityUsage(
