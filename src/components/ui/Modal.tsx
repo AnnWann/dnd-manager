@@ -31,11 +31,11 @@ export function Modal({ title, onClose, children, className }: ModalProps) {
   if (typeof document === "undefined") return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[10000] flex h-dvh w-screen items-stretch justify-stretch overflow-hidden sm:items-center sm:justify-center sm:p-4">
+    <div className="fixed inset-0 z-[10000] flex h-screen w-screen items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-4">
       <button
         type="button"
         aria-label="Fechar"
-        className="absolute inset-0 bg-black/65 backdrop-blur-sm"
+        className="absolute inset-0"
         onClick={onClose}
       />
 
@@ -44,11 +44,11 @@ export function Modal({ title, onClose, children, className }: ModalProps) {
         aria-modal="true"
         aria-label={title}
         className={cn(
-          "relative z-10 flex h-dvh max-h-dvh w-full max-w-3xl flex-col overflow-hidden bg-bg-elevated shadow-theme-lg sm:h-auto sm:max-h-[92dvh] sm:rounded-xl sm:border sm:border-border",
+          "relative z-10 flex max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-bg-elevated shadow-theme-lg sm:max-h-[calc(100dvh-2rem)]",
           className,
         )}
       >
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-bg-elevated px-4 py-3 sm:px-5">
+        <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between gap-3 border-b border-border bg-bg-elevated/95 px-4 py-3 backdrop-blur sm:px-5">
           <h2 className="min-w-0 break-words font-heading text-lg font-semibold text-textH">
             {title}
           </h2>
