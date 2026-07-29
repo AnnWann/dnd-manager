@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Crosshair, Hand, Scale, Sparkles, Swords } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
@@ -16,6 +17,10 @@ import {
   type Weapon,
 } from "../../../models/items/equipment/Weapon"
 import { EquipmentFeaturesList } from "./equipmentFeaturesList"
+import {
+  HandItemActionsDialog,
+  type HandItemActionsDialogState,
+} from "../characterSheet/weaponAttackCardActionsDialog"
 
 type Props = {
   character: CharacterTemplate
@@ -97,13 +102,12 @@ export function EquipmentWeaponsSection({
   character,
   updateCharacter,
 }: Props) {
+  const [dialogState, setDialogState] =
+    useState<HandItemActionsDialogState | null>(null)
   const weapons = character.get("equipment").weapons
   const usedHands = getUsedArmsIncludingShield(character)
   const totalHands = character.get("sheet").arms
 
-  function unequipWeapon(index: number) {
-    updateCharacter(character.get("id"), (c) => c.unequipWeapon(index))
-  }
 
   function setWeaponGrip(index: number, wieldedTwoHanded: boolean) {
     updateCharacter(character.get("id"), (current) =>
@@ -112,7 +116,8 @@ export function EquipmentWeaponsSection({
   }
 
   return (
-    <section>
+    <>
+      <section>
       <div className="mb-3 flex items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold text-textH">
@@ -216,7 +221,7 @@ export function EquipmentWeaponsSection({
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => unequipWeapon(index)}
+                      onClick={() => setDialogState({ itemId: weapon.id })}
                     >
                       Desequipar
                     </Button>
@@ -289,6 +294,13 @@ export function EquipmentWeaponsSection({
         </div>
       )}
     </section>
+
+      <HandItemActionsDialog
+        character={character}
+        state={dialogState}
+        onClose={() => setDialogState(null)}
+      />
+    </>
   )
 }
 

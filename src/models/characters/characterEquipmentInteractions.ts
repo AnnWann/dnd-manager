@@ -14,6 +14,7 @@ import { canItemGoInPocket } from "../items/itemPocketability"
 
 export type EquipmentDestination =
   | { type: "natural" }
+  | { type: "pocket" }
   | {
       type: "hand"
       hands?: 1 | 2
@@ -37,6 +38,10 @@ export function equipInventoryItemWithRules(
     .find((entry) => entry.id === itemId)
 
   if (!item) return character
+
+  if (destination.type === "pocket") {
+    return pocketInventoryItemWithRules(character, itemId)
+  }
 
   if (destination.type === "hand") {
     const hands =
