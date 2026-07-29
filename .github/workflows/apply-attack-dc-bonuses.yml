@@ -1,0 +1,41 @@
+name: Apply attack and DC bonuses
+
+on:
+  pull_request:
+    paths:
+      - ".github/attack-dc-bonus-trigger"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply attack and DC bonus support
+        run: python .github/apply_attack_dc_bonus.py
+
+      - run: rm -f .github/attack-dc-bonus-trigger .github/apply_attack_dc_bonus.py
+      - run: npm install --package-lock=false --ignore-scripts
+      - run: npm run build
+
+      - name: Commit implementation to PR branch
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "apply active attack and save DC bonuses"
+          git push origin HEAD:${{ github.head_ref }}
