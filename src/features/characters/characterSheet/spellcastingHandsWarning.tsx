@@ -28,14 +28,16 @@ export function SpellcastingHandsWarning({
   if (state.canCast) return null
 
   function handleOccupant(occupant: HandOccupant) {
+    const reference = occupant.reference
+
     if (
       occupant.canReduceToOneHand &&
-      occupant.reference.type === "weapon"
+      reference.type === "weapon"
     ) {
       updateCharacter(character.get("id"), (current) =>
         setWeaponGripWithRules(
           current,
-          occupant.reference.index,
+          reference.index,
           false,
         ),
       )
