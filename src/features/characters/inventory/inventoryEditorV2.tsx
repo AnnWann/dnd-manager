@@ -26,15 +26,14 @@ type Props = {
   description: string
   items: Itemmable[]
   emptyMessage: string
-  onAddItem: (item: Itemmable) => void
-  onUpdateItem: (
+  onAddItem?: (item: Itemmable) => void
+  onUpdateItem?: (
     itemId: string,
     updater: (item: Itemmable) => Itemmable,
   ) => void
-  onRemoveItem: (itemId: string) => void
+  onRemoveItem?: (itemId: string) => void
   onConsumeItem?: (itemId: string) => void
   onEquipItem?: (itemId: string) => void
-  onPocketItem?: (itemId: string) => void
   onToggleBagOfHolding?: (itemId: string) => void
   onToggleAttunement?: (itemId: string) => void
   attunedItemIds?: string[]
@@ -147,7 +146,6 @@ export function InventoryEditor({
   onRemoveItem,
   onConsumeItem,
   onEquipItem,
-  onPocketItem,
   onToggleBagOfHolding,
   onToggleAttunement,
   attunedItemIds = [],
@@ -177,14 +175,16 @@ export function InventoryEditor({
               {description}
             </div>
           </div>
-          <Button
-            className="w-full sm:w-auto"
-            size="sm"
-            variant="primary"
-            onClick={() => setCreatingItem(true)}
-          >
-            + Adicionar
-          </Button>
+          {onAddItem ? (
+            <Button
+              className="w-full sm:w-auto"
+              size="sm"
+              variant="primary"
+              onClick={() => setCreatingItem(true)}
+            >
+              + Adicionar
+            </Button>
+          ) : null}
         </div>
       </CardHeader>
 
@@ -195,6 +195,7 @@ export function InventoryEditor({
           onUpdateItem={onUpdateItem}
           onRemoveItem={onRemoveItem}
           onTransferItem={onTransferItem}
+          onEquipItem={onEquipItem}
           transferLabel={transferLabel}
           onEditItem={setEditingItem}
         />
@@ -268,13 +269,15 @@ export function InventoryEditor({
                   {isOpen ? (
                     <div className="border-t border-border p-3">
                       <div className="flex flex-wrap gap-2">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => setEditingItem(item)}
-                        >
-                          Editar
-                        </Button>
+                        {onUpdateItem ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => setEditingItem(item)}
+                          >
+                            Editar
+                          </Button>
+                        ) : null}
 
                         {item.magicItem &&
                         item.requiresAttunement &&
@@ -300,23 +303,13 @@ export function InventoryEditor({
                           </Button>
                         ) : null}
 
-                        {item.equippable && item.equipSlot && onEquipItem ? (
+                        {onEquipItem ? (
                           <Button
                             size="sm"
                             variant="secondary"
                             onClick={() => onEquipItem(item.id)}
                           >
                             Equipar
-                          </Button>
-                        ) : null}
-
-                        {canItemGoInPocket(item) && onPocketItem ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => onPocketItem(item.id)}
-                          >
-                            Colocar no bolso
                           </Button>
                         ) : null}
 
@@ -342,18 +335,25 @@ export function InventoryEditor({
                           </Button>
                         ) : null}
 
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => onRemoveItem(item.id)}
-                        >
-                          Remover
-                        </Button>
+                        {onRemoveItem ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={!onRemoveItem}
+                  onClick={() => onRemoveItem?.(item.id)}
+                          >
+                            Remover
+                          </Button>
+                        ) : null}
                       </div>
 
                       <ItemDropdownDetails
                         item={item}
-                        onUpdate={(updater) => onUpdateItem(item.id, updater)}
+                        onUpdate={
+                          onUpdateItem
+                            ? (updater) => onUpdateItem(item.id, updater)
+                            : undefined
+                        }
                       />
                     </div>
                   ) : null}
@@ -372,6 +372,7 @@ export function InventoryEditor({
         )}
       </CardContent>
 
+      {onAddItem ? (
       <ItemEditPopup
         open={creatingItem}
         title="Criar item"
@@ -382,7 +383,9 @@ export function InventoryEditor({
           setCreatingItem(false)
         }}
       />
+      ) : null}
 
+      {onUpdateItem ? (
       <ItemEditPopup
         open={editingItem !== null}
         title="Editar item"
@@ -393,6 +396,7 @@ export function InventoryEditor({
           setEditingItem(null)
         }}
       />
+      ) : null}
     </Card>
   )
 }
@@ -411,17 +415,19 @@ function CurrencyWallet({
   onUpdateItem,
   onRemoveItem,
   onTransferItem,
+  onEquipItem,
   transferLabel,
   onEditItem,
 }: {
   items: Itemmable[]
-  onAddItem: (item: Itemmable) => void
-  onUpdateItem: (
+  onAddItem?: (item: Itemmable) => void
+  onUpdateItem?: (
     itemId: string,
     updater: (item: Itemmable) => Itemmable,
   ) => void
-  onRemoveItem: (itemId: string) => void
+  onRemoveItem?: (itemId: string) => void
   onTransferItem?: (item: Itemmable) => void
+  onEquipItem?: (itemId: string) => void
   transferLabel: string
   onEditItem: (item: Itemmable) => void
 }) {
@@ -434,20 +440,25 @@ function CurrencyWallet({
             Valores monetários ficam separados do restante dos itens.
           </div>
         </div>
-        <Button
-          className="w-full sm:w-auto"
-          size="sm"
-          variant="secondary"
-          onClick={() => onAddItem(newCurrencyItem())}
-        >
-          + Moeda
-        </Button>
+        {onAddItem ? (
+          <Button
+            className="w-full sm:w-auto"
+            size="sm"
+            variant="secondary"
+            onClick={() => onAddItem(newCurrencyItem())}
+          >
+            + Moeda
+          </Button>
+        ) : null}
       </div>
 
       {items.length ? (
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item) => (
-            <div key={item.id} className="rounded-lg border border-border bg-bg p-3">
+            <div
+              key={item.id}
+              className="rounded-lg border border-border bg-bg p-3"
+            >
               <div className="truncate text-sm font-medium text-textH">
                 {item.name || "Moedas"}
               </div>
@@ -457,9 +468,10 @@ function CurrencyWallet({
                   type="number"
                   min={0}
                   step="any"
+                  disabled={!onUpdateItem}
                   value={item.quantity ?? 0}
                   onChange={(event) =>
-                    onUpdateItem(item.id, (current) => ({
+                    onUpdateItem?.(item.id, (current) => ({
                       ...current,
                       quantity: Math.max(0, Number(event.target.value) || 0),
                     }))
@@ -467,9 +479,24 @@ function CurrencyWallet({
                 />
               </label>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button size="sm" variant="secondary" onClick={() => onEditItem(item)}>
-                  Editar
-                </Button>
+                {onUpdateItem ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => onEditItem(item)}
+                  >
+                    Editar
+                  </Button>
+                ) : null}
+                {onEquipItem ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => onEquipItem(item.id)}
+                  >
+                    Equipar
+                  </Button>
+                ) : null}
                 {onTransferItem ? (
                   <Button
                     size="sm"
@@ -479,9 +506,15 @@ function CurrencyWallet({
                     {transferLabel}
                   </Button>
                 ) : null}
-                <Button size="sm" variant="ghost" onClick={() => onRemoveItem(item.id)}>
-                  Remover
-                </Button>
+                {onRemoveItem ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onRemoveItem(item.id)}
+                  >
+                    Remover
+                  </Button>
+                ) : null}
               </div>
             </div>
           ))}

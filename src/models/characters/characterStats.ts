@@ -3,7 +3,11 @@ import type { Bonus, NormalBonusKey, ScopedBonusKey } from "../bonuses/Bonus"
 import { evaluateCharacterSheetFormula } from "../../lib/customSystems/CharacterSheetFormula"
 import type { Armor } from "../items/equipment/Armor"
 import type { Equipment } from "../items/equipment/EquipmentSlot"
-import type { Weapon } from "../items/equipment/Weapon"
+import {
+  getWeaponAttackAttribute,
+  isWeaponImprovisedGrip,
+  type Weapon,
+} from "../items/equipment/Weapon"
 import type { Attribute } from "../sheet/Attribute"
 import type { Sheet } from "../sheet/Sheet"
 import type { CharacterTemplate } from "./CharacterTemplate"
@@ -58,6 +62,9 @@ export function getEquippedItems(character: CharacterTemplate): Equipment[] {
     equipment.cape,
     ...equipment.rings,
     ...equipment.weapons,
+    ...(equipment.heldItems ?? []).filter(
+      (item): item is Equipment => item.kind === "focus",
+    ),
     ...equipment.pockets.filter(
       (item): item is Equipment => item.kind === "equipment",
     ),
@@ -400,10 +407,17 @@ export function getEffectiveWeaponAttackBonus(
   weapon: Weapon,
   baseValue: number,
 ): number {
+  if (isWeaponImprovisedGrip(weapon)) {
+    return getEffectiveAttackBonus(
+      character,
+      getEffectiveAttributeModifier(character, "str"),
+    )
+  }
+
   const weaponAttackBonus = weapon.bonuses?.attack?.bonus
     ? resolveBonus(character, weapon.bonuses.attack.bonus)
     : undefined
-  const modifierAttribute = weapon.modifierAttribute ?? "str"
+  const modifierAttribute = getWeaponAttackAttribute(weapon)
 
   return applyBonuses(baseValue, [
     ...getCharacterBonuses(character, "attackBonus"),
@@ -421,6 +435,10 @@ export function getEffectiveWeaponDamageBonus(
   weapon: Weapon,
   baseValue: number,
 ): number {
+  if (isWeaponImprovisedGrip(weapon)) {
+    return getEffectiveAttributeModifier(character, "str")
+  }
+
   const weaponDamageBonus = weapon.bonuses?.damage?.bonus
     ? resolveBonus(character, weapon.bonuses.damage.bonus)
     : undefined

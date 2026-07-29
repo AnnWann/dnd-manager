@@ -8,7 +8,9 @@ import { formatSigned } from "../../../lib/formatSigned"
 import { clampInt } from "../../../lib/numberFormat"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
+  getWeaponAttackAttribute,
   getWeaponDamageDie,
+  isWeaponImprovisedGrip,
   type Weapon,
 } from "../../../models/items/equipment/Weapon"
 import {
@@ -26,6 +28,7 @@ import {
   ATTRIBUTE_KEYS,
   type Attribute,
 } from "../../../models/sheet/Attribute"
+import { SpellcastingHandsWarning } from "./spellcastingHandsWarning"
 import type { Skill } from "../../../models/sheet/Skills"
 import { SelectSkillModule } from "./skills/selectCharacterSkills"
 
@@ -307,6 +310,8 @@ export function MinimalCharacterSheet({
 
       <CompactSection title="Ataques e CDs">
         <div className="grid gap-3">
+          <SpellcastingHandsWarning character={character} />
+
           <div>
             <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-textMuted">
               Armas equipadas
@@ -314,10 +319,12 @@ export function MinimalCharacterSheet({
             {character.get("equipment").weapons.length ? (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {character.get("equipment").weapons.map((weapon, index) => {
-                  const attribute = weapon.modifierAttribute ?? "str"
+                  const attribute = getWeaponAttackAttribute(weapon)
                   const baseAttack =
                     character.getEffectiveAttributeModifier(attribute) +
-                    (weapon.proficient ? proficiency : 0)
+                    (weapon.proficient && !isWeaponImprovisedGrip(weapon)
+                      ? proficiency
+                      : 0)
                   const attack = character.getEffectiveWeaponAttackBonus(
                     weapon,
                     baseAttack,
@@ -520,6 +527,7 @@ function CompactWeaponTile({
     <div className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center">
       <div className="truncate text-[10px] uppercase tracking-wide text-textMuted" title={weapon.name}>
         {weapon.name || "Arma"}
+        {isWeaponImprovisedGrip(weapon) ? " · imp." : ""}
       </div>
       <div className="mt-1 text-lg font-bold text-textH">{formatSigned(attack)}</div>
       <div className="text-[10px] font-medium text-textMuted">{damage}</div>
