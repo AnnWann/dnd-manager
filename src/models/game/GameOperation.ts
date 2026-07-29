@@ -15,6 +15,7 @@ export type GameEntityMetadata = {
 
 export type InventoryLocation =
   | { type: "party" }
+  | { type: "ground" }
   | { type: "character"; characterId: string }
 
 export type TransferItemOperationRequest = {
@@ -128,6 +129,19 @@ export type GameOperation =
       itemId: string
     }
   | {
+      type: "ground.item.add"
+      item: Itemmable
+    }
+  | {
+      type: "ground.item.update"
+      itemId: string
+      item: Itemmable
+    }
+  | {
+      type: "ground.item.remove"
+      itemId: string
+    }
+  | {
       type: "inventory.item.transfer"
       request: TransferItemOperationRequest
     }
@@ -148,7 +162,9 @@ function isBulkyOperation(operation: GameOperation): boolean {
     operation.type === "character.add" ||
     operation.type === "character.replace" ||
     operation.type === "party.item.add" ||
-    operation.type === "party.item.update"
+    operation.type === "party.item.update" ||
+    operation.type === "ground.item.add" ||
+    operation.type === "ground.item.update"
   )
 }
 

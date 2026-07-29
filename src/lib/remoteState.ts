@@ -30,6 +30,8 @@ export type AppStateV1 = {
   characters: CharacterTemplateProps[]
   activeCharacterId: string
   partyInventory?: Itemmable[]
+  /** Shared items currently lying on the ground. */
+  groundInventory?: Itemmable[]
   /** Carrying capacity of the party vehicle, including carriage and draft animals. */
   partyCarryCapacity?: number
   /** Optional: reusable homebrew spell definitions keyed by hb:... index (synced across devices). */
@@ -78,6 +80,7 @@ function defaultState(): AppStateV1 {
     characters: [],
     activeCharacterId: '',
     partyInventory: [],
+    groundInventory: [],
     partyCarryCapacity: 0,
     spells: [],
     entityVersions: {},

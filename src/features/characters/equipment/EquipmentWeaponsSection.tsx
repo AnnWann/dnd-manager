@@ -6,10 +6,13 @@ import { formatBonusName, formatBonusValue } from "../../../lib/formatBonus"
 import { formatSigned } from "../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getUsedArmsIncludingShield } from "../../../models/characters/characterEquipmentInteractions"
+import { setWeaponGripWithRules } from "../../../models/characters/characterHands"
 import {
+  getWeaponAttackAttribute,
   getWeaponDamageDie,
   getWeaponHandsUsed,
   isVersatileWeapon,
+  isWeaponImprovisedGrip,
   type Weapon,
 } from "../../../models/items/equipment/Weapon"
 import { EquipmentFeaturesList } from "./equipmentFeaturesList"
@@ -58,15 +61,16 @@ function formatDie(die: Weapon["damage"] | undefined) {
 }
 
 function weaponAttackBonus(character: CharacterTemplate, weapon: Weapon) {
-  const modifierAttribute = weapon.modifierAttribute ?? "str"
+  const modifierAttribute = getWeaponAttackAttribute(weapon)
 
   const attributeMod = character.getEffectiveAttributeModifier(
     modifierAttribute,
   )
 
-  const proficiency = weapon.proficient
-    ? character.getProficiencyBonus()
-    : 0
+  const proficiency =
+    weapon.proficient && !isWeaponImprovisedGrip(weapon)
+      ? character.getProficiencyBonus()
+      : 0
 
   return character.getEffectiveWeaponAttackBonus(
     weapon,
@@ -100,25 +104,9 @@ export function EquipmentWeaponsSection({
   }
 
   function setWeaponGrip(index: number, wieldedTwoHanded: boolean) {
-    updateCharacter(character.get("id"), (current) => {
-      const equipment = current.get("equipment")
-      const weapon = equipment.weapons[index]
-      if (!weapon || !isVersatileWeapon(weapon)) return current
-
-      const nextWeapon: Weapon = {
-        ...weapon,
-        twoHanded: false,
-        wieldedTwoHanded,
-      }
-      const nextUsedHands =
-        getUsedArmsIncludingShield(current) -
-        getWeaponHandsUsed(weapon) +
-        getWeaponHandsUsed(nextWeapon)
-
-      if (nextUsedHands > current.get("sheet").arms) return current
-
-      return current.updateWeapon(index, nextWeapon)
-    })
+    updateCharacter(character.get("id"), (current) =>
+      setWeaponGripWithRules(current, index, wieldedTwoHanded),
+    )
   }
 
   return (
@@ -145,12 +133,14 @@ export function EquipmentWeaponsSection({
       ) : (
         <div className="grid gap-3">
           {weapons.map((weapon, index) => {
-            const modifierAttribute = weapon.modifierAttribute ?? "str"
+            const modifierAttribute = getWeaponAttackAttribute(weapon)
             const attackBonus = weaponAttackBonus(character, weapon)
             const damageBonus = weaponDamageBonus(character, weapon)
             const damageText = formatDie(getWeaponDamageDie(weapon))
             const handUsage = getWeaponHandsUsed(weapon)
             const versatile = isVersatileWeapon(weapon)
+            const improvised = isWeaponImprovisedGrip(weapon)
+            const supportsGripChoice = versatile || weapon.twoHanded === true
             const canUseTwoHands =
               usedHands - handUsage + 2 <= totalHands
 
@@ -169,11 +159,13 @@ export function EquipmentWeaponsSection({
                         {weapon.proficient ? "Proficiente" : "Não proficiente"}
                       </span>
                       <span className="rounded-full border border-border bg-bg px-2 py-0.5 text-[10px] font-semibold text-textMuted">
-                        {versatile
-                          ? `Versátil · ${handUsage} ${handUsage === 1 ? "mão" : "mãos"}`
-                          : handUsage === 2
-                            ? "Duas mãos"
-                            : "Uma mão"}
+                        {improvised
+                          ? "Improvisada · uma mão"
+                          : versatile
+                            ? `Versátil · ${handUsage} ${handUsage === 1 ? "mão" : "mãos"}`
+                            : handUsage === 2
+                              ? "Duas mãos"
+                              : "Uma mão"}
                       </span>
                     </div>
 
@@ -185,7 +177,7 @@ export function EquipmentWeaponsSection({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    {versatile ? (
+                    {supportsGripChoice ? (
                       <div className="flex rounded-lg border border-border bg-bg p-0.5">
                         <button
                           type="button"
@@ -196,7 +188,9 @@ export function EquipmentWeaponsSection({
                           }
                           onClick={() => setWeaponGrip(index, false)}
                         >
-                          Uma mão
+                          {weapon.twoHanded
+                            ? "Uma mão — improvisada"
+                            : "Uma mão"}
                         </button>
                         <button
                           type="button"

@@ -7,7 +7,7 @@ export function ItemDropdownDetails({
   onUpdate,
 }: {
   item: Itemmable
-  onUpdate: (updater: (item: Itemmable) => Itemmable) => void
+  onUpdate?: (updater: (item: Itemmable) => Itemmable) => void
 }) {
   const equipment =
     item.kind === "equipment" || item.kind === "shield"
@@ -15,7 +15,7 @@ export function ItemDropdownDetails({
       : null
 
   function updateAbilityCharge(abilityId: string, delta: number) {
-    onUpdate((current) => {
+    onUpdate?.((current) => {
       const equipment = current as Equipment
 
       return {
@@ -40,7 +40,7 @@ export function ItemDropdownDetails({
   }
 
   function updateSpellCharge(spellIndex: string, delta: number) {
-    onUpdate((current) => {
+    onUpdate?.((current) => {
       const equipment = current as Equipment
 
       return {
@@ -87,8 +87,9 @@ export function ItemDropdownDetails({
           <div className="mt-2 grid gap-2">
             {equipment.abilities.map((ability) => {
               const usage = ability.usage
-              const canConsume = usage && usage.reset !== "spellSlot"
+              const canConsume = onUpdate && usage && usage.reset !== "spellSlot"
               const canRestore =
+                onUpdate &&
                 usage &&
                 usage.reset !== "spellSlot" &&
                 usage.reset !== "limited"

@@ -44,6 +44,14 @@ export function TransferItemDialog({
       })
     }
 
+    if (from.type !== "ground") {
+      options.push({
+        key: "ground",
+        label: "Inventário do chão",
+        location: { type: "ground" },
+      })
+    }
+
     for (const character of characters) {
       if (
         from.type === "character" &&

@@ -15,6 +15,13 @@ export function normalizeAppStateInventory(
     },
   )
 
+  const groundInventory = normalizeCollection(
+    state.groundInventory ?? [],
+    () => {
+      changed = true
+    },
+  )
+
   const characters = state.characters.map((character) => {
     const inventory = normalizeCollection(
       character.inventory ?? [],
@@ -43,6 +50,7 @@ export function normalizeAppStateInventory(
     ...state,
     characters,
     partyInventory,
+    groundInventory,
   }
 }
 

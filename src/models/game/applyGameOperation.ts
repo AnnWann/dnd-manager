@@ -188,6 +188,33 @@ export function applyGameOperation<TState extends AppStateV1>(
         ),
       }
 
+    case "ground.item.add":
+      return {
+        ...state,
+        groundInventory: [
+          ...(state.groundInventory ?? []),
+          touchItem(normalizeItemText(operation.item), meta),
+        ],
+      }
+
+    case "ground.item.update":
+      return {
+        ...state,
+        groundInventory: (state.groundInventory ?? []).map((item) =>
+          item.id === operation.itemId
+            ? touchItem(normalizeItemText(operation.item), meta)
+            : item,
+        ),
+      }
+
+    case "ground.item.remove":
+      return {
+        ...state,
+        groundInventory: (state.groundInventory ?? []).filter(
+          (item) => item.id !== operation.itemId,
+        ),
+      }
+
     case "inventory.item.transfer":
       return transferItem(state, operation.request, meta)
   }
@@ -266,6 +293,7 @@ function transferItem<TState extends AppStateV1>(
   if (locationKey(request.from) === locationKey(request.to)) return state
 
   const partyInventory = [...(state.partyInventory ?? [])]
+  const groundInventory = [...(state.groundInventory ?? [])]
   const inventoryByCharacterId = new Map(
     state.characters.map((rawCharacter) => [
       rawCharacter.id,
@@ -276,11 +304,13 @@ function transferItem<TState extends AppStateV1>(
   const sourceInventory = getLocationInventory(
     request.from,
     partyInventory,
+    groundInventory,
     inventoryByCharacterId,
   )
   const destinationInventory = getLocationInventory(
     request.to,
     partyInventory,
+    groundInventory,
     inventoryByCharacterId,
   )
 
@@ -331,6 +361,7 @@ function transferItem<TState extends AppStateV1>(
   return {
     ...state,
     partyInventory,
+    groundInventory,
     characters: state.characters.map((rawCharacter) => ({
       ...rawCharacter,
       inventory:
@@ -418,6 +449,11 @@ function getTouchedEntityKeys(operation: GameOperation): string[] {
     case "party.item.update":
     case "party.item.remove":
       return ["inventory:party", `partyItem:${operation.itemId}`]
+    case "ground.item.add":
+      return ["inventory:ground", `groundItem:${operation.item.id}`]
+    case "ground.item.update":
+    case "ground.item.remove":
+      return ["inventory:ground", `groundItem:${operation.itemId}`]
     case "inventory.item.transfer":
       return [
         `inventory:${locationKey(operation.request.from)}`,
@@ -432,14 +468,17 @@ function getTouchedEntityKeys(operation: GameOperation): string[] {
 
 function locationKey(location: InventoryLocation): string {
   if (location.type === "party") return "party"
+  if (location.type === "ground") return "ground"
   return `character:${location.characterId}`
 }
 
 function getLocationInventory(
   location: InventoryLocation,
   partyInventory: Itemmable[],
+  groundInventory: Itemmable[],
   inventoryByCharacterId: Map<string, Itemmable[]>,
 ): Itemmable[] | undefined {
   if (location.type === "party") return partyInventory
+  if (location.type === "ground") return groundInventory
   return inventoryByCharacterId.get(location.characterId)
 }

@@ -5,10 +5,7 @@ import { Input } from "../../../components/ui/Input"
 import { useCharacterContext } from "../../../contexts/characterContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getEncumbranceInfo } from "../../../models/characters/characterEncumbrance"
-import {
-  equipInventoryItemWithRules,
-  pocketInventoryItemWithRules,
-} from "../../../models/characters/characterEquipmentInteractions"
+import { equipInventoryItemWithRules } from "../../../models/characters/characterEquipmentInteractions"
 import { toggleInventoryItemAttunement } from "../../../models/characters/characterInventory"
 import {
   BAG_OF_HOLDING_CAPACITY_KG,
@@ -17,6 +14,7 @@ import {
 import type { Itemmable } from "../../../models/items/item"
 import { consumeInventoryItem } from "../../../models/items/itemConsumption"
 import { CharacterEncumbrancePanel } from "./characterEncumbrancePanel"
+import { EquipItemDialog } from "./equipItemDialog"
 import { InventoryEditor } from "./inventoryEditor"
 import { TransferItemDialog } from "./transferItemDialog"
 
@@ -59,6 +57,7 @@ export function CharacterInventoryTab({
   } = useCharacterContext()
   const [transferringItem, setTransferringItem] =
     useState<Itemmable | null>(null)
+  const [equippingItem, setEquippingItem] = useState<Itemmable | null>(null)
   const [bagLimitMessage, setBagLimitMessage] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
 
@@ -184,14 +183,7 @@ export function CharacterInventoryTab({
         onRemoveItem={removeItem}
         onConsumeItem={consumeItem}
         onEquipItem={(itemId) =>
-          updateCharacter(character.get("id"), (current) =>
-            equipInventoryItemWithRules(current, itemId),
-          )
-        }
-        onPocketItem={(itemId) =>
-          updateCharacter(character.get("id"), (current) =>
-            pocketInventoryItemWithRules(current, itemId),
-          )
+          setEquippingItem(items.find((item) => item.id === itemId) ?? null)
         }
         onToggleBagOfHolding={toggleBagOfHolding}
         onToggleAttunement={(itemId) =>
@@ -201,6 +193,23 @@ export function CharacterInventoryTab({
         }
         attunedItemIds={attunedItemIds}
         onTransferItem={canTransfer ? setTransferringItem : undefined}
+      />
+
+      <EquipItemDialog
+        open={equippingItem !== null}
+        character={character}
+        item={equippingItem}
+        onClose={() => setEquippingItem(null)}
+        onEquip={(destination) => {
+          if (!equippingItem) return
+          updateCharacter(character.get("id"), (current) =>
+            equipInventoryItemWithRules(
+              current,
+              equippingItem.id,
+              destination,
+            ),
+          )
+        }}
       />
 
       <TransferItemDialog

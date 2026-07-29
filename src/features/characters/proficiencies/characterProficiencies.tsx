@@ -1,11 +1,16 @@
 import { useMemo, useState } from "react"
-import { Plus, Search, Trash2, X } from "lucide-react"
+import { Hand, Plus, Search, Trash2, X } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import {
+  OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID,
+  OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME,
+  hasOccupiedHandsSpellcastingProficiency,
+} from "../../../models/characters/characterHands"
 import type {
   Proficiency,
   ProficiencyCategory,
@@ -175,6 +180,11 @@ export function CharacterProficienciesTab({
 
   return (
     <div className="grid gap-4">
+      <OccupiedHandsSpellcastingProficiency
+        character={character}
+        updateCharacter={updateCharacter}
+      />
+
       <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
@@ -263,6 +273,93 @@ export function CharacterProficienciesTab({
         }}
       />
     </div>
+  )
+}
+
+
+function OccupiedHandsSpellcastingProficiency({
+  character,
+  updateCharacter,
+}: Props) {
+  const ownProficiency = (character.get("sheet").proficiencies ?? []).find(
+    (proficiency) =>
+      proficiency.id === OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID ||
+      proficiency.name === OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME,
+  )
+  const racialProficiency = (
+    character.get("sheet").race.proficiencies ?? []
+  ).some(
+    (proficiency) =>
+      proficiency.id === OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID ||
+      proficiency.name === OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME,
+  )
+  const enabled = hasOccupiedHandsSpellcastingProficiency(character)
+
+  function toggle() {
+    if (racialProficiency) return
+
+    updateCharacter(character.get("id"), (current) => {
+      const proficiencies = current.get("sheet").proficiencies ?? []
+
+      if (ownProficiency) {
+        return current.withSheet(
+          "proficiencies",
+          proficiencies.filter(
+            (proficiency) => proficiency.id !== ownProficiency.id,
+          ),
+        )
+      }
+
+      return current.withSheet("proficiencies", [
+        ...proficiencies,
+        {
+          id: OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID,
+          name: OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME,
+          category: "other",
+          notes:
+            "Permite conjurar mesmo quando todas as mãos não ocupadas por focos arcanos estão preenchidas.",
+        },
+      ])
+    })
+  }
+
+  return (
+    <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-bg-subtle text-accent">
+            <Hand className="h-4 w-4" />
+          </span>
+          <div>
+            <h2 className="text-sm font-semibold text-textH">
+              {OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME}
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-textMuted">
+              Ignora o bloqueio de conjuração causado por todas as mãos estarem
+              ocupadas. Focos arcanos já não contam como bloqueadores.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          aria-pressed={enabled}
+          disabled={racialProficiency}
+          onClick={toggle}
+          className={
+            enabled
+              ? "rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH"
+              : "rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs font-medium text-text"
+          }
+        >
+          {racialProficiency
+            ? "Concedida pela raça"
+            : enabled
+              ? "Proficiente"
+              : "Não proficiente"}
+        </button>
+      </div>
+    </section>
   )
 }
 

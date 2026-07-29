@@ -5,11 +5,14 @@ import { attributeShort } from "../../../lib/attributeShorts"
 import { formatSigned } from "../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
+  getWeaponAttackAttribute,
   getWeaponDamageDie,
+  isWeaponImprovisedGrip,
   type Weapon,
 } from "../../../models/items/equipment/Weapon"
 import type { Attribute } from "../../../models/sheet/Attribute"
 import { ATTRIBUTE_KEYS } from "../../../models/sheet/Attribute"
+import { SpellcastingHandsWarning } from "./spellcastingHandsWarning"
 
 type Props = {
   character: CharacterTemplate
@@ -26,8 +29,11 @@ export function AttributeCalculators({ character }: Props) {
   }
 
   function getWeaponAttack(weapon: Weapon): number {
-    const attribute = weapon.modifierAttribute ?? "str"
-    const proficiency = weapon.proficient ? proficiencyBonus : 0
+    const attribute = getWeaponAttackAttribute(weapon)
+    const proficiency =
+      weapon.proficient && !isWeaponImprovisedGrip(weapon)
+        ? proficiencyBonus
+        : 0
     return character.getEffectiveWeaponAttackBonus(
       weapon,
       getModifier(attribute) + proficiency,
@@ -76,6 +82,8 @@ export function AttributeCalculators({ character }: Props) {
       </div>
 
       <div className="grid gap-4">
+        <SpellcastingHandsWarning character={character} />
+
         <CalculatorGroup
           icon={<Swords className="h-4 w-4" />}
           title="Armas equipadas"
@@ -182,6 +190,7 @@ function WeaponAttackCard({
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="min-w-0 truncate text-xs font-bold text-textH" title={weapon.name}>
           {weapon.name || "Arma sem nome"}
+          {isWeaponImprovisedGrip(weapon) ? " · improvisada" : ""}
         </span>
         <span className="shrink-0 text-[10px] font-semibold uppercase text-textMuted">
           {attributeShort(attribute)}

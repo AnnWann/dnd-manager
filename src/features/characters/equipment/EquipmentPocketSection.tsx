@@ -5,9 +5,11 @@ import type { CharacterTemplate } from "../../../models/characters/CharacterTemp
 import { wieldPocketWeaponWithRules } from "../../../models/characters/characterEquipmentInteractions"
 import type { ConsumableItem, ThrowableItem } from "../../../models/items/equipment/PocketItem"
 import {
+  getWeaponAttackAttribute,
   getWeaponDamageDie,
   getWeaponHandsUsed,
   isVersatileWeapon,
+  isWeaponImprovisedGrip,
   type Weapon,
 } from "../../../models/items/equipment/Weapon"
 import type { Itemmable } from "../../../models/items/item"
@@ -231,12 +233,13 @@ function WeaponPocketSummary({
   character: CharacterTemplate
   weapon: Weapon
 }) {
-  const attribute = weapon.modifierAttribute ?? "str"
+  const attribute = getWeaponAttackAttribute(weapon)
   const attributeMod = character.getEffectiveAttributeModifier(attribute)
 
-  const proficiency = weapon.proficient
-    ? character.getProficiencyBonus()
-    : 0
+  const proficiency =
+    weapon.proficient && !isWeaponImprovisedGrip(weapon)
+      ? character.getProficiencyBonus()
+      : 0
 
   const attackBonus = character.getEffectiveWeaponAttackBonus(
     weapon,

@@ -10,6 +10,7 @@ import { CustomSystemsListView } from "./views/CustomSystemsListView"
 import { InitiativeView } from "./views/InitiativeView"
 import { MagicView } from "./views/MagicView"
 import { MissionsView } from "./views/MissionsView"
+import { GroundInventoryView } from "./views/GroundInventoryView"
 import { PartyInventoryView } from "./views/PartyInventoryView"
 import { SyncView } from "./views/SyncView"
 
@@ -31,6 +32,7 @@ export function AppRouter() {
       <Route path="/character/:characterId" element={<CharacterDetailView />} />
       <Route path="/character/:characterId/:tab" element={<CharacterDetailView />} />
       <Route path="/party-inventory" element={<PartyInventoryView />} />
+      <Route path="/ground-inventory" element={<GroundInventoryView />} />
       <Route path="/missions" element={<MissionsView />} />
       <Route path="/creatures-compendium" element={<CreaturesCompendiumView />} />
       <Route path="/custom-systems" element={<CustomSystemsListView />} />

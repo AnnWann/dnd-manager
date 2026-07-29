@@ -3,6 +3,7 @@ import type { CharacterTemplate } from "../../../models/characters/CharacterTemp
 import { EquipmentArmorSection } from "./equipmentArmorSection"
 import { EquipmentAttunementSection } from "./equipmentAttunementSection"
 import { EquipmentPocketsSection } from "./EquipmentPocketSection"
+import { EquipmentHeldItemsSection } from "./EquipmentHeldItemsSection"
 import { EquipmentRingsSection } from "./equipmentRingSection"
 import { EquipmentSingleSlotSection } from "./EquipmentSingleSlotSection"
 import { EquipmentSummary } from "./equipmentSummary"
@@ -22,7 +23,7 @@ export function CharacterEquipmentTab({ character, updateCharacter }: Props) {
       <CardHeader>
         <div className="text-sm font-semibold text-textH">Equipamento</div>
         <div className="mt-1 text-xs text-text">
-          Itens equipados, escudo, armas, anéis, bolsos e sintonias.
+          Itens vestidos, empunhados, segurados, anéis, bolsos legados e sintonias.
         </div>
       </CardHeader>
 
@@ -78,6 +79,8 @@ export function CharacterEquipmentTab({ character, updateCharacter }: Props) {
           character={character}
           updateCharacter={updateCharacter}
         />
+
+        <EquipmentHeldItemsSection character={character} />
 
         <EquipmentRingsSection
           character={character}

@@ -1,6 +1,7 @@
 // models/characters/characterEquipment.ts
 
 import type { CharacterTemplate } from "./CharacterTemplate"
+import { getUsedHands } from "./characterHands"
 import type { CharacterEquipment } from "../items/equipment/Equipment"
 import type { Bonus, Equipment } from "../items/equipment/EquipmentSlot"
 import {
@@ -15,7 +16,7 @@ import type { Ability, Usage } from "../abilities/Ability"
 
 type SingleSlot = Exclude<
   keyof CharacterEquipment,
-  "weapons" | "rings" | "pockets"
+  "weapons" | "rings" | "pockets" | "heldItems"
 >
 
 function toWeapon(item: Itemmable): Weapon {
@@ -44,7 +45,7 @@ function toWeapon(item: Itemmable): Weapon {
     twoHanded: versatile ? false : (weapon.twoHanded ?? false),
     wieldedTwoHanded: versatile
       ? (weapon.wieldedTwoHanded ?? false)
-      : (weapon.twoHanded ?? false),
+      : (weapon.wieldedTwoHanded ?? weapon.twoHanded ?? false),
     damage,
     versatileDamage: versatile
       ? (weapon.versatileDamage ?? { ...damage })
@@ -72,6 +73,11 @@ export function getWeight(character: CharacterTemplate): number {
     0,
   )
 
+  const heldItemsWeight = (equipment.heldItems ?? []).reduce(
+    (total, item) => total + (item.weight ?? 0) * (item.quantity ?? 1),
+    0,
+  )
+
   const equipmentWeight =
     (equipment.armor?.weight ?? 0) * (equipment.armor?.quantity ?? 1) +
     (equipment.boots?.weight ?? 0) * (equipment.boots?.quantity ?? 1) +
@@ -79,6 +85,7 @@ export function getWeight(character: CharacterTemplate): number {
     (equipment.helmet?.weight ?? 0) * (equipment.helmet?.quantity ?? 1) +
     ringsWeight +
     weaponsWeight +
+    heldItemsWeight +
     pocketsWeight
 
   const inventoryWeight = character
@@ -143,12 +150,7 @@ export function unequipArmor(character: CharacterTemplate): CharacterTemplate {
 }
 
 export function getUsedArms(character: CharacterTemplate): number {
-  return (
-    character.get("equipment").weapons?.reduce(
-      (total, weapon) => total + (getWeaponHandsUsed(weapon)),
-      0,
-    ) ?? 0
-  )
+  return getUsedHands(character)
 }
 
 export function useWeapon(
@@ -536,6 +538,7 @@ export function getEquippedItems(character: CharacterTemplate): Equipment[] {
     equipment.helmet,
     ...equipment.rings,
     ...equipment.weapons,
+    ...(equipment.heldItems ?? []).filter((item) => item.kind === "focus"),
     ...equipment.pockets.filter((item) => item.kind === "equipment"),
   ].filter(Boolean) as Equipment[]
 }
@@ -670,6 +673,7 @@ function updateEquipmentById(
     helmet: updateItem(equipment.helmet),
     rings: equipment.rings.map(updateItem),
     weapons: equipment.weapons.map(updateItem),
+    heldItems: (equipment.heldItems ?? []).map(updateItem),
     pockets: equipment.pockets.map(updateItem),
   })
 }

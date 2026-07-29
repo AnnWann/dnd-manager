@@ -26,6 +26,11 @@ import {
   type TransferItemOperationRequest,
 } from "../models/game/GameOperation"
 import type { Itemmable } from "../models/items/item"
+import {
+  removeHandOccupant,
+  stowHandOccupant as stowCharacterHandOccupant,
+  type HandOccupantReference,
+} from "../models/characters/characterHands"
 import type { Player } from "../models/player/Player"
 import type { LongRestSupplySelection } from "../models/supplies/partySupply"
 
@@ -38,6 +43,7 @@ export type CharacterContextValue = {
   visibleCharacters: CharacterTemplate[]
   transferCharacters: CharacterTemplate[]
   partyInventory: Itemmable[]
+  groundInventory: Itemmable[]
   operationLog: GameOperationRecord[]
   dispatchGameOperation: (operation: GameOperation) => void
   updateCharacter: (
@@ -65,6 +71,20 @@ export type CharacterContextValue = {
     updater: (item: Itemmable) => Itemmable,
   ) => void
   removePartyItem: (itemId: string) => void
+  addGroundItem: (item: Itemmable) => void
+  updateGroundItem: (
+    itemId: string,
+    updater: (item: Itemmable) => Itemmable,
+  ) => void
+  removeGroundItem: (itemId: string) => void
+  stowHandOccupant: (
+    characterId: string,
+    reference: HandOccupantReference,
+  ) => void
+  dropHandOccupant: (
+    characterId: string,
+    reference: HandOccupantReference,
+  ) => void
   transferItem: (request: TransferItemRequest) => void
   canTransferFromCharacter: (characterId: string) => boolean
   canViewCharacterDetails: (characterId: string) => boolean
@@ -430,6 +450,91 @@ export function CharacterProvider({
     dispatchGameOperation({ type: "party.item.remove", itemId })
   }
 
+  function addGroundItem(item: Itemmable) {
+    dispatchGameOperation({ type: "ground.item.add", item })
+  }
+
+  function updateGroundItem(
+    itemId: string,
+    updater: (item: Itemmable) => Itemmable,
+  ) {
+    setAppState((previous) => {
+      const item = (previous.groundInventory ?? []).find(
+        (entry) => entry.id === itemId,
+      )
+      if (!item) return previous
+
+      return applyRecordedGameOperation(
+        previous,
+        createGameOperationRecord(
+          {
+            type: "ground.item.update",
+            itemId,
+            item: updater(item),
+          },
+          actorId,
+        ),
+      )
+    })
+  }
+
+  function removeGroundItem(itemId: string) {
+    dispatchGameOperation({ type: "ground.item.remove", itemId })
+  }
+
+  function stowHandOccupant(
+    characterId: string,
+    reference: HandOccupantReference,
+  ) {
+    updateCharacter(characterId, (current) =>
+      stowCharacterHandOccupant(current, reference),
+    )
+  }
+
+  function dropHandOccupant(
+    characterId: string,
+    reference: HandOccupantReference,
+  ) {
+    setAppState((previous) => {
+      const rawCharacter = previous.characters.find(
+        (entry) => entry.id === characterId,
+      )
+      if (!rawCharacter) return previous
+
+      const removed = removeHandOccupant(
+        CharacterTemplate.fromJSON(rawCharacter),
+        reference,
+      )
+      if (!removed.item) return previous
+
+      const withCharacter = applyRecordedGameOperation(
+        previous,
+        createGameOperationRecord(
+          {
+            type: "character.replace",
+            characterId,
+            character: removed.character.toJSON(),
+          },
+          actorId,
+        ),
+      )
+
+      return applyRecordedGameOperation(
+        withCharacter,
+        createGameOperationRecord(
+          {
+            type: "ground.item.add",
+            item: {
+              ...removed.item,
+              insideBagOfHolding: false,
+            },
+          },
+          actorId,
+        ),
+      )
+    })
+  }
+
   function canTransferFromCharacter(characterId: string): boolean {
     if (userRole === "master") return true
 
@@ -496,6 +601,7 @@ export function CharacterProvider({
         visibleCharacters,
         transferCharacters,
         partyInventory: appState.partyInventory ?? [],
+        groundInventory: appState.groundInventory ?? [],
         operationLog: appState.operations ?? [],
         dispatchGameOperation,
         updateCharacter,
@@ -514,6 +620,11 @@ export function CharacterProvider({
         addPartyItem,
         updatePartyItem,
         removePartyItem,
+        addGroundItem,
+        updateGroundItem,
+        removeGroundItem,
+        stowHandOccupant,
+        dropHandOccupant,
         transferItem,
         canTransferFromCharacter,
         canViewCharacterDetails,
@@ -530,9 +641,9 @@ export function CharacterProvider({
 }
 
 function locationKey(location: InventoryLocation): string {
-  return location.type === "party"
-    ? "party"
-    : `character:${location.characterId}`
+  if (location.type === "party") return "party"
+  if (location.type === "ground") return "ground"
+  return `character:${location.characterId}`
 }
 
 function canUseCharacterAsSource(

@@ -95,6 +95,12 @@ function App() {
       onClick: () => navigate("/party-inventory"),
     },
     {
+      label: "Inventário do chão",
+      icon: <IconBackpack />,
+      active: location.pathname === "/ground-inventory",
+      onClick: () => navigate("/ground-inventory"),
+    },
+    {
       label: "Missões",
       icon: <IconNotes />,
       active: location.pathname === "/missions",
