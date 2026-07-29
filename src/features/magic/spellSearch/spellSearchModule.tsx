@@ -11,6 +11,7 @@ import {
 } from "../../../contexts/consts"
 import type { Spell } from "../../../models/magic/spells/Spell"
 import type { ClassName } from "../../../models/sheet/Class"
+import { attributeShort } from "../../../lib/attributeShorts"
 import { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { SpellSource } from "../../../models/magic/spells/SpellSource"
 
@@ -761,7 +762,7 @@ function formatRollMode(spell: Spell): string {
   if (spell.targeting.hasSavingThrow) {
     parts.push(
       spell.targeting.savingThrowAttribute
-        ? `Teste de resistência: ${spell.targeting.savingThrowAttribute.toUpperCase()}`
+        ? `Teste de resistência: ${attributeShort(spell.targeting.savingThrowAttribute)}`
         : "Teste de resistência",
     )
   }

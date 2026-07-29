@@ -51,6 +51,8 @@ const NORMAL_BONUS_KEYS: DisplayBonusKey[] = [
 const SCOPED_BONUS_KEYS = [
   "weaponAttackBonus",
   "spellAttackBonus",
+  "weaponDamageBonus",
+  "spellDamageBonus",
   "spellSaveDcBonus",
   "abilitySaveDcBonus",
 ] as const
@@ -336,7 +338,7 @@ function WeaponBonusList({ weapon }: WeaponBonusListProps) {
   for (const key of SCOPED_BONUS_KEYS) {
     for (const entry of bonuses[key] ?? []) {
       const scope = entry.attribute
-        ? ` ${entry.attribute.toUpperCase()}`
+        ? ` ${attributeShort(entry.attribute)}`
         : " — todos"
       rows.push(`${formatBonusName(key)}${scope}: ${formatBonusValue(entry.bonus)}`)
     }
@@ -344,7 +346,7 @@ function WeaponBonusList({ weapon }: WeaponBonusListProps) {
 
   for (const entry of bonuses.attribute ?? []) {
     rows.push(
-      `Atributo ${entry.attribute.toUpperCase()}: ${formatBonusValue(
+      `Atributo ${attributeShort(entry.attribute)}: ${formatBonusValue(
         entry.bonus,
       )}`,
     )
@@ -352,7 +354,7 @@ function WeaponBonusList({ weapon }: WeaponBonusListProps) {
 
   for (const entry of bonuses.attributeModifier ?? []) {
     rows.push(
-      `Mod. ${entry.attribute.toUpperCase()}: ${formatBonusValue(
+      `Mod. ${attributeShort(entry.attribute)}: ${formatBonusValue(
         entry.bonus,
       )}`,
     )

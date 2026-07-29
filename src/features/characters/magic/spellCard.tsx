@@ -11,6 +11,8 @@ import {
 import type { Spell } from "../../../models/magic/spells/Spell"
 import type { SpellSource } from "../../../models/magic/spells/SpellSource"
 import type { ClassName } from "../../../models/sheet/Class"
+import type { Attribute } from "../../../models/sheet/Attribute"
+import { attributeShort } from "../../../lib/attributeShorts"
 
 const MAX_CASTING_DESCRIPTIONS = 5
 const MAX_CASTING_DESCRIPTION_LENGTH = 800
@@ -693,7 +695,7 @@ function formatAttackAndSave(spell: Spell): string {
   if (spell.targeting.hasSavingThrow) {
     parts.push(
       spell.targeting.savingThrowAttribute
-        ? `Teste de resistência de ${spell.targeting.savingThrowAttribute.toUpperCase()}`
+        ? `Teste de resistência de ${attributeShort(spell.targeting.savingThrowAttribute)}`
         : "Teste de resistência",
     )
   }
@@ -789,7 +791,7 @@ function formatEffect(effect: Spell["effects"][number]): string {
     parts.push(`aplica-se a: ${data.rollAppliesTo.map(String).join(", ")}`)
   }
   if (typeof data.attribute === "string") {
-    parts.push(`atributo: ${data.attribute.toUpperCase()}`)
+    parts.push(`atributo: ${formatAttributeLabel(data.attribute)}`)
   }
   if (typeof data.condition === "string") {
     parts.push(`condição: ${data.condition}`)
@@ -808,6 +810,13 @@ function formatEffect(effect: Spell["effects"][number]): string {
   if (typeof data.type === "string") parts.push(`tipo: ${data.type}`)
 
   return parts.length ? parts.join("; ") : "Dados adicionais não informados."
+}
+
+function formatAttributeLabel(value: string): string {
+  if (["str", "dex", "con", "int", "wis", "cha"].includes(value)) {
+    return attributeShort(value as Attribute)
+  }
+  return value.toUpperCase()
 }
 
 function formatUnknownDie(value: unknown): string | undefined {

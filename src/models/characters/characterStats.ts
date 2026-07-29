@@ -166,6 +166,17 @@ export function getEffectiveSpellAttackBonus(
   ])
 }
 
+export function getEffectiveSpellDamageBonus(
+  character: CharacterTemplate,
+  attribute: Attribute,
+  baseValue: number,
+): number {
+  return applyBonuses(baseValue, [
+    ...getCharacterBonuses(character, "damageBonus"),
+    ...getScopedCharacterBonuses(character, "spellDamageBonus", attribute),
+  ])
+}
+
 export function getEffectiveSaveDc(
   character: CharacterTemplate,
   baseValue: number,
@@ -435,20 +446,24 @@ export function getEffectiveWeaponDamageBonus(
   weapon: Weapon,
   baseValue: number,
 ): number {
-  if (isWeaponImprovisedGrip(weapon)) {
-    return getEffectiveAttributeModifier(character, "str")
-  }
+  const modifierAttribute = isWeaponImprovisedGrip(weapon)
+    ? "str"
+    : getWeaponAttackAttribute(weapon)
+  const effectiveBase = isWeaponImprovisedGrip(weapon)
+    ? getEffectiveAttributeModifier(character, "str")
+    : baseValue
+  const weaponDamageBonus =
+    !isWeaponImprovisedGrip(weapon) && weapon.bonuses?.damage?.bonus
+      ? resolveBonus(character, weapon.bonuses.damage.bonus)
+      : undefined
 
-  const weaponDamageBonus = weapon.bonuses?.damage?.bonus
-    ? resolveBonus(character, weapon.bonuses.damage.bonus)
-    : undefined
-  const weaponGeneralBonuses = (weapon.bonuses?.damageBonus ?? [])
-    .map((bonus) => resolveBonus(character, bonus))
-  const abilityBonuses = getAbilityBonuses(character, "damageBonus")
-
-  return applyBonuses(baseValue, [
-    ...weaponGeneralBonuses,
-    ...abilityBonuses,
+  return applyBonuses(effectiveBase, [
+    ...getCharacterBonuses(character, "damageBonus"),
+    ...getScopedCharacterBonuses(
+      character,
+      "weaponDamageBonus",
+      modifierAttribute,
+    ),
     ...(weaponDamageBonus ? [weaponDamageBonus] : []),
   ])
 }

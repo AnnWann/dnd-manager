@@ -33,7 +33,12 @@ export type BonusCollection = {
   spellSaveDcBonus?: AttributeScopedBonus[]
   /** Bônus aplicado apenas a CDs de habilidades e efeitos. */
   abilitySaveDcBonus?: AttributeScopedBonus[]
+  /** Bônus global aplicado a qualquer rolagem de dano. */
   damageBonus?: Bonus[]
+  /** Bônus aplicado apenas a danos com armas. */
+  weaponDamageBonus?: AttributeScopedBonus[]
+  /** Bônus aplicado apenas a danos mágicos. */
+  spellDamageBonus?: AttributeScopedBonus[]
   speed?: Bonus[]
   attribute?: Array<{
     attribute: Attribute
@@ -69,6 +74,8 @@ export type NormalBonusKey =
 export type ScopedBonusKey =
   | "weaponAttackBonus"
   | "spellAttackBonus"
+  | "weaponDamageBonus"
+  | "spellDamageBonus"
   | "spellSaveDcBonus"
   | "abilitySaveDcBonus"
 

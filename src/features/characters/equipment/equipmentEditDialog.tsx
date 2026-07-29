@@ -9,6 +9,7 @@ import type {
 } from "../../../models/items/equipment/EquipmentSlot"
 import type { Attribute } from "../../../models/sheet/Attribute"
 import type { BonusTarget, NormalBonusKey, ScopedBonusKey } from "../../../models/bonuses/Bonus"
+import { attributeShort } from "../../../lib/attributeShorts"
 
 type NormalBonusTarget = NormalBonusKey
 
@@ -31,6 +32,9 @@ const BONUS_TARGETS: Array<{ value: BonusTarget; label: string }> = [
   { value: "saveDcBonus", label: "CD — global" },
   { value: "spellSaveDcBonus", label: "CD de magia" },
   { value: "abilitySaveDcBonus", label: "CD de habilidade" },
+  { value: "damageBonus", label: "Dano — global" },
+  { value: "weaponDamageBonus", label: "Dano com arma" },
+  { value: "spellDamageBonus", label: "Dano mágico" },
   { value: "speed", label: "Velocidade" },
   { value: "attribute", label: "Atributo" },
   { value: "attributeModifier", label: "Modificador de atributo" },
@@ -39,6 +43,8 @@ const BONUS_TARGETS: Array<{ value: BonusTarget; label: string }> = [
 const SCOPED_TARGETS = new Set<BonusTarget>([
   "weaponAttackBonus",
   "spellAttackBonus",
+  "weaponDamageBonus",
+  "spellDamageBonus",
   "spellSaveDcBonus",
   "abilitySaveDcBonus",
 ])
@@ -378,7 +384,7 @@ export function EquipmentEditDialog<T extends Equipment>({
                     className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-xs text-text"
                   >
                     <span>
-                      Atributo {entry.attribute.toUpperCase()}{" "}
+                      Atributo {attributeShort(entry.attribute)}{" "}
                       {bonusTypeLabel(entry.bonus.type)} {entry.bonus.value}
                     </span>
 
@@ -401,7 +407,7 @@ export function EquipmentEditDialog<T extends Equipment>({
                       className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-xs text-text"
                     >
                       <span>
-                        Mod. {entry.attribute.toUpperCase()}{" "}
+                        Mod. {attributeShort(entry.attribute)}{" "}
                         {bonusTypeLabel(entry.bonus.type)} {entry.bonus.value}
                       </span>
 
@@ -426,7 +432,7 @@ export function EquipmentEditDialog<T extends Equipment>({
                     className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-xs text-text"
                   >
                     <span>
-                      {target.label}{entry.attribute ? ` ${entry.attribute.toUpperCase()}` : " — todos"}{" "}
+                      {target.label}{entry.attribute ? ` ${attributeShort(entry.attribute)}` : " — todos"}{" "}
                       {bonusTypeLabel(entry.bonus.type)} {entry.bonus.value}
                     </span>
                     <button
