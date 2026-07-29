@@ -159,7 +159,7 @@ export function CharacterSettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-[10000] flex items-start justify-center overflow-y-auto bg-black/65 p-2 pt-3 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[10000] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/65 p-3 backdrop-blur-sm sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label={`Configurações de ${character.get('name')}`}
@@ -167,7 +167,7 @@ export function CharacterSettingsModal({
         if (event.currentTarget === event.target) onClose()
       }}
     >
-      <section className="grid max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl gap-5 overflow-y-auto rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg sm:max-h-[calc(100dvh-2rem)] sm:p-5">
+      <section className="grid max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl gap-5 overflow-y-auto overscroll-contain rounded-2xl border border-border bg-bg-elevated p-4 shadow-theme-lg sm:max-h-[calc(100dvh-2rem)] sm:p-5">
         <header className="flex items-start justify-between gap-4 border-b border-border pb-4">
           <div className="flex min-w-0 items-start gap-3">
             <div className="rounded-lg border border-accentBorder bg-accentBg p-2 text-accent">

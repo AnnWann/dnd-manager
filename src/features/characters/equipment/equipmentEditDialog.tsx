@@ -198,9 +198,12 @@ export function EquipmentEditDialog<T extends Equipment>({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex h-screen w-screen items-start justify-center overflow-y-auto bg-black/40 p-4 pt-10">
+    <div className="fixed inset-0 z-[9999] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/40 p-3 sm:p-4">
       <div
-        className="w-full max-w-2xl rounded-lg border border-border p-4 shadow-xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Editar equipamento"
+        className="max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-2xl border border-border p-4 shadow-xl sm:max-h-[calc(100dvh-2rem)]"
         style={{ backgroundColor: "var(--bg)" }}
       >
         <div className="flex items-start justify-between gap-3">
