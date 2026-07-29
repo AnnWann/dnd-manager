@@ -28,6 +28,41 @@ const CATEGORY_OPTIONS: Array<{
   { value: "other", label: "Outra" },
 ]
 
+type ProficiencyPreset = {
+  value: string
+  label: string
+}
+
+const SAVING_THROW_OPTIONS: ProficiencyPreset[] = [
+  { value: "Força", label: "Força (FOR)" },
+  { value: "Destreza", label: "Destreza (DES)" },
+  { value: "Constituição", label: "Constituição (CON)" },
+  { value: "Inteligência", label: "Inteligência (INT)" },
+  { value: "Sabedoria", label: "Sabedoria (SAB)" },
+  { value: "Carisma", label: "Carisma (CAR)" },
+]
+
+const SKILL_OPTIONS: ProficiencyPreset[] = [
+  { value: "Acrobacia", label: "Acrobacia (DES)" },
+  { value: "Arcanismo", label: "Arcanismo (INT)" },
+  { value: "Atletismo", label: "Atletismo (FOR)" },
+  { value: "Atuação", label: "Atuação (CAR)" },
+  { value: "Blefe", label: "Blefe (CAR)" },
+  { value: "Furtividade", label: "Furtividade (DES)" },
+  { value: "História", label: "História (INT)" },
+  { value: "Intimidação", label: "Intimidação (CAR)" },
+  { value: "Intuição", label: "Intuição (SAB)" },
+  { value: "Investigação", label: "Investigação (INT)" },
+  { value: "Lidar com Animais", label: "Lidar com Animais (SAB)" },
+  { value: "Medicina", label: "Medicina (SAB)" },
+  { value: "Natureza", label: "Natureza (INT)" },
+  { value: "Percepção", label: "Percepção (SAB)" },
+  { value: "Persuasão", label: "Persuasão (CAR)" },
+  { value: "Prestidigitação", label: "Prestidigitação (DES)" },
+  { value: "Religião", label: "Religião (INT)" },
+  { value: "Sobrevivência", label: "Sobrevivência (SAB)" },
+]
+
 export function GrantedProficienciesEditor({
   proficiencies,
   onChange,
@@ -39,6 +74,13 @@ export function GrantedProficienciesEditor({
     useState<ProficiencyCategory>("weapon")
   const [name, setName] = useState("")
   const [notes, setNotes] = useState("")
+  const presetOptions = getPresetOptions(category)
+
+  function changeCategory(nextCategory: ProficiencyCategory) {
+    const nextOptions = getPresetOptions(nextCategory)
+    setCategory(nextCategory)
+    setName(nextOptions?.[0]?.value ?? "")
+  }
 
   function addProficiency() {
     const normalizedName = name.trim()
@@ -60,7 +102,7 @@ export function GrantedProficienciesEditor({
         notes: notes.trim() || undefined,
       },
     ])
-    setName("")
+    setName(presetOptions?.[0]?.value ?? "")
     setNotes("")
   }
 
@@ -126,7 +168,7 @@ export function GrantedProficienciesEditor({
           <Select
             value={category}
             onChange={(event) =>
-              setCategory(event.target.value as ProficiencyCategory)
+              changeCategory(event.target.value as ProficiencyCategory)
             }
           >
             {CATEGORY_OPTIONS.map((option) => (
@@ -139,11 +181,24 @@ export function GrantedProficienciesEditor({
 
         <label className="grid gap-1">
           <span className="text-xs text-textMuted">Proficiência</span>
-          <Input
-            value={name}
-            placeholder="Ex.: Ferramentas de ladrão"
-            onChange={(event) => setName(event.target.value)}
-          />
+          {presetOptions ? (
+            <Select
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            >
+              {presetOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <Input
+              value={name}
+              placeholder="Ex.: Ferramentas de ladrão"
+              onChange={(event) => setName(event.target.value)}
+            />
+          )}
         </label>
 
         <Button
@@ -168,6 +223,14 @@ export function GrantedProficienciesEditor({
       </label>
     </section>
   )
+}
+
+function getPresetOptions(
+  category: ProficiencyCategory,
+): ProficiencyPreset[] | undefined {
+  if (category === "saving-throw") return SAVING_THROW_OPTIONS
+  if (category === "skill") return SKILL_OPTIONS
+  return undefined
 }
 
 function categoryLabel(category: ProficiencyCategory): string {
