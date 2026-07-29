@@ -16,7 +16,7 @@ import type {
   AbilityUsageResetKind,
 } from "../../../models/abilities/Ability"
 import { BonusesFields } from "../inventory/equipmentBonusFields"
-import { GrantedProficienciesEditor } from "./grantedProficienciesEditor"
+import { GrantedProficienciesEditor } from "../proficiencies/grantedProficienciesEditor"
 import {
   GrantedSpellsEditor,
   type EditableSpellGrant,

@@ -88,9 +88,16 @@ const OCCUPIED_HANDS_OPTIONS: ProficiencyPreset[] = [
 export function GrantedProficienciesEditor({
   proficiencies,
   onChange,
+  title = "Proficiências concedidas",
+  description =
+    "Enquanto esta fonte estiver ativa, estas proficiências passam a fazer parte da ficha do personagem.",
+  emptyMessage = "Nenhuma proficiência concedida.",
 }: {
   proficiencies: Proficiency[]
   onChange: (proficiencies: Proficiency[]) => void
+  title?: string
+  description?: string
+  emptyMessage?: string
 }) {
   const [category, setCategory] =
     useState<GrantedProficiencyType>("weapon")
@@ -153,12 +160,9 @@ export function GrantedProficienciesEditor({
   return (
     <section className="grid gap-3 rounded-xl border border-border bg-bg-subtle p-3">
       <div>
-        <div className="text-xs font-semibold text-textH">
-          Proficiências concedidas
-        </div>
+        <div className="text-xs font-semibold text-textH">{title}</div>
         <p className="mt-1 text-[11px] leading-4 text-textMuted">
-          Enquanto os modificadores desta habilidade estiverem ativos, estas
-          proficiências passam a fazer parte da ficha do personagem.
+          {description}
         </p>
       </div>
 
@@ -202,7 +206,7 @@ export function GrantedProficienciesEditor({
         </div>
       ) : (
         <div className="rounded-lg border border-dashed border-border bg-bg px-3 py-4 text-center text-xs text-textMuted">
-          Nenhuma proficiência concedida.
+          {emptyMessage}
         </div>
       )}
 
