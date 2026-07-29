@@ -43,6 +43,9 @@ export function EquipmentArmorSection({
         </div>
       ) : (
         <EquipmentItemCard
+          characterId={character.get("id")}
+          reference={{ type: "slot", slot: "armor" }}
+          pocketCount={character.get("equipment").pockets.length}
           item={armor}
           fallbackName="Armadura sem nome"
           badges={[armorTypeLabel(armor.armorType)]}
@@ -58,11 +61,6 @@ export function EquipmentArmorSection({
               value: String(armor.weight ?? 0),
             },
           ]}
-          onUnequip={() =>
-            updateCharacter(character.get("id"), (current) =>
-              current.unequipArmor(),
-            )
-          }
           onUpdate={(updater) =>
             updateCharacter(character.get("id"), (current) =>
               current.with("equipment", {
