@@ -1,0 +1,69 @@
+name: Fix passive actions group
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/fix-passive-actions-trigger"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Insert passive group
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/features/characters/characterSheet/minimalCharacterActions.tsx')
+          text = path.read_text()
+          anchor = '''      <ActionGroup
+                title="Habilidades do personagem"
+                entries={abilityActions}
+                onSelect={open}
+                emptyMessage={`Nenhuma habilidade configurada como ${filterLabel(filter).toLocaleLowerCase("pt-BR")}.`}
+              />'''
+          replacement = anchor + '''
+              <ActionGroup
+                title="Passivas"
+                entries={passiveAbilities}
+                onSelect={open}
+                emptyMessage="Nenhuma habilidade passiva cadastrada."
+              />'''
+
+          if 'title="Passivas"' not in text:
+              if anchor not in text:
+                  raise SystemExit('ability action group anchor not found')
+              text = text.replace(anchor, replacement, 1)
+
+          if 'title="Passivas"' not in text:
+              raise SystemExit('passive group was not inserted')
+
+          path.write_text(text)
+          PY
+
+      - run: rm -f .github/fix-passive-actions-trigger .github/workflows/fix-passive-actions-group.yml
+      - run: npm install --package-lock=false --ignore-scripts
+      - run: npm run build
+
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "show passive abilities group in action sheet"
+          git push origin HEAD:master
