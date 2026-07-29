@@ -38,7 +38,7 @@ jobs:
               r'  if \(!occupant\) return null'
           )
           replacement = (
-              '  const itemId = state.itemId\n'
+              '  const itemId: string = state.itemId\n'
               '  const resolvedOccupant = findHandOccupantByItemId(character, itemId)\n'
               '  if (!resolvedOccupant) return null\n'
               '  const occupant: HandOccupant = resolvedOccupant'
@@ -47,6 +47,11 @@ jobs:
           if count != 1:
               raise SystemExit(f'dialog narrowing matched {count} times')
           text = text.replace('state.itemId', 'itemId')
+          text = text.replace(
+              'const itemId: string = itemId',
+              'const itemId: string = state.itemId',
+              1,
+          )
           path.write_text(text)
           PY
 
