@@ -195,7 +195,7 @@ export function CharacterView() {
       Math.max(content.scrollHeight, content.offsetHeight),
     )
     if (nextHeight > 0) {
-      setTabPanelMinHeight((current) => Math.max(current, nextHeight))
+      setTabPanelMinHeight(nextHeight)
     }
   }
 
@@ -393,7 +393,9 @@ export function CharacterView() {
   }
   const tabContentStyle: CSSProperties = {
     opacity: 1 - swipeProgress * 0.18,
-    transform: `translate3d(${swipeOffset}px, 0, 0) scale(${1 - swipeProgress * 0.015})`,
+    transform: swipeOffset === 0
+      ? undefined
+      : `translate3d(${swipeOffset}px, 0, 0) scale(${1 - swipeProgress * 0.015})`,
     transition: swipeDragging
       ? "none"
       : "transform 160ms ease-out, opacity 160ms ease-out",
@@ -483,7 +485,7 @@ export function CharacterView() {
       >
         <div
           ref={tabContentRef}
-          className="grid min-w-0 gap-4 will-change-transform"
+          className="grid min-w-0 gap-4"
           style={tabContentStyle}
         >
           {placedBefore}
