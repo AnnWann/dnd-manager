@@ -18,6 +18,10 @@ export function formatBonusName(key: string): string {
       return "Ataque com arma"
     case "spellAttackBonus":
       return "Ataque mágico"
+    case "weaponDamageBonus":
+      return "Dano com arma"
+    case "spellDamageBonus":
+      return "Dano mágico"
     case "saveDcBonus":
       return "CD geral"
     case "spellSaveDcBonus":
@@ -26,8 +30,8 @@ export function formatBonusName(key: string): string {
       return "CD de habilidade"
     case "speed":
       return "Velocidade"
-    case "damageBonus": 
-      return "Dano"
+    case "damageBonus":
+      return "Dano geral"
     default:
       return key
   }

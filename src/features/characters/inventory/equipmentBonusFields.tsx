@@ -16,6 +16,7 @@ import type { Attribute } from "../../../models/sheet/Attribute"
 import { FormulaVariablePicker } from "../../customSystems/FormulaVariablePicker"
 import { listCharacterFormulaVariables } from "../../../lib/customSystems/CharacterFormulaVariables"
 import { validateCharacterSheetFormula } from "../../../lib/customSystems/CharacterSheetFormula"
+import { attributeShort } from "../../../lib/attributeShorts"
 
 const ATTRIBUTES: Array<{ value: Attribute; label: string }> = [
   { value: "str", label: "FOR" },
@@ -38,7 +39,9 @@ const TARGET_OPTIONS: Array<{ value: BonusTarget; label: string }> = [
   { value: "saveDcBonus", label: "CD — global" },
   { value: "spellSaveDcBonus", label: "CD de magias" },
   { value: "abilitySaveDcBonus", label: "CD de habilidades" },
-  { value: "damageBonus", label: "Dano" },
+  { value: "damageBonus", label: "Dano — global" },
+  { value: "weaponDamageBonus", label: "Dano com arma" },
+  { value: "spellDamageBonus", label: "Dano mágico" },
   { value: "speed", label: "Velocidade" },
   { value: "attribute", label: "Valor de atributo" },
   { value: "attributeModifier", label: "Modificador de atributo" },
@@ -47,6 +50,8 @@ const TARGET_OPTIONS: Array<{ value: BonusTarget; label: string }> = [
 const SCOPED_TARGETS = new Set<BonusTarget>([
   "weaponAttackBonus",
   "spellAttackBonus",
+  "weaponDamageBonus",
+  "spellDamageBonus",
   "spellSaveDcBonus",
   "abilitySaveDcBonus",
 ])
@@ -181,7 +186,7 @@ export function flattenBonuses(
       values.forEach((entry, index) => {
         entries.push({
           id: `${option.value}-${index}`,
-          label: `${option.label} ${entry.attribute.toUpperCase()}: ${formatBonus(entry.bonus)}`,
+          label: `${option.label} ${attributeShort(entry.attribute)}: ${formatBonus(entry.bonus)}`,
           remove: (current) => ({
             ...current,
             [option.value]: (current[option.value] ?? []).filter(
@@ -197,7 +202,7 @@ export function flattenBonuses(
       const values = bonuses[option.value] ?? []
       values.forEach((entry, index) => {
         const scope = entry.attribute
-          ? ` ${entry.attribute.toUpperCase()}`
+          ? ` ${attributeShort(entry.attribute)}`
           : " — todos os atributos"
         entries.push({
           id: `${option.value}-${index}`,

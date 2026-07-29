@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 
 import { Button } from "../../../components/ui/Button"
+import { attributeShort } from "../../../lib/attributeShorts"
 import { formatBonusName, formatBonusValue } from "../../../lib/formatBonus"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
 import { EquipmentFeaturesList } from "./equipmentFeaturesList"
@@ -31,6 +32,8 @@ const NORMAL_BONUS_KEYS: DisplayBonusKey[] = [
 const SCOPED_BONUS_KEYS = [
   "weaponAttackBonus",
   "spellAttackBonus",
+  "weaponDamageBonus",
+  "spellDamageBonus",
   "spellSaveDcBonus",
   "abilitySaveDcBonus",
 ] as const
@@ -171,7 +174,7 @@ export function EquipmentBonusList({
   for (const key of SCOPED_BONUS_KEYS) {
     for (const entry of bonuses[key] ?? []) {
       const scope = entry.attribute
-        ? ` ${entry.attribute.toUpperCase()}`
+        ? ` ${attributeShort(entry.attribute)}`
         : " — todos"
       rows.push(`${formatBonusName(key)}${scope}: ${formatBonusValue(entry.bonus)}`)
     }
@@ -179,7 +182,7 @@ export function EquipmentBonusList({
 
   for (const entry of bonuses.attribute ?? []) {
     rows.push(
-      `Atributo ${entry.attribute.toUpperCase()}: ${formatBonusValue(
+      `Atributo ${attributeShort(entry.attribute)}: ${formatBonusValue(
         entry.bonus,
       )}`,
     )
@@ -187,7 +190,7 @@ export function EquipmentBonusList({
 
   for (const entry of bonuses.attributeModifier ?? []) {
     rows.push(
-      `Mod. ${entry.attribute.toUpperCase()}: ${formatBonusValue(
+      `Mod. ${attributeShort(entry.attribute)}: ${formatBonusValue(
         entry.bonus,
       )}`,
     )

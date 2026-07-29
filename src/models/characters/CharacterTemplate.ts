@@ -107,6 +107,7 @@ import {
   getEffectivePassivePerception,
   getEffectiveSaveDc,
   getEffectiveSpellAttackBonus,
+  getEffectiveSpellDamageBonus,
   getEffectiveSpellSaveDc,
   getEffectiveStat,
   getEffectiveWeaponAttackBonus,
@@ -444,6 +445,7 @@ export class CharacterTemplate {
   getEffectiveStat<K extends keyof Sheet["stats"]>(stat: K,): Sheet["stats"][K] {return getEffectiveStat(this, stat)}
   getEffectiveAttackBonus(baseValue: number): number {return getEffectiveAttackBonus(this, baseValue)}
   getEffectiveSpellAttackBonus(attribute: Attribute, baseValue: number): number {return getEffectiveSpellAttackBonus(this, attribute, baseValue)}
+  getEffectiveSpellDamageBonus(attribute: Attribute, baseValue: number): number {return getEffectiveSpellDamageBonus(this, attribute, baseValue)}
   getEffectiveSaveDc(baseValue: number): number {return getEffectiveSaveDc(this, baseValue)}
   getEffectiveSpellSaveDc(attribute: Attribute, baseValue: number): number {return getEffectiveSpellSaveDc(this, attribute, baseValue)}
   getEffectiveAbilitySaveDc(attribute: Attribute, baseValue: number): number {return getEffectiveAbilitySaveDc(this, attribute, baseValue)}

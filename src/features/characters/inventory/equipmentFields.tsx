@@ -5,6 +5,7 @@ import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { ATTRIBUTES, DIE_SIDES } from "../../../contexts/consts"
 import type { Ability } from "../../../models/abilities/Ability"
+import type { Bonus } from "../../../models/bonuses/Bonus"
 import type { Die, DieSides } from "../../../models/dice/Die"
 import type { Armor } from "../../../models/items/equipment/Armor"
 import type {
@@ -121,22 +122,21 @@ export function WeaponFields({
 }) {
   const weapon = item as Partial<Weapon>
   const versatile = hasWeaponProperty(weapon, "versatile")
-  const ownAttackBonus = (() => {
-    const bonus = weapon.bonuses?.attack?.bonus
-    if (!bonus) return 0
-    if (bonus.type === "sub") return -Math.abs(bonus.value)
-    return bonus.value
-  })()
+  const ownAttackBonus = getSignedOwnBonus(weapon.bonuses?.attack?.bonus)
+  const ownDamageBonus = getSignedOwnBonus(weapon.bonuses?.damage?.bonus)
 
-  function setOwnAttackBonus(value: number) {
+  function setOwnWeaponBonus(
+    target: "attack" | "damage",
+    value: number,
+  ) {
     onUpdate((current) => {
       const currentEquipment = current as Equipment
       const bonuses = { ...(currentEquipment.bonuses ?? {}) }
 
       if (value === 0) {
-        delete bonuses.attack
+        delete bonuses[target]
       } else {
-        bonuses.attack = {
+        bonuses[target] = {
           type: "equipment",
           bonus: {
             type: value < 0 ? "sub" : "add",
@@ -237,7 +237,18 @@ export function WeaponFields({
           type="number"
           value={ownAttackBonus}
           onChange={(event) =>
-            setOwnAttackBonus(Number(event.target.value) || 0)
+            setOwnWeaponBonus("attack", Number(event.target.value) || 0)
+          }
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <label className="text-xs text-text">Bônus próprio de dano</label>
+        <Input
+          type="number"
+          value={ownDamageBonus}
+          onChange={(event) =>
+            setOwnWeaponBonus("damage", Number(event.target.value) || 0)
           }
         />
       </div>
@@ -291,6 +302,12 @@ export function WeaponFields({
       ) : null}
     </div>
   )
+}
+
+function getSignedOwnBonus(bonus: Bonus | undefined): number {
+  if (!bonus) return 0
+  if (bonus.type === "sub") return -Math.abs(bonus.value)
+  return bonus.value
 }
 
 function WeaponDamageFields({
