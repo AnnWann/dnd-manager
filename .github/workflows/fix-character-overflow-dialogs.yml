@@ -21,7 +21,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Fix character tab sizing and dialog semantics
+      - name: Fix character tab sizing and dialog positioning
         shell: bash
         run: |
           python - <<'PY'
@@ -29,113 +29,68 @@ jobs:
 
           character_path = Path("src/views/CharacterView.tsx")
           character = character_path.read_text()
-
-          old = '''  useLayoutEffect(() => {
-            lockTabPanelHeight()
-          }, [activeTab])
-          '''
-          new = '''  useLayoutEffect(() => {
-            const content = tabContentRef.current
-            if (!content) {
-              setTabPanelMinHeight(0)
-              return
-            }
-
-            const updateHeight = () => {
-              const nextHeight = Math.ceil(
-                Math.max(content.scrollHeight, content.offsetHeight),
-              )
-              setTabPanelMinHeight(nextHeight > 0 ? nextHeight : 0)
-            }
-
-            updateHeight()
-            const observer = new ResizeObserver(updateHeight)
-            observer.observe(content)
-
-            return () => observer.disconnect()
-          }, [activeTab])
-          '''
-          if old not in character:
-              raise SystemExit("character tab layout effect not found")
-          character = character.replace(old, new, 1)
-
-          old = '''    if (nextHeight > 0) {
-                setTabPanelMinHeight((current) => Math.max(current, nextHeight))
-              }
-          '''
-          new = '''    setTabPanelMinHeight(nextHeight > 0 ? nextHeight : 0)
-          '''
-          if old not in character:
-              raise SystemExit("character height lock not found")
-          character = character.replace(old, new, 1)
-
-          old = '''  const tabContentStyle: CSSProperties = {
-            opacity: 1 - swipeProgress * 0.18,
-            transform: `translate3d(${swipeOffset}px, 0, 0) scale(${1 - swipeProgress * 0.015})`,
-            transition: swipeDragging
-              ? "none"
-              : "transform 160ms ease-out, opacity 160ms ease-out",
-          }
-          '''
-          new = '''  const hasSwipeTransform = swipeDragging || swipeOffset !== 0
-            const tabContentStyle: CSSProperties = {
-              transition: swipeDragging
-                ? "none"
-                : "transform 160ms ease-out, opacity 160ms ease-out",
-              ...(hasSwipeTransform
-                ? {
-                    opacity: 1 - swipeProgress * 0.18,
-                    transform: `translate3d(${swipeOffset}px, 0, 0) scale(${1 - swipeProgress * 0.015})`,
-                    willChange: "transform",
-                  }
-                : {}),
-            }
-          '''
-          if old not in character:
-              raise SystemExit("character swipe style not found")
-          character = character.replace(old, new, 1)
-
-          old = '          className="grid min-w-0 gap-4 will-change-transform"\n'
-          new = '          className="grid min-w-0 gap-4"\n'
-          if old not in character:
-              raise SystemExit("character swipe class not found")
-          character = character.replace(old, new, 1)
+          character = character.replace(
+              "setTabPanelMinHeight((current) => Math.max(current, nextHeight))",
+              "setTabPanelMinHeight(nextHeight)",
+              1,
+          )
+          character = character.replace(
+              "transform: `translate3d(${swipeOffset}px, 0, 0) scale(${1 - swipeProgress * 0.015})`,",
+              "transform: swipeOffset === 0\n      ? undefined\n      : `translate3d(${swipeOffset}px, 0, 0) scale(${1 - swipeProgress * 0.015})`,",
+              1,
+          )
+          character = character.replace(
+              'className="grid min-w-0 gap-4 will-change-transform"',
+              'className="grid min-w-0 gap-4"',
+              1,
+          )
+          if "Math.max(current, nextHeight)" in character:
+              raise SystemExit("tab height accumulation was not removed")
+          if "will-change-transform" in character:
+              raise SystemExit("permanent transform containing block was not removed")
           character_path.write_text(character)
 
           ability_path = Path("src/features/characters/abilities/abilityDialog.tsx")
           ability = ability_path.read_text()
-          old = '      <div className="w-full max-w-2xl rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg">\n'
-          new = '''      <div
-                role="dialog"
-                aria-modal="true"
-                aria-label={ability ? "Editar habilidade" : "Adicionar habilidade"}
-                className="h-full w-full max-w-2xl overflow-y-auto overscroll-contain rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg sm:h-auto sm:max-h-[calc(100dvh-2rem)]"
-              >
-          '''
-          if old not in ability:
-              raise SystemExit("ability dialog panel not found")
-          ability = ability.replace(old, new, 1)
+          ability = ability.replace(
+              'className="fixed inset-0 z-[12000] flex h-screen w-screen items-start justify-center overflow-y-auto bg-black/55 p-4 pt-10 backdrop-blur-sm"',
+              'className="fixed inset-0 z-[12000] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/55 p-3 backdrop-blur-sm sm:p-4"',
+              1,
+          )
+          ability = ability.replace(
+              '<div className="w-full max-w-2xl rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg">',
+              '<div role="dialog" aria-modal="true" aria-label={ability ? "Editar habilidade" : "Adicionar habilidade"} className="max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-2xl border border-border bg-bg-elevated p-4 shadow-theme-lg sm:max-h-[calc(100dvh-2rem)]">',
+              1,
+          )
           ability_path.write_text(ability)
 
           equipment_path = Path("src/features/characters/equipment/equipmentEditDialog.tsx")
           equipment = equipment_path.read_text()
-          old = '''      <div
-                className="w-full max-w-2xl rounded-lg border border-border p-4 shadow-xl"
-                style={{ backgroundColor: "var(--bg)" }}
-              >
-          '''
-          new = '''      <div
-                role="dialog"
-                aria-modal="true"
-                aria-label="Editar equipamento"
-                className="h-full w-full max-w-2xl overflow-y-auto overscroll-contain rounded-lg border border-border p-4 shadow-xl sm:h-auto sm:max-h-[calc(100dvh-2rem)]"
-                style={{ backgroundColor: "var(--bg)" }}
-              >
-          '''
-          if old not in equipment:
-              raise SystemExit("equipment dialog panel not found")
-          equipment = equipment.replace(old, new, 1)
+          equipment = equipment.replace(
+              'className="fixed inset-0 z-[9999] flex h-screen w-screen items-start justify-center overflow-y-auto bg-black/40 p-4 pt-10"',
+              'className="fixed inset-0 z-[9999] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/40 p-3 sm:p-4"',
+              1,
+          )
+          equipment = equipment.replace(
+              'className="w-full max-w-2xl rounded-lg border border-border p-4 shadow-xl"',
+              'role="dialog"\n        aria-modal="true"\n        aria-label="Editar equipamento"\n        className="max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-2xl border border-border p-4 shadow-xl sm:max-h-[calc(100dvh-2rem)]"',
+              1,
+          )
           equipment_path.write_text(equipment)
+
+          settings_path = Path("src/features/characters/settings/CharacterSettingsModal.tsx")
+          settings = settings_path.read_text()
+          settings = settings.replace(
+              'className="fixed inset-0 z-[10000] flex items-start justify-center overflow-y-auto bg-black/65 p-2 pt-3 backdrop-blur-sm sm:items-center sm:p-4"',
+              'className="fixed inset-0 z-[10000] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/65 p-3 backdrop-blur-sm sm:p-4"',
+              1,
+          )
+          settings = settings.replace(
+              'className="grid max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl gap-5 overflow-y-auto rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg sm:max-h-[calc(100dvh-2rem)] sm:p-5"',
+              'className="grid max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl gap-5 overflow-y-auto overscroll-contain rounded-2xl border border-border bg-bg-elevated p-4 shadow-theme-lg sm:max-h-[calc(100dvh-2rem)] sm:p-5"',
+              1,
+          )
+          settings_path.write_text(settings)
           PY
 
           rm -f .github/character-layout-fix-trigger
@@ -151,6 +106,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/views/CharacterView.tsx src/features/characters/abilities/abilityDialog.tsx src/features/characters/equipment/equipmentEditDialog.tsx .github/character-layout-fix-trigger
-          git commit -m "fix character overflow and mobile dialog positioning"
+          git add src/views/CharacterView.tsx src/features/characters/abilities/abilityDialog.tsx src/features/characters/equipment/equipmentEditDialog.tsx src/features/characters/settings/CharacterSettingsModal.tsx .github/character-layout-fix-trigger
+          git commit -m "fix character overflow and centre mobile dialogs"
           git push origin HEAD:${{ github.head_ref }}
