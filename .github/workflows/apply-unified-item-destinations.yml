@@ -24,6 +24,23 @@ jobs:
       - name: Apply unified item destination updates
         run: python .github/apply_unified_item_destinations.py
 
+      - name: Preserve pocketability helper
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/features/characters/inventory/inventoryEditorV2.tsx')
+          text = path.read_text()
+          anchor = 'import {\n  getDefaultPocketableForKind,'
+          if anchor in text:
+              text = text.replace(
+                  anchor,
+                  'import {\n  canItemGoInPocket,\n  getDefaultPocketableForKind,',
+                  1,
+              )
+          path.write_text(text)
+          PY
+
       - name: Remove temporary implementation files
         run: rm -f .github/unified-item-destinations-trigger .github/apply_unified_item_destinations.py
 
