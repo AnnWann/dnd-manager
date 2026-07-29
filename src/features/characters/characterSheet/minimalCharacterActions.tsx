@@ -17,7 +17,7 @@ import {
 } from "../../../models/abilities/abilityActivation"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 
-type ActionFilter = "action" | "bonusAction" | "reaction" | "free"
+type ActionFilter = "action" | "bonusAction" | "reaction" | "free" | "passive"
 
 type AbilitySource =
   | { type: "character"; abilityId: string }
@@ -82,6 +82,10 @@ export function MinimalCharacterActions({
   const abilityActions = useMemo(
     () => getAbilityActions(character, filter),
     [character, filter],
+  )
+  const passiveAbilities = useMemo(
+    () => getPassiveAbilities(character),
+    [character],
   )
 
   function open(entry: ActionEntry) {
@@ -159,6 +163,15 @@ export function MinimalCharacterActions({
             <div className="flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-wide text-textMuted">
               <span>{filterLabel(selected.filter)}</span>
               {selected.source ? <span>• {selected.source}</span> : null}
+              {selected.ability && (selected.ability.kind ?? "active") === "passive" ? (
+                <span>
+                  • {abilityRequiresActivation(selected.ability)
+                    ? isAbilityBenefitsActive(selected.ability)
+                      ? "Ativa"
+                      : "Inativa"
+                    : "Sempre ativa"}
+                </span>
+              ) : null}
               {selected.ability?.usage ? (
                 <span>
                   • {Math.max(0, getAbilityUsageMax(character, selected.ability.usage) - selected.ability.usage.used)}/
@@ -266,6 +279,45 @@ function getAbilityActions(character: CharacterTemplate, filter: ActionFilter): 
     .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
 }
 
+function getPassiveAbilities(character: CharacterTemplate): ActionEntry[] {
+  const raceAbilities = (character.get("sheet").race.naturalAbilities ?? []).map((ability) => ({
+    ability,
+    sourceLabel: "Raça",
+    source: { type: "race", abilityId: ability.id } as AbilitySource,
+  }))
+  const characterAbilities = (character.getCharacterAbilities() ?? []).map((ability) => {
+    if ("source" in ability && ability.source === "equipment") {
+      return {
+        ability,
+        sourceLabel: `Equipamento: ${ability.sourceItemName}`,
+        source: {
+          type: "equipment",
+          itemId: ability.sourceItemId,
+          abilityId: ability.originalAbilityId,
+        } as AbilitySource,
+      }
+    }
+    return {
+      ability,
+      sourceLabel: ability.category === "feat" ? "Talento" : "Habilidade",
+      source: { type: "character", abilityId: ability.id } as AbilitySource,
+    }
+  })
+
+  return [...characterAbilities, ...raceAbilities]
+    .filter(({ ability }) => (ability.kind ?? "active") === "passive")
+    .map(({ ability, sourceLabel, source }) => ({
+      id: `passive:${source.type}:${ability.id}`,
+      name: ability.name || "Habilidade sem nome",
+      description: ability.description?.trim() || "Esta habilidade não possui uma descrição cadastrada.",
+      filter: "passive" as const,
+      source: sourceLabel,
+      ability,
+      abilitySource: source,
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
+}
+
 function normalizeActionKind(actionKind: AbilityActionKind | undefined): ActionFilter | undefined {
   if (actionKind === "action") return "action"
   if (actionKind === "bonusAction") return "bonusAction"
@@ -275,6 +327,7 @@ function normalizeActionKind(actionKind: AbilityActionKind | undefined): ActionF
 }
 
 function filterLabel(filter: ActionFilter): string {
+  if (filter === "passive") return "Passiva"
   return FILTER_OPTIONS.find((option) => option.value === filter)?.label ?? filter
 }
 
