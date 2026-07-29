@@ -39,6 +39,7 @@ import {
 } from "./weaponAttackCardActionsDialog"
 import type { Skill } from "../../../models/sheet/Skills"
 import { SelectSkillModule } from "./skills/selectCharacterSkills"
+import { MinimalCharacterActions } from "./minimalCharacterActions"
 
 type Props = {
   character: CharacterTemplate
@@ -449,6 +450,8 @@ export function MinimalCharacterSheet({
           </p>
         )}
       </CompactSection>
+
+      <MinimalCharacterActions character={character} />
 
       <HandItemActionsDialog
         character={character}
