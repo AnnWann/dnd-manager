@@ -16,6 +16,7 @@ import type {
   AbilityUsageResetKind,
 } from "../../../models/abilities/Ability"
 import { BonusesFields } from "../inventory/equipmentBonusFields"
+import { GrantedProficienciesEditor } from "./grantedProficienciesEditor"
 import {
   GrantedSpellsEditor,
   type EditableSpellGrant,
@@ -45,6 +46,7 @@ function createEmptyAbility(): Ability {
     actionKind: "action",
     trigger: "always",
     grantedSpells: [],
+    grantedProficiencies: [],
     bonuses: {},
     modifiersActive: true,
   }
@@ -80,7 +82,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
               {ability ? "Editar habilidade" : "Adicionar habilidade"}
             </h2>
             <p className="mt-1 text-xs text-textMuted">
-              Configure categoria, comportamento, usos, bônus e magias concedidas.
+              Configure categoria, comportamento, usos, bônus, proficiências e magias concedidas.
             </p>
           </div>
           <Button size="sm" variant="ghost" onClick={onClose}>
@@ -332,6 +334,13 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
           <BonusesFields
             bonuses={draft.bonuses ?? {}}
             onChange={(bonuses) => setDraft({ ...draft, bonuses })}
+          />
+
+          <GrantedProficienciesEditor
+            proficiencies={draft.grantedProficiencies ?? []}
+            onChange={(grantedProficiencies) =>
+              setDraft({ ...draft, grantedProficiencies })
+            }
           />
 
           <GrantedSpellsEditor

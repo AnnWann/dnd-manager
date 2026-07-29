@@ -34,6 +34,7 @@ type Props = {
   onRemoveItem?: (itemId: string) => void
   onConsumeItem?: (itemId: string) => void
   onEquipItem?: (itemId: string) => void
+  onPocketItem?: (itemId: string) => void
   onToggleBagOfHolding?: (itemId: string) => void
   onToggleAttunement?: (itemId: string) => void
   attunedItemIds?: string[]
@@ -50,6 +51,7 @@ type InventoryFilter =
   | "gloves"
   | "boots"
   | "ring"
+  | "necklace"
   | "bagOfHolding"
   | "magicItem"
   | "requiresAttunement"
@@ -92,6 +94,7 @@ const INVENTORY_FILTERS: Array<{ value: InventoryFilter; label: string }> = [
   { value: "gloves", label: "Luvas" },
   { value: "boots", label: "Botas" },
   { value: "ring", label: "Anéis" },
+  { value: "necklace", label: "Colares" },
   { value: "bagOfHolding", label: "Bolsa Mágica" },
 ]
 
@@ -128,7 +131,8 @@ function matchesInventoryFilter(
     filter === "helmet" ||
     filter === "gloves" ||
     filter === "boots" ||
-    filter === "ring"
+    filter === "ring" ||
+    filter === "necklace"
   ) {
     return item.kind === "equipment" && item.equipSlot === filter
   }
@@ -146,6 +150,7 @@ export function InventoryEditor({
   onRemoveItem,
   onConsumeItem,
   onEquipItem,
+  onPocketItem,
   onToggleBagOfHolding,
   onToggleAttunement,
   attunedItemIds = [],
@@ -196,6 +201,7 @@ export function InventoryEditor({
           onRemoveItem={onRemoveItem}
           onTransferItem={onTransferItem}
           onEquipItem={onEquipItem}
+          onPocketItem={onPocketItem}
           transferLabel={transferLabel}
           onEditItem={setEditingItem}
         />
@@ -313,6 +319,16 @@ export function InventoryEditor({
                           </Button>
                         ) : null}
 
+                        {canItemGoInPocket(item) && onPocketItem ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => onPocketItem(item.id)}
+                          >
+                            Enviar ao bolso
+                          </Button>
+                        ) : null}
+
                         {onToggleBagOfHolding ? (
                           <Button
                             size="sm"
@@ -416,6 +432,7 @@ function CurrencyWallet({
   onRemoveItem,
   onTransferItem,
   onEquipItem,
+  onPocketItem,
   transferLabel,
   onEditItem,
 }: {
@@ -428,6 +445,7 @@ function CurrencyWallet({
   onRemoveItem?: (itemId: string) => void
   onTransferItem?: (item: Itemmable) => void
   onEquipItem?: (itemId: string) => void
+  onPocketItem?: (itemId: string) => void
   transferLabel: string
   onEditItem: (item: Itemmable) => void
 }) {
@@ -495,6 +513,15 @@ function CurrencyWallet({
                     onClick={() => onEquipItem(item.id)}
                   >
                     Equipar
+                  </Button>
+                ) : null}
+                {canItemGoInPocket(item) && onPocketItem ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => onPocketItem(item.id)}
+                  >
+                    Enviar ao bolso
                   </Button>
                 ) : null}
                 {onTransferItem ? (
@@ -569,6 +596,7 @@ function inventoryItemTypeLabel(item: Itemmable): string {
     if (item.equipSlot === "cape") return "Capa"
     if (item.equipSlot === "weapon") return "Arma"
     if (item.equipSlot === "ring") return "Anel"
+    if (item.equipSlot === "necklace") return "Colar"
   }
   return ITEM_KIND_LABELS[item.kind ?? "common"]
 }

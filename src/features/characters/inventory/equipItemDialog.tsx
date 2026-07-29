@@ -155,6 +155,9 @@ function getEquipmentOptions(
     const requiresHand = item.equipSlot === "shield"
     const replacingShield =
       requiresHand && Boolean(character.get("equipment").shield)
+    const necklaceSpaceAvailable =
+      item.equipSlot !== "necklace" ||
+      (character.get("equipment").necklaces ?? []).length < 3
 
     options.push({
       key: `natural:${item.equipSlot}`,
@@ -163,7 +166,9 @@ function getEquipmentOptions(
         item.equipSlot === "shield"
           ? "Ocupa uma mão e ativa os benefícios do escudo."
           : "Ativa os benefícios próprios deste espaço de equipamento.",
-      available: !requiresHand || replacingShield || freeHands >= 1,
+      available:
+        necklaceSpaceAvailable &&
+        (!requiresHand || replacingShield || freeHands >= 1),
       destination: { type: "natural" },
     })
   }
@@ -181,6 +186,7 @@ function naturalSlotLabel(slot: EquipSlot): string {
     shield: "Empunhar como escudo",
     weapon: "Empunhar como arma",
     ring: "Usar como anel",
+    necklace: "Usar como colar",
   }
 
   return labels[slot]

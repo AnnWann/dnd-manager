@@ -1,5 +1,6 @@
 import type { BonusCollection } from "../bonuses/Bonus"
 import type { SpellGrant } from "../magic/spells/SpellGrant"
+import type { Proficiency } from "../sheet/Proficiency"
 
 export interface Ability {
   id: string
@@ -11,6 +12,7 @@ export interface Ability {
   actionKind?: AbilityActionKind
   trigger?: Trigger
   grantedSpells?: SpellGrant[]
+  grantedProficiencies?: Proficiency[]
   bonuses?: BonusCollection
   /** Permite desativar modificadores sem remover a habilidade. Passivas permanecem ativas. */
   modifiersActive?: boolean

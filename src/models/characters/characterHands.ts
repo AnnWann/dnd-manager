@@ -5,6 +5,7 @@ import {
   type Weapon,
 } from "../items/equipment/Weapon"
 import type { Itemmable } from "../items/item"
+import { getCharacterProficiencies } from "./characterProficiencies"
 
 export const OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID =
   "spellcasting-with-occupied-hands"
@@ -109,15 +110,11 @@ export function getFreeHands(character: CharacterTemplate): number {
 export function hasOccupiedHandsSpellcastingProficiency(
   character: CharacterTemplate,
 ): boolean {
-  const proficiencies = [
-    ...(character.get("sheet").proficiencies ?? []),
-    ...(character.get("sheet").race.proficiencies ?? []),
-  ]
   const expectedName = normalizeName(
     OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME,
   )
 
-  return proficiencies.some(
+  return getCharacterProficiencies(character).some(
     (proficiency) =>
       proficiency.id === OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID ||
       (proficiency.category === "other" &&
