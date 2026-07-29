@@ -24,6 +24,20 @@ jobs:
       - name: Apply inventory and proficiency updates
         run: python .github/apply_pockets_necklaces_proficiencies.py
 
+      - name: Fix proficiency source destructuring
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/features/characters/proficiencies/characterProficiencies.tsx')
+          text = path.read_text()
+          text = text.replace(
+              'entries.map(({ proficiency, source }) => (',
+              'entries.map(({ proficiency, source, sourceName }) => (',
+          )
+          path.write_text(text)
+          PY
+
       - name: Remove temporary implementation files
         run: rm -f .github/pockets-necklaces-proficiencies-trigger .github/apply_pockets_necklaces_proficiencies.py
 
