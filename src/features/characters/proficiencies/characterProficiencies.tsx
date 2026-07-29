@@ -108,9 +108,15 @@ export function CharacterProficienciesTab({
 
   const characterProficiencies = toManagedProficiencies(
     character.get("sheet").proficiencies ?? [],
+  ).filter(
+    (proficiency) =>
+      proficiency.id !== OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID,
   )
   const racialProficiencies = toManagedProficiencies(
     character.get("sheet").race.proficiencies ?? [],
+  ).filter(
+    (proficiency) =>
+      proficiency.id !== OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID,
   )
 
   const displayedProficiencies: DisplayProficiency[] = [

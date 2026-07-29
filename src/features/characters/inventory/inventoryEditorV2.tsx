@@ -195,6 +195,7 @@ export function InventoryEditor({
           onUpdateItem={onUpdateItem}
           onRemoveItem={onRemoveItem}
           onTransferItem={onTransferItem}
+          onEquipItem={onEquipItem}
           transferLabel={transferLabel}
           onEditItem={setEditingItem}
         />
@@ -414,6 +415,7 @@ function CurrencyWallet({
   onUpdateItem,
   onRemoveItem,
   onTransferItem,
+  onEquipItem,
   transferLabel,
   onEditItem,
 }: {
@@ -425,6 +427,7 @@ function CurrencyWallet({
   ) => void
   onRemoveItem?: (itemId: string) => void
   onTransferItem?: (item: Itemmable) => void
+  onEquipItem?: (itemId: string) => void
   transferLabel: string
   onEditItem: (item: Itemmable) => void
 }) {
@@ -437,21 +440,25 @@ function CurrencyWallet({
             Valores monetários ficam separados do restante dos itens.
           </div>
         </div>
-        <Button
-          className="w-full sm:w-auto"
-          size="sm"
-          variant="secondary"
-          disabled={!onAddItem}
-          onClick={() => onAddItem?.(newCurrencyItem())}
-        >
-          + Moeda
-        </Button>
+        {onAddItem ? (
+          <Button
+            className="w-full sm:w-auto"
+            size="sm"
+            variant="secondary"
+            onClick={() => onAddItem(newCurrencyItem())}
+          >
+            + Moeda
+          </Button>
+        ) : null}
       </div>
 
       {items.length ? (
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item) => (
-            <div key={item.id} className="rounded-lg border border-border bg-bg p-3">
+            <div
+              key={item.id}
+              className="rounded-lg border border-border bg-bg p-3"
+            >
               <div className="truncate text-sm font-medium text-textH">
                 {item.name || "Moedas"}
               </div>
@@ -461,6 +468,7 @@ function CurrencyWallet({
                   type="number"
                   min={0}
                   step="any"
+                  disabled={!onUpdateItem}
                   value={item.quantity ?? 0}
                   onChange={(event) =>
                     onUpdateItem?.(item.id, (current) => ({
@@ -471,9 +479,24 @@ function CurrencyWallet({
                 />
               </label>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button size="sm" variant="secondary" onClick={() => onEditItem(item)}>
-                  Editar
-                </Button>
+                {onUpdateItem ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => onEditItem(item)}
+                  >
+                    Editar
+                  </Button>
+                ) : null}
+                {onEquipItem ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => onEquipItem(item.id)}
+                  >
+                    Equipar
+                  </Button>
+                ) : null}
                 {onTransferItem ? (
                   <Button
                     size="sm"
@@ -483,10 +506,15 @@ function CurrencyWallet({
                     {transferLabel}
                   </Button>
                 ) : null}
-                <Button size="sm" variant="ghost" disabled={!onRemoveItem}
-                  onClick={() => onRemoveItem?.(item.id)}>
-                  Remover
-                </Button>
+                {onRemoveItem ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onRemoveItem(item.id)}
+                  >
+                    Remover
+                  </Button>
+                ) : null}
               </div>
             </div>
           ))}
