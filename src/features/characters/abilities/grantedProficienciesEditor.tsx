@@ -5,13 +5,24 @@ import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
+import {
+  OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID,
+  OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME,
+} from "../../../models/characters/characterHands"
 import type {
   Proficiency,
   ProficiencyCategory,
 } from "../../../models/sheet/Proficiency"
 
+const OCCUPIED_HANDS_SPELLCASTING_TYPE =
+  "occupied-hands-spellcasting" as const
+
+type GrantedProficiencyType =
+  | ProficiencyCategory
+  | typeof OCCUPIED_HANDS_SPELLCASTING_TYPE
+
 const CATEGORY_OPTIONS: Array<{
-  value: ProficiencyCategory
+  value: GrantedProficiencyType
   label: string
 }> = [
   { value: "weapon", label: "Arma" },
@@ -25,6 +36,10 @@ const CATEGORY_OPTIONS: Array<{
   { value: "game", label: "Jogo" },
   { value: "skill", label: "Perícia" },
   { value: "saving-throw", label: "Teste de resistência" },
+  {
+    value: OCCUPIED_HANDS_SPELLCASTING_TYPE,
+    label: OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME,
+  },
   { value: "other", label: "Outra" },
 ]
 
@@ -63,6 +78,13 @@ const SKILL_OPTIONS: ProficiencyPreset[] = [
   { value: "Sobrevivência", label: "Sobrevivência (SAB)" },
 ]
 
+const OCCUPIED_HANDS_OPTIONS: ProficiencyPreset[] = [
+  {
+    value: OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME,
+    label: OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME,
+  },
+]
+
 export function GrantedProficienciesEditor({
   proficiencies,
   onChange,
@@ -71,33 +93,55 @@ export function GrantedProficienciesEditor({
   onChange: (proficiencies: Proficiency[]) => void
 }) {
   const [category, setCategory] =
-    useState<ProficiencyCategory>("weapon")
+    useState<GrantedProficiencyType>("weapon")
   const [name, setName] = useState("")
   const [notes, setNotes] = useState("")
   const presetOptions = getPresetOptions(category)
 
-  function changeCategory(nextCategory: ProficiencyCategory) {
+  function changeCategory(nextCategory: GrantedProficiencyType) {
     const nextOptions = getPresetOptions(nextCategory)
     setCategory(nextCategory)
     setName(nextOptions?.[0]?.value ?? "")
   }
 
   function addProficiency() {
-    const normalizedName = name.trim()
+    const occupiedHands =
+      category === OCCUPIED_HANDS_SPELLCASTING_TYPE
+    const storedCategory: ProficiencyCategory = occupiedHands
+      ? "other"
+      : category
+    const normalizedName = (
+      occupiedHands
+        ? OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME
+        : name
+    ).trim()
+
     if (!normalizedName) return
 
-    const duplicate = proficiencies.some(
-      (proficiency) =>
-        proficiency.category === category &&
-        normalizeName(proficiency.name) === normalizeName(normalizedName),
-    )
+    const duplicate = proficiencies.some((proficiency) => {
+      if (
+        occupiedHands &&
+        proficiency.id ===
+          OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID
+      ) {
+        return true
+      }
+
+      return (
+        proficiency.category === storedCategory &&
+        normalizeName(proficiency.name) ===
+          normalizeName(normalizedName)
+      )
+    })
     if (duplicate) return
 
     onChange([
       ...proficiencies,
       {
-        id: crypto.randomUUID(),
-        category,
+        id: occupiedHands
+          ? OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID
+          : crypto.randomUUID(),
+        category: storedCategory,
         name: normalizedName,
         notes: notes.trim() || undefined,
       },
@@ -130,7 +174,7 @@ export function GrantedProficienciesEditor({
                   {proficiency.name}
                 </div>
                 <div className="mt-0.5 text-[10px] text-textMuted">
-                  {categoryLabel(proficiency.category)}
+                  {categoryLabel(proficiency)}
                 </div>
                 {proficiency.notes ? (
                   <div className="mt-1 text-xs leading-5 text-textMuted">
@@ -168,7 +212,9 @@ export function GrantedProficienciesEditor({
           <Select
             value={category}
             onChange={(event) =>
-              changeCategory(event.target.value as ProficiencyCategory)
+              changeCategory(
+                event.target.value as GrantedProficiencyType,
+              )
             }
           >
             {CATEGORY_OPTIONS.map((option) => (
@@ -226,17 +272,32 @@ export function GrantedProficienciesEditor({
 }
 
 function getPresetOptions(
-  category: ProficiencyCategory,
+  category: GrantedProficiencyType,
 ): ProficiencyPreset[] | undefined {
   if (category === "saving-throw") return SAVING_THROW_OPTIONS
   if (category === "skill") return SKILL_OPTIONS
+  if (category === OCCUPIED_HANDS_SPELLCASTING_TYPE) {
+    return OCCUPIED_HANDS_OPTIONS
+  }
   return undefined
 }
 
-function categoryLabel(category: ProficiencyCategory): string {
+function categoryLabel(proficiency: Proficiency): string {
+  if (
+    proficiency.id ===
+      OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID ||
+    normalizeName(proficiency.name) ===
+      normalizeName(
+        OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME,
+      )
+  ) {
+    return OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME
+  }
+
   return (
-    CATEGORY_OPTIONS.find((option) => option.value === category)?.label ??
-    category
+    CATEGORY_OPTIONS.find(
+      (option) => option.value === proficiency.category,
+    )?.label ?? proficiency.category
   )
 }
 
