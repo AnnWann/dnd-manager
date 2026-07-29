@@ -16,6 +16,11 @@ export interface Ability {
   bonuses?: BonusCollection
   /** Permite desativar modificadores sem remover a habilidade. Passivas permanecem ativas. */
   modifiersActive?: boolean
+  /** Metadados presentes nas habilidades projetadas por equipamentos. */
+  source?: "equipment" | "race" | string
+  sourceItemId?: string
+  sourceItemName?: string
+  originalAbilityId?: string
 }
 
 export interface Usage {
