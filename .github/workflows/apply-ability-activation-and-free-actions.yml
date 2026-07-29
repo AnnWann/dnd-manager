@@ -1,9 +1,11 @@
 name: Apply ability activation and free actions
 
 on:
-  pull_request:
+  push:
+    branches:
+      - master
     paths:
-      - ".github/ability-activation-trigger"
+      - ".github/ability-activation-master-trigger"
 
 permissions:
   contents: write
@@ -14,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: feature/ability-activation-and-free-actions
 
       - uses: actions/setup-node@v4
         with:
@@ -78,13 +80,16 @@ jobs:
           path.write_text(text.replace(old, new, 1))
           PY
 
-      - name: Remove temporary implementation files
-        run: rm -f .github/ability-activation-trigger .github/apply_ability_activation_and_free_actions.py
+      - name: Remove temporary branch files
+        run: |
+          rm -f .github/ability-activation-trigger
+          rm -f .github/apply_ability_activation_and_free_actions.py
+          rm -f .github/workflows/branch-ability-activation.yml
 
       - run: npm install --package-lock=false --ignore-scripts
       - run: npm run build
 
-      - name: Commit implementation to PR branch
+      - name: Commit implementation to feature branch
         shell: bash
         run: |
           if git diff --quiet; then
@@ -94,4 +99,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "activate ability benefits on use"
-          git push origin HEAD:${{ github.head_ref }}
+          git push origin HEAD:feature/ability-activation-and-free-actions
