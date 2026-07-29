@@ -3,9 +3,9 @@ import type { Attribute } from "../../sheet/Attribute"
 import type { Equipment } from "./EquipmentSlot"
 
 export type Weapon = Equipment & {
-  /** A arma exige duas mãos e não pode ser usada como versátil. */
+  /** A arma exige duas mãos para usar suas estatísticas normais. */
   twoHanded?: boolean
-  /** Estado atual de empunhadura. Só altera armas versáteis. */
+  /** Estado atual de empunhadura para armas versáteis ou de duas mãos. */
   wieldedTwoHanded?: boolean
   /** Dado usado quando uma arma versátil é empunhada com duas mãos. */
   versatileDamage?: Die
@@ -50,13 +50,31 @@ export function isVersatileWeapon(weapon: Partial<Weapon>): boolean {
   return hasWeaponProperty(weapon, "versatile") || Boolean(weapon.versatileDamage)
 }
 
+export function isWeaponImprovisedGrip(weapon: Partial<Weapon>): boolean {
+  return weapon.twoHanded === true && weapon.wieldedTwoHanded === false
+}
+
 export function getWeaponHandsUsed(weapon: Partial<Weapon>): 1 | 2 {
-  if (weapon.twoHanded) return 2
+  if (weapon.twoHanded) {
+    return weapon.wieldedTwoHanded === false ? 1 : 2
+  }
   if (isVersatileWeapon(weapon) && weapon.wieldedTwoHanded) return 2
   return 1
 }
 
+export function getWeaponAttackAttribute(
+  weapon: Partial<Weapon>,
+): Attribute {
+  return isWeaponImprovisedGrip(weapon)
+    ? "str"
+    : (weapon.modifierAttribute ?? "str")
+}
+
 export function getWeaponDamageDie(weapon: Partial<Weapon>): Die | undefined {
+  if (isWeaponImprovisedGrip(weapon)) {
+    return { quantity: 1, sides: "d4" }
+  }
+
   if (
     isVersatileWeapon(weapon) &&
     weapon.wieldedTwoHanded &&
@@ -126,7 +144,7 @@ export const WEAPON_PROPERTIES: Record<WeaponPropertyId, WeaponProperty> = {
   "two-handed": {
     id: "two-handed",
     name: "Duas Mãos",
-    desc: "Esta arma exige duas mãos para ser utilizada ao realizar ataques.",
+    desc: "Esta arma exige duas mãos para usar suas estatísticas normais. Com apenas uma mão, ela conta como arma improvisada: ataque com Força e dano 1d4 + Força.",
   },
 
   versatile: {
