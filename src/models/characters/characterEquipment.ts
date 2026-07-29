@@ -16,7 +16,7 @@ import type { Ability, Usage } from "../abilities/Ability"
 
 type SingleSlot = Exclude<
   keyof CharacterEquipment,
-  "weapons" | "rings" | "pockets" | "heldItems"
+  "weapons" | "rings" | "necklaces" | "pockets" | "heldItems"
 >
 
 function toWeapon(item: Itemmable): Weapon {
@@ -63,6 +63,11 @@ export function getWeight(character: CharacterTemplate): number {
     0,
   )
 
+  const necklacesWeight = (equipment.necklaces ?? []).reduce(
+    (total, item) => total + (item.weight ?? 0) * (item.quantity ?? 1),
+    0,
+  )
+
   const weaponsWeight = equipment.weapons.reduce(
     (total, item) => total + (item.weight ?? 0) * (item.quantity ?? 1),
     0,
@@ -84,6 +89,7 @@ export function getWeight(character: CharacterTemplate): number {
     (equipment.gloves?.weight ?? 0) * (equipment.gloves?.quantity ?? 1) +
     (equipment.helmet?.weight ?? 0) * (equipment.helmet?.quantity ?? 1) +
     ringsWeight +
+    necklacesWeight +
     weaponsWeight +
     heldItemsWeight +
     pocketsWeight
@@ -514,6 +520,20 @@ export function equipInventoryItem(
       })
   }
 
+  if (itemToEquip.equipSlot === "necklace") {
+    if ((equipment.necklaces ?? []).length >= 3) return character
+
+    return character
+      .with("inventory", inventoryWithoutItem)
+      .with("equipment", {
+        ...equipment,
+        necklaces: [
+          ...(equipment.necklaces ?? []),
+          itemToEquip as Equipment,
+        ],
+      })
+  }
+
   const slot = itemToEquip.equipSlot as SingleSlot
   const previous = equipment[slot]
 
@@ -536,6 +556,7 @@ export function getEquippedItems(character: CharacterTemplate): Equipment[] {
     equipment.boots,
     equipment.gloves,
     equipment.helmet,
+    ...(equipment.necklaces ?? []),
     ...equipment.rings,
     ...equipment.weapons,
     ...(equipment.heldItems ?? []).filter((item) => item.kind === "focus"),
@@ -671,6 +692,7 @@ function updateEquipmentById(
     boots: updateItem(equipment.boots),
     gloves: updateItem(equipment.gloves),
     helmet: updateItem(equipment.helmet),
+    necklaces: (equipment.necklaces ?? []).map(updateItem),
     rings: equipment.rings.map(updateItem),
     weapons: equipment.weapons.map(updateItem),
     heldItems: (equipment.heldItems ?? []).map(updateItem),

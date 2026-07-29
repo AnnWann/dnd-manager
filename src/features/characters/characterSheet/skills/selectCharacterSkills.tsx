@@ -1,6 +1,7 @@
 import { attributeShort } from "../../../../lib/attributeShorts"
 import { formatSigned } from "../../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
+import { hasProficiency } from "../../../../models/characters/characterProficiencies"
 import type { Attribute } from "../../../../models/sheet/Attribute"
 import type { Skill, SkillProficiency } from "../../../../models/sheet/Skills"
 
@@ -26,12 +27,21 @@ export function SelectSkillModule({
 }: Props) {
   const sheet = character.get("sheet")
   const proficiency = sheet.skills[skillKey] ?? "none"
+  const grantedProficiency =
+    hasProficiency(character, "skill", label) ||
+    hasProficiency(character, "skill", skillKey)
+  const effectiveProficiency =
+    proficiency === "expertise"
+      ? "expertise"
+      : proficiency === "proficient" || grantedProficiency
+        ? "proficient"
+        : "none"
   const abilityMod = character.getEffectiveAttributeModifier(ability)
 
   const bonus =
     abilityMod +
-    (proficiency === "proficient" ? profBonus : 0) +
-    (proficiency === "expertise" ? profBonus * 2 : 0)
+    (effectiveProficiency === "proficient" ? profBonus : 0) +
+    (effectiveProficiency === "expertise" ? profBonus * 2 : 0)
 
   function setProficiency(next: SkillProficiency) {
     updateCharacter(character.get("id"), (c) =>
@@ -68,7 +78,7 @@ export function SelectSkillModule({
             )
           }
           className={
-            proficiency === "proficient" || proficiency === "expertise"
+            effectiveProficiency === "proficient" || effectiveProficiency === "expertise"
               ? "h-3 w-3 rounded-full border border-blue-400 bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.7)]"
               : "h-3 w-3 rounded-full border border-text bg-transparent"
           }

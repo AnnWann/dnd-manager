@@ -77,6 +77,7 @@ export function newCharacterTemplate(
     abilities: [],
     equipment: {
       rings: [],
+      necklaces: [],
       weapons: [],
       heldItems: [],
       pockets: [],

@@ -13,6 +13,8 @@ import type { Sheet } from "../sheet/Sheet"
 import type { CharacterTemplate } from "./CharacterTemplate"
 import { getEncumbranceSpeedPenalty } from "./characterEncumbrance"
 import { getCharacterConditions } from "./characterConditionStorage"
+import { hasProficiency } from "./characterProficiencies"
+import { attributeShort } from "../../lib/attributeShorts"
 
 export type StatBonusKey =
   | "armorClass"
@@ -60,6 +62,7 @@ export function getEquippedItems(character: CharacterTemplate): Equipment[] {
     equipment.helmet,
     equipment.gloves,
     equipment.cape,
+    ...(equipment.necklaces ?? []),
     ...equipment.rings,
     ...equipment.weapons,
     ...(equipment.heldItems ?? []).filter(
@@ -554,10 +557,21 @@ export function isSavingThrowProficient(
   character: CharacterTemplate,
   attribute: Attribute,
 ): boolean {
-  return (
-    character
-      .get("sheet")
-      .savingThrowProficiencies?.[attribute] ?? false
+  const direct =
+    character.get("sheet").savingThrowProficiencies?.[attribute] ?? false
+  if (direct) return true
+
+  const fullNames: Record<Attribute, string> = {
+    str: "Força",
+    dex: "Destreza",
+    con: "Constituição",
+    int: "Inteligência",
+    wis: "Sabedoria",
+    cha: "Carisma",
+  }
+
+  return [attribute, attributeShort(attribute), fullNames[attribute]].some(
+    (name) => hasProficiency(character, "saving-throw", name),
   )
 }
 

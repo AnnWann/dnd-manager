@@ -13,6 +13,7 @@ export type EquipSlot =
   | "shield"
   | "weapon"
   | "ring"
+  | "necklace"
 
 export type ItemKind =
   | "common"

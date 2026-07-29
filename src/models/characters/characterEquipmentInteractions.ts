@@ -89,9 +89,23 @@ export function equipInventoryItemWithRules(
       })
   }
 
+  if (item.equipSlot === "necklace") {
+    if ((equipment.necklaces ?? []).length >= 3) return character
+
+    return character
+      .with("inventory", inventoryWithoutItem)
+      .with("equipment", {
+        ...equipment,
+        necklaces: [
+          ...(equipment.necklaces ?? []),
+          itemToEquip as Equipment,
+        ],
+      })
+  }
+
   const slot = item.equipSlot as Exclude<
     keyof typeof equipment,
-    "weapons" | "rings" | "pockets" | "heldItems"
+    "weapons" | "rings" | "necklaces" | "pockets" | "heldItems"
   >
   const previous = equipment[slot]
 

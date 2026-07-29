@@ -15,6 +15,7 @@ import type {
   Proficiency,
   ProficiencyCategory,
 } from "../../../models/sheet/Proficiency"
+import { getAbilityGrantedProficiencies } from "../../../models/characters/characterProficiencies"
 
 type Props = {
   character: CharacterTemplate
@@ -24,10 +25,7 @@ type Props = {
   ) => void
 }
 
-type ManagedProficiencyCategory = Exclude<
-  ProficiencyCategory,
-  "skill" | "saving-throw"
->
+type ManagedProficiencyCategory = ProficiencyCategory
 
 type CategoryOption = {
   value: ManagedProficiencyCategory
@@ -39,7 +37,8 @@ type DisplayProficiency = {
   proficiency: Proficiency & {
     category: ManagedProficiencyCategory
   }
-  source: "character" | "race"
+  source: "character" | "race" | "ability"
+  sourceName?: string
 }
 
 const CATEGORY_OPTIONS: CategoryOption[] = [
@@ -89,6 +88,16 @@ const CATEGORY_OPTIONS: CategoryOption[] = [
     description: "Baralhos, dados, xadrez, jogos de azar etc.",
   },
   {
+    value: "skill",
+    label: "Perícias",
+    description: "Perícias concedidas por habilidades ou outras origens.",
+  },
+  {
+    value: "saving-throw",
+    label: "Testes de resistência",
+    description: "Proficiência em resistências de atributos específicos.",
+  },
+  {
     value: "other",
     label: "Outros",
     description: "Qualquer proficiência que não se encaixe acima.",
@@ -119,6 +128,17 @@ export function CharacterProficienciesTab({
       proficiency.id !== OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID,
   )
 
+  const abilityProficiencies = getAbilityGrantedProficiencies(character)
+    .map((entry) => ({
+      proficiency: entry.proficiency,
+      source: "ability" as const,
+      sourceName: entry.abilityName,
+    }))
+    .filter(
+      ({ proficiency }) =>
+        proficiency.id !== OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID,
+    )
+
   const displayedProficiencies: DisplayProficiency[] = [
     ...characterProficiencies.map((proficiency) => ({
       proficiency,
@@ -128,6 +148,7 @@ export function CharacterProficienciesTab({
       proficiency,
       source: "race" as const,
     })),
+    ...abilityProficiencies,
   ]
 
   const filteredProficiencies = useMemo(() => {
@@ -199,7 +220,7 @@ export function CharacterProficienciesTab({
             </h2>
 
             <p className="mt-1 text-xs text-textMuted">
-              Proficiências próprias e concedidas pela raça do personagem.
+              Proficiências próprias e concedidas pela raça ou por habilidades ativas.
             </p>
           </div>
 
@@ -271,6 +292,7 @@ export function CharacterProficienciesTab({
         existingProficiencies={[
           ...characterProficiencies,
           ...racialProficiencies,
+          ...abilityProficiencies.map((entry) => entry.proficiency),
         ]}
         onClose={() => setModalOpen(false)}
         onSave={(proficiency) => {
@@ -299,10 +321,15 @@ function OccupiedHandsSpellcastingProficiency({
       proficiency.id === OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID ||
       proficiency.name === OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME,
   )
+  const abilityProficiency = getAbilityGrantedProficiencies(character).some(
+    ({ proficiency }) =>
+      proficiency.id === OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID ||
+      proficiency.name === OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME,
+  )
   const enabled = hasOccupiedHandsSpellcastingProficiency(character)
 
   function toggle() {
-    if (racialProficiency) return
+    if (racialProficiency || abilityProficiency) return
 
     updateCharacter(character.get("id"), (current) => {
       const proficiencies = current.get("sheet").proficiencies ?? []
@@ -350,7 +377,7 @@ function OccupiedHandsSpellcastingProficiency({
         <button
           type="button"
           aria-pressed={enabled}
-          disabled={racialProficiency}
+          disabled={racialProficiency || abilityProficiency}
           onClick={toggle}
           className={
             enabled
@@ -360,7 +387,9 @@ function OccupiedHandsSpellcastingProficiency({
         >
           {racialProficiency
             ? "Concedida pela raça"
-            : enabled
+            : abilityProficiency
+              ? "Concedida por habilidade"
+              : enabled
               ? "Proficiente"
               : "Não proficiente"}
         </button>
@@ -391,7 +420,7 @@ function ProficiencyGroup({
       </div>
 
       <div className="grid gap-2">
-        {entries.map(({ proficiency, source }) => (
+        {entries.map(({ proficiency, source, sourceName }) => (
           <div
             key={`${source}:${proficiency.id}`}
             className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-border bg-bg-subtle px-3 py-2.5"
@@ -402,9 +431,9 @@ function ProficiencyGroup({
                   {proficiency.name}
                 </div>
 
-                {source === "race" ? (
+                {source === "race" || source === "ability" ? (
                   <span className="rounded-full bg-accentBg px-2 py-0.5 text-[10px] font-semibold text-accent">
-                    Raça
+                    {source === "race" ? "Raça" : sourceName || "Habilidade"}
                   </span>
                 ) : null}
               </div>
@@ -428,7 +457,7 @@ function ProficiencyGroup({
               </button>
             ) : (
               <span className="text-[10px] font-medium text-textMuted">
-                Gerenciada em Raça
+                {source === "race" ? "Gerenciada em Raça" : "Gerenciada na habilidade"}
               </span>
             )}
           </div>
