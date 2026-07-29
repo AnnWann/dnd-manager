@@ -24,6 +24,30 @@ jobs:
       - name: Apply general hand actions and unarmed attacks
         run: python .github/apply-versatile-attack-card-toggle.py
 
+      - name: Fix generated dialog callback narrowing
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/features/characters/characterSheet/weaponAttackCardActionsDialog.tsx')
+          text = path.read_text()
+          old = '''  const occupant = findHandOccupantByItemId(character, state.itemId)
+          if (!occupant) return null
+
+          const blockers ='''
+          new = '''  const itemId = state.itemId
+          const resolvedOccupant = findHandOccupantByItemId(character, itemId)
+          if (!resolvedOccupant) return null
+          const occupant: HandOccupant = resolvedOccupant
+
+          const blockers ='''
+          if old not in text:
+              raise SystemExit('dialog narrowing anchor not found')
+          text = text.replace(old, new, 1)
+          text = text.replace('state.itemId', 'itemId')
+          path.write_text(text)
+          PY
+
       - name: Remove temporary implementation files
         run: rm -f .github/versatile-attack-card-trigger .github/apply-versatile-attack-card-toggle.py
 
