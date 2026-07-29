@@ -1,0 +1,97 @@
+name: Build ability activation branch
+
+on:
+  push:
+    branches:
+      - feature/ability-activation-and-free-actions
+    paths:
+      - ".github/ability-activation-trigger"
+      - ".github/workflows/branch-ability-activation.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/ability-activation-and-free-actions
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Correct patch anchors
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/apply_ability_activation_and_free_actions.py')
+          text = path.read_text()
+          text = text.replace(
+              "'''                 const sourceLabel = getAbilitySourceLabel(''',",
+              "'''                const sourceLabel = getAbilitySourceLabel(''',",
+          )
+          path.write_text(text)
+          PY
+
+      - name: Apply ability activation rules
+        run: python .github/apply_ability_activation_and_free_actions.py
+
+      - name: Correct generated TypeScript
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/features/characters/characterSheet/minimalCharacterActions.tsx')
+          text = path.read_text()
+          old = '''    if ("source" in ability && ability.source === "equipment") {
+      return {
+        ability,
+        sourceLabel: `Equipamento: ${ability.sourceItemName}`,
+        source: {
+          type: "equipment",
+          itemId: ability.sourceItemId,
+          abilityId: ability.originalAbilityId,
+        } as AbilitySource,
+      }
+    }'''
+          new = '''    if ("source" in ability && ability.source === "equipment") {
+      const equipmentAbility = ability as Ability & {
+        source: "equipment"
+        sourceItemName: string
+        sourceItemId: string
+        originalAbilityId: string
+      }
+      return {
+        ability: equipmentAbility,
+        sourceLabel: `Equipamento: ${equipmentAbility.sourceItemName}`,
+        source: {
+          type: "equipment",
+          itemId: equipmentAbility.sourceItemId,
+          abilityId: equipmentAbility.originalAbilityId,
+        } as AbilitySource,
+      }
+    }'''
+          if old not in text:
+              raise SystemExit('equipment ability narrowing anchor not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
+      - name: Remove temporary files
+        run: rm -f .github/ability-activation-trigger .github/apply_ability_activation_and_free_actions.py .github/workflows/branch-ability-activation.yml
+
+      - run: npm install --package-lock=false --ignore-scripts
+      - run: npm run build
+
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "activate ability benefits on use"
+          git push origin HEAD:feature/ability-activation-and-free-actions
