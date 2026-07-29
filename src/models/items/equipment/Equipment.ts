@@ -1,3 +1,4 @@
+import type { Itemmable } from "../item"
 import type { Armor } from "./Armor"
 import type { Equipment } from "./EquipmentSlot"
 import type { PocketItem } from "./PocketItem"
@@ -12,9 +13,12 @@ export type CharacterEquipment = {
   shield?: Equipment
   rings: Equipment[]
 
-  // armas realmente empunhadas
+  // Armas realmente empunhadas.
   weapons: Weapon[]
 
-  // itens carregados no bolso, mas sem bônus ativo
+  // Itens não-arma segurados nas mãos.
+  heldItems: Itemmable[]
+
+  // Itens legados carregados no bolso, mas sem bônus ativo.
   pockets: PocketItem[]
 }
