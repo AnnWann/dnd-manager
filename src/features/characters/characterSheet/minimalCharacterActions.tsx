@@ -156,6 +156,12 @@ export function MinimalCharacterActions({
         onSelect={open}
         emptyMessage={`Nenhuma habilidade configurada como ${filterLabel(filter).toLocaleLowerCase("pt-BR")}.`}
       />
+      <ActionGroup
+        title="Passivas"
+        entries={passiveAbilities}
+        onSelect={open}
+        emptyMessage="Nenhuma habilidade passiva cadastrada."
+      />
 
       {selected ? (
         <Modal title={selected.name} onClose={() => setSelected(null)} className="max-w-lg">
