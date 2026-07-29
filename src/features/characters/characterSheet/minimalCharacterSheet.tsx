@@ -7,7 +7,10 @@ import { cn } from "../../../lib/cn"
 import { formatSigned } from "../../../lib/formatSigned"
 import { clampInt } from "../../../lib/numberFormat"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import type { Weapon } from "../../../models/items/equipment/Weapon"
+import {
+  getWeaponDamageDie,
+  type Weapon,
+} from "../../../models/items/equipment/Weapon"
 import {
   getCalculatedInitiative,
   getCalculatedMobility,
@@ -508,7 +511,8 @@ function CompactWeaponTile({
   attack: number
   damageBonus: number
 }) {
-  const damage = `${weapon.damage.quantity}${weapon.damage.sides}${
+  const die = getWeaponDamageDie(weapon) ?? weapon.damage
+  const damage = `${die.quantity}${die.sides}${
     damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""
   }`
 

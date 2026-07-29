@@ -4,7 +4,12 @@ import { formatSigned } from "../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { wieldPocketWeaponWithRules } from "../../../models/characters/characterEquipmentInteractions"
 import type { ConsumableItem, ThrowableItem } from "../../../models/items/equipment/PocketItem"
-import type { Weapon } from "../../../models/items/equipment/Weapon"
+import {
+  getWeaponDamageDie,
+  getWeaponHandsUsed,
+  isVersatileWeapon,
+  type Weapon,
+} from "../../../models/items/equipment/Weapon"
 import type { Itemmable } from "../../../models/items/item"
 import {
   consumeItemQuantity,
@@ -242,11 +247,17 @@ function WeaponPocketSummary({
     weapon,
     attributeMod,
   )
+  const activeDamage = getWeaponDamageDie(weapon) ?? weapon.damage
+  const versatile = isVersatileWeapon(weapon)
+  const handUsage = getWeaponHandsUsed(weapon)
 
   return (
     <>
       <div className="mt-1 text-xs text-text">
         Dano base: {formatDie(weapon.damage)}
+        {versatile && weapon.versatileDamage
+          ? ` / ${formatDie(weapon.versatileDamage)} (versátil)`
+          : ""}
         {" • "}
         Atributo: {attributeShort(attribute)}
         {" • "}
@@ -256,12 +267,16 @@ function WeaponPocketSummary({
       <div className="mt-1 text-xs text-text">
         Ataque: {formatSigned(attackBonus)}
         {" • "}
-        Dano: {formatDie(weapon.damage)}
+        Dano: {formatDie(activeDamage)}
         {damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""}
       </div>
 
       <div className="mt-1 text-xs text-text">
-        {weapon.twoHanded ? "Duas mãos" : "Uma mão"}
+        {versatile
+          ? `Versátil · ${handUsage} ${handUsage === 1 ? "mão" : "mãos"}`
+          : handUsage === 2
+            ? "Duas mãos"
+            : "Uma mão"}
       </div>
     </>
   )

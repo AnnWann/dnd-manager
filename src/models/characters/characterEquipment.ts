@@ -3,7 +3,12 @@
 import type { CharacterTemplate } from "./CharacterTemplate"
 import type { CharacterEquipment } from "../items/equipment/Equipment"
 import type { Bonus, Equipment } from "../items/equipment/EquipmentSlot"
-import type { Weapon } from "../items/equipment/Weapon"
+import {
+  WEAPON_PROPERTIES,
+  getWeaponHandsUsed,
+  hasWeaponProperty,
+  type Weapon,
+} from "../items/equipment/Weapon"
 import type { Itemmable } from "../items/item"
 import type { Armor } from "../items/equipment/Armor"
 import type { Ability, Usage } from "../abilities/Ability"
@@ -15,18 +20,35 @@ type SingleSlot = Exclude<
 
 function toWeapon(item: Itemmable): Weapon {
   const weapon = item as Partial<Weapon>
+  const properties = [...(weapon.properties ?? [])]
+  const versatile =
+    hasWeaponProperty(weapon, "versatile") || Boolean(weapon.versatileDamage)
+
+  if (versatile && !properties.some((property) => property.id === "versatile")) {
+    properties.push(WEAPON_PROPERTIES.versatile)
+  }
+
+  const damage = weapon.damage ?? {
+    quantity: 1,
+    sides: "d6",
+  }
 
   return {
     ...item,
     kind: "equipment",
     equippable: true,
     equipSlot: "weapon",
-    properties: weapon.properties ?? [],
-    twoHanded: weapon.twoHanded ?? false,
-    damage: weapon.damage ?? {
-      quantity: 1,
-      sides: "d6",
-    },
+    properties: properties.filter((property) =>
+      versatile ? property.id !== "two-handed" : property.id !== "versatile",
+    ),
+    twoHanded: versatile ? false : (weapon.twoHanded ?? false),
+    wieldedTwoHanded: versatile
+      ? (weapon.wieldedTwoHanded ?? false)
+      : (weapon.twoHanded ?? false),
+    damage,
+    versatileDamage: versatile
+      ? (weapon.versatileDamage ?? { ...damage })
+      : undefined,
     modifierAttribute: weapon.modifierAttribute ?? "str",
     proficient: weapon.proficient ?? false,
   } as Weapon
@@ -123,7 +145,7 @@ export function unequipArmor(character: CharacterTemplate): CharacterTemplate {
 export function getUsedArms(character: CharacterTemplate): number {
   return (
     character.get("equipment").weapons?.reduce(
-      (total, weapon) => total + (weapon.twoHanded ? 2 : 1),
+      (total, weapon) => total + (getWeaponHandsUsed(weapon)),
       0,
     ) ?? 0
   )
@@ -134,7 +156,7 @@ export function useWeapon(
   weapon: Weapon,
 ): CharacterTemplate {
   const usedArms = getUsedArms(character)
-  const neededArms = weapon.twoHanded ? 2 : 1
+  const neededArms = getWeaponHandsUsed(weapon)
 
   if (usedArms + neededArms > character.get("sheet").arms) {
     throw new Error("All hands are occupied")
@@ -356,12 +378,12 @@ export function wieldPocketWeapon(
     (_, i) => i !== index,
   )
 
-  const neededArms = weapon.twoHanded ? 2 : 1
+  const neededArms = getWeaponHandsUsed(weapon)
   const currentWeapons = [...character.get("equipment").weapons]
   const returnedToInventory: Itemmable[] = []
 
   let usedArms = currentWeapons.reduce(
-    (total, currentWeapon) => total + (currentWeapon.twoHanded ? 2 : 1),
+    (total, currentWeapon) => total + (getWeaponHandsUsed(currentWeapon)),
     0,
   )
 
@@ -373,7 +395,7 @@ export function wieldPocketWeapon(
     if (!removed) break
 
     returnedToInventory.push(removed)
-    usedArms -= removed.twoHanded ? 2 : 1
+    usedArms -= getWeaponHandsUsed(removed)
   }
 
   return character.with("inventory", [
@@ -445,12 +467,12 @@ export function equipInventoryItem(
 
   if (itemToEquip.equipSlot === "weapon") {
     const weapon = toWeapon(itemToEquip)
-    const neededArms = weapon.twoHanded ? 2 : 1
+    const neededArms = getWeaponHandsUsed(weapon)
     const currentWeapons = [...equipment.weapons]
     const returnedToInventory: Itemmable[] = []
 
     let usedArms = currentWeapons.reduce(
-      (total, currentWeapon) => total + (currentWeapon.twoHanded ? 2 : 1),
+      (total, currentWeapon) => total + (getWeaponHandsUsed(currentWeapon)),
       0,
     )
 
@@ -462,7 +484,7 @@ export function equipInventoryItem(
       if (!removed) break
 
       returnedToInventory.push(removed)
-      usedArms -= removed.twoHanded ? 2 : 1
+      usedArms -= getWeaponHandsUsed(removed)
     }
 
     if (usedArms + neededArms > character.get("sheet").arms) {
