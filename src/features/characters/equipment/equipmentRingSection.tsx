@@ -45,6 +45,9 @@ export function EquipmentRingsSection({
           {rings.map((ring, index) => (
             <EquipmentItemCard
               key={`${ring.id}-${index}`}
+              characterId={character.get("id")}
+              reference={{ type: "ring", itemId: ring.id }}
+              pocketCount={character.get("equipment").pockets.length}
               item={ring}
               fallbackName="Anel sem nome"
               badges={["Anel"]}
@@ -60,11 +63,6 @@ export function EquipmentRingsSection({
                   value: String(ring.weight ?? 0),
                 },
               ]}
-              onUnequip={() =>
-                updateCharacter(character.get("id"), (current) =>
-                  current.unequipRing(index),
-                )
-              }
               onUpdate={(updater) =>
                 updateCharacter(character.get("id"), (current) => {
                   const equipment = current.get("equipment")
