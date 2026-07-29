@@ -14,7 +14,9 @@ export interface Ability {
   grantedSpells?: SpellGrant[]
   grantedProficiencies?: Proficiency[]
   bonuses?: BonusCollection
-  /** Permite desativar modificadores sem remover a habilidade. Passivas permanecem ativas. */
+  /** Estado persistido dos benefícios de habilidades que precisam ser acionadas. */
+  benefitsActive?: boolean
+  /** Campo legado; novos cálculos usam benefitsActive. */
   modifiersActive?: boolean
   /** Metadados presentes nas habilidades projetadas por equipamentos. */
   source?: "equipment" | "race" | string
@@ -25,6 +27,8 @@ export interface Ability {
 
 export interface Usage {
   max: number
+  /** Fórmula opcional; quando válida, substitui max nos cálculos. */
+  maxFormula?: string
   used: number
   reset: AbilityUsageResetKind
   cooldownAmount?: number

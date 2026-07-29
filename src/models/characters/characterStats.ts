@@ -1,4 +1,5 @@
 import type { Ability } from "../abilities/Ability"
+import { isAbilityBenefitsActive } from "../abilities/abilityActivation"
 import type { Bonus, NormalBonusKey, ScopedBonusKey } from "../bonuses/Bonus"
 import { evaluateCharacterSheetFormula } from "../../lib/customSystems/CharacterSheetFormula"
 import type { Armor } from "../items/equipment/Armor"
@@ -83,9 +84,7 @@ export function getActiveAbilities(
     ...getEquippedItems(character).flatMap(
       (item) => item.abilities ?? [],
     ),
-  ].filter(
-    (ability) => ability.kind === "passive" || ability.modifiersActive !== false,
-  )
+  ].filter(isAbilityBenefitsActive)
 }
 
 export function getEquipmentBonuses(

@@ -1,39 +1,49 @@
 import { Button } from "../../../components/ui/Button"
 import { useMagicContext } from "../../../contexts/magicContext"
+import { useCharacterContext } from "../../../contexts/characterContext"
+import {
+  abilityRequiresActivation,
+  activateAbilityBenefits,
+  deactivateAbilityBenefits,
+  getAbilityUsageMax,
+  isAbilityBenefitsActive,
+  restoreAbilityUse,
+} from "../../../models/abilities/abilityActivation"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
 
 type Props<T extends Equipment> = {
+  characterId: string
   equipment: T
   onUpdate: (updater: (equipment: T) => T) => void
 }
 
 export function EquipmentFeaturesList<T extends Equipment>({
+  characterId,
   equipment,
   onUpdate,
 }: Props<T>) {
   const { getSpellByIndex } = useMagicContext()
+  const { activeCharacter, visibleCharacters } = useCharacterContext()
+  const character =
+    activeCharacter?.get("id") === characterId
+      ? activeCharacter
+      : visibleCharacters.find((entry) => entry.get("id") === characterId)
   const abilities = equipment.abilities ?? []
   const spells = equipment.spells ?? []
 
   if (!abilities.length && !spells.length) return null
 
-  function updateAbilityCharge(abilityId: string, delta: number) {
+  function updateAbilityState(
+    abilityId: string,
+    action: "use" | "restore" | "deactivate",
+  ) {
     onUpdate((current) => ({
       ...current,
       abilities: (current.abilities ?? []).map((ability) => {
-        if (ability.id !== abilityId || !ability.usage) return ability
-        if (ability.usage.reset === "spellSlot") return ability
-
-        return {
-          ...ability,
-          usage: {
-            ...ability.usage,
-            used: Math.max(
-              0,
-              Math.min(ability.usage.max, ability.usage.used + delta),
-            ),
-          },
-        }
+        if (ability.id !== abilityId) return ability
+        if (action === "deactivate") return deactivateAbilityBenefits(ability)
+        if (action === "restore") return restoreAbilityUse(ability)
+        return character ? activateAbilityBenefits(character, ability) : ability
       }),
     }))
   }
@@ -80,14 +90,23 @@ export function EquipmentFeaturesList<T extends Equipment>({
       <div className="grid gap-2 lg:grid-cols-2">
         {abilities.map((ability) => {
           const usage = ability.usage
-          const canConsume = usage && usage.reset !== "spellSlot"
+          const usageMax = usage
+            ? character
+              ? getAbilityUsageMax(character, usage)
+              : usage.max
+            : undefined
+          const remaining = usage && usageMax !== undefined
+            ? Math.max(0, usageMax - usage.used)
+            : undefined
+          const requiresActivation = abilityRequiresActivation(ability)
+          const benefitsActive = isAbilityBenefitsActive(ability)
+          const canTrigger =
+            requiresActivation &&
+            ((ability.kind ?? "active") === "active" || !benefitsActive)
           const canRestore =
             usage &&
             usage.reset !== "spellSlot" &&
             usage.reset !== "limited"
-          const remaining = usage
-            ? Math.max(0, usage.max - usage.used)
-            : undefined
 
           return (
             <div
@@ -109,7 +128,7 @@ export function EquipmentFeaturesList<T extends Equipment>({
                     <div className="mt-1 text-xs font-medium text-text">
                       {usage.reset === "spellSlot"
                         ? "Usa espaço de magia"
-                        : `${remaining}/${usage.max} cargas disponíveis`}
+                        : `${remaining}/${usageMax} cargas disponíveis`}
                     </div>
                   ) : (
                     <div className="mt-1 text-xs text-textMuted">
@@ -140,14 +159,24 @@ export function EquipmentFeaturesList<T extends Equipment>({
                 </div>
 
                 <div className="flex shrink-0 gap-2">
-                  {canConsume ? (
+                  {canTrigger ? (
                     <Button
                       size="sm"
                       variant="secondary"
-                      disabled={usage.used >= usage.max}
-                      onClick={() => updateAbilityCharge(ability.id, 1)}
+                      disabled={remaining !== undefined && remaining <= 0}
+                      onClick={() => updateAbilityState(ability.id, "use")}
                     >
-                      Consumir
+                      {(ability.kind ?? "active") === "passive" ? "Acionar" : "Usar"}
+                    </Button>
+                  ) : null}
+
+                  {requiresActivation && benefitsActive ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => updateAbilityState(ability.id, "deactivate")}
+                    >
+                      Encerrar
                     </Button>
                   ) : null}
 
@@ -156,7 +185,7 @@ export function EquipmentFeaturesList<T extends Equipment>({
                       size="sm"
                       variant="ghost"
                       disabled={usage.used <= 0}
-                      onClick={() => updateAbilityCharge(ability.id, -1)}
+                      onClick={() => updateAbilityState(ability.id, "restore")}
                     >
                       Regenerar
                     </Button>
