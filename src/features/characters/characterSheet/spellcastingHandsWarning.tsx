@@ -7,7 +7,7 @@ import { useCharacterContext } from "../../../contexts/characterContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
   getSpellcastingHandState,
-  setWeaponGripWithRules,
+  setHandOccupantHandsWithRules,
   type HandOccupant,
 } from "../../../models/characters/characterHands"
 
@@ -28,17 +28,12 @@ export function SpellcastingHandsWarning({
   if (state.canCast) return null
 
   function handleOccupant(occupant: HandOccupant) {
-    const reference = occupant.reference
-
-    if (
-      occupant.canReduceToOneHand &&
-      reference.type === "weapon"
-    ) {
+    if (occupant.hands === 2) {
       updateCharacter(character.get("id"), (current) =>
-        setWeaponGripWithRules(
+        setHandOccupantHandsWithRules(
           current,
-          reference.index,
-          false,
+          occupant.reference,
+          1,
         ),
       )
       return
@@ -82,8 +77,8 @@ export function SpellcastingHandsWarning({
         </div>
 
         <p className="mt-2 text-[10px] leading-4 text-textMuted">
-          Armas em duas mãos passam para uma mão ao serem tocadas. Outros itens
-          abrem as opções de guardar ou soltar.
+          Itens em duas mãos passam para uma mão ao serem tocados. Itens em uma
+          mão abrem as opções de guardar ou largar.
         </p>
       </div>
 
@@ -95,7 +90,7 @@ export function SpellcastingHandsWarning({
         >
           <div className="grid gap-4">
             <p className="text-sm leading-6 text-text">
-              Guardar devolve o item ao inventário pessoal. Soltar envia o item
+              Guardar devolve o item ao inventário pessoal. Largar envia o item
               para o Inventário do chão, onde qualquer jogador poderá pegá-lo.
             </p>
 
@@ -122,7 +117,7 @@ export function SpellcastingHandsWarning({
                   setSelectedOccupant(null)
                 }}
               >
-                Soltar no chão
+                Largar no chão
               </Button>
             </div>
           </div>

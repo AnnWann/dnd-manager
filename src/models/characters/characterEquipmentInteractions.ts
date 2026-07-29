@@ -4,6 +4,7 @@ import type { Equipment } from "../items/equipment/EquipmentSlot"
 import { withShieldDefaults } from "../items/equipment/Shield"
 import {
   WEAPON_PROPERTIES,
+  getWeaponHandsUsed,
   hasWeaponProperty,
   isVersatileWeapon,
   type Weapon,
@@ -13,7 +14,12 @@ import { canItemGoInPocket } from "../items/itemPocketability"
 
 export type EquipmentDestination =
   | { type: "natural" }
-  | { type: "hand"; wieldedTwoHanded?: boolean }
+  | {
+      type: "hand"
+      hands?: 1 | 2
+      /** Compatibilidade com chamadas anteriores. */
+      wieldedTwoHanded?: boolean
+    }
 
 export function getUsedArmsIncludingShield(
   character: CharacterTemplate,
@@ -33,7 +39,9 @@ export function equipInventoryItemWithRules(
   if (!item) return character
 
   if (destination.type === "hand") {
-    return equipItemInHand(character, item, destination.wieldedTwoHanded)
+    const hands =
+      destination.hands ?? (destination.wieldedTwoHanded ? 2 : 1)
+    return equipItemInHand(character, item, hands)
   }
 
   if (!item.equippable || !item.equipSlot) return character
@@ -63,7 +71,10 @@ export function equipInventoryItemWithRules(
       )
       .with("equipment", {
         ...equipment,
-        shield: withShieldDefaults(itemToEquip),
+        shield: withShieldDefaults({
+          ...itemToEquip,
+          heldHands: 1,
+        }),
       })
   }
 
@@ -152,25 +163,21 @@ export function wieldPocketWeaponWithRules(
 function equipItemInHand(
   character: CharacterTemplate,
   item: Itemmable,
-  wieldedTwoHanded?: boolean,
+  hands: 1 | 2 = 1,
 ): CharacterTemplate {
   const equipment = character.get("equipment")
   const inventoryWithoutItem = character
     .get("inventory")
     .filter((entry) => entry.id !== item.id)
 
+  if (getFreeHands(character) < hands) return character
+
   if (item.kind === "equipment" && item.equipSlot === "weapon") {
     const weapon = toWeapon(item)
-    const supportsTwoHands = weapon.twoHanded || isVersatileWeapon(weapon)
     const nextWeapon: Weapon = {
       ...weapon,
-      wieldedTwoHanded: supportsTwoHands
-        ? (wieldedTwoHanded ?? (weapon.twoHanded ? true : false))
-        : false,
-    }
-
-    if (getFreeHands(character) < getWeaponRequiredHands(nextWeapon)) {
-      return character
+      heldHands: undefined,
+      wieldedTwoHanded: hands === 2,
     }
 
     return character
@@ -181,8 +188,6 @@ function equipItemInHand(
       })
   }
 
-  if (getFreeHands(character) < 1) return character
-
   return character
     .with("inventory", inventoryWithoutItem)
     .with("equipment", {
@@ -191,6 +196,7 @@ function equipItemInHand(
         ...(equipment.heldItems ?? []),
         {
           ...item,
+          heldHands: hands,
           insideBagOfHolding: false,
         },
       ],
@@ -198,9 +204,7 @@ function equipItemInHand(
 }
 
 function getWeaponRequiredHands(weapon: Weapon): number {
-  if (weapon.twoHanded) return weapon.wieldedTwoHanded === false ? 1 : 2
-  if (isVersatileWeapon(weapon) && weapon.wieldedTwoHanded) return 2
-  return 1
+  return getWeaponHandsUsed(weapon)
 }
 
 function toWeapon(item: Itemmable): Weapon {

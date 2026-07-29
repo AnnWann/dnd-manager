@@ -140,7 +140,7 @@ export function EquipmentWeaponsSection({
             const handUsage = getWeaponHandsUsed(weapon)
             const versatile = isVersatileWeapon(weapon)
             const improvised = isWeaponImprovisedGrip(weapon)
-            const supportsGripChoice = versatile || weapon.twoHanded === true
+            const supportsGripChoice = true
             const canUseTwoHands =
               usedHands - handUsage + 2 <= totalHands
 
