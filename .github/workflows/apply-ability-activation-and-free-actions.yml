@@ -38,6 +38,46 @@ jobs:
       - name: Apply ability activation rules
         run: python .github/apply_ability_activation_and_free_actions.py
 
+      - name: Correct generated TypeScript
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/features/characters/characterSheet/minimalCharacterActions.tsx')
+          text = path.read_text()
+          old = '''    if ("source" in ability && ability.source === "equipment") {
+      return {
+        ability,
+        sourceLabel: `Equipamento: ${ability.sourceItemName}`,
+        source: {
+          type: "equipment",
+          itemId: ability.sourceItemId,
+          abilityId: ability.originalAbilityId,
+        } as AbilitySource,
+      }
+    }'''
+          new = '''    if ("source" in ability && ability.source === "equipment") {
+      const equipmentAbility = ability as Ability & {
+        source: "equipment"
+        sourceItemName: string
+        sourceItemId: string
+        originalAbilityId: string
+      }
+      return {
+        ability: equipmentAbility,
+        sourceLabel: `Equipamento: ${equipmentAbility.sourceItemName}`,
+        source: {
+          type: "equipment",
+          itemId: equipmentAbility.sourceItemId,
+          abilityId: equipmentAbility.originalAbilityId,
+        } as AbilitySource,
+      }
+    }'''
+          if old not in text:
+              raise SystemExit('equipment ability narrowing anchor not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
       - name: Remove temporary implementation files
         run: rm -f .github/ability-activation-trigger .github/apply_ability_activation_and_free_actions.py
 
