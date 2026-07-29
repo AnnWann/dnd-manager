@@ -1,5 +1,6 @@
 import { X } from "lucide-react"
 import { useEffect, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 
 import { cn } from "../../lib/cn"
 import { Button } from "./Button"
@@ -27,8 +28,10 @@ export function Modal({ title, onClose, children, className }: ModalProps) {
     }
   }, [onClose])
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+  if (typeof document === "undefined") return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-[10000] flex h-dvh w-screen items-stretch justify-stretch overflow-hidden sm:items-center sm:justify-center sm:p-4">
       <button
         type="button"
         aria-label="Fechar"
@@ -41,21 +44,29 @@ export function Modal({ title, onClose, children, className }: ModalProps) {
         aria-modal="true"
         aria-label={title}
         className={cn(
-          "relative z-10 max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-border bg-bg-elevated p-5 shadow-theme-lg",
+          "relative z-10 flex h-dvh max-h-dvh w-full max-w-3xl flex-col overflow-hidden bg-bg-elevated shadow-theme-lg sm:h-auto sm:max-h-[92dvh] sm:rounded-xl sm:border sm:border-border",
           className,
         )}
       >
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <h2 className="font-heading text-lg font-semibold text-textH">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-bg-elevated px-4 py-3 sm:px-5">
+          <h2 className="min-w-0 break-words font-heading text-lg font-semibold text-textH">
             {title}
           </h2>
-          <Button size="icon" variant="ghost" onClick={onClose}>
+          <Button
+            className="shrink-0"
+            size="icon"
+            variant="ghost"
+            onClick={onClose}
+          >
             <X className="h-5 w-5" />
           </Button>
-        </div>
+        </header>
 
-        {children}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">
+          {children}
+        </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   )
 }
