@@ -10,6 +10,7 @@ import {
   type Weapon,
 } from "../../../models/items/equipment/Weapon"
 import type { EquipSlot, Itemmable } from "../../../models/items/item"
+import { canItemGoInPocket } from "../../../models/items/itemPocketability"
 
 export function EquipItemDialog({
   open,
@@ -40,17 +41,16 @@ export function EquipItemDialog({
   const selected = options.find((option) => option.key === selectedKey)
 
   return (
-    <Modal title="Equipar item" onClose={onClose} className="max-w-xl">
+    <Modal title="Destino do item" onClose={onClose} className="max-w-xl">
       <div className="grid gap-4">
         <div className="rounded-xl border border-border bg-bg-subtle p-3">
           <div className="text-sm font-semibold text-textH">
             {item.name || "Item sem nome"}
           </div>
           <div className="mt-1 text-xs leading-5 text-textMuted">
-            Qualquer item pode ser segurado com uma ou duas mãos. Usar duas
-            mãos só altera ataque e dano quando a arma possui uma regra própria,
-            como Versátil ou Duas Mãos. Focos arcanos segurados não bloqueiam a
-            conjuração.
+            Escolha como o item será equipado ou armazenado. Qualquer item pode
+            ser segurado com uma ou duas mãos. Itens compatíveis também podem ir
+            diretamente para o bolso.
           </div>
         </div>
 
@@ -94,7 +94,7 @@ export function EquipItemDialog({
               onClose()
             }}
           >
-            Equipar
+            Confirmar destino
           </Button>
         </div>
       </div>
@@ -170,6 +170,19 @@ function getEquipmentOptions(
         necklaceSpaceAvailable &&
         (!requiresHand || replacingShield || freeHands >= 1),
       destination: { type: "natural" },
+    })
+  }
+
+  if (canItemGoInPocket(item)) {
+    const pocketFull = character.get("equipment").pockets.length >= 8
+    options.push({
+      key: "pocket",
+      label: pocketFull ? "Bolso cheio" : "Bolso",
+      description: pocketFull
+        ? "Os oito espaços de bolso já estão ocupados."
+        : "Armazena o item diretamente em um espaço de bolso.",
+      available: !pocketFull,
+      destination: { type: "pocket" },
     })
   }
 

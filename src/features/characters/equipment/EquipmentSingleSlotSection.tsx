@@ -29,6 +29,10 @@ export function EquipmentSingleSlotSection({
   updateCharacter,
 }: Props) {
   const item = character.get("equipment")[slot] as Equipment | undefined
+  const reference =
+    slot === "shield"
+      ? ({ type: "shield" } as const)
+      : ({ type: "slot", slot } as const)
 
   return (
     <section>
@@ -49,6 +53,9 @@ export function EquipmentSingleSlotSection({
         </div>
       ) : (
         <EquipmentItemCard
+          characterId={character.get("id")}
+          reference={reference}
+          pocketCount={character.get("equipment").pockets.length}
           item={item}
           fallbackName="Item sem nome"
           badges={[title]}
@@ -64,11 +71,6 @@ export function EquipmentSingleSlotSection({
               value: String(item.weight ?? 0),
             },
           ]}
-          onUnequip={() =>
-            updateCharacter(character.get("id"), (current) =>
-              current.unequip(slot),
-            )
-          }
           onUpdate={(updater) =>
             updateCharacter(character.get("id"), (current) => {
               const equipment = current.get("equipment")

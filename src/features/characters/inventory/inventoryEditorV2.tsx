@@ -34,7 +34,6 @@ type Props = {
   onRemoveItem?: (itemId: string) => void
   onConsumeItem?: (itemId: string) => void
   onEquipItem?: (itemId: string) => void
-  onPocketItem?: (itemId: string) => void
   onToggleBagOfHolding?: (itemId: string) => void
   onToggleAttunement?: (itemId: string) => void
   attunedItemIds?: string[]
@@ -150,7 +149,6 @@ export function InventoryEditor({
   onRemoveItem,
   onConsumeItem,
   onEquipItem,
-  onPocketItem,
   onToggleBagOfHolding,
   onToggleAttunement,
   attunedItemIds = [],
@@ -201,7 +199,6 @@ export function InventoryEditor({
           onRemoveItem={onRemoveItem}
           onTransferItem={onTransferItem}
           onEquipItem={onEquipItem}
-          onPocketItem={onPocketItem}
           transferLabel={transferLabel}
           onEditItem={setEditingItem}
         />
@@ -319,16 +316,6 @@ export function InventoryEditor({
                           </Button>
                         ) : null}
 
-                        {canItemGoInPocket(item) && onPocketItem ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => onPocketItem(item.id)}
-                          >
-                            Enviar ao bolso
-                          </Button>
-                        ) : null}
-
                         {onToggleBagOfHolding ? (
                           <Button
                             size="sm"
@@ -432,7 +419,6 @@ function CurrencyWallet({
   onRemoveItem,
   onTransferItem,
   onEquipItem,
-  onPocketItem,
   transferLabel,
   onEditItem,
 }: {
@@ -445,7 +431,6 @@ function CurrencyWallet({
   onRemoveItem?: (itemId: string) => void
   onTransferItem?: (item: Itemmable) => void
   onEquipItem?: (itemId: string) => void
-  onPocketItem?: (itemId: string) => void
   transferLabel: string
   onEditItem: (item: Itemmable) => void
 }) {
@@ -513,15 +498,6 @@ function CurrencyWallet({
                     onClick={() => onEquipItem(item.id)}
                   >
                     Equipar
-                  </Button>
-                ) : null}
-                {canItemGoInPocket(item) && onPocketItem ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => onPocketItem(item.id)}
-                  >
-                    Enviar ao bolso
                   </Button>
                 ) : null}
                 {onTransferItem ? (

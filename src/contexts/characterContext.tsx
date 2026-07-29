@@ -31,6 +31,12 @@ import {
   stowHandOccupant as stowCharacterHandOccupant,
   type HandOccupantReference,
 } from "../models/characters/characterHands"
+import {
+  moveEquippedItemToCharacterStorage,
+  removeEquippedItem as removeAnyEquippedItem,
+  type EquippedItemDestination,
+  type EquippedItemReference,
+} from "../models/characters/characterEquippedItemMovement"
 import type { Player } from "../models/player/Player"
 import type { LongRestSupplySelection } from "../models/supplies/partySupply"
 
@@ -84,6 +90,11 @@ export type CharacterContextValue = {
   dropHandOccupant: (
     characterId: string,
     reference: HandOccupantReference,
+  ) => void
+  moveEquippedItem: (
+    characterId: string,
+    reference: EquippedItemReference,
+    destination: EquippedItemDestination,
   ) => void
   transferItem: (request: TransferItemRequest) => void
   canTransferFromCharacter: (characterId: string) => boolean
@@ -535,6 +546,64 @@ export function CharacterProvider({
     })
   }
 
+
+  function moveEquippedItem(
+    characterId: string,
+    reference: EquippedItemReference,
+    destination: EquippedItemDestination,
+  ) {
+    if (destination !== "ground") {
+      updateCharacter(characterId, (current) =>
+        moveEquippedItemToCharacterStorage(
+          current,
+          reference,
+          destination,
+        ),
+      )
+      return
+    }
+
+    setAppState((previous) => {
+      const rawCharacter = previous.characters.find(
+        (entry) => entry.id === characterId,
+      )
+      if (!rawCharacter) return previous
+
+      const removed = removeAnyEquippedItem(
+        CharacterTemplate.fromJSON(rawCharacter),
+        reference,
+      )
+      if (!removed.item) return previous
+
+      const withCharacter = applyRecordedGameOperation(
+        previous,
+        createGameOperationRecord(
+          {
+            type: "character.replace",
+            characterId,
+            character: removed.character.toJSON(),
+          },
+          actorId,
+        ),
+      )
+
+      return applyRecordedGameOperation(
+        withCharacter,
+        createGameOperationRecord(
+          {
+            type: "ground.item.add",
+            item: {
+              ...removed.item,
+              heldHands: undefined,
+              insideBagOfHolding: false,
+            },
+          },
+          actorId,
+        ),
+      )
+    })
+  }
+
   function canTransferFromCharacter(characterId: string): boolean {
     if (userRole === "master") return true
 
@@ -625,6 +694,7 @@ export function CharacterProvider({
         removeGroundItem,
         stowHandOccupant,
         dropHandOccupant,
+        moveEquippedItem,
         transferItem,
         canTransferFromCharacter,
         canViewCharacterDetails,

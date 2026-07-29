@@ -1,9 +1,15 @@
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 
 import { Button } from "../../../components/ui/Button"
+import { useCharacterContext } from "../../../contexts/characterContext"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatBonusName, formatBonusValue } from "../../../lib/formatBonus"
+import type {
+  EquippedItemDestination,
+  EquippedItemReference,
+} from "../../../models/characters/characterEquippedItemMovement"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
+import { EquippedItemDestinationDialog } from "./equippedItemDestinationDialog"
 import { EquipmentFeaturesList } from "./equipmentFeaturesList"
 
 type DisplayBonusKey =
@@ -45,92 +51,113 @@ export type EquipmentDisplayStat = {
 }
 
 type Props<T extends Equipment> = {
+  characterId: string
+  reference: EquippedItemReference
+  pocketCount: number
   item: T
   fallbackName: string
   badges?: string[]
   stats?: EquipmentDisplayStat[]
-  onUnequip: () => void
   onUpdate: (updater: (item: T) => T) => void
   children?: ReactNode
 }
 
 export function EquipmentItemCard<T extends Equipment>({
+  characterId,
+  reference,
+  pocketCount,
   item,
   fallbackName,
   badges = [],
   stats = [],
-  onUnequip,
   onUpdate,
   children,
 }: Props<T>) {
-  return (
-    <article className="overflow-hidden rounded-xl border border-border bg-bg-subtle shadow-theme-sm">
-      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="break-words text-base font-semibold text-textH">
-              {item.name || fallbackName}
-            </h3>
+  const { moveEquippedItem } = useCharacterContext()
+  const [destinationOpen, setDestinationOpen] = useState(false)
 
-            {badges.map((badge, index) => (
-              <span
-                key={`${badge}-${index}`}
-                className={
-                  index === 0
-                    ? "rounded-full bg-accentBg px-2 py-0.5 text-[10px] font-semibold text-accent"
-                    : "rounded-full border border-border bg-bg px-2 py-0.5 text-[10px] font-semibold text-textMuted"
-                }
-              >
-                {badge}
-              </span>
-            ))}
+  function handleMove(destination: EquippedItemDestination) {
+    moveEquippedItem(characterId, reference, destination)
+  }
+
+  return (
+    <>
+      <article className="overflow-hidden rounded-xl border border-border bg-bg-subtle shadow-theme-sm">
+        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="break-words text-base font-semibold text-textH">
+                {item.name || fallbackName}
+              </h3>
+
+              {badges.map((badge, index) => (
+                <span
+                  key={`${badge}-${index}`}
+                  className={
+                    index === 0
+                      ? "rounded-full bg-accentBg px-2 py-0.5 text-[10px] font-semibold text-accent"
+                      : "rounded-full border border-border bg-bg px-2 py-0.5 text-[10px] font-semibold text-textMuted"
+                  }
+                >
+                  {badge}
+                </span>
+              ))}
+            </div>
+
+            {item.desc?.trim() ? (
+              <p className="mt-2 max-w-3xl whitespace-pre-wrap break-words text-xs leading-5 text-textMuted">
+                {item.desc}
+              </p>
+            ) : null}
           </div>
 
-          {item.desc?.trim() ? (
-            <p className="mt-2 max-w-3xl whitespace-pre-wrap break-words text-xs leading-5 text-textMuted">
-              {item.desc}
-            </p>
-          ) : null}
+          <Button
+            className="w-full shrink-0 sm:w-auto"
+            size="sm"
+            variant="ghost"
+            onClick={() => setDestinationOpen(true)}
+          >
+            Desequipar
+          </Button>
         </div>
 
-        <Button
-          className="w-full shrink-0 sm:w-auto"
-          size="sm"
-          variant="ghost"
-          onClick={onUnequip}
-        >
-          Desequipar
-        </Button>
-      </div>
+        {stats.length > 0 ? (
+          <div
+            className={[
+              "grid gap-px border-y border-border bg-border",
+              stats.length >= 4
+                ? "grid-cols-2 sm:grid-cols-4"
+                : stats.length === 3
+                  ? "grid-cols-2 sm:grid-cols-3"
+                  : "grid-cols-2",
+            ].join(" ")}
+          >
+            {stats.map((stat) => (
+              <EquipmentStat
+                key={`${stat.label}-${stat.value}`}
+                icon={stat.icon}
+                label={stat.label}
+                value={stat.value}
+              />
+            ))}
+          </div>
+        ) : null}
 
-      {stats.length > 0 ? (
-        <div
-          className={[
-            "grid gap-px border-y border-border bg-border",
-            stats.length >= 4
-              ? "grid-cols-2 sm:grid-cols-4"
-              : stats.length === 3
-                ? "grid-cols-2 sm:grid-cols-3"
-                : "grid-cols-2",
-          ].join(" ")}
-        >
-          {stats.map((stat) => (
-            <EquipmentStat
-              key={`${stat.label}-${stat.value}`}
-              icon={stat.icon}
-              label={stat.label}
-              value={stat.value}
-            />
-          ))}
+        <div className="p-4">
+          {children}
+          <EquipmentBonusList bonuses={item.bonuses} />
+          <EquipmentFeaturesList equipment={item} onUpdate={onUpdate} />
         </div>
-      ) : null}
+      </article>
 
-      <div className="p-4">
-        {children}
-        <EquipmentBonusList bonuses={item.bonuses} />
-        <EquipmentFeaturesList equipment={item} onUpdate={onUpdate} />
-      </div>
-    </article>
+      <EquippedItemDestinationDialog
+        open={destinationOpen}
+        item={item}
+        pocketCount={pocketCount}
+        onClose={() => setDestinationOpen(false)}
+        onMove={handleMove}
+      />
+    </>
   )
 }
 
