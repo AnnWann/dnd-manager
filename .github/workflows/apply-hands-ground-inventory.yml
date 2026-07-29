@@ -38,6 +38,28 @@ jobs:
       - name: Apply hands and ground inventory support
         run: python .github/apply_hands_ground_inventory.py
 
+      - name: Correct optional inventory callbacks
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/features/characters/inventory/inventoryEditorV2.tsx')
+          text = path.read_text()
+          text = text.replace(
+              'onClick={() => onAddItem(newCurrencyItem())}',
+              'disabled={!onAddItem}\n          onClick={() => onAddItem?.(newCurrencyItem())}',
+          )
+          text = text.replace(
+              'onUpdateItem(item.id, (current) => ({',
+              'onUpdateItem?.(item.id, (current) => ({',
+          )
+          text = text.replace(
+              'onClick={() => onRemoveItem(item.id)}',
+              'disabled={!onRemoveItem}\n                  onClick={() => onRemoveItem?.(item.id)}',
+          )
+          path.write_text(text)
+          PY
+
       - name: Remove temporary implementation files
         run: rm -f .github/hands-ground-trigger .github/apply_hands_ground_inventory.py
 
