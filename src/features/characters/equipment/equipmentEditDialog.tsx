@@ -16,6 +16,7 @@ type BonusTarget =
   | "temporaryHp"
   | "passivePerception"
   | "attackBonus"
+  | "saveDcBonus"
   | "speed"
   | "attribute"
   | "attributeModifier"
@@ -39,6 +40,7 @@ const BONUS_TARGETS: Array<{ value: BonusTarget; label: string }> = [
   { value: "temporaryHp", label: "HP Temp." },
   { value: "passivePerception", label: "Percepção Passiva" },
   { value: "attackBonus", label: "Ataque" },
+  { value: "saveDcBonus", label: "CD de magia e habilidades" },
   { value: "speed", label: "Velocidade" },
   { value: "attribute", label: "Atributo" },
   { value: "attributeModifier", label: "Modificador de atributo" },

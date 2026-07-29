@@ -98,11 +98,13 @@ import {
   applyBonuses,
   getAttributeModifier,
   getEffectiveArmorClass,
+  getEffectiveAttackBonus,
   getEffectiveAttribute,
   getEffectiveAttributeModifier,
   getEffectiveInitiative,
   getEffectiveMobility,
   getEffectivePassivePerception,
+  getEffectiveSaveDc,
   getEffectiveStat,
   getEffectiveWeaponAttackBonus,
   getEffectiveWeaponDamageBonus,
@@ -435,6 +437,8 @@ export class CharacterTemplate {
   getEffectiveAttribute(attribute: Attribute): number {return getEffectiveAttribute(this, attribute)}
   getEffectiveAttributeModifier(attribute: Attribute): number {return getEffectiveAttributeModifier(this, attribute)}
   getEffectiveStat<K extends keyof Sheet["stats"]>(stat: K,): Sheet["stats"][K] {return getEffectiveStat(this, stat)}
+  getEffectiveAttackBonus(baseValue: number): number {return getEffectiveAttackBonus(this, baseValue)}
+  getEffectiveSaveDc(baseValue: number): number {return getEffectiveSaveDc(this, baseValue)}
   getEffectiveWeaponAttackBonus(weapon: Weapon,baseValue: number,): number {return getEffectiveWeaponAttackBonus(this, weapon, baseValue)}
   getEffectiveWeaponDamageBonus(weapon: Weapon,baseValue: number,): number {return getEffectiveWeaponDamageBonus(this, weapon, baseValue)}
   getEquipmentBonuses(key: StatBonusKey): Bonus[] {return getEquipmentBonuses(this, key)}

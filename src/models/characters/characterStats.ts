@@ -117,6 +117,26 @@ export function getCharacterBonuses(
   ]
 }
 
+export function getEffectiveAttackBonus(
+  character: CharacterTemplate,
+  baseValue: number,
+): number {
+  return applyBonuses(
+    baseValue,
+    getCharacterBonuses(character, "attackBonus"),
+  )
+}
+
+export function getEffectiveSaveDc(
+  character: CharacterTemplate,
+  baseValue: number,
+): number {
+  return applyBonuses(
+    baseValue,
+    getCharacterBonuses(character, "saveDcBonus"),
+  )
+}
+
 export function getEffectiveAttribute(
   character: CharacterTemplate,
   attribute: Attribute,
@@ -329,13 +349,9 @@ export function getEffectiveWeaponAttackBonus(
   const weaponAttackBonus = weapon.bonuses?.attack?.bonus
     ? resolveBonus(character, weapon.bonuses.attack.bonus)
     : undefined
-  const weaponGeneralBonuses = (weapon.bonuses?.attackBonus ?? [])
-    .map((bonus) => resolveBonus(character, bonus))
-  const abilityBonuses = getAbilityBonuses(character, "attackBonus")
 
   return applyBonuses(baseValue, [
-    ...weaponGeneralBonuses,
-    ...abilityBonuses,
+    ...getCharacterBonuses(character, "attackBonus"),
     ...(weaponAttackBonus ? [weaponAttackBonus] : []),
   ])
 }
