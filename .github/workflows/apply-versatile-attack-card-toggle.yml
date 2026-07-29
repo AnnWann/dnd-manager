@@ -29,21 +29,23 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
+
           path = Path('src/features/characters/characterSheet/weaponAttackCardActionsDialog.tsx')
           text = path.read_text()
-          old = '''  const occupant = findHandOccupantByItemId(character, state.itemId)
-          if (!occupant) return null
-
-          const blockers ='''
-          new = '''  const itemId = state.itemId
-          const resolvedOccupant = findHandOccupantByItemId(character, itemId)
-          if (!resolvedOccupant) return null
-          const occupant: HandOccupant = resolvedOccupant
-
-          const blockers ='''
-          if old not in text:
-              raise SystemExit('dialog narrowing anchor not found')
-          text = text.replace(old, new, 1)
+          pattern = re.compile(
+              r'  const occupant = findHandOccupantByItemId\(character, state\.itemId\)\n'
+              r'  if \(!occupant\) return null'
+          )
+          replacement = (
+              '  const itemId = state.itemId\n'
+              '  const resolvedOccupant = findHandOccupantByItemId(character, itemId)\n'
+              '  if (!resolvedOccupant) return null\n'
+              '  const occupant: HandOccupant = resolvedOccupant'
+          )
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'dialog narrowing matched {count} times')
           text = text.replace('state.itemId', 'itemId')
           path.write_text(text)
           PY
