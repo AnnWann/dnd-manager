@@ -1,0 +1,22 @@
+name: Validate ability proficiency presets
+
+on:
+  pull_request:
+    paths:
+      - ".github/ability-proficiency-presets-trigger"
+      - "src/features/characters/abilities/grantedProficienciesEditor.tsx"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install --package-lock=false --ignore-scripts
+      - run: npm run build
