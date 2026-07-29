@@ -33,11 +33,15 @@ export function AttributeCalculators({
   }
 
   function getProficientAttack(attribute: Attribute): number {
-    return getModifier(attribute) + proficiencyBonus
+    return character.getEffectiveAttackBonus(
+      getModifier(attribute) + proficiencyBonus,
+    )
   }
 
   function getDc(attribute: Attribute): number {
-    return 8 + getModifier(attribute) + proficiencyBonus
+    return character.getEffectiveSaveDc(
+      8 + getModifier(attribute) + proficiencyBonus,
+    )
   }
 
   return (
@@ -49,7 +53,7 @@ export function AttributeCalculators({
           </h2>
 
           <p className="mt-1 text-xs text-textMuted">
-            Valores derivados dos atributos e da proficiência.
+            Valores derivados dos atributos e da proficiência, incluindo bônus ativos de equipamentos, habilidades e condições.
           </p>
         </div>
 
@@ -62,7 +66,7 @@ export function AttributeCalculators({
         <CalculatorGroup
           icon={<Swords className="h-4 w-4" />}
           title="Ataques com arma"
-          description="Ataque proficiente, sem bônus específico da arma."
+          description="Ataque proficiente com bônus gerais ativos; bônus específicos da arma entram no ataque real."
         >
           <div className="grid grid-cols-2 gap-2">
             {WEAPON_ATTRIBUTES.map((attribute) => (
@@ -79,7 +83,7 @@ export function AttributeCalculators({
         <CalculatorGroup
           icon={<Sparkles className="h-4 w-4" />}
           title="Conjuração"
-          description="Modificador, ataque mágico e CD da magia."
+          description="Modificador, ataque mágico e CD com bônus ativos."
         >
           <div className="grid gap-2 sm:grid-cols-3">
             {SPELLCASTING_ATTRIBUTES.map((attribute) => (
@@ -97,7 +101,7 @@ export function AttributeCalculators({
         <CalculatorGroup
           icon={<ShieldCheck className="h-4 w-4" />}
           title="CD por atributo"
-          description="8 + modificador do atributo + proficiência."
+          description="8 + modificador do atributo + proficiência + bônus ativos de CD."
         >
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 xl:grid-cols-3 2xl:grid-cols-6">
             {ATTRIBUTE_KEYS.map((attribute) => (

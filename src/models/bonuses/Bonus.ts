@@ -16,6 +16,7 @@ export type BonusCollection = {
   temporaryHp?: Bonus[]
   passivePerception?: Bonus[]
   attackBonus?: Bonus[]
+  saveDcBonus?: Bonus[]
   damageBonus?: Bonus[]
   speed?: Bonus[]
   attribute?: Array<{
@@ -45,6 +46,7 @@ export type NormalBonusKey =
   | "temporaryHp"
   | "passivePerception"
   | "attackBonus"
+  | "saveDcBonus"
   | "damageBonus"
   | "speed"
 

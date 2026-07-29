@@ -32,6 +32,7 @@ const TARGET_OPTIONS: Array<{ value: BonusTarget; label: string }> = [
   { value: "temporaryHp", label: "HP temporário" },
   { value: "passivePerception", label: "Percepção passiva" },
   { value: "attackBonus", label: "Ataques" },
+  { value: "saveDcBonus", label: "CD de magia e habilidades" },
   { value: "damageBonus", label: "Dano" },
   { value: "speed", label: "Velocidade" },
   { value: "attribute", label: "Valor de atributo" },

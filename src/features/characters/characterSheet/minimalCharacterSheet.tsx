@@ -309,7 +309,9 @@ export function MinimalCharacterSheet({
                 key={attribute}
                 label={`Arma ${attributeShort(attribute)}`}
                 value={formatSigned(
-                  character.getEffectiveAttributeModifier(attribute) + proficiency,
+                  character.getEffectiveAttackBonus(
+                    character.getEffectiveAttributeModifier(attribute) + proficiency,
+                  ),
                 )}
               />
             ))}
@@ -328,11 +330,15 @@ export function MinimalCharacterSheet({
                   </div>
                   <div className="mt-1 flex items-baseline justify-center gap-2">
                     <span className="text-sm font-bold text-textH">
-                      {formatSigned(modifier + proficiency)}
+                      {formatSigned(
+                        character.getEffectiveAttackBonus(modifier + proficiency),
+                      )}
                     </span>
                     <span className="text-[10px] text-textMuted">CD</span>
                     <span className="text-sm font-bold text-textH">
-                      {8 + modifier + proficiency}
+                      {character.getEffectiveSaveDc(
+                        8 + modifier + proficiency,
+                      )}
                     </span>
                   </div>
                 </div>
@@ -347,7 +353,10 @@ export function MinimalCharacterSheet({
               key={attribute}
               className="rounded-full border border-border bg-bg px-2 py-1 text-[10px] text-text"
             >
-              CD {attributeShort(attribute)} {8 + character.getEffectiveAttributeModifier(attribute) + proficiency}
+              CD {attributeShort(attribute)}{" "}
+              {character.getEffectiveSaveDc(
+                8 + character.getEffectiveAttributeModifier(attribute) + proficiency,
+              )}
             </span>
           ))}
         </div>
