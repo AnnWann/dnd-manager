@@ -42,6 +42,32 @@ jobs:
       - name: Apply scoped attack and DC support
         run: python .github/apply_scoped_attack_dc.py
 
+      - name: Correct generated bonus-key arrays
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          replacement = '''[
+            "armorClass",
+            "initiative",
+            "maxHp",
+            "temporaryHp",
+            "passivePerception",
+            "attackBonus",
+            "saveDcBonus",
+            "damageBonus",
+            "speed",
+          ]'''
+          for filename in [
+              'src/features/characters/equipment/equipmentItemCard.tsx',
+              'src/features/characters/equipment/EquipmentWeaponsSection.tsx',
+          ]:
+              path = Path(filename)
+              text = path.read_text()
+              text = text.replace('[\x01]', replacement)
+              path.write_text(text)
+          PY
+
       - name: Remove temporary implementation files
         run: rm -f .github/scoped-attack-dc-trigger .github/apply_scoped_attack_dc.py
 
