@@ -21,47 +21,11 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Correct implementation anchors
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('.github/apply_hands_ground_inventory.py')
-          text = path.read_text()
-          text = text.replace(
-              "'import type { Attribute } from \"../../../models/sheet/Attribute\"',\n    'import type { Attribute } from \"../../../models/sheet/Attribute\"\\nimport { SpellcastingHandsWarning } from \"./spellcastingHandsWarning\"',",
-              "'''import {\n  ATTRIBUTE_KEYS,\n  type Attribute,\n} from \"../../../models/sheet/Attribute\"''',\n    '''import {\n  ATTRIBUTE_KEYS,\n  type Attribute,\n} from \"../../../models/sheet/Attribute\"\nimport { SpellcastingHandsWarning } from \"./spellcastingHandsWarning\"''',",
-          )
-          path.write_text(text)
-          PY
-
-      - name: Apply hands and ground inventory support
-        run: python .github/apply_hands_ground_inventory.py
-
-      - name: Correct optional inventory callbacks
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('src/features/characters/inventory/inventoryEditorV2.tsx')
-          text = path.read_text()
-          text = text.replace(
-              'onClick={() => onAddItem(newCurrencyItem())}',
-              'disabled={!onAddItem}\n          onClick={() => onAddItem?.(newCurrencyItem())}',
-          )
-          text = text.replace(
-              'onUpdateItem(item.id, (current) => ({',
-              'onUpdateItem?.(item.id, (current) => ({',
-          )
-          text = text.replace(
-              'onClick={() => onRemoveItem(item.id)}',
-              'disabled={!onRemoveItem}\n                  onClick={() => onRemoveItem?.(item.id)}',
-          )
-          path.write_text(text)
-          PY
+      - name: Apply final hands and ground inventory cleanup
+        run: python .github/cleanup_hands_ground_inventory.py
 
       - name: Remove temporary implementation files
-        run: rm -f .github/hands-ground-trigger .github/apply_hands_ground_inventory.py
+        run: rm -f .github/hands-ground-trigger .github/cleanup_hands_ground_inventory.py
 
       - run: npm install --package-lock=false --ignore-scripts
       - run: npm run build
@@ -75,5 +39,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "add hands, ground inventory, and casting restrictions"
+          git commit -m "finish hands and ground inventory interactions"
           git push origin HEAD:${{ github.head_ref }}
