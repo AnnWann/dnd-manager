@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
+import { cn } from "../../../lib/cn"
 import { CLASS_NAMES } from "../../../contexts/consts"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { getCharacterGrantedSpells } from "../../../models/characters/characterGrantedSpells"
@@ -33,12 +34,16 @@ type PreparedFilter = "all" | "prepared" | "not-prepared"
 type SourceTypeFilter = "all" | SpellSource["type"]
 type SpecificSourceFilter = "all" | string
 type ListViewMode = "detailed" | "compact"
+type CastingTimeFilter = "all" | "action" | "bonusAction" | "reaction"
+type ConcentrationFilter = "all" | "concentration" | "no-concentration"
 
 type SpellListPreferences = {
   searchQuery: string
   preparedFilter: PreparedFilter
   sourceTypeFilter: SourceTypeFilter
   specificSourceFilter: SpecificSourceFilter
+  castingTimeFilter: CastingTimeFilter
+  concentrationFilter: ConcentrationFilter
   viewMode: ListViewMode
 }
 
@@ -74,11 +79,32 @@ const SOURCE_TYPE_ORDER: SpellSource["type"][] = [
   "equipment",
 ]
 
+const CASTING_TIME_FILTER_OPTIONS: Array<{
+  value: CastingTimeFilter
+  label: string
+}> = [
+  { value: "all", label: "Todas" },
+  { value: "action", label: "Ação" },
+  { value: "bonusAction", label: "Ação bônus" },
+  { value: "reaction", label: "Reação" },
+]
+
+const CONCENTRATION_FILTER_OPTIONS: Array<{
+  value: ConcentrationFilter
+  label: string
+}> = [
+  { value: "all", label: "Todas" },
+  { value: "concentration", label: "Concentração" },
+  { value: "no-concentration", label: "Sem concentração" },
+]
+
 const DEFAULT_SPELL_LIST_PREFERENCES: SpellListPreferences = {
   searchQuery: "",
   preparedFilter: "all",
   sourceTypeFilter: "all",
   specificSourceFilter: "all",
+  castingTimeFilter: "all",
+  concentrationFilter: "all",
   viewMode: "detailed",
 }
 
@@ -93,6 +119,8 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     preparedFilter,
     sourceTypeFilter,
     specificSourceFilter,
+    castingTimeFilter,
+    concentrationFilter,
     viewMode,
   } = preferences
   const classes = character.get("sheet").classes ?? []
@@ -210,11 +238,22 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       effectiveSpecificSourceFilter === "all" ||
       getSourceKey(source) === effectiveSpecificSourceFilter
 
+    const matchesCastingTime =
+      castingTimeFilter === "all" ||
+      spell.castingTime.type === castingTimeFilter
+
+    const matchesConcentration =
+      concentrationFilter === "all" ||
+      (concentrationFilter === "concentration" && spell.concentration) ||
+      (concentrationFilter === "no-concentration" && !spell.concentration)
+
     return (
       matchesName &&
       matchesPrepared &&
       matchesSourceType &&
-      matchesSpecificSource
+      matchesSpecificSource &&
+      matchesCastingTime &&
+      matchesConcentration
     )
   })
 
@@ -417,6 +456,72 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
           </label>
         </div>
 
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+          <fieldset className="grid gap-1.5">
+            <legend className="text-[11px] text-textMuted">
+              Tempo de conjuração
+            </legend>
+            <div
+              className="grid grid-cols-4 gap-1 rounded-lg border border-border bg-bg-subtle p-1"
+              aria-label="Filtrar magias pelo tempo de conjuração"
+            >
+              {CASTING_TIME_FILTER_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={castingTimeFilter === option.value}
+                  onClick={() =>
+                    setPreferences((current) => ({
+                      ...current,
+                      castingTimeFilter: option.value,
+                    }))
+                  }
+                  className={cn(
+                    "min-h-9 rounded-md px-2 py-1.5 text-[11px] font-semibold leading-4 transition-colors",
+                    castingTimeFilter === option.value
+                      ? "bg-accentBg text-textH shadow-theme-sm"
+                      : "text-textMuted hover:bg-bg hover:text-textH",
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset className="grid gap-1.5">
+            <legend className="text-[11px] text-textMuted">
+              Concentração
+            </legend>
+            <div
+              className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-bg-subtle p-1"
+              aria-label="Filtrar magias por concentração"
+            >
+              {CONCENTRATION_FILTER_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={concentrationFilter === option.value}
+                  onClick={() =>
+                    setPreferences((current) => ({
+                      ...current,
+                      concentrationFilter: option.value,
+                    }))
+                  }
+                  className={cn(
+                    "min-h-9 rounded-md px-2 py-1.5 text-[11px] font-semibold leading-4 transition-colors",
+                    concentrationFilter === option.value
+                      ? "bg-accentBg text-textH shadow-theme-sm"
+                      : "text-textMuted hover:bg-bg hover:text-textH",
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+        </div>
+
         {spells.length ? (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {sourceTypeOptions.map((type) => {
@@ -550,6 +655,12 @@ function loadSpellListPreferences(characterId: string): SpellListPreferences {
         typeof parsed.specificSourceFilter === "string"
           ? parsed.specificSourceFilter
           : DEFAULT_SPELL_LIST_PREFERENCES.specificSourceFilter,
+      castingTimeFilter: isCastingTimeFilter(parsed.castingTimeFilter)
+        ? parsed.castingTimeFilter
+        : DEFAULT_SPELL_LIST_PREFERENCES.castingTimeFilter,
+      concentrationFilter: isConcentrationFilter(parsed.concentrationFilter)
+        ? parsed.concentrationFilter
+        : DEFAULT_SPELL_LIST_PREFERENCES.concentrationFilter,
       viewMode: isListViewMode(parsed.viewMode)
         ? parsed.viewMode
         : DEFAULT_SPELL_LIST_PREFERENCES.viewMode,
@@ -592,6 +703,23 @@ function isSourceTypeFilter(value: unknown): value is SourceTypeFilter {
 
 function isListViewMode(value: unknown): value is ListViewMode {
   return value === "detailed" || value === "compact"
+}
+
+function isCastingTimeFilter(value: unknown): value is CastingTimeFilter {
+  return (
+    value === "all" ||
+    value === "action" ||
+    value === "bonusAction" ||
+    value === "reaction"
+  )
+}
+
+function isConcentrationFilter(value: unknown): value is ConcentrationFilter {
+  return (
+    value === "all" ||
+    value === "concentration" ||
+    value === "no-concentration"
+  )
 }
 
 function normalizeSearchText(value: string): string {
