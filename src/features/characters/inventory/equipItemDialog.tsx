@@ -47,9 +47,10 @@ export function EquipItemDialog({
             {item.name || "Item sem nome"}
           </div>
           <div className="mt-1 text-xs leading-5 text-textMuted">
-            Escolha onde o item será usado. Segurar um item ocupa uma mão, mas
-            não concede os benefícios de armaduras, anéis ou outros espaços
-            específicos. Focos arcanos segurados não bloqueiam a conjuração.
+            Qualquer item pode ser segurado com uma ou duas mãos. Usar duas
+            mãos só altera ataque e dano quando a arma possui uma regra própria,
+            como Versátil ou Duas Mãos. Focos arcanos segurados não bloqueiam a
+            conjuração.
           </div>
         </div>
 
@@ -115,45 +116,40 @@ function getEquipmentOptions(
 ): EquipmentOption[] {
   const options: EquipmentOption[] = []
   const freeHands = getFreeHands(character)
+  const weapon =
+    item.kind === "equipment" && item.equipSlot === "weapon"
+      ? (item as Weapon)
+      : undefined
 
-  if (item.kind === "equipment" && item.equipSlot === "weapon") {
-    const weapon = item as Weapon
+  options.push({
+    key: "hand-one",
+    label: weapon?.twoHanded
+      ? "Segurar com uma mão — arma improvisada"
+      : "Segurar com uma mão",
+    description: weapon?.twoHanded
+      ? "Usa Força no ataque e causa 1d4 + Força, ignorando proficiência e estatísticas próprias da arma."
+      : item.kind === "focus"
+        ? "Ocupa uma mão, ativa o foco e não bloqueia a conjuração."
+        : "Ocupa uma mão. A arma mantém suas estatísticas normais quando não exige duas mãos.",
+    available: freeHands >= 1,
+    destination: { type: "hand", hands: 1 },
+  })
 
-    options.push({
-      key: "weapon-one-hand",
-      label: weapon.twoHanded
-        ? "Empunhar com uma mão — improvisada"
-        : "Empunhar com uma mão",
-      description: weapon.twoHanded
-        ? "Usa Força para o ataque e causa 1d4 + Força, ignorando as estatísticas próprias da arma."
-        : "Usa o dado normal da arma e ocupa uma mão.",
-      available: freeHands >= 1,
-      destination: { type: "hand", wieldedTwoHanded: false },
-    })
-
-    if (weapon.twoHanded || isVersatileWeapon(weapon)) {
-      options.push({
-        key: "weapon-two-hands",
-        label: "Empunhar com duas mãos",
-        description: weapon.twoHanded
-          ? "Usa normalmente as estatísticas e o dado da arma."
-          : "Usa o dado de dano versátil definido para duas mãos.",
-        available: freeHands >= 2,
-        destination: { type: "hand", wieldedTwoHanded: true },
-      })
-    }
-  } else {
-    options.push({
-      key: "generic-hand",
-      label: item.kind === "focus" ? "Segurar como foco arcano" : "Segurar na mão",
-      description:
-        item.kind === "focus"
-          ? "Ocupa uma mão, ativa o foco e não conta como mão bloqueada para conjuração."
-          : "Ocupa uma mão. Benefícios ligados a outro espaço de equipamento não são ativados.",
-      available: freeHands >= 1,
-      destination: { type: "hand" },
-    })
-  }
+  options.push({
+    key: "hand-two",
+    label: "Segurar com duas mãos",
+    description: weapon
+      ? weapon.twoHanded
+        ? "Usa normalmente as estatísticas da arma."
+        : isVersatileWeapon(weapon)
+          ? "Usa o dado de dano versátil definido para duas mãos."
+          : "Ocupa duas mãos, mas não altera as estatísticas desta arma."
+      : item.kind === "focus"
+        ? "Ocupa duas mãos, ativa o foco e não bloqueia a conjuração."
+        : "Ocupa duas mãos sem conceder benefícios adicionais por padrão.",
+    available: freeHands >= 2,
+    destination: { type: "hand", hands: 2 },
+  })
 
   if (item.equippable && item.equipSlot && item.equipSlot !== "weapon") {
     const requiresHand = item.equipSlot === "shield"

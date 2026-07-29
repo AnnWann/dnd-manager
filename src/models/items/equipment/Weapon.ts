@@ -5,7 +5,7 @@ import type { Equipment } from "./EquipmentSlot"
 export type Weapon = Equipment & {
   /** A arma exige duas mãos para usar suas estatísticas normais. */
   twoHanded?: boolean
-  /** Estado atual de empunhadura para armas versáteis ou de duas mãos. */
+  /** Estado atual de empunhadura. Qualquer arma pode ocupar uma ou duas mãos. */
   wieldedTwoHanded?: boolean
   /** Dado usado quando uma arma versátil é empunhada com duas mãos. */
   versatileDamage?: Die
@@ -55,11 +55,9 @@ export function isWeaponImprovisedGrip(weapon: Partial<Weapon>): boolean {
 }
 
 export function getWeaponHandsUsed(weapon: Partial<Weapon>): 1 | 2 {
-  if (weapon.twoHanded) {
-    return weapon.wieldedTwoHanded === false ? 1 : 2
-  }
-  if (isVersatileWeapon(weapon) && weapon.wieldedTwoHanded) return 2
-  return 1
+  if (weapon.wieldedTwoHanded === true) return 2
+  if (weapon.wieldedTwoHanded === false) return 1
+  return weapon.twoHanded ? 2 : 1
 }
 
 export function getWeaponAttackAttribute(

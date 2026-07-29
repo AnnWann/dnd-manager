@@ -8,6 +8,10 @@ import { formatSigned } from "../../../lib/formatSigned"
 import { clampInt } from "../../../lib/numberFormat"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
+  formatUnarmedDamage,
+  getUnarmedAttackProfile,
+} from "../../../models/characters/unarmedAttack"
+import {
   getWeaponAttackAttribute,
   getWeaponDamageDie,
   isWeaponImprovisedGrip,
@@ -29,6 +33,10 @@ import {
   type Attribute,
 } from "../../../models/sheet/Attribute"
 import { SpellcastingHandsWarning } from "./spellcastingHandsWarning"
+import {
+  HandItemActionsDialog,
+  type HandItemActionsDialogState,
+} from "./weaponAttackCardActionsDialog"
 import type { Skill } from "../../../models/sheet/Skills"
 import { SelectSkillModule } from "./skills/selectCharacterSkills"
 
@@ -75,6 +83,8 @@ export function MinimalCharacterSheet({
   updateCharacter,
 }: Props) {
   const [skillQuery, setSkillQuery] = useState("")
+  const [handDialog, setHandDialog] =
+    useState<HandItemActionsDialogState | null>(null)
   const sheet = character.get("sheet")
   const proficiency = character.getProficiencyBonus()
   const normalizedSkillQuery = normalizeSearchText(skillQuery)
@@ -316,9 +326,9 @@ export function MinimalCharacterSheet({
             <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-textMuted">
               Armas equipadas
             </div>
-            {character.get("equipment").weapons.length ? (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {character.get("equipment").weapons.map((weapon, index) => {
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {character.get("equipment").weapons.length ? (
+                character.get("equipment").weapons.map((weapon, index) => {
                   const attribute = getWeaponAttackAttribute(weapon)
                   const baseAttack =
                     character.getEffectiveAttributeModifier(attribute) +
@@ -340,15 +350,14 @@ export function MinimalCharacterSheet({
                       weapon={weapon}
                       attack={attack}
                       damageBonus={damageBonus}
+                      onClick={() => setHandDialog({ itemId: weapon.id })}
                     />
                   )
-                })}
-              </div>
-            ) : (
-              <div className="rounded-lg border border-dashed border-border bg-bg-subtle px-3 py-3 text-center text-xs text-textMuted">
-                Nenhuma arma equipada.
-              </div>
-            )}
+                })
+              ) : (
+                <CompactUnarmedTile character={character} />
+              )}
+            </div>
           </div>
 
           <div>
@@ -440,6 +449,12 @@ export function MinimalCharacterSheet({
           </p>
         )}
       </CompactSection>
+
+      <HandItemActionsDialog
+        character={character}
+        state={handDialog}
+        onClose={() => setHandDialog(null)}
+      />
     </div>
   )
 }
@@ -513,24 +528,60 @@ function CompactWeaponTile({
   weapon,
   attack,
   damageBonus,
+  onClick,
 }: {
   weapon: Weapon
   attack: number
   damageBonus: number
+  onClick: () => void
 }) {
   const die = getWeaponDamageDie(weapon) ?? weapon.damage
   const damage = `${die.quantity}${die.sides}${
     damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""
   }`
+  const hands = weapon.wieldedTwoHanded ? 2 : 1
 
   return (
-    <div className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center">
-      <div className="truncate text-[10px] uppercase tracking-wide text-textMuted" title={weapon.name}>
-        {weapon.name || "Arma"}
-        {isWeaponImprovisedGrip(weapon) ? " · imp." : ""}
+    <button
+      type="button"
+      title="Abrir opções de empunhadura, guardar ou largar"
+      onClick={onClick}
+      className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center transition-colors hover:border-accentBorder hover:bg-accentBg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <div className="flex min-w-0 items-center justify-center gap-1 text-[10px] uppercase tracking-wide text-textMuted">
+        <span className="truncate">
+          {weapon.name || "Arma"}
+          {isWeaponImprovisedGrip(weapon) ? " · imp." : ""}
+        </span>
+        <span className="shrink-0 rounded-full border border-accentBorder bg-accentBg px-1 py-0.5 text-[9px] font-semibold text-accent">
+          {hands}M
+        </span>
       </div>
       <div className="mt-1 text-lg font-bold text-textH">{formatSigned(attack)}</div>
       <div className="text-[10px] font-medium text-textMuted">{damage}</div>
+    </button>
+  )
+}
+
+function CompactUnarmedTile({
+  character,
+}: {
+  character: CharacterTemplate
+}) {
+  const profile = getUnarmedAttackProfile(character)
+
+  return (
+    <div className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center">
+      <div className="truncate text-[10px] uppercase tracking-wide text-textMuted">
+        Ataque desarmado
+        {profile.monkLevel > 0 ? ` · M${profile.monkLevel}` : ""}
+      </div>
+      <div className="mt-1 text-lg font-bold text-textH">
+        {formatSigned(profile.attack)}
+      </div>
+      <div className="text-[10px] font-medium text-textMuted">
+        {formatUnarmedDamage(profile)}
+      </div>
     </div>
   )
 }

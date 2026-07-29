@@ -48,6 +48,9 @@ export type Item = {
   attuned?: boolean
 
   insideBagOfHolding?: boolean
+
+  /** Quantidade de mãos usadas enquanto o item está sendo segurado. */
+  heldHands?: 1 | 2
 }
 
 export type Itemmable =
