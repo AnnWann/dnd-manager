@@ -274,6 +274,7 @@ export function EquipmentWeaponsSection({
                   <WeaponBonusList weapon={weapon} />
 
                   <EquipmentFeaturesList
+                    characterId={character.get("id")}
                     equipment={weapon}
                     onUpdate={(updater) =>
                       updateCharacter(character.get("id"), (c) => {

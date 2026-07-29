@@ -451,7 +451,7 @@ export function MinimalCharacterSheet({
         )}
       </CompactSection>
 
-      <MinimalCharacterActions character={character} />
+      <MinimalCharacterActions character={character} updateCharacter={updateCharacter} />
 
       <HandItemActionsDialog
         character={character}

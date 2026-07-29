@@ -7,6 +7,12 @@ import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
 import { attributeShort } from "../../../lib/attributeShorts"
 import type { Ability } from "../../../models/abilities/Ability"
+import {
+  activateAbilityBenefits,
+  deactivateAbilityBenefits,
+  getAbilityUsageMax,
+  restoreAbilityUse,
+} from "../../../models/abilities/abilityActivation"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { CharacterRace, CreatureSize } from "../../../models/races/CharacterRace"
 import type { Race } from "../../../models/races/Race"
@@ -175,27 +181,22 @@ export function CharacterRaceTab({
     }))
   }
 
-  function updateAbilityUsage(abilityId: string, delta: 1 | -1) {
-    updateRace((currentRace) => ({
-      ...currentRace,
-      naturalAbilities: (currentRace.naturalAbilities ?? []).map(
-        (ability) => {
-          if (ability.id !== abilityId || !ability.usage) return ability
-          if (ability.usage.reset === "spellSlot") return ability
-
-          return {
-            ...ability,
-            usage: {
-              ...ability.usage,
-              used: Math.min(
-                ability.usage.max,
-                Math.max(0, ability.usage.used + delta),
-              ),
-            },
-          }
-        },
-      ),
-    }))
+  function updateAbilityState(
+    abilityId: string,
+    action: "use" | "restore" | "deactivate",
+  ) {
+    updateCharacter(character.get("id"), (current) => {
+      const currentRace = current.get("sheet").race
+      return current.withSheet("race", {
+        ...currentRace,
+        naturalAbilities: (currentRace.naturalAbilities ?? []).map((ability) => {
+          if (ability.id !== abilityId) return ability
+          if (action === "use") return activateAbilityBenefits(current, ability)
+          if (action === "restore") return restoreAbilityUse(ability)
+          return deactivateAbilityBenefits(ability)
+        }),
+      })
+    })
   }
 
   function addProficiency(proficiency: Proficiency) {
@@ -361,10 +362,16 @@ export function CharacterRaceTab({
                   key={ability.id}
                   ability={ability}
                   sourceLabel="Raça"
+                  usageMax={
+                    ability.usage
+                      ? getAbilityUsageMax(character, ability.usage)
+                      : undefined
+                  }
                   onEdit={() => setEditingAbility(ability)}
                   onRemove={() => removeAbility(ability.id)}
-                  onUse={() => updateAbilityUsage(ability.id, 1)}
-                  onRestore={() => updateAbilityUsage(ability.id, -1)}
+                  onUse={() => updateAbilityState(ability.id, "use")}
+                  onRestore={() => updateAbilityState(ability.id, "restore")}
+                  onDeactivate={() => updateAbilityState(ability.id, "deactivate")}
                 />
               ))}
           </div>

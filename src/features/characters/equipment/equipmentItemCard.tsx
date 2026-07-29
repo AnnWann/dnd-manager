@@ -146,7 +146,7 @@ export function EquipmentItemCard<T extends Equipment>({
         <div className="p-4">
           {children}
           <EquipmentBonusList bonuses={item.bonuses} />
-          <EquipmentFeaturesList equipment={item} onUpdate={onUpdate} />
+          <EquipmentFeaturesList characterId={characterId} equipment={item} onUpdate={onUpdate} />
         </div>
       </article>
 

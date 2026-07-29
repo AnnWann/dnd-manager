@@ -6,6 +6,7 @@ import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
 import { normalizeAbilityText } from "../../../lib/textNormalization"
+import { validateCharacterSheetFormula } from "../../../lib/customSystems/CharacterSheetFormula"
 import type {
   Ability,
   AbilityActionKind,
@@ -15,6 +16,10 @@ import type {
   AbilityUsageCooldownUnit,
   AbilityUsageResetKind,
 } from "../../../models/abilities/Ability"
+import {
+  abilityRequiresActivation,
+  normalizeAbilityActivation,
+} from "../../../models/abilities/abilityActivation"
 import { BonusesFields } from "../inventory/equipmentBonusFields"
 import { GrantedProficienciesEditor } from "../proficiencies/grantedProficienciesEditor"
 import {
@@ -48,7 +53,7 @@ function createEmptyAbility(): Ability {
     grantedSpells: [],
     grantedProficiencies: [],
     bonuses: {},
-    modifiersActive: true,
+    benefitsActive: false,
   }
 }
 
@@ -72,6 +77,39 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
 
   if (!open) return null
   const hasUsage = draft.usage !== undefined
+  const maximumFormula = draft.usage?.maxFormula?.trim() ?? ""
+  const maximumFormulaError = maximumFormula
+    ? validateCharacterSheetFormula(maximumFormula)
+    : undefined
+  const requiresActivation = abilityRequiresActivation(draft)
+
+  function updateUsageMaximum(rawValue: string) {
+    if (!draft.usage) return
+    const trimmed = rawValue.trim()
+    const numeric = Number(trimmed)
+
+    if (trimmed && Number.isFinite(numeric)) {
+      const max = Math.max(1, Math.floor(numeric))
+      setDraft({
+        ...draft,
+        usage: {
+          ...draft.usage,
+          max,
+          maxFormula: undefined,
+          used: Math.min(draft.usage.used, max),
+        },
+      })
+      return
+    }
+
+    setDraft({
+      ...draft,
+      usage: {
+        ...draft.usage,
+        maxFormula: rawValue,
+      },
+    })
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-[12000] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/55 p-3 backdrop-blur-sm sm:p-4">
@@ -209,23 +247,24 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
             {hasUsage && draft.usage ? (
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <label className="grid gap-1">
-                  <span className="text-xs text-textMuted">Máximo</span>
+                  <span className="text-xs text-textMuted">
+                    Máximo ou fórmula
+                  </span>
                   <Input
-                    type="number"
-                    min={1}
-                    value={draft.usage.max}
-                    onChange={(event) => {
-                      const max = Math.max(1, Number(event.target.value) || 1)
-                      setDraft({
-                        ...draft,
-                        usage: {
-                          ...draft.usage!,
-                          max,
-                          used: Math.min(draft.usage!.used, max),
-                        },
-                      })
-                    }}
+                    type="text"
+                    value={draft.usage.maxFormula ?? String(draft.usage.max)}
+                    placeholder="Ex.: proficiencia ou 2 + nivel.total / 4"
+                    onChange={(event) => updateUsageMaximum(event.target.value)}
                   />
+                  {maximumFormulaError ? (
+                    <span className="text-[10px] text-danger">
+                      {maximumFormulaError}
+                    </span>
+                  ) : maximumFormula ? (
+                    <span className="text-[10px] text-textMuted">
+                      A fórmula é recalculada com os valores atuais da ficha.
+                    </span>
+                  ) : null}
                 </label>
                 <label className="grid gap-1">
                   <span className="text-xs text-textMuted">Usado</span>
@@ -321,15 +360,13 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
             ) : null}
           </section>
 
-          <label className="flex items-center gap-2 rounded-xl border border-border bg-bg-subtle p-3 text-xs font-medium text-textH">
-            <input
-              type="checkbox"
-              checked={draft.kind === "passive" || draft.modifiersActive !== false}
-              disabled={draft.kind === "passive"}
-              onChange={(event) => setDraft({ ...draft, modifiersActive: event.target.checked })}
-            />
-            Manter modificadores desta habilidade ativos
-          </label>
+          <div className="rounded-xl border border-border bg-bg-subtle p-3 text-xs leading-5 text-text">
+            {requiresActivation
+              ? draft.kind === "passive"
+                ? "Esta passiva possui um gatilho. Seus bônus, proficiências e magias só ficam ativos depois de Acionar."
+                : "Habilidades ativas só aplicam seus bônus, proficiências e magias depois de Usar, mesmo sem contador de usos."
+              : "Esta passiva não possui condição e concede seus benefícios permanentemente."}
+          </div>
 
           <BonusesFields
             bonuses={draft.bonuses ?? {}}
@@ -359,8 +396,12 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
           </Button>
           <Button
             variant="primary"
-            disabled={!draft.name.trim()}
-            onClick={() => onSave(normalizeAbilityText(draft))}
+            disabled={!draft.name.trim() || Boolean(maximumFormulaError)}
+            onClick={() =>
+              onSave(
+                normalizeAbilityActivation(normalizeAbilityText(draft)),
+              )
+            }
           >
             Salvar
           </Button>

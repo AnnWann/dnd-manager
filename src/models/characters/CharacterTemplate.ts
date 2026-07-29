@@ -18,6 +18,7 @@ import {
   removeAbility, 
   resetAbility, 
   restoreAbility, 
+  deactivateAbility, 
   saveAbility, 
   updateAbility, 
   useAbility 
@@ -43,6 +44,7 @@ import {
   removeRing, 
   removeWeapon, 
   restoreEquipmentAbility, 
+  deactivateEquipmentAbility, 
   unequip, 
   unequipArmor, 
   unequipPocketItem, 
@@ -351,6 +353,7 @@ export class CharacterTemplate {
   saveAbility(ability: Ability): CharacterTemplate {return saveAbility(this, ability)}
   useAbility(abilityId: string): CharacterTemplate {return useAbility(this, abilityId)}
   restoreAbility(abilityId: string): CharacterTemplate {return restoreAbility(this, abilityId)}
+  deactivateAbility(abilityId: string): CharacterTemplate {return deactivateAbility(this, abilityId)}
   resetAbility(abilityId: string): CharacterTemplate {return resetAbility(this, abilityId)}
   getCharacterAbilities(): Ability[] {return getCharacterAbilities(this)}
   /*
@@ -395,6 +398,7 @@ export class CharacterTemplate {
   removeEquipmentSpell(itemId: string,spellIndex: string): CharacterTemplate {return removeEquipmentSpell(this, itemId, spellIndex)}
   useEquipmentAbility(itemId: string, abilityId: string): CharacterTemplate {return useEquipmentAbility(this, itemId, abilityId)}
   restoreEquipmentAbility(itemId: string, abilityId: string): CharacterTemplate {return restoreEquipmentAbility(this, itemId, abilityId)}
+  deactivateEquipmentAbility(itemId: string, abilityId: string): CharacterTemplate {return deactivateEquipmentAbility(this, itemId, abilityId)}
   /**
    * 
    * INVENTORY

@@ -1,6 +1,12 @@
 // models/characters/characterAbilities.ts
 
 import type { Ability } from "../abilities/Ability"
+import {
+  abilityRequiresActivation,
+  activateAbilityBenefits,
+  deactivateAbilityBenefits,
+  restoreAbilityUse,
+} from "../abilities/abilityActivation"
 import { getEquipmentAbilities } from "./characterEquipment"
 import type { CharacterTemplate } from "./CharacterTemplate"
 
@@ -55,17 +61,25 @@ export function useAbility(
 ): CharacterTemplate {
   return character.with(
     "abilities",
-    (character.get("abilities") ?? []).map((a) => {
-      if (a.id !== abilityId || !a.usage) return a
+    (character.get("abilities") ?? []).map((ability) =>
+      ability.id === abilityId
+        ? activateAbilityBenefits(character, ability)
+        : ability,
+    ),
+  )
+}
 
-      return {
-        ...a,
-        usage: {
-          ...a.usage,
-          used: Math.min(a.usage.max, a.usage.used + 1),
-        },
-      }
-    }),
+export function deactivateAbility(
+  character: CharacterTemplate,
+  abilityId: string,
+): CharacterTemplate {
+  return character.with(
+    "abilities",
+    (character.get("abilities") ?? []).map((ability) =>
+      ability.id === abilityId
+        ? deactivateAbilityBenefits(ability)
+        : ability,
+    ),
   )
 }
 
@@ -80,6 +94,8 @@ export function resetAbility(
 
       return {
         ...a,
+        benefitsActive: abilityRequiresActivation(a) ? false : undefined,
+        modifiersActive: undefined,
         usage: {
           ...a.usage,
           used: 0,
@@ -105,16 +121,8 @@ export function restoreAbility(
 ): CharacterTemplate {
   return character.with(
     "abilities",
-    (character.get("abilities") ?? []).map((a) => {
-      if (a.id !== abilityId || !a.usage) return a
-
-      return {
-        ...a,
-        usage: {
-          ...a.usage,
-          used: Math.max(0, a.usage.used - 1),
-        },
-      }
-    }),
+    (character.get("abilities") ?? []).map((ability) =>
+      ability.id === abilityId ? restoreAbilityUse(ability) : ability,
+    ),
   )
 }

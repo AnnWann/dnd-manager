@@ -4,6 +4,10 @@ import { Button } from "../../../components/ui/Button"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
 import type { Ability } from "../../../models/abilities/Ability"
+import {
+  abilityRequiresActivation,
+  isAbilityBenefitsActive,
+} from "../../../models/abilities/abilityActivation"
 import { flattenBonuses } from "../inventory/equipmentBonusFields"
 import {
   ABILITY_ACTION_OPTIONS,
@@ -15,9 +19,11 @@ import {
 type Props = {
   ability: Ability
   sourceLabel?: string
+  usageMax?: number
   onEdit?: () => void
   onRemove?: () => void
   onUse?: () => void
+  onDeactivate?: () => void
   onRestore?: () => void
 }
 
@@ -47,21 +53,32 @@ function summaryLabel(ability: Ability) {
 export function AbilityCard({
   ability,
   sourceLabel,
+  usageMax,
   onEdit,
   onRemove,
   onUse,
+  onDeactivate,
   onRestore,
 }: Props) {
   const { getSpellByIndex } = useMagicContext()
   const [expanded, setExpanded] = useState(false)
   const usage = ability.usage
-  const remaining = usage ? Math.max(0, usage.max - usage.used) : null
+  const resolvedMax = usage ? Math.max(0, usageMax ?? usage.max) : null
+  const remaining = usage && resolvedMax !== null
+    ? Math.max(0, resolvedMax - usage.used)
+    : null
   const description = ability.description?.trim() ?? ""
   const grantedSpells = (ability.grantedSpells ?? []).map((grant) => ({
     grant,
     spell: getSpellByIndex(grant.index),
   }))
   const bonusEntries = flattenBonuses(ability.bonuses ?? {})
+  const requiresActivation = abilityRequiresActivation(ability)
+  const benefitsActive = isAbilityBenefitsActive(ability)
+  const canTrigger =
+    requiresActivation &&
+    Boolean(onUse) &&
+    ((ability.kind ?? "active") === "active" || !benefitsActive)
 
   return (
     <div
@@ -80,7 +97,22 @@ export function AbilityCard({
           </div>
 
           <span className="rounded-full border border-border bg-[color:color-mix(in_srgb,var(--social-bg)_70%,transparent)] px-2 py-0.5 text-[11px] font-medium text-text">
-            {usage ? summaryLabel(ability) : "Sem contador"}
+            {summaryLabel(ability)}
+          </span>
+
+          <span
+            className={cn(
+              "rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+              benefitsActive
+                ? "border-accentBorder bg-accentBg text-accent"
+                : "border-border bg-bg-subtle text-textMuted",
+            )}
+          >
+            {benefitsActive
+              ? requiresActivation
+                ? "Benefícios ativos"
+                : "Sempre ativa"
+              : "Aguardando acionamento"}
           </span>
 
           {sourceLabel ? (
@@ -115,7 +147,7 @@ export function AbilityCard({
         ) : null}
 
         {bonusEntries.length > 0 ? (
-          <div className="mt-3">
+          <div className={cn("mt-3", !benefitsActive && "opacity-60")}>
             <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
               Bônus concedidos
             </div>
@@ -133,7 +165,7 @@ export function AbilityCard({
         ) : null}
 
         {grantedSpells.length > 0 ? (
-          <div className="mt-3">
+          <div className={cn("mt-3", !benefitsActive && "opacity-60")}>
             <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
               Magias concedidas
             </div>
@@ -154,13 +186,14 @@ export function AbilityCard({
         ) : null}
 
         <div className="mt-2 text-xs text-text">
-          {usage ? (
+          {usage && resolvedMax !== null ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span>{remaining}/{usage.max} usos restantes</span>
+              <span>{remaining}/{resolvedMax} usos restantes</span>
               <span>Gastos {usage.used}</span>
+              {usage.maxFormula ? <span>Máximo por fórmula</span> : null}
             </div>
           ) : (
-            <span>Habilidade livre, sem recursos associados.</span>
+            <span>Sem limite de usos.</span>
           )}
         </div>
       </div>
@@ -170,14 +203,20 @@ export function AbilityCard({
           <Button size="sm" variant="secondary" onClick={onEdit}>Editar</Button>
         ) : null}
 
-        {ability.kind === "active" && usage && onUse ? (
+        {canTrigger ? (
           <Button
             size="sm"
             variant="secondary"
             disabled={remaining !== null && remaining <= 0}
             onClick={onUse}
           >
-            Usar
+            {(ability.kind ?? "active") === "passive" ? "Acionar" : "Usar"}
+          </Button>
+        ) : null}
+
+        {requiresActivation && benefitsActive && onDeactivate ? (
+          <Button size="sm" variant="ghost" onClick={onDeactivate}>
+            Encerrar efeito
           </Button>
         ) : null}
 

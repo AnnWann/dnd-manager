@@ -4,6 +4,7 @@ import type {
   ProficiencyCategory,
 } from "../sheet/Proficiency"
 import { getEquippedItems } from "./characterEquipment"
+import { isAbilityBenefitsActive } from "../abilities/abilityActivation"
 
 export function addProficiency(
   character: CharacterTemplate,
@@ -66,10 +67,7 @@ export function getAbilityGrantedProficiencies(
     ...(character.get("abilities") ?? []),
     ...(character.get("sheet").race.naturalAbilities ?? []),
     ...getEquippedItems(character).flatMap((item) => item.abilities ?? []),
-  ].filter(
-    (ability) =>
-      ability.kind === "passive" || ability.modifiersActive !== false,
-  )
+  ].filter(isAbilityBenefitsActive)
 
   return abilities.flatMap((ability) =>
     (ability.grantedProficiencies ?? []).map((proficiency) => ({

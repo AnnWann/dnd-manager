@@ -5,6 +5,12 @@ import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import type { Ability } from "../../../models/abilities/Ability"
+import {
+  activateAbilityBenefits,
+  deactivateAbilityBenefits,
+  getAbilityUsageMax,
+  restoreAbilityUse,
+} from "../../../models/abilities/abilityActivation"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { AbilityCard } from "./abilityCard"
 import { AbilityDialog } from "./abilityDialog"
@@ -150,14 +156,38 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       }
 
       if (ability && isRaceAbility(ability)) {
-        return updateRaceAbilityUsage(
+        return updateRaceAbilityState(
           current,
           ability.originalAbilityId,
-          1,
+          "use",
         )
       }
 
       return current.useAbility(id)
+    })
+  }
+
+  function deactivateAbility(id: string) {
+    updateCharacter(character.get("id"), (current) => {
+      const ability = abilities.find((entry) => entry.id === id)
+      if (!ability) return current
+
+      if (isEquipmentAbility(ability)) {
+        return current.deactivateEquipmentAbility(
+          ability.sourceItemId,
+          ability.originalAbilityId,
+        )
+      }
+
+      if (isRaceAbility(ability)) {
+        return updateRaceAbilityState(
+          current,
+          ability.originalAbilityId,
+          "deactivate",
+        )
+      }
+
+      return current.deactivateAbility(id)
     })
   }
 
@@ -173,10 +203,10 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       }
 
       if (ability && isRaceAbility(ability)) {
-        return updateRaceAbilityUsage(
+        return updateRaceAbilityState(
           current,
           ability.originalAbilityId,
-          -1,
+          "restore",
         )
       }
 
@@ -267,7 +297,10 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
                 const equipmentAbility = isEquipmentAbility(ability)
                 const raceAbility = isRaceAbility(ability)
                 const grantedAbility = equipmentAbility || raceAbility
-                const sourceLabel = getAbilitySourceLabel(
+                 const usageMax = ability.usage
+                   ? getAbilityUsageMax(character, ability.usage)
+                   : undefined
+                 const sourceLabel = getAbilitySourceLabel(
                   ability,
                   equipmentAbility,
                   raceAbility,
@@ -366,29 +399,20 @@ function saveAbilityListViewMode(viewMode: AbilityListViewMode) {
   }
 }
 
-function updateRaceAbilityUsage(
+function updateRaceAbilityState(
   character: CharacterTemplate,
   abilityId: string,
-  delta: 1 | -1,
+  action: "use" | "restore" | "deactivate",
 ): CharacterTemplate {
   const race = character.get("sheet").race
 
   return character.withSheet("race", {
     ...race,
     naturalAbilities: (race.naturalAbilities ?? []).map((ability) => {
-      if (ability.id !== abilityId || !ability.usage) return ability
-      if (ability.usage.reset === "spellSlot") return ability
-
-      return {
-        ...ability,
-        usage: {
-          ...ability.usage,
-          used: Math.min(
-            ability.usage.max,
-            Math.max(0, ability.usage.used + delta),
-          ),
-        },
-      }
+      if (ability.id !== abilityId) return ability
+      if (action === "use") return activateAbilityBenefits(character, ability)
+      if (action === "restore") return restoreAbilityUse(ability)
+      return deactivateAbilityBenefits(ability)
     }),
   })
 }

@@ -1,4 +1,5 @@
 import type { Ability, Usage } from "../abilities/Ability"
+import { isAbilityBenefitsActive } from "../abilities/abilityActivation"
 import type { Equipment } from "../items/equipment/EquipmentSlot"
 import type { SpellSource } from "../magic/spells/SpellSource"
 import type { SpellGrantCastingMode } from "../magic/spells/SpellGrant"
@@ -18,6 +19,7 @@ export function getCharacterGrantedSpells(
   const results: CharacterGrantedSpell[] = []
 
   for (const ability of character.get("abilities") ?? []) {
+    if (!isAbilityBenefitsActive(ability)) continue
     addAbilitySpellGrants(results, ability, {
       type: ability.category === "feat" ? "feat" : "ability",
       name: ability.name || (ability.category === "feat" ? "Talento" : "Habilidade"),
@@ -27,6 +29,7 @@ export function getCharacterGrantedSpells(
 
   const race = character.get("sheet").race
   for (const ability of race.naturalAbilities ?? []) {
+    if (!isAbilityBenefitsActive(ability)) continue
     addAbilitySpellGrants(results, ability, {
       type: "race",
       name: ability.name || race.subrace || race.race,
@@ -68,6 +71,7 @@ export function getCharacterGrantedSpells(
     }
 
     for (const ability of equipment.abilities ?? []) {
+      if (!isAbilityBenefitsActive(ability)) continue
       for (const grant of ability.grantedSpells ?? []) {
         if (!grant.index) continue
 

@@ -13,6 +13,11 @@ import {
 import type { Itemmable } from "../items/item"
 import type { Armor } from "../items/equipment/Armor"
 import type { Ability, Usage } from "../abilities/Ability"
+import {
+  activateAbilityBenefits,
+  deactivateAbilityBenefits,
+  restoreAbilityUse,
+} from "../abilities/abilityActivation"
 
 type SingleSlot = Exclude<
   keyof CharacterEquipment,
@@ -781,18 +786,26 @@ export function useEquipmentAbility(
 ): CharacterTemplate {
   return updateEquipmentById(character, itemId, (equipment) => ({
     ...equipment,
-    abilities: (equipment.abilities ?? []).map((ability) => {
-      if (ability.id !== abilityId || !ability.usage) return ability
-      if (ability.usage.reset === "spellSlot") return ability
+    abilities: (equipment.abilities ?? []).map((ability) =>
+      ability.id === abilityId
+        ? activateAbilityBenefits(character, ability)
+        : ability,
+    ),
+  }))
+}
 
-      return {
-        ...ability,
-        usage: {
-          ...ability.usage,
-          used: Math.min(ability.usage.max, ability.usage.used + 1),
-        },
-      }
-    }),
+export function deactivateEquipmentAbility(
+  character: CharacterTemplate,
+  itemId: string,
+  abilityId: string,
+): CharacterTemplate {
+  return updateEquipmentById(character, itemId, (equipment) => ({
+    ...equipment,
+    abilities: (equipment.abilities ?? []).map((ability) =>
+      ability.id === abilityId
+        ? deactivateAbilityBenefits(ability)
+        : ability,
+    ),
   }))
 }
 
@@ -803,18 +816,8 @@ export function restoreEquipmentAbility(
 ): CharacterTemplate {
   return updateEquipmentById(character, itemId, (equipment) => ({
     ...equipment,
-    abilities: (equipment.abilities ?? []).map((ability) => {
-      if (ability.id !== abilityId || !ability.usage) return ability
-      if (ability.usage.reset === "spellSlot") return ability
-      if (ability.usage.reset === "limited") return ability
-
-      return {
-        ...ability,
-        usage: {
-          ...ability.usage,
-          used: Math.max(0, ability.usage.used - 1),
-        },
-      }
-    }),
+    abilities: (equipment.abilities ?? []).map((ability) =>
+      ability.id === abilityId ? restoreAbilityUse(ability) : ability,
+    ),
   }))
 }
