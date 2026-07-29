@@ -21,6 +21,20 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Correct compact card patch anchor
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/apply-versatile-attack-card-toggle.py')
+          text = path.read_text()
+          old = "'''                       damageBonus={damageBonus}\n                      />''',"
+          new = "'''                       damageBonus={damageBonus}\n                     />''',"
+          if old not in text:
+              raise SystemExit('compact card anchor not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+
       - name: Apply versatile attack card toggle
         run: python .github/apply-versatile-attack-card-toggle.py
 
