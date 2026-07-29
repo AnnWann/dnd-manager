@@ -16,8 +16,8 @@ export type CharacterEquipment = {
   // Armas realmente empunhadas.
   weapons: Weapon[]
 
-  // Itens não-arma segurados nas mãos.
-  heldItems: Itemmable[]
+  // Itens não-arma segurados nas mãos. Opcional para JSONs antigos.
+  heldItems?: Itemmable[]
 
   // Itens legados carregados no bolso, mas sem bônus ativo.
   pockets: PocketItem[]
