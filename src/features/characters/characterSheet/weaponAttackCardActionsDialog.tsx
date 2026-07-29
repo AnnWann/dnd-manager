@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Hand, PackageOpen } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
@@ -34,6 +34,10 @@ export function HandItemActionsDialog({
     dropHandOccupant,
   } = useCharacterContext()
   const [pendingHands, setPendingHands] = useState<HeldHands | null>(null)
+
+  useEffect(() => {
+    setPendingHands(null)
+  }, [state?.itemId])
 
   if (!state) return null
 
