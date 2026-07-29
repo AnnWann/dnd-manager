@@ -6,6 +6,10 @@ import { Modal } from "../../../components/ui/Modal"
 import { useCharacterContext } from "../../../contexts/characterContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
+  handReferenceToEquippedItemReference,
+  type EquippedItemDestination,
+} from "../../../models/characters/characterEquippedItemMovement"
+import {
   findHandOccupantByItemId,
   getHandOccupants,
   getUsedHands,
@@ -14,6 +18,7 @@ import {
   type HeldHands,
 } from "../../../models/characters/characterHands"
 import { isWeaponImprovisedGrip } from "../../../models/items/equipment/Weapon"
+import { canItemGoInPocket } from "../../../models/items/itemPocketability"
 
 export type HandItemActionsDialogState = {
   itemId: string
@@ -32,6 +37,7 @@ export function HandItemActionsDialog({
     updateCharacter,
     stowHandOccupant,
     dropHandOccupant,
+    moveEquippedItem,
   } = useCharacterContext()
   const [pendingHands, setPendingHands] = useState<HeldHands | null>(null)
 
@@ -52,6 +58,8 @@ export function HandItemActionsDialog({
   const itemIsWeapon = occupant.reference.type === "weapon"
   const improvised =
     itemIsWeapon && isWeaponImprovisedGrip(occupant.item)
+  const canPocketSelected = canItemGoInPocket(occupant.item)
+  const pocketFull = character.get("equipment").pockets.length >= 8
 
   function setHands(hands: HeldHands) {
     const availableAfterRemovingCurrent =
@@ -78,18 +86,21 @@ export function HandItemActionsDialog({
     onClose()
   }
 
-  function removeSelected(destination: "inventory" | "ground") {
+  function removeSelected(destination: EquippedItemDestination) {
     const currentOccupant = findHandOccupantByItemId(
       character,
       itemId,
     )
     if (!currentOccupant) return
 
-    if (destination === "inventory") {
-      stowHandOccupant(character.get("id"), currentOccupant.reference)
-    } else {
-      dropHandOccupant(character.get("id"), currentOccupant.reference)
-    }
+    moveEquippedItem(
+      character.get("id"),
+      handReferenceToEquippedItemReference(
+        currentOccupant.reference,
+        currentOccupant.item.id,
+      ),
+      destination,
+    )
     onClose()
   }
 
@@ -160,18 +171,36 @@ export function HandItemActionsDialog({
           >
             Duas mãos
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => removeSelected("inventory")}
-          >
-            Guardar
-          </Button>
-          <Button
-            variant="danger"
-            onClick={() => removeSelected("ground")}
-          >
-            Largar no chão
-          </Button>
+        </div>
+
+        <div className="grid gap-2 border-t border-border pt-4">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-textMuted">
+            Destino ao retirar
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Button
+              variant="secondary"
+              onClick={() => removeSelected("inventory")}
+            >
+              Inventário
+            </Button>
+            {canPocketSelected ? (
+              <Button
+                variant="secondary"
+                disabled={pocketFull}
+                title={pocketFull ? "Os oito espaços de bolso estão ocupados" : "Enviar ao bolso"}
+                onClick={() => removeSelected("pocket")}
+              >
+                {pocketFull ? "Bolso cheio" : "Bolso"}
+              </Button>
+            ) : null}
+            <Button
+              variant="danger"
+              onClick={() => removeSelected("ground")}
+            >
+              Chão
+            </Button>
+          </div>
         </div>
 
         {pendingHands ? (
