@@ -4,7 +4,10 @@ import { Crosshair, ShieldCheck, Sparkles, Swords } from "lucide-react"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatSigned } from "../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import type { Weapon } from "../../../models/items/equipment/Weapon"
+import {
+  getWeaponDamageDie,
+  type Weapon,
+} from "../../../models/items/equipment/Weapon"
 import type { Attribute } from "../../../models/sheet/Attribute"
 import { ATTRIBUTE_KEYS } from "../../../models/sheet/Attribute"
 
@@ -171,7 +174,7 @@ function WeaponAttackCard({
   damageBonus: number
 }) {
   const attribute = weapon.modifierAttribute ?? "str"
-  const die = weapon.damage
+  const die = getWeaponDamageDie(weapon) ?? weapon.damage
   const damage = `${die.quantity}${die.sides}${damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""}`
 
   return (

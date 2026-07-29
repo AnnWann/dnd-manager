@@ -5,14 +5,18 @@ import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { ATTRIBUTES, DIE_SIDES } from "../../../contexts/consts"
 import type { Ability } from "../../../models/abilities/Ability"
-import type { DieSides } from "../../../models/dice/Die"
+import type { Die, DieSides } from "../../../models/dice/Die"
 import type { Armor } from "../../../models/items/equipment/Armor"
 import type {
   Equipment,
   EquipmentSpellGrant,
 } from "../../../models/items/equipment/EquipmentSlot"
 import { withShieldDefaults as withShieldModelDefaults } from "../../../models/items/equipment/Shield"
-import type { Weapon } from "../../../models/items/equipment/Weapon"
+import {
+  WEAPON_PROPERTIES,
+  hasWeaponProperty,
+  type Weapon,
+} from "../../../models/items/equipment/Weapon"
 import type { EquipSlot, Itemmable } from "../../../models/items/item"
 import type { Attribute } from "../../../models/sheet/Attribute"
 import { AbilityDialog } from "../abilities/abilityDialog"
@@ -116,48 +120,97 @@ export function WeaponFields({
   onUpdate: (updater: (item: Itemmable) => Itemmable) => void
 }) {
   const weapon = item as Partial<Weapon>
+  const versatile = hasWeaponProperty(weapon, "versatile")
+  const ownAttackBonus = (() => {
+    const bonus = weapon.bonuses?.attack?.bonus
+    if (!bonus) return 0
+    if (bonus.type === "sub") return -Math.abs(bonus.value)
+    return bonus.value
+  })()
+
+  function setOwnAttackBonus(value: number) {
+    onUpdate((current) => {
+      const currentEquipment = current as Equipment
+      const bonuses = { ...(currentEquipment.bonuses ?? {}) }
+
+      if (value === 0) {
+        delete bonuses.attack
+      } else {
+        bonuses.attack = {
+          type: "equipment",
+          bonus: {
+            type: value < 0 ? "sub" : "add",
+            value: Math.abs(value),
+          },
+        }
+      }
+
+      return {
+        ...current,
+        bonuses,
+      }
+    })
+  }
+
+  function setTwoHanded(enabled: boolean) {
+    onUpdate((current) => {
+      const currentWeapon = current as Partial<Weapon>
+      const properties = (currentWeapon.properties ?? []).filter(
+        (property) => property.id !== "two-handed" && property.id !== "versatile",
+      )
+
+      if (enabled) properties.push(WEAPON_PROPERTIES["two-handed"])
+
+      return {
+        ...current,
+        properties,
+        twoHanded: enabled,
+        wieldedTwoHanded: enabled,
+        versatileDamage: undefined,
+      }
+    })
+  }
+
+  function setVersatile(enabled: boolean) {
+    onUpdate((current) => {
+      const currentWeapon = current as Partial<Weapon>
+      const properties = (currentWeapon.properties ?? []).filter(
+        (property) => property.id !== "two-handed" && property.id !== "versatile",
+      )
+
+      if (enabled) properties.push(WEAPON_PROPERTIES.versatile)
+
+      const baseDamage = currentWeapon.damage ?? {
+        quantity: 1,
+        sides: "d6" as DieSides,
+      }
+
+      return {
+        ...current,
+        properties,
+        twoHanded: false,
+        wieldedTwoHanded: enabled
+          ? (currentWeapon.wieldedTwoHanded ?? false)
+          : false,
+        versatileDamage: enabled
+          ? (currentWeapon.versatileDamage ?? { ...baseDamage })
+          : undefined,
+      }
+    })
+  }
 
   return (
     <div className="grid gap-3 md:col-span-3 md:grid-cols-4">
-      <div className="grid gap-2">
-        <label className="text-xs text-text">Qtd. dados</label>
-        <Input
-          type="number"
-          min={1}
-          value={weapon.damage?.quantity ?? 1}
-          onChange={(event) =>
-            onUpdate((current) => ({
-              ...current,
-              damage: {
-                quantity: Number(event.target.value) || 1,
-                sides: weapon.damage?.sides ?? "d6",
-              },
-            }))
-          }
-        />
-      </div>
-
-      <div className="grid gap-2">
-        <label className="text-xs text-text">Dado</label>
-        <Select
-          value={weapon.damage?.sides ?? "d6"}
-          onChange={(event) =>
-            onUpdate((current) => ({
-              ...current,
-              damage: {
-                quantity: weapon.damage?.quantity ?? 1,
-                sides: event.target.value as DieSides,
-              },
-            }))
-          }
-        >
-          {DIE_SIDES.map((side) => (
-            <option key={side} value={side}>
-              {side}
-            </option>
-          ))}
-        </Select>
-      </div>
+      <WeaponDamageFields
+        title={versatile ? "Dano com uma mão" : "Dano"}
+        die={weapon.damage ?? { quantity: 1, sides: "d6" }}
+        onChange={(damage) =>
+          onUpdate((current) => ({
+            ...current,
+            damage,
+          }))
+        }
+      />
 
       <div className="grid gap-2">
         <label className="text-xs text-text">Atributo</label>
@@ -178,18 +231,33 @@ export function WeaponFields({
         </Select>
       </div>
 
+      <div className="grid gap-2">
+        <label className="text-xs text-text">Bônus próprio de ataque</label>
+        <Input
+          type="number"
+          value={ownAttackBonus}
+          onChange={(event) =>
+            setOwnAttackBonus(Number(event.target.value) || 0)
+          }
+        />
+      </div>
+
       <label className="flex items-center gap-2 self-end text-xs text-text">
         <input
           type="checkbox"
           checked={weapon.twoHanded ?? false}
-          onChange={(event) =>
-            onUpdate((current) => ({
-              ...current,
-              twoHanded: event.target.checked,
-            }))
-          }
+          onChange={(event) => setTwoHanded(event.target.checked)}
         />
-        Duas mãos
+        Exige duas mãos
+      </label>
+
+      <label className="flex items-center gap-2 self-end text-xs text-text">
+        <input
+          type="checkbox"
+          checked={versatile}
+          onChange={(event) => setVersatile(event.target.checked)}
+        />
+        Versátil
       </label>
 
       <label className="flex items-center gap-2 self-end text-xs text-text">
@@ -205,6 +273,70 @@ export function WeaponFields({
         />
         Proficiente
       </label>
+
+      {versatile ? (
+        <WeaponDamageFields
+          title="Dano com duas mãos"
+          die={
+            weapon.versatileDamage ??
+            weapon.damage ?? { quantity: 1, sides: "d6" }
+          }
+          onChange={(versatileDamage) =>
+            onUpdate((current) => ({
+              ...current,
+              versatileDamage,
+            }))
+          }
+        />
+      ) : null}
+    </div>
+  )
+}
+
+function WeaponDamageFields({
+  title,
+  die,
+  onChange,
+}: {
+  title: string
+  die: Die
+  onChange: (die: Die) => void
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2 md:col-span-2">
+      <div className="grid gap-2">
+        <label className="text-xs text-text">{title}: qtd. dados</label>
+        <Input
+          type="number"
+          min={1}
+          value={die.quantity}
+          onChange={(event) =>
+            onChange({
+              ...die,
+              quantity: Number(event.target.value) || 1,
+            })
+          }
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <label className="text-xs text-text">{title}: dado</label>
+        <Select
+          value={die.sides}
+          onChange={(event) =>
+            onChange({
+              ...die,
+              sides: event.target.value as DieSides,
+            })
+          }
+        >
+          {DIE_SIDES.map((side) => (
+            <option key={side} value={side}>
+              {side}
+            </option>
+          ))}
+        </Select>
+      </div>
     </div>
   )
 }
@@ -366,15 +498,41 @@ export function withEquipmentDefaults(
 
 function withWeaponDefaults(item: Itemmable): Itemmable {
   const weapon = item as Partial<Weapon>
+  const properties = [...(weapon.properties ?? [])]
+  const versatile =
+    properties.some((property) => property.id === "versatile") ||
+    Boolean(weapon.versatileDamage)
+
+  if (versatile && !properties.some((property) => property.id === "versatile")) {
+    properties.push(WEAPON_PROPERTIES.versatile)
+  }
+
+  if (
+    !versatile &&
+    weapon.twoHanded &&
+    !properties.some((property) => property.id === "two-handed")
+  ) {
+    properties.push(WEAPON_PROPERTIES["two-handed"])
+  }
+
+  const damage = weapon.damage ?? {
+    quantity: 1,
+    sides: "d6" as DieSides,
+  }
 
   return {
     ...item,
-    properties: weapon.properties ?? [],
-    twoHanded: weapon.twoHanded ?? false,
-    damage: weapon.damage ?? {
-      quantity: 1,
-      sides: "d6",
-    },
+    properties: properties.filter((property) =>
+      versatile ? property.id !== "two-handed" : property.id !== "versatile",
+    ),
+    twoHanded: versatile ? false : (weapon.twoHanded ?? false),
+    wieldedTwoHanded: versatile
+      ? (weapon.wieldedTwoHanded ?? false)
+      : (weapon.twoHanded ?? false),
+    damage,
+    versatileDamage: versatile
+      ? (weapon.versatileDamage ?? { ...damage })
+      : undefined,
     modifierAttribute: weapon.modifierAttribute ?? "str",
     proficient: weapon.proficient ?? false,
   }

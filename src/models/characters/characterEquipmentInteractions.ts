@@ -1,6 +1,11 @@
 import type { CharacterTemplate } from "./CharacterTemplate"
 import type { Itemmable } from "../items/item"
-import type { Weapon } from "../items/equipment/Weapon"
+import {
+  WEAPON_PROPERTIES,
+  getWeaponHandsUsed,
+  hasWeaponProperty,
+  type Weapon,
+} from "../items/equipment/Weapon"
 import { canItemGoInPocket } from "../items/itemPocketability"
 import { withShieldDefaults } from "../items/equipment/Shield"
 
@@ -9,7 +14,7 @@ export function getUsedArmsIncludingShield(
 ): number {
   const equipment = character.get("equipment")
   const weaponArms = equipment.weapons.reduce(
-    (total, weapon) => total + (weapon.twoHanded ? 2 : 1),
+    (total, weapon) => total + (getWeaponHandsUsed(weapon)),
     0,
   )
 
@@ -80,13 +85,13 @@ export function wieldPocketWeaponWithRules(
   }
 
   const weapon = toWeapon(item)
-  const neededArms = weapon.twoHanded ? 2 : 1
+  const neededArms = getWeaponHandsUsed(weapon)
   const maxArms = character.get("sheet").arms
   const currentWeapons = [...equipment.weapons]
   const returnedToInventory: Itemmable[] = []
   let nextShield = equipment.shield
   let usedArms = currentWeapons.reduce(
-    (total, currentWeapon) => total + (currentWeapon.twoHanded ? 2 : 1),
+    (total, currentWeapon) => total + (getWeaponHandsUsed(currentWeapon)),
     0,
   ) + (nextShield ? 1 : 0)
 
@@ -95,7 +100,7 @@ export function wieldPocketWeaponWithRules(
     if (!removed) break
 
     returnedToInventory.push(removed)
-    usedArms -= removed.twoHanded ? 2 : 1
+    usedArms -= getWeaponHandsUsed(removed)
   }
 
   if (usedArms + neededArms > maxArms && nextShield) {
@@ -132,7 +137,7 @@ function equipShield(
   const currentWeapons = [...equipment.weapons]
   const returnedToInventory: Itemmable[] = []
   let usedWeaponArms = currentWeapons.reduce(
-    (total, weapon) => total + (weapon.twoHanded ? 2 : 1),
+    (total, weapon) => total + (getWeaponHandsUsed(weapon)),
     0,
   )
 
@@ -141,7 +146,7 @@ function equipShield(
     if (!removed) break
 
     returnedToInventory.push(removed)
-    usedWeaponArms -= removed.twoHanded ? 2 : 1
+    usedWeaponArms -= getWeaponHandsUsed(removed)
   }
 
   if (usedWeaponArms + 1 > maxArms) return character
@@ -167,13 +172,13 @@ function equipWeaponRespectingShield(
   const equipment = character.get("equipment")
   const inventory = character.get("inventory")
   const weapon = toWeapon(item)
-  const neededArms = weapon.twoHanded ? 2 : 1
+  const neededArms = getWeaponHandsUsed(weapon)
   const maxArms = character.get("sheet").arms
   const currentWeapons = [...equipment.weapons]
   const returnedToInventory: Itemmable[] = []
   let nextShield = equipment.shield
   let usedArms = currentWeapons.reduce(
-    (total, currentWeapon) => total + (currentWeapon.twoHanded ? 2 : 1),
+    (total, currentWeapon) => total + (getWeaponHandsUsed(currentWeapon)),
     0,
   ) + (nextShield ? 1 : 0)
 
@@ -182,7 +187,7 @@ function equipWeaponRespectingShield(
     if (!removed) break
 
     returnedToInventory.push(removed)
-    usedArms -= removed.twoHanded ? 2 : 1
+    usedArms -= getWeaponHandsUsed(removed)
   }
 
   if (usedArms + neededArms > maxArms && nextShield) {
@@ -207,18 +212,35 @@ function equipWeaponRespectingShield(
 
 function toWeapon(item: Itemmable): Weapon {
   const weapon = item as Partial<Weapon>
+  const properties = [...(weapon.properties ?? [])]
+  const versatile =
+    hasWeaponProperty(weapon, "versatile") || Boolean(weapon.versatileDamage)
+
+  if (versatile && !properties.some((property) => property.id === "versatile")) {
+    properties.push(WEAPON_PROPERTIES.versatile)
+  }
+
+  const damage = weapon.damage ?? {
+    quantity: 1,
+    sides: "d6",
+  }
 
   return {
     ...item,
     kind: "equipment",
     equippable: true,
     equipSlot: "weapon",
-    properties: weapon.properties ?? [],
-    twoHanded: weapon.twoHanded ?? false,
-    damage: weapon.damage ?? {
-      quantity: 1,
-      sides: "d6",
-    },
+    properties: properties.filter((property) =>
+      versatile ? property.id !== "two-handed" : property.id !== "versatile",
+    ),
+    twoHanded: versatile ? false : (weapon.twoHanded ?? false),
+    wieldedTwoHanded: versatile
+      ? (weapon.wieldedTwoHanded ?? false)
+      : (weapon.twoHanded ?? false),
+    damage,
+    versatileDamage: versatile
+      ? (weapon.versatileDamage ?? { ...damage })
+      : undefined,
     modifierAttribute: weapon.modifierAttribute ?? "str",
     proficient: weapon.proficient ?? false,
   } as Weapon
