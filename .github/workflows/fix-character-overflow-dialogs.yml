@@ -1,0 +1,156 @@
+name: Fix character overflow and mobile dialogs
+
+on:
+  pull_request:
+    paths:
+      - ".github/character-layout-fix-trigger"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Fix character tab sizing and dialog semantics
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          character_path = Path("src/views/CharacterView.tsx")
+          character = character_path.read_text()
+
+          old = '''  useLayoutEffect(() => {
+            lockTabPanelHeight()
+          }, [activeTab])
+          '''
+          new = '''  useLayoutEffect(() => {
+            const content = tabContentRef.current
+            if (!content) {
+              setTabPanelMinHeight(0)
+              return
+            }
+
+            const updateHeight = () => {
+              const nextHeight = Math.ceil(
+                Math.max(content.scrollHeight, content.offsetHeight),
+              )
+              setTabPanelMinHeight(nextHeight > 0 ? nextHeight : 0)
+            }
+
+            updateHeight()
+            const observer = new ResizeObserver(updateHeight)
+            observer.observe(content)
+
+            return () => observer.disconnect()
+          }, [activeTab])
+          '''
+          if old not in character:
+              raise SystemExit("character tab layout effect not found")
+          character = character.replace(old, new, 1)
+
+          old = '''    if (nextHeight > 0) {
+                setTabPanelMinHeight((current) => Math.max(current, nextHeight))
+              }
+          '''
+          new = '''    setTabPanelMinHeight(nextHeight > 0 ? nextHeight : 0)
+          '''
+          if old not in character:
+              raise SystemExit("character height lock not found")
+          character = character.replace(old, new, 1)
+
+          old = '''  const tabContentStyle: CSSProperties = {
+            opacity: 1 - swipeProgress * 0.18,
+            transform: `translate3d(${swipeOffset}px, 0, 0) scale(${1 - swipeProgress * 0.015})`,
+            transition: swipeDragging
+              ? "none"
+              : "transform 160ms ease-out, opacity 160ms ease-out",
+          }
+          '''
+          new = '''  const hasSwipeTransform = swipeDragging || swipeOffset !== 0
+            const tabContentStyle: CSSProperties = {
+              transition: swipeDragging
+                ? "none"
+                : "transform 160ms ease-out, opacity 160ms ease-out",
+              ...(hasSwipeTransform
+                ? {
+                    opacity: 1 - swipeProgress * 0.18,
+                    transform: `translate3d(${swipeOffset}px, 0, 0) scale(${1 - swipeProgress * 0.015})`,
+                    willChange: "transform",
+                  }
+                : {}),
+            }
+          '''
+          if old not in character:
+              raise SystemExit("character swipe style not found")
+          character = character.replace(old, new, 1)
+
+          old = '          className="grid min-w-0 gap-4 will-change-transform"\n'
+          new = '          className="grid min-w-0 gap-4"\n'
+          if old not in character:
+              raise SystemExit("character swipe class not found")
+          character = character.replace(old, new, 1)
+          character_path.write_text(character)
+
+          ability_path = Path("src/features/characters/abilities/abilityDialog.tsx")
+          ability = ability_path.read_text()
+          old = '      <div className="w-full max-w-2xl rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg">\n'
+          new = '''      <div
+                role="dialog"
+                aria-modal="true"
+                aria-label={ability ? "Editar habilidade" : "Adicionar habilidade"}
+                className="h-full w-full max-w-2xl overflow-y-auto overscroll-contain rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg sm:h-auto sm:max-h-[calc(100dvh-2rem)]"
+              >
+          '''
+          if old not in ability:
+              raise SystemExit("ability dialog panel not found")
+          ability = ability.replace(old, new, 1)
+          ability_path.write_text(ability)
+
+          equipment_path = Path("src/features/characters/equipment/equipmentEditDialog.tsx")
+          equipment = equipment_path.read_text()
+          old = '''      <div
+                className="w-full max-w-2xl rounded-lg border border-border p-4 shadow-xl"
+                style={{ backgroundColor: "var(--bg)" }}
+              >
+          '''
+          new = '''      <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Editar equipamento"
+                className="h-full w-full max-w-2xl overflow-y-auto overscroll-contain rounded-lg border border-border p-4 shadow-xl sm:h-auto sm:max-h-[calc(100dvh-2rem)]"
+                style={{ backgroundColor: "var(--bg)" }}
+              >
+          '''
+          if old not in equipment:
+              raise SystemExit("equipment dialog panel not found")
+          equipment = equipment.replace(old, new, 1)
+          equipment_path.write_text(equipment)
+          PY
+
+          rm -f .github/character-layout-fix-trigger
+
+      - run: npm install --package-lock=false --ignore-scripts
+      - run: npm run build
+
+      - name: Commit correction to PR branch
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/views/CharacterView.tsx src/features/characters/abilities/abilityDialog.tsx src/features/characters/equipment/equipmentEditDialog.tsx .github/character-layout-fix-trigger
+          git commit -m "fix character overflow and mobile dialog positioning"
+          git push origin HEAD:${{ github.head_ref }}
