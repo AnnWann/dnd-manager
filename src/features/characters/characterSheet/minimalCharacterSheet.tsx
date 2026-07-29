@@ -7,6 +7,7 @@ import { cn } from "../../../lib/cn"
 import { formatSigned } from "../../../lib/formatSigned"
 import { clampInt } from "../../../lib/numberFormat"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import type { Weapon } from "../../../models/items/equipment/Weapon"
 import {
   getCalculatedInitiative,
   getCalculatedMobility,
@@ -302,48 +303,80 @@ export function MinimalCharacterSheet({
       </CompactSection>
 
       <CompactSection title="Ataques e CDs">
-        <div className="grid gap-2 lg:grid-cols-[0.7fr_1.3fr]">
-          <div className="grid grid-cols-2 gap-2">
-            {(["str", "dex"] as Attribute[]).map((attribute) => (
-              <DerivedTile
-                key={attribute}
-                label={`Arma ${attributeShort(attribute)}`}
-                value={formatSigned(
-                  character.getEffectiveAttackBonus(
-                    character.getEffectiveAttributeModifier(attribute) + proficiency,
-                  ),
-                )}
-              />
-            ))}
+        <div className="grid gap-3">
+          <div>
+            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+              Armas equipadas
+            </div>
+            {character.get("equipment").weapons.length ? (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {character.get("equipment").weapons.map((weapon, index) => {
+                  const attribute = weapon.modifierAttribute ?? "str"
+                  const baseAttack =
+                    character.getEffectiveAttributeModifier(attribute) +
+                    (weapon.proficient ? proficiency : 0)
+                  const attack = character.getEffectiveWeaponAttackBonus(
+                    weapon,
+                    baseAttack,
+                  )
+                  const damageBonus = character.getEffectiveWeaponDamageBonus(
+                    weapon,
+                    character.getEffectiveAttributeModifier(attribute),
+                  )
+
+                  return (
+                    <CompactWeaponTile
+                      key={`${weapon.id}-${index}`}
+                      weapon={weapon}
+                      attack={attack}
+                      damageBonus={damageBonus}
+                    />
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border bg-bg-subtle px-3 py-3 text-center text-xs text-textMuted">
+                Nenhuma arma equipada.
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            {(["int", "wis", "cha"] as Attribute[]).map((attribute) => {
-              const modifier = character.getEffectiveAttributeModifier(attribute)
-              return (
-                <div
-                  key={attribute}
-                  className="rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center"
-                >
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-                    {attributeShort(attribute)}
+          <div>
+            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+              Magias
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {(["int", "wis", "cha"] as Attribute[]).map((attribute) => {
+                const modifier = character.getEffectiveAttributeModifier(attribute)
+                return (
+                  <div
+                    key={attribute}
+                    className="rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center"
+                  >
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+                      {attributeShort(attribute)}
+                    </div>
+                    <div className="mt-1 flex items-baseline justify-center gap-2">
+                      <span className="text-sm font-bold text-textH">
+                        {formatSigned(
+                          character.getEffectiveSpellAttackBonus(
+                            attribute,
+                            modifier + proficiency,
+                          ),
+                        )}
+                      </span>
+                      <span className="text-[10px] text-textMuted">CD</span>
+                      <span className="text-sm font-bold text-textH">
+                        {character.getEffectiveSpellSaveDc(
+                          attribute,
+                          8 + modifier + proficiency,
+                        )}
+                      </span>
+                    </div>
                   </div>
-                  <div className="mt-1 flex items-baseline justify-center gap-2">
-                    <span className="text-sm font-bold text-textH">
-                      {formatSigned(
-                        character.getEffectiveAttackBonus(modifier + proficiency),
-                      )}
-                    </span>
-                    <span className="text-[10px] text-textMuted">CD</span>
-                    <span className="text-sm font-bold text-textH">
-                      {character.getEffectiveSaveDc(
-                        8 + modifier + proficiency,
-                      )}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </div>
 
@@ -354,7 +387,8 @@ export function MinimalCharacterSheet({
               className="rounded-full border border-border bg-bg px-2 py-1 text-[10px] text-text"
             >
               CD {attributeShort(attribute)}{" "}
-              {character.getEffectiveSaveDc(
+              {character.getEffectiveAbilitySaveDc(
+                attribute,
                 8 + character.getEffectiveAttributeModifier(attribute) + proficiency,
               )}
             </span>
@@ -461,6 +495,30 @@ function ReadOnlyStat({ label, value }: { label: string; value: string }) {
         {label}
       </div>
       <div className="mt-1 text-lg font-bold text-textH">{value}</div>
+    </div>
+  )
+}
+
+function CompactWeaponTile({
+  weapon,
+  attack,
+  damageBonus,
+}: {
+  weapon: Weapon
+  attack: number
+  damageBonus: number
+}) {
+  const damage = `${weapon.damage.quantity}${weapon.damage.sides}${
+    damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""
+  }`
+
+  return (
+    <div className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center">
+      <div className="truncate text-[10px] uppercase tracking-wide text-textMuted" title={weapon.name}>
+        {weapon.name || "Arma"}
+      </div>
+      <div className="mt-1 text-lg font-bold text-textH">{formatSigned(attack)}</div>
+      <div className="text-[10px] font-medium text-textMuted">{damage}</div>
     </div>
   )
 }

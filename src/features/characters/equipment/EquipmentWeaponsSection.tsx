@@ -17,26 +17,35 @@ type Props = {
   ) => void
 }
 
-type NormalBonusKey =
+type DisplayBonusKey =
   | "armorClass"
   | "initiative"
   | "maxHp"
   | "temporaryHp"
   | "passivePerception"
   | "attackBonus"
-  | "speed"
+  | "saveDcBonus"
   | "damageBonus"
+  | "speed"
 
-const NORMAL_BONUS_KEYS: NormalBonusKey[] = [
+const NORMAL_BONUS_KEYS: DisplayBonusKey[] = [
   "armorClass",
   "initiative",
   "maxHp",
   "temporaryHp",
   "passivePerception",
   "attackBonus",
+  "saveDcBonus",
   "damageBonus",
   "speed",
 ]
+
+const SCOPED_BONUS_KEYS = [
+  "weaponAttackBonus",
+  "spellAttackBonus",
+  "spellSaveDcBonus",
+  "abilitySaveDcBonus",
+] as const
 
 function formatDie(die: Weapon["damage"] | undefined) {
   if (!die) return "—"
@@ -269,6 +278,15 @@ function WeaponBonusList({ weapon }: WeaponBonusListProps) {
 
     for (const bonus of value) {
       rows.push(`${formatBonusName(key)}: ${formatBonusValue(bonus)}`)
+    }
+  }
+
+  for (const key of SCOPED_BONUS_KEYS) {
+    for (const entry of bonuses[key] ?? []) {
+      const scope = entry.attribute
+        ? ` ${entry.attribute.toUpperCase()}`
+        : " — todos"
+      rows.push(`${formatBonusName(key)}${scope}: ${formatBonusValue(entry.bonus)}`)
     }
   }
 

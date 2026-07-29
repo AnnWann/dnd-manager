@@ -8,6 +8,7 @@ import type {
   Bonus,
   BonusCollection,
   BonusTarget,
+  ScopedBonusKey,
 } from "../../../models/bonuses/Bonus"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
 import type { Itemmable } from "../../../models/items/item"
@@ -31,13 +32,28 @@ const TARGET_OPTIONS: Array<{ value: BonusTarget; label: string }> = [
   { value: "maxHp", label: "HP máximo" },
   { value: "temporaryHp", label: "HP temporário" },
   { value: "passivePerception", label: "Percepção passiva" },
-  { value: "attackBonus", label: "Ataques" },
-  { value: "saveDcBonus", label: "CD de magia e habilidades" },
+  { value: "attackBonus", label: "Ataques — global" },
+  { value: "weaponAttackBonus", label: "Ataques com arma" },
+  { value: "spellAttackBonus", label: "Ataques mágicos" },
+  { value: "saveDcBonus", label: "CD — global" },
+  { value: "spellSaveDcBonus", label: "CD de magias" },
+  { value: "abilitySaveDcBonus", label: "CD de habilidades" },
   { value: "damageBonus", label: "Dano" },
   { value: "speed", label: "Velocidade" },
   { value: "attribute", label: "Valor de atributo" },
   { value: "attributeModifier", label: "Modificador de atributo" },
 ]
+
+const SCOPED_TARGETS = new Set<BonusTarget>([
+  "weaponAttackBonus",
+  "spellAttackBonus",
+  "spellSaveDcBonus",
+  "abilitySaveDcBonus",
+])
+
+function isScopedTarget(target: BonusTarget): target is ScopedBonusKey {
+  return SCOPED_TARGETS.has(target)
+}
 
 export function EquipmentBonusesFields({
   item,
@@ -118,13 +134,21 @@ export function BonusesFields({
       <AddBonusDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        onAdd={({ target, attribute, bonus }) => {
+        onAdd={({ target, attribute, scopeAttribute, bonus }) => {
           if (target === "attribute" || target === "attributeModifier") {
             onChange({
               ...bonuses,
               [target]: [
                 ...(bonuses[target] ?? []),
                 { attribute, bonus },
+              ],
+            })
+          } else if (isScopedTarget(target)) {
+            onChange({
+              ...bonuses,
+              [target]: [
+                ...(bonuses[target] ?? []),
+                { attribute: scopeAttribute, bonus },
               ],
             })
           } else {
@@ -158,6 +182,26 @@ export function flattenBonuses(
         entries.push({
           id: `${option.value}-${index}`,
           label: `${option.label} ${entry.attribute.toUpperCase()}: ${formatBonus(entry.bonus)}`,
+          remove: (current) => ({
+            ...current,
+            [option.value]: (current[option.value] ?? []).filter(
+              (_, currentIndex) => currentIndex !== index,
+            ),
+          }),
+        })
+      })
+      continue
+    }
+
+    if (isScopedTarget(option.value)) {
+      const values = bonuses[option.value] ?? []
+      values.forEach((entry, index) => {
+        const scope = entry.attribute
+          ? ` ${entry.attribute.toUpperCase()}`
+          : " — todos os atributos"
+        entries.push({
+          id: `${option.value}-${index}`,
+          label: `${option.label}${scope}: ${formatBonus(entry.bonus)}`,
           remove: (current) => ({
             ...current,
             [option.value]: (current[option.value] ?? []).filter(
@@ -204,11 +248,13 @@ function AddBonusDialog({
   onAdd: (entry: {
     target: BonusTarget
     attribute: Attribute
+    scopeAttribute?: Attribute
     bonus: Bonus
   }) => void
 }) {
   const [target, setTarget] = useState<BonusTarget>("armorClass")
   const [attribute, setAttribute] = useState<Attribute>("str")
+  const [scopeAttribute, setScopeAttribute] = useState<"all" | Attribute>("all")
   const [type, setType] = useState<Bonus["type"]>("add")
   const [value, setValue] = useState(1)
   const [useFormula, setUseFormula] = useState(false)
@@ -218,11 +264,13 @@ function AddBonusDialog({
 
   const needsAttribute =
     target === "attribute" || target === "attributeModifier"
+  const supportsAttributeScope = isScopedTarget(target)
   const formulaError = useFormula ? validateCharacterSheetFormula(formula) : undefined
 
   function close() {
     setTarget("armorClass")
     setAttribute("str")
+    setScopeAttribute("all")
     setType("add")
     setValue(1)
     setUseFormula(false)
@@ -272,6 +320,23 @@ function AddBonusDialog({
             <label className="grid gap-1">
               <span className="text-xs font-medium text-textH">Atributo</span>
               <Select value={attribute} onChange={(event) => setAttribute(event.target.value as Attribute)}>
+                {ATTRIBUTES.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </Select>
+            </label>
+          ) : null}
+
+          {supportsAttributeScope ? (
+            <label className="grid gap-1">
+              <span className="text-xs font-medium text-textH">Limitar ao atributo</span>
+              <Select
+                value={scopeAttribute}
+                onChange={(event) =>
+                  setScopeAttribute(event.target.value as "all" | Attribute)
+                }
+              >
+                <option value="all">Todos os atributos</option>
                 {ATTRIBUTES.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
@@ -336,9 +401,10 @@ function AddBonusDialog({
             variant="primary"
             disabled={Boolean(formulaError)}
             onClick={() => onAdd({
-              target,
-              attribute,
-              bonus: {
+               target,
+               attribute,
+               scopeAttribute: scopeAttribute === "all" ? undefined : scopeAttribute,
+               bonus: {
                 type,
                 value: Math.abs(value),
                 formula: useFormula ? formula.trim() : undefined,
