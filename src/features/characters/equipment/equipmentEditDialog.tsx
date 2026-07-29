@@ -8,23 +8,9 @@ import type {
   Equipment,
 } from "../../../models/items/equipment/EquipmentSlot"
 import type { Attribute } from "../../../models/sheet/Attribute"
+import type { BonusTarget, NormalBonusKey, ScopedBonusKey } from "../../../models/bonuses/Bonus"
 
-type BonusTarget =
-  | "armorClass"
-  | "initiative"
-  | "maxHp"
-  | "temporaryHp"
-  | "passivePerception"
-  | "attackBonus"
-  | "saveDcBonus"
-  | "speed"
-  | "attribute"
-  | "attributeModifier"
-
-type NormalBonusTarget = Exclude<
-  BonusTarget,
-  "attribute" | "attributeModifier"
->
+type NormalBonusTarget = NormalBonusKey
 
 type Props<T extends Equipment> = {
   open: boolean
@@ -39,12 +25,27 @@ const BONUS_TARGETS: Array<{ value: BonusTarget; label: string }> = [
   { value: "maxHp", label: "HP Máx." },
   { value: "temporaryHp", label: "HP Temp." },
   { value: "passivePerception", label: "Percepção Passiva" },
-  { value: "attackBonus", label: "Ataque" },
-  { value: "saveDcBonus", label: "CD de magia e habilidades" },
+  { value: "attackBonus", label: "Ataque — global" },
+  { value: "weaponAttackBonus", label: "Ataque com arma" },
+  { value: "spellAttackBonus", label: "Ataque mágico" },
+  { value: "saveDcBonus", label: "CD — global" },
+  { value: "spellSaveDcBonus", label: "CD de magia" },
+  { value: "abilitySaveDcBonus", label: "CD de habilidade" },
   { value: "speed", label: "Velocidade" },
   { value: "attribute", label: "Atributo" },
   { value: "attributeModifier", label: "Modificador de atributo" },
 ]
+
+const SCOPED_TARGETS = new Set<BonusTarget>([
+  "weaponAttackBonus",
+  "spellAttackBonus",
+  "spellSaveDcBonus",
+  "abilitySaveDcBonus",
+])
+
+function isScopedTarget(target: BonusTarget): target is ScopedBonusKey {
+  return SCOPED_TARGETS.has(target)
+}
 
 const ATTRIBUTES: Array<{ key: Attribute; label: string }> = [
   { key: "str", label: "FOR" },
@@ -76,6 +77,7 @@ export function EquipmentEditDialog<T extends Equipment>({
   const [bonusType, setBonusType] = useState<Bonus["type"]>("add")
   const [bonusValue, setBonusValue] = useState(0)
   const [bonusAttribute, setBonusAttribute] = useState<Attribute>("str")
+  const [bonusScopeAttribute, setBonusScopeAttribute] = useState<"all" | Attribute>("all")
 
   useEffect(() => {
     if (open) setDraft(equipment)
@@ -146,6 +148,22 @@ export function EquipmentEditDialog<T extends Equipment>({
       return
     }
 
+    if (isScopedTarget(bonusTarget)) {
+      updateDraft({
+        bonuses: {
+          ...(currentDraft.bonuses ?? {}),
+          [bonusTarget]: [
+            ...(currentDraft.bonuses?.[bonusTarget] ?? []),
+            {
+              attribute: bonusScopeAttribute === "all" ? undefined : bonusScopeAttribute,
+              bonus: nextBonus,
+            },
+          ],
+        },
+      })
+      return
+    }
+
     const bonusKey = bonusTarget as NormalBonusTarget
 
     updateDraft({
@@ -184,6 +202,16 @@ export function EquipmentEditDialog<T extends Equipment>({
       if (next.length) nextBonuses.attributeModifier = next
       else delete nextBonuses.attributeModifier
 
+      updateDraft({ bonuses: nextBonuses })
+      return
+    }
+
+    if (isScopedTarget(target)) {
+      const next = (currentDraft.bonuses[target] ?? []).filter(
+        (_, i) => i !== index,
+      )
+      if (next.length) nextBonuses[target] = next
+      else delete nextBonuses[target]
       updateDraft({ bonuses: nextBonuses })
       return
     }
@@ -319,6 +347,26 @@ export function EquipmentEditDialog<T extends Equipment>({
             </div>
           ) : null}
 
+          {isScopedTarget(bonusTarget) ? (
+            <div className="mt-3">
+              <label className="text-xs text-text">Limitar ao atributo</label>
+              <Select
+                className="mt-1"
+                value={bonusScopeAttribute}
+                onChange={(e) =>
+                  setBonusScopeAttribute(e.target.value as "all" | Attribute)
+                }
+              >
+                <option value="all">Todos os atributos</option>
+                {ATTRIBUTES.map((attribute) => (
+                  <option key={attribute.key} value={attribute.key}>
+                    {attribute.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : null}
+
           <div className="mt-4 grid gap-2">
             {BONUS_TARGETS.flatMap((target) => {
               if (!draft.bonuses) return []
@@ -369,6 +417,27 @@ export function EquipmentEditDialog<T extends Equipment>({
                     </div>
                   ),
                 )
+              }
+
+              if (isScopedTarget(target.value)) {
+                return (draft.bonuses[target.value] ?? []).map((entry, index) => (
+                  <div
+                    key={`${target.value}-${index}`}
+                    className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-xs text-text"
+                  >
+                    <span>
+                      {target.label}{entry.attribute ? ` ${entry.attribute.toUpperCase()}` : " — todos"}{" "}
+                      {bonusTypeLabel(entry.bonus.type)} {entry.bonus.value}
+                    </span>
+                    <button
+                      type="button"
+                      className="rounded-md border border-border px-2 py-1"
+                      onClick={() => removeBonus(target.value, index)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))
               }
 
               const bonusKey = target.value as NormalBonusTarget

@@ -9,14 +9,30 @@ export type Bonus = {
   label?: string
 }
 
+export type AttributeScopedBonus = {
+  /** Ausente significa todos os atributos válidos para o escopo. */
+  attribute?: Attribute
+  bonus: Bonus
+}
+
 export type BonusCollection = {
   armorClass?: Bonus[]
   initiative?: Bonus[]
   maxHp?: Bonus[]
   temporaryHp?: Bonus[]
   passivePerception?: Bonus[]
+  /** Bônus global aplicado a qualquer jogada de ataque. */
   attackBonus?: Bonus[]
+  /** Bônus aplicado apenas a ataques com armas. */
+  weaponAttackBonus?: AttributeScopedBonus[]
+  /** Bônus aplicado apenas a ataques mágicos. */
+  spellAttackBonus?: AttributeScopedBonus[]
+  /** Bônus global aplicado a qualquer CD calculada. */
   saveDcBonus?: Bonus[]
+  /** Bônus aplicado apenas a CDs de magia. */
+  spellSaveDcBonus?: AttributeScopedBonus[]
+  /** Bônus aplicado apenas a CDs de habilidades e efeitos. */
+  abilitySaveDcBonus?: AttributeScopedBonus[]
   damageBonus?: Bonus[]
   speed?: Bonus[]
   attribute?: Array<{
@@ -50,7 +66,14 @@ export type NormalBonusKey =
   | "damageBonus"
   | "speed"
 
+export type ScopedBonusKey =
+  | "weaponAttackBonus"
+  | "spellAttackBonus"
+  | "spellSaveDcBonus"
+  | "abilitySaveDcBonus"
+
 export type BonusTarget =
   | NormalBonusKey
+  | ScopedBonusKey
   | "attribute"
   | "attributeModifier"

@@ -13,9 +13,17 @@ export function formatBonusName(key: string): string {
     case "passivePerception":
       return "Percepção"
     case "attackBonus":
-      return "Ataque"
+      return "Ataque geral"
+    case "weaponAttackBonus":
+      return "Ataque com arma"
+    case "spellAttackBonus":
+      return "Ataque mágico"
     case "saveDcBonus":
-      return "CD"
+      return "CD geral"
+    case "spellSaveDcBonus":
+      return "CD de magia"
+    case "abilitySaveDcBonus":
+      return "CD de habilidade"
     case "speed":
       return "Velocidade"
     case "damageBonus": 

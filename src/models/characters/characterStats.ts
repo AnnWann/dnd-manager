@@ -1,5 +1,5 @@
 import type { Ability } from "../abilities/Ability"
-import type { Bonus, NormalBonusKey } from "../bonuses/Bonus"
+import type { Bonus, NormalBonusKey, ScopedBonusKey } from "../bonuses/Bonus"
 import { evaluateCharacterSheetFormula } from "../../lib/customSystems/CharacterSheetFormula"
 import type { Armor } from "../items/equipment/Armor"
 import type { Equipment } from "../items/equipment/EquipmentSlot"
@@ -117,6 +117,27 @@ export function getCharacterBonuses(
   ]
 }
 
+export function getScopedCharacterBonuses(
+  character: CharacterTemplate,
+  key: ScopedBonusKey,
+  attribute: Attribute,
+): Bonus[] {
+  const collect = (
+    collection: { bonuses?: Partial<Record<ScopedBonusKey, Array<{ attribute?: Attribute; bonus: Bonus }>>> },
+  ) =>
+    (collection.bonuses?.[key] ?? [])
+      .filter((entry) => !entry.attribute || entry.attribute === attribute)
+      .map((entry) => resolveBonus(character, entry.bonus))
+
+  return [
+    ...getEquippedItems(character).flatMap(collect),
+    ...getActiveAbilities(character).flatMap(collect),
+    ...getCharacterConditions(character)
+      .filter(isConditionActive)
+      .flatMap(collect),
+  ]
+}
+
 export function getEffectiveAttackBonus(
   character: CharacterTemplate,
   baseValue: number,
@@ -127,6 +148,17 @@ export function getEffectiveAttackBonus(
   )
 }
 
+export function getEffectiveSpellAttackBonus(
+  character: CharacterTemplate,
+  attribute: Attribute,
+  baseValue: number,
+): number {
+  return applyBonuses(baseValue, [
+    ...getCharacterBonuses(character, "attackBonus"),
+    ...getScopedCharacterBonuses(character, "spellAttackBonus", attribute),
+  ])
+}
+
 export function getEffectiveSaveDc(
   character: CharacterTemplate,
   baseValue: number,
@@ -135,6 +167,28 @@ export function getEffectiveSaveDc(
     baseValue,
     getCharacterBonuses(character, "saveDcBonus"),
   )
+}
+
+export function getEffectiveSpellSaveDc(
+  character: CharacterTemplate,
+  attribute: Attribute,
+  baseValue: number,
+): number {
+  return applyBonuses(baseValue, [
+    ...getCharacterBonuses(character, "saveDcBonus"),
+    ...getScopedCharacterBonuses(character, "spellSaveDcBonus", attribute),
+  ])
+}
+
+export function getEffectiveAbilitySaveDc(
+  character: CharacterTemplate,
+  attribute: Attribute,
+  baseValue: number,
+): number {
+  return applyBonuses(baseValue, [
+    ...getCharacterBonuses(character, "saveDcBonus"),
+    ...getScopedCharacterBonuses(character, "abilitySaveDcBonus", attribute),
+  ])
 }
 
 export function getEffectiveAttribute(
@@ -349,9 +403,15 @@ export function getEffectiveWeaponAttackBonus(
   const weaponAttackBonus = weapon.bonuses?.attack?.bonus
     ? resolveBonus(character, weapon.bonuses.attack.bonus)
     : undefined
+  const modifierAttribute = weapon.modifierAttribute ?? "str"
 
   return applyBonuses(baseValue, [
     ...getCharacterBonuses(character, "attackBonus"),
+    ...getScopedCharacterBonuses(
+      character,
+      "weaponAttackBonus",
+      modifierAttribute,
+    ),
     ...(weaponAttackBonus ? [weaponAttackBonus] : []),
   ])
 }
