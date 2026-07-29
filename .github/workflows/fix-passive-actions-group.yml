@@ -30,27 +30,33 @@ jobs:
 
           path = Path('src/features/characters/characterSheet/minimalCharacterActions.tsx')
           text = path.read_text()
-          anchor = '''      <ActionGroup
-                title="Habilidades do personagem"
-                entries={abilityActions}
-                onSelect={open}
-                emptyMessage={`Nenhuma habilidade configurada como ${filterLabel(filter).toLocaleLowerCase("pt-BR")}.`}
-              />'''
-          replacement = anchor + '''
-              <ActionGroup
-                title="Passivas"
-                entries={passiveAbilities}
-                onSelect={open}
-                emptyMessage="Nenhuma habilidade passiva cadastrada."
-              />'''
 
           if 'title="Passivas"' not in text:
-              if anchor not in text:
-                  raise SystemExit('ability action group anchor not found')
-              text = text.replace(anchor, replacement, 1)
+              title_index = text.index('title="Habilidades do personagem"')
+              block_start = text.rfind('<ActionGroup', 0, title_index)
+              block_end = text.index('/>', title_index) + 2
+              indentation_start = text.rfind('\n', 0, block_start) + 1
+              indentation = text[indentation_start:block_start]
+              passive_block = (
+                  '\n'
+                  f'{indentation}<ActionGroup\n'
+                  f'{indentation}  title="Passivas"\n'
+                  f'{indentation}  entries={{passiveAbilities}}\n'
+                  f'{indentation}  onSelect={{open}}\n'
+                  f'{indentation}  emptyMessage="Nenhuma habilidade passiva cadastrada."\n'
+                  f'{indentation}/>'
+              )
+              text = text[:block_end] + passive_block + text[block_end:]
 
-          if 'title="Passivas"' not in text:
-              raise SystemExit('passive group was not inserted')
+          required = [
+              'title="Passivas"',
+              'entries={passiveAbilities}',
+              'function getPassiveAbilities',
+              'filter === "passive"',
+          ]
+          missing = [value for value in required if value not in text]
+          if missing:
+              raise SystemExit(f'missing passive group requirements: {missing}')
 
           path.write_text(text)
           PY
