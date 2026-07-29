@@ -46,6 +46,9 @@ export function EquipmentNecklacesSection({
           {necklaces.map((necklace, index) => (
             <EquipmentItemCard
               key={`${necklace.id}-${index}`}
+              characterId={character.get("id")}
+              reference={{ type: "necklace", itemId: necklace.id }}
+              pocketCount={character.get("equipment").pockets.length}
               item={necklace}
               fallbackName="Colar sem nome"
               badges={["Colar"]}
@@ -61,25 +64,6 @@ export function EquipmentNecklacesSection({
                   value: String(necklace.weight ?? 0),
                 },
               ]}
-              onUnequip={() =>
-                updateCharacter(character.get("id"), (current) => {
-                  const equipment = current.get("equipment")
-                  const currentNecklace = (equipment.necklaces ?? [])[index]
-                  if (!currentNecklace) return current
-
-                  return current
-                    .with("equipment", {
-                      ...equipment,
-                      necklaces: (equipment.necklaces ?? []).filter(
-                        (_, currentIndex) => currentIndex !== index,
-                      ),
-                    })
-                    .with("inventory", [
-                      ...current.get("inventory"),
-                      currentNecklace,
-                    ])
-                })
-              }
               onUpdate={(updater) =>
                 updateCharacter(character.get("id"), (current) => {
                   const equipment = current.get("equipment")
