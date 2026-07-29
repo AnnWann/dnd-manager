@@ -1,45 +1,100 @@
 import type { CharacterTemplate } from "./CharacterTemplate"
-import type { Itemmable } from "../items/item"
+import { getFreeHands, getUsedHands } from "./characterHands"
+import type { Equipment } from "../items/equipment/EquipmentSlot"
+import { withShieldDefaults } from "../items/equipment/Shield"
 import {
   WEAPON_PROPERTIES,
-  getWeaponHandsUsed,
   hasWeaponProperty,
+  isVersatileWeapon,
   type Weapon,
 } from "../items/equipment/Weapon"
+import type { Itemmable } from "../items/item"
 import { canItemGoInPocket } from "../items/itemPocketability"
-import { withShieldDefaults } from "../items/equipment/Shield"
+
+export type EquipmentDestination =
+  | { type: "natural" }
+  | { type: "hand"; wieldedTwoHanded?: boolean }
 
 export function getUsedArmsIncludingShield(
   character: CharacterTemplate,
 ): number {
-  const equipment = character.get("equipment")
-  const weaponArms = equipment.weapons.reduce(
-    (total, weapon) => total + (getWeaponHandsUsed(weapon)),
-    0,
-  )
-
-  return weaponArms + (equipment.shield ? 1 : 0)
+  return getUsedHands(character)
 }
 
 export function equipInventoryItemWithRules(
   character: CharacterTemplate,
   itemId: string,
+  destination: EquipmentDestination = { type: "natural" },
 ): CharacterTemplate {
   const item = character
     .get("inventory")
     .find((entry) => entry.id === itemId)
 
-  if (!item || !item.equippable || !item.equipSlot) return character
+  if (!item) return character
 
-  if (item.kind === "shield" || item.equipSlot === "shield") {
-    return equipShield(character, item)
+  if (destination.type === "hand") {
+    return equipItemInHand(character, item, destination.wieldedTwoHanded)
   }
 
+  if (!item.equippable || !item.equipSlot) return character
   if (item.equipSlot === "weapon") {
-    return equipWeaponRespectingShield(character, item)
+    return equipItemInHand(character, item)
   }
 
-  return character.equipInventoryItem(itemId)
+  const equipment = character.get("equipment")
+  const inventory = character.get("inventory")
+  const inventoryWithoutItem = inventory.filter((entry) => entry.id !== item.id)
+  const itemToEquip = {
+    ...item,
+    insideBagOfHolding: false,
+  }
+
+  if (item.equipSlot === "shield" || item.kind === "shield") {
+    const replacingShield = equipment.shield
+    const freeHands = getFreeHands(character) + (replacingShield ? 1 : 0)
+    if (freeHands < 1) return character
+
+    return character
+      .with(
+        "inventory",
+        replacingShield
+          ? [...inventoryWithoutItem, replacingShield]
+          : inventoryWithoutItem,
+      )
+      .with("equipment", {
+        ...equipment,
+        shield: withShieldDefaults(itemToEquip),
+      })
+  }
+
+  if (item.equipSlot === "ring") {
+    if (equipment.rings.length >= character.getTotalFingers()) return character
+
+    return character
+      .with("inventory", inventoryWithoutItem)
+      .with("equipment", {
+        ...equipment,
+        rings: [...equipment.rings, itemToEquip as Equipment],
+      })
+  }
+
+  const slot = item.equipSlot as Exclude<
+    keyof typeof equipment,
+    "weapons" | "rings" | "pockets" | "heldItems"
+  >
+  const previous = equipment[slot]
+
+  return character
+    .with(
+      "inventory",
+      previous
+        ? [...inventoryWithoutItem, previous as Itemmable]
+        : inventoryWithoutItem,
+    )
+    .with("equipment", {
+      ...equipment,
+      [slot]: itemToEquip,
+    })
 }
 
 export function pocketInventoryItemWithRules(
@@ -53,12 +108,6 @@ export function pocketInventoryItemWithRules(
   if (!item || !canItemGoInPocket(item)) return character
   if (character.get("equipment").pockets.length >= 8) return character
 
-  const itemToPocket = {
-    ...item,
-    pocketable: true,
-    insideBagOfHolding: false,
-  }
-
   return character
     .with("inventory", [
       ...inventory.slice(0, itemIndex),
@@ -68,7 +117,11 @@ export function pocketInventoryItemWithRules(
       ...character.get("equipment"),
       pockets: [
         ...character.get("equipment").pockets,
-        itemToPocket,
+        {
+          ...item,
+          pocketable: true,
+          insideBagOfHolding: false,
+        },
       ],
     })
 }
@@ -85,129 +138,69 @@ export function wieldPocketWeaponWithRules(
   }
 
   const weapon = toWeapon(item)
-  const neededArms = getWeaponHandsUsed(weapon)
-  const maxArms = character.get("sheet").arms
-  const currentWeapons = [...equipment.weapons]
-  const returnedToInventory: Itemmable[] = []
-  let nextShield = equipment.shield
-  let usedArms = currentWeapons.reduce(
-    (total, currentWeapon) => total + (getWeaponHandsUsed(currentWeapon)),
-    0,
-  ) + (nextShield ? 1 : 0)
+  if (getFreeHands(character) < getWeaponRequiredHands(weapon)) return character
 
-  while (usedArms + neededArms > maxArms && currentWeapons.length > 0) {
-    const removed = currentWeapons.shift()
-    if (!removed) break
+  return character.with("equipment", {
+    ...equipment,
+    pockets: equipment.pockets.filter(
+      (_, currentIndex) => currentIndex !== index,
+    ),
+    weapons: [...equipment.weapons, weapon],
+  })
+}
 
-    returnedToInventory.push(removed)
-    usedArms -= getWeaponHandsUsed(removed)
+function equipItemInHand(
+  character: CharacterTemplate,
+  item: Itemmable,
+  wieldedTwoHanded?: boolean,
+): CharacterTemplate {
+  const equipment = character.get("equipment")
+  const inventoryWithoutItem = character
+    .get("inventory")
+    .filter((entry) => entry.id !== item.id)
+
+  if (item.kind === "equipment" && item.equipSlot === "weapon") {
+    const weapon = toWeapon(item)
+    const supportsTwoHands = weapon.twoHanded || isVersatileWeapon(weapon)
+    const nextWeapon: Weapon = {
+      ...weapon,
+      wieldedTwoHanded: supportsTwoHands
+        ? (wieldedTwoHanded ?? (weapon.twoHanded ? true : false))
+        : false,
+    }
+
+    if (getFreeHands(character) < getWeaponRequiredHands(nextWeapon)) {
+      return character
+    }
+
+    return character
+      .with("inventory", inventoryWithoutItem)
+      .with("equipment", {
+        ...equipment,
+        weapons: [...equipment.weapons, nextWeapon],
+      })
   }
 
-  if (usedArms + neededArms > maxArms && nextShield) {
-    returnedToInventory.push(nextShield)
-    nextShield = undefined
-    usedArms -= 1
-  }
-
-  if (usedArms + neededArms > maxArms) return character
+  if (getFreeHands(character) < 1) return character
 
   return character
-    .with("inventory", [
-      ...character.get("inventory"),
-      ...returnedToInventory,
-    ])
+    .with("inventory", inventoryWithoutItem)
     .with("equipment", {
       ...equipment,
-      shield: nextShield,
-      pockets: equipment.pockets.filter((_, currentIndex) => currentIndex !== index),
-      weapons: [...currentWeapons, weapon],
+      heldItems: [
+        ...(equipment.heldItems ?? []),
+        {
+          ...item,
+          insideBagOfHolding: false,
+        },
+      ],
     })
 }
 
-function equipShield(
-  character: CharacterTemplate,
-  item: Itemmable,
-): CharacterTemplate {
-  const equipment = character.get("equipment")
-  const inventory = character.get("inventory")
-  const maxArms = character.get("sheet").arms
-
-  if (maxArms < 1) return character
-
-  const currentWeapons = [...equipment.weapons]
-  const returnedToInventory: Itemmable[] = []
-  let usedWeaponArms = currentWeapons.reduce(
-    (total, weapon) => total + (getWeaponHandsUsed(weapon)),
-    0,
-  )
-
-  while (usedWeaponArms + 1 > maxArms && currentWeapons.length > 0) {
-    const removed = currentWeapons.shift()
-    if (!removed) break
-
-    returnedToInventory.push(removed)
-    usedWeaponArms -= getWeaponHandsUsed(removed)
-  }
-
-  if (usedWeaponArms + 1 > maxArms) return character
-
-  if (equipment.shield) returnedToInventory.push(equipment.shield)
-
-  return character
-    .with("inventory", [
-      ...inventory.filter((entry) => entry.id !== item.id),
-      ...returnedToInventory,
-    ])
-    .with("equipment", {
-      ...equipment,
-      shield: withShieldDefaults(item),
-      weapons: currentWeapons,
-    })
-}
-
-function equipWeaponRespectingShield(
-  character: CharacterTemplate,
-  item: Itemmable,
-): CharacterTemplate {
-  const equipment = character.get("equipment")
-  const inventory = character.get("inventory")
-  const weapon = toWeapon(item)
-  const neededArms = getWeaponHandsUsed(weapon)
-  const maxArms = character.get("sheet").arms
-  const currentWeapons = [...equipment.weapons]
-  const returnedToInventory: Itemmable[] = []
-  let nextShield = equipment.shield
-  let usedArms = currentWeapons.reduce(
-    (total, currentWeapon) => total + (getWeaponHandsUsed(currentWeapon)),
-    0,
-  ) + (nextShield ? 1 : 0)
-
-  while (usedArms + neededArms > maxArms && currentWeapons.length > 0) {
-    const removed = currentWeapons.shift()
-    if (!removed) break
-
-    returnedToInventory.push(removed)
-    usedArms -= getWeaponHandsUsed(removed)
-  }
-
-  if (usedArms + neededArms > maxArms && nextShield) {
-    returnedToInventory.push(nextShield)
-    nextShield = undefined
-    usedArms -= 1
-  }
-
-  if (usedArms + neededArms > maxArms) return character
-
-  return character
-    .with("inventory", [
-      ...inventory.filter((entry) => entry.id !== item.id),
-      ...returnedToInventory,
-    ])
-    .with("equipment", {
-      ...equipment,
-      shield: nextShield,
-      weapons: [...currentWeapons, weapon],
-    })
+function getWeaponRequiredHands(weapon: Weapon): number {
+  if (weapon.twoHanded) return weapon.wieldedTwoHanded === false ? 1 : 2
+  if (isVersatileWeapon(weapon) && weapon.wieldedTwoHanded) return 2
+  return 1
 }
 
 function toWeapon(item: Itemmable): Weapon {
@@ -236,7 +229,7 @@ function toWeapon(item: Itemmable): Weapon {
     twoHanded: versatile ? false : (weapon.twoHanded ?? false),
     wieldedTwoHanded: versatile
       ? (weapon.wieldedTwoHanded ?? false)
-      : (weapon.twoHanded ?? false),
+      : (weapon.wieldedTwoHanded ?? weapon.twoHanded ?? false),
     damage,
     versatileDamage: versatile
       ? (weapon.versatileDamage ?? { ...damage })
