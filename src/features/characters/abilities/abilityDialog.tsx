@@ -5,28 +5,29 @@ import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
-import { normalizeAbilityText } from "../../../lib/textNormalization"
 import { validateCharacterSheetFormula } from "../../../lib/customSystems/CharacterSheetFormula"
+import { normalizeAbilityText } from "../../../lib/textNormalization"
 import type {
   Ability,
   AbilityActionKind,
   AbilityCategory,
   AbilityEffectDuration,
+  AbilityEffectPersistence,
   AbilityKind,
-  Trigger,
   AbilityUsageCooldownUnit,
   AbilityUsageResetKind,
+  Trigger,
 } from "../../../models/abilities/Ability"
 import {
   abilityRequiresActivation,
   normalizeAbilityActivation,
 } from "../../../models/abilities/abilityActivation"
 import { BonusesFields } from "../inventory/equipmentBonusFields"
-import { GrantedProficienciesEditor } from "../proficiencies/grantedProficienciesEditor"
 import {
   GrantedSpellsEditor,
   type EditableSpellGrant,
 } from "../magic/grantedSpellsEditor"
+import { GrantedProficienciesEditor } from "../proficiencies/grantedProficienciesEditor"
 import {
   ABILITY_ACTION_OPTIONS,
   ABILITY_KIND_OPTIONS,
@@ -51,6 +52,7 @@ function createEmptyAbility(): Ability {
     category: "general",
     actionKind: "action",
     effectDuration: "instant",
+    effectPersistence: "untilEnd",
     trigger: "always",
     grantedSpells: [],
     grantedProficiencies: [],
@@ -78,12 +80,16 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
   }, [open])
 
   if (!open) return null
+
   const hasUsage = draft.usage !== undefined
   const maximumFormula = draft.usage?.maxFormula?.trim() ?? ""
   const maximumFormulaError = maximumFormula
     ? validateCharacterSheetFormula(maximumFormula)
     : undefined
   const requiresActivation = abilityRequiresActivation(draft)
+  const duration =
+    draft.effectDuration ?? (draft.kind === "active" ? "instant" : "lasting")
+  const persistence = draft.effectPersistence ?? "untilEnd"
   const triggerInputValue =
     ABILITY_TRIGGER_OPTIONS.find(
       (option) => option.value === (draft.trigger ?? "always"),
@@ -91,6 +97,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
 
   function updateUsageMaximum(rawValue: string) {
     if (!draft.usage) return
+
     const trimmed = rawValue.trim()
     const numeric = Number(trimmed)
 
@@ -119,7 +126,12 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
 
   return createPortal(
     <div className="fixed inset-0 z-[12000] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/55 p-3 backdrop-blur-sm sm:p-4">
-      <div role="dialog" aria-modal="true" aria-label={ability ? "Editar habilidade" : "Adicionar habilidade"} className="max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-2xl border border-border bg-bg-elevated p-4 shadow-theme-lg sm:max-h-[calc(100dvh-2rem)]">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={ability ? "Editar habilidade" : "Adicionar habilidade"}
+        className="max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-2xl border border-border bg-bg-elevated p-4 shadow-theme-lg sm:max-h-[calc(100dvh-2rem)]"
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold text-textH">
@@ -191,6 +203,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                           ? "instant"
                           : "lasting",
                     effectDurationText: undefined,
+                    effectPersistence: "untilEnd",
                     benefitsActive: false,
                   })
                 }}
@@ -225,50 +238,72 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
           </div>
 
           {draft.kind !== "feature" ? (
-            <div className="grid gap-2 md:grid-cols-2">
-            <label className="grid gap-1">
-              <span className="text-xs font-medium text-textH">
-                Duração do efeito
-              </span>
-              <Select
-                value={
-                  draft.effectDuration ??
-                  (draft.kind === "active" ? "instant" : "lasting")
-                }
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    effectDuration: event.target.value as AbilityEffectDuration,
-                    benefitsActive: false,
-                  })
-                }
-              >
-                <option value="instant">Instantânea</option>
-                <option value="lasting">Duradoura</option>
-              </Select>
-              <span className="text-[10px] text-textMuted">
-                Instantânea executa e termina no mesmo clique. Duradoura permanece como uma condição ativa.
-              </span>
-            </label>
+            <section className="grid gap-3 rounded-xl border border-border bg-bg-subtle p-3">
+              <div className="grid gap-2 md:grid-cols-2">
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-textH">
+                    Duração do efeito
+                  </span>
+                  <Select
+                    value={duration}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        effectDuration: event.target.value as AbilityEffectDuration,
+                        benefitsActive: false,
+                      })
+                    }
+                  >
+                    <option value="instant">Instantânea</option>
+                    <option value="lasting">Duradoura</option>
+                  </Select>
+                  <span className="text-[10px] text-textMuted">
+                    Instantânea executa no mesmo clique. Duradoura cria uma condição ativa.
+                  </span>
+                </label>
 
-            {(draft.effectDuration ?? (draft.kind === "active" ? "instant" : "lasting")) === "lasting" ? (
-              <label className="grid gap-1">
-                <span className="text-xs font-medium text-textH">
-                  Duração descrita
-                </span>
-                <Input
-                  value={draft.effectDurationText ?? ""}
-                  placeholder="Ex.: 1 minuto, até o próximo descanso, enquanto concentrar"
-                  onChange={(event) =>
-                    setDraft({ ...draft, effectDurationText: event.target.value })
-                  }
-                />
-                <span className="text-[10px] text-textMuted">
-                  Este texto aparecerá na condição criada enquanto o efeito estiver ativo.
-                </span>
-              </label>
-            ) : null}
-            </div>
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-textH">
+                    Após o uso ou término
+                  </span>
+                  <Select
+                    value={persistence}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        effectPersistence: event.target
+                          .value as AbilityEffectPersistence,
+                        benefitsActive: false,
+                      })
+                    }
+                  >
+                    <option value="untilEnd">Remover os benefícios</option>
+                    <option value="permanent">Manter os benefícios</option>
+                  </Select>
+                  <span className="text-[10px] text-textMuted">
+                    Escolha se os modificadores somem junto com o efeito ou permanecem na ficha.
+                  </span>
+                </label>
+              </div>
+
+              {duration === "lasting" ? (
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-textH">
+                    Duração descrita
+                  </span>
+                  <Input
+                    value={draft.effectDurationText ?? ""}
+                    placeholder="Ex.: 1 minuto, até o próximo descanso, enquanto concentrar"
+                    onChange={(event) =>
+                      setDraft({ ...draft, effectDurationText: event.target.value })
+                    }
+                  />
+                  <span className="text-[10px] text-textMuted">
+                    Este texto aparecerá na condição criada enquanto o efeito estiver ativo.
+                  </span>
+                </label>
+              ) : null}
+            </section>
           ) : null}
 
           <label className="grid gap-1">
@@ -323,7 +358,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                   <Input
                     type="text"
                     value={draft.usage.maxFormula ?? String(draft.usage.max)}
-                    placeholder="Ex.: proficiencia ou 2 + nivel.total / 4"
+                    placeholder="Ex.: character.proficiencyBonus"
                     onChange={(event) => updateUsageMaximum(event.target.value)}
                   />
                   {maximumFormulaError ? (
@@ -336,6 +371,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                     </span>
                   ) : null}
                 </label>
+
                 <label className="grid gap-1">
                   <span className="text-xs text-textMuted">Usado</span>
                   <Input
@@ -359,6 +395,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                     }
                   />
                 </label>
+
                 <label className="grid gap-1">
                   <span className="text-xs text-textMuted">Reset</span>
                   <Select
@@ -380,6 +417,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                     ))}
                   </Select>
                 </label>
+
                 {draft.usage.reset === "cooldown" ? (
                   <>
                     <label className="grid gap-1">
@@ -432,11 +470,11 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
 
           <div className="rounded-xl border border-border bg-bg-subtle p-3 text-xs leading-5 text-text">
             {requiresActivation
-              ? draft.kind === "feature"
-                ? "Esta característica possui um gatilho e precisa ser acionada para conceder seus benefícios. Ela não aparece na seção de ações."
-                : (draft.effectDuration ?? (draft.kind === "active" ? "instant" : "lasting")) === "lasting"
-                  ? `${draft.kind === "active" ? "Usar" : "Acionar"} aplica o efeito e cria uma condição duradoura. Encerrar ou remover essa condição encerra os modificadores.`
-                  : `${draft.kind === "active" ? "Usar" : "Acionar"} executa o efeito e termina automaticamente. PV, PV temporários e outras alterações gravadas na ficha permanecem.`
+              ? persistence === "permanent"
+                ? "Ao acionar, os modificadores permanecem ativos mesmo após o uso ou o término da condição. A habilidade não poderá ser acionada novamente enquanto esses benefícios estiverem ativos."
+                : duration === "lasting"
+                  ? `${draft.kind === "active" ? "Usar" : "Acionar"} aplica o efeito e cria uma condição duradoura. Encerrar ou remover a condição encerra os modificadores.`
+                  : `${draft.kind === "active" ? "Usar" : "Acionar"} executa o efeito e termina automaticamente. Alterações gravadas diretamente na ficha permanecem.`
               : draft.kind === "feature"
                 ? "Esta característica não possui condição e concede seus benefícios permanentemente. Ela não aparece na seção de ações."
                 : "Esta passiva não possui condição e concede seus benefícios permanentemente."}
