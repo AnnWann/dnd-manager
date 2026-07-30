@@ -13,6 +13,8 @@ export interface Ability {
   effectDuration?: AbilityEffectDuration
   /** Texto livre exibido na condição criada por efeitos duradouros. */
   effectDurationText?: string
+  /** Define se os benefícios somem ao término ou permanecem na ficha. */
+  effectPersistence?: AbilityEffectPersistence
   trigger?: Trigger
   grantedSpells?: SpellGrant[]
   grantedProficiencies?: Proficiency[]
@@ -50,6 +52,8 @@ export type AbilityKind = 'active' | 'passive' | 'feature'
 export type AbilityActionKind = 'action' | 'bonusAction' | 'reaction' | 'legendaryAction' | 'legendaryReaction' | 'legendaryResistance' | 'free'
 
 export type AbilityEffectDuration = 'instant' | 'lasting'
+
+export type AbilityEffectPersistence = 'untilEnd' | 'permanent'
 
 export type AbilityTriggerPreset =
   | 'startTurn'
