@@ -106,15 +106,15 @@ export function MinimalCharacterActions({
           ? current.useEquipmentAbility(source.itemId, source.abilityId)
           : current.deactivateEquipmentAbility(source.itemId, source.abilityId)
       }
-      if (source.type === "race") {
-        const ability = (current.get("sheet").race.naturalAbilities ?? []).find(
-          (entry) => entry.id === source.abilityId,
-        )
-        if (!ability) return current
-        return action === "use"
-          ? useAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
-          : endAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
-      }
+       if (source.type === "race") {
+         const ability = (current.get("sheet").race.naturalAbilities ?? []).find(
+           (entry) => entry.id === source.abilityId,
+         )
+         if (!ability) return current
+         return action === "use"
+           ? useAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
+           : endAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
+       }
       return action === "use"
         ? current.useAbility(source.abilityId)
         : current.deactivateAbility(source.abilityId)
