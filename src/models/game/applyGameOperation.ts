@@ -346,17 +346,16 @@ function transferItem<TState extends AppStateV1>(
     )
   }
 
-  destinationInventory.push(
-    touchItem(
-      normalizeItemText({
-        ...sourceItem,
-        id: request.destinationItemId ?? crypto.randomUUID(),
-        quantity: movedQuantity,
-        insideBagOfHolding: false,
-      }),
-      meta,
-    ),
-  )
+  const movedItem = normalizeItemText({
+    ...sourceItem,
+    id: request.destinationItemId ?? crypto.randomUUID(),
+    quantity: movedQuantity,
+    heldHands: undefined,
+    wieldedTwoHanded: undefined,
+    insideBagOfHolding: false,
+  })
+
+  addOrMergeStack(destinationInventory, movedItem, meta)
 
   return {
     ...state,
@@ -368,6 +367,78 @@ function transferItem<TState extends AppStateV1>(
         inventoryByCharacterId.get(rawCharacter.id) ?? rawCharacter.inventory ?? [],
     })),
   }
+}
+
+function addOrMergeStack(
+  inventory: Itemmable[],
+  movedItem: Itemmable,
+  meta?: ApplyMeta,
+) {
+  const existingIndex = inventory.findIndex((item) =>
+    areItemsStackCompatible(item, movedItem),
+  )
+
+  if (existingIndex < 0) {
+    inventory.push(touchItem(movedItem, meta))
+    return
+  }
+
+  const existing = inventory[existingIndex]
+  inventory[existingIndex] = touchItem(
+    normalizeItemText({
+      ...existing,
+      quantity:
+        Math.max(0, Number(existing.quantity) || 0) +
+        Math.max(0, Number(movedItem.quantity) || 0),
+      insideBagOfHolding: false,
+    }),
+    meta,
+  )
+}
+
+function areItemsStackCompatible(first: Itemmable, second: Itemmable): boolean {
+  if (first.kind !== second.kind) return false
+  if (first.name.trim().toLocaleLowerCase("pt-BR") !== second.name.trim().toLocaleLowerCase("pt-BR")) {
+    return false
+  }
+
+  return stableStringify(stackComparableItem(first)) ===
+    stableStringify(stackComparableItem(second))
+}
+
+function stackComparableItem(item: Itemmable): Record<string, unknown> {
+  const {
+    id: _id,
+    quantity: _quantity,
+    version: _version,
+    updatedAt: _updatedAt,
+    updatedBy: _updatedBy,
+    insideBagOfHolding: _insideBagOfHolding,
+    heldHands: _heldHands,
+    wieldedTwoHanded: _wieldedTwoHanded,
+    ...comparable
+  } = item as Itemmable & GameEntityMetadata & {
+    heldHands?: unknown
+    wieldedTwoHanded?: unknown
+  }
+
+  return comparable
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`
+  }
+
+  if (value && typeof value === "object") {
+    const object = value as Record<string, unknown>
+    return `{${Object.keys(object)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(object[key])}`)
+      .join(",")}}`
+  }
+
+  return JSON.stringify(value)
 }
 
 function touchCharacter(
