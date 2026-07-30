@@ -31,10 +31,13 @@ export function getEffectiveMaxHp(
 export function getEffectiveTemporaryHp(
   character: CharacterTemplate,
 ): number {
-  return applyBonuses(
-    character.get("sheet").HP.temporary,
-    getCharacterBonuses(character, "temporaryHp"),
-  )
+  const bonuses = getCharacterBonuses(character, "temporaryHp")
+
+  if (bonuses.length === 0) {
+    return character.get("sheet").HP.temporary
+  }
+
+  return applyBonuses(0, bonuses)
 }
 
 export function setCurrentHp(
