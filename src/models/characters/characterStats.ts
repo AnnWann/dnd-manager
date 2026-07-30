@@ -100,6 +100,8 @@ export function getAbilityBonuses(
   character: CharacterTemplate,
   key: NormalBonusKey,
 ): Bonus[] {
+  if (key === "temporaryHp") return []
+
   return getActiveAbilities(character)
     .flatMap((ability) => ability.bonuses?.[key] ?? [])
     .map((bonus) => resolveBonus(character, bonus))
@@ -373,11 +375,12 @@ export function getEffectivePassivePerception(
 }
 
 export function getCalculatedMobility(character: CharacterTemplate): number {
-  const raceSpeedBonus =
-    character.get("sheet").race.speedBonus ?? 0
-
+  const sheet = character.get("sheet")
+  const racialMobility = sheet.race.mobility
   const baseSpeed =
-    (character.get("sheet").stats.mobility ?? 9) + raceSpeedBonus
+    typeof racialMobility === "number" && Number.isFinite(racialMobility)
+      ? racialMobility
+      : (sheet.stats.mobility ?? 9) + (sheet.race.speedBonus ?? 0)
 
   const unencumberedSpeed = applyBonuses(
     baseSpeed,

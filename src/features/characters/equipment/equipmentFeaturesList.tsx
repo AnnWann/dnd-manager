@@ -3,11 +3,8 @@ import { useMagicContext } from "../../../contexts/magicContext"
 import { useCharacterContext } from "../../../contexts/characterContext"
 import {
   abilityRequiresActivation,
-  activateAbilityBenefits,
-  deactivateAbilityBenefits,
   getAbilityUsageMax,
   isAbilityBenefitsActive,
-  restoreAbilityUse,
 } from "../../../models/abilities/abilityActivation"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
 
@@ -23,7 +20,7 @@ export function EquipmentFeaturesList<T extends Equipment>({
   onUpdate,
 }: Props<T>) {
   const { getSpellByIndex } = useMagicContext()
-  const { activeCharacter, visibleCharacters } = useCharacterContext()
+  const { activeCharacter, visibleCharacters, updateCharacter } = useCharacterContext()
   const character =
     activeCharacter?.get("id") === characterId
       ? activeCharacter
@@ -37,15 +34,16 @@ export function EquipmentFeaturesList<T extends Equipment>({
     abilityId: string,
     action: "use" | "restore" | "deactivate",
   ) {
-    onUpdate((current) => ({
-      ...current,
-      abilities: (current.abilities ?? []).map((ability) => {
-        if (ability.id !== abilityId) return ability
-        if (action === "deactivate") return deactivateAbilityBenefits(ability)
-        if (action === "restore") return restoreAbilityUse(ability)
-        return character ? activateAbilityBenefits(character, ability) : ability
-      }),
-    }))
+    if (!character) return
+    updateCharacter(characterId, (current) => {
+      if (action === "use") {
+        return current.useEquipmentAbility(equipment.id, abilityId)
+      }
+      if (action === "deactivate") {
+        return current.deactivateEquipmentAbility(equipment.id, abilityId)
+      }
+      return current.restoreEquipmentAbility(equipment.id, abilityId)
+    })
   }
 
   function updateSpellCharge(spellIndex: string, delta: number) {
@@ -100,9 +98,7 @@ export function EquipmentFeaturesList<T extends Equipment>({
             : undefined
           const requiresActivation = abilityRequiresActivation(ability)
           const benefitsActive = isAbilityBenefitsActive(ability)
-          const canTrigger =
-            requiresActivation &&
-            ((ability.kind ?? "active") === "active" || !benefitsActive)
+          const canTrigger = requiresActivation && !benefitsActive
           const canRestore =
             usage &&
             usage.reset !== "spellSlot" &&

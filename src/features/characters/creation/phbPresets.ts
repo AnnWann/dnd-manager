@@ -483,6 +483,7 @@ export function racePresetToCharacterRace(preset: RacePreset): CharacterRace {
     attributeBonus: { ...preset.attributeBonus },
     proficiencies: preset.proficiencies.map((entry) => ({ ...entry })),
     size: preset.size,
-    speedBonus: preset.speedBonus,
+    mobility: 9 + preset.speedBonus,
+    speedBonus: undefined,
   }
 }

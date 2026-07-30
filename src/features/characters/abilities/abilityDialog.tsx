@@ -179,12 +179,21 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
               <span className="text-xs font-medium text-textH">Tipo</span>
               <Select
                 value={draft.kind ?? "active"}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const kind = event.target.value as AbilityKind
                   setDraft({
                     ...draft,
-                    kind: event.target.value as AbilityKind,
+                    kind,
+                    effectDuration:
+                      kind === "feature"
+                        ? undefined
+                        : kind === "active"
+                          ? "instant"
+                          : "lasting",
+                    effectDurationText: undefined,
+                    benefitsActive: false,
                   })
-                }
+                }}
               >
                 {ABILITY_KIND_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -215,13 +224,17 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
             </label>
           </div>
 
-          {draft.kind === "active" ? (
-            <label className="grid max-w-sm gap-1">
+          {draft.kind !== "feature" ? (
+            <div className="grid gap-2 md:grid-cols-2">
+            <label className="grid gap-1">
               <span className="text-xs font-medium text-textH">
                 Duração do efeito
               </span>
               <Select
-                value={draft.effectDuration ?? "instant"}
+                value={
+                  draft.effectDuration ??
+                  (draft.kind === "active" ? "instant" : "lasting")
+                }
                 onChange={(event) =>
                   setDraft({
                     ...draft,
@@ -234,9 +247,28 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                 <option value="lasting">Duradoura</option>
               </Select>
               <span className="text-[10px] text-textMuted">
-                Instantânea permanece ativa somente durante a resolução daquele uso.
+                Instantânea executa e termina no mesmo clique. Duradoura permanece como uma condição ativa.
               </span>
             </label>
+
+            {(draft.effectDuration ?? (draft.kind === "active" ? "instant" : "lasting")) === "lasting" ? (
+              <label className="grid gap-1">
+                <span className="text-xs font-medium text-textH">
+                  Duração descrita
+                </span>
+                <Input
+                  value={draft.effectDurationText ?? ""}
+                  placeholder="Ex.: 1 minuto, até o próximo descanso, enquanto concentrar"
+                  onChange={(event) =>
+                    setDraft({ ...draft, effectDurationText: event.target.value })
+                  }
+                />
+                <span className="text-[10px] text-textMuted">
+                  Este texto aparecerá na condição criada enquanto o efeito estiver ativo.
+                </span>
+              </label>
+            ) : null}
+            </div>
           ) : null}
 
           <label className="grid gap-1">
@@ -400,11 +432,11 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
 
           <div className="rounded-xl border border-border bg-bg-subtle p-3 text-xs leading-5 text-text">
             {requiresActivation
-              ? draft.kind === "active"
-                ? draft.effectDuration === "lasting"
-                  ? "Esta habilidade é duradoura. Seus benefícios entram em vigor ao Usar e permanecem até Encerrar efeito."
-                  : "Esta habilidade é instantânea. Seus benefícios entram em vigor ao Usar e permanecem apenas enquanto o uso estiver em resolução; depois selecione Concluir uso."
-                : `${draft.kind === "feature" ? "Esta característica" : "Esta passiva"} possui um gatilho. Seus bônus, proficiências e magias só ficam ativos depois de Acionar.`
+              ? draft.kind === "feature"
+                ? "Esta característica possui um gatilho e precisa ser acionada para conceder seus benefícios. Ela não aparece na seção de ações."
+                : (draft.effectDuration ?? (draft.kind === "active" ? "instant" : "lasting")) === "lasting"
+                  ? `${draft.kind === "active" ? "Usar" : "Acionar"} aplica o efeito e cria uma condição duradoura. Encerrar ou remover essa condição encerra os modificadores.`
+                  : `${draft.kind === "active" ? "Usar" : "Acionar"} executa o efeito e termina automaticamente. PV, PV temporários e outras alterações gravadas na ficha permanecem.`
               : draft.kind === "feature"
                 ? "Esta característica não possui condição e concede seus benefícios permanentemente. Ela não aparece na seção de ações."
                 : "Esta passiva não possui condição e concede seus benefícios permanentemente."}

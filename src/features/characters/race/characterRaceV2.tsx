@@ -7,8 +7,8 @@ import { Select } from "../../../components/ui/Select"
 import { attributeShort } from "../../../lib/attributeShorts"
 import type { Ability } from "../../../models/abilities/Ability"
 import {
-  activateAbilityBenefits,
-  deactivateAbilityBenefits,
+  endAbilityEffect,
+  useAbilityEffect,
   getAbilityUsageMax,
   restoreAbilityUse,
 } from "../../../models/abilities/abilityActivation"
@@ -41,6 +41,7 @@ type Props = {
 }
 
 const RACE_OPTIONS: Array<{ value: Race; label: string }> = [
+  { value: "custom", label: "Personalizada" },
   { value: "aarakocra", label: "Aarakocra" },
   { value: "aasimar", label: "Aasimar" },
   { value: "bugbear", label: "Bugbear" },
@@ -236,14 +237,27 @@ export function CharacterRaceTab({
   ) {
     updateCharacter(character.get("id"), (current) => {
       const currentRace = current.get("sheet").race
+      const ability = (currentRace.naturalAbilities ?? []).find(
+        (entry) => entry.id === abilityId,
+      )
+      if (!ability) return current
+      if (action === "use") {
+        return useAbilityEffect(current, ability, {
+          type: "race",
+          sourceLabel: "Raça",
+        })
+      }
+      if (action === "deactivate") {
+        return endAbilityEffect(current, ability, {
+          type: "race",
+          sourceLabel: "Raça",
+        })
+      }
       return current.withSheet("race", {
         ...currentRace,
-        naturalAbilities: (currentRace.naturalAbilities ?? []).map((ability) => {
-          if (ability.id !== abilityId) return ability
-          if (action === "use") return activateAbilityBenefits(current, ability)
-          if (action === "restore") return restoreAbilityUse(ability)
-          return deactivateAbilityBenefits(ability)
-        }),
+        naturalAbilities: (currentRace.naturalAbilities ?? []).map((entry) =>
+          entry.id === abilityId ? restoreAbilityUse(entry) : entry,
+        ),
       })
     })
   }
@@ -336,6 +350,17 @@ export function CharacterRaceTab({
         </div>
 
         <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {race.race === "custom" ? (
+            <label className="grid min-w-0 gap-1.5">
+              <span className="text-xs font-medium text-textH">Nome da raça</span>
+              <Input
+                value={race.customName ?? ""}
+                placeholder="Ex.: Povo da Lua"
+                onChange={(event) => setRaceField("customName", event.target.value)}
+              />
+            </label>
+          ) : null}
+
           <label className="grid min-w-0 gap-1.5">
             <span className="text-xs font-medium text-textH">Raça</span>
             <Select
@@ -384,17 +409,19 @@ export function CharacterRaceTab({
 
           <label className="grid min-w-0 gap-1.5">
             <span className="text-xs font-medium text-textH">
-              Bônus de deslocamento
+              Mobilidade
             </span>
             <Input
               type="number"
+              min={0}
               step="0.5"
-              value={race.speedBonus ?? 0}
+              value={race.mobility ?? 9 + (race.speedBonus ?? 0)}
               onChange={(event) =>
-                setRaceField(
-                  "speedBonus",
-                  Number(event.target.value) || 0,
-                )
+                updateRace((currentRace) => ({
+                  ...currentRace,
+                  mobility: Math.max(0, Number(event.target.value) || 0),
+                  speedBonus: undefined,
+                }))
               }
             />
           </label>

@@ -14,8 +14,8 @@ import type { Itemmable } from "../items/item"
 import type { Armor } from "../items/equipment/Armor"
 import type { Ability, Usage } from "../abilities/Ability"
 import {
-  activateAbilityBenefits,
-  deactivateAbilityBenefits,
+  endAbilityEffect,
+  useAbilityEffect,
   restoreAbilityUse,
 } from "../abilities/abilityActivation"
 
@@ -784,14 +784,23 @@ export function useEquipmentAbility(
   itemId: string,
   abilityId: string,
 ): CharacterTemplate {
-  return updateEquipmentById(character, itemId, (equipment) => ({
-    ...equipment,
-    abilities: (equipment.abilities ?? []).map((ability) =>
-      ability.id === abilityId
-        ? activateAbilityBenefits(character, ability)
-        : ability,
-    ),
-  }))
+  const ability = getEquipmentAbilities(character).find(
+    (current) =>
+      current.sourceItemId === itemId &&
+      current.originalAbilityId === abilityId,
+  )
+  if (!ability) return character
+
+  const { source, sourceItemId, sourceItemName, originalAbilityId, ...projected } = ability
+  return useAbilityEffect(
+    character,
+    { ...projected, id: originalAbilityId },
+    {
+      type: "equipment",
+      itemId,
+      sourceLabel: `Equipamento: ${sourceItemName}`,
+    },
+  )
 }
 
 export function deactivateEquipmentAbility(
@@ -799,14 +808,23 @@ export function deactivateEquipmentAbility(
   itemId: string,
   abilityId: string,
 ): CharacterTemplate {
-  return updateEquipmentById(character, itemId, (equipment) => ({
-    ...equipment,
-    abilities: (equipment.abilities ?? []).map((ability) =>
-      ability.id === abilityId
-        ? deactivateAbilityBenefits(ability)
-        : ability,
-    ),
-  }))
+  const ability = getEquipmentAbilities(character).find(
+    (current) =>
+      current.sourceItemId === itemId &&
+      current.originalAbilityId === abilityId,
+  )
+  if (!ability) return character
+
+  const { source, sourceItemId, sourceItemName, originalAbilityId, ...projected } = ability
+  return endAbilityEffect(
+    character,
+    { ...projected, id: originalAbilityId },
+    {
+      type: "equipment",
+      itemId,
+      sourceLabel: `Equipamento: ${sourceItemName}`,
+    },
+  )
 }
 
 export function restoreEquipmentAbility(

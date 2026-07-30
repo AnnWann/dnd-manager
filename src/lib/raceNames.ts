@@ -1,6 +1,7 @@
 import type { Race } from "../models/races/Race"
 
 export const RACE_NAMES: Record<Race, string> = {
+  custom: "Personalizada",
   aarakocra: "Aarakocra",
   aasimar: "Aasimar",
   bugbear: "Bugbear",

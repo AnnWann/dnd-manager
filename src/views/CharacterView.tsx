@@ -27,8 +27,6 @@ import { CharacterProficienciesTab } from "../features/characters/proficiencies/
 import { CharacterRaceTab } from "../features/characters/race/characterRaceV2"
 import { CharacterProfileTab } from "../features/characters/profile/characterProfileV2"
 import { CharacterRestControls } from "../features/characters/rest/characterRestControlsV2"
-import { CharacterCreationWizard } from "../features/characters/creation/characterCreationWizardV5"
-import { ensureCharacterBackgroundFromHistory } from "../features/characters/creation/inferCharacterBackground"
 import { CharacterSettingsModal } from "../features/characters/settings/CharacterSettingsModal"
 import {
   CustomSystemsRuntime,
@@ -87,7 +85,6 @@ export function CharacterView() {
     ? characters.find((character) => character.get("id") === characterId)
     : undefined
 
-  const [creationOpen, setCreationOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [swipeDragging, setSwipeDragging] = useState(false)
@@ -281,25 +278,6 @@ export function CharacterView() {
     if (deliberate) setAdjacentTab(deltaX < 0 ? "next" : "previous")
   }
 
-  const creationWizard = (
-    <CharacterCreationWizard
-      open={creationOpen}
-      defaultOwner={defaultOwner}
-      owners={wizardOwners}
-      canAssignOwners={canAssignOwners}
-      createOwner={createOwner}
-      onClose={() => setCreationOpen(false)}
-      onCreate={(character) => {
-        setCreationOpen(false)
-        const prepared = ensureCharacterBackgroundFromHistory(character)
-        const imported = importCharacter(prepared.toJSON())
-        navigate(characterPath(imported.get("id"), "profile"), {
-          replace: true,
-        })
-      }}
-    />
-  )
-
   if (!characterId) {
     if (!activeCharacter) {
       return (
@@ -314,12 +292,11 @@ export function CharacterView() {
             <button
               type="button"
               className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accentText"
-              onClick={() => setCreationOpen(true)}
+              onClick={() => navigate("/character/create")}
             >
               Criar personagem
             </button>
           </div>
-          {creationWizard}
         </>
       )
     }
@@ -329,7 +306,7 @@ export function CharacterView() {
         <CharacterSelector
           characters={characters}
           activeCharacter={activeCharacter}
-          addCharacter={() => setCreationOpen(true)}
+          addCharacter={() => navigate("/character/create")}
           importCharacter={(raw) => {
             const imported = importCharacter(raw)
             navigate(characterPath(imported.get("id"), "sheet"))
@@ -345,7 +322,6 @@ export function CharacterView() {
           disableDelete={characters.length <= 1}
           showOwnerBadge={canAssignOwners}
         />
-        {creationWizard}
       </>
     )
   }
@@ -573,7 +549,6 @@ export function CharacterView() {
         createOwner={createOwner}
       />
 
-      {creationWizard}
     </div>
   )
 }

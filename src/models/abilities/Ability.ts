@@ -11,6 +11,8 @@ export interface Ability {
   category?: AbilityCategory
   actionKind?: AbilityActionKind
   effectDuration?: AbilityEffectDuration
+  /** Texto livre exibido na condição criada por efeitos duradouros. */
+  effectDurationText?: string
   trigger?: Trigger
   grantedSpells?: SpellGrant[]
   grantedProficiencies?: Proficiency[]

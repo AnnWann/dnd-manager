@@ -45,6 +45,11 @@ export type CharacterCondition = {
   duration: CharacterConditionDuration
   createdAt: string
 
+  /** Vínculo criado automaticamente por habilidades duradouras. */
+  sourceAbilityId?: string
+  sourceAbilityLocation?: "character" | "race" | "equipment"
+  sourceItemId?: string
+
   /** Reserved for the future encounter / initiative system. */
   sourceCharacterId?: string
   linkedCombatantId?: string

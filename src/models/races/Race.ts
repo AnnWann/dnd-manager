@@ -1,4 +1,5 @@
 export type Race =
+  | 'custom'
   | 'aarakocra'
   | 'aasimar'
   | 'bugbear'
