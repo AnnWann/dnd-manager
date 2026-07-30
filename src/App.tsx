@@ -175,7 +175,7 @@ function App() {
                   spells={appState.spells ?? []}
                   setAppState={setAppState}
                 >
-                  <div className="flex h-svh max-w-full flex-col overflow-hidden bg-[color:var(--surface-app)] text-text">
+                  <div className="fixed inset-0 flex w-full max-w-full flex-col overflow-hidden bg-[color:var(--surface-app)] text-text">
                     <AppHeader />
 
                     <div className="flex min-h-0 min-w-0 max-w-full flex-1 overflow-hidden">
