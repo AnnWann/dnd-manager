@@ -10,11 +10,11 @@ import type {
 } from "../../../models/abilities/Ability"
 import {
   abilityRequiresActivation,
-  activateAbilityBenefits,
-  deactivateAbilityBenefits,
+  endAbilityEffect,
   getAbilityEffectDuration,
   getAbilityUsageMax,
   isAbilityBenefitsActive,
+  useAbilityEffect,
 } from "../../../models/abilities/abilityActivation"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 
@@ -107,17 +107,13 @@ export function MinimalCharacterActions({
           : current.deactivateEquipmentAbility(source.itemId, source.abilityId)
       }
       if (source.type === "race") {
-        const race = current.get("sheet").race
-        return current.withSheet("race", {
-          ...race,
-          naturalAbilities: (race.naturalAbilities ?? []).map((ability) => {
-            if (ability.id !== source.abilityId) return ability
-            if (action === "use") {
-              return activateAbilityBenefits(current, ability)
-            }
-            return deactivateAbilityBenefits(ability)
-          }),
-        })
+        const ability = (current.get("sheet").race.naturalAbilities ?? []).find(
+          (entry) => entry.id === source.abilityId,
+        )
+        if (!ability) return current
+        return action === "use"
+          ? useAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
+          : endAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
       }
       return action === "use"
         ? current.useAbility(source.abilityId)
@@ -191,10 +187,7 @@ export function MinimalCharacterActions({
               <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
                 {isAbilityBenefitsActive(selected.ability) ? (
                   <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>
-                    {(selected.ability.kind ?? "active") === "active" &&
-                    getAbilityEffectDuration(selected.ability) === "instant"
-                      ? "Concluir uso"
-                      : "Encerrar efeito"}
+                    Encerrar efeito
                   </Button>
                 ) : null}
                 {!isAbilityBenefitsActive(selected.ability) ? (
@@ -340,4 +333,3 @@ function filterLabel(filter: ActionFilter): string {
   if (filter === "passive") return "Passiva"
   return FILTER_OPTIONS.find((option) => option.value === filter)?.label ?? filter
 }
-
