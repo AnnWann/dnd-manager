@@ -81,12 +81,18 @@ export function removeCharacterCondition(
   character: CharacterTemplate,
   conditionId: string,
 ): CharacterTemplate {
-  return withCharacterConditions(
+  const conditions = getCharacterConditions(character)
+  const removed = conditions.find((condition) => condition.id === conditionId)
+  let next = withCharacterConditions(
     character,
-    getCharacterConditions(character).filter(
-      (condition) => condition.id !== conditionId,
-    ),
+    conditions.filter((condition) => condition.id !== conditionId),
   )
+
+  if (removed?.sourceAbilityId && removed.sourceAbilityLocation) {
+    next = deactivateLinkedAbility(next, removed)
+  }
+
+  return next
 }
 
 export function adjustConditionRemaining(
@@ -139,6 +145,9 @@ function normalizeCondition(value: unknown): CharacterCondition {
     bonuses: normalizeBonuses(raw.bonuses),
     duration: normalizeDuration(raw.duration),
     createdAt: readString(raw.createdAt) || new Date().toISOString(),
+    sourceAbilityId: optionalString(raw.sourceAbilityId),
+    sourceAbilityLocation: normalizeAbilityLocation(raw.sourceAbilityLocation),
+    sourceItemId: optionalString(raw.sourceItemId),
     sourceCharacterId: optionalString(raw.sourceCharacterId),
     linkedCombatantId: optionalString(raw.linkedCombatantId),
     initiativeEffectId: optionalString(raw.initiativeEffectId),
@@ -227,4 +236,70 @@ function normalizeBonuses(value: unknown): BonusCollection | undefined {
 function readOptionalNumber(value: unknown): number | undefined {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? Math.max(0, parsed) : undefined
+}
+
+
+function normalizeAbilityLocation(
+  value: unknown,
+): CharacterCondition["sourceAbilityLocation"] {
+  return value === "character" || value === "race" || value === "equipment"
+    ? value
+    : undefined
+}
+
+function deactivateLinkedAbility(
+  character: CharacterTemplate,
+  condition: CharacterCondition,
+): CharacterTemplate {
+  const abilityId = condition.sourceAbilityId
+  if (!abilityId) return character
+
+  let next = character
+  if (condition.sourceAbilityLocation === "character") {
+    const ability = (next.get("abilities") ?? []).find(
+      (current) => current.id === abilityId,
+    )
+    if (ability) {
+      next = next.updateAbility({
+        ...ability,
+        benefitsActive: false,
+        modifiersActive: undefined,
+      })
+    }
+  }
+
+  if (condition.sourceAbilityLocation === "race") {
+    const race = next.get("sheet").race
+    next = next.withSheet("race", {
+      ...race,
+      naturalAbilities: (race.naturalAbilities ?? []).map((ability) =>
+        ability.id === abilityId
+          ? { ...ability, benefitsActive: false, modifiersActive: undefined }
+          : ability,
+      ),
+    })
+  }
+
+  const linkedItemId = condition.sourceItemId
+  if (condition.sourceAbilityLocation === "equipment" && linkedItemId) {
+    const projected = next.getEquipmentAbilities().find(
+      (ability) =>
+        ability.sourceItemId === linkedItemId &&
+        ability.originalAbilityId === abilityId,
+    )
+    if (projected) {
+      const { source, sourceItemId, sourceItemName, originalAbilityId, ...ability } = projected
+      next = next.updateEquipmentAbility(linkedItemId, {
+        ...ability,
+        id: originalAbilityId ?? abilityId,
+        benefitsActive: false,
+        modifiersActive: undefined,
+      })
+    }
+  }
+
+  const effectiveMaxHp = next.getEffectiveMaxHp()
+  return next.get("sheet").HP.current > effectiveMaxHp
+    ? next.setCurrentHp(effectiveMaxHp)
+    : next
 }

@@ -6,8 +6,8 @@ import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import type { Ability } from "../../../models/abilities/Ability"
 import {
-  activateAbilityBenefits,
-  deactivateAbilityBenefits,
+  endAbilityEffect,
+  useAbilityEffect,
   getAbilityUsageMax,
   restoreAbilityUse,
 } from "../../../models/abilities/abilityActivation"
@@ -415,15 +415,29 @@ function updateRaceAbilityState(
   action: "use" | "restore" | "deactivate",
 ): CharacterTemplate {
   const race = character.get("sheet").race
+  const ability = (race.naturalAbilities ?? []).find(
+    (current) => current.id === abilityId,
+  )
+  if (!ability) return character
+
+  if (action === "use") {
+    return useAbilityEffect(character, ability, {
+      type: "race",
+      sourceLabel: "Raça",
+    })
+  }
+  if (action === "deactivate") {
+    return endAbilityEffect(character, ability, {
+      type: "race",
+      sourceLabel: "Raça",
+    })
+  }
 
   return character.withSheet("race", {
     ...race,
-    naturalAbilities: (race.naturalAbilities ?? []).map((ability) => {
-      if (ability.id !== abilityId) return ability
-      if (action === "use") return activateAbilityBenefits(character, ability)
-      if (action === "restore") return restoreAbilityUse(ability)
-      return deactivateAbilityBenefits(ability)
-    }),
+    naturalAbilities: (race.naturalAbilities ?? []).map((current) =>
+      current.id === abilityId ? restoreAbilityUse(current) : current,
+    ),
   })
 }
 

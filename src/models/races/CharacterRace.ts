@@ -20,11 +20,16 @@ export type RaceSupplyConsumption = {
 
 export type CharacterRace = {
   race: Race
+  /** Nome exibido quando a raça é personalizada. */
+  customName?: string
   subrace: string
   naturalAbilities: Ability[]
   attributeBonus: Partial<Record<Attribute, number>>
   proficiencies: Proficiency[]
   size?: CreatureSize
+  /** Mobilidade racial base em metros. */
+  mobility?: number
+  /** Campo legado mantido para personagens antigos. */
   speedBonus?: number
   /** Effective values saved for export and sync. */
   supplyConsumption?: RaceSupplyConsumption

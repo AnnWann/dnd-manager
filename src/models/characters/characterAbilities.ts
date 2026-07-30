@@ -3,8 +3,8 @@
 import type { Ability } from "../abilities/Ability"
 import {
   abilityRequiresActivation,
-  activateAbilityBenefits,
-  deactivateAbilityBenefits,
+  endAbilityEffect,
+  useAbilityEffect,
   restoreAbilityUse,
 } from "../abilities/abilityActivation"
 import { getEquipmentAbilities } from "./characterEquipment"
@@ -59,28 +59,24 @@ export function useAbility(
   character: CharacterTemplate,
   abilityId: string,
 ): CharacterTemplate {
-  return character.with(
-    "abilities",
-    (character.get("abilities") ?? []).map((ability) =>
-      ability.id === abilityId
-        ? activateAbilityBenefits(character, ability)
-        : ability,
-    ),
+  const ability = (character.get("abilities") ?? []).find(
+    (current) => current.id === abilityId,
   )
+  return ability
+    ? useAbilityEffect(character, ability, { type: "character" })
+    : character
 }
 
 export function deactivateAbility(
   character: CharacterTemplate,
   abilityId: string,
 ): CharacterTemplate {
-  return character.with(
-    "abilities",
-    (character.get("abilities") ?? []).map((ability) =>
-      ability.id === abilityId
-        ? deactivateAbilityBenefits(ability)
-        : ability,
-    ),
+  const ability = (character.get("abilities") ?? []).find(
+    (current) => current.id === abilityId,
   )
+  return ability
+    ? endAbilityEffect(character, ability, { type: "character" })
+    : character
 }
 
 export function resetAbility(

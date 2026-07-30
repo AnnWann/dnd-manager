@@ -13,6 +13,7 @@ import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
 import { newCharacterTemplate } from "../../../lib/newCharacterTemplate"
+import type { Ability } from "../../../models/abilities/Ability"
 import type { CharacterBackground } from "../../../models/characters/CharacterBackground"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Itemmable } from "../../../models/items/item"
@@ -29,7 +30,10 @@ import {
   type ClassLevel,
   type ClassName,
 } from "../../../models/sheet/Class"
+import type { Proficiency } from "../../../models/sheet/Proficiency"
 import type { Skill } from "../../../models/sheet/Skills"
+import { AbilityDialog } from "../abilities/abilityDialog"
+import { GrantedProficienciesEditor } from "../proficiencies/grantedProficienciesEditor"
 import {
   averageStartingGold,
   formatStartingGoldFormula,
@@ -105,6 +109,7 @@ const EQUIPMENT_CATEGORY_LABELS: Record<StartingItemCategory, string> = {
 
 type Visibility = "private" | "party" | "master"
 type EquipmentMode = "equipment" | "gold"
+type CustomRaceBonusPattern = "two-one" | "three-ones"
 
 type RaceBonusSlot = {
   id: string
@@ -121,6 +126,7 @@ type Props = {
   onClose: () => void
   onCreate: (character: CharacterTemplate) => void
   createOwner: (ownerName: string) => Player
+  mode?: "modal" | "page"
 }
 
 export function CharacterCreationWizard({
@@ -131,6 +137,7 @@ export function CharacterCreationWizard({
   onClose,
   onCreate,
   createOwner,
+  mode = "modal",
 }: Props) {
   const firstRace = PHB_RACE_PRESETS[0]
   const firstBackground = PHB_BACKGROUND_PRESETS[0]
@@ -149,6 +156,8 @@ export function CharacterCreationWizard({
     getRaceBonusSlots(firstRace.id, firstRace.attributeBonus),
   )
   const [racialSkillChoices, setRacialSkillChoices] = useState<Skill[]>([])
+  const [customRaceBonusPattern, setCustomRaceBonusPattern] =
+    useState<CustomRaceBonusPattern>("two-one")
 
   const [backgroundPresetId, setBackgroundPresetId] = useState(
     firstBackground.id,
@@ -224,6 +233,7 @@ export function CharacterCreationWizard({
     setRace(applyRaceBonusSlots(initialRace, initialSlots))
     setRaceBonusSlots(initialSlots)
     setRacialSkillChoices([])
+    setCustomRaceBonusPattern("two-one")
     setBackgroundPresetId(firstBackground.id)
     setBackground(cloneBackground(firstBackground))
     setBackgroundEquipmentText(getBackgroundEquipmentText(firstBackground))
@@ -294,34 +304,34 @@ export function CharacterCreationWizard({
   }
 
   function selectCustomRace() {
-    const slots: RaceBonusSlot[] = [
-      {
-        id: "custom-plus-two",
-        amount: 2,
-        attribute: "str",
-        locked: false,
-      },
-      {
-        id: "custom-plus-one",
-        amount: 1,
-        attribute: "dex",
-        locked: false,
-      },
-    ]
-
+    const slots = createCustomRaceBonusSlots("two-one")
     setRacePresetId("custom")
+    setCustomRaceBonusPattern("two-one")
     setRaceBonusSlots(slots)
     setRacialSkillChoices([])
-    setRace((current) =>
+    setRace(
       applyRaceBonusSlots(
         {
-          ...current,
-          naturalAbilities: [...(current.naturalAbilities ?? [])],
-          proficiencies: [...(current.proficiencies ?? [])],
+          race: "custom",
+          customName: "Raça personalizada",
+          subrace: "",
+          naturalAbilities: [],
+          attributeBonus: {},
+          proficiencies: [],
+          size: "medium",
+          mobility: 9,
+          speedBonus: undefined,
         },
         slots,
       ),
     )
+  }
+
+  function changeCustomRaceBonusPattern(pattern: CustomRaceBonusPattern) {
+    const slots = createCustomRaceBonusSlots(pattern)
+    setCustomRaceBonusPattern(pattern)
+    setRaceBonusSlots(slots)
+    setRace((current) => applyRaceBonusSlots(current, slots))
   }
 
   function moveRaceBonus(slotId: string, attribute: Attribute) {
@@ -541,14 +551,22 @@ export function CharacterCreationWizard({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex max-w-[100vw] items-center justify-center overflow-x-hidden bg-black/65 p-0 backdrop-blur-sm sm:p-4"
-      onMouseDown={onClose}
+      className={
+        mode === "page"
+          ? "mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-6xl items-start px-2 py-4 sm:px-4"
+          : "fixed inset-0 z-[80] flex max-w-[100vw] items-center justify-center overflow-x-hidden bg-black/65 p-0 backdrop-blur-sm sm:p-4"
+      }
+      onMouseDown={mode === "modal" ? onClose : undefined}
     >
       <div
-        role="dialog"
-        aria-modal="true"
+        role={mode === "modal" ? "dialog" : undefined}
+        aria-modal={mode === "modal" ? true : undefined}
         aria-labelledby="character-creation-title"
-        className="grid h-[100dvh] w-full min-w-0 max-w-[100vw] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-border bg-bg-elevated text-text shadow-theme-lg sm:h-auto sm:max-h-[94dvh] sm:max-w-5xl sm:rounded-xl sm:border"
+        className={
+          mode === "page"
+            ? "grid min-h-[calc(100dvh-10rem)] w-full min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-xl border border-border bg-bg-elevated text-text shadow-theme-lg"
+            : "grid h-[100dvh] w-full min-w-0 max-w-[100vw] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-border bg-bg-elevated text-text shadow-theme-lg sm:h-auto sm:max-h-[94dvh] sm:max-w-5xl sm:rounded-xl sm:border"
+        }
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="min-w-0 overflow-hidden border-b border-border p-3 sm:p-4">
@@ -619,6 +637,8 @@ export function CharacterCreationWizard({
               blockedSkills={background.skillProficiencies}
               onSelectPreset={selectRacePreset}
               onSelectCustom={selectCustomRace}
+              bonusPattern={customRaceBonusPattern}
+              onBonusPatternChange={changeCustomRaceBonusPattern}
               onChange={setRace}
               onToggleSkill={toggleRacialSkill}
             />
@@ -829,6 +849,8 @@ function RaceStep({
   blockedSkills,
   onSelectPreset,
   onSelectCustom,
+  bonusPattern,
+  onBonusPatternChange,
   onChange,
   onToggleSkill,
 }: {
@@ -840,9 +862,28 @@ function RaceStep({
   blockedSkills: Skill[]
   onSelectPreset: (preset: RacePreset) => void
   onSelectCustom: () => void
+  bonusPattern: CustomRaceBonusPattern
+  onBonusPatternChange: (pattern: CustomRaceBonusPattern) => void
   onChange: (race: CharacterRace) => void
   onToggleSkill: (skill: Skill) => void
 }) {
+  const [creatingAbility, setCreatingAbility] = useState(false)
+  const [editingAbility, setEditingAbility] = useState<Ability | null>(null)
+  const custom = selectedPresetId === "custom"
+
+  function saveRacialAbility(ability: Ability) {
+    const current = race.naturalAbilities ?? []
+    const exists = current.some((entry) => entry.id === ability.id)
+    onChange({
+      ...race,
+      naturalAbilities: exists
+        ? current.map((entry) => (entry.id === ability.id ? ability : entry))
+        : [...current, ability],
+    })
+    setCreatingAbility(false)
+    setEditingAbility(null)
+  }
+
   return (
     <div className="grid min-w-0 gap-5">
       <StepSection
@@ -870,6 +911,17 @@ function RaceStep({
 
       <StepSection title="Personalização racial">
         <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {custom ? (
+            <Field label="Nome da raça">
+              <Input
+                value={race.customName ?? ""}
+                placeholder="Ex.: Povo da Lua"
+                onChange={(event) =>
+                  onChange({ ...race, race: "custom", customName: event.target.value })
+                }
+              />
+            </Field>
+          ) : null}
           <Field label="Sub-raça">
             <Input
               value={race.subrace}
@@ -895,19 +947,34 @@ function RaceStep({
               ))}
             </Select>
           </Field>
-          <Field label="Ajuste de deslocamento">
+          <Field label="Mobilidade">
             <Input
               type="number"
+              min={0}
               step="0.5"
-              value={race.speedBonus ?? 0}
+              value={race.mobility ?? 9 + (race.speedBonus ?? 0)}
               onChange={(event) =>
                 onChange({
                   ...race,
-                  speedBonus: Number(event.target.value) || 0,
+                  mobility: Math.max(0, Number(event.target.value) || 0),
+                  speedBonus: undefined,
                 })
               }
             />
           </Field>
+          {custom ? (
+            <Field label="Bônus de atributos">
+              <Select
+                value={bonusPattern}
+                onChange={(event) =>
+                  onBonusPatternChange(event.target.value as CustomRaceBonusPattern)
+                }
+              >
+                <option value="two-one">Livre: +2 e +1</option>
+                <option value="three-ones">Livre: +1, +1 e +1</option>
+              </Select>
+            </Field>
+          ) : null}
         </div>
 
         {fixedSkills.length > 0 ? (
@@ -920,6 +987,63 @@ function RaceStep({
                 <Badge key={skill}>{SKILL_LABELS[skill]}</Badge>
               ))}
             </div>
+          </div>
+        ) : null}
+
+        {custom ? (
+          <div className="mt-5 grid gap-4">
+            <section className="rounded-xl border border-border bg-bg-subtle p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold text-textH">Características raciais</div>
+                  <div className="mt-1 text-[11px] text-textMuted">
+                    Use o mesmo editor de habilidades da ficha para registrar características, passivas e ações raciais.
+                  </div>
+                </div>
+                <Button size="sm" variant="secondary" onClick={() => setCreatingAbility(true)}>
+                  <Plus className="h-4 w-4" /> Característica
+                </Button>
+              </div>
+              {(race.naturalAbilities ?? []).length ? (
+                <div className="mt-3 grid gap-2">
+                  {(race.naturalAbilities ?? []).map((ability) => (
+                    <div key={ability.id} className="flex items-start justify-between gap-3 rounded-lg border border-border bg-bg p-3">
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-textH">{ability.name}</div>
+                        {ability.description ? <div className="mt-1 line-clamp-2 text-[11px] text-textMuted">{ability.description}</div> : null}
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <Button size="sm" variant="ghost" onClick={() => setEditingAbility(ability)}>Editar</Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            onChange({
+                              ...race,
+                              naturalAbilities: (race.naturalAbilities ?? []).filter((entry) => entry.id !== ability.id),
+                            })
+                          }
+                        >
+                          Remover
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 rounded-lg border border-dashed border-border bg-bg px-3 py-4 text-center text-xs text-textMuted">
+                  Nenhuma característica racial cadastrada.
+                </div>
+              )}
+            </section>
+
+            <GrantedProficienciesEditor
+              proficiencies={race.proficiencies ?? []}
+              onChange={(proficiencies: Proficiency[]) => onChange({ ...race, proficiencies })}
+              title="Proficiências raciais"
+              description="Defina perícias, testes de resistência, idiomas, armas, ferramentas e conjuração com mãos ocupadas antes de criar o personagem."
+              emptyMessage="Nenhuma proficiência racial cadastrada."
+            />
           </div>
         ) : null}
 
@@ -964,6 +1088,16 @@ function RaceStep({
           </div>
         ) : null}
       </StepSection>
+
+      <AbilityDialog
+        open={creatingAbility || editingAbility !== null}
+        ability={editingAbility}
+        onClose={() => {
+          setCreatingAbility(false)
+          setEditingAbility(null)
+        }}
+        onSave={saveRacialAbility}
+      />
     </div>
   )
 }
@@ -1526,7 +1660,10 @@ function ReviewStep({
       </ReviewCard>
 
       <ReviewCard title="Raça">
-        <ReviewLine label="Raça" value={race.race} />
+        <ReviewLine
+          label="Raça"
+          value={race.race === "custom" ? race.customName || "Personalizada" : race.race}
+        />
         <ReviewLine label="Sub-raça" value={race.subrace || "—"} />
         <ReviewLine
           label="Perícias raciais"
@@ -1768,6 +1905,21 @@ function ReviewLine({ label, value }: { label: string; value: string }) {
       </span>
     </div>
   )
+}
+
+function createCustomRaceBonusSlots(
+  pattern: CustomRaceBonusPattern,
+): RaceBonusSlot[] {
+  return pattern === "three-ones"
+    ? [
+        { id: "custom-plus-one-a", amount: 1, attribute: "str", locked: false },
+        { id: "custom-plus-one-b", amount: 1, attribute: "dex", locked: false },
+        { id: "custom-plus-one-c", amount: 1, attribute: "con", locked: false },
+      ]
+    : [
+        { id: "custom-plus-two", amount: 2, attribute: "str", locked: false },
+        { id: "custom-plus-one", amount: 1, attribute: "dex", locked: false },
+      ]
 }
 
 function getRaceBonusSlots(

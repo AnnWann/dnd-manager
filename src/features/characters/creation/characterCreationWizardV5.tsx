@@ -24,6 +24,7 @@ type Props = {
     plan: CharacterCreationProgressionPlan,
   ) => void
   createOwner: (ownerName: string) => Player
+  mode?: "modal" | "page"
 }
 
 type BoundaryProps = {
@@ -105,7 +106,7 @@ class CharacterCreationErrorBoundary extends Component<
 
 export function CharacterCreationWizard(props: Props) {
   useEffect(() => {
-    if (!props.open) return
+    if (!props.open || props.mode === "page") return
 
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = "hidden"

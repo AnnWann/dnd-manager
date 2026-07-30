@@ -234,6 +234,7 @@ export class CharacterTemplate {
         skills: props.sheet?.skills ?? {},
         race: {
           race: props.sheet?.race?.race ?? "human",
+          customName: props.sheet?.race?.customName,
           subrace: props.sheet?.race?.subrace ?? "",
           naturalAbilities: props.sheet?.race?.naturalAbilities ?? [],
           attributeBonus: props.sheet?.race?.attributeBonus ?? {},
@@ -241,6 +242,7 @@ export class CharacterTemplate {
             props.sheet?.race?.proficiencies,
           ),
           size: props.sheet?.race?.size ?? "medium",
+          mobility: props.sheet?.race?.mobility,
           speedBonus: props.sheet?.race?.speedBonus ?? 0,
         },
         type: props.sheet?.type ?? "pc",
