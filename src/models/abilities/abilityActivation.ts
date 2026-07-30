@@ -149,10 +149,12 @@ export function useAbilityEffect(
     ability.bonuses?.temporaryHp ?? [],
   )
   if (temporaryHpBonuses.length > 0) {
-    const grantedTemporaryHp = Math.max(0, applyBonuses(0, temporaryHpBonuses))
-    if (grantedTemporaryHp > 0) {
-      next = next.addTemporaryHp(grantedTemporaryHp)
-    }
+    const currentTemporaryHp = next.get("sheet").HP.temporary
+    const nextTemporaryHp = Math.max(
+      0,
+      applyBonuses(currentTemporaryHp, temporaryHpBonuses),
+    )
+    next = next.setTemporaryHp(nextTemporaryHp)
   }
 
   if (duration === "lasting") {
