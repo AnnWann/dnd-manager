@@ -37,6 +37,7 @@ export function normalizeAbilityText(ability: Ability): Ability {
     ...ability,
     name: trimSingleLine(ability.name),
     description: trimOptionalMultiline(ability.description),
+    trigger: trimOptionalSingleLine(ability.trigger),
     grantedSpells: ability.grantedSpells?.map((grant) => ({
       ...grant,
       index: trimSingleLine(grant.index),

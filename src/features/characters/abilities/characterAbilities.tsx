@@ -46,7 +46,7 @@ type AbilitySourceFilter =
   | "feat"
   | "channelDivinity"
 
-type AbilityKindFilter = "all" | "active" | "passive"
+type AbilityKindFilter = "all" | "active" | "passive" | "feature"
 type AbilityListViewMode = "detailed" | "compact"
 
 const ABILITY_LIST_VIEW_STORAGE_KEY = "dnd-manager:ability-list-view"
@@ -286,6 +286,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               <option value="all">Ativas e passivas</option>
               <option value="active">Somente ativas</option>
               <option value="passive">Somente passivas</option>
+              <option value="feature">Somente características</option>
             </Select>
           </div>
         </CardHeader>

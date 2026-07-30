@@ -192,7 +192,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
               <span className="text-xs font-medium text-textH">Ação</span>
               <Select
                 value={draft.actionKind ?? "action"}
-                disabled={draft.kind === "passive"}
+                disabled={draft.kind !== "active"}
                 onChange={(event) =>
                   setDraft({
                     ...draft,
@@ -211,21 +211,27 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
 
           <label className="grid gap-1">
             <span className="text-xs font-medium text-textH">Gatilho</span>
-            <Select
+            <Input
+              list="ability-trigger-suggestions"
               value={draft.trigger ?? "always"}
+              placeholder="Ex.: Quando um aliado cair a 0 PV"
               onChange={(event) =>
                 setDraft({
                   ...draft,
                   trigger: event.target.value as Trigger,
                 })
               }
-            >
+            />
+            <datalist id="ability-trigger-suggestions">
               {ABILITY_TRIGGER_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
-            </Select>
+            </datalist>
+            <span className="text-[10px] text-textMuted">
+              Escolha uma sugestão ou escreva qualquer condição de acionamento.
+            </span>
           </label>
 
           <section className="rounded-xl border border-border bg-bg-subtle p-3">
@@ -363,10 +369,12 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
 
           <div className="rounded-xl border border-border bg-bg-subtle p-3 text-xs leading-5 text-text">
             {requiresActivation
-              ? draft.kind === "passive"
-                ? "Esta passiva possui um gatilho. Seus bônus, proficiências e magias só ficam ativos depois de Acionar."
-                : "Habilidades ativas só aplicam seus bônus, proficiências e magias depois de Usar, mesmo sem contador de usos."
-              : "Esta passiva não possui condição e concede seus benefícios permanentemente."}
+              ? draft.kind === "active"
+                ? "Habilidades ativas só aplicam seus bônus, proficiências e magias depois de Usar, mesmo sem contador de usos."
+                : `${draft.kind === "feature" ? "Esta característica" : "Esta passiva"} possui um gatilho. Seus bônus, proficiências e magias só ficam ativos depois de Acionar.`
+              : draft.kind === "feature"
+                ? "Esta característica não possui condição e concede seus benefícios permanentemente. Ela não aparece na seção de ações."
+                : "Esta passiva não possui condição e concede seus benefícios permanentemente."}
           </div>
 
           <BonusesFields

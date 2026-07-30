@@ -32,7 +32,11 @@ export function CompactAbilityCard({
 }: Props) {
   const [open, setOpen] = useState(false)
   const abilityName = ability.name || "Habilidade sem nome"
-  const kindLabel = ability.kind === "passive" ? "Passiva" : "Ativa"
+  const kindLabel = ability.kind === "passive"
+    ? "Passiva"
+    : ability.kind === "feature"
+      ? "Característica"
+      : "Ativa"
   const compactLabel = sourceLabel ? `${kindLabel} • ${sourceLabel}` : kindLabel
   const usage = ability.usage
   const resolvedMax = usage ? Math.max(0, usageMax ?? usage.max) : null
@@ -92,7 +96,7 @@ export function CompactAbilityCard({
                 disabled={remaining !== null && remaining <= 0}
                 onClick={onUse}
               >
-                {(ability.kind ?? "active") === "passive" ? "Acionar" : "Usar"}
+                {(ability.kind ?? "active") === "active" ? "Usar" : "Acionar"}
               </Button>
             ) : null}
             {requiresActivation && benefitsActive && onDeactivate ? (

@@ -42,11 +42,11 @@ export type AbilityUsageResetKind = 'turn' | 'cooldown' | 'shortRest' | 'longRes
 
 export type AbilityUsageCooldownUnit = 'turns' | 'minutes' | 'hours' | 'days' | 'tenDays'
 
-export type AbilityKind = 'active' | 'passive'
+export type AbilityKind = 'active' | 'passive' | 'feature'
 
 export type AbilityActionKind = 'action' | 'bonusAction' | 'reaction' | 'legendaryAction' | 'legendaryReaction' | 'legendaryResistance' | 'free'
 
-export type Trigger =
+export type AbilityTriggerPreset =
   | 'startTurn'
   | 'endTurn'
   | 'startRound'
@@ -85,3 +85,5 @@ export type Trigger =
   | 'whileGrappled'
   | 'whileSurprised'
   | 'always'
+
+export type Trigger = AbilityTriggerPreset | (string & {})

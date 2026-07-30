@@ -29,11 +29,15 @@ type Props = {
 
 function summaryLabel(ability: Ability) {
   const usage = ability.usage
-  const kindLabel = ability.kind === "passive" ? "Passiva" : "Ativa"
+  const kindLabel = ability.kind === "passive"
+    ? "Passiva"
+    : ability.kind === "feature"
+      ? "Característica"
+      : "Ativa"
 
   if (!usage) {
-    return ability.kind === "passive"
-      ? `${kindLabel} • ${ABILITY_TRIGGER_OPTIONS.find((option) => option.value === (ability.trigger ?? "always"))?.label ?? "Sempre"}`
+    return (ability.kind ?? "active") !== "active"
+      ? `${kindLabel} • ${ABILITY_TRIGGER_OPTIONS.find((option) => option.value === (ability.trigger ?? "always"))?.label ?? ability.trigger ?? "Sempre"}`
       : `${kindLabel} • ${ABILITY_ACTION_OPTIONS.find((option) => option.value === (ability.actionKind ?? "action"))?.label ?? "Ação"}`
   }
 
@@ -210,7 +214,7 @@ export function AbilityCard({
             disabled={remaining !== null && remaining <= 0}
             onClick={onUse}
           >
-            {(ability.kind ?? "active") === "passive" ? "Acionar" : "Usar"}
+            {(ability.kind ?? "active") === "active" ? "Usar" : "Acionar"}
           </Button>
         ) : null}
 
