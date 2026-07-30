@@ -58,6 +58,62 @@ jobs:
       - name: Apply implementation
         run: python .github/apply_ability_activation_and_free_actions.py
 
+      - name: Correct generated TypeScript
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          router_path = Path('src/Router.tsx')
+          router_lines = router_path.read_text().splitlines()
+          create_import = 'import { CharacterCreateView } from "./views/CharacterCreateView"'
+          seen = False
+          deduplicated = []
+          for line in router_lines:
+              if line == create_import:
+                  if seen:
+                      continue
+                  seen = True
+              deduplicated.append(line)
+          router_path.write_text('\n'.join(deduplicated) + '\n')
+
+          wrapper_path = Path('src/features/characters/creation/characterCreationWizardV5.tsx')
+          wrapper = wrapper_path.read_text()
+          if '  mode?: "modal" | "page"\n' not in wrapper:
+              wrapper = wrapper.replace(
+                  '  createOwner: (ownerName: string) => Player\n}',
+                  '  createOwner: (ownerName: string) => Player\n  mode?: "modal" | "page"\n}',
+                  1,
+              )
+          wrapper = wrapper.replace(
+              '    if (!props.open) return\n',
+              '    if (!props.open || props.mode === "page") return\n',
+              1,
+          )
+          wrapper_path.write_text(wrapper)
+
+          storage_path = Path('src/models/characters/characterConditionStorage.ts')
+          storage = storage_path.read_text()
+          storage = storage.replace(
+              '  if (condition.sourceAbilityLocation === "equipment" && condition.sourceItemId) {\n    const projected',
+              '  const linkedItemId = condition.sourceItemId\n  if (condition.sourceAbilityLocation === "equipment" && linkedItemId) {\n    const projected',
+              1,
+          )
+          storage = storage.replace(
+              'ability.sourceItemId === condition.sourceItemId',
+              'ability.sourceItemId === linkedItemId',
+          )
+          storage = storage.replace(
+              'next.updateEquipmentAbility(condition.sourceItemId, {',
+              'next.updateEquipmentAbility(linkedItemId, {',
+          )
+          storage_path.write_text(storage)
+
+          view_path = Path('src/views/CharacterView.tsx')
+          view = view_path.read_text().replace('\n      {creationWizard}\n', '\n', 1)
+          view_path.write_text(view)
+          PY
+
       - name: Remove temporary implementation files
         run: |
           rm -f .github/apply_ability_activation_and_free_actions.py
