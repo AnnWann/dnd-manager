@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom"
 
+import { CharacterCreateView } from "./views/CharacterCreateView"
 import {
   CharacterDetailView,
   CharacterIndexView,
@@ -29,6 +30,7 @@ export function AppRouter() {
       />
       <Route path="/sync" element={<SyncView />} />
       <Route path="/character" element={<CharacterIndexView />} />
+      <Route path="/character/create" element={<CharacterCreateView />} />
       <Route path="/character/:characterId" element={<CharacterDetailView />} />
       <Route path="/character/:characterId/:tab" element={<CharacterDetailView />} />
       <Route path="/party-inventory" element={<PartyInventoryView />} />
