@@ -77,10 +77,16 @@ export function CharacterSheetTab({
       </div>
 
       {viewMode === "minimal" ? (
-        <MinimalCharacterSheet
-          character={character}
-          updateCharacter={updateCharacter}
-        />
+        <>
+          <MinimalCharacterSheet
+            character={character}
+            updateCharacter={updateCharacter}
+          />
+          <CharacterConditions
+            character={character}
+            updateCharacter={updateCharacter}
+          />
+        </>
       ) : (
         <>
           <CharacterIdentity
