@@ -1,4 +1,5 @@
 import { Button } from "../../../components/ui/Button"
+import { useCharacterContext } from "../../../contexts/characterContext"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatSigned } from "../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
@@ -66,6 +67,7 @@ export function EquipmentPocketsSection({
   character,
   updateCharacter,
 }: Props) {
+  const { addGroundItem } = useCharacterContext()
   const pockets = character.get("equipment").pockets
 
   function unequipPocketItem(index: number) {
@@ -81,14 +83,17 @@ export function EquipmentPocketsSection({
   }
 
   function usePocketItem(index: number) {
+    const item = pockets[index]
+    if (!item || !isConsumableItemKind(item)) return
+
     updateCharacter(character.get("id"), (current) => {
       const equipment = current.get("equipment")
-      const item = equipment.pockets[index]
+      const currentItem = equipment.pockets[index]
 
-      if (!item || !isConsumableItemKind(item)) return current
+      if (!currentItem || !isConsumableItemKind(currentItem)) return current
 
-      const nextItem = consumeItemQuantity(item)
-      const pockets = nextItem
+      const nextItem = consumeItemQuantity(currentItem)
+      const nextPockets = nextItem
         ? equipment.pockets.map((pocketItem, pocketIndex) =>
             pocketIndex === index ? nextItem : pocketItem,
           )
@@ -96,8 +101,16 @@ export function EquipmentPocketsSection({
 
       return current.with("equipment", {
         ...equipment,
-        pockets,
+        pockets: nextPockets,
       })
+    })
+
+    addGroundItem({
+      ...item,
+      id: crypto.randomUUID(),
+      quantity: 1,
+      heldHands: undefined,
+      insideBagOfHolding: false,
     })
   }
 
