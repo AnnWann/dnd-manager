@@ -12,6 +12,7 @@ import {
   IconBackpack,
   IconCharacter,
   IconCompendium,
+  IconGround,
   IconInitiative,
   IconMagic,
   IconNotes,
@@ -95,8 +96,8 @@ function App() {
       onClick: () => navigate("/party-inventory"),
     },
     {
-      label: "Inventário do chão",
-      icon: <IconBackpack />,
+      label: "Chão",
+      icon: <IconGround />,
       active: location.pathname === "/ground-inventory",
       onClick: () => navigate("/ground-inventory"),
     },
