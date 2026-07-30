@@ -85,12 +85,14 @@ export function activateAbilityBenefits(
   if (!canActivateAbility(character, ability)) return ability
 
   const duration = getAbilityEffectDuration(ability)
+  const persists = ability.effectPersistence === "permanent"
   const usage = ability.usage
 
   return {
     ...ability,
     effectDuration: duration,
-    benefitsActive: duration === "lasting",
+    effectPersistence: ability.effectPersistence ?? "untilEnd",
+    benefitsActive: duration === "lasting" || persists,
     modifiersActive: undefined,
     usage:
       usage && usage.reset !== "spellSlot"
@@ -107,6 +109,8 @@ export function activateAbilityBenefits(
 
 export function deactivateAbilityBenefits(ability: Ability): Ability {
   if (!abilityRequiresActivation(ability)) return ability
+  if (ability.effectPersistence === "permanent") return ability
+
   return {
     ...ability,
     benefitsActive: false,
@@ -124,6 +128,7 @@ export function useAbilityEffect(
   if (!canActivateAbility(character, ability)) return character
 
   const duration = getAbilityEffectDuration(ability)
+  const persists = ability.effectPersistence === "permanent"
   const previousEffectiveMaxHp = character.getEffectiveMaxHp()
   const previousCurrentHp = character.get("sheet").HP.current
   const nextAbility = activateAbilityBenefits(character, ability)
@@ -131,7 +136,7 @@ export function useAbilityEffect(
 
   const maxHpBonuses = resolveBonuses(character, ability.bonuses?.maxHp ?? [])
   if (maxHpBonuses.length > 0) {
-    if (duration === "instant") {
+    if (duration === "instant" && !persists) {
       const currentBaseMax = next.get("sheet").HP.max
       const nextBaseMax = Math.max(1, applyBonuses(currentBaseMax, maxHpBonuses))
       const gained = Math.max(0, nextBaseMax - currentBaseMax)
@@ -182,9 +187,11 @@ export function endAbilityEffect(
     getCharacterConditions(next).filter((condition) => condition.id !== conditionId),
   )
 
-  const effectiveMaxHp = next.getEffectiveMaxHp()
-  if (next.get("sheet").HP.current > effectiveMaxHp) {
-    next = next.setCurrentHp(effectiveMaxHp)
+  if (ability.effectPersistence !== "permanent") {
+    const effectiveMaxHp = next.getEffectiveMaxHp()
+    if (next.get("sheet").HP.current > effectiveMaxHp) {
+      next = next.setCurrentHp(effectiveMaxHp)
+    }
   }
 
   return next
@@ -204,12 +211,14 @@ export function restoreAbilityUse(ability: Ability): Ability {
 
 export function normalizeAbilityActivation(ability: Ability): Ability {
   const duration = getAbilityEffectDuration(ability)
+  const persistence = ability.effectPersistence ?? "untilEnd"
   const normalized = {
     ...ability,
     effectDuration:
       (ability.kind ?? "active") === "feature" ? ability.effectDuration : duration,
     effectDurationText:
       duration === "lasting" ? ability.effectDurationText?.trim() || undefined : undefined,
+    effectPersistence: persistence,
     modifiersActive: undefined,
   }
 
@@ -223,7 +232,8 @@ export function normalizeAbilityActivation(ability: Ability): Ability {
   return {
     ...normalized,
     benefitsActive:
-      duration === "lasting" && normalized.benefitsActive === true,
+      (duration === "lasting" || persistence === "permanent") &&
+      normalized.benefitsActive === true,
   }
 }
 
@@ -267,11 +277,15 @@ function createAbilityCondition(
   ability: Ability,
   source: AbilityEffectSource,
 ): CharacterCondition {
+  const persists = ability.effectPersistence === "permanent"
+
   return {
     id: getAbilityConditionId(ability.id, source),
     name: ability.name || "Efeito de habilidade",
     description: ability.description?.trim() ?? "",
-    behavior: "Os benefícios desta habilidade permanecem ativos enquanto esta condição existir.",
+    behavior: persists
+      ? "A condição controla a duração narrativa, mas os benefícios permanecem após o seu término."
+      : "Os benefícios desta habilidade permanecem ativos enquanto esta condição existir.",
     source: source.sourceLabel?.trim() || ability.name || "Habilidade",
     notes: "",
     tags: ["Habilidade", "Efeito duradouro"],
