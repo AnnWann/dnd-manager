@@ -36,7 +36,7 @@ export interface Usage {
   cooldownRemaining?: number
 }
 
-export type AbilityCategory = 'general' | 'invocation' | 'feat'
+export type AbilityCategory = 'general' | 'invocation' | 'feat' | 'channelDivinity'
 
 export type AbilityUsageResetKind = 'turn' | 'cooldown' | 'shortRest' | 'longRest' | 'limited' | 'spellSlot'
 
