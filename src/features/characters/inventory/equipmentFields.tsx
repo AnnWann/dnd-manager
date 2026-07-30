@@ -28,9 +28,7 @@ import {
 } from "../magic/grantedSpellsEditor"
 import { EquipmentBonusesFields } from "./equipmentBonusFields"
 
-const CONFIGURABLE_WEAPON_PROPERTIES = Object.values(WEAPON_PROPERTIES).filter(
-  (property) => property.id !== "two-handed" && property.id !== "versatile",
-)
+const CONFIGURABLE_WEAPON_PROPERTIES = Object.values(WEAPON_PROPERTIES)
 
 export function EquipmentFields({
   item,
@@ -158,59 +156,46 @@ export function WeaponFields({
     })
   }
 
-  function setTwoHanded(enabled: boolean) {
+  function toggleProperty(propertyId: WeaponPropertyId, enabled: boolean) {
     onUpdate((current) => {
       const currentWeapon = current as Partial<Weapon>
-      const properties = (currentWeapon.properties ?? []).filter(
-        (property) => property.id !== "two-handed" && property.id !== "versatile",
+      let properties = (currentWeapon.properties ?? []).filter(
+        (property) => property.id !== propertyId,
       )
-
-      if (enabled) properties.push(WEAPON_PROPERTIES["two-handed"])
-
-      return {
-        ...current,
-        properties,
-        twoHanded: enabled,
-        wieldedTwoHanded: enabled,
-        versatileDamage: undefined,
-      }
-    })
-  }
-
-  function setVersatile(enabled: boolean) {
-    onUpdate((current) => {
-      const currentWeapon = current as Partial<Weapon>
-      const properties = (currentWeapon.properties ?? []).filter(
-        (property) => property.id !== "two-handed" && property.id !== "versatile",
-      )
-
-      if (enabled) properties.push(WEAPON_PROPERTIES.versatile)
-
       const baseDamage = currentWeapon.damage ?? {
         quantity: 1,
         sides: "d6" as DieSides,
       }
 
-      return {
-        ...current,
-        properties,
-        twoHanded: false,
-        wieldedTwoHanded: enabled
-          ? (currentWeapon.wieldedTwoHanded ?? false)
-          : false,
-        versatileDamage: enabled
-          ? (currentWeapon.versatileDamage ?? { ...baseDamage })
-          : undefined,
-      }
-    })
-  }
+      if (propertyId === "two-handed") {
+        properties = properties.filter((property) => property.id !== "versatile")
+        if (enabled) properties.push(WEAPON_PROPERTIES["two-handed"])
 
-  function toggleProperty(propertyId: WeaponPropertyId, enabled: boolean) {
-    onUpdate((current) => {
-      const currentWeapon = current as Partial<Weapon>
-      const properties = (currentWeapon.properties ?? []).filter(
-        (property) => property.id !== propertyId,
-      )
+        return {
+          ...current,
+          properties,
+          twoHanded: undefined,
+          wieldedTwoHanded: enabled,
+          versatileDamage: undefined,
+        }
+      }
+
+      if (propertyId === "versatile") {
+        properties = properties.filter((property) => property.id !== "two-handed")
+        if (enabled) properties.push(WEAPON_PROPERTIES.versatile)
+
+        return {
+          ...current,
+          properties,
+          twoHanded: undefined,
+          wieldedTwoHanded: enabled
+            ? (currentWeapon.wieldedTwoHanded ?? false)
+            : false,
+          versatileDamage: enabled
+            ? (currentWeapon.versatileDamage ?? { ...baseDamage })
+            : undefined,
+        }
+      }
 
       if (enabled) properties.push(WEAPON_PROPERTIES[propertyId])
 
@@ -274,24 +259,6 @@ export function WeaponFields({
           }
         />
       </div>
-
-      <label className="flex items-center gap-2 self-end text-xs text-text">
-        <input
-          type="checkbox"
-          checked={weapon.twoHanded ?? false}
-          onChange={(event) => setTwoHanded(event.target.checked)}
-        />
-        Exige duas mãos
-      </label>
-
-      <label className="flex items-center gap-2 self-end text-xs text-text">
-        <input
-          type="checkbox"
-          checked={versatile}
-          onChange={(event) => setVersatile(event.target.checked)}
-        />
-        Versátil
-      </label>
 
       <label className="flex items-center gap-2 self-end text-xs text-text">
         <input
