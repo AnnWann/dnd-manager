@@ -1,4 +1,5 @@
 import type { Ability, AbilityUsageResetKind, Usage } from "../abilities/Ability"
+import { getAbilityEffectDuration } from "../abilities/abilityActivation"
 import type { DieSides } from "../dice/Die"
 import type { CharacterEquipment } from "../items/equipment/Equipment"
 import type { Equipment } from "../items/equipment/EquipmentSlot"
@@ -218,13 +219,21 @@ function resetAbilities(
   recoveryFraction: number,
 ): Ability[] {
   return abilities.map((ability) => {
-    if (!ability.usage || !shouldReset(ability.usage.reset, restKind)) {
-      return ability
-    }
+    const clearInstantEffect =
+      getAbilityEffectDuration(ability) === "instant" &&
+      ability.benefitsActive === true
+    const shouldRestoreUsage =
+      ability.usage && shouldReset(ability.usage.reset, restKind)
+
+    if (!clearInstantEffect && !shouldRestoreUsage) return ability
 
     return {
       ...ability,
-      usage: restoreUsage(ability.usage, recoveryFraction),
+      benefitsActive: clearInstantEffect ? false : ability.benefitsActive,
+      modifiersActive: clearInstantEffect ? undefined : ability.modifiersActive,
+      usage: shouldRestoreUsage && ability.usage
+        ? restoreUsage(ability.usage, recoveryFraction)
+        : ability.usage,
     }
   })
 }

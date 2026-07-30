@@ -5,6 +5,7 @@ import { Button } from "../../../components/ui/Button"
 import type { Ability } from "../../../models/abilities/Ability"
 import {
   abilityRequiresActivation,
+  getAbilityEffectDuration,
   isAbilityBenefitsActive,
 } from "../../../models/abilities/abilityActivation"
 import { AbilityCard } from "./abilityCard"
@@ -45,10 +46,13 @@ export function CompactAbilityCard({
     : null
   const requiresActivation = abilityRequiresActivation(ability)
   const benefitsActive = isAbilityBenefitsActive(ability)
+  const isInstant =
+    (ability.kind ?? "active") === "active" &&
+    getAbilityEffectDuration(ability) === "instant"
   const canUse =
     requiresActivation &&
     Boolean(onUse) &&
-    ((ability.kind ?? "active") === "active" || !benefitsActive)
+    !benefitsActive
   const canRestore = Boolean(
     usage &&
       usage.reset !== "limited" &&
@@ -101,7 +105,7 @@ export function CompactAbilityCard({
             ) : null}
             {requiresActivation && benefitsActive && onDeactivate ? (
               <Button className="min-w-0 flex-1 sm:flex-none" size="sm" variant="ghost" onClick={onDeactivate}>
-                Encerrar
+                {isInstant ? "Concluir" : "Encerrar"}
               </Button>
             ) : null}
             {canRestore ? (

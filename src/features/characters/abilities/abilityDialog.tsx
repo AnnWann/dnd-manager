@@ -11,6 +11,7 @@ import type {
   Ability,
   AbilityActionKind,
   AbilityCategory,
+  AbilityEffectDuration,
   AbilityKind,
   Trigger,
   AbilityUsageCooldownUnit,
@@ -49,6 +50,7 @@ function createEmptyAbility(): Ability {
     kind: "active",
     category: "general",
     actionKind: "action",
+    effectDuration: "instant",
     trigger: "always",
     grantedSpells: [],
     grantedProficiencies: [],
@@ -213,6 +215,30 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
             </label>
           </div>
 
+          {draft.kind === "active" ? (
+            <label className="grid max-w-sm gap-1">
+              <span className="text-xs font-medium text-textH">
+                Duração do efeito
+              </span>
+              <Select
+                value={draft.effectDuration ?? "instant"}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    effectDuration: event.target.value as AbilityEffectDuration,
+                    benefitsActive: false,
+                  })
+                }
+              >
+                <option value="instant">Instantânea</option>
+                <option value="lasting">Duradoura</option>
+              </Select>
+              <span className="text-[10px] text-textMuted">
+                Instantânea permanece ativa somente durante a resolução daquele uso.
+              </span>
+            </label>
+          ) : null}
+
           <label className="grid gap-1">
             <span className="text-xs font-medium text-textH">Gatilho</span>
             <Input
@@ -375,7 +401,9 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
           <div className="rounded-xl border border-border bg-bg-subtle p-3 text-xs leading-5 text-text">
             {requiresActivation
               ? draft.kind === "active"
-                ? "Habilidades ativas só aplicam seus bônus, proficiências e magias depois de Usar, mesmo sem contador de usos."
+                ? draft.effectDuration === "lasting"
+                  ? "Esta habilidade é duradoura. Seus benefícios entram em vigor ao Usar e permanecem até Encerrar efeito."
+                  : "Esta habilidade é instantânea. Seus benefícios entram em vigor ao Usar e permanecem apenas enquanto o uso estiver em resolução; depois selecione Concluir uso."
                 : `${draft.kind === "feature" ? "Esta característica" : "Esta passiva"} possui um gatilho. Seus bônus, proficiências e magias só ficam ativos depois de Acionar.`
               : draft.kind === "feature"
                 ? "Esta característica não possui condição e concede seus benefícios permanentemente. Ela não aparece na seção de ações."

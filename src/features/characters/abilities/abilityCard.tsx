@@ -6,6 +6,7 @@ import { cn } from "../../../lib/cn"
 import type { Ability } from "../../../models/abilities/Ability"
 import {
   abilityRequiresActivation,
+  getAbilityEffectDuration,
   isAbilityBenefitsActive,
 } from "../../../models/abilities/abilityActivation"
 import { flattenBonuses } from "../inventory/equipmentBonusFields"
@@ -79,10 +80,13 @@ export function AbilityCard({
   const bonusEntries = flattenBonuses(ability.bonuses ?? {})
   const requiresActivation = abilityRequiresActivation(ability)
   const benefitsActive = isAbilityBenefitsActive(ability)
+  const isInstant =
+    (ability.kind ?? "active") === "active" &&
+    getAbilityEffectDuration(ability) === "instant"
   const canTrigger =
     requiresActivation &&
     Boolean(onUse) &&
-    ((ability.kind ?? "active") === "active" || !benefitsActive)
+    !benefitsActive
 
   return (
     <div
@@ -114,9 +118,13 @@ export function AbilityCard({
           >
             {benefitsActive
               ? requiresActivation
-                ? "Benefícios ativos"
+                ? isInstant
+                  ? "Uso instantâneo em resolução"
+                  : "Benefícios ativos"
                 : "Sempre ativa"
-              : "Aguardando acionamento"}
+              : (ability.kind ?? "active") === "active"
+                ? "Aguardando uso"
+                : "Aguardando acionamento"}
           </span>
 
           {sourceLabel ? (
@@ -220,7 +228,7 @@ export function AbilityCard({
 
         {requiresActivation && benefitsActive && onDeactivate ? (
           <Button size="sm" variant="ghost" onClick={onDeactivate}>
-            Encerrar efeito
+            {isInstant ? "Concluir uso" : "Encerrar efeito"}
           </Button>
         ) : null}
 

@@ -10,6 +10,7 @@ export interface Ability {
   kind?: AbilityKind
   category?: AbilityCategory
   actionKind?: AbilityActionKind
+  effectDuration?: AbilityEffectDuration
   trigger?: Trigger
   grantedSpells?: SpellGrant[]
   grantedProficiencies?: Proficiency[]
@@ -45,6 +46,8 @@ export type AbilityUsageCooldownUnit = 'turns' | 'minutes' | 'hours' | 'days' | 
 export type AbilityKind = 'active' | 'passive' | 'feature'
 
 export type AbilityActionKind = 'action' | 'bonusAction' | 'reaction' | 'legendaryAction' | 'legendaryReaction' | 'legendaryResistance' | 'free'
+
+export type AbilityEffectDuration = 'instant' | 'lasting'
 
 export type AbilityTriggerPreset =
   | 'startTurn'
