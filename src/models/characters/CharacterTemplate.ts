@@ -196,12 +196,14 @@ export class CharacterTemplate {
       name: props.name ?? "Personagem",
       profile: {
         traits: props.profile?.traits ?? "",
+        alignment: props.profile?.alignment,
         history: props.profile?.history ?? "",
         physicalAppearance: props.profile?.physicalAppearance ?? "",
         imageUrl: props.profile?.imageUrl,
         relationships: Array.isArray(props.profile?.relationships)
           ? props.profile.relationships
           : [],
+        background: props.profile?.background,
       },
       sheet: {
         HP: props.sheet?.HP ?? {

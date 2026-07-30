@@ -165,6 +165,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                 <option value="general">Habilidade</option>
                 <option value="invocation">Evocação</option>
                 <option value="feat">Talento</option>
+                <option value="channelDivinity">Canalizar Divindade</option>
               </Select>
             </label>
 

@@ -7,8 +7,21 @@ export type CharacterRelationship = {
   description?: string
 }
 
+export type CharacterAlignment =
+  | "lawful-good"
+  | "neutral-good"
+  | "chaotic-good"
+  | "lawful-neutral"
+  | "true-neutral"
+  | "chaotic-neutral"
+  | "lawful-evil"
+  | "neutral-evil"
+  | "chaotic-evil"
+  | "unaligned"
+
 export type CharacterProfile = {
   traits: string
+  alignment?: CharacterAlignment
   history: string
   physicalAppearance: string
   imageUrl?: string

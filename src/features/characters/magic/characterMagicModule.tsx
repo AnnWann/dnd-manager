@@ -15,6 +15,7 @@ import type {
   CharacterClassInterface,
   ClassName,
 } from "../../../models/sheet/Class"
+import { ChannelDivinityModule } from "./channelDivinityModule"
 import { KnownSpellsList } from "./knownSpellsList"
 import { MetamagicModule } from "./metamagicModule"
 import { SpellSlotsEditor } from "./slots"
@@ -119,6 +120,11 @@ export function CharacterMagicTab({
             </div>
           </div>
         </CardHeader>
+
+        <ChannelDivinityModule
+          character={character}
+          updateCharacter={updateCharacter}
+        />
 
         {hasSorcererResources ? (
           <MetamagicModule

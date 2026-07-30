@@ -44,6 +44,7 @@ type AbilitySourceFilter =
   | "equipment"
   | "invocation"
   | "feat"
+  | "channelDivinity"
 
 type AbilityKindFilter = "all" | "active" | "passive"
 type AbilityListViewMode = "detailed" | "compact"
@@ -107,6 +108,8 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               return ability.category === "invocation"
             case "feat":
               return ability.category === "feat"
+            case "channelDivinity":
+              return ability.category === "channelDivinity"
             default:
               return true
           }
@@ -225,7 +228,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               </div>
               <div className="mt-1 text-xs text-text">
                 Filtre habilidades próprias, raciais, de armas, equipamentos,
-                evocações e talentos.
+                evocações, talentos e Canalizar Divindade.
               </div>
             </div>
 
@@ -271,6 +274,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               <option value="equipment">Todos os equipamentos</option>
               <option value="invocation">Evocações</option>
               <option value="feat">Talentos</option>
+              <option value="channelDivinity">Canalizar Divindade</option>
             </Select>
 
             <Select
@@ -374,6 +378,7 @@ function getAbilitySourceLabel(
 function getCategoryLabel(ability: Ability): string | undefined {
   if (ability.category === "invocation") return "Evocação"
   if (ability.category === "feat") return "Talento"
+  if (ability.category === "channelDivinity") return "Canalizar Divindade"
   return undefined
 }
 

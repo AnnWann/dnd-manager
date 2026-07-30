@@ -2,9 +2,13 @@ import { ImagePlus, Trash2, UserRound } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
+import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import type { CharacterRelationship } from "../../../models/characters/characterProfile"
+import type {
+  CharacterAlignment,
+  CharacterRelationship,
+} from "../../../models/characters/characterProfile"
 
 
 type Props = {
@@ -17,6 +21,22 @@ type Props = {
 
 const MAX_IMAGE_SIZE_MB = 1.5
 const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
+
+const ALIGNMENT_OPTIONS: Array<{
+  value: CharacterAlignment
+  label: string
+}> = [
+  { value: "lawful-good", label: "Leal e Bom" },
+  { value: "neutral-good", label: "Neutro e Bom" },
+  { value: "chaotic-good", label: "Caótico e Bom" },
+  { value: "lawful-neutral", label: "Leal e Neutro" },
+  { value: "true-neutral", label: "Neutro" },
+  { value: "chaotic-neutral", label: "Caótico e Neutro" },
+  { value: "lawful-evil", label: "Leal e Mau" },
+  { value: "neutral-evil", label: "Neutro e Mau" },
+  { value: "chaotic-evil", label: "Caótico e Mau" },
+  { value: "unaligned", label: "Sem alinhamento" },
+]
 
 export function CharacterProfileTab({
   character,
@@ -160,6 +180,30 @@ export function CharacterProfileTab({
                 Aparência, personalidade, história e vínculos narrativos.
               </p>
             </div>
+
+            <label className="grid max-w-sm gap-1.5">
+              <span className="text-xs font-medium text-textH">
+                Alinhamento
+              </span>
+              <Select
+                value={profile.alignment ?? ""}
+                onChange={(event) =>
+                  updateProfile(
+                    "alignment",
+                    event.target.value
+                      ? (event.target.value as CharacterAlignment)
+                      : undefined,
+                  )
+                }
+              >
+                <option value="">Não definido</option>
+                {ALIGNMENT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </label>
 
             <label className="grid gap-1.5">
               <span className="text-xs font-medium text-textH">
