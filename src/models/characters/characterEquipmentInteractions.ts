@@ -136,23 +136,34 @@ export function pocketInventoryItemWithRules(
   const item = inventory[itemIndex]
 
   if (!item || !canItemGoInPocket(item)) return character
-  if (character.get("equipment").pockets.length >= 8) return character
+
+  const equipment = character.get("equipment")
+  const freePocketCount = Math.max(0, 8 - equipment.pockets.length)
+  if (freePocketCount <= 0) return character
+
+  const availableQuantity = Math.max(1, Math.trunc(item.quantity ?? 1))
+  const movedQuantity = Math.min(availableQuantity, freePocketCount)
+  const pocketUnits = Array.from({ length: movedQuantity }, () => ({
+    ...item,
+    id: crypto.randomUUID(),
+    quantity: 1,
+    pocketable: true,
+    insideBagOfHolding: false,
+  }))
+  const remainingQuantity = availableQuantity - movedQuantity
+  const nextInventory = [
+    ...inventory.slice(0, itemIndex),
+    ...(remainingQuantity > 0
+      ? [{ ...item, quantity: remainingQuantity }]
+      : []),
+    ...inventory.slice(itemIndex + 1),
+  ]
 
   return character
-    .with("inventory", [
-      ...inventory.slice(0, itemIndex),
-      ...inventory.slice(itemIndex + 1),
-    ])
+    .with("inventory", nextInventory)
     .with("equipment", {
-      ...character.get("equipment"),
-      pockets: [
-        ...character.get("equipment").pockets,
-        {
-          ...item,
-          pocketable: true,
-          insideBagOfHolding: false,
-        },
-      ],
+      ...equipment,
+      pockets: [...equipment.pockets, ...pocketUnits],
     })
 }
 
@@ -175,7 +186,7 @@ export function wieldPocketWeaponWithRules(
     pockets: equipment.pockets.filter(
       (_, currentIndex) => currentIndex !== index,
     ),
-    weapons: [...equipment.weapons, weapon],
+    weapons: [...equipment.weapons, { ...weapon, quantity: 1 }],
   })
 }
 
@@ -184,37 +195,72 @@ function equipItemInHand(
   item: Itemmable,
   hands: 1 | 2 = 1,
 ): CharacterTemplate {
-  const equipment = character.get("equipment")
-  const inventoryWithoutItem = character
-    .get("inventory")
-    .filter((entry) => entry.id !== item.id)
-
   if (getFreeHands(character) < hands) return character
 
+  const equipment = character.get("equipment")
+  const inventory = character.get("inventory")
+  const itemIndex = inventory.findIndex((entry) => entry.id === item.id)
+  if (itemIndex < 0) return character
+
+  const availableQuantity = Math.max(1, Math.trunc(item.quantity ?? 1))
+  const inventoryBefore = inventory.slice(0, itemIndex)
+  const inventoryAfter = inventory.slice(itemIndex + 1)
+
   if (item.kind === "equipment" && item.equipSlot === "weapon") {
-    const weapon = toWeapon(item)
+    const weapon = toWeapon({ ...item, quantity: 1 })
     const nextWeapon: Weapon = {
       ...weapon,
+      quantity: 1,
       heldHands: undefined,
       wieldedTwoHanded: hands === 2,
     }
+    const remainingQuantity = availableQuantity - 1
+    const freePocketCount = Math.max(0, 8 - equipment.pockets.length)
+    const pocketedQuantity = Math.min(remainingQuantity, freePocketCount)
+    const pocketUnits = Array.from({ length: pocketedQuantity }, () => ({
+      ...item,
+      id: crypto.randomUUID(),
+      quantity: 1,
+      pocketable: true,
+      insideBagOfHolding: false,
+    }))
+    const leftoverQuantity = remainingQuantity - pocketedQuantity
+    const nextInventory = [
+      ...inventoryBefore,
+      ...(leftoverQuantity > 0
+        ? [{ ...item, quantity: leftoverQuantity }]
+        : []),
+      ...inventoryAfter,
+    ]
 
     return character
-      .with("inventory", inventoryWithoutItem)
+      .with("inventory", nextInventory)
       .with("equipment", {
         ...equipment,
+        pockets: [...equipment.pockets, ...pocketUnits],
         weapons: [...equipment.weapons, nextWeapon],
       })
   }
 
+  const remainingQuantity = availableQuantity - 1
+  const nextInventory = [
+    ...inventoryBefore,
+    ...(remainingQuantity > 0
+      ? [{ ...item, quantity: remainingQuantity }]
+      : []),
+    ...inventoryAfter,
+  ]
+
   return character
-    .with("inventory", inventoryWithoutItem)
+    .with("inventory", nextInventory)
     .with("equipment", {
       ...equipment,
       heldItems: [
         ...(equipment.heldItems ?? []),
         {
           ...item,
+          id: crypto.randomUUID(),
+          quantity: 1,
           heldHands: hands,
           insideBagOfHolding: false,
         },
@@ -229,8 +275,7 @@ function getWeaponRequiredHands(weapon: Weapon): number {
 function toWeapon(item: Itemmable): Weapon {
   const weapon = item as Partial<Weapon>
   const properties = [...(weapon.properties ?? [])]
-  const versatile =
-    hasWeaponProperty(weapon, "versatile") || Boolean(weapon.versatileDamage)
+  const versatile = isVersatileWeapon(weapon)
 
   if (versatile && !properties.some((property) => property.id === "versatile")) {
     properties.push(WEAPON_PROPERTIES.versatile)
@@ -246,13 +291,9 @@ function toWeapon(item: Itemmable): Weapon {
     kind: "equipment",
     equippable: true,
     equipSlot: "weapon",
-    properties: properties.filter((property) =>
-      versatile ? property.id !== "two-handed" : property.id !== "versatile",
-    ),
-    twoHanded: versatile ? false : (weapon.twoHanded ?? false),
-    wieldedTwoHanded: versatile
-      ? (weapon.wieldedTwoHanded ?? false)
-      : (weapon.wieldedTwoHanded ?? weapon.twoHanded ?? false),
+    properties,
+    twoHanded: undefined,
+    wieldedTwoHanded: weapon.wieldedTwoHanded ?? false,
     damage,
     versatileDamage: versatile
       ? (weapon.versatileDamage ?? { ...damage })
