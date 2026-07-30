@@ -82,6 +82,10 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
     ? validateCharacterSheetFormula(maximumFormula)
     : undefined
   const requiresActivation = abilityRequiresActivation(draft)
+  const triggerInputValue =
+    ABILITY_TRIGGER_OPTIONS.find(
+      (option) => option.value === (draft.trigger ?? "always"),
+    )?.label ?? draft.trigger ?? ""
 
   function updateUsageMaximum(rawValue: string) {
     if (!draft.usage) return
@@ -213,20 +217,21 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
             <span className="text-xs font-medium text-textH">Gatilho</span>
             <Input
               list="ability-trigger-suggestions"
-              value={draft.trigger ?? "always"}
+              value={triggerInputValue}
               placeholder="Ex.: Quando um aliado cair a 0 PV"
-              onChange={(event) =>
+              onChange={(event) => {
+                const preset = ABILITY_TRIGGER_OPTIONS.find(
+                  (option) => option.label === event.target.value,
+                )
                 setDraft({
                   ...draft,
-                  trigger: event.target.value as Trigger,
+                  trigger: (preset?.value ?? event.target.value) as Trigger,
                 })
-              }
+              }}
             />
             <datalist id="ability-trigger-suggestions">
               {ABILITY_TRIGGER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
+                <option key={option.value} value={option.label} />
               ))}
             </datalist>
             <span className="text-[10px] text-textMuted">
