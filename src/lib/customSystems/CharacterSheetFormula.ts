@@ -24,7 +24,13 @@ export function evaluateCharacterSheetFormula(
 
   evaluatingCharacterFormula = true
   try {
-    const result = evaluateWithValues(formula, getCharacterFormulaValues(character))
+    const referencedPaths = listCharacterFormulaVariables()
+      .map((variable) => variable.path)
+      .filter((path) => containsIdentifier(formula, path))
+    const result = evaluateWithValues(
+      formula,
+      getCharacterFormulaValues(character, referencedPaths),
+    )
     return result.ok && typeof result.value === 'number' ? result.value : undefined
   } finally {
     evaluatingCharacterFormula = false
@@ -115,4 +121,15 @@ function replaceIdentifier(
     'g',
   )
   return expression.replace(pattern, (_, prefix: string) => prefix + replacement)
+}
+
+
+function containsIdentifier(
+  expression: string,
+  identifier: string,
+): boolean {
+  const escaped = identifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return new RegExp(
+    "(^|[^A-Za-z0-9_.-])" + escaped + "(?=$|[^A-Za-z0-9_.-])",
+  ).test(expression)
 }

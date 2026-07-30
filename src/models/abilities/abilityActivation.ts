@@ -1,10 +1,26 @@
 import { evaluateCharacterSheetFormula } from "../../lib/customSystems/CharacterSheetFormula"
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
-import type { Ability, Usage } from "./Ability"
+import type {
+  Ability,
+  AbilityEffectDuration,
+  Usage,
+} from "./Ability"
+
+export function getAbilityEffectDuration(
+  ability: Ability,
+): AbilityEffectDuration {
+  if ((ability.kind ?? "active") !== "active") return "lasting"
+  return ability.effectDuration ?? "instant"
+}
 
 export function abilityRequiresActivation(ability: Ability): boolean {
   if ((ability.kind ?? "active") === "active") return true
-  return (ability.trigger ?? "always") !== "always"
+
+  const trigger = (ability.trigger ?? "always")
+    .trim()
+    .toLocaleLowerCase("pt-BR")
+
+  return trigger !== "" && trigger !== "always" && trigger !== "sempre"
 }
 
 export function isAbilityBenefitsActive(ability: Ability): boolean {
@@ -37,6 +53,10 @@ export function canActivateAbility(
   character: CharacterTemplate,
   ability: Ability,
 ): boolean {
+  if (abilityRequiresActivation(ability) && isAbilityBenefitsActive(ability)) {
+    return false
+  }
+
   const usage = ability.usage
   if (!usage || usage.reset === "spellSlot") return true
   return usage.used < getAbilityUsageMax(character, usage)
@@ -52,6 +72,10 @@ export function activateAbilityBenefits(
   const usage = ability.usage
   return {
     ...ability,
+    effectDuration:
+      (ability.kind ?? "active") === "active"
+        ? getAbilityEffectDuration(ability)
+        : ability.effectDuration,
     benefitsActive: true,
     modifiersActive: undefined,
     usage:
@@ -89,17 +113,24 @@ export function restoreAbilityUse(ability: Ability): Ability {
 }
 
 export function normalizeAbilityActivation(ability: Ability): Ability {
-  if (!abilityRequiresActivation(ability)) {
+  const normalized = {
+    ...ability,
+    effectDuration:
+      (ability.kind ?? "active") === "active"
+        ? getAbilityEffectDuration(ability)
+        : ability.effectDuration,
+    modifiersActive: undefined,
+  }
+
+  if (!abilityRequiresActivation(normalized)) {
     return {
-      ...ability,
+      ...normalized,
       benefitsActive: undefined,
-      modifiersActive: undefined,
     }
   }
 
   return {
-    ...ability,
-    benefitsActive: ability.benefitsActive === true,
-    modifiersActive: undefined,
+    ...normalized,
+    benefitsActive: normalized.benefitsActive === true,
   }
 }

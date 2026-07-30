@@ -5,6 +5,7 @@ import { Button } from "../../../components/ui/Button"
 import type { Ability } from "../../../models/abilities/Ability"
 import {
   abilityRequiresActivation,
+  getAbilityEffectDuration,
   isAbilityBenefitsActive,
 } from "../../../models/abilities/abilityActivation"
 import { AbilityCard } from "./abilityCard"
@@ -32,7 +33,11 @@ export function CompactAbilityCard({
 }: Props) {
   const [open, setOpen] = useState(false)
   const abilityName = ability.name || "Habilidade sem nome"
-  const kindLabel = ability.kind === "passive" ? "Passiva" : "Ativa"
+  const kindLabel = ability.kind === "passive"
+    ? "Passiva"
+    : ability.kind === "feature"
+      ? "Característica"
+      : "Ativa"
   const compactLabel = sourceLabel ? `${kindLabel} • ${sourceLabel}` : kindLabel
   const usage = ability.usage
   const resolvedMax = usage ? Math.max(0, usageMax ?? usage.max) : null
@@ -41,10 +46,13 @@ export function CompactAbilityCard({
     : null
   const requiresActivation = abilityRequiresActivation(ability)
   const benefitsActive = isAbilityBenefitsActive(ability)
+  const isInstant =
+    (ability.kind ?? "active") === "active" &&
+    getAbilityEffectDuration(ability) === "instant"
   const canUse =
     requiresActivation &&
     Boolean(onUse) &&
-    ((ability.kind ?? "active") === "active" || !benefitsActive)
+    !benefitsActive
   const canRestore = Boolean(
     usage &&
       usage.reset !== "limited" &&
@@ -92,12 +100,12 @@ export function CompactAbilityCard({
                 disabled={remaining !== null && remaining <= 0}
                 onClick={onUse}
               >
-                {(ability.kind ?? "active") === "passive" ? "Acionar" : "Usar"}
+                {(ability.kind ?? "active") === "active" ? "Usar" : "Acionar"}
               </Button>
             ) : null}
             {requiresActivation && benefitsActive && onDeactivate ? (
               <Button className="min-w-0 flex-1 sm:flex-none" size="sm" variant="ghost" onClick={onDeactivate}>
-                Encerrar
+                {isInstant ? "Concluir" : "Encerrar"}
               </Button>
             ) : null}
             {canRestore ? (

@@ -12,6 +12,7 @@ import {
   abilityRequiresActivation,
   activateAbilityBenefits,
   deactivateAbilityBenefits,
+  getAbilityEffectDuration,
   getAbilityUsageMax,
   isAbilityBenefitsActive,
 } from "../../../models/abilities/abilityActivation"
@@ -190,12 +191,15 @@ export function MinimalCharacterActions({
               <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
                 {isAbilityBenefitsActive(selected.ability) ? (
                   <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>
-                    Encerrar efeito
+                    {(selected.ability.kind ?? "active") === "active" &&
+                    getAbilityEffectDuration(selected.ability) === "instant"
+                      ? "Concluir uso"
+                      : "Encerrar efeito"}
                   </Button>
                 ) : null}
-                {((selected.ability.kind ?? "active") === "active" || !isAbilityBenefitsActive(selected.ability)) ? (
+                {!isAbilityBenefitsActive(selected.ability) ? (
                   <Button variant="primary" onClick={() => changeAbilityState(selected, "use")}>
-                    {(selected.ability.kind ?? "active") === "passive" ? "Acionar" : "Usar"}
+                    {(selected.ability.kind ?? "active") === "active" ? "Usar" : "Acionar"}
                   </Button>
                 ) : null}
               </div>

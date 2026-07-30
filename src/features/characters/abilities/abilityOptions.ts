@@ -19,6 +19,7 @@ export const COOLDOWN_UNIT_OPTIONS: Array<{ value: AbilityUsageCooldownUnit; lab
 export const ABILITY_KIND_OPTIONS: Array<{ value: AbilityKind; label: string }> = [
   { value: "active", label: "Ativa" },
   { value: "passive", label: "Passiva" },
+  { value: "feature", label: "Característica" },
 ]
 
 export const ABILITY_ACTION_OPTIONS: Array<{ value: AbilityActionKind; label: string }> = [

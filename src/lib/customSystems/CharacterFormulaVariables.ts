@@ -102,57 +102,133 @@ export function listCharacterFormulaVariables(): CustomFormulaVariable[] {
 
 export function getCharacterFormulaValues(
   character?: CharacterTemplate,
+  requestedPaths?: Iterable<string>,
 ): CharacterFormulaValues {
-  if (!character) return createEmptyValues()
+  const paths = requestedPaths
+    ? Array.from(new Set(requestedPaths))
+    : listCharacterFormulaVariables().map((entry) => entry.path)
+
+  if (!character) return createEmptyValues(paths)
 
   const sheet = character.get('sheet')
-  const proficiencyBonus = character.getProficiencyBonus()
-  const values = createEmptyValues()
+  const values: CharacterFormulaValues = {}
 
-  values['character.level'] = (sheet.classes ?? []).reduce(
-    (total, entry) => total + Math.max(0, Number(entry.level) || 0),
-    0,
-  )
-  values['character.proficiencyBonus'] = proficiencyBonus
-  values['character.armorClass'] = character.getEffectiveArmorClass()
-  values['character.initiative'] = character.getEffectiveInitiative()
-  values['character.passivePerception'] = character.getEffectivePassivePerception()
-  values['character.mobility'] = character.getEffectiveMobility()
-  values['character.hp.current'] = Number(sheet.HP.current) || 0
-  values['character.hp.maximum'] = character.getEffectiveMaxHp()
-  values['character.hp.temporary'] = character.getEffectiveTemporaryHp()
-  values['character.exhaustion'] = Math.max(0, Number(sheet.stats.exhaustion) || 0)
-  values['character.inspiration'] = Boolean(sheet.stats.inspiration)
+  for (const path of paths) {
+    if (path === 'character.level') {
+      values[path] = (sheet.classes ?? []).reduce(
+        (total, entry) => total + Math.max(0, Number(entry.level) || 0),
+        0,
+      )
+      continue
+    }
+    if (path === 'character.proficiencyBonus') {
+      values[path] = character.getProficiencyBonus()
+      continue
+    }
+    if (path === 'character.armorClass') {
+      values[path] = character.getEffectiveArmorClass()
+      continue
+    }
+    if (path === 'character.initiative') {
+      values[path] = character.getEffectiveInitiative()
+      continue
+    }
+    if (path === 'character.passivePerception') {
+      values[path] = character.getEffectivePassivePerception()
+      continue
+    }
+    if (path === 'character.mobility') {
+      values[path] = character.getEffectiveMobility()
+      continue
+    }
+    if (path === 'character.hp.current') {
+      values[path] = Number(sheet.HP.current) || 0
+      continue
+    }
+    if (path === 'character.hp.maximum') {
+      values[path] = character.getEffectiveMaxHp()
+      continue
+    }
+    if (path === 'character.hp.temporary') {
+      values[path] = character.getEffectiveTemporaryHp()
+      continue
+    }
+    if (path === 'character.exhaustion') {
+      values[path] = Math.max(0, Number(sheet.stats.exhaustion) || 0)
+      continue
+    }
+    if (path === 'character.inspiration') {
+      values[path] = Boolean(sheet.stats.inspiration)
+      continue
+    }
 
-  for (const { id } of ATTRIBUTES) {
-    values[`character.attribute.${id}`] = character.getEffectiveAttribute(id)
-    values[`character.attributeModifier.${id}`] =
-      character.getEffectiveAttributeModifier(id)
-    values[`character.save.${id}`] = character.getSavingThrowBonus(id)
-  }
+    const attribute = ATTRIBUTES.find(({ id }) =>
+      path === `character.attribute.${id}` ||
+      path === `character.attributeModifier.${id}` ||
+      path === `character.save.${id}`
+    )
+    if (attribute) {
+      if (path === `character.attribute.${attribute.id}`) {
+        values[path] = character.getEffectiveAttribute(attribute.id)
+      } else if (path === `character.attributeModifier.${attribute.id}`) {
+        values[path] = character.getEffectiveAttributeModifier(attribute.id)
+      } else {
+        values[path] = character.getSavingThrowBonus(attribute.id)
+      }
+      continue
+    }
 
-  for (const { id } of CLASSES) {
-    const level = Math.max(0, Number(character.getClassLevel(id)) || 0)
-    values[`character.class.${id}.level`] = level
-    values[`character.class.${id}.present`] = level > 0
-  }
+    const classDefinition = CLASSES.find(({ id }) =>
+      path === `character.class.${id}.level` ||
+      path === `character.class.${id}.present`
+    )
+    if (classDefinition) {
+      const level = Math.max(
+        0,
+        Number(character.getClassLevel(classDefinition.id)) || 0,
+      )
+      values[path] = path.endsWith('.present') ? level > 0 : level
+      continue
+    }
 
-  for (const skill of SKILLS) {
-    const modifier = character.getEffectiveAttributeModifier(skill.attribute)
-    const proficiency = sheet.skills?.[skill.id] ?? 'none'
-    const multiplier = proficiency === 'expertise' ? 2 : proficiency === 'proficient' ? 1 : 0
-    values[`character.skill.${skill.id}`] = modifier + proficiencyBonus * multiplier
+    const skill = SKILLS.find(({ id }) => path === `character.skill.${id}`)
+    if (skill) {
+      const modifier = character.getEffectiveAttributeModifier(skill.attribute)
+      const proficiency = sheet.skills?.[skill.id] ?? 'none'
+      const multiplier =
+        proficiency === 'expertise'
+          ? 2
+          : proficiency === 'proficient'
+            ? 1
+            : 0
+      values[path] = modifier + character.getProficiencyBonus() * multiplier
+    }
   }
 
   return values
 }
 
-function createEmptyValues(): CharacterFormulaValues {
+function createEmptyValues(
+  requestedPaths: Iterable<string> = listCharacterFormulaVariables().map(
+    (entry) => entry.path,
+  ),
+): CharacterFormulaValues {
+  const definitions = new Map(
+    listCharacterFormulaVariables().map((entry) => [entry.path, entry]),
+  )
+
   return Object.fromEntries(
-    listCharacterFormulaVariables().map((entry) => [
-      entry.path,
-      entry.valueType === 'boolean' ? false : entry.valueType === 'text' ? '' : 0,
-    ]),
+    Array.from(requestedPaths).map((path) => {
+      const entry = definitions.get(path)
+      return [
+        path,
+        entry?.valueType === 'boolean'
+          ? false
+          : entry?.valueType === 'text'
+            ? ''
+            : 0,
+      ]
+    }),
   )
 }
 

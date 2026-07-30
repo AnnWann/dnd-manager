@@ -46,7 +46,7 @@ type AbilitySourceFilter =
   | "feat"
   | "channelDivinity"
 
-type AbilityKindFilter = "all" | "active" | "passive"
+type AbilityKindFilter = "all" | "active" | "passive" | "feature"
 type AbilityListViewMode = "detailed" | "compact"
 
 const ABILITY_LIST_VIEW_STORAGE_KEY = "dnd-manager:ability-list-view"
@@ -283,9 +283,10 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
                 setKindFilter(event.target.value as AbilityKindFilter)
               }
             >
-              <option value="all">Ativas e passivas</option>
+              <option value="all">Ativas, passivas e características</option>
               <option value="active">Somente ativas</option>
               <option value="passive">Somente passivas</option>
+              <option value="feature">Somente características</option>
             </Select>
           </div>
         </CardHeader>
@@ -323,9 +324,11 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
                       key={ability.id}
                       ability={ability}
                       sourceLabel={sourceLabel}
+                      usageMax={usageMax}
                       onEdit={editAbility}
                       onRemove={deleteAbility}
                       onUse={() => useAbility(ability.id)}
+                      onDeactivate={() => deactivateAbility(ability.id)}
                       onRestore={() => restoreAbility(ability.id)}
                     />
                   )
@@ -336,9 +339,11 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
                     key={ability.id}
                     ability={ability}
                     sourceLabel={sourceLabel}
+                    usageMax={usageMax}
                     onEdit={editAbility}
                     onRemove={deleteAbility}
                     onUse={() => useAbility(ability.id)}
+                    onDeactivate={() => deactivateAbility(ability.id)}
                     onRestore={() => restoreAbility(ability.id)}
                   />
                 )

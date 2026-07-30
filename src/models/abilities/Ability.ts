@@ -10,6 +10,7 @@ export interface Ability {
   kind?: AbilityKind
   category?: AbilityCategory
   actionKind?: AbilityActionKind
+  effectDuration?: AbilityEffectDuration
   trigger?: Trigger
   grantedSpells?: SpellGrant[]
   grantedProficiencies?: Proficiency[]
@@ -42,11 +43,13 @@ export type AbilityUsageResetKind = 'turn' | 'cooldown' | 'shortRest' | 'longRes
 
 export type AbilityUsageCooldownUnit = 'turns' | 'minutes' | 'hours' | 'days' | 'tenDays'
 
-export type AbilityKind = 'active' | 'passive'
+export type AbilityKind = 'active' | 'passive' | 'feature'
 
 export type AbilityActionKind = 'action' | 'bonusAction' | 'reaction' | 'legendaryAction' | 'legendaryReaction' | 'legendaryResistance' | 'free'
 
-export type Trigger =
+export type AbilityEffectDuration = 'instant' | 'lasting'
+
+export type AbilityTriggerPreset =
   | 'startTurn'
   | 'endTurn'
   | 'startRound'
@@ -85,3 +88,5 @@ export type Trigger =
   | 'whileGrappled'
   | 'whileSurprised'
   | 'always'
+
+export type Trigger = AbilityTriggerPreset | (string & {})
