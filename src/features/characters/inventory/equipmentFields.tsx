@@ -17,6 +17,7 @@ import {
   WEAPON_PROPERTIES,
   hasWeaponProperty,
   type Weapon,
+  type WeaponPropertyId,
 } from "../../../models/items/equipment/Weapon"
 import type { EquipSlot, Itemmable } from "../../../models/items/item"
 import type { Attribute } from "../../../models/sheet/Attribute"
@@ -26,6 +27,10 @@ import {
   type EditableSpellGrant,
 } from "../magic/grantedSpellsEditor"
 import { EquipmentBonusesFields } from "./equipmentBonusFields"
+
+const CONFIGURABLE_WEAPON_PROPERTIES = Object.values(WEAPON_PROPERTIES).filter(
+  (property) => property.id !== "two-handed" && property.id !== "versatile",
+)
 
 export function EquipmentFields({
   item,
@@ -200,6 +205,22 @@ export function WeaponFields({
     })
   }
 
+  function toggleProperty(propertyId: WeaponPropertyId, enabled: boolean) {
+    onUpdate((current) => {
+      const currentWeapon = current as Partial<Weapon>
+      const properties = (currentWeapon.properties ?? []).filter(
+        (property) => property.id !== propertyId,
+      )
+
+      if (enabled) properties.push(WEAPON_PROPERTIES[propertyId])
+
+      return {
+        ...current,
+        properties,
+      }
+    })
+  }
+
   return (
     <div className="grid gap-3 md:col-span-3 md:grid-cols-4">
       <WeaponDamageFields
@@ -301,6 +322,39 @@ export function WeaponFields({
           }
         />
       ) : null}
+
+      <div className="grid gap-2 md:col-span-4">
+        <div>
+          <div className="text-xs font-medium text-textH">Propriedades</div>
+          <div className="mt-0.5 text-[11px] text-textMuted">
+            Selecione todas as propriedades aplicáveis à arma.
+          </div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {CONFIGURABLE_WEAPON_PROPERTIES.map((property) => (
+            <label
+              key={property.id}
+              title={property.desc}
+              className="flex items-start gap-2 rounded-lg border border-border bg-bg-subtle p-2 text-xs text-text"
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={hasWeaponProperty(weapon, property.id)}
+                onChange={(event) =>
+                  toggleProperty(property.id, event.target.checked)
+                }
+              />
+              <span>
+                <span className="font-medium text-textH">{property.name}</span>
+                <span className="mt-0.5 block text-[10px] leading-4 text-textMuted">
+                  {property.desc}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

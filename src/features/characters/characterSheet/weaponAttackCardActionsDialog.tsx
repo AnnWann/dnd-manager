@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Hand, PackageOpen } from "lucide-react"
+import { Hand, PackageOpen, Send } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
 import { Modal } from "../../../components/ui/Modal"
@@ -104,6 +104,14 @@ export function HandItemActionsDialog({
     onClose()
   }
 
+  function throwSelected() {
+    const currentOccupant = findHandOccupantByItemId(character, itemId)
+    if (!currentOccupant) return
+
+    dropHandOccupant(character.get("id"), currentOccupant.reference)
+    onClose()
+  }
+
   function freeBlocker(
     blocker: HandOccupant,
     destination: "inventory" | "ground",
@@ -177,7 +185,7 @@ export function HandItemActionsDialog({
           <div className="text-[11px] font-semibold uppercase tracking-wide text-textMuted">
             Destino ao retirar
           </div>
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <Button
               variant="secondary"
               onClick={() => removeSelected("inventory")}
@@ -199,6 +207,14 @@ export function HandItemActionsDialog({
               onClick={() => removeSelected("ground")}
             >
               Chão
+            </Button>
+            <Button
+              variant="primary"
+              title="Arremessar o objeto e transferi-lo para o chão"
+              onClick={throwSelected}
+            >
+              <Send className="h-4 w-4" />
+              Arremessar
             </Button>
           </div>
         </div>
