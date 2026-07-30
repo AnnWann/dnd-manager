@@ -107,6 +107,11 @@ jobs:
               'next.updateEquipmentAbility(condition.sourceItemId, {',
               'next.updateEquipmentAbility(linkedItemId, {',
           )
+          storage = storage.replace(
+              '        id: originalAbilityId,',
+              '        id: originalAbilityId ?? abilityId,',
+              1,
+          )
           storage_path.write_text(storage)
 
           view_path = Path('src/views/CharacterView.tsx')
