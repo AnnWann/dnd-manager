@@ -124,9 +124,12 @@ function replaceIdentifier(
 }
 
 
-function containsIdentifier(expression: string, identifier: string): boolean {
-  const escaped = identifier.replace(/[.*+?^${}()|[\]\\]/g, '\$&')
+function containsIdentifier(
+  expression: string,
+  identifier: string,
+): boolean {
+  const escaped = identifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   return new RegExp(
-    '(^|[^A-Za-z0-9_.-])' + escaped + '(?=$|[^A-Za-z0-9_.-])',
+    "(^|[^A-Za-z0-9_.-])" + escaped + "(?=$|[^A-Za-z0-9_.-])",
   ).test(expression)
 }
