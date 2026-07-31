@@ -16,6 +16,10 @@ import {
   removeCharacterCondition,
   updateCharacterCondition,
 } from "../../../models/characters/characterConditionStorage"
+import {
+  STANDARD_CONDITION_PRESETS,
+  type StandardConditionPreset,
+} from "./standardConditionPresets"
 
 type Props = {
   character: CharacterTemplate
@@ -329,6 +333,41 @@ function ConditionDialog({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
+          {!condition ? (
+            <section className="grid gap-2 rounded-xl border border-accentBorder bg-accentBg p-3 sm:col-span-2">
+              <div>
+                <div className="text-xs font-semibold text-textH">
+                  Condição padrão
+                </div>
+                <p className="mt-1 text-[11px] leading-5 text-textMuted">
+                  Selecione uma condição comum para preencher nome, descrição,
+                  comportamento e etiquetas. Todos os campos continuam editáveis.
+                </p>
+              </div>
+              <Select
+                value=""
+                aria-label="Selecionar condição padrão"
+                onChange={(event) => {
+                  const preset = STANDARD_CONDITION_PRESETS.find(
+                    (entry) => entry.id === event.target.value,
+                  )
+                  if (preset) {
+                    setDraft((current) =>
+                      applyStandardConditionPreset(current, preset),
+                    )
+                  }
+                }}
+              >
+                <option value="">Escolha uma condição...</option>
+                {STANDARD_CONDITION_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
+              </Select>
+            </section>
+          ) : null}
+
           <label className="grid gap-1.5">
             <span className="text-xs text-text">Nome</span>
             <Input
@@ -589,6 +628,27 @@ function createCondition(): CharacterCondition {
       tickOn: "end-of-turn",
       tickOwner: "affected",
       autoRemoveAtZero: true,
+    },
+  }
+}
+
+function applyStandardConditionPreset(
+  current: CharacterCondition,
+  preset: StandardConditionPreset,
+): CharacterCondition {
+  return {
+    ...current,
+    name: preset.name,
+    description: preset.description,
+    behavior: preset.behavior,
+    tags: [...preset.tags],
+    bonuses: {},
+    duration: {
+      type: "custom",
+      customLabel: "Até a condição ser encerrada",
+      tickOn: "manual",
+      tickOwner: "affected",
+      autoRemoveAtZero: false,
     },
   }
 }
