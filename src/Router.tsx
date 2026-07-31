@@ -9,6 +9,7 @@ import { CreaturesCompendiumView } from "./views/CreaturesCompendiumView"
 import { CustomSystemEditorView } from "./views/CustomSystemEditorView"
 import { CustomSystemsListView } from "./views/CustomSystemsListView"
 import { InitiativeView } from "./views/InitiativeView"
+import { ItemsCompendiumView } from "./views/ItemsCompendiumView"
 import { MagicView } from "./views/MagicView"
 import { MissionsView } from "./views/MissionsView"
 import { GroundInventoryView } from "./views/GroundInventoryView"
@@ -35,6 +36,7 @@ export function AppRouter() {
       <Route path="/character/:characterId/:tab" element={<CharacterDetailView />} />
       <Route path="/party-inventory" element={<PartyInventoryView />} />
       <Route path="/ground-inventory" element={<GroundInventoryView />} />
+      <Route path="/items-compendium" element={<ItemsCompendiumView />} />
       <Route path="/missions" element={<MissionsView />} />
       <Route path="/creatures-compendium" element={<CreaturesCompendiumView />} />
       <Route path="/custom-systems" element={<CustomSystemsListView />} />
