@@ -101,7 +101,8 @@ export function adjustConditionRemaining(
   delta: number,
 ): CharacterTemplate {
   const conditions = getCharacterConditions(character)
-  const next = conditions.flatMap((condition) => {
+  let removed: CharacterCondition | undefined
+  const nextConditions = conditions.flatMap((condition) => {
     if (condition.id !== conditionId) return [condition]
 
     const remaining = condition.duration.remaining
@@ -112,6 +113,7 @@ export function adjustConditionRemaining(
       nextRemaining <= 0 &&
       condition.duration.autoRemoveAtZero
     ) {
+      removed = condition
       return []
     }
 
@@ -126,7 +128,12 @@ export function adjustConditionRemaining(
     ]
   })
 
-  return withCharacterConditions(character, next)
+  let next = withCharacterConditions(character, nextConditions)
+  if (removed?.sourceAbilityId && removed.sourceAbilityLocation) {
+    next = deactivateLinkedAbility(next, removed)
+  }
+
+  return next
 }
 
 function normalizeCondition(value: unknown): CharacterCondition {
@@ -238,7 +245,6 @@ function readOptionalNumber(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : undefined
 }
 
-
 function normalizeAbilityLocation(
   value: unknown,
 ): CharacterCondition["sourceAbilityLocation"] {
@@ -259,7 +265,9 @@ function deactivateLinkedAbility(
     const ability = (next.get("abilities") ?? []).find(
       (current) => current.id === abilityId,
     )
-    if (ability) {
+    if (ability?.source === "consumable") {
+      next = next.removeAbility(abilityId)
+    } else if (ability) {
       next = next.updateAbility({
         ...ability,
         benefitsActive: false,
