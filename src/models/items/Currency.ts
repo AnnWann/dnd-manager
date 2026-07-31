@@ -71,11 +71,12 @@ export function isCurrencyItem(item: Itemmable): item is CurrencyItem {
 export function createCurrencyItem(
   currencyType: CurrencyType,
   quantity = 0,
+  id = crypto.randomUUID(),
 ): CurrencyItem {
   const definition = CURRENCY_DEFINITIONS[currencyType]
 
   return {
-    id: crypto.randomUUID(),
+    id,
     name: definition.name,
     desc: "",
     notes: "",
@@ -93,15 +94,30 @@ export function createCurrencyItem(
   }
 }
 
+export function createCurrencyCompendiumItems(): CurrencyItem[] {
+  return CURRENCY_TYPES.map((currencyType) =>
+    createCurrencyItem(
+      currencyType,
+      1,
+      `compendium-currency-${currencyType}`,
+    ),
+  )
+}
+
 export function normalizeCurrencyItem(item: Itemmable): CurrencyItem {
   const requestedType = (item as Partial<CurrencyItem>).currencyType
   const currencyType = isCurrencyType(requestedType)
     ? requestedType
     : inferCurrencyType(item.name)
   const definition = CURRENCY_DEFINITIONS[currencyType]
+  const metadata = item as Itemmable & {
+    version?: number
+    updatedAt?: string
+    updatedBy?: string
+  }
 
   return {
-    ...item,
+    id: item.id,
     name: definition.name,
     desc: typeof item.desc === "string" ? item.desc : "",
     notes: typeof item.notes === "string" ? item.notes : "",
@@ -111,13 +127,19 @@ export function normalizeCurrencyItem(item: Itemmable): CurrencyItem {
     kind: "currency",
     currencyType,
     equippable: false,
-    equipSlot: undefined,
     magicItem: false,
     requiresAttunement: false,
     attuned: false,
     insideBagOfHolding: false,
     heldHands: undefined,
-  }
+    ...(metadata.version === undefined ? {} : { version: metadata.version }),
+    ...(metadata.updatedAt === undefined
+      ? {}
+      : { updatedAt: metadata.updatedAt }),
+    ...(metadata.updatedBy === undefined
+      ? {}
+      : { updatedBy: metadata.updatedBy }),
+  } as CurrencyItem
 }
 
 export function mergeCurrencyStacks(items: Itemmable[]): Itemmable[] {
