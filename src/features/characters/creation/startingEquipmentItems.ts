@@ -1,6 +1,7 @@
 import type { Armor } from "../../../models/items/equipment/Armor"
 import { withShieldDefaults } from "../../../models/items/equipment/Shield"
 import { WEAPON_PROPERTIES, type Weapon } from "../../../models/items/equipment/Weapon"
+import { createCurrencyItem } from "../../../models/items/Currency"
 import type { Itemmable, ItemKind } from "../../../models/items/item"
 import type { StartingItemSpec } from "./phbClassEquipment"
 
@@ -88,6 +89,14 @@ export function createStartingInventoryItem(
     })
   }
 
+  if (spec.category === "currency") {
+    return {
+      ...createCurrencyItem("gold", base.quantity),
+      desc: base.desc,
+      notes: base.notes,
+    }
+  }
+
   return {
     ...base,
     kind: KIND_BY_CATEGORY[spec.category],
@@ -97,15 +106,8 @@ export function createStartingInventoryItem(
 
 export function createStartingGoldItem(amount: number): Itemmable {
   return {
-    id: crypto.randomUUID(),
-    name: "Peças de ouro",
+    ...createCurrencyItem("gold", amount),
     desc: "Ouro inicial escolhido para substituir o pacote de equipamentos da classe.",
     notes: "Moeda inicial da criação do personagem.",
-    quantity: Math.max(0, Math.trunc(amount)),
-    weight: 0,
-    pocketable: true,
-    kind: "currency",
-    equippable: false,
-    insideBagOfHolding: false,
   }
 }
