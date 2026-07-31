@@ -11,7 +11,7 @@ import { TransferItemDialog } from "../features/characters/inventory/transferIte
 import {
   itemJsonTemplate,
   parseItemJson,
-} from "../features/items/itemCompendium"
+} from "../features/items/itemJsonGuide"
 import type { Itemmable } from "../models/items/item"
 
 export function GroundInventoryView() {
@@ -34,7 +34,7 @@ export function GroundInventoryView() {
     const template = JSON.stringify(itemJsonTemplate(), null, 2)
     await navigator.clipboard.writeText(template)
     setJsonValue(template)
-    setJsonMessage("Estrutura copiada.")
+    setJsonMessage("Guia completo copiado.")
   }
 
   function addFromJson() {
@@ -78,19 +78,26 @@ export function GroundInventoryView() {
           <CardHeader>
             <h2 className="text-sm font-semibold text-textH">Adicionar item via JSON</h2>
             <p className="mt-1 text-xs leading-5 text-textMuted">
-              Cole um objeto de item. Campos básicos ausentes recebem valores padrão.
+              Cole somente o objeto do item ou o guia completo para IA. Quando o
+              envelope completo for usado, apenas o conteúdo do campo `item` será
+              importado.
             </p>
           </CardHeader>
           <CardContent>
             <Textarea
-              className="min-h-56 font-mono text-xs"
+              className="min-h-72 font-mono text-xs"
               value={jsonValue}
-              placeholder="Cole a estrutura JSON do item aqui"
+              placeholder="Cole o JSON do item ou o guia preenchido por uma IA"
               onChange={(event) => {
                 setJsonValue(event.target.value)
                 setJsonMessage("")
               }}
             />
+            <p className="mt-2 text-[11px] leading-5 text-textMuted">
+              O guia inclui campos válidos, enums e exemplos de armas, armaduras,
+              consumíveis, itens arremessáveis, suprimentos, focos com magias e
+              moedas.
+            </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Button
                 size="sm"
@@ -103,7 +110,7 @@ export function GroundInventoryView() {
               </Button>
               <Button size="sm" variant="secondary" onClick={copyStructure}>
                 <Copy className="h-4 w-4" />
-                Copiar estrutura do item
+                Copiar guia completo para IA
               </Button>
               {jsonMessage ? (
                 <span className="text-xs text-textMuted">{jsonMessage}</span>
