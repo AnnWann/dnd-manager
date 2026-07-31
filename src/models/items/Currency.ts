@@ -72,6 +72,7 @@ export function createCurrencyItem(
   currencyType: CurrencyType,
   quantity = 0,
   id: string = crypto.randomUUID(),
+  insideBagOfHolding = false,
 ): CurrencyItem {
   const definition = CURRENCY_DEFINITIONS[currencyType]
 
@@ -89,7 +90,7 @@ export function createCurrencyItem(
     magicItem: false,
     requiresAttunement: false,
     attuned: false,
-    insideBagOfHolding: false,
+    insideBagOfHolding,
     heldHands: undefined,
   }
 }
@@ -130,7 +131,7 @@ export function normalizeCurrencyItem(item: Itemmable): CurrencyItem {
     magicItem: false,
     requiresAttunement: false,
     attuned: false,
-    insideBagOfHolding: false,
+    insideBagOfHolding: item.insideBagOfHolding === true,
     heldHands: undefined,
     ...(metadata.version === undefined ? {} : { version: metadata.version }),
     ...(metadata.updatedAt === undefined
@@ -144,7 +145,7 @@ export function normalizeCurrencyItem(item: Itemmable): CurrencyItem {
 
 export function mergeCurrencyStacks(items: Itemmable[]): Itemmable[] {
   const result: Itemmable[] = []
-  const indexByType = new Map<CurrencyType, number>()
+  const indexByStack = new Map<string, number>()
 
   for (const item of items) {
     if (!isCurrencyItem(item)) {
@@ -153,10 +154,11 @@ export function mergeCurrencyStacks(items: Itemmable[]): Itemmable[] {
     }
 
     const normalized = normalizeCurrencyItem(item)
-    const existingIndex = indexByType.get(normalized.currencyType)
+    const stackKey = getCurrencyStackKey(normalized)
+    const existingIndex = indexByStack.get(stackKey)
 
     if (existingIndex === undefined) {
-      indexByType.set(normalized.currencyType, result.length)
+      indexByStack.set(stackKey, result.length)
       result.push(normalized)
       continue
     }
@@ -173,6 +175,10 @@ export function mergeCurrencyStacks(items: Itemmable[]): Itemmable[] {
 
 export function getCurrencyTotalWeight(item: CurrencyItem): number {
   return item.quantity * item.weight
+}
+
+function getCurrencyStackKey(item: CurrencyItem): string {
+  return `${item.currencyType}:${item.insideBagOfHolding ? "bag" : "carried"}`
 }
 
 function normalizeCurrencyQuantity(value: unknown): number {
