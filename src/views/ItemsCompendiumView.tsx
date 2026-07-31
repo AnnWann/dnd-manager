@@ -9,6 +9,12 @@ import {
   BASIC_ITEM_COMPENDIUM,
   cloneCompendiumItem,
 } from "../features/items/itemCompendium"
+import { createCurrencyCompendiumItems } from "../models/items/Currency"
+
+const COMPENDIUM_ITEMS = [
+  ...createCurrencyCompendiumItems(),
+  ...BASIC_ITEM_COMPENDIUM,
+]
 
 export function ItemsCompendiumView() {
   const { addGroundItem } = useCharacterContext()
@@ -17,8 +23,8 @@ export function ItemsCompendiumView() {
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("pt-BR")
-    if (!normalized) return BASIC_ITEM_COMPENDIUM
-    return BASIC_ITEM_COMPENDIUM.filter((item) =>
+    if (!normalized) return COMPENDIUM_ITEMS
+    return COMPENDIUM_ITEMS.filter((item) =>
       `${item.name} ${item.desc} ${item.kind}`
         .toLocaleLowerCase("pt-BR")
         .includes(normalized),
@@ -26,7 +32,7 @@ export function ItemsCompendiumView() {
   }, [query])
 
   async function copyItem(itemId: string) {
-    const item = BASIC_ITEM_COMPENDIUM.find((entry) => entry.id === itemId)
+    const item = COMPENDIUM_ITEMS.find((entry) => entry.id === itemId)
     if (!item) return
     await navigator.clipboard.writeText(JSON.stringify(item, null, 2))
     setCopiedId(itemId)
