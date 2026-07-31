@@ -12,6 +12,7 @@ import {
   IconBackpack,
   IconCharacter,
   IconCompendium,
+  IconEquipment,
   IconGround,
   IconInitiative,
   IconMagic,
@@ -100,6 +101,12 @@ function App() {
       icon: <IconGround />,
       active: location.pathname === "/ground-inventory",
       onClick: () => navigate("/ground-inventory"),
+    },
+    {
+      label: "Compêndio de Itens",
+      icon: <IconEquipment />,
+      active: location.pathname === "/items-compendium",
+      onClick: () => navigate("/items-compendium"),
     },
     {
       label: "Missões",

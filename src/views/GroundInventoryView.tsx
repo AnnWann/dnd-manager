@@ -1,11 +1,17 @@
 import { useState } from "react"
-import { PackageOpen } from "lucide-react"
+import { Copy, PackageOpen, Plus } from "lucide-react"
 
+import { Button } from "../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../components/ui/Card"
+import { Textarea } from "../components/ui/Textarea"
 import { useCharacterContext } from "../contexts/characterContext"
 import { useSyncContext } from "../contexts/syncContext"
 import { InventoryEditor } from "../features/characters/inventory/inventoryEditor"
 import { TransferItemDialog } from "../features/characters/inventory/transferItemDialog"
+import {
+  itemJsonTemplate,
+  parseItemJson,
+} from "../features/items/itemCompendium"
 import type { Itemmable } from "../models/items/item"
 
 export function GroundInventoryView() {
@@ -19,9 +25,27 @@ export function GroundInventoryView() {
     removeGroundItem,
     transferItem,
   } = useCharacterContext()
-  const [transferringItem, setTransferringItem] =
-    useState<Itemmable | null>(null)
+  const [transferringItem, setTransferringItem] = useState<Itemmable | null>(null)
+  const [jsonValue, setJsonValue] = useState("")
+  const [jsonMessage, setJsonMessage] = useState("")
   const canManage = userRole === "master"
+
+  async function copyStructure() {
+    const template = JSON.stringify(itemJsonTemplate(), null, 2)
+    await navigator.clipboard.writeText(template)
+    setJsonValue(template)
+    setJsonMessage("Estrutura copiada.")
+  }
+
+  function addFromJson() {
+    try {
+      addGroundItem(parseItemJson(jsonValue))
+      setJsonValue("")
+      setJsonMessage("Item adicionado ao chão.")
+    } catch (error) {
+      setJsonMessage(error instanceof Error ? error.message : "JSON inválido.")
+    }
+  }
 
   return (
     <div className="grid w-full min-w-0 max-w-full gap-4 overflow-hidden">
@@ -29,12 +53,10 @@ export function GroundInventoryView() {
         <CardHeader>
           <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-textH">
             <PackageOpen className="h-4 w-4 shrink-0 text-accent" />
-            <span className="break-words">Inventário do chão</span>
+            <span className="break-words">Chão</span>
           </div>
           <p className="mt-1 break-words text-xs leading-5 text-textMuted">
-            Itens largados por personagens ficam disponíveis aqui para todo o
-            grupo. Jogadores podem pegar ou transferir itens. O mestre também
-            pode criar, editar e remover itens diretamente.
+            Itens largados por personagens ficam disponíveis aqui para todo o grupo.
           </p>
         </CardHeader>
         <CardContent>
@@ -50,6 +72,46 @@ export function GroundInventoryView() {
           </div>
         </CardContent>
       </Card>
+
+      {canManage ? (
+        <Card>
+          <CardHeader>
+            <h2 className="text-sm font-semibold text-textH">Adicionar item via JSON</h2>
+            <p className="mt-1 text-xs leading-5 text-textMuted">
+              Cole um objeto de item. Campos básicos ausentes recebem valores padrão.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Textarea
+              className="min-h-56 font-mono text-xs"
+              value={jsonValue}
+              placeholder="Cole a estrutura JSON do item aqui"
+              onChange={(event) => {
+                setJsonValue(event.target.value)
+                setJsonMessage("")
+              }}
+            />
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={!jsonValue.trim()}
+                onClick={addFromJson}
+              >
+                <Plus className="h-4 w-4" />
+                Adicionar ao chão
+              </Button>
+              <Button size="sm" variant="secondary" onClick={copyStructure}>
+                <Copy className="h-4 w-4" />
+                Copiar estrutura do item
+              </Button>
+              {jsonMessage ? (
+                <span className="text-xs text-textMuted">{jsonMessage}</span>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <InventoryEditor
         title="Itens no chão"
