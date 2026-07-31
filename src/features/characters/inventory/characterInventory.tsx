@@ -4,6 +4,7 @@ import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { useCharacterContext } from "../../../contexts/characterContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { consumeCharacterInventoryItem } from "../../../models/characters/characterConsumables"
 import { getEncumbranceInfo } from "../../../models/characters/characterEncumbrance"
 import { equipInventoryItemWithRules } from "../../../models/characters/characterEquipmentInteractions"
 import { toggleInventoryItemAttunement } from "../../../models/characters/characterInventory"
@@ -12,7 +13,6 @@ import {
   getBagOfHoldingWeightKg,
 } from "../../../models/items/bagOfHolding"
 import type { Itemmable } from "../../../models/items/item"
-import { consumeInventoryItem } from "../../../models/items/itemConsumption"
 import { CharacterEncumbrancePanel } from "./characterEncumbrancePanel"
 import { EquipItemDialog } from "./equipItemDialog"
 import { InventoryEditor } from "./inventoryEditor"
@@ -128,10 +128,7 @@ export function CharacterInventoryTab({
 
   function consumeItem(itemId: string) {
     updateCharacter(character.get("id"), (current) =>
-      current.with(
-        "inventory",
-        consumeInventoryItem(current.get("inventory"), itemId),
-      ),
+      consumeCharacterInventoryItem(current, itemId),
     )
   }
 
