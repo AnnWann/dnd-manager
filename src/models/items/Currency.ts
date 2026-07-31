@@ -71,7 +71,7 @@ export function isCurrencyItem(item: Itemmable): item is CurrencyItem {
 export function createCurrencyItem(
   currencyType: CurrencyType,
   quantity = 0,
-  id = crypto.randomUUID(),
+  id: string = crypto.randomUUID(),
 ): CurrencyItem {
   const definition = CURRENCY_DEFINITIONS[currencyType]
 
