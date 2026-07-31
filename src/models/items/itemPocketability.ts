@@ -2,7 +2,6 @@ import type { ItemKind, Itemmable } from "./item"
 
 const AUTOMATICALLY_POCKETABLE_KINDS = new Set<ItemKind>([
   "ammunition",
-  "currency",
   "consumable",
   "throwable",
   "focus",
@@ -10,6 +9,7 @@ const AUTOMATICALLY_POCKETABLE_KINDS = new Set<ItemKind>([
 ])
 
 const NEVER_POCKETABLE_KINDS = new Set<ItemKind>([
+  "currency",
   "supply",
   "pack",
   "shield",
