@@ -31,7 +31,7 @@ export function GroundInventoryView() {
   const canManage = userRole === "master"
 
   async function copyStructure() {
-    const template = JSON.stringify(itemJsonTemplate(), null, 2)
+    const template = JSON.stringify(buildItemAiGuide(), null, 2)
     await navigator.clipboard.writeText(template)
     setJsonValue(template)
     setJsonMessage("Guia completo copiado.")
@@ -95,8 +95,8 @@ export function GroundInventoryView() {
             />
             <p className="mt-2 text-[11px] leading-5 text-textMuted">
               O guia inclui campos válidos, enums e exemplos de armas, armaduras,
-              consumíveis, itens arremessáveis, suprimentos, focos com magias e
-              moedas.
+              consumíveis com efeitos, itens arremessáveis, suprimentos, focos com
+              magias e moedas.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Button
@@ -143,6 +143,65 @@ export function GroundInventoryView() {
       />
     </div>
   )
+}
+
+function buildItemAiGuide() {
+  const guide = itemJsonTemplate()
+  const consumableExample = guide.examples.consumable ?? {}
+
+  return {
+    ...guide,
+    instructions: [
+      ...guide.instructions,
+      "Consumíveis podem usar `consumptionEffect` para conceder bônus e magias ao personagem depois do uso.",
+      "Em `consumptionEffect.persistence`, use `temporary` para criar uma condição removível ou `permanent` para incorporar o efeito à ficha.",
+      "Bônus temporários permanecem enquanto a condição existir. Magias temporárias desaparecem quando a condição for removida.",
+    ],
+    enums: {
+      ...guide.enums,
+      consumableEffectPersistence: ["temporary", "permanent"],
+    },
+    fieldGuide: {
+      ...guide.fieldGuide,
+      consumptionEffect:
+        "Objeto opcional de consumível: {id?, name?, description?, persistence, durationText?, bonuses?, grantedSpells?}. `temporary` cria uma condição; `permanent` salva uma característica permanente.",
+    },
+    examples: {
+      ...guide.examples,
+      consumable: {
+        ...consumableExample,
+        name: "Elixir da força arcana",
+        desc: "Concede força sobrenatural e acesso temporário à magia Salto.",
+        useText: "Beba o elixir para receber seus efeitos.",
+        consumptionEffect: {
+          id: "elixir-forca-arcana-effect",
+          name: "Força arcana",
+          description: "O corpo do personagem é fortalecido magicamente.",
+          persistence: "temporary",
+          durationText: "1 hora",
+          bonuses: {
+            attribute: [
+              {
+                attribute: "str",
+                bonus: {
+                  type: "flat",
+                  value: 21,
+                  label: "Elixir da força arcana",
+                },
+              },
+            ],
+          },
+          grantedSpells: [
+            {
+              index: "jump",
+              castingMode: "known",
+              attribute: "int",
+            },
+          ],
+        },
+      },
+    },
+  }
 }
 
 function Summary({ label, value }: { label: string; value: number }) {
