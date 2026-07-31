@@ -7,6 +7,7 @@ import type { CharacterTemplate } from "../../../models/characters/CharacterTemp
 import { consumeCharacterInventoryItem } from "../../../models/characters/characterConsumables"
 import { getEncumbranceInfo } from "../../../models/characters/characterEncumbrance"
 import { equipInventoryItemWithRules } from "../../../models/characters/characterEquipmentInteractions"
+import { equipInventoryStackWithRules } from "../../../models/characters/characterInventoryStacks"
 import { toggleInventoryItemAttunement } from "../../../models/characters/characterInventory"
 import {
   BAG_OF_HOLDING_CAPACITY_KG,
@@ -199,13 +200,22 @@ export function CharacterInventoryTab({
         onClose={() => setEquippingItem(null)}
         onEquip={(destination) => {
           if (!equippingItem) return
-          updateCharacter(character.get("id"), (current) =>
-            equipInventoryItemWithRules(
+          updateCharacter(character.get("id"), (current) => {
+            const stackedResult = equipInventoryStackWithRules(
               current,
               equippingItem.id,
               destination,
-            ),
-          )
+            )
+
+            return (
+              stackedResult ??
+              equipInventoryItemWithRules(
+                current,
+                equippingItem.id,
+                destination,
+              )
+            )
+          })
         }}
       />
 
