@@ -1,5 +1,6 @@
 import { Button } from "../../../components/ui/Button"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
+import type { ConsumableItem } from "../../../models/items/equipment/PocketItem"
 import type { Itemmable } from "../../../models/items/item"
 
 export function ItemDropdownDetails({
@@ -13,6 +14,8 @@ export function ItemDropdownDetails({
     item.kind === "equipment" || item.kind === "shield"
       ? (item as Equipment)
       : null
+  const consumable =
+    item.kind === "consumable" ? (item as ConsumableItem) : null
 
   function updateAbilityCharge(abilityId: string, delta: number) {
     onUpdate?.((current) => {
@@ -77,6 +80,36 @@ export function ItemDropdownDetails({
         <div>
           <div className="text-xs font-medium text-textH">Notas</div>
           <p className="mt-1 whitespace-pre-wrap">{item.notes}</p>
+        </div>
+      ) : null}
+
+      {consumable?.consumptionEffect ? (
+        <div>
+          <div className="text-xs font-medium text-textH">
+            Efeito ao consumir
+          </div>
+          <div className="mt-2 rounded-lg border border-border p-2 text-xs">
+            <div className="font-medium text-textH">
+              {consumable.consumptionEffect.name || `Efeito de ${item.name}`}
+            </div>
+            <div className="mt-1 text-textMuted">
+              {consumable.consumptionEffect.persistence === "permanent"
+                ? "Permanente"
+                : consumable.consumptionEffect.durationText?.trim() || "Temporário"}
+            </div>
+            {consumable.consumptionEffect.description?.trim() ? (
+              <p className="mt-2 whitespace-pre-wrap text-text">
+                {consumable.consumptionEffect.description}
+              </p>
+            ) : null}
+            {consumable.consumptionEffect.grantedSpells?.length ? (
+              <div className="mt-2 text-text">
+                Magias: {consumable.consumptionEffect.grantedSpells
+                  .map((spell) => spell.index)
+                  .join(", ")}
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
 

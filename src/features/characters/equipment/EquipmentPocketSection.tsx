@@ -3,6 +3,7 @@ import { useCharacterContext } from "../../../contexts/characterContext"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatSigned } from "../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { applyConsumableEffect } from "../../../models/characters/characterConsumables"
 import { wieldPocketWeaponWithRules } from "../../../models/characters/characterEquipmentInteractions"
 import type { ConsumableItem, ThrowableItem } from "../../../models/items/equipment/PocketItem"
 import {
@@ -87,11 +88,14 @@ export function EquipmentPocketsSection({
     if (!item || !isConsumableItemKind(item)) return
 
     updateCharacter(character.get("id"), (current) => {
-      const equipment = current.get("equipment")
-      const currentItem = equipment.pockets[index]
-
+      const currentItem = current.get("equipment").pockets[index]
       if (!currentItem || !isConsumableItemKind(currentItem)) return current
 
+      const withEffect =
+        currentItem.kind === "consumable"
+          ? applyConsumableEffect(current, currentItem)
+          : current
+      const equipment = withEffect.get("equipment")
       const nextItem = consumeItemQuantity(currentItem)
       const nextPockets = nextItem
         ? equipment.pockets.map((pocketItem, pocketIndex) =>
@@ -99,7 +103,7 @@ export function EquipmentPocketsSection({
           )
         : equipment.pockets.filter((_, pocketIndex) => pocketIndex !== index)
 
-      return current.with("equipment", {
+      return withEffect.with("equipment", {
         ...equipment,
         pockets: nextPockets,
       })
@@ -158,6 +162,15 @@ export function EquipmentPocketsSection({
                   {isConsumable(item) && item.useText?.trim() ? (
                     <div className="mt-1 text-xs text-text">
                       Uso: {item.useText}
+                    </div>
+                  ) : null}
+
+                  {isConsumable(item) && item.consumptionEffect ? (
+                    <div className="mt-1 text-xs text-text">
+                      Efeito: {item.consumptionEffect.name || "Efeito do consumível"} •{" "}
+                      {item.consumptionEffect.persistence === "permanent"
+                        ? "Permanente"
+                        : item.consumptionEffect.durationText || "Temporário"}
                     </div>
                   ) : null}
 
