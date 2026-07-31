@@ -1,4 +1,5 @@
 import { normalizeItemText } from "../../lib/textNormalization"
+import { mergeCurrencyStacks, normalizeCurrencyItem } from "./Currency"
 import { withShieldDefaults } from "./equipment/Shield"
 import type { Itemmable } from "./item"
 
@@ -6,8 +7,7 @@ export function normalizeInventoryItemIds(
   items: Itemmable[] | undefined,
 ): Itemmable[] {
   const seen = new Set<string>()
-
-  return (items ?? []).map((item) => {
+  const normalized = (items ?? []).map((item) => {
     const currentId =
       typeof item.id === "string" ? item.id.trim() : ""
     const id = currentId && !seen.has(currentId)
@@ -21,6 +21,8 @@ export function normalizeInventoryItemIds(
       id,
     })
   })
+
+  return mergeCurrencyStacks(normalized)
 }
 
 export function prepareInventoryItemForInsert(
@@ -53,7 +55,7 @@ export function updateSingleInventoryItem(
 ): Itemmable[] {
   let updated = false
 
-  return items.map((item) => {
+  const nextItems = items.map((item) => {
     if (updated || item.id !== itemId) return item
 
     updated = true
@@ -64,6 +66,8 @@ export function updateSingleInventoryItem(
       id: item.id,
     }
   })
+
+  return mergeCurrencyStacks(nextItems)
 }
 
 export function removeSingleInventoryItem(
@@ -81,6 +85,10 @@ export function removeSingleInventoryItem(
 
 function normalizeInventoryItem(item: Itemmable): Itemmable {
   const normalized = normalizeItemText(item)
+
+  if (normalized.kind === "currency") {
+    return normalizeCurrencyItem(normalized)
+  }
 
   return normalized.kind === "shield"
     ? withShieldDefaults(normalized)
