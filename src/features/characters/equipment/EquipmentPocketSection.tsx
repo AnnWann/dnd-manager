@@ -5,6 +5,7 @@ import { formatSigned } from "../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { applyConsumableEffect } from "../../../models/characters/characterConsumables"
 import { wieldPocketWeaponWithRules } from "../../../models/characters/characterEquipmentInteractions"
+import { unequipPocketStack } from "../../../models/characters/characterInventoryStacks"
 import type { ConsumableItem, ThrowableItem } from "../../../models/items/equipment/PocketItem"
 import {
   getWeaponAttackAttribute,
@@ -73,7 +74,7 @@ export function EquipmentPocketsSection({
 
   function unequipPocketItem(index: number) {
     updateCharacter(character.get("id"), (current) =>
-      current.unequipPocketItem(index),
+      unequipPocketStack(current, index),
     )
   }
 
