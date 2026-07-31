@@ -1,3 +1,4 @@
+import type { CurrencyItem } from "./Currency"
 import type { Armor } from "./equipment/Armor"
 import type { Equipment } from "./equipment/EquipmentSlot"
 import type { ConsumableItem, ThrowableItem } from "./equipment/PocketItem"
@@ -56,6 +57,7 @@ export type Item = {
 
 export type Itemmable =
   | Item
+  | CurrencyItem
   | Equipment
   | Weapon
   | Armor
