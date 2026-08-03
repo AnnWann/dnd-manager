@@ -5,6 +5,7 @@ import { Input } from "../../../components/ui/Input"
 import {
   CURRENCY_DEFINITIONS,
   CURRENCY_TYPES,
+  areAllCurrenciesInBagOfHolding,
   createCurrencyItem,
   type CurrencyType,
 } from "../../../models/items/Currency"
@@ -31,7 +32,9 @@ export function InventoryEditor(props: Props) {
     setCurrencyQuantity(
       String(Math.max(1, Math.trunc(Number(item.quantity) || 1))),
     )
-    setInsideBagOfHolding(false)
+    setInsideBagOfHolding(
+      canUseBagOfHolding && areAllCurrenciesInBagOfHolding(props.items),
+    )
     setCurrencyDialogOpen(true)
   }
 
@@ -188,8 +191,8 @@ function CurrencyAddDialog({
                   Adicionar à Bolsa Mágica
                 </span>
                 <span className="mt-0.5 block text-textMuted">
-                  A pilha será criada dentro da bolsa e contará para a
-                  capacidade dela, não para o peso carregado normalmente.
+                  O valor inicial acompanha o estado atual das demais moedas do
+                  personagem e ainda pode ser alterado nesta inclusão.
                 </span>
               </span>
             </label>
