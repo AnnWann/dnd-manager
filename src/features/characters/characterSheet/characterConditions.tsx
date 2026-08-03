@@ -6,8 +6,10 @@ import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
-import { BonusesFields } from "../inventory/equipmentBonusFields"
-import type { CharacterCondition, ConditionDurationType } from "../../../models/characters/CharacterCondition"
+import type {
+  CharacterCondition,
+  ConditionDurationType,
+} from "../../../models/characters/CharacterCondition"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
   addCharacterCondition,
@@ -16,6 +18,7 @@ import {
   removeCharacterCondition,
   updateCharacterCondition,
 } from "../../../models/characters/characterConditionStorage"
+import { BonusesFields } from "../inventory/equipmentBonusFields"
 import {
   STANDARD_CONDITION_PRESETS,
   type StandardConditionPreset,
@@ -78,9 +81,7 @@ export function CharacterConditions({
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <div className="text-sm font-semibold text-textH">
-                Condições
-              </div>
+              <div className="text-sm font-semibold text-textH">Condições</div>
               <div className="mt-1 text-xs text-textMuted">
                 Efeitos temporários, estados persistentes e comportamentos que poderão acompanhar os turnos na iniciativa.
               </div>
@@ -324,7 +325,7 @@ function ConditionDialog({
               {condition ? "Editar condição" : "Adicionar condição"}
             </h2>
             <p className="mt-1 text-xs text-textMuted">
-              O comportamento descreve o efeito mecânico; a duração prepara o efeito para avançar em turnos futuramente.
+              Preencha apenas o efeito principal e a duração. Os demais controles ficam em opções avançadas.
             </p>
           </div>
           <Button size="sm" variant="secondary" onClick={onClose}>
@@ -340,8 +341,7 @@ function ConditionDialog({
                   Condição padrão
                 </div>
                 <p className="mt-1 text-[11px] leading-5 text-textMuted">
-                  Selecione uma condição comum para preencher nome, descrição,
-                  comportamento e etiquetas. Todos os campos continuam editáveis.
+                  Selecione uma condição comum para preencher automaticamente os campos principais.
                 </p>
               </div>
               <Select
@@ -368,7 +368,7 @@ function ConditionDialog({
             </section>
           ) : null}
 
-          <label className="grid gap-1.5">
+          <label className="grid gap-1.5 sm:col-span-2">
             <span className="text-xs text-text">Nome</span>
             <Input
               value={draft.name}
@@ -377,32 +377,13 @@ function ConditionDialog({
             />
           </label>
 
-          <label className="grid gap-1.5">
-            <span className="text-xs text-text">Fonte</span>
-            <Input
-              value={draft.source}
-              placeholder="Ex.: magia Medo, veneno, criatura"
-              onChange={(event) => patch({ source: event.target.value })}
-            />
-          </label>
-
           <label className="grid gap-1.5 sm:col-span-2">
-            <span className="text-xs text-text">Comportamento mecânico</span>
+            <span className="text-xs text-text">Efeito principal</span>
             <Textarea
               rows={3}
               value={draft.behavior}
               placeholder="Ex.: desvantagem em ataques enquanto enxergar a fonte; não pode se aproximar voluntariamente."
               onChange={(event) => patch({ behavior: event.target.value })}
-            />
-          </label>
-
-          <label className="grid gap-1.5 sm:col-span-2">
-            <span className="text-xs text-text">Descrição</span>
-            <Textarea
-              rows={2}
-              value={draft.description}
-              placeholder="Descrição narrativa ou contexto da condição."
-              onChange={(event) => patch({ description: event.target.value })}
             />
           </label>
 
@@ -417,8 +398,10 @@ function ConditionDialog({
                   type,
                   total: becomesNumeric ? draft.duration.total ?? 1 : undefined,
                   remaining: becomesNumeric
-                    ? draft.duration.remaining ?? draft.duration.total ?? 1
+                    ? draft.duration.total ?? draft.duration.remaining ?? 1
                     : undefined,
+                  customLabel:
+                    type === "custom" ? draft.duration.customLabel ?? "" : undefined,
                 })
               }}
             >
@@ -431,40 +414,18 @@ function ConditionDialog({
           </label>
 
           {numeric ? (
-            <div className="grid grid-cols-2 gap-2">
-              <label className="grid gap-1.5">
-                <span className="text-xs text-text">Total</span>
-                <Input
-                  type="number"
-                  min={0}
-                  value={draft.duration.total ?? 1}
-                  onChange={(event) => {
-                    const total = Math.max(0, Number(event.target.value) || 0)
-                    patchDuration({
-                      total,
-                      remaining: Math.min(
-                        draft.duration.remaining ?? total,
-                        total,
-                      ),
-                    })
-                  }}
-                />
-              </label>
-
-              <label className="grid gap-1.5">
-                <span className="text-xs text-text">Restante</span>
-                <Input
-                  type="number"
-                  min={0}
-                  value={draft.duration.remaining ?? draft.duration.total ?? 1}
-                  onChange={(event) =>
-                    patchDuration({
-                      remaining: Math.max(0, Number(event.target.value) || 0),
-                    })
-                  }
-                />
-              </label>
-            </div>
+            <label className="grid gap-1.5">
+              <span className="text-xs text-text">Quantidade</span>
+              <Input
+                type="number"
+                min={0}
+                value={draft.duration.total ?? 1}
+                onChange={(event) => {
+                  const total = Math.max(0, Number(event.target.value) || 0)
+                  patchDuration({ total, remaining: total })
+                }}
+              />
+            </label>
           ) : null}
 
           {draft.duration.type === "custom" ? (
@@ -480,94 +441,130 @@ function ConditionDialog({
             </label>
           ) : null}
 
-          <label className="grid gap-1.5">
-            <span className="text-xs text-text">Quando reduzir</span>
-            <Select
-              value={draft.duration.tickOn ?? "end-of-turn"}
-              onChange={(event) =>
-                patchDuration({
-                  tickOn: event.target.value as CharacterCondition["duration"]["tickOn"],
-                })
-              }
-            >
-              <option value="start-of-turn">Início do turno</option>
-              <option value="end-of-turn">Fim do turno</option>
-              <option value="manual">Somente manualmente</option>
-            </Select>
-          </label>
-
-          <label className="grid gap-1.5">
-            <span className="text-xs text-text">Turno de referência</span>
-            <Select
-              value={draft.duration.tickOwner ?? "affected"}
-              onChange={(event) =>
-                patchDuration({
-                  tickOwner: event.target.value as CharacterCondition["duration"]["tickOwner"],
-                })
-              }
-            >
-              <option value="affected">Personagem afetado</option>
-              <option value="source">Fonte da condição</option>
-            </Select>
-          </label>
-
-          <label className="flex items-start gap-2 rounded-lg border border-border bg-bg-subtle p-3 text-xs text-text sm:col-span-2">
-            <input
-              type="checkbox"
-              className="mt-0.5"
-              checked={draft.duration.autoRemoveAtZero !== false}
-              onChange={(event) =>
-                patchDuration({ autoRemoveAtZero: event.target.checked })
-              }
-            />
-            <span>
-              <span className="font-medium text-textH">
-                Remover automaticamente ao chegar a zero
-              </span>
-              <span className="mt-0.5 block text-textMuted">
-                Esta opção será usada automaticamente pelo futuro controlador de turnos.
-              </span>
-            </span>
-          </label>
-
-          <div className="sm:col-span-2">
-            <BonusesFields
-              bonuses={draft.bonuses ?? {}}
-              description="Modificadores aplicados enquanto esta condição estiver ativa e não expirada."
-              onChange={(bonuses) => patch({ bonuses })}
-            />
-          </div>
-
-          <label className="grid gap-1.5 sm:col-span-2">
-            <span className="text-xs text-text">Etiquetas</span>
-            <Input
-              value={draft.tags.join(", ")}
-              placeholder="Ex.: mental, medo, magia, debilitante"
-              onChange={(event) =>
-                patch({
-                  tags: event.target.value
-                    .split(",")
-                    .map((tag) => tag.trim())
-                    .filter(Boolean),
-                })
-              }
-            />
-          </label>
-
-          <label className="grid gap-1.5 sm:col-span-2">
-            <span className="text-xs text-text">Notas</span>
-            <Textarea
-              rows={2}
-              value={draft.notes}
-              onChange={(event) => patch({ notes: event.target.value })}
-            />
-          </label>
-
           <details className="rounded-lg border border-border bg-bg-subtle p-3 sm:col-span-2">
             <summary className="cursor-pointer text-xs font-medium text-textH">
-              Integração futura com iniciativa
+              Opções avançadas
             </summary>
+
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="grid gap-1.5">
+                <span className="text-xs text-text">Fonte</span>
+                <Input
+                  value={draft.source}
+                  placeholder="Ex.: magia Medo, veneno, criatura"
+                  onChange={(event) => patch({ source: event.target.value })}
+                />
+              </label>
+
+              {numeric ? (
+                <label className="grid gap-1.5">
+                  <span className="text-xs text-text">Tempo restante</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={draft.duration.remaining ?? draft.duration.total ?? 1}
+                    onChange={(event) =>
+                      patchDuration({
+                        remaining: Math.max(0, Number(event.target.value) || 0),
+                      })
+                    }
+                  />
+                </label>
+              ) : null}
+
+              <label className="grid gap-1.5 sm:col-span-2">
+                <span className="text-xs text-text">Descrição</span>
+                <Textarea
+                  rows={2}
+                  value={draft.description}
+                  placeholder="Descrição narrativa ou contexto da condição."
+                  onChange={(event) => patch({ description: event.target.value })}
+                />
+              </label>
+
+              <label className="grid gap-1.5">
+                <span className="text-xs text-text">Quando reduzir</span>
+                <Select
+                  value={draft.duration.tickOn ?? "end-of-turn"}
+                  onChange={(event) =>
+                    patchDuration({
+                      tickOn: event.target.value as CharacterCondition["duration"]["tickOn"],
+                    })
+                  }
+                >
+                  <option value="start-of-turn">Início do turno</option>
+                  <option value="end-of-turn">Fim do turno</option>
+                  <option value="manual">Somente manualmente</option>
+                </Select>
+              </label>
+
+              <label className="grid gap-1.5">
+                <span className="text-xs text-text">Turno de referência</span>
+                <Select
+                  value={draft.duration.tickOwner ?? "affected"}
+                  onChange={(event) =>
+                    patchDuration({
+                      tickOwner: event.target.value as CharacterCondition["duration"]["tickOwner"],
+                    })
+                  }
+                >
+                  <option value="affected">Personagem afetado</option>
+                  <option value="source">Fonte da condição</option>
+                </Select>
+              </label>
+
+              <label className="flex items-start gap-2 rounded-lg border border-border bg-bg p-3 text-xs text-text sm:col-span-2">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={draft.duration.autoRemoveAtZero !== false}
+                  onChange={(event) =>
+                    patchDuration({ autoRemoveAtZero: event.target.checked })
+                  }
+                />
+                <span>
+                  <span className="font-medium text-textH">
+                    Remover automaticamente ao chegar a zero
+                  </span>
+                  <span className="mt-0.5 block text-textMuted">
+                    Usado pelo controlador de turnos da iniciativa.
+                  </span>
+                </span>
+              </label>
+
+              <div className="sm:col-span-2">
+                <BonusesFields
+                  bonuses={draft.bonuses ?? {}}
+                  description="Modificadores aplicados enquanto esta condição estiver ativa e não expirada."
+                  onChange={(bonuses) => patch({ bonuses })}
+                />
+              </div>
+
+              <label className="grid gap-1.5 sm:col-span-2">
+                <span className="text-xs text-text">Etiquetas</span>
+                <Input
+                  value={draft.tags.join(", ")}
+                  placeholder="Ex.: mental, medo, magia, debilitante"
+                  onChange={(event) =>
+                    patch({
+                      tags: event.target.value
+                        .split(",")
+                        .map((tag) => tag.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                />
+              </label>
+
+              <label className="grid gap-1.5 sm:col-span-2">
+                <span className="text-xs text-text">Notas</span>
+                <Textarea
+                  rows={2}
+                  value={draft.notes}
+                  onChange={(event) => patch({ notes: event.target.value })}
+                />
+              </label>
+
               <label className="grid gap-1.5">
                 <span className="text-xs text-text">ID da fonte</span>
                 <Input
@@ -578,6 +575,7 @@ function ConditionDialog({
                   }
                 />
               </label>
+
               <label className="grid gap-1.5">
                 <span className="text-xs text-text">ID do combatente vinculado</span>
                 <Input
@@ -661,7 +659,13 @@ function formatDuration(condition: CharacterCondition): string {
     return `${value} ${durationUnitLabel(duration.type, value)}`
   }
 
-  const labels: Record<Exclude<ConditionDurationType, "rounds" | "turns" | "minutes" | "hours" | "days">, string> = {
+  const labels: Record<
+    Exclude<
+      ConditionDurationType,
+      "rounds" | "turns" | "minutes" | "hours" | "days"
+    >,
+    string
+  > = {
     "until-start-of-turn": "Até o início do turno",
     "until-end-of-turn": "Até o fim do turno",
     "until-save": "Até passar em um teste",
