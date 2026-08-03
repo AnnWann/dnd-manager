@@ -16,6 +16,7 @@ import { GroundInventoryView } from "./views/GroundInventoryView"
 import { PartyInventoryView } from "./views/PartyInventoryView"
 import { SyncView } from "./views/SyncView"
 import { AuthView } from "./views/AuthView"
+import { NotFoundView } from "./views/NotFoundView"
 
 export function AppRouter() {
   return (
@@ -31,6 +32,8 @@ export function AppRouter() {
         }
       />
       <Route path="/auth" element={<AuthView />} />
+      <Route path="/not-found" element={<NotFoundView />} />
+      <Route path="*" element={<Navigate to="/not-found" replace />} />
       <Route path="/sync" element={<SyncView />} />
       <Route path="/character" element={<CharacterIndexView />} />
       <Route path="/character/create" element={<CharacterCreateView />} />

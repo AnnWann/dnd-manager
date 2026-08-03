@@ -144,6 +144,17 @@ function App() {
     },
   ]
 
+  const NoSideBar = ["/auth", "/not-found"].includes(location.pathname)
+
+
+  if (NoSideBar) {
+    return (
+      <div className="min-h-dvh bg-[color:var(--surface-app)] text-text">
+        <AppRouter />
+      </div>
+    )
+  }
+
   return (
     <SyncProvider
       value={{
