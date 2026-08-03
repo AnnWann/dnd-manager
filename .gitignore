@@ -29,3 +29,5 @@ dist-ssr
 
 # Generated spell DB (created by scripts/build-spells-json.mjs)
 public/spells.v1.json
+
+/generated
