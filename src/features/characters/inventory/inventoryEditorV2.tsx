@@ -441,6 +441,11 @@ function CurrencyWallet({
   transferLabel: string
   onEditItem: (item: Itemmable) => void
 }) {
+  const positiveCurrency = items.filter((item) => (item.quantity ?? 0) > 0)
+  const currenciesInsideBagOfHolding =
+    positiveCurrency.length > 0 &&
+    positiveCurrency.every((item) => item.insideBagOfHolding === true)
+
   return (
     <div className="mb-4 rounded-xl border border-accentBorder bg-accentBg p-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -456,10 +461,12 @@ function CurrencyWallet({
               <Button
                 className="w-full sm:w-auto"
                 size="sm"
-                variant="secondary"
+                variant={currenciesInsideBagOfHolding ? "primary" : "secondary"}
                 onClick={onMoveAllCurrenciesToBagOfHolding}
               >
-                Todas na Bolsa Mágica
+                {currenciesInsideBagOfHolding
+                  ? "Retirar da Bolsa Mágica"
+                  : "Colocar na Bolsa Mágica"}
               </Button>
             ) : null}
             {onAddItem ? (

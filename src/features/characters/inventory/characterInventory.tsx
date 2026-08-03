@@ -13,7 +13,10 @@ import {
   BAG_OF_HOLDING_CAPACITY_KG,
   getBagOfHoldingWeightKg,
 } from "../../../models/items/bagOfHolding"
-import { mergeCurrencyStacks } from "../../../models/items/Currency"
+import {
+  areAllCurrenciesInBagOfHolding,
+  setCurrenciesInsideBagOfHolding,
+} from "../../../models/items/Currency"
 import type { Itemmable } from "../../../models/items/item"
 import { CharacterEncumbrancePanel } from "./characterEncumbrancePanel"
 import { EquipItemDialog } from "./equipItemDialog"
@@ -75,12 +78,11 @@ export function CharacterInventoryTab({
   const encumbrance = getEncumbranceInfo(character)
   const canTransfer = canTransferFromCharacter(character.get("id"))
   const bagWeight = getBagOfHoldingWeightKg(items)
-  const hasCarriedCurrency = items.some(
-    (item) =>
-      item.kind === "currency" &&
-      item.insideBagOfHolding !== true &&
-      (item.quantity ?? 0) > 0,
+  const hasCurrency = items.some(
+    (item) => item.kind === "currency" && (item.quantity ?? 0) > 0,
   )
+  const currenciesInsideBagOfHolding =
+    areAllCurrenciesInBagOfHolding(items)
   const attunedItemIds = items
     .filter((item) => item.attuned === true)
     .map((item) => item.id)
@@ -106,11 +108,18 @@ export function CharacterInventoryTab({
   }
 
   function addItem(item: Itemmable) {
-    const candidateItems = [...items, item]
+    const itemWithCurrencyState =
+      item.kind === "currency" && hasCurrency
+        ? {
+            ...item,
+            insideBagOfHolding: currenciesInsideBagOfHolding,
+          }
+        : item
+    const candidateItems = [...items, itemWithCurrencyState]
     if (wouldExceedBagCapacity(candidateItems)) return
 
     updateCharacter(character.get("id"), (current) =>
-      current.addInventoryItem(item),
+      current.addInventoryItem(itemWithCurrencyState),
     )
   }
 
@@ -157,14 +166,20 @@ export function CharacterInventoryTab({
     )
   }
 
-  function moveAllCurrenciesToBagOfHolding() {
-    const candidateItems = moveCurrenciesToBagOfHolding(items)
+  function setAllCurrenciesBagOfHolding(insideBagOfHolding: boolean) {
+    const candidateItems = setCurrenciesInsideBagOfHolding(
+      items,
+      insideBagOfHolding,
+    )
     if (wouldExceedBagCapacity(candidateItems)) return
 
     updateCharacter(character.get("id"), (current) =>
       current.with(
         "inventory",
-        moveCurrenciesToBagOfHolding(current.get("inventory") ?? []),
+        setCurrenciesInsideBagOfHolding(
+          current.get("inventory") ?? [],
+          insideBagOfHolding,
+        ),
       ),
     )
   }
@@ -204,7 +219,12 @@ export function CharacterInventoryTab({
         }
         onToggleBagOfHolding={toggleBagOfHolding}
         onMoveAllCurrenciesToBagOfHolding={
-          hasCarriedCurrency ? moveAllCurrenciesToBagOfHolding : undefined
+          hasCurrency
+            ? () =>
+                setAllCurrenciesBagOfHolding(
+                  !currenciesInsideBagOfHolding,
+                )
+            : undefined
         }
         onToggleAttunement={(itemId) =>
           updateCharacter(character.get("id"), (current) =>
@@ -259,19 +279,6 @@ export function CharacterInventoryTab({
         onClose={() => setBagLimitMessage(null)}
       />
     </>
-  )
-}
-
-function moveCurrenciesToBagOfHolding(items: Itemmable[]): Itemmable[] {
-  return mergeCurrencyStacks(
-    items.map((item) =>
-      item.kind === "currency"
-        ? {
-            ...item,
-            insideBagOfHolding: true,
-          }
-        : item,
-    ),
   )
 }
 

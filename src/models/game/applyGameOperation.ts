@@ -8,6 +8,7 @@ import {
   takeLongRest,
   takePartialLongRest,
 } from "../characters/characterRestWithSorcery"
+import { areAllCurrenciesInBagOfHolding } from "../items/Currency"
 import type { Itemmable } from "../items/item"
 import {
   consumeSelectedSupplies,
@@ -346,13 +347,18 @@ function transferItem<TState extends AppStateV1>(
     )
   }
 
+  const destinationKeepsCurrencyInBag =
+    request.to.type === "character" &&
+    sourceItem.kind === "currency" &&
+    areAllCurrenciesInBagOfHolding(destinationInventory)
+
   const movedItem = normalizeItemText({
     ...sourceItem,
     id: request.destinationItemId ?? crypto.randomUUID(),
     quantity: movedQuantity,
     heldHands: undefined,
     wieldedTwoHanded: undefined,
-    insideBagOfHolding: false,
+    insideBagOfHolding: destinationKeepsCurrencyInBag,
   })
 
   addOrMergeStack(destinationInventory, movedItem, meta)
@@ -390,7 +396,10 @@ function addOrMergeStack(
       quantity:
         Math.max(0, Number(existing.quantity) || 0) +
         Math.max(0, Number(movedItem.quantity) || 0),
-      insideBagOfHolding: false,
+      insideBagOfHolding:
+        movedItem.kind === "currency"
+          ? movedItem.insideBagOfHolding === true
+          : false,
     }),
     meta,
   )
@@ -398,6 +407,12 @@ function addOrMergeStack(
 
 function areItemsStackCompatible(first: Itemmable, second: Itemmable): boolean {
   if (first.kind !== second.kind) return false
+  if (
+    first.kind === "currency" &&
+    first.insideBagOfHolding !== second.insideBagOfHolding
+  ) {
+    return false
+  }
   if (first.name.trim().toLocaleLowerCase("pt-BR") !== second.name.trim().toLocaleLowerCase("pt-BR")) {
     return false
   }
