@@ -18,6 +18,11 @@ model User {
   sessions      Session[]
   accounts      Account[]
 
+  characters Character[]
+
+  ownedCampaigns      Campaign[]       @relation("CampaignOwner")
+  campaignMemberships CampaignMember[]
+
   @@unique([email])
   @@map("user")
 }
@@ -68,4 +73,95 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+enum CharacterVisibility {
+  PRIVATE
+  PARTY
+  MASTER
+}
+
+model Character {
+  id         String              @id @default(uuid())
+  name       String
+  data       Json
+  visibility CharacterVisibility @default(PRIVATE)
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  campaignLinks CampaignCharacter[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+  @@map("character")
+}
+
+enum CampaignRole {
+  MASTER
+  PLAYER
+}
+
+enum CampaignMemberStatus {
+  ACTIVE
+  INVITED
+  REMOVED
+}
+
+model Campaign {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  inviteCode  String? @unique
+
+  ownerId String
+  owner   User   @relation("CampaignOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  members    CampaignMember[]
+  characters CampaignCharacter[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+  @@map("campaign")
+}
+
+model CampaignMember {
+  id     String               @id @default(uuid())
+  role   CampaignRole         @default(PLAYER)
+  status CampaignMemberStatus @default(ACTIVE)
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  joinedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([campaignId, userId])
+  @@index([userId])
+  @@index([campaignId])
+  @@map("campaign_member")
+}
+
+model CampaignCharacter {
+  id String @id @default(uuid())
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  addedAt DateTime @default(now())
+
+  @@unique([campaignId, characterId])
+  @@index([campaignId])
+  @@index([characterId])
+  @@map("campaign_character")
 }
