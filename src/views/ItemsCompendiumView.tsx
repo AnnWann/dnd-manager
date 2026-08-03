@@ -1,17 +1,17 @@
-import { useEffect, useMemo, useState } from "react"
 import { Copy, PackagePlus, Plus, Search, Trash2 } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
 import { Navigate } from "react-router-dom"
 
 import { Button } from "../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../components/ui/Card"
 import { Input } from "../components/ui/Input"
-import { Textarea } from "../components/ui/Textarea"
 import { useCharacterContext } from "../contexts/characterContext"
 import { useSyncContext } from "../contexts/syncContext"
 import {
   BASIC_ITEM_COMPENDIUM,
   cloneCompendiumItem,
 } from "../features/items/itemCompendium"
+import { ItemCreationDialog } from "../features/items/ItemCreationDialog"
 import { createCurrencyCompendiumItems } from "../models/items/Currency"
 import type { ItemKind, Itemmable } from "../models/items/item"
 
@@ -42,8 +42,6 @@ export function ItemsCompendiumView() {
   const [query, setQuery] = useState("")
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
-  const [templateJson, setTemplateJson] = useState(DEFAULT_TEMPLATE_JSON)
-  const [templateError, setTemplateError] = useState("")
   const [customTemplates, setCustomTemplates] = useState<Itemmable[]>(
     readCustomTemplates,
   )
@@ -87,24 +85,10 @@ export function ItemsCompendiumView() {
     window.setTimeout(() => setCopiedId(null), 1500)
   }
 
-  function addTemplates() {
-    try {
-      const parsed = JSON.parse(templateJson) as unknown
-      const entries = Array.isArray(parsed) ? parsed : [parsed]
-      if (entries.length === 0) {
-        throw new Error("Informe pelo menos um modelo de item.")
-      }
-
-      const templates = entries.map(normalizeTemplate)
-      setCustomTemplates((current) => [...current, ...templates])
-      setTemplateJson(DEFAULT_TEMPLATE_JSON)
-      setTemplateError("")
-      setCreating(false)
-    } catch (error) {
-      setTemplateError(
-        error instanceof Error ? error.message : "JSON de item inválido.",
-      )
-    }
+  function addCustomItem(item: Itemmable) {
+    const template = normalizeTemplate(item)
+    setCustomTemplates((current) => [...current, template])
+    setCreating(false)
   }
 
   function removeTemplate(itemId: string) {
@@ -119,21 +103,21 @@ export function ItemsCompendiumView() {
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h1 className="text-lg font-semibold text-textH">Compêndio de Itens</h1>
+              <h1 className="text-lg font-semibold text-textH">
+                Compêndio de Itens
+              </h1>
               <p className="mt-1 text-xs leading-5 text-textMuted">
-                Modelos prontos para consulta, cópia em JSON ou adição ao chão. Esta área é exclusiva do mestre.
+                Itens prontos para consulta, cópia em JSON ou adição ao chão.
+                Esta área é exclusiva do mestre.
               </p>
             </div>
             <Button
               size="sm"
               variant="primary"
-              onClick={() => {
-                setCreating((current) => !current)
-                setTemplateError("")
-              }}
+              onClick={() => setCreating(true)}
             >
               <Plus className="h-4 w-4" />
-              Adicionar modelo
+              Adicionar item
             </Button>
           </div>
         </CardHeader>
@@ -149,47 +133,6 @@ export function ItemsCompendiumView() {
           </label>
         </CardContent>
       </Card>
-
-      {creating ? (
-        <Card>
-          <CardHeader>
-            <h2 className="text-sm font-semibold text-textH">Novo modelo</h2>
-            <p className="mt-1 text-xs leading-5 text-textMuted">
-              Cole um item ou uma lista de itens em JSON. Campos adicionais são preservados para armas, armaduras, consumíveis e outros tipos.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3">
-              <Textarea
-                rows={14}
-                value={templateJson}
-                aria-label="JSON do modelo de item"
-                onChange={(event) => setTemplateJson(event.target.value)}
-              />
-              {templateError ? (
-                <div className="rounded-lg border border-danger/40 bg-danger/5 px-3 py-2 text-xs text-danger">
-                  {templateError}
-                </div>
-              ) : null}
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    setCreating(false)
-                    setTemplateError("")
-                  }}
-                >
-                  Cancelar
-                </Button>
-                <Button size="sm" variant="primary" onClick={addTemplates}>
-                  Salvar modelo
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((item) => {
@@ -219,7 +162,9 @@ export function ItemsCompendiumView() {
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="min-h-12 text-sm leading-6 text-text">{item.desc}</p>
+                <p className="min-h-12 text-sm leading-6 text-text">
+                  {item.desc}
+                </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button
                     size="sm"
@@ -229,7 +174,11 @@ export function ItemsCompendiumView() {
                     <PackagePlus className="h-4 w-4" />
                     Adicionar ao chão
                   </Button>
-                  <Button size="sm" variant="secondary" onClick={() => copyItem(item.id)}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => copyItem(item.id)}
+                  >
                     <Copy className="h-4 w-4" />
                     {copiedId === item.id ? "Copiado" : "Copiar JSON"}
                   </Button>
@@ -237,7 +186,7 @@ export function ItemsCompendiumView() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      title="Excluir modelo personalizado"
+                      title="Excluir item personalizado"
                       onClick={() => removeTemplate(item.id)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -255,6 +204,15 @@ export function ItemsCompendiumView() {
           Nenhum item encontrado.
         </div>
       ) : null}
+
+      <ItemCreationDialog
+        open={creating}
+        title="Adicionar item ao compêndio"
+        enableJson
+        saveLabel="Adicionar item"
+        onClose={() => setCreating(false)}
+        onSave={addCustomItem}
+      />
     </div>
   )
 }
@@ -284,17 +242,18 @@ function normalizeTemplate(value: unknown): Itemmable {
   return {
     ...item,
     id: `compendium-custom-${crypto.randomUUID()}`,
+    quantity: Math.max(1, Math.trunc(Number(item.quantity) || 1)),
   }
 }
 
 function normalizeStoredTemplate(value: unknown): Itemmable {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Cada modelo precisa ser um objeto JSON.")
+    throw new Error("Cada item precisa ser um objeto válido.")
   }
 
   const raw = value as Record<string, unknown>
   const name = typeof raw.name === "string" ? raw.name.trim() : ""
-  if (!name) throw new Error("Cada modelo precisa ter um nome.")
+  if (!name) throw new Error("Cada item precisa ter um nome.")
 
   const kind = raw.kind
   if (typeof kind !== "string" || !ITEM_KINDS.has(kind as ItemKind)) {
@@ -303,8 +262,8 @@ function normalizeStoredTemplate(value: unknown): Itemmable {
 
   const quantity = Number(raw.quantity ?? 1)
   const weight = Number(raw.weight ?? 0)
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    throw new Error(`A quantidade de ${name} precisa ser maior que zero.`)
+  if (!Number.isFinite(quantity) || quantity < 0) {
+    throw new Error(`A quantidade de ${name} não pode ser negativa.`)
   }
   if (!Number.isFinite(weight) || weight < 0) {
     throw new Error(`O peso de ${name} não pode ser negativo.`)
@@ -325,13 +284,3 @@ function normalizeStoredTemplate(value: unknown): Itemmable {
     kind: kind as ItemKind,
   } as Itemmable
 }
-
-const DEFAULT_TEMPLATE_JSON = `{
-  "name": "Novo item",
-  "desc": "Descrição do modelo.",
-  "notes": "",
-  "quantity": 1,
-  "weight": 0,
-  "pocketable": true,
-  "kind": "gear"
-}`
