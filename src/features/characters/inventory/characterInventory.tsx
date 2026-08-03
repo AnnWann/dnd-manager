@@ -211,9 +211,13 @@ export function CharacterInventoryTab({
           setEquippingItem(items.find((item) => item.id === itemId) ?? null)
         }
         onToggleBagOfHolding={toggleBagOfHolding}
-        currenciesInsideBagOfHolding={currenciesInsideBagOfHolding}
-        onSetCurrenciesBagOfHolding={
-          hasCurrency ? setAllCurrenciesBagOfHolding : undefined
+        onMoveAllCurrenciesToBagOfHolding={
+          hasCurrency
+            ? () =>
+                setAllCurrenciesBagOfHolding(
+                  !currenciesInsideBagOfHolding,
+                )
+            : undefined
         }
         onToggleAttunement={(itemId) =>
           updateCharacter(character.get("id"), (current) =>
