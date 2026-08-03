@@ -103,12 +103,6 @@ function App() {
       onClick: () => navigate("/ground-inventory"),
     },
     {
-      label: "Compêndio de Itens",
-      icon: <IconEquipment />,
-      active: location.pathname === "/items-compendium",
-      onClick: () => navigate("/items-compendium"),
-    },
-    {
       label: "Missões",
       icon: <IconNotes />,
       active: location.pathname === "/missions",
@@ -116,6 +110,12 @@ function App() {
     },
     ...(userRole === "master"
       ? [
+          {
+            label: "Compêndio de Itens",
+            icon: <IconEquipment />,
+            active: location.pathname === "/items-compendium",
+            onClick: () => navigate("/items-compendium"),
+          },
           {
             label: "Compêndio de Criaturas",
             icon: <IconCompendium />,
