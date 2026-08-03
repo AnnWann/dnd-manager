@@ -108,11 +108,18 @@ export function CharacterInventoryTab({
   }
 
   function addItem(item: Itemmable) {
-    const candidateItems = [...items, item]
+    const itemWithCurrencyState =
+      item.kind === "currency" && hasCurrency
+        ? {
+            ...item,
+            insideBagOfHolding: currenciesInsideBagOfHolding,
+          }
+        : item
+    const candidateItems = [...items, itemWithCurrencyState]
     if (wouldExceedBagCapacity(candidateItems)) return
 
     updateCharacter(character.get("id"), (current) =>
-      current.addInventoryItem(item),
+      current.addInventoryItem(itemWithCurrencyState),
     )
   }
 
