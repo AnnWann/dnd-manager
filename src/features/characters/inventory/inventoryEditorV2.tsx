@@ -35,6 +35,7 @@ type Props = {
   onConsumeItem?: (itemId: string) => void
   onEquipItem?: (itemId: string) => void
   onToggleBagOfHolding?: (itemId: string) => void
+  onMoveAllCurrenciesToBagOfHolding?: () => void
   onToggleAttunement?: (itemId: string) => void
   attunedItemIds?: string[]
   onTransferItem?: (item: Itemmable) => void
@@ -150,6 +151,7 @@ export function InventoryEditor({
   onConsumeItem,
   onEquipItem,
   onToggleBagOfHolding,
+  onMoveAllCurrenciesToBagOfHolding,
   onToggleAttunement,
   attunedItemIds = [],
   onTransferItem,
@@ -199,6 +201,9 @@ export function InventoryEditor({
           onRemoveItem={onRemoveItem}
           onTransferItem={onTransferItem}
           onEquipItem={onEquipItem}
+          onMoveAllCurrenciesToBagOfHolding={
+            onMoveAllCurrenciesToBagOfHolding
+          }
           transferLabel={transferLabel}
           onEditItem={setEditingItem}
         />
@@ -343,7 +348,7 @@ export function InventoryEditor({
                             size="sm"
                             variant="ghost"
                             disabled={!onRemoveItem}
-                  onClick={() => onRemoveItem?.(item.id)}
+                            onClick={() => onRemoveItem?.(item.id)}
                           >
                             Remover
                           </Button>
@@ -376,29 +381,29 @@ export function InventoryEditor({
       </CardContent>
 
       {onAddItem ? (
-      <ItemEditPopup
-        open={creatingItem}
-        title="Criar item"
-        item={newInventoryItem()}
-        onClose={() => setCreatingItem(false)}
-        onSave={(item) => {
-          onAddItem(normalizeItemText(item))
-          setCreatingItem(false)
-        }}
-      />
+        <ItemEditPopup
+          open={creatingItem}
+          title="Criar item"
+          item={newInventoryItem()}
+          onClose={() => setCreatingItem(false)}
+          onSave={(item) => {
+            onAddItem(normalizeItemText(item))
+            setCreatingItem(false)
+          }}
+        />
       ) : null}
 
       {onUpdateItem ? (
-      <ItemEditPopup
-        open={editingItem !== null}
-        title="Editar item"
-        item={editingItem}
-        onClose={() => setEditingItem(null)}
-        onSave={(item) => {
-          onUpdateItem(item.id, () => normalizeItemText(item))
-          setEditingItem(null)
-        }}
-      />
+        <ItemEditPopup
+          open={editingItem !== null}
+          title="Editar item"
+          item={editingItem}
+          onClose={() => setEditingItem(null)}
+          onSave={(item) => {
+            onUpdateItem(item.id, () => normalizeItemText(item))
+            setEditingItem(null)
+          }}
+        />
       ) : null}
     </Card>
   )
@@ -419,6 +424,7 @@ function CurrencyWallet({
   onRemoveItem,
   onTransferItem,
   onEquipItem,
+  onMoveAllCurrenciesToBagOfHolding,
   transferLabel,
   onEditItem,
 }: {
@@ -431,6 +437,7 @@ function CurrencyWallet({
   onRemoveItem?: (itemId: string) => void
   onTransferItem?: (item: Itemmable) => void
   onEquipItem?: (itemId: string) => void
+  onMoveAllCurrenciesToBagOfHolding?: () => void
   transferLabel: string
   onEditItem: (item: Itemmable) => void
 }) {
@@ -443,15 +450,29 @@ function CurrencyWallet({
             Valores monetários ficam separados do restante dos itens.
           </div>
         </div>
-        {onAddItem ? (
-          <Button
-            className="w-full sm:w-auto"
-            size="sm"
-            variant="secondary"
-            onClick={() => onAddItem(newCurrencyItem())}
-          >
-            + Moeda
-          </Button>
+        {onAddItem || onMoveAllCurrenciesToBagOfHolding ? (
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            {onMoveAllCurrenciesToBagOfHolding ? (
+              <Button
+                className="w-full sm:w-auto"
+                size="sm"
+                variant="secondary"
+                onClick={onMoveAllCurrenciesToBagOfHolding}
+              >
+                Todas na Bolsa Mágica
+              </Button>
+            ) : null}
+            {onAddItem ? (
+              <Button
+                className="w-full sm:w-auto"
+                size="sm"
+                variant="secondary"
+                onClick={() => onAddItem(newCurrencyItem())}
+              >
+                + Moeda
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </div>
 

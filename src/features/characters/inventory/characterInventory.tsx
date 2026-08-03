@@ -13,6 +13,7 @@ import {
   BAG_OF_HOLDING_CAPACITY_KG,
   getBagOfHoldingWeightKg,
 } from "../../../models/items/bagOfHolding"
+import { mergeCurrencyStacks } from "../../../models/items/Currency"
 import type { Itemmable } from "../../../models/items/item"
 import { CharacterEncumbrancePanel } from "./characterEncumbrancePanel"
 import { EquipItemDialog } from "./equipItemDialog"
@@ -74,6 +75,12 @@ export function CharacterInventoryTab({
   const encumbrance = getEncumbranceInfo(character)
   const canTransfer = canTransferFromCharacter(character.get("id"))
   const bagWeight = getBagOfHoldingWeightKg(items)
+  const hasCarriedCurrency = items.some(
+    (item) =>
+      item.kind === "currency" &&
+      item.insideBagOfHolding !== true &&
+      (item.quantity ?? 0) > 0,
+  )
   const attunedItemIds = items
     .filter((item) => item.attuned === true)
     .map((item) => item.id)
@@ -150,6 +157,18 @@ export function CharacterInventoryTab({
     )
   }
 
+  function moveAllCurrenciesToBagOfHolding() {
+    const candidateItems = moveCurrenciesToBagOfHolding(items)
+    if (wouldExceedBagCapacity(candidateItems)) return
+
+    updateCharacter(character.get("id"), (current) =>
+      current.with(
+        "inventory",
+        moveCurrenciesToBagOfHolding(current.get("inventory") ?? []),
+      ),
+    )
+  }
+
   return (
     <>
       <div className="mb-4 grid gap-4">
@@ -184,6 +203,9 @@ export function CharacterInventoryTab({
           setEquippingItem(items.find((item) => item.id === itemId) ?? null)
         }
         onToggleBagOfHolding={toggleBagOfHolding}
+        onMoveAllCurrenciesToBagOfHolding={
+          hasCarriedCurrency ? moveAllCurrenciesToBagOfHolding : undefined
+        }
         onToggleAttunement={(itemId) =>
           updateCharacter(character.get("id"), (current) =>
             toggleInventoryItemAttunement(current, itemId),
@@ -237,6 +259,19 @@ export function CharacterInventoryTab({
         onClose={() => setBagLimitMessage(null)}
       />
     </>
+  )
+}
+
+function moveCurrenciesToBagOfHolding(items: Itemmable[]): Itemmable[] {
+  return mergeCurrencyStacks(
+    items.map((item) =>
+      item.kind === "currency"
+        ? {
+            ...item,
+            insideBagOfHolding: true,
+          }
+        : item,
+    ),
   )
 }
 
