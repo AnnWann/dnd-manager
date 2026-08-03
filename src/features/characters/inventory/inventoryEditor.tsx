@@ -192,7 +192,7 @@ function CurrencyAddDialog({
                 </span>
                 <span className="mt-0.5 block text-textMuted">
                   O valor inicial acompanha o estado atual das demais moedas do
-                  personagem. Quando já existem moedas, o toggle geral da carteira
+                  personagem. Quando já existem moedas, o controle geral da carteira
                   mantém todas elas no mesmo local.
                 </span>
               </span>
