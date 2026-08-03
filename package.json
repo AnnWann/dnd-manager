@@ -14,6 +14,7 @@
     "spells:fetch": "node scripts/build-spells-json.mjs --force"
   },
   "dependencies": {
+    "@better-auth/prisma-adapter": "^1.6.25",
     "@google-cloud/translate": "^9.4.2",
     "@neondatabase/serverless": "^1.1.0",
     "@prisma/adapter-neon": "^7.9.1",
