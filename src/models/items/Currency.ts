@@ -173,6 +173,36 @@ export function mergeCurrencyStacks(items: Itemmable[]): Itemmable[] {
   return result
 }
 
+export function areAllCurrenciesInBagOfHolding(
+  items: Itemmable[],
+): boolean {
+  const currencies = items.filter(
+    (item): item is CurrencyItem =>
+      isCurrencyItem(item) && normalizeCurrencyQuantity(item.quantity) > 0,
+  )
+
+  return (
+    currencies.length > 0 &&
+    currencies.every((item) => item.insideBagOfHolding === true)
+  )
+}
+
+export function setCurrenciesInsideBagOfHolding(
+  items: Itemmable[],
+  insideBagOfHolding: boolean,
+): Itemmable[] {
+  return mergeCurrencyStacks(
+    items.map((item) =>
+      isCurrencyItem(item)
+        ? normalizeCurrencyItem({
+            ...item,
+            insideBagOfHolding,
+          })
+        : item,
+    ),
+  )
+}
+
 export function getCurrencyTotalWeight(item: CurrencyItem): number {
   return item.quantity * item.weight
 }
