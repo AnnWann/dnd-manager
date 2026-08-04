@@ -7,19 +7,12 @@ import { Card, CardContent, CardHeader } from "../components/ui/Card"
 import { Input } from "../components/ui/Input"
 import { useCharacterContext } from "../contexts/characterContext"
 import { useSyncContext } from "../contexts/syncContext"
-import {
-  BASIC_ITEM_COMPENDIUM,
-  cloneCompendiumItem,
-} from "../features/items/itemCompendium"
+import { cloneCompendiumItem } from "../features/items/itemCompendium"
 import { ItemCreationDialog } from "../features/items/ItemCreationDialog"
-import { createCurrencyCompendiumItems } from "../models/items/Currency"
+import { STANDARD_ITEM_COMPENDIUM } from "../features/items/standardItemCompendium"
 import type { ItemKind, Itemmable } from "../models/items/item"
 
 const CUSTOM_TEMPLATES_STORAGE_KEY = "dndmm.itemCompendium.custom.v1"
-const BASE_COMPENDIUM_ITEMS = [
-  ...createCurrencyCompendiumItems(),
-  ...BASIC_ITEM_COMPENDIUM,
-]
 const ITEM_KINDS = new Set<ItemKind>([
   "common",
   "equipment",
@@ -54,7 +47,7 @@ export function ItemsCompendiumView() {
   }, [customTemplates])
 
   const compendiumItems = useMemo(
-    () => [...BASE_COMPENDIUM_ITEMS, ...customTemplates],
+    () => [...STANDARD_ITEM_COMPENDIUM, ...customTemplates],
     [customTemplates],
   )
 
@@ -67,7 +60,7 @@ export function ItemsCompendiumView() {
     const normalized = query.trim().toLocaleLowerCase("pt-BR")
     if (!normalized) return compendiumItems
     return compendiumItems.filter((item) =>
-      `${item.name} ${item.desc} ${item.kind}`
+      `${item.name} ${item.desc} ${item.kind} ${item.category ?? ""}`
         .toLocaleLowerCase("pt-BR")
         .includes(normalized),
     )
@@ -107,8 +100,7 @@ export function ItemsCompendiumView() {
                 Compêndio de Itens
               </h1>
               <p className="mt-1 text-xs leading-5 text-textMuted">
-                Itens prontos para consulta, cópia em JSON ou adição ao chão.
-                Esta área é exclusiva do mestre.
+                Itens canônicos usados também pelo wizard de inventário, além de modelos personalizados do mestre.
               </p>
             </div>
             <Button
@@ -137,6 +129,9 @@ export function ItemsCompendiumView() {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((item) => {
           const custom = customTemplateIds.has(item.id)
+          const protectedItem =
+            item.kind === "currency" || item.category === "bagOfHolding"
+
           return (
             <Card key={item.id}>
               <CardHeader>
@@ -149,6 +144,10 @@ export function ItemsCompendiumView() {
                       {custom ? (
                         <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
                           Personalizado
+                        </span>
+                      ) : protectedItem ? (
+                        <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
+                          Canônico
                         </span>
                       ) : null}
                     </div>
