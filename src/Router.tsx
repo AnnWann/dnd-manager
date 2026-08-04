@@ -19,6 +19,7 @@ import { AuthView } from "./views/AuthView"
 import { NotFoundView } from "./views/NotFoundView"
 import { UserCharactersTab } from "./views/user/UserCharactersTab"
 import { UserCampaignsTab } from "./views/user/UserCampaignTab"
+import { UserSpellsTab } from "./views/user/UserSpellsTab"
 import { UnauthorizedView } from "./views/UnauthorisedView"
 import { RequireAuth } from "./auth/requireAuth"
 import { UserDashboardView } from "./views/user/UserDashboardView"
@@ -27,18 +28,30 @@ import { UserCharacterDetailView } from "./views/user/UserCharacterDetailView"
 export function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={ <Navigate to="/user" replace state={{ autoOpenLast: true }} /> } />
+      <Route path="/" element={<Navigate to="/user" replace />} />
       <Route path="/auth" element={<AuthView />} />
       <Route path="/not-found" element={<NotFoundView />} />
       <Route path="/unauthorized" element={<UnauthorizedView />} />
-      <Route path="*" element={<Navigate to="/not-found" replace />} />
 
-      <Route path="/user" element={ <RequireAuth> <UserDashboardView /> </RequireAuth> } >
+      <Route
+        path="/user"
+        element={
+          <RequireAuth>
+            <UserDashboardView />
+          </RequireAuth>
+        }
+      >
         <Route index element={<Navigate to="characters" replace />} />
         <Route path="characters" element={<UserCharactersTab />} />
-        <Route path="characters/:characterId" element={<Navigate to="sheet" replace />} />
-        <Route path="characters/:characterId/:tab" element={<UserCharacterDetailView />}
-/>
+        <Route
+          path="characters/:characterId"
+          element={<Navigate to="sheet" replace />}
+        />
+        <Route
+          path="characters/:characterId/:tab"
+          element={<UserCharacterDetailView />}
+        />
+        <Route path="spells" element={<UserSpellsTab />} />
         <Route path="campaigns" element={<UserCampaignsTab />} />
       </Route>
 
@@ -57,6 +70,8 @@ export function AppRouter() {
       <Route path="/custom-systems/:systemId/:tab" element={<CustomSystemEditorView />} />
       <Route path="/initiative" element={<InitiativeView />} />
       <Route path="/magic" element={<MagicView />} />
+
+      <Route path="*" element={<Navigate to="/not-found" replace />} />
     </Routes>
   )
 }
