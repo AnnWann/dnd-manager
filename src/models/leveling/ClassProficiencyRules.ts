@@ -53,7 +53,13 @@ export const CLASS_PROFICIENCY_RULES: Record<
       proficiency("artificer", "simple-weapons", "Armas simples", "weapon"),
       proficiency("artificer", "thieves-tools", "Ferramentas de ladrão", "tool"),
       proficiency("artificer", "tinkers-tools", "Ferramentas de funileiro", "tool"),
-      proficiency("artificer", "artisan-tool", "Uma ferramenta de artesão à escolha", "tool"),
+      proficiency(
+        "artificer",
+        "artisan-tool-default",
+        "Ferramentas de ferreiro",
+        "tool",
+        "Escolha padrão para a ferramenta de artesão concedida pela classe; pode ser editada na ficha.",
+      ),
     ],
     multiclass: [
       proficiency("artificer", "mc-armor-light", "Armaduras leves", "armor"),
@@ -64,7 +70,15 @@ export const CLASS_PROFICIENCY_RULES: Record<
     ],
     initialSkills: {
       count: 2,
-      options: skill("arcana", "history", "investigation", "medicine", "nature", "perception", "sleightOfHand"),
+      options: skill(
+        "arcana",
+        "history",
+        "investigation",
+        "medicine",
+        "nature",
+        "perception",
+        "sleightOfHand",
+      ),
     },
   },
   barbarian: {
@@ -83,7 +97,14 @@ export const CLASS_PROFICIENCY_RULES: Record<
     ],
     initialSkills: {
       count: 2,
-      options: skill("animalHandling", "athletics", "intimidation", "nature", "perception", "survival"),
+      options: skill(
+        "animalHandling",
+        "athletics",
+        "intimidation",
+        "nature",
+        "perception",
+        "survival",
+      ),
     },
   },
   bard: {
@@ -95,11 +116,30 @@ export const CLASS_PROFICIENCY_RULES: Record<
       proficiency("bard", "longsword", "Espada longa", "weapon"),
       proficiency("bard", "rapier", "Rapieira", "weapon"),
       proficiency("bard", "shortsword", "Espada curta", "weapon"),
-      proficiency("bard", "instruments", "Três instrumentos musicais à escolha", "instrument"),
+      proficiency(
+        "bard",
+        "instrument-lute",
+        "Alaúde",
+        "instrument",
+        "Primeiro instrumento padrão; pode ser editado na ficha.",
+      ),
+      proficiency(
+        "bard",
+        "instrument-flute",
+        "Flauta",
+        "instrument",
+        "Segundo instrumento padrão; pode ser editado na ficha.",
+      ),
+      proficiency(
+        "bard",
+        "instrument-drum",
+        "Tambor",
+        "instrument",
+        "Terceiro instrumento padrão; pode ser editado na ficha.",
+      ),
     ],
     multiclass: [
       proficiency("bard", "mc-armor-light", "Armaduras leves", "armor"),
-      proficiency("bard", "mc-instrument", "Um instrumento musical à escolha", "instrument"),
     ],
     initialSkills: { count: 3, options: "any" },
     multiclassSkills: { count: 1, options: "any" },
@@ -121,7 +161,13 @@ export const CLASS_PROFICIENCY_RULES: Record<
     ],
     initialSkills: {
       count: 2,
-      options: skill("history", "insight", "medicine", "persuasion", "religion"),
+      options: skill(
+        "history",
+        "insight",
+        "medicine",
+        "persuasion",
+        "religion",
+      ),
     },
   },
   druid: {
@@ -130,7 +176,13 @@ export const CLASS_PROFICIENCY_RULES: Record<
       proficiency("druid", "armor-light", "Armaduras leves não metálicas", "armor"),
       proficiency("druid", "armor-medium", "Armaduras médias não metálicas", "armor"),
       proficiency("druid", "shields", "Escudos não metálicos", "shield"),
-      proficiency("druid", "druid-weapons", "Armas druídicas", "weapon", "Clavas, adagas, dardos, azagaias, maças, bordões, cimitarras, foices, fundas e lanças."),
+      proficiency(
+        "druid",
+        "druid-weapons",
+        "Armas druídicas",
+        "weapon",
+        "Clavas, adagas, dardos, azagaias, maças, bordões, cimitarras, foices, fundas e lanças.",
+      ),
       proficiency("druid", "herbalism", "Kit de herbalismo", "tool"),
     ],
     multiclass: [
@@ -140,7 +192,16 @@ export const CLASS_PROFICIENCY_RULES: Record<
     ],
     initialSkills: {
       count: 2,
-      options: skill("arcana", "animalHandling", "insight", "medicine", "nature", "perception", "religion", "survival"),
+      options: skill(
+        "arcana",
+        "animalHandling",
+        "insight",
+        "medicine",
+        "nature",
+        "perception",
+        "religion",
+        "survival",
+      ),
     },
   },
   fighter: {
@@ -160,7 +221,16 @@ export const CLASS_PROFICIENCY_RULES: Record<
     ],
     initialSkills: {
       count: 2,
-      options: skill("acrobatics", "animalHandling", "athletics", "history", "insight", "intimidation", "perception", "survival"),
+      options: skill(
+        "acrobatics",
+        "animalHandling",
+        "athletics",
+        "history",
+        "insight",
+        "intimidation",
+        "perception",
+        "survival",
+      ),
     },
   },
   monk: {
@@ -168,7 +238,13 @@ export const CLASS_PROFICIENCY_RULES: Record<
     initial: [
       proficiency("monk", "simple-weapons", "Armas simples", "weapon"),
       proficiency("monk", "shortsword", "Espadas curtas", "weapon"),
-      proficiency("monk", "artisan-or-instrument", "Uma ferramenta de artesão ou instrumento musical", "tool"),
+      proficiency(
+        "monk",
+        "artisan-tool-default",
+        "Ferramentas de calígrafo",
+        "tool",
+        "Escolha padrão para a ferramenta de artesão ou instrumento musical concedido pela classe; pode ser editada na ficha.",
+      ),
     ],
     multiclass: [
       proficiency("monk", "mc-simple-weapons", "Armas simples", "weapon"),
@@ -176,7 +252,14 @@ export const CLASS_PROFICIENCY_RULES: Record<
     ],
     initialSkills: {
       count: 2,
-      options: skill("acrobatics", "athletics", "history", "insight", "religion", "stealth"),
+      options: skill(
+        "acrobatics",
+        "athletics",
+        "history",
+        "insight",
+        "religion",
+        "stealth",
+      ),
     },
   },
   paladin: {
@@ -196,7 +279,14 @@ export const CLASS_PROFICIENCY_RULES: Record<
     ],
     initialSkills: {
       count: 2,
-      options: skill("athletics", "insight", "intimidation", "medicine", "persuasion", "religion"),
+      options: skill(
+        "athletics",
+        "insight",
+        "intimidation",
+        "medicine",
+        "persuasion",
+        "religion",
+      ),
     },
   },
   ranger: {
@@ -217,11 +307,29 @@ export const CLASS_PROFICIENCY_RULES: Record<
     ],
     initialSkills: {
       count: 3,
-      options: skill("animalHandling", "athletics", "insight", "investigation", "nature", "perception", "stealth", "survival"),
+      options: skill(
+        "animalHandling",
+        "athletics",
+        "insight",
+        "investigation",
+        "nature",
+        "perception",
+        "stealth",
+        "survival",
+      ),
     },
     multiclassSkills: {
       count: 1,
-      options: skill("animalHandling", "athletics", "insight", "investigation", "nature", "perception", "stealth", "survival"),
+      options: skill(
+        "animalHandling",
+        "athletics",
+        "insight",
+        "investigation",
+        "nature",
+        "perception",
+        "stealth",
+        "survival",
+      ),
     },
   },
   rogue: {
@@ -241,19 +349,43 @@ export const CLASS_PROFICIENCY_RULES: Record<
     ],
     initialSkills: {
       count: 4,
-      options: skill("acrobatics", "athletics", "deception", "insight", "intimidation", "investigation", "perception", "performance", "persuasion", "sleightOfHand", "stealth"),
+      options: skill(
+        "acrobatics",
+        "athletics",
+        "deception",
+        "insight",
+        "intimidation",
+        "investigation",
+        "perception",
+        "performance",
+        "persuasion",
+        "sleightOfHand",
+        "stealth",
+      ),
     },
     multiclassSkills: { count: 1, options: "any" },
   },
   sorcerer: {
     savingThrows: ["con", "cha"],
     initial: [
-      proficiency("sorcerer", "weapons", "Adagas, dardos, fundas, bordões e bestas leves", "weapon"),
+      proficiency(
+        "sorcerer",
+        "weapons",
+        "Adagas, dardos, fundas, bordões e bestas leves",
+        "weapon",
+      ),
     ],
     multiclass: [],
     initialSkills: {
       count: 2,
-      options: skill("arcana", "deception", "insight", "intimidation", "persuasion", "religion"),
+      options: skill(
+        "arcana",
+        "deception",
+        "insight",
+        "intimidation",
+        "persuasion",
+        "religion",
+      ),
     },
   },
   warlock: {
@@ -268,18 +400,38 @@ export const CLASS_PROFICIENCY_RULES: Record<
     ],
     initialSkills: {
       count: 2,
-      options: skill("arcana", "deception", "history", "intimidation", "investigation", "nature", "religion"),
+      options: skill(
+        "arcana",
+        "deception",
+        "history",
+        "intimidation",
+        "investigation",
+        "nature",
+        "religion",
+      ),
     },
   },
   wizard: {
     savingThrows: ["int", "wis"],
     initial: [
-      proficiency("wizard", "weapons", "Adagas, dardos, fundas, bordões e bestas leves", "weapon"),
+      proficiency(
+        "wizard",
+        "weapons",
+        "Adagas, dardos, fundas, bordões e bestas leves",
+        "weapon",
+      ),
     ],
     multiclass: [],
     initialSkills: {
       count: 2,
-      options: skill("arcana", "history", "insight", "investigation", "medicine", "religion"),
+      options: skill(
+        "arcana",
+        "history",
+        "insight",
+        "investigation",
+        "medicine",
+        "religion",
+      ),
     },
   },
 }
