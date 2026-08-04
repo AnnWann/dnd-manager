@@ -7,7 +7,10 @@ import {
   type CharacterAcquisitionReason,
   type CharacterAcquisitionSourceType,
 } from "./CharacterAcquisition"
-import { CharacterTemplate } from "./CharacterTemplate"
+import {
+  CharacterTemplate,
+  type CharacterTemplateProps,
+} from "./CharacterTemplate"
 
 const CLASS_NAMES = new Set<ClassName>([
   "artificer",
@@ -53,7 +56,7 @@ export function ensureCharacterAcquisitionMetadata(
   const characterLevel =
     defaults.characterLevel ?? getCharacterTotalLevel(character)
   const reason = defaults.reason ?? "manual"
-  const classLevels = new Map(
+  const classLevels = new Map<ClassName, number>(
     (character.get("sheet").classes ?? []).map((entry) => [
       entry.className,
       Number(entry.level) || 0,
@@ -142,15 +145,14 @@ export function ensureCharacterAcquisitionMetadata(
 
   const race = character.get("sheet").race
   const raceName = race.customName?.trim() || race.subrace?.trim() || race.race
-  const abilities = (character.get("abilities") ?? []).map((ability) => {
-    const sourceType = inferAbilitySource(ability, defaults.sourceType)
-    return normalizeAbility(
+  const abilities = (character.get("abilities") ?? []).map((ability) =>
+    normalizeAbility(
       ability,
-      sourceType,
+      inferAbilitySource(ability, defaults.sourceType),
       ability.sourceItemId ?? defaults.sourceId,
       ability.sourceItemName ?? defaults.sourceName,
-    )
-  })
+    ),
+  )
   const naturalAbilities = (race.naturalAbilities ?? []).map((ability) =>
     normalizeAbility(ability, "race", String(race.race), raceName),
   )
@@ -161,6 +163,7 @@ export function ensureCharacterAcquisitionMetadata(
       entry.source.type === "class" && isClassName(entry.source.sourceId)
         ? entry.source.sourceId
         : undefined
+
     return {
       ...entry,
       acquisition:
@@ -179,14 +182,12 @@ export function ensureCharacterAcquisitionMetadata(
     character.get("inventory"),
     normalizeAbility,
     normalizeGrant,
-  ) as CharacterTemplate["toJSON"] extends () => infer _T
-    ? ReturnType<CharacterTemplate["get"]>
-    : never
+  ) as CharacterTemplateProps["inventory"]
   const equipment = normalizeEquipmentValue(
     character.get("equipment"),
     normalizeAbility,
     normalizeGrant,
-  ) as typeof character extends never ? never : ReturnType<typeof character.get>
+  ) as CharacterTemplateProps["equipment"]
 
   return character.withPatch({
     abilities,
@@ -206,13 +207,9 @@ export function ensureCharacterAcquisitionMetadata(
           },
         }
       : magic,
-    inventory: inventory as typeof character extends never
-      ? never
-      : ReturnType<typeof character.get>,
-    equipment: equipment as typeof character extends never
-      ? never
-      : ReturnType<typeof character.get>,
-  } as Parameters<CharacterTemplate["withPatch"]>[0])
+    inventory,
+    equipment,
+  })
 }
 
 function normalizeEquipmentValue(
