@@ -32,6 +32,7 @@ export type ItemKind =
   | "shield"
 
 export type ItemCategory = "bagOfHolding"
+export type ItemOrigin = "standard" | "custom"
 
 export type Item = {
   id: string
@@ -44,6 +45,10 @@ export type Item = {
   pocketable: boolean
   kind: ItemKind
   category?: ItemCategory
+
+  /** Stable source definition used to restore protected canonical fields. */
+  compendiumItemId?: string
+  itemOrigin?: ItemOrigin
 
   equippable?: boolean
   equipSlot?: EquipSlot
@@ -70,4 +75,8 @@ export type Itemmable =
 
 export function isBagOfHoldingItem(item: Itemmable): boolean {
   return item.category === "bagOfHolding"
+}
+
+export function isStandardCompendiumItem(item: Itemmable): boolean {
+  return item.itemOrigin === "standard" && Boolean(item.compendiumItemId)
 }
