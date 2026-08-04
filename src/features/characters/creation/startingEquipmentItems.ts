@@ -1,8 +1,16 @@
 import type { Armor } from "../../../models/items/equipment/Armor"
 import { withShieldDefaults } from "../../../models/items/equipment/Shield"
-import { WEAPON_PROPERTIES, type Weapon } from "../../../models/items/equipment/Weapon"
-import { createCurrencyItem } from "../../../models/items/Currency"
+import {
+  WEAPON_PROPERTIES,
+  type Weapon,
+} from "../../../models/items/equipment/Weapon"
 import type { Itemmable, ItemKind } from "../../../models/items/item"
+import {
+  findStandardItemDefinition,
+  findStandardItemDefinitionByName,
+  instantiateStandardItem,
+  normalizeStandardItem,
+} from "../../items/standardItemCompendium"
 import type { StartingItemSpec } from "./phbClassEquipment"
 
 const CATEGORY_LABELS: Record<StartingItemSpec["category"], string> = {
@@ -35,14 +43,62 @@ export function createStartingInventoryItem(
   spec: StartingItemSpec,
   flavoredName?: string,
 ): Itemmable {
-  const name = flavoredName?.trim() || spec.name
+  const requestedName = flavoredName?.trim() || spec.name
+  const quantity = Math.max(1, spec.quantity ?? 1)
+  const definition =
+    findStandardItemDefinition(`compendium-${spec.id}`) ??
+    findStandardItemDefinitionByName(spec.name)
+
+  if (definition) {
+    const canonical = instantiateStandardItem(definition.item.id, quantity)
+    const name = definition.locked ? canonical.name : requestedName
+    const notes =
+      name === definition.item.name
+        ? "Equipamento inicial da classe, criado a partir do compêndio."
+        : `Equipamento inicial da classe com aparência/nome personalizado. Item-base do compêndio: ${definition.item.name}.`
+
+    return normalizeStandardItem({
+      ...canonical,
+      name,
+      notes,
+      quantity,
+      insideBagOfHolding: false,
+      ...(canonical.kind === "equipment" && canonical.equipSlot === "weapon"
+        ? { proficient: true }
+        : {}),
+      ...(spec.category === "armor" && spec.armorType
+        ? { armorType: spec.armorType }
+        : {}),
+    } as Itemmable)
+  }
+
+  return createFallbackStartingItem(spec, requestedName)
+}
+
+export function createStartingGoldItem(amount: number): Itemmable {
+  const item = instantiateStandardItem(
+    "compendium-currency-gold",
+    Math.max(0, Math.trunc(amount || 0)),
+  )
+
+  return normalizeStandardItem({
+    ...item,
+    desc: "Ouro inicial escolhido para substituir o pacote de equipamentos da classe.",
+    notes: "Moeda inicial da criação do personagem.",
+  })
+}
+
+function createFallbackStartingItem(
+  spec: StartingItemSpec,
+  name: string,
+): Itemmable {
   const base = {
     id: crypto.randomUUID(),
     name,
     desc: `${CATEGORY_LABELS[spec.category]} inicial de classe. Base mecânica: ${spec.name}.`,
     notes:
       name === spec.name
-        ? "Equipamento inicial da classe."
+        ? "Equipamento inicial da classe sem correspondência no compêndio."
         : `Equipamento inicial da classe com aparência/nome personalizado. Item-base: ${spec.name}.`,
     quantity: Math.max(1, spec.quantity ?? 1),
     weight: Math.max(0, spec.weight ?? 0),
@@ -53,6 +109,7 @@ export function createStartingInventoryItem(
       spec.category === "tool" ||
       spec.category === "focus",
     insideBagOfHolding: false,
+    itemOrigin: "custom" as const,
   }
 
   if (spec.category === "weapon") {
@@ -89,25 +146,9 @@ export function createStartingInventoryItem(
     })
   }
 
-  if (spec.category === "currency") {
-    return {
-      ...createCurrencyItem("gold", base.quantity),
-      desc: base.desc,
-      notes: base.notes,
-    }
-  }
-
   return {
     ...base,
     kind: KIND_BY_CATEGORY[spec.category],
     equippable: false,
-  }
-}
-
-export function createStartingGoldItem(amount: number): Itemmable {
-  return {
-    ...createCurrencyItem("gold", amount),
-    desc: "Ouro inicial escolhido para substituir o pacote de equipamentos da classe.",
-    notes: "Moeda inicial da criação do personagem.",
   }
 }
