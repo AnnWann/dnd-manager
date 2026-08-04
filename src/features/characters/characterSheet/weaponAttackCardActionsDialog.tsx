@@ -3,7 +3,7 @@ import { Hand, PackageOpen, Send } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
 import { Modal } from "../../../components/ui/Modal"
-import { useCharacterContext } from "../../../contexts/characterContext"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
   handReferenceToEquippedItemReference,
@@ -24,6 +24,8 @@ export type HandItemActionsDialogState = {
   itemId: string
 }
 
+type LocalDestination = Exclude<EquippedItemDestination, "ground">
+
 export function HandItemActionsDialog({
   character,
   state,
@@ -38,7 +40,9 @@ export function HandItemActionsDialog({
     stowHandOccupant,
     dropHandOccupant,
     moveEquippedItem,
-  } = useCharacterContext()
+    moveEquippedItemToGround,
+    canUseGroundInventory,
+  } = useCharacterWorkspace()
   const [pendingHands, setPendingHands] = useState<HeldHands | null>(null)
 
   useEffect(() => {
@@ -60,6 +64,10 @@ export function HandItemActionsDialog({
     itemIsWeapon && isWeaponImprovisedGrip(occupant.item)
   const canPocketSelected = canItemGoInPocket(occupant.item)
   const pocketFull = character.get("equipment").pockets.length >= 8
+  const canMoveToGround =
+    canUseGroundInventory && Boolean(moveEquippedItemToGround)
+  const canDropToGround =
+    canUseGroundInventory && Boolean(dropHandOccupant)
 
   function setHands(hands: HeldHands) {
     const availableAfterRemovingCurrent =
@@ -86,7 +94,7 @@ export function HandItemActionsDialog({
     onClose()
   }
 
-  function removeSelected(destination: EquippedItemDestination) {
+  function removeSelected(destination: LocalDestination) {
     const currentOccupant = findHandOccupantByItemId(
       character,
       itemId,
@@ -104,7 +112,28 @@ export function HandItemActionsDialog({
     onClose()
   }
 
+  function moveSelectedToGround() {
+    if (!moveEquippedItemToGround) return
+
+    const currentOccupant = findHandOccupantByItemId(
+      character,
+      itemId,
+    )
+    if (!currentOccupant) return
+
+    moveEquippedItemToGround(
+      character.get("id"),
+      handReferenceToEquippedItemReference(
+        currentOccupant.reference,
+        currentOccupant.item.id,
+      ),
+    )
+    onClose()
+  }
+
   function throwSelected() {
+    if (!dropHandOccupant) return
+
     const currentOccupant = findHandOccupantByItemId(character, itemId)
     if (!currentOccupant) return
 
@@ -121,6 +150,7 @@ export function HandItemActionsDialog({
     if (destination === "inventory") {
       stowHandOccupant(character.get("id"), blocker.reference)
     } else {
+      if (!dropHandOccupant) return
       dropHandOccupant(character.get("id"), blocker.reference)
     }
 
@@ -202,20 +232,24 @@ export function HandItemActionsDialog({
                 {pocketFull ? "Bolso cheio" : "Bolso"}
               </Button>
             ) : null}
-            <Button
-              variant="danger"
-              onClick={() => removeSelected("ground")}
-            >
-              Chão
-            </Button>
-            <Button
-              variant="primary"
-              title="Arremessar o objeto e transferi-lo para o chão"
-              onClick={throwSelected}
-            >
-              <Send className="h-4 w-4" />
-              Arremessar
-            </Button>
+            {canMoveToGround ? (
+              <Button
+                variant="danger"
+                onClick={moveSelectedToGround}
+              >
+                Chão
+              </Button>
+            ) : null}
+            {canDropToGround ? (
+              <Button
+                variant="primary"
+                title="Arremessar o objeto e transferi-lo para o chão"
+                onClick={throwSelected}
+              >
+                <Send className="h-4 w-4" />
+                Arremessar
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -226,9 +260,10 @@ export function HandItemActionsDialog({
                 Não há mãos livres suficientes
               </div>
               <p className="mt-1 text-xs leading-5 text-textMuted">
-                Escolha outro item para guardar ou largar. Depois disso,
-                {" "}{occupant.name} passará automaticamente para {pendingHands}
-                {" "}{pendingHands === 1 ? "mão" : "mãos"}.
+                Escolha outro item para guardar
+                {canDropToGround ? " ou largar" : ""}. Depois disso,{" "}
+                {occupant.name} passará automaticamente para {pendingHands}{" "}
+                {pendingHands === 1 ? "mão" : "mãos"}.
               </p>
             </div>
 
@@ -258,13 +293,15 @@ export function HandItemActionsDialog({
                   >
                     Guardar este item
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    onClick={() => freeBlocker(blocker, "ground")}
-                  >
-                    Largar este item
-                  </Button>
+                  {canDropToGround ? (
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => freeBlocker(blocker, "ground")}
+                    >
+                      Largar este item
+                    </Button>
+                  ) : null}
                 </div>
               </article>
             ))}
