@@ -23,9 +23,16 @@ type Props = {
     characterId: string,
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) => void
+  onSpellAdded?: (spell: Spell) => void
+  onCancel?: () => void
 }
 
-export function CharacterSpellLibrary({ character, updateCharacter }: Props) {
+export function CharacterSpellLibrary({
+  character,
+  updateCharacter,
+  onSpellAdded,
+  onCancel,
+}: Props) {
   const { spells } = useMagicContext()
   const [query, setQuery] = useState("")
   const [originFilter, setOriginFilter] = useState<OriginFilter>("all")
@@ -141,12 +148,14 @@ export function CharacterSpellLibrary({ character, updateCharacter }: Props) {
       return
     }
 
+    const spellToAdd = selectedSpell
+
     updateCharacter(character.get("id"), (current) => {
       const alreadyKnown =
         current
           .get("magic")
           ?.spells.knownSpells.some(
-            (entry) => entry.spells.id === selectedSpell.index,
+            (entry) => entry.spells.id === spellToAdd.index,
           ) ?? false
 
       if (alreadyKnown) return current
@@ -170,23 +179,34 @@ export function CharacterSpellLibrary({ character, updateCharacter }: Props) {
               : undefined,
         },
         spells: {
-          id: selectedSpell.index,
+          id: spellToAdd.index,
           prepared: !usesPreparation,
         },
       })
     })
 
     closeAdd()
+    onSpellAdded?.(spellToAdd)
   }
 
   return (
     <Card>
       <CardHeader>
-        <div className="text-sm font-semibold text-textH">
-          Adicionar magia ao personagem
-        </div>
-        <div className="mt-1 text-xs text-textMuted">
-          Escolha uma magia disponível e registre a origem correta na ficha.
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-textH">
+              Adicionar magia ao personagem
+            </div>
+            <div className="mt-1 text-xs text-textMuted">
+              Escolha uma magia disponível e registre a origem correta na ficha.
+            </div>
+          </div>
+
+          {onCancel ? (
+            <Button size="sm" variant="secondary" onClick={onCancel}>
+              Voltar para a lista
+            </Button>
+          ) : null}
         </div>
       </CardHeader>
 
