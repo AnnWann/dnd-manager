@@ -19,6 +19,9 @@ model User {
   accounts      Account[]
 
   characters Character[]
+  homebrewSpells HomebrewSpell[] @relation("HomebrewSpellOwner")
+  submittedCampaignSpells CampaignHomebrewSpell[] @relation("CampaignSpellSubmitter")
+  reviewedCampaignSpells CampaignHomebrewSpell[] @relation("CampaignSpellReviewer")
 
   ownedCampaigns      Campaign[]       @relation("CampaignOwner")
   campaignMemberships CampaignMember[]
@@ -54,10 +57,10 @@ model Account {
   idToken               String?
   accessTokenExpiresAt  DateTime?
   refreshTokenExpiresAt DateTime?
-  scope                 String?
-  password              String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  scope                  String?
+  password               String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   @@index([userId])
   @@map("account")
@@ -121,6 +124,7 @@ model Campaign {
 
   members    CampaignMember[]
   characters CampaignCharacter[]
+  homebrewSpells CampaignHomebrewSpell[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -164,4 +168,65 @@ model CampaignCharacter {
   @@index([campaignId])
   @@index([characterId])
   @@map("campaign_character")
+}
+
+enum HomebrewSpellStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum CampaignSpellApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVOKED
+}
+
+model HomebrewSpell {
+  id          String              @id @default(uuid())
+  index       String              @unique
+  name        String
+  data        Json
+  status      HomebrewSpellStatus @default(ACTIVE)
+  revision    Int                 @default(1)
+
+  ownerId String
+  owner   User @relation("HomebrewSpellOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  campaignLinks CampaignHomebrewSpell[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId, status])
+  @@index([name])
+  @@map("homebrew_spell")
+}
+
+model CampaignHomebrewSpell {
+  id       String                      @id @default(uuid())
+  status   CampaignSpellApprovalStatus @default(PENDING)
+  note     String?
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  spellId String
+  spell   HomebrewSpell @relation(fields: [spellId], references: [id], onDelete: Cascade)
+
+  submittedById String
+  submittedBy   User @relation("CampaignSpellSubmitter", fields: [submittedById], references: [id], onDelete: Cascade)
+
+  reviewedById String?
+  reviewedBy   User? @relation("CampaignSpellReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  submittedAt DateTime @default(now())
+  reviewedAt  DateTime?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([campaignId, spellId])
+  @@index([campaignId, status])
+  @@index([spellId])
+  @@index([submittedById])
+  @@map("campaign_homebrew_spell")
 }
