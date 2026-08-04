@@ -300,7 +300,7 @@ export function CharacterView() {
           />
         ) : null}
 
-        {activeTab === "spellsList" ? (
+        {activeTab === "spells-list" ? (
           <CharacterMagicTab
             character={routeCharacter}
             updateCharacter={updateCharacter}
@@ -381,6 +381,9 @@ function normalizeCharacterViewTab(
   value: string | undefined,
   tabs: CharacterViewTabDefinition[],
 ): string {
-  if (value && tabs.some((entry) => entry.key === value)) return value
+  const normalizedValue = value === "spellsList" ? "spells-list" : value
+  if (normalizedValue && tabs.some((entry) => entry.key === normalizedValue)) {
+    return normalizedValue
+  }
   return tabs[0]?.key ?? "sheet"
 }
