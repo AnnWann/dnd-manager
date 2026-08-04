@@ -36,13 +36,15 @@ const MagicContext = createContext<MagicContextValue | null>(null)
 type MagicProviderProps = {
   children: ReactNode
   spells: Spell[]
-  setAppState: React.Dispatch<React.SetStateAction<AppStateV1>>
+  setAppState?: React.Dispatch<React.SetStateAction<AppStateV1>>
+  onSpellsChange?: (spells: Spell[]) => void
 }
 
 export function MagicProvider({
   children,
   spells,
   setAppState,
+  onSpellsChange,
 }: MagicProviderProps) {
   const spellByIndex = useMemo(() => {
     const map = new Map<string, Spell>()
@@ -52,8 +54,6 @@ export function MagicProvider({
       if (index) map.set(index, spell)
     }
 
-    // Saved spells intentionally override an official spell with the same
-    // index, which supports edited/homebrew replacements without duplicates.
     for (const rawSpell of spells) {
       const spell = normalizeSpellText(rawSpell)
       const index = spell.index?.trim()
@@ -62,6 +62,7 @@ export function MagicProvider({
 
     return map
   }, [spells])
+
   const allSpells = useMemo(
     () => Array.from(spellByIndex.values()),
     [spellByIndex],
@@ -92,29 +93,34 @@ export function MagicProvider({
       .filter((metamagic): metamagic is Metamagic => Boolean(metamagic))
   }
 
+  function commitSavedSpells(nextSpells: Spell[]) {
+    if (setAppState) {
+      setAppState((previous) => ({
+        ...previous,
+        spells: nextSpells,
+      }))
+    }
+
+    onSpellsChange?.(nextSpells)
+  }
+
   function saveSpell(spell: Spell) {
     const normalizedSpell = normalizeSpellText(spell)
+    const nextSpells = [
+      ...spells.filter(
+        (existing) => existing.index !== normalizedSpell.index,
+      ),
+      normalizedSpell,
+    ]
 
-    setAppState((previous) => ({
-      ...previous,
-      spells: [
-        ...(previous.spells ?? []).filter(
-          (existing) => existing.index !== normalizedSpell.index,
-        ),
-        normalizedSpell,
-      ],
-    }))
+    commitSavedSpells(nextSpells)
   }
 
   function deleteSpell(spellIndex: string) {
     const normalizedIndex = spellIndex.trim()
-
-    setAppState((previous) => ({
-      ...previous,
-      spells: (previous.spells ?? []).filter(
-        (existing) => existing.index !== normalizedIndex,
-      ),
-    }))
+    commitSavedSpells(
+      spells.filter((existing) => existing.index !== normalizedIndex),
+    )
   }
 
   return (
