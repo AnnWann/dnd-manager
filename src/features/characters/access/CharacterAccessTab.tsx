@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 
 import {
   getMyCharacterAccess,
+  type CharacterVisibility,
   type UserCharacterAccess,
 } from "../../../api/user-characters"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
@@ -67,7 +68,7 @@ export function CharacterAccessTab({
             Campanhas vinculadas
           </h2>
           <p className="mt-1 text-xs leading-5 text-text">
-            Estas campanhas podem acessar a ficha conforme sua visibilidade.
+            Cada vínculo possui sua própria visibilidade, independente da configuração geral da ficha.
           </p>
         </CardHeader>
         <CardContent>
@@ -88,6 +89,7 @@ export function CharacterAccessTab({
                       }
                     />
                     <Badge label={statusLabel(campaign.status)} />
+                    <Badge label={visibilityLabel(campaign.visibility)} />
                   </div>
                   <div className="mt-2 text-xs text-textMuted">
                     Mestre principal: {campaign.master.name}
@@ -174,6 +176,12 @@ function statusLabel(status: "ACTIVE" | "INVITED" | "REMOVED"): string {
   if (status === "ACTIVE") return "Ativa"
   if (status === "INVITED") return "Pendente"
   return "Removida"
+}
+
+function visibilityLabel(visibility: CharacterVisibility): string {
+  if (visibility === "PRIVATE") return "Privado"
+  if (visibility === "MASTER") return "Somente mestres"
+  return "Toda a campanha"
 }
 
 function Badge({ label }: { label: string }) {
