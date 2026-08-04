@@ -47,10 +47,11 @@ function sanitizeValue(value: unknown): unknown {
       .filter(([, child]) => child !== undefined)
       .map(([key, child]) => [key, sanitizeValue(child)]),
   )
-  const sourceId =
+  const declaredSourceId =
     typeof normalized.compendiumItemId === "string"
       ? normalized.compendiumItemId
       : ""
+  const sourceId = resolveProtectedSourceId(normalized, declaredSourceId)
 
   if (sourceId === BAG_OF_HOLDING_ID) {
     return {
@@ -105,6 +106,60 @@ function sanitizeValue(value: unknown): unknown {
   }
 
   return normalized
+}
+
+function resolveProtectedSourceId(
+  item: Record<string, unknown>,
+  declaredSourceId: string,
+): string {
+  if (
+    item.category === "bagOfHolding" ||
+    declaredSourceId === BAG_OF_HOLDING_ID
+  ) {
+    return BAG_OF_HOLDING_ID
+  }
+
+  if (item.kind === "currency") {
+    return `compendium-currency-${inferCurrencyType(item)}`
+  }
+
+  return declaredSourceId
+}
+
+function inferCurrencyType(
+  item: Record<string, unknown>,
+): "copper" | "silver" | "electrum" | "gold" | "platinum" {
+  const requested = item.currencyType
+  if (
+    requested === "copper" ||
+    requested === "silver" ||
+    requested === "electrum" ||
+    requested === "gold" ||
+    requested === "platinum"
+  ) {
+    return requested
+  }
+
+  const normalizedName = stringOr(item.name, "")
+    .trim()
+    .toLocaleLowerCase("pt-BR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+
+  if (normalizedName.includes("platina") || normalizedName.includes("platinum")) {
+    return "platinum"
+  }
+  if (normalizedName.includes("electrum") || normalizedName.includes("eletro")) {
+    return "electrum"
+  }
+  if (normalizedName.includes("prata") || normalizedName.includes("silver")) {
+    return "silver"
+  }
+  if (normalizedName.includes("cobre") || normalizedName.includes("copper")) {
+    return "copper"
+  }
+
+  return "gold"
 }
 
 function stringOr(value: unknown, fallback: string): string {
