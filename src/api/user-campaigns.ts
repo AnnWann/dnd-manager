@@ -264,6 +264,43 @@ export async function reviewCampaignMember(
   )
 }
 
+export async function reviewCampaignSpell(
+  campaignId: string,
+  spellId: string,
+  status: Exclude<CampaignSpellStatus, "PENDING">,
+  note?: string,
+): Promise<void> {
+  if (LOCAL_AUTH_BYPASS) {
+    const campaigns = readLocalCampaigns().map((campaign) => {
+      if (campaign.id !== campaignId) return campaign
+
+      const homebrewSpells = campaign.homebrewSpells.map((spell) =>
+        spell.id === spellId
+          ? {
+              ...spell,
+              status,
+              note: note?.trim() || null,
+              reviewedAt: new Date().toISOString(),
+            }
+          : spell,
+      )
+
+      return {
+        ...campaign,
+        homebrewSpells,
+        homebrew: countSpellStatuses(homebrewSpells),
+      }
+    })
+    writeLocalCampaigns(campaigns)
+    return
+  }
+
+  await apiClient.patch(
+    `/campaigns/${encodeURIComponent(campaignId)}/spells/${encodeURIComponent(spellId)}`,
+    { status, note },
+  )
+}
+
 function readLocalCampaigns(): UserCampaign[] {
   try {
     const parsed = JSON.parse(
@@ -316,6 +353,17 @@ function syncLocalCharacterCampaigns(campaigns: UserCampaign[]): void {
       campaigns: linksByCharacter.get(character.id) ?? [],
     })),
   )
+}
+
+function countSpellStatuses(
+  spells: UserCampaign["homebrewSpells"],
+): UserCampaign["homebrew"] {
+  return {
+    approved: spells.filter((spell) => spell.status === "APPROVED").length,
+    pending: spells.filter((spell) => spell.status === "PENDING").length,
+    rejected: spells.filter((spell) => spell.status === "REJECTED").length,
+    revoked: spells.filter((spell) => spell.status === "REVOKED").length,
+  }
 }
 
 function createInviteCode(): string {
