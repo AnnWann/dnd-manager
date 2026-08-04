@@ -519,8 +519,35 @@ function formatRange(spell: Spell): string {
 }
 
 function formatDuration(spell: Spell): string {
-  if (spell.duration.unit === "instantaneous") return "Duração: instantânea"
-  return `Duração: ${spell.duration.value} ${spell.duration.unit}`
+  const { value, unit } = spell.duration
+
+  if (unit === "instantaneous") return "Duração: instantânea"
+  if (unit === "special") return "Duração: especial"
+  if (unit === "untilDispelled") return "Duração: até ser dissipada"
+  if (unit === "short rest") return "Duração: até um descanso curto"
+  if (unit === "long rest") return "Duração: até um descanso longo"
+  if (unit === "permanent") return "Duração: permanente"
+
+  const singular: Record<string, string> = {
+    turn: "turno",
+    round: "rodada",
+    minute: "minuto",
+    hour: "hora",
+    day: "dia",
+  }
+  const plural: Record<string, string> = {
+    turn: "turnos",
+    round: "rodadas",
+    minute: "minutos",
+    hour: "horas",
+    day: "dias",
+  }
+
+  const label = value === 1
+    ? singular[unit] ?? unit
+    : plural[unit] ?? unit
+
+  return `Duração: ${value} ${label}`
 }
 
 function Badge({ label }: { label: string }) {
