@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from "react"
-import { ArrowLeft, Settings2 } from "lucide-react"
+import {
+  ArrowLeft,
+  Settings2,
+  ShieldCheck,
+  TrendingUp,
+} from "lucide-react"
 import { useNavigate, useParams } from "react-router-dom"
 
 import { CharacterAbilitiesTab } from "../features/characters/abilities/characterAbilities"
+import { CharacterAccessTab } from "../features/characters/access/CharacterAccessTab"
 import { CharacterSelector } from "../features/characters/characterSelector"
 import { CharacterEquipmentTab } from "../features/characters/equipment/characterEquipment"
 import { CharacterInventoryTab } from "../features/characters/inventory/characterInventory"
@@ -12,6 +18,7 @@ import { CharacterProficienciesTab } from "../features/characters/proficiencies/
 import { CharacterRaceTab } from "../features/characters/race/characterRaceV2"
 import { CharacterRestControls } from "../features/characters/rest/characterRestControlsV2"
 import { CharacterSettingsModal } from "../features/characters/settings/CharacterSettingsModal"
+import { UserCharacterSettingsModal } from "../features/characters/settings/UserCharacterSettingsModal"
 import { CharacterSheetTab } from "../features/characters/characterSheet/characterSheet"
 import {
   CHARACTER_TABS,
@@ -29,6 +36,12 @@ import { getCustomSystemPlacement } from "../features/customSystems/CustomSystem
 import { useCustomSystemDefinitions } from "../lib/customSystems/CustomSystemRegistry"
 import type { CustomSystemActor } from "../lib/customSystems"
 import type { CustomSystemDefinition } from "../models/customSystems/CustomSystemDefinition"
+
+const USER_ACCESS_TAB: CharacterViewTabDefinition = {
+  key: "access",
+  label: "Acessos",
+  icon: ShieldCheck,
+}
 
 export function CharacterView() {
   const {
@@ -48,7 +61,9 @@ export function CharacterView() {
     createOwner,
   } = useCharacterWorkspace()
 
-  const customSystemDefinitions = useCustomSystemDefinitions()
+  const registeredCustomSystemDefinitions = useCustomSystemDefinitions()
+  const customSystemDefinitions =
+    mode === "campaign" ? registeredCustomSystemDefinitions : []
   const { characterId, tab } = useParams<{
     characterId?: string
     tab?: string
@@ -67,7 +82,7 @@ export function CharacterView() {
   }, [routeCharacter, setSelectedCharacterId])
 
   const activeCustomSystemDefinitions = useMemo(() => {
-    if (!routeCharacter) return []
+    if (mode !== "campaign" || !routeCharacter) return []
 
     const states = routeCharacter.get("sheet").customSystems ?? []
     const activeIds = new Set(
@@ -77,24 +92,26 @@ export function CharacterView() {
     return customSystemDefinitions.filter((definition) =>
       activeIds.has(definition.id),
     )
-  }, [customSystemDefinitions, routeCharacter])
+  }, [customSystemDefinitions, mode, routeCharacter])
 
   const hiddenStandardTabs = useMemo(
     () => new Set(routeCharacter?.get("sheet").hiddenCharacterTabs ?? []),
     [routeCharacter],
   )
 
-  const characterTabs = useMemo<CharacterViewTabDefinition[]>(
-    () =>
-      orderCharacterTabs(
-        CHARACTER_TABS.filter(
-          (entry) =>
-            entry.key === "sheet" || !hiddenStandardTabs.has(entry.key),
-        ),
-        activeCustomSystemDefinitions,
-      ),
-    [activeCustomSystemDefinitions, hiddenStandardTabs],
-  )
+  const characterTabs = useMemo<CharacterViewTabDefinition[]>(() => {
+    const standardTabs: CharacterViewTabDefinition[] = CHARACTER_TABS.filter(
+      (entry) =>
+        entry.key === "sheet" || !hiddenStandardTabs.has(entry.key),
+    )
+
+    if (mode === "user") standardTabs.push(USER_ACCESS_TAB)
+
+    return orderCharacterTabs(
+      standardTabs,
+      activeCustomSystemDefinitions,
+    )
+  }, [activeCustomSystemDefinitions, hiddenStandardTabs, mode])
 
   const activeTab = normalizeCharacterViewTab(tab, characterTabs)
 
@@ -116,15 +133,19 @@ export function CharacterView() {
           <div className="mt-1 text-xs text-text">
             Nenhum personagem está disponível neste contexto.
           </div>
-          {mode === "campaign" ? (
-            <button
-              type="button"
-              className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accentText"
-              onClick={() => navigate("/character/create")}
-            >
-              Criar personagem
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accentText"
+            onClick={() =>
+              navigate(
+                mode === "user"
+                  ? "/user/characters/create"
+                  : "/character/create",
+              )
+            }
+          >
+            Criar personagem
+          </button>
         </div>
       )
     }
@@ -199,12 +220,20 @@ export function CharacterView() {
     })
   }
 
+  function deleteOwnedCharacter() {
+    deleteCharacter(routeCharacter!.get("id"))
+    setSettingsOpen(false)
+    navigate("/user/characters", { replace: true })
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <CustomSystemsRuntime
-        character={routeCharacter}
-        updateCharacter={updateCharacter}
-      />
+      {mode === "campaign" ? (
+        <CustomSystemsRuntime
+          character={routeCharacter}
+          updateCharacter={updateCharacter}
+        />
+      ) : null}
 
       <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
         <button
@@ -224,17 +253,35 @@ export function CharacterView() {
           </div>
         </div>
 
-        {canAssignOwners ? (
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            title="Configurações do personagem"
-            aria-label="Configurações do personagem"
-            className="rounded-lg border border-border p-2.5 text-textH hover:bg-accentBg"
-          >
-            <Settings2 className="h-5 w-5" />
-          </button>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {mode === "user" ? (
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  `/user/characters/${encodeURIComponent(routeCharacter.get("id"))}/level-up`,
+                )
+              }
+              title="Subir de nível"
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-textH hover:bg-accentBg"
+            >
+              <TrendingUp className="h-4 w-4" />
+              <span className="hidden sm:inline">Subir nível</span>
+            </button>
+          ) : null}
+
+          {mode === "user" || canAssignOwners ? (
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              title="Configurações do personagem"
+              aria-label="Configurações do personagem"
+              className="rounded-lg border border-border p-2.5 text-textH hover:bg-accentBg"
+            >
+              <Settings2 className="h-5 w-5" />
+            </button>
+          ) : null}
+        </div>
       </header>
 
       {mode === "campaign" ? (
@@ -314,7 +361,11 @@ export function CharacterView() {
           />
         ) : null}
 
-        {customTabSystemId ? (
+        {activeTab === "access" && mode === "user" ? (
+          <CharacterAccessTab character={routeCharacter} />
+        ) : null}
+
+        {customTabSystemId && mode === "campaign" ? (
           <CustomSystemsTabWithLibrary
             character={routeCharacter}
             updateCharacter={updateCharacter}
@@ -324,23 +375,33 @@ export function CharacterView() {
         ) : null}
       </div>
 
-      <CharacterSettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        character={routeCharacter}
-        updateCharacter={updateCharacter}
-        canAssignOwners={canAssignOwners}
-        canEditCharacterType={canEditCharacterType}
-        playerKeys={knownPlayerKeys}
-        getOwner={getOwner}
-        createOwner={createOwner}
-      />
+      {mode === "campaign" ? (
+        <CharacterSettingsModal
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          character={routeCharacter}
+          updateCharacter={updateCharacter}
+          canAssignOwners={canAssignOwners}
+          canEditCharacterType={canEditCharacterType}
+          playerKeys={knownPlayerKeys}
+          getOwner={getOwner}
+          createOwner={createOwner}
+        />
+      ) : (
+        <UserCharacterSettingsModal
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          character={routeCharacter}
+          updateCharacter={updateCharacter}
+          onDelete={deleteOwnedCharacter}
+        />
+      )}
     </div>
   )
 }
 
 function orderCharacterTabs(
-  standardTabs: Array<CharacterViewTabDefinition & { key: CharacterTab }>,
+  standardTabs: CharacterViewTabDefinition[],
   definitions: CustomSystemDefinition[],
 ): CharacterViewTabDefinition[] {
   const result: CharacterViewTabDefinition[] = [...standardTabs]
