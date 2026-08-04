@@ -8,12 +8,27 @@ import type {
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import type { Attribute } from "../sheet/Attribute"
 import type { ClassName } from "../sheet/Class"
+import {
+  getProgressionFeatureMechanics,
+  mergeProgressionMechanics,
+} from "./ProgressionFeatureMechanics"
 
 export type DefaultFeatDefinition = {
   id: string
   name: string
   description: string
-  kind: AbilityKind
+  kind: Exclude<AbilityKind, "feature">
+  actionKind?: AbilityActionKind
+  usage?: Usage
+  effectDuration?: AbilityEffectDuration
+  effectDurationText?: string
+  trigger?: string
+}
+
+export type CustomFeatDefinition = {
+  name: string
+  description: string
+  kind: Exclude<AbilityKind, "feature">
   actionKind?: AbilityActionKind
   usage?: Usage
   effectDuration?: AbilityEffectDuration
@@ -29,7 +44,7 @@ export type AsiAttributeIncrease = {
 export type ParsedAsiSelection =
   | { mode: "attributes"; increases: AsiAttributeIncrease[] }
   | { mode: "feat"; featId: string }
-  | { mode: "customFeat"; name: string; description: string }
+  | { mode: "customFeat"; feat: CustomFeatDefinition }
 
 export const DEFAULT_FEATS: DefaultFeatDefinition[] = [
   {
@@ -115,11 +130,7 @@ export const DEFAULT_FEATS: DefaultFeatDefinition[] = [
     kind: "active",
     actionKind: "action",
     effectDuration: "instant",
-    usage: {
-      max: 1,
-      used: 0,
-      reset: "shortRest",
-    },
+    usage: { max: 1, used: 0, reset: "shortRest" },
   },
   {
     id: "inspiring-leader",
@@ -129,11 +140,7 @@ export const DEFAULT_FEATS: DefaultFeatDefinition[] = [
     kind: "active",
     actionKind: "action",
     effectDuration: "instant",
-    usage: {
-      max: 1,
-      used: 0,
-      reset: "shortRest",
-    },
+    usage: { max: 1, used: 0, reset: "shortRest" },
   },
   {
     id: "lucky",
@@ -143,11 +150,7 @@ export const DEFAULT_FEATS: DefaultFeatDefinition[] = [
     kind: "active",
     actionKind: "free",
     effectDuration: "instant",
-    usage: {
-      max: 3,
-      used: 0,
-      reset: "longRest",
-    },
+    usage: { max: 3, used: 0, reset: "longRest" },
   },
   {
     id: "mage-slayer",
@@ -165,11 +168,7 @@ export const DEFAULT_FEATS: DefaultFeatDefinition[] = [
     kind: "active",
     actionKind: "action",
     effectDuration: "instant",
-    usage: {
-      max: 1,
-      used: 0,
-      reset: "longRest",
-    },
+    usage: { max: 1, used: 0, reset: "longRest" },
   },
   {
     id: "mobile",
@@ -280,10 +279,19 @@ export function encodeAsiFeatSelection(featId: string): string {
 export function encodeCustomAsiFeatSelection(
   name: string,
   description: string,
+  configuration: Partial<Omit<CustomFeatDefinition, "name" | "description">> = {},
 ): string {
-  return `asi:custom-feat:${encodeURIComponent(name.trim())}:${encodeURIComponent(
-    description.trim(),
-  )}`
+  const feat = sanitizeCustomFeat({
+    name,
+    description,
+    kind: configuration.kind ?? "passive",
+    actionKind: configuration.actionKind,
+    usage: configuration.usage,
+    effectDuration: configuration.effectDuration,
+    effectDurationText: configuration.effectDurationText,
+    trigger: configuration.trigger,
+  })
+  return `asi:custom-feat-json:${encodeURIComponent(JSON.stringify(feat))}`
 }
 
 export function parseAsiSelection(
@@ -318,13 +326,34 @@ export function parseAsiSelection(
     return featId ? { mode: "feat", featId } : undefined
   }
 
+  if (raw.startsWith("asi:custom-feat-json:")) {
+    const decoded = decodeSafe(raw.slice("asi:custom-feat-json:".length))
+    try {
+      const value = JSON.parse(decoded) as Partial<CustomFeatDefinition>
+      const feat = sanitizeCustomFeat(value)
+      return feat.name ? { mode: "customFeat", feat } : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  // Compatibilidade com rascunhos produzidos pela primeira versão do modal.
   if (raw.startsWith("asi:custom-feat:")) {
     const payload = raw.slice("asi:custom-feat:".length)
     const separator = payload.indexOf(":")
     if (separator < 0) return undefined
     const name = decodeSafe(payload.slice(0, separator)).trim()
     const description = decodeSafe(payload.slice(separator + 1)).trim()
-    return name ? { mode: "customFeat", name, description } : undefined
+    return name
+      ? {
+          mode: "customFeat",
+          feat: sanitizeCustomFeat({
+            name,
+            description,
+            kind: "passive",
+          }),
+        }
+      : undefined
   }
 
   return undefined
@@ -334,12 +363,11 @@ export function finalizeProgressionFeatures(
   character: CharacterTemplate,
 ): CharacterTemplate {
   let next = character
-  const abilities = [...(next.get("abilities") ?? [])]
   const remaining: Ability[] = []
   const createdFeats: Ability[] = []
   const attributeIncreases: AsiAttributeIncrease[] = []
 
-  for (const ability of abilities) {
+  for (const ability of next.get("abilities") ?? []) {
     if (!isProgressionAsiAbility(ability)) {
       remaining.push(normalizeProgressionAbility(next, ability))
       continue
@@ -380,21 +408,7 @@ export function finalizeProgressionFeatures(
       continue
     }
 
-    createdFeats.push(
-      normalizeProgressionAbility(next, {
-        ...ability,
-        id: `feat:${choiceId}:custom:${slug(selection.name)}`,
-        name: selection.name,
-        description:
-          selection.description || "Talento personalizado obtido por ASI.",
-        category: "feat",
-        kind: "passive",
-        actionKind: undefined,
-        usage: undefined,
-        effectDuration: "lasting",
-        trigger: "always",
-      }),
-    )
+    createdFeats.push(customFeatToAbility(selection.feat, ability, choiceId))
   }
 
   if (attributeIncreases.length) {
@@ -414,7 +428,10 @@ export function finalizeProgressionFeatures(
     })
   }
 
-  return next.with("abilities", deduplicateAbilities([...remaining, ...createdFeats]))
+  return next.with(
+    "abilities",
+    deduplicateAbilities([...remaining, ...createdFeats]),
+  )
 }
 
 export function normalizeProgressionAbility(
@@ -424,20 +441,10 @@ export function normalizeProgressionAbility(
   if (!ability.id.startsWith("progression:")) return ability
   if (ability.category === "feat") return ability
 
-  const mechanics = getProgressionFeatureMechanics(character, ability)
-  return {
-    ...ability,
-    kind: mechanics.kind,
-    actionKind: mechanics.actionKind,
-    usage: mechanics.usage,
-    effectDuration: mechanics.effectDuration,
-    effectDurationText: mechanics.effectDurationText,
-    trigger: mechanics.trigger,
-    benefitsActive:
-      mechanics.kind === "active" && mechanics.effectDuration === "lasting"
-        ? false
-        : undefined,
-  }
+  return mergeProgressionMechanics(
+    ability,
+    getProgressionFeatureMechanics(character, ability),
+  )
 }
 
 function featDefinitionToAbility(
@@ -452,260 +459,93 @@ function featDefinitionToAbility(
     description: definition.description,
     category: "feat",
     kind: definition.kind,
-    actionKind: definition.actionKind,
-    usage: definition.usage ? { ...definition.usage } : undefined,
+    actionKind:
+      definition.kind === "active" ? definition.actionKind : undefined,
+    usage:
+      definition.kind === "active" && definition.usage
+        ? { ...definition.usage }
+        : undefined,
     effectDuration:
       definition.effectDuration ??
       (definition.kind === "active" ? "instant" : "lasting"),
     effectDurationText: definition.effectDurationText,
-    trigger: definition.trigger ??
+    trigger:
+      definition.trigger ??
       (definition.kind === "passive" ? "always" : undefined),
     benefitsActive: undefined,
+    modifiersActive: undefined,
   }
 }
 
-function getProgressionFeatureMechanics(
-  character: CharacterTemplate,
-  ability: Ability,
-): {
-  kind: AbilityKind
-  actionKind?: AbilityActionKind
-  usage?: Usage
-  effectDuration: AbilityEffectDuration
-  effectDurationText?: string
-  trigger?: string
-} {
-  const name = normalizeText(ability.name)
-  const className = resolveAbilityClassName(ability)
-  const classLevel = className ? character.getClassLevel(className) : 0
-  const attributeModifier = (attribute: Attribute) =>
-    character.getEffectiveAttributeModifier(attribute)
-
-  const active = (
-    actionKind: AbilityActionKind,
-    options: {
-      max?: number
-      maxFormula?: string
-      reset?: Usage["reset"]
-      effectDuration?: AbilityEffectDuration
-      effectDurationText?: string
-      trigger?: string
-    } = {},
-  ) => ({
-    kind: "active" as const,
-    actionKind,
+function customFeatToAbility(
+  definition: CustomFeatDefinition,
+  sourceAbility: Ability,
+  choiceId: string,
+): Ability {
+  return {
+    ...sourceAbility,
+    id: `feat:${choiceId}:custom:${slug(definition.name)}`,
+    name: definition.name,
+    description:
+      definition.description || "Talento personalizado obtido por ASI.",
+    category: "feat",
+    kind: definition.kind,
+    actionKind:
+      definition.kind === "active" ? definition.actionKind : undefined,
     usage:
-      options.max !== undefined || options.maxFormula
-        ? {
-            max: options.max ?? 0,
-            maxFormula: options.maxFormula,
-            used: 0,
-            reset: options.reset ?? "longRest",
-          }
+      definition.kind === "active" && definition.usage
+        ? { ...definition.usage, used: 0 }
         : undefined,
-    effectDuration: options.effectDuration ?? "instant",
-    effectDurationText: options.effectDurationText,
-    trigger: options.trigger,
-  })
+    effectDuration:
+      definition.effectDuration ??
+      (definition.kind === "active" ? "instant" : "lasting"),
+    effectDurationText: definition.effectDurationText,
+    trigger:
+      definition.trigger ??
+      (definition.kind === "passive" ? "always" : undefined),
+    benefitsActive: undefined,
+    modifiersActive: undefined,
+  }
+}
 
-  if (matches(name, "furia", "rage")) {
-    return active("bonusAction", {
-      max: rageUses(classLevel),
-      reset: "longRest",
-      effectDuration: "lasting",
-      effectDurationText: "Até 1 minuto, encerramento voluntário ou condição da característica.",
-    })
-  }
-  if (matches(name, "retomar o folego", "second wind")) {
-    return active("bonusAction", { max: 1, reset: "shortRest" })
-  }
-  if (matches(name, "surto de acao", "action surge")) {
-    return active("free", {
-      max: classLevel >= 17 ? 2 : 1,
-      reset: "shortRest",
-    })
-  }
-  if (matches(name, "forma selvagem", "wild shape")) {
-    return active("action", {
-      max: 2,
-      reset: "shortRest",
-      effectDuration: "lasting",
-      effectDurationText: "Pela duração indicada pela Forma Selvagem ou até encerrá-la.",
-    })
-  }
-  if (matches(name, "inspiracao de bardo", "bardic inspiration")) {
-    return active("bonusAction", {
-      max: Math.max(1, attributeModifier("cha")),
-      reset: classLevel >= 5 ? "shortRest" : "longRest",
-    })
-  }
-  if (matches(name, "canalizar divindade", "channel divinity")) {
-    const max =
-      className === "cleric"
-        ? classLevel >= 18
-          ? 3
-          : classLevel >= 6
-            ? 2
-            : 1
-        : 1
-    return active("action", { max, reset: "shortRest" })
-  }
-  if (matches(name, "sentido divino", "divine sense")) {
-    return active("action", {
-      max: Math.max(1, 1 + attributeModifier("cha")),
-      reset: "longRest",
-    })
-  }
-  if (matches(name, "imposicao das maos", "lay on hands")) {
-    return active("action", {
-      maxFormula: "character.class.paladin.level * 5",
-      reset: "longRest",
-    })
-  }
-  if (matches(name, "golpe divino", "divine smite")) {
-    return active("free", { reset: "spellSlot", trigger: "onHit" })
-  }
-  if (matches(name, "recuperacao arcana", "arcane recovery")) {
-    return active("free", { max: 1, reset: "longRest", trigger: "onShortRest" })
-  }
-  if (matches(name, "lampejo de genialidade", "flash of genius")) {
-    return active("reaction", {
-      max: Math.max(1, attributeModifier("int")),
-      reset: "longRest",
-      trigger: "onSave",
-    })
-  }
-  if (matches(name, "desviar projeteis", "deflect missiles")) {
-    return active("reaction", { trigger: "whenHit" })
-  }
-  if (matches(name, "queda lenta", "slow fall")) {
-    return active("reaction", { trigger: "whenDamaged" })
-  }
-  if (matches(name, "ataque atordoante", "stunning strike")) {
-    return active("free", { trigger: "onHit" })
-  }
-  if (matches(name, "contrafeitico", "countercharm")) {
-    return active("action", {
-      effectDuration: "lasting",
-      effectDurationText: "Até o início do seu próximo turno.",
-    })
-  }
-  if (matches(name, "maldição da lâmina maldita", "hexblades curse", "hexblade s curse")) {
-    return active("bonusAction", {
-      max: 1,
-      reset: "shortRest",
-      effectDuration: "lasting",
-      effectDurationText: "Por 1 minuto ou até o alvo morrer.",
-    })
-  }
-  if (matches(name, "clarão protetor", "warding flare")) {
-    return active("reaction", {
-      max: Math.max(1, attributeModifier("wis")),
-      reset: "longRest",
-      trigger: "whenTargeted",
-    })
-  }
-  if (matches(name, "ira da tempestade", "wrath of the storm")) {
-    return active("reaction", {
-      max: Math.max(1, attributeModifier("wis")),
-      reset: "longRest",
-      trigger: "whenHit",
-    })
-  }
-  if (matches(name, "sacerdote da guerra", "war priest")) {
-    return active("bonusAction", {
-      max: Math.max(1, attributeModifier("wis")),
-      reset: "longRest",
-      trigger: "onAttack",
-    })
-  }
-  if (matches(name, "benção do trapaceiro", "blessing of the trickster")) {
-    return active("action", {
-      effectDuration: "lasting",
-      effectDurationText: "Por 1 hora ou até usar novamente.",
-    })
-  }
-  if (matches(name, "invocar duplicidade", "invoke duplicity")) {
-    return active("action", {
-      max: 1,
-      reset: "shortRest",
-      effectDuration: "lasting",
-      effectDurationText: "Por até 1 minuto, enquanto mantiver concentração.",
-    })
-  }
-  if (matches(name, "manto de sombras", "cloak of shadows")) {
-    return active("action", { max: 1, reset: "shortRest" })
-  }
-  if (matches(name, "conhecimento do inimigo", "know your enemy")) {
-    return active("action")
-  }
-  if (matches(name, "indomavel", "indomitable")) {
-    return active("free", {
-      max: classLevel >= 17 ? 3 : classLevel >= 13 ? 2 : 1,
-      reset: "longRest",
-      trigger: "onFailedSave",
-    })
-  }
-  if (matches(name, "evasao sobrenatural", "uncanny dodge")) {
-    return active("reaction", { trigger: "whenHit" })
-  }
-  if (matches(name, "golpe de sorte", "stroke of luck")) {
-    return active("free", {
-      max: 1,
-      reset: "shortRest",
-      trigger: "onMiss",
-    })
-  }
-  if (matches(name, "intervencao divina", "divine intervention")) {
-    return active("action", { max: 1, reset: "longRest" })
-  }
+function sanitizeCustomFeat(
+  value: Partial<CustomFeatDefinition>,
+): CustomFeatDefinition {
+  const kind = value.kind === "active" ? "active" : "passive"
+  const max = Math.max(0, Math.trunc(Number(value.usage?.max) || 0))
+  const reset = isUsageReset(value.usage?.reset)
+    ? value.usage.reset
+    : "longRest"
+  const usage =
+    kind === "active" &&
+    (max > 0 || value.usage?.maxFormula?.trim() || reset === "spellSlot")
+      ? {
+          max: max || (reset === "spellSlot" ? 1 : 0),
+          maxFormula: value.usage?.maxFormula?.trim() || undefined,
+          used: 0,
+          reset,
+        }
+      : undefined
 
   return {
-    kind: "passive",
-    effectDuration: "lasting",
-    trigger: inferPassiveTrigger(name),
+    name: String(value.name ?? "").trim(),
+    description: String(value.description ?? "").trim(),
+    kind,
+    actionKind:
+      kind === "active" && isActionKind(value.actionKind)
+        ? value.actionKind
+        : kind === "active"
+          ? "action"
+          : undefined,
+    usage,
+    effectDuration:
+      value.effectDuration === "lasting" ? "lasting" : "instant",
+    effectDurationText:
+      value.effectDuration === "lasting"
+        ? value.effectDurationText?.trim() || undefined
+        : undefined,
+    trigger: value.trigger?.trim() || (kind === "passive" ? "always" : undefined),
   }
-}
-
-function inferPassiveTrigger(name: string): string {
-  if (name.includes("aura")) return "always"
-  if (name.includes("critico")) return "onCrit"
-  if (name.includes("ataque furtivo")) return "onHit"
-  if (name.includes("concentr")) return "whenConcentrating"
-  if (name.includes("salv")) return "onSave"
-  if (name.includes("iniciativa")) return "onInitiative"
-  if (name.includes("descanso")) return "onShortRest"
-  return "always"
-}
-
-function rageUses(level: number): number {
-  if (level >= 20) return 999
-  if (level >= 17) return 6
-  if (level >= 12) return 5
-  if (level >= 6) return 4
-  if (level >= 3) return 3
-  return 2
-}
-
-function isProgressionAsiAbility(ability: Ability): boolean {
-  return (
-    ability.id.startsWith("progression:") &&
-    /:ability-score-improvement-\d+$/.test(ability.id)
-  )
-}
-
-function resolveAbilityClassName(ability: Ability): ClassName | undefined {
-  if (ability.acquisition?.className) return ability.acquisition.className
-  const [, className] = ability.id.split(":")
-  return isClassName(className) ? className : undefined
-}
-
-function resolveAbilityClassLevel(ability: Ability): number | undefined {
-  const fromMetadata = Number(ability.acquisition?.classLevel)
-  if (Number.isFinite(fromMetadata) && fromMetadata > 0) return fromMetadata
-  const match = ability.id.match(/-(\d+)$/)
-  const parsed = Number(match?.[1])
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
 function sanitizeIncreases(
@@ -733,6 +573,27 @@ function sanitizeIncreases(
   return result
 }
 
+function isProgressionAsiAbility(ability: Ability): boolean {
+  return (
+    ability.id.startsWith("progression:") &&
+    /:ability-score-improvement-\d+$/.test(ability.id)
+  )
+}
+
+function resolveAbilityClassName(ability: Ability): ClassName | undefined {
+  if (ability.acquisition?.className) return ability.acquisition.className
+  const [, className] = ability.id.split(":")
+  return isClassName(className) ? className : undefined
+}
+
+function resolveAbilityClassLevel(ability: Ability): number | undefined {
+  const fromMetadata = Number(ability.acquisition?.classLevel)
+  if (Number.isFinite(fromMetadata) && fromMetadata > 0) return fromMetadata
+  const match = ability.id.match(/-(\d+)$/)
+  const parsed = Number(match?.[1])
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
 function deduplicateAbilities(abilities: Ability[]): Ability[] {
   const byId = new Map<string, Ability>()
   for (const ability of abilities) byId.set(ability.id, ability)
@@ -757,17 +618,27 @@ function isClassName(value: string | undefined): value is ClassName {
   ].includes(String(value))
 }
 
-function normalizeText(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("pt-BR")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
+function isActionKind(value: unknown): value is AbilityActionKind {
+  return [
+    "action",
+    "bonusAction",
+    "reaction",
+    "legendaryAction",
+    "legendaryReaction",
+    "legendaryResistance",
+    "free",
+  ].includes(String(value))
 }
 
-function matches(value: string, ...candidates: string[]): boolean {
-  return candidates.some((candidate) => value === normalizeText(candidate))
+function isUsageReset(value: unknown): value is Usage["reset"] {
+  return [
+    "turn",
+    "cooldown",
+    "shortRest",
+    "longRest",
+    "limited",
+    "spellSlot",
+  ].includes(String(value))
 }
 
 function decodeSafe(value: string): string {
@@ -779,5 +650,10 @@ function decodeSafe(value: string): string {
 }
 
 function slug(value: string): string {
-  return normalizeText(value).replace(/\s+/g, "-") || "talento"
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "talento"
 }
