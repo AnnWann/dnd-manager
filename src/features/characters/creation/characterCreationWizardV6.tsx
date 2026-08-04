@@ -2,6 +2,7 @@ import { useRef, useState } from "react"
 
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Player } from "../../../models/player/Player"
+import { CharacterProgressionConfigurator } from "../progression/CharacterProgressionConfigurator"
 import {
   CharacterCreationWizard as BaseCharacterCreationWizard,
   type CharacterCreationProgressionPlan,
@@ -25,6 +26,7 @@ type Props = {
 type PendingCharacter = {
   character: CharacterTemplate
   plan: CharacterCreationProgressionPlan
+  stage: "progression" | "inventory"
 }
 
 export function CharacterCreationWizard(props: Props) {
@@ -42,12 +44,33 @@ export function CharacterCreationWizard(props: Props) {
             : "fixed inset-0 z-[90] overflow-y-auto bg-black/65 p-3 backdrop-blur-sm sm:p-4"
         }
       >
-        <StartingInventoryReview
-          character={pending.character}
-          plan={pending.plan}
-          onCancel={props.onClose}
-          onConfirm={(character) => props.onCreate(character, pending.plan)}
-        />
+        {pending.stage === "progression" ? (
+          <CharacterProgressionConfigurator
+            mode="creation"
+            character={pending.character}
+            targetTotalLevel={pending.plan.targetLevel}
+            primaryClassName={pending.plan.className}
+            onCancel={props.onClose}
+            onComplete={(character) =>
+              setPending((current) =>
+                current
+                  ? {
+                      ...current,
+                      character,
+                      stage: "inventory",
+                    }
+                  : current,
+              )
+            }
+          />
+        ) : (
+          <StartingInventoryReview
+            character={pending.character}
+            plan={pending.plan}
+            onCancel={props.onClose}
+            onConfirm={(character) => props.onCreate(character, pending.plan)}
+          />
+        )}
       </div>
     )
   }
@@ -64,7 +87,7 @@ export function CharacterCreationWizard(props: Props) {
       }}
       onCreate={(character, plan) => {
         suppressBaseClose.current = true
-        setPending({ character, plan })
+        setPending({ character, plan, stage: "progression" })
       }}
     />
   )
