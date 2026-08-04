@@ -8,6 +8,7 @@ import {
   jsonResponse,
   readJsonObject,
 } from "../../server/api"
+import { sanitizeCharacterItemData } from "../../server/character-items"
 import { prisma } from "../../server/prisma"
 import { requireSession } from "../../server/session"
 
@@ -31,10 +32,7 @@ export async function GET(request: Request): Promise<Response> {
         visibility: true,
         createdAt: true,
         updatedAt: true,
-
-        // Apenas informações úteis para a listagem.
         data: true,
-
         campaignLinks: {
           select: {
             campaign: {
@@ -74,10 +72,8 @@ export async function POST(request: Request): Promise<Response> {
     const character = await prisma.character.create({
       data: {
         name: body.name,
-        data: body.data,
+        data: sanitizeCharacterItemData(body.data),
         visibility: body.visibility,
-
-        // Nunca receber ownerId do cliente.
         ownerId: session.user.id,
       },
       select: {
