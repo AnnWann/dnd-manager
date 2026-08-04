@@ -26,6 +26,7 @@ import { UserDashboardView } from "./views/user/UserDashboardView"
 import { UserCharacterDetailView } from "./views/user/UserCharacterDetailView"
 import { UserCharacterAddSpellsView } from "./views/user/UserCharacterAddSpellsView"
 import { UserCharacterCreateItemView } from "./views/user/UserCharacterCreateItemView"
+import { UserCharacterCreateView } from "./views/user/UserCharacterCreateView"
 
 export function AppRouter() {
   return (
@@ -45,6 +46,7 @@ export function AppRouter() {
       >
         <Route index element={<Navigate to="characters" replace />} />
         <Route path="characters" element={<UserCharactersTab />} />
+        <Route path="characters/create" element={<UserCharacterCreateView />} />
         <Route
           path="characters/:characterId"
           element={<Navigate to="sheet" replace />}
