@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { getClassNamePt } from "../../../models/leveling/ClassLocalization"
 import {
   getDynamicSubclassSpellGrants,
 } from "../../../models/leveling/DynamicSubclassSpellRules"
@@ -16,7 +17,6 @@ import {
 } from "../../../models/leveling/SpellSelectionRules"
 import type { Spell } from "../../../models/magic/spells/Spell"
 import type { ClassName } from "../../../models/sheet/Class"
-import { getClassNamePt } from "../../../models/leveling/ClassLocalization"
 
 const ALL_CLASSES: ClassName[] = [
   "artificer",
@@ -316,7 +316,7 @@ function grantModeLabel(mode: string): string {
   return "Lista expandida"
 }
 
-function Badge({ children }: { children: React.ReactNode }) {
+function Badge({ children }: { children: ReactNode }) {
   return (
     <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
       {children}
