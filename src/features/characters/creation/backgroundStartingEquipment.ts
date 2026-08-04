@@ -1,3 +1,4 @@
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { ItemKind, Itemmable } from "../../../models/items/item"
 import {
   findStandardItemDefinitionByName,
@@ -39,9 +40,7 @@ const BACKGROUND_ITEM_DEFINITIONS: Record<string, BackgroundItemDefinition> = {
     pocketable: true,
     description: "Objetos, documentos e pequenos acessórios usados para executar um golpe específico.",
   },
-  "roupas escuras": {
-    compendiumName: "Roupas comuns",
-  },
+  "roupas escuras": { compendiumName: "Roupas comuns" },
   bolsa: {
     kind: "gear",
     weight: 0.45,
@@ -60,9 +59,7 @@ const BACKGROUND_ITEM_DEFINITIONS: Record<string, BackgroundItemDefinition> = {
     pocketable: true,
     description: "Uma lembrança recebida de alguém que admirava as apresentações do personagem.",
   },
-  traje: {
-    compendiumName: "Roupas finas",
-  },
+  traje: { compendiumName: "Roupas finas" },
   "ferramenta de artesao": {
     kind: "tool",
     weight: 2.5,
@@ -90,9 +87,7 @@ const BACKGROUND_ITEM_DEFINITIONS: Record<string, BackgroundItemDefinition> = {
     pocketable: true,
     description: "Documento que registra a genealogia e as prerrogativas da família do personagem.",
   },
-  cajado: {
-    compendiumName: "Bordão",
-  },
+  cajado: { compendiumName: "Bordão" },
   "trofeu animal": {
     kind: "gear",
     weight: 0.25,
@@ -111,18 +106,14 @@ const BACKGROUND_ITEM_DEFINITIONS: Record<string, BackgroundItemDefinition> = {
     pocketable: true,
     description: "Pena preparada para escrita com tinta.",
   },
-  "pequena faca": {
-    compendiumName: "Adaga",
-  },
+  "pequena faca": { compendiumName: "Adaga" },
   "carta de colega": {
     kind: "gear",
     weight: 0.01,
     pocketable: true,
     description: "Carta de um colega, mestre ou instituição relacionada aos estudos do personagem.",
   },
-  "cavilha de amarracao": {
-    compendiumName: "Clava",
-  },
+  "cavilha de amarracao": { compendiumName: "Clava" },
   "amuleto da sorte": {
     kind: "gear",
     weight: 0.05,
@@ -197,8 +188,8 @@ export function hydrateBackgroundStartingItem(
     id: item.id || crypto.randomUUID(),
     name: originalName,
     desc:
-      explicit?.description ??
-      item.desc?.trim() ??
+      explicit?.description ||
+      item.desc?.trim() ||
       "Equipamento inicial concedido pelo antecedente.",
     notes: buildSourceNote(source),
     quantity: Math.max(1, item.quantity || 1),
@@ -221,6 +212,47 @@ export function hydrateBackgroundStartingItems(
   return items.map((item) => hydrateBackgroundStartingItem(item, source))
 }
 
+export function hydrateCharacterStartingInventory(
+  character: CharacterTemplate,
+): CharacterTemplate {
+  const backgroundName = getBackgroundName(character)
+  const source: StartingItemSource = {
+    type: "background",
+    sourceId: backgroundName ? normalizeName(backgroundName) : undefined,
+    sourceName: backgroundName || "Antecedente",
+  }
+  const inventory = character.get("inventory") ?? []
+
+  return character.with(
+    "inventory",
+    inventory.map((item) => {
+      if (isBackgroundPlaceholder(item)) {
+        return hydrateBackgroundStartingItem(item, source)
+      }
+      return normalizeStandardItem(item)
+    }),
+  )
+}
+
+function isBackgroundPlaceholder(item: Itemmable): boolean {
+  const text = `${item.desc ?? ""} ${item.notes ?? ""}`
+    .toLocaleLowerCase("pt-BR")
+  if (text.includes("antecedente")) return true
+
+  return (
+    !item.compendiumItemId &&
+    item.itemOrigin !== "standard" &&
+    item.kind === "common" &&
+    item.weight === 0
+  )
+}
+
+function getBackgroundName(character: CharacterTemplate): string {
+  const history = character.get("profile").history ?? ""
+  const match = history.match(/^Antecedente:\s*(.+)$/im)
+  return match?.[1]?.trim() ?? ""
+}
+
 function buildSourceNote(
   source: StartingItemSource,
   canonicalName?: string,
@@ -239,10 +271,18 @@ function buildSourceNote(
 
 function inferKind(name: string): ItemKind {
   const normalized = normalizeName(name)
-  if (normalized.includes("kit") || normalized.includes("ferrament")) return "tool"
+  if (normalized.includes("kit") || normalized.includes("ferrament")) {
+    return "tool"
+  }
   if (normalized.includes("instrument")) return "instrument"
   if (normalized.includes("simbolo")) return "focus"
-  if (normalized.includes("roup") || normalized.includes("traje") || normalized.includes("veste")) return "gear"
+  if (
+    normalized.includes("roup") ||
+    normalized.includes("traje") ||
+    normalized.includes("veste")
+  ) {
+    return "gear"
+  }
   return "gear"
 }
 
