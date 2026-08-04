@@ -1,5 +1,4 @@
 import { Button } from "../../../components/ui/Button"
-import { useCharacterContext } from "../../../contexts/characterContext"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatSigned } from "../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
@@ -20,6 +19,7 @@ import {
   consumeItemQuantity,
   isConsumableItemKind,
 } from "../../../models/items/itemConsumption"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 
 type Props = {
   character: CharacterTemplate
@@ -69,7 +69,7 @@ export function EquipmentPocketsSection({
   character,
   updateCharacter,
 }: Props) {
-  const { addGroundItem } = useCharacterContext()
+  const { addGroundItem } = useCharacterWorkspace()
   const pockets = character.get("equipment").pockets
 
   function unequipPocketItem(index: number) {
@@ -110,7 +110,7 @@ export function EquipmentPocketsSection({
       })
     })
 
-    addGroundItem({
+    addGroundItem?.({
       ...item,
       id: crypto.randomUUID(),
       quantity: 1,
@@ -122,19 +122,12 @@ export function EquipmentPocketsSection({
   return (
     <div className="rounded-md border border-border p-3">
       <div className="mb-3">
-        <div className="text-sm font-medium text-textH">
-          Bolsos
-        </div>
-
-        <div className="text-xs text-text">
-          {pockets.length}/8 bolsos usados
-        </div>
+        <div className="text-sm font-medium text-textH">Bolsos</div>
+        <div className="text-xs text-text">{pockets.length}/8 bolsos usados</div>
       </div>
 
       {pockets.length === 0 ? (
-        <div className="text-xs text-text">
-          Nenhum item nos bolsos.
-        </div>
+        <div className="text-xs text-text">Nenhum item nos bolsos.</div>
       ) : (
         <div className="flex flex-col gap-3">
           {pockets.map((item, index) => (
@@ -154,16 +147,11 @@ export function EquipmentPocketsSection({
                   </div>
 
                   {isPocketWeapon(item) ? (
-                    <WeaponPocketSummary
-                      character={character}
-                      weapon={item}
-                    />
+                    <WeaponPocketSummary character={character} weapon={item} />
                   ) : null}
 
                   {isConsumable(item) && item.useText?.trim() ? (
-                    <div className="mt-1 text-xs text-text">
-                      Uso: {item.useText}
-                    </div>
+                    <div className="mt-1 text-xs text-text">Uso: {item.useText}</div>
                   ) : null}
 
                   {isConsumable(item) && item.consumptionEffect ? (
@@ -185,30 +173,18 @@ export function EquipmentPocketsSection({
 
                 <div className="flex shrink-0 flex-col gap-2">
                   {isPocketWeapon(item) ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => wieldPocketWeapon(index)}
-                    >
+                    <Button size="sm" variant="secondary" onClick={() => wieldPocketWeapon(index)}>
                       Empunhar
                     </Button>
                   ) : null}
 
                   {isConsumableItemKind(item) ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => usePocketItem(index)}
-                    >
+                    <Button size="sm" variant="secondary" onClick={() => usePocketItem(index)}>
                       Usar
                     </Button>
                   ) : null}
 
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => unequipPocketItem(index)}
-                  >
+                  <Button size="sm" variant="secondary" onClick={() => unequipPocketItem(index)}>
                     Tirar do bolso
                   </Button>
                 </div>
@@ -216,22 +192,14 @@ export function EquipmentPocketsSection({
 
               {item.desc?.trim() ? (
                 <div className="mt-3">
-                  <div className="text-xs font-medium text-textH">
-                    Descrição
-                  </div>
-
-                  <div className="mt-1 whitespace-pre-wrap text-xs text-text">
-                    {item.desc}
-                  </div>
+                  <div className="text-xs font-medium text-textH">Descrição</div>
+                  <div className="mt-1 whitespace-pre-wrap text-xs text-text">{item.desc}</div>
                 </div>
               ) : null}
 
               {isPocketWeapon(item) && item.properties?.length ? (
                 <div className="mt-3">
-                  <div className="text-xs font-medium text-textH">
-                    Propriedades
-                  </div>
-
+                  <div className="text-xs font-medium text-textH">Propriedades</div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {item.properties.map((property) => (
                       <span
@@ -262,21 +230,15 @@ function WeaponPocketSummary({
 }) {
   const attribute = getWeaponAttackAttribute(weapon)
   const attributeMod = character.getEffectiveAttributeModifier(attribute)
-
   const proficiency =
     weapon.proficient && !isWeaponImprovisedGrip(weapon)
       ? character.getProficiencyBonus()
       : 0
-
   const attackBonus = character.getEffectiveWeaponAttackBonus(
     weapon,
     attributeMod + proficiency,
   )
-
-  const damageBonus = character.getEffectiveWeaponDamageBonus(
-    weapon,
-    attributeMod,
-  )
+  const damageBonus = character.getEffectiveWeaponDamageBonus(weapon, attributeMod)
   const activeDamage = getWeaponDamageDie(weapon) ?? weapon.damage
   const versatile = isVersatileWeapon(weapon)
   const handUsage = getWeaponHandsUsed(weapon)
