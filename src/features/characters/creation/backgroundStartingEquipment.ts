@@ -184,6 +184,14 @@ export function hydrateBackgroundStartingItem(
     })
   }
 
+  const kind = explicit?.kind ?? inferKind(originalName)
+  const weight =
+    explicit?.weight !== undefined
+      ? explicit.weight
+      : item.weight > 0
+        ? item.weight
+        : defaultWeightForKind(kind)
+
   return normalizeStandardItem({
     id: item.id || crypto.randomUUID(),
     name: originalName,
@@ -193,9 +201,9 @@ export function hydrateBackgroundStartingItem(
       "Equipamento inicial concedido pelo antecedente.",
     notes: buildSourceNote(source),
     quantity: Math.max(1, item.quantity || 1),
-    weight: Math.max(0, explicit?.weight ?? item.weight ?? 0.1),
+    weight: Math.max(0, weight),
     pocketable: explicit?.pocketable ?? item.pocketable ?? true,
-    kind: explicit?.kind ?? inferKind(originalName),
+    kind,
     equippable: false,
     magicItem: false,
     requiresAttunement: false,
@@ -284,6 +292,13 @@ function inferKind(name: string): ItemKind {
     return "gear"
   }
   return "gear"
+}
+
+function defaultWeightForKind(kind: ItemKind): number {
+  if (kind === "instrument") return 1.5
+  if (kind === "tool") return 1
+  if (kind === "focus") return 0.25
+  return 0.1
 }
 
 function normalizeName(value: string): string {
