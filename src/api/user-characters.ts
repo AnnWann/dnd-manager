@@ -16,12 +16,49 @@ export type UserCharacterSummary = LocalCharacter & {
   }>
 }
 
+export type UserCharacterAccess = {
+  campaigns: Array<{
+    id: string
+    name: string
+    master: {
+      id: string
+      name: string
+    }
+    role: "MASTER" | "PLAYER"
+    status: "ACTIVE" | "INVITED" | "REMOVED"
+  }>
+  homebrewSpells: Array<{
+    id: string
+    index: string
+    name: string
+    author: {
+      id: string
+      name: string
+    }
+    ownedByCurrentUser: boolean
+    sourceCampaign?: {
+      id: string
+      name: string
+    } | null
+    approvedCampaigns: Array<{
+      id: string
+      name: string
+      status: "APPROVED"
+    }>
+    grantedAt: string
+  }>
+}
+
 type CharactersResponse = {
   characters: UserCharacterSummary[]
 }
 
 type CharacterResponse = {
   character: UserCharacterSummary
+}
+
+type CharacterAccessResponse = {
+  access: UserCharacterAccess
 }
 
 export async function getMyCharacters(): Promise<UserCharacterSummary[]> {
@@ -56,6 +93,32 @@ export async function getMyCharacter(
   )
 
   return response.data.character
+}
+
+export async function getMyCharacterAccess(
+  characterId: string,
+): Promise<UserCharacterAccess> {
+  if (LOCAL_AUTH_BYPASS) {
+    const character = await getMyCharacter(characterId)
+    return {
+      campaigns: (character.campaigns ?? []).map((campaign) => ({
+        ...campaign,
+        master: {
+          id: "local-development-user",
+          name: "Usuário local",
+        },
+        role: "MASTER" as const,
+        status: "ACTIVE" as const,
+      })),
+      homebrewSpells: [],
+    }
+  }
+
+  const response = await apiClient.get<CharacterAccessResponse>(
+    `/me/characters/${encodeURIComponent(characterId)}/access`,
+  )
+
+  return response.data.access
 }
 
 export async function createMyCharacter(input: {
@@ -151,11 +214,12 @@ export async function deleteMyCharacter(
   characterId: string,
 ): Promise<void> {
   if (LOCAL_AUTH_BYPASS) {
-    const remaining = getLocalCharacters().filter(
+    const current = getLocalCharacters()
+    const remaining = current.filter(
       (character) => character.id !== characterId,
     )
 
-    if (remaining.length === getLocalCharacters().length) {
+    if (remaining.length === current.length) {
       throw new Error("Personagem local não encontrado.")
     }
 
