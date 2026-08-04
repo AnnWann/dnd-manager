@@ -12,6 +12,11 @@ export type CampaignSpellAccess = {
   reviewedAt?: string | null
 }
 
+export type CharacterSpellAccess = {
+  id: string
+  name: string
+}
+
 export type AccessibleHomebrewSpell = {
   id: string
   index: string
@@ -21,6 +26,7 @@ export type AccessibleHomebrewSpell = {
   revision: number
   ownerId: string
   ownedByCurrentUser: boolean
+  characters: CharacterSpellAccess[]
   campaigns: CampaignSpellAccess[]
   createdAt: string
   updatedAt: string
@@ -58,6 +64,7 @@ export async function createOwnedHomebrewSpell(
       revision: 1,
       ownerId: "local-user",
       ownedByCurrentUser: true,
+      characters: [],
       campaigns: [],
       createdAt: now,
       updatedAt: now,
@@ -114,6 +121,7 @@ export async function updateOwnedHomebrewSpell(
   return {
     ...response.data.spell,
     ownedByCurrentUser: true,
+    characters: record.characters,
     campaigns: record.campaigns,
   }
 }
@@ -142,7 +150,11 @@ function readLocalSpells(): AccessibleHomebrewSpell[] {
     ) as unknown
 
     return Array.isArray(parsed)
-      ? (parsed as AccessibleHomebrewSpell[])
+      ? (parsed as AccessibleHomebrewSpell[]).map((record) => ({
+          ...record,
+          characters: record.characters ?? [],
+          campaigns: record.campaigns ?? [],
+        }))
       : []
   } catch {
     return []
