@@ -141,6 +141,56 @@ export async function archiveOwnedHomebrewSpell(
   )
 }
 
+export async function submitOwnedHomebrewSpellToCampaign(
+  record: AccessibleHomebrewSpell,
+  campaign: {
+    id: string
+    name: string
+    autoApprove: boolean
+  },
+): Promise<void> {
+  if (!record.ownedByCurrentUser) {
+    throw new Error("Somente o autor pode enviar esta magia para uma campanha.")
+  }
+
+  if (LOCAL_AUTH_BYPASS) {
+    const now = new Date().toISOString()
+    const status = campaign.autoApprove ? "APPROVED" : "PENDING"
+
+    writeLocalSpells(
+      readLocalSpells().map((entry) =>
+        entry.id === record.id
+          ? {
+              ...entry,
+              campaigns: [
+                ...entry.campaigns.filter(
+                  (linked) => linked.id !== campaign.id,
+                ),
+                {
+                  linkId: crypto.randomUUID(),
+                  id: campaign.id,
+                  name: campaign.name,
+                  status,
+                  submittedAt: now,
+                  reviewedAt: campaign.autoApprove ? now : null,
+                },
+              ],
+              updatedAt: now,
+            }
+          : entry,
+      ),
+    )
+    return
+  }
+
+  await apiClient.post(
+    `/me/spells/${encodeURIComponent(record.id)}/campaigns`,
+    {
+      campaignId: campaign.id,
+    },
+  )
+}
+
 function readLocalSpells(): AccessibleHomebrewSpell[] {
   if (typeof window === "undefined") return []
 
