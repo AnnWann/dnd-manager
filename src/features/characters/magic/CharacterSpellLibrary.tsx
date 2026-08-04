@@ -4,6 +4,7 @@ import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
 import {
+  CASTING_TIME_NAMES,
   CLASS_NAMES,
   MAGIC_SCHOOLS_MAP,
 } from "../../../contexts/consts"
@@ -41,6 +42,7 @@ export function CharacterSpellLibrary({
   const [classFilter, setClassFilter] = useState<ClassFilter>("all")
   const [concentrationOnly, setConcentrationOnly] = useState(false)
   const [selectedSpell, setSelectedSpell] = useState<Spell | null>(null)
+  const [viewingSpell, setViewingSpell] = useState<Spell | null>(null)
   const [selectedSource, setSelectedSource] = useState<SourceChoice>("")
   const [extendedList, setExtendedList] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
@@ -301,11 +303,103 @@ export function CharacterSpellLibrary({
                 </p>
               </div>
 
-              <Button size="sm" onClick={() => openAdd(spell)}>Adicionar</Button>
+              <div className="flex shrink-0 gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setViewingSpell(spell)}
+                >
+                  Ver detalhes
+                </Button>
+                <Button size="sm" onClick={() => openAdd(spell)}>
+                  Adicionar
+                </Button>
+              </div>
             </article>
           ))}
         </div>
       </CardContent>
+
+      {viewingSpell ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-bg shadow-xl">
+            <div className="flex items-start justify-between gap-4 border-b border-border p-4">
+              <div>
+                <h2 className="text-lg font-semibold text-textH">
+                  {spellName(viewingSpell)}
+                </h2>
+                <div className="mt-1 text-xs text-textMuted">
+                  {formatLevel(viewingSpell.slotLevel)} · {MAGIC_SCHOOLS_MAP[viewingSpell.school] ?? String(viewingSpell.school)}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setViewingSpell(null)}
+              >
+                Fechar
+              </Button>
+            </div>
+
+            <div className="grid gap-5 p-4 text-sm text-text">
+              <div className="flex flex-wrap gap-2">
+                <Badge label={formatCastingTime(viewingSpell)} />
+                <Badge label={formatRange(viewingSpell)} />
+                <Badge label={formatDuration(viewingSpell)} />
+                <Badge label={`Componentes: ${viewingSpell.components.join(", ") || "nenhum"}`} />
+                {viewingSpell.concentration ? <Badge label="Concentração" /> : null}
+                {viewingSpell.ritual ? <Badge label="Ritual" /> : null}
+                {viewingSpell.targeting.hasAttackRoll ? <Badge label="Jogada de ataque" /> : null}
+                {viewingSpell.targeting.hasSavingThrow ? <Badge label="Teste de resistência" /> : null}
+              </div>
+
+              {viewingSpell.material?.trim() ? (
+                <section>
+                  <h3 className="font-semibold text-textH">Material</h3>
+                  <p className="mt-1 whitespace-pre-wrap leading-6">{viewingSpell.material}</p>
+                </section>
+              ) : null}
+
+              <section>
+                <h3 className="font-semibold text-textH">Descrição</h3>
+                <p className="mt-1 whitespace-pre-wrap leading-6">
+                  {viewingSpell.description || "Sem descrição."}
+                </p>
+              </section>
+
+              {viewingSpell.higherLevelText?.trim() ? (
+                <section>
+                  <h3 className="font-semibold text-textH">Em níveis superiores</h3>
+                  <p className="mt-1 whitespace-pre-wrap leading-6">
+                    {viewingSpell.higherLevelText}
+                  </p>
+                </section>
+              ) : null}
+
+              {viewingSpell.headcanon?.trim() ? (
+                <section>
+                  <h3 className="font-semibold text-textH">Personalização</h3>
+                  <p className="mt-1 whitespace-pre-wrap leading-6">
+                    {viewingSpell.headcanon}
+                  </p>
+                </section>
+              ) : null}
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => {
+                    const spell = viewingSpell
+                    setViewingSpell(null)
+                    openAdd(spell)
+                  }}
+                >
+                  Adicionar esta magia
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {selectedSpell ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
@@ -411,6 +505,22 @@ function spellName(spell: Spell): string {
 
 function formatLevel(level: number): string {
   return level === 0 ? "Truque" : `${level}º nível`
+}
+
+function formatCastingTime(spell: Spell): string {
+  const label = CASTING_TIME_NAMES[spell.castingTime.type] ?? spell.castingTime.type
+  return `Conjuração: ${spell.castingTime.value} ${label}`
+}
+
+function formatRange(spell: Spell): string {
+  if (spell.range.origin === "self") return "Alcance: pessoal"
+  if (spell.range.origin === "touch") return "Alcance: toque"
+  return `Alcance: ${spell.range.distance} m`
+}
+
+function formatDuration(spell: Spell): string {
+  if (spell.duration.unit === "instantaneous") return "Duração: instantânea"
+  return `Duração: ${spell.duration.value} ${spell.duration.unit}`
 }
 
 function Badge({ label }: { label: string }) {
