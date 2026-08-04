@@ -62,6 +62,19 @@ export function findStandardItemDefinition(
   )
 }
 
+export function findStandardDefinitionForItem(
+  item: Itemmable,
+): StandardItemDefinition | undefined {
+  const sourceId = item.compendiumItemId?.trim()
+  if (sourceId) return findStandardItemDefinition(sourceId)
+
+  if (item.id.startsWith("compendium-")) {
+    return findStandardItemDefinition(item.id)
+  }
+
+  return undefined
+}
+
 export function instantiateStandardItem(
   templateId: string,
   quantity = 1,
@@ -73,11 +86,115 @@ export function instantiateStandardItem(
 
   if (definition.item.kind === "currency") {
     const currencyType = definition.item.currencyType as CurrencyType
-    return createCurrencyItem(currencyType, quantity)
+    return {
+      ...createCurrencyItem(currencyType, quantity),
+      compendiumItemId: definition.item.id,
+      itemOrigin: "standard",
+    }
   }
 
   return {
     ...cloneCompendiumItem(definition.item),
-    quantity: Math.max(1, Math.trunc(Number(quantity) || 1)),
+    quantity:
+      definition.item.category === "bagOfHolding"
+        ? 1
+        : Math.max(1, Math.trunc(Number(quantity) || 1)),
+    compendiumItemId: definition.item.id,
+    itemOrigin: "standard",
   }
+}
+
+export function normalizeStandardItem(item: Itemmable): Itemmable {
+  const definition = findStandardDefinitionForItem(item)
+  if (!definition) {
+    return {
+      ...item,
+      itemOrigin: item.itemOrigin ?? "custom",
+    }
+  }
+
+  const sourceId = definition.item.id
+
+  if (!definition.locked) {
+    return {
+      ...item,
+      compendiumItemId: sourceId,
+      itemOrigin: "standard",
+    }
+  }
+
+  if (definition.item.kind === "currency") {
+    const canonical = createCurrencyItem(
+      definition.item.currencyType as CurrencyType,
+      item.quantity,
+      item.id,
+      item.insideBagOfHolding === true,
+    )
+
+    return {
+      ...canonical,
+      notes: typeof item.notes === "string" ? item.notes : "",
+      compendiumItemId: sourceId,
+      itemOrigin: "standard",
+    }
+  }
+
+  if (definition.item.category === "bagOfHolding") {
+    return {
+      ...structuredClone(definition.item),
+      id: item.id,
+      notes: typeof item.notes === "string" ? item.notes : "",
+      quantity: 1,
+      insideBagOfHolding: false,
+      compendiumItemId: sourceId,
+      itemOrigin: "standard",
+    }
+  }
+
+  return {
+    ...structuredClone(definition.item),
+    id: item.id,
+    quantity: Math.max(1, Math.trunc(Number(item.quantity) || 1)),
+    notes: typeof item.notes === "string" ? item.notes : "",
+    insideBagOfHolding: item.insideBagOfHolding === true,
+    attuned:
+      definition.item.requiresAttunement === true && item.attuned === true,
+    compendiumItemId: sourceId,
+    itemOrigin: "standard",
+  }
+}
+
+export function normalizeStandardItemsInValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(normalizeStandardItemsInValue)
+  }
+
+  if (!isRecord(value)) return value
+
+  const normalizedChildren = Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [
+      key,
+      normalizeStandardItemsInValue(child),
+    ]),
+  )
+
+  if (!looksLikeItem(normalizedChildren)) {
+    return normalizedChildren
+  }
+
+  return normalizeStandardItem(normalizedChildren as Itemmable)
+}
+
+function looksLikeItem(value: Record<string, unknown>): boolean {
+  return (
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.kind === "string" &&
+    typeof value.quantity === "number" &&
+    typeof value.weight === "number"
+  )
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
