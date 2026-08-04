@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react"
 
-import { CustomSystemsProvider } from "../contexts/customSystemsContext"
 import { MagicProvider } from "../contexts/magicContext"
 import type { Spell } from "../models/magic/spells/Spell"
 import { AppRouter } from "../Router"
@@ -22,14 +21,12 @@ export function UserLayout() {
   }, [spells])
 
   return (
-    <CustomSystemsProvider>
-      <MagicProvider
-        spells={spells}
-        onSpellsChange={setSpells}
-      >
-        <AppRouter />
-      </MagicProvider>
-    </CustomSystemsProvider>
+    <MagicProvider
+      spells={spells}
+      onSpellsChange={setSpells}
+    >
+      <AppRouter />
+    </MagicProvider>
   )
 }
 
