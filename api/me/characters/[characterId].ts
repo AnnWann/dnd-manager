@@ -11,6 +11,7 @@ import {
   jsonResponse,
   readJsonObject,
 } from "../../../server/api"
+import { sanitizeCharacterAcquisitionData } from "../../../server/character-acquisitions"
 import { sanitizeCharacterItemData } from "../../../server/character-items"
 import { prisma } from "../../../server/prisma"
 import { requireSession } from "../../../server/session"
@@ -112,9 +113,14 @@ export async function PATCH(
     const requestedName =
       typeof body.name === "string" ? body.name.trim() : ""
     const requestedVisibility = parseVisibility(body.visibility)
-    const data = sanitizeCharacterItemData(
+    const itemSafeData = sanitizeCharacterItemData(
       body.data as Prisma.InputJsonObject,
     )
+    const data = sanitizeCharacterAcquisitionData(itemSafeData, {
+      reason: "manual",
+      sourceType: "manual",
+      sourceName: "Edição da ficha",
+    })
     const referencedSpellIndexes = extractReferencedSpellIndexes(data)
     const accessibleHomebrewSpells = referencedSpellIndexes.length
       ? await prisma.homebrewSpell.findMany({
