@@ -43,7 +43,9 @@ function sanitizeValue(value: unknown): unknown {
   if (!isRecord(value)) return value
 
   const normalized = Object.fromEntries(
-    Object.entries(value).map(([key, child]) => [key, sanitizeValue(child)]),
+    Object.entries(value)
+      .filter(([, child]) => child !== undefined)
+      .map(([key, child]) => [key, sanitizeValue(child)]),
   )
   const sourceId =
     typeof normalized.compendiumItemId === "string"
@@ -74,8 +76,15 @@ function sanitizeValue(value: unknown): unknown {
 
   const coin = COINS[sourceId]
   if (coin) {
+    const {
+      heldHands: _heldHands,
+      equipSlot: _equipSlot,
+      category: _category,
+      ...safeMetadata
+    } = normalized
+
     return {
-      ...normalized,
+      ...safeMetadata,
       id: stringOr(normalized.id, crypto.randomUUID()),
       name: coin.name,
       desc: "",
@@ -90,7 +99,6 @@ function sanitizeValue(value: unknown): unknown {
       requiresAttunement: false,
       attuned: false,
       insideBagOfHolding: normalized.insideBagOfHolding === true,
-      heldHands: undefined,
       compendiumItemId: sourceId,
       itemOrigin: "standard",
     }
