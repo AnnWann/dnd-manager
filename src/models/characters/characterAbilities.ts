@@ -7,6 +7,7 @@ import {
   useAbilityEffect,
   restoreAbilityUse,
 } from "../abilities/abilityActivation"
+import { createCharacterAcquisition } from "./CharacterAcquisition"
 import { getEquipmentAbilities } from "./characterEquipment"
 import type { CharacterTemplate } from "./CharacterTemplate"
 
@@ -16,7 +17,7 @@ export function addAbility(
 ): CharacterTemplate {
   return character.with("abilities", [
     ...(character.get("abilities") ?? []),
-    ability,
+    withManualAbilityMetadata(character, ability),
   ])
 }
 
@@ -26,8 +27,16 @@ export function updateAbility(
 ): CharacterTemplate {
   return character.with(
     "abilities",
-    (character.get("abilities") ?? []).map((a) =>
-      a.id === ability.id ? ability : a,
+    (character.get("abilities") ?? []).map((current) =>
+      current.id === ability.id
+        ? {
+            ...ability,
+            acquisition:
+              ability.acquisition ??
+              current.acquisition ??
+              withManualAbilityMetadata(character, ability).acquisition,
+          }
+        : current,
     ),
   )
 }
@@ -121,4 +130,47 @@ export function restoreAbility(
       ability.id === abilityId ? restoreAbilityUse(ability) : ability,
     ),
   )
+}
+
+function withManualAbilityMetadata(
+  character: CharacterTemplate,
+  ability: Ability,
+): Ability {
+  if (ability.acquisition) return ability
+
+  const characterLevel = (character.get("sheet").classes ?? []).reduce(
+    (sum, entry) => sum + entry.level,
+    0,
+  )
+  const sourceType =
+    ability.source === "race"
+      ? "race"
+      : ability.source === "equipment"
+        ? "equipment"
+        : ability.category === "feat"
+          ? "feat"
+          : "manual"
+  const acquisition = createCharacterAcquisition({
+    characterLevel,
+    sourceType,
+    sourceId: ability.sourceItemId,
+    sourceName: ability.sourceItemName || "Adição manual à ficha",
+    reason: "manual",
+  })
+
+  return {
+    ...ability,
+    acquisition,
+    grantedSpells: ability.grantedSpells?.map((grant) => ({
+      ...grant,
+      acquisition:
+        grant.acquisition ??
+        createCharacterAcquisition({
+          ...acquisition,
+          sourceType: "ability",
+          sourceId: ability.id,
+          sourceName: ability.name,
+        }),
+    })),
+  }
 }
