@@ -1,6 +1,7 @@
 import { useRef, useState } from "react"
 
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import "../../../models/leveling/ExpandedClassProgression"
 import type { Player } from "../../../models/player/Player"
 import { CharacterProgressionConfigurator } from "../progression/CharacterProgressionConfigurator"
 import { hydrateCharacterStartingInventory } from "./backgroundStartingEquipment"
