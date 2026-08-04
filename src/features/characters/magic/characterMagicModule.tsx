@@ -1,6 +1,7 @@
 // features/characters/spells/CharacterSpellsModule.tsx
 
 import { useEffect, useMemo, useState } from "react"
+import { useNavigate } from "react-router-dom"
 
 import { Button } from "../../../components/ui/Button"
 import { Card, CardHeader } from "../../../components/ui/Card"
@@ -41,6 +42,7 @@ export function CharacterMagicTab({
   character,
   updateCharacter,
 }: Props) {
+  const navigate = useNavigate()
   const { characters, mode } = useCharacterWorkspace()
   const { spells, getSpellByIndex } = useMagicContext()
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle")
@@ -80,6 +82,12 @@ export function CharacterMagicTab({
     }
   }
 
+  function openAddSpellsPage() {
+    navigate(
+      `/user/characters/${encodeURIComponent(character.get("id"))}/spells-list/add-spells`,
+    )
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <Card>
@@ -95,31 +103,39 @@ export function CharacterMagicTab({
               </div>
             </div>
 
-            <div className="grid gap-1 sm:justify-items-end">
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={!canCopySpellList}
-                onClick={copyAllSpellLists}
-              >
-                {mode === "campaign"
-                  ? "Copiar listas do grupo"
-                  : "Copiar lista do personagem"}
-              </Button>
+            <div className="flex flex-wrap items-start justify-end gap-2">
+              {mode === "user" ? (
+                <Button size="sm" onClick={openAddSpellsPage}>
+                  Adicionar magias
+                </Button>
+              ) : null}
 
-              {copyStatus === "copied" ? (
-                <span className="text-xs text-accent">
-                  Listas copiadas.
-                </span>
-              ) : copyStatus === "error" ? (
-                <span className="text-xs text-danger">
-                  Não foi possível copiar.
-                </span>
-              ) : (
-                <span className="text-xs text-textMuted">
-                  Copia personagem, nível e nome da magia.
-                </span>
-              )}
+              <div className="grid gap-1 sm:justify-items-end">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={!canCopySpellList}
+                  onClick={copyAllSpellLists}
+                >
+                  {mode === "campaign"
+                    ? "Copiar listas do grupo"
+                    : "Copiar lista do personagem"}
+                </Button>
+
+                {copyStatus === "copied" ? (
+                  <span className="text-xs text-accent">
+                    Listas copiadas.
+                  </span>
+                ) : copyStatus === "error" ? (
+                  <span className="text-xs text-danger">
+                    Não foi possível copiar.
+                  </span>
+                ) : (
+                  <span className="text-xs text-textMuted">
+                    Copia personagem, nível e nome da magia.
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -148,10 +164,12 @@ export function CharacterMagicTab({
         />
       </Card>
 
-      <CharacterSpellLibrary
-        character={character}
-        updateCharacter={updateCharacter}
-      />
+      {mode === "campaign" ? (
+        <CharacterSpellLibrary
+          character={character}
+          updateCharacter={updateCharacter}
+        />
+      ) : null}
     </div>
   )
 }
