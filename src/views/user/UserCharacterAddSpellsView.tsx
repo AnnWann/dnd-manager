@@ -28,7 +28,7 @@ function UserCharacterAddSpellsContent({
   const character = characters.find(
     (entry) => entry.get("id") === characterId,
   )
-  const spellListPath = `/user/characters/${encodeURIComponent(characterId)}/spellsList`
+  const spellListPath = `/user/characters/${encodeURIComponent(characterId)}/spells-list`
 
   if (!character) {
     return <Navigate to="/not-found" replace />
