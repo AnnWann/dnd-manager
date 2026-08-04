@@ -15,6 +15,8 @@ import {
   getLocalUser,
   LOCAL_AUTH_BYPASS,
 } from "../../../auth/local-auth"
+import { moveEquippedItemToCharacterStorage } from "../../../models/characters/characterEquippedItemMovement"
+import { stowHandOccupant as stowCharacterHandOccupant } from "../../../models/characters/characterHands"
 import { takeLongRest } from "../../../models/characters/characterRest"
 import { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Player } from "../../../models/player/Player"
@@ -160,6 +162,21 @@ export function UserCharacterWorkspace({
       updateCharacter(targetId, takeLongRest)
     },
     partyInventory: [],
+    stowHandOccupant: (targetId, reference) => {
+      updateCharacter(targetId, (current) =>
+        stowCharacterHandOccupant(current, reference),
+      )
+    },
+    moveEquippedItem: (targetId, reference, destination) => {
+      updateCharacter(targetId, (current) =>
+        moveEquippedItemToCharacterStorage(
+          current,
+          reference,
+          destination,
+        ),
+      )
+    },
+    canUseGroundInventory: false,
     canAssignOwners: false,
     canEditCharacterType: true,
     owners: [fallbackOwner],
