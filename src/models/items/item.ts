@@ -31,6 +31,8 @@ export type ItemKind =
   | "currency"
   | "shield"
 
+export type ItemCategory = "bagOfHolding"
+
 export type Item = {
   id: string
   name: string
@@ -41,6 +43,7 @@ export type Item = {
 
   pocketable: boolean
   kind: ItemKind
+  category?: ItemCategory
 
   equippable?: boolean
   equipSlot?: EquipSlot
@@ -64,3 +67,7 @@ export type Itemmable =
   | ConsumableItem
   | ThrowableItem
   | SupplyItem
+
+export function isBagOfHoldingItem(item: Itemmable): boolean {
+  return item.category === "bagOfHolding"
+}
