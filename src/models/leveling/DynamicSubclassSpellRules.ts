@@ -99,6 +99,23 @@ const GENIE_SPELLS: Record<string, Tier[]> = {
   ],
 }
 
+const CHOICE_ALIASES: Record<string, string> = {
+  arctico: "arctic",
+  artico: "arctic",
+  costa: "coast",
+  deserto: "desert",
+  floresta: "forest",
+  pradaria: "grassland",
+  montanha: "mountain",
+  pantano: "swamp",
+  umbreterna: "underdark",
+  bem: "good",
+  mal: "evil",
+  ordem: "law",
+  caos: "chaos",
+  neutralidade: "neutrality",
+}
+
 const DIVINE_SOUL_AFFINITY_SPELL: Record<string, string> = {
   good: "Cure Wounds",
   evil: "Inflict Wounds",
@@ -123,7 +140,7 @@ export function getDynamicSubclassSpellGrants(
   const sourceName = classEntry?.subclass?.name ?? subclassId
 
   if (className === "druid" && subclassId === "land") {
-    const landType = normalizeChoice(choices["circle-land-type"]?.[0])
+    const landType = resolveChoice(choices["circle-land-type"]?.[0])
     return tierGrants(
       className,
       subclassId,
@@ -135,7 +152,7 @@ export function getDynamicSubclassSpellGrants(
   }
 
   if (className === "warlock" && subclassId === "genie") {
-    const genieKind = normalizeChoice(choices["genie-kind"]?.[0])
+    const genieKind = resolveChoice(choices["genie-kind"]?.[0])
     return tierGrants(
       className,
       subclassId,
@@ -147,7 +164,7 @@ export function getDynamicSubclassSpellGrants(
   }
 
   if (className === "sorcerer" && subclassId === "divine-soul") {
-    const affinity = normalizeChoice(
+    const affinity = resolveChoice(
       choices["divine-soul-affinity"]?.[0],
     )
     const spellName = DIVINE_SOUL_AFFINITY_SPELL[affinity]
@@ -188,6 +205,11 @@ function tierGrants(
         sourceName,
       })),
     )
+}
+
+function resolveChoice(value: string | undefined): string {
+  const normalized = normalizeChoice(value)
+  return CHOICE_ALIASES[normalized] ?? normalized
 }
 
 function normalizeChoice(value: string | undefined): string {
