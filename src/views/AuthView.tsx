@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react"
 
 import { authClient } from "../auth/auth-client"
+import { useNavigate } from "react-router-dom"
+import { createLocalDevelopmentSession, LOCAL_AUTH_BYPASS } from "../auth/local-auth"
 
 type AuthMode = "sign-in" | "sign-up"
 
@@ -52,6 +54,16 @@ export function AuthView() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const navigate = useNavigate()
+
+  function enterLocalDevelopmentMode() {
+    createLocalDevelopmentSession()
+
+    navigate("/user/characters", {
+      replace: true,
+    })
   }
 
   return (
@@ -136,6 +148,16 @@ export function AuthView() {
             : "Já tenho uma conta"}
         </button>
       </section>
+
+      {LOCAL_AUTH_BYPASS ? (
+        <button
+          type="button"
+          className="mt-3 w-full rounded-lg border border-border bg-bg-subtle px-4 py-2 text-sm font-medium text-textH"
+          onClick={enterLocalDevelopmentMode}
+        >
+          Entrar em modo local
+        </button>
+      ) : null}
     </main>
   )
 }

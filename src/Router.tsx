@@ -17,23 +17,27 @@ import { PartyInventoryView } from "./views/PartyInventoryView"
 import { SyncView } from "./views/SyncView"
 import { AuthView } from "./views/AuthView"
 import { NotFoundView } from "./views/NotFoundView"
+import { UserCharactersTab } from "./views/user/UserCharactersTab"
+import { UserCampaignsTab } from "./views/user/UserCampaignTab"
+import { UnauthorizedView } from "./views/UnauthorisedView"
+import { RequireAuth } from "./auth/requireAuth"
+import { UserDashboardView } from "./views/user/UserDashboardView"
 
 export function AppRouter() {
   return (
     <Routes>
-      <Route
-        path="/"
-        element={
-          <Navigate
-            to="/character"
-            replace
-            state={{ autoOpenLast: true }}
-          />
-        }
-      />
+      <Route path="/" element={ <Navigate to="/user" replace state={{ autoOpenLast: true }} /> } />
       <Route path="/auth" element={<AuthView />} />
       <Route path="/not-found" element={<NotFoundView />} />
+      <Route path="/unauthorized" element={<UnauthorizedView />} />
       <Route path="*" element={<Navigate to="/not-found" replace />} />
+
+      <Route path="/user" element={ <RequireAuth> <UserDashboardView /> </RequireAuth> } >
+        <Route index element={<Navigate to="characters" replace />} />
+        <Route path="characters" element={<UserCharactersTab />} />
+        <Route path="campaigns" element={<UserCampaignsTab />} />
+      </Route>
+
       <Route path="/sync" element={<SyncView />} />
       <Route path="/character" element={<CharacterIndexView />} />
       <Route path="/character/create" element={<CharacterCreateView />} />
