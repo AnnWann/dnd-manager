@@ -1,6 +1,6 @@
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 
-import { CharacterLevelUpWizard } from "../../features/characters/levelUp/CharacterLevelUpWizard"
+import { CharacterLevelUpWizard } from "../../features/characters/levelUp/CharacterLevelUpWizardV2"
 import { useCharacterWorkspace } from "../../features/characters/workspace/CharacterWorkspaceContext"
 import { UserCharacterWorkspace } from "../../features/characters/workspace/UserCharacterWorkspace"
 
