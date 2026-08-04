@@ -2,6 +2,7 @@ import type { ComponentProps } from "react"
 
 import "../../../models/leveling/ExpandedClassProgression"
 import { finalizeProgressionFeatures } from "../../../models/leveling/ProgressionFeatureFinalization"
+import { refreshProgressionFeatureMechanics } from "../../../models/leveling/refreshProgressionFeatureMechanics"
 import { ProgressionFeatureModalEnhancer } from "../progression/ProgressionFeatureModalEnhancer"
 import { IntegratedCharacterCreationWizard } from "./IntegratedCharacterCreationWizard"
 
@@ -15,7 +16,12 @@ export function CharacterCreationWizard(
       <IntegratedCharacterCreationWizard
         {...props}
         onCreate={(character, plan) =>
-          props.onCreate(finalizeProgressionFeatures(character), plan)
+          props.onCreate(
+            refreshProgressionFeatureMechanics(
+              finalizeProgressionFeatures(character),
+            ),
+            plan,
+          )
         }
       />
       <ProgressionFeatureModalEnhancer />
