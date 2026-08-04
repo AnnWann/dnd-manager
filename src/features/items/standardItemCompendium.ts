@@ -63,6 +63,46 @@ export function findStandardItemDefinition(
   )
 }
 
+export function findStandardItemDefinitionByName(
+  name: string,
+): StandardItemDefinition | undefined {
+  const normalized = normalizeItemLookupName(name)
+  if (!normalized) return undefined
+
+  return STANDARD_ITEM_DEFINITIONS.find(
+    (definition) =>
+      normalizeItemLookupName(definition.item.name) === normalized,
+  )
+}
+
+export function resolveStandardItemDefinition(
+  item: Pick<Itemmable, "id" | "name" | "kind" | "category" | "compendiumItemId">,
+): StandardItemDefinition | undefined {
+  const sourceId = item.compendiumItemId?.trim()
+  if (sourceId) {
+    const bySource = findStandardItemDefinition(sourceId)
+    if (bySource) return bySource
+  }
+
+  const directId = item.id.startsWith("compendium-")
+    ? findStandardItemDefinition(item.id)
+    : undefined
+  if (directId) return directId
+
+  if (item.category === "bagOfHolding") {
+    return findStandardItemDefinition(BAG_OF_HOLDING_COMPENDIUM_ITEM.id)
+  }
+
+  if (item.kind === "currency") {
+    const currencyType = normalizeCurrencyItem(item as Itemmable).currencyType
+    return findStandardItemDefinition(
+      `compendium-currency-${currencyType}`,
+    )
+  }
+
+  return findStandardItemDefinitionByName(item.name)
+}
+
 export function findStandardDefinitionForItem(
   item: Itemmable,
 ): StandardItemDefinition | undefined {
@@ -116,6 +156,27 @@ export function instantiateStandardItem(
     compendiumItemId: definition.item.id,
     itemOrigin: "standard",
   }
+}
+
+export function instantiateMatchingStandardItem(
+  item: Itemmable,
+): Itemmable | undefined {
+  const definition = resolveStandardItemDefinition(item)
+  if (!definition) return undefined
+
+  const instantiated = instantiateStandardItem(
+    definition.item.id,
+    item.quantity,
+  )
+
+  return normalizeStandardItem({
+    ...instantiated,
+    id: item.id,
+    name: definition.locked ? instantiated.name : item.name || instantiated.name,
+    notes: item.notes,
+    insideBagOfHolding: item.insideBagOfHolding === true,
+    attuned: item.attuned === true,
+  })
 }
 
 export function normalizeStandardItem(item: Itemmable): Itemmable {
@@ -197,6 +258,17 @@ export function normalizeStandardItemsInValue(value: unknown): unknown {
   }
 
   return normalizeStandardItem(normalizedChildren as Itemmable)
+}
+
+export function normalizeItemLookupName(value: string): string {
+  return value
+    .replace(/\s*[×x]\s*\d+\s*$/i, "")
+    .replace(/\s*\([^)]*\)\s*$/g, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
 }
 
 function looksLikeItem(value: Record<string, unknown>): boolean {
