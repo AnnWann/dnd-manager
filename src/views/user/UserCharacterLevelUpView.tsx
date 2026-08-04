@@ -3,6 +3,7 @@ import { Navigate, useNavigate, useParams } from "react-router-dom"
 import { CharacterProgressionConfigurator } from "../../features/characters/progression/CharacterProgressionConfigurator"
 import { useCharacterWorkspace } from "../../features/characters/workspace/CharacterWorkspaceContext"
 import { UserCharacterWorkspace } from "../../features/characters/workspace/UserCharacterWorkspace"
+import "../../models/leveling/ExpandedClassProgression"
 
 export function UserCharacterLevelUpView() {
   const { characterId } = useParams<{ characterId?: string }>()
