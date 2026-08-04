@@ -3,6 +3,7 @@ import { useMemo, useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import type { DieSides } from "../../../models/dice/Die"
 import {
   CharacterClassBuilder,
   type CharacterClassInterface,
@@ -42,7 +43,8 @@ export function CharacterLevelUpWizard({
   const existingClass = classes.find(
     (entry) => entry.className === className,
   )
-  const nextClassLevel = mode === "existing" ? (existingClass?.level ?? 0) + 1 : 1
+  const nextClassLevel =
+    mode === "existing" ? (existingClass?.level ?? 0) + 1 : 1
   const conModifier = character.getAttributeModifier("con")
   const averageHp = Math.max(
     1,
@@ -299,7 +301,7 @@ function applyLevelUp(
   className: ClassName,
   mode: "existing" | "multiclass",
   hpGain: number,
-  hitDie: `d${number}`,
+  hitDie: DieSides,
   pendingReviews: string[],
 ): CharacterTemplate {
   const sheet = character.get("sheet")
@@ -314,8 +316,7 @@ function applyLevelUp(
       level: Math.min(20, classes[index].level + 1) as ClassLevel,
     }
   } else {
-    const created = createClass(className)
-    classes.push(created)
+    classes.push(createClass(className))
   }
 
   const currentHp = sheet.HP
@@ -363,19 +364,32 @@ function createClass(className: ClassName): CharacterClassInterface {
   const builder = new CharacterClassBuilder()
 
   switch (className) {
-    case "artificer": return builder.artificer()
-    case "barbarian": return builder.barbarian()
-    case "bard": return builder.bard()
-    case "cleric": return builder.cleric()
-    case "druid": return builder.druid()
-    case "fighter": return builder.fighter()
-    case "monk": return builder.monk()
-    case "paladin": return builder.paladin()
-    case "ranger": return builder.ranger()
-    case "rogue": return builder.rogue()
-    case "sorcerer": return builder.sorcerer()
-    case "warlock": return builder.warlock()
-    case "wizard": return builder.wizard()
+    case "artificer":
+      return builder.artificer()
+    case "barbarian":
+      return builder.barbarian()
+    case "bard":
+      return builder.bard()
+    case "cleric":
+      return builder.cleric()
+    case "druid":
+      return builder.druid()
+    case "fighter":
+      return builder.fighter()
+    case "monk":
+      return builder.monk()
+    case "paladin":
+      return builder.paladin()
+    case "ranger":
+      return builder.ranger()
+    case "rogue":
+      return builder.rogue()
+    case "sorcerer":
+      return builder.sorcerer()
+    case "warlock":
+      return builder.warlock()
+    case "wizard":
+      return builder.wizard()
   }
 }
 
@@ -399,14 +413,37 @@ function getPendingReviews(
   if (
     (className === "cleric" && classLevel === 1) ||
     (className === "druid" && classLevel === 2) ||
-    (["bard", "fighter", "monk", "paladin", "ranger", "rogue", "sorcerer", "wizard", "artificer"].includes(className) && classLevel === 3) ||
+    ([
+      "bard",
+      "fighter",
+      "monk",
+      "paladin",
+      "ranger",
+      "rogue",
+      "sorcerer",
+      "wizard",
+      "artificer",
+    ].includes(className) &&
+      classLevel === 3) ||
     (className === "warlock" && classLevel === 1) ||
     (className === "barbarian" && classLevel === 3)
   ) {
     reviews.push("Escolher ou revisar a subclasse.")
   }
 
-  if (["artificer", "bard", "cleric", "druid", "paladin", "ranger", "sorcerer", "warlock", "wizard"].includes(className)) {
+  if (
+    [
+      "artificer",
+      "bard",
+      "cleric",
+      "druid",
+      "paladin",
+      "ranger",
+      "sorcerer",
+      "warlock",
+      "wizard",
+    ].includes(className)
+  ) {
     reviews.push("Revisar magias conhecidas, preparadas e espaços de magia.")
   }
 
