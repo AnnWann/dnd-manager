@@ -1,0 +1,14 @@
+.progression-feature-card-enhanced {
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.progression-feature-card-enhanced:hover {
+  border-color: var(--color-accent-border, currentColor);
+}
+
+.progression-feature-card-enhanced .progression-feature-inline-hidden {
+  display: none;
+}
