@@ -1,12 +1,12 @@
 import { Button } from "../../../components/ui/Button"
 import { useMagicContext } from "../../../contexts/magicContext"
-import { useCharacterContext } from "../../../contexts/characterContext"
 import {
   abilityRequiresActivation,
   getAbilityUsageMax,
   isAbilityBenefitsActive,
 } from "../../../models/abilities/abilityActivation"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 
 type Props<T extends Equipment> = {
   characterId: string
@@ -20,11 +20,8 @@ export function EquipmentFeaturesList<T extends Equipment>({
   onUpdate,
 }: Props<T>) {
   const { getSpellByIndex } = useMagicContext()
-  const { activeCharacter, visibleCharacters, updateCharacter } = useCharacterContext()
-  const character =
-    activeCharacter?.get("id") === characterId
-      ? activeCharacter
-      : visibleCharacters.find((entry) => entry.get("id") === characterId)
+  const { characters, updateCharacter } = useCharacterWorkspace()
+  const character = characters.find((entry) => entry.get("id") === characterId)
   const abilities = equipment.abilities ?? []
   const spells = equipment.spells ?? []
 
@@ -35,6 +32,7 @@ export function EquipmentFeaturesList<T extends Equipment>({
     action: "use" | "restore" | "deactivate",
   ) {
     if (!character) return
+
     updateCharacter(characterId, (current) => {
       if (action === "use") {
         return current.useEquipmentAbility(equipment.id, abilityId)
