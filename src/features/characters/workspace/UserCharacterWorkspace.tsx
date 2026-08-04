@@ -15,6 +15,7 @@ import {
   getLocalUser,
   LOCAL_AUTH_BYPASS,
 } from "../../../auth/local-auth"
+import { takeLongRest } from "../../../models/characters/characterRest"
 import { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Player } from "../../../models/player/Player"
 import {
@@ -29,25 +30,14 @@ export function UserCharacterWorkspace({
   characterId: string
   children: ReactNode
 }) {
-  const { data: session } =
-    authClient.useSession()
-
-  const localUser =
-    LOCAL_AUTH_BYPASS
-      ? getLocalUser()
-      : null
-
-  const user =
-    session?.user ?? localUser
+  const { data: session } = authClient.useSession()
+  const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
+  const user = session?.user ?? localUser
 
   const [character, setCharacter] =
     useState<CharacterTemplate | null>(null)
-
-  const [loading, setLoading] =
-    useState(true)
-
-  const [notFound, setNotFound] =
-    useState(false)
+  const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -57,8 +47,7 @@ export function UserCharacterWorkspace({
       setNotFound(false)
 
       try {
-        const result =
-          await getMyCharacter(characterId)
+        const result = await getMyCharacter(characterId)
 
         if (!active) return
 
@@ -70,13 +59,9 @@ export function UserCharacterWorkspace({
           }),
         )
       } catch {
-        if (active) {
-          setNotFound(true)
-        }
+        if (active) setNotFound(true)
       } finally {
-        if (active) {
-          setLoading(false)
-        }
+        if (active) setLoading(false)
       }
     }
 
@@ -87,44 +72,43 @@ export function UserCharacterWorkspace({
     }
   }, [characterId])
 
-  const updateCharacter = useCallback(
-    (
-      targetId: string,
-      updater: (
-        current: CharacterTemplate,
-      ) => CharacterTemplate,
-    ) => {
-      setCharacter((current) => {
-        if (
-          !current ||
-          current.get("id") !== targetId
-        ) {
-          return current
-        }
-
-        const updated = updater(current)
-
-        void updateMyCharacter(
-          targetId,
-          updated.toJSON(),
-        )
-
-        return updated
-      })
+  const persistCharacter = useCallback(
+    (updated: CharacterTemplate) => {
+      void updateMyCharacter(
+        updated.get("id"),
+        updated.toJSON() as unknown as Record<string, unknown>,
+      )
     },
     [],
   )
 
-  const currentOwner =
-    useMemo<Player | undefined>(() => {
-      if (!user) return undefined
+  const updateCharacter = useCallback(
+    (
+      targetId: string,
+      updater: (current: CharacterTemplate) => CharacterTemplate,
+    ) => {
+      setCharacter((current) => {
+        if (!current || current.get("id") !== targetId) {
+          return current
+        }
 
-      return {
-        id: user.id,
-        name: user.name,
-        role: "player",
-      }
-    }, [user])
+        const updated = updater(current)
+        persistCharacter(updated)
+        return updated
+      })
+    },
+    [persistCharacter],
+  )
+
+  const currentOwner = useMemo<Player | undefined>(() => {
+    if (!user) return undefined
+
+    return {
+      id: user.id,
+      name: user.name,
+      role: "player",
+    }
+  }, [user])
 
   if (loading) {
     return (
@@ -142,35 +126,47 @@ export function UserCharacterWorkspace({
     )
   }
 
+  const fallbackOwner: Player =
+    currentOwner ?? character.get("owner") ?? {
+      id: "local-user",
+      name: "Usuário local",
+      role: "player",
+    }
+
+  const getOwner = (ownerId: string): Player =>
+    ownerId === fallbackOwner.id
+      ? fallbackOwner
+      : {
+          id: ownerId,
+          name: ownerId,
+          role: "player",
+        }
+
+  const createOwner = (ownerName: string): Player => ({
+    id: crypto.randomUUID(),
+    name: ownerName.trim() || "Novo jogador",
+    role: "player",
+  })
+
   const value: CharacterWorkspaceValue = {
     mode: "user",
-
     characters: [character],
     activeCharacter: character,
-    selectedCharacterId:
-      character.get("id"),
-
-    setSelectedCharacterId: () => {
-      // A rota já determina o personagem ativo.
-    },
-
+    selectedCharacterId: character.get("id"),
+    setSelectedCharacterId: () => {},
     updateCharacter,
-
-    deleteCharacter: () => {
-      // Será conectado ao DELETE da API.
+    deleteCharacter: () => {},
+    completeLongRest: (targetId) => {
+      updateCharacter(targetId, takeLongRest)
     },
-
     partyInventory: [],
-
     canAssignOwners: false,
     canEditCharacterType: true,
-
-    owners:
-      currentOwner
-        ? [currentOwner]
-        : [],
-
-    currentOwner,
+    owners: [fallbackOwner],
+    currentOwner: fallbackOwner,
+    knownPlayerKeys: [fallbackOwner.id],
+    getOwner,
+    createOwner,
   }
 
   return (
