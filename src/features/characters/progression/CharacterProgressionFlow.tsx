@@ -26,8 +26,11 @@ import type { Spell } from "../../../models/magic/spells/Spell"
 import type { CharacterSpells } from "../../../models/magic/spells/CharacterSpells"
 import type { ClassName } from "../../../models/sheet/Class"
 import type { Skill } from "../../../models/sheet/Skills"
+import { ATTRIBUTE_KEYS } from "../../../models/sheet/Attribute"
 import { SKILL_LABELS } from "../creation/phbPresets"
 import { CharacterProgressionConfigurator } from "./CharacterProgressionConfigurator"
+import { ProgressionReferencePanel } from "./ProgressionReferencePanel"
+import "./progressionDetails.css"
 
 type Props = ComponentProps<typeof CharacterProgressionConfigurator>
 type KnownSpell = CharacterSpells["knownSpells"][number]
@@ -51,6 +54,10 @@ export function CharacterProgressionFlow({
   >({})
   const [validationMessage, setValidationMessage] = useState("")
 
+  const calculationCharacter = useMemo(
+    () => createProgressionCalculationCharacter(props.character),
+    [props.character],
+  )
   const originalClassNames = useMemo(
     () =>
       new Set(
@@ -71,7 +78,11 @@ export function CharacterProgressionFlow({
     )
   }
 
-  function receiveProgression(character: CharacterTemplate) {
+  function receiveProgression(calculatedCharacter: CharacterTemplate) {
+    const character = restoreStoredAttributes(
+      calculatedCharacter,
+      props.character,
+    )
     const newClasses = (character.get("sheet").classes ?? [])
       .map((entry) => entry.className)
       .filter((className) => !originalClassNames.has(className))
@@ -255,10 +266,17 @@ export function CharacterProgressionFlow({
   }
 
   return (
-    <CharacterProgressionConfigurator
-      {...props}
-      onComplete={receiveProgression}
-    />
+    <div className="progression-readable-details">
+      <CharacterProgressionConfigurator
+        {...props}
+        character={calculationCharacter}
+        onComplete={receiveProgression}
+      />
+      <ProgressionReferencePanel
+        character={props.character}
+        spells={spells}
+      />
+    </div>
   )
 }
 
@@ -376,6 +394,49 @@ export function finalizeDynamicSubclassSpells(
     spells: {
       ...magic.spells,
       knownSpells,
+    },
+  })
+}
+
+function createProgressionCalculationCharacter(
+  character: CharacterTemplate,
+): CharacterTemplate {
+  const sheet = character.get("sheet")
+  const race = sheet.race
+  const attributes = Object.fromEntries(
+    ATTRIBUTE_KEYS.map((attribute) => [
+      attribute,
+      sheet.attributes[attribute] + (race.attributeBonus[attribute] ?? 0),
+    ]),
+  ) as typeof sheet.attributes
+
+  return character.withPatch({
+    sheet: {
+      ...sheet,
+      attributes,
+      race: {
+        ...race,
+        attributeBonus: {},
+      },
+    },
+  })
+}
+
+function restoreStoredAttributes(
+  character: CharacterTemplate,
+  original: CharacterTemplate,
+): CharacterTemplate {
+  const originalSheet = original.get("sheet")
+  const currentSheet = character.get("sheet")
+
+  return character.withPatch({
+    sheet: {
+      ...currentSheet,
+      attributes: { ...originalSheet.attributes },
+      race: {
+        ...currentSheet.race,
+        attributeBonus: { ...originalSheet.race.attributeBonus },
+      },
     },
   })
 }
