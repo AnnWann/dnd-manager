@@ -8,6 +8,12 @@ import { apiClient } from "./api-client"
 
 export type CampaignRole = "MASTER" | "PLAYER"
 export type CampaignMemberStatus = "ACTIVE" | "INVITED" | "REMOVED"
+export type CampaignCharacterVisibility = "PRIVATE" | "PARTY" | "MASTER"
+export type CampaignSpellStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "REVOKED"
 
 export type UserCampaign = {
   id: string
@@ -24,6 +30,7 @@ export type UserCampaign = {
   characters: Array<{
     id: string
     name: string
+    visibility: CampaignCharacterVisibility
   }>
   pendingMembers: Array<{
     id: string
@@ -36,6 +43,21 @@ export type UserCampaign = {
     rejected: number
     revoked: number
   }
+  homebrewSpells: Array<{
+    linkId: string
+    id: string
+    index: string
+    name: string
+    status: CampaignSpellStatus
+    note?: string | null
+    author: {
+      id: string
+      name: string
+    }
+    submittedByCurrentUser: boolean
+    submittedAt: string
+    reviewedAt?: string | null
+  }>
   createdAt: string
   updatedAt: string
 }
@@ -84,6 +106,7 @@ export async function createMyCampaign(input: {
         rejected: 0,
         revoked: 0,
       },
+      homebrewSpells: [],
       createdAt: now,
       updatedAt: now,
     }
@@ -115,6 +138,7 @@ export async function requestCampaignJoin(inviteCode: string): Promise<void> {
 export async function linkCharacterToCampaign(
   campaignId: string,
   characterId: string,
+  visibility: CampaignCharacterVisibility = "PARTY",
 ): Promise<void> {
   if (LOCAL_AUTH_BYPASS) {
     const character = getLocalCharacters().find(
@@ -129,8 +153,19 @@ export async function linkCharacterToCampaign(
             characters: campaign.characters.some(
               (entry) => entry.id === characterId,
             )
-              ? campaign.characters
-              : [...campaign.characters, { id: character.id, name: character.name }],
+              ? campaign.characters.map((entry) =>
+                  entry.id === characterId
+                    ? { ...entry, visibility }
+                    : entry,
+                )
+              : [
+                  ...campaign.characters,
+                  {
+                    id: character.id,
+                    name: character.name,
+                    visibility,
+                  },
+                ],
             updatedAt: new Date().toISOString(),
           }
         : campaign,
@@ -142,7 +177,23 @@ export async function linkCharacterToCampaign(
 
   await apiClient.post(
     `/me/campaigns/${encodeURIComponent(campaignId)}/characters/${encodeURIComponent(characterId)}`,
-    {},
+    { visibility },
+  )
+}
+
+export async function updateCharacterCampaignVisibility(
+  campaignId: string,
+  characterId: string,
+  visibility: CampaignCharacterVisibility,
+): Promise<void> {
+  if (LOCAL_AUTH_BYPASS) {
+    await linkCharacterToCampaign(campaignId, characterId, visibility)
+    return
+  }
+
+  await apiClient.patch(
+    `/me/campaigns/${encodeURIComponent(campaignId)}/characters/${encodeURIComponent(characterId)}`,
+    { visibility },
   )
 }
 
@@ -218,7 +269,24 @@ function readLocalCampaigns(): UserCampaign[] {
     const parsed = JSON.parse(
       window.localStorage.getItem(LOCAL_CAMPAIGNS_KEY) ?? "[]",
     ) as unknown
-    return Array.isArray(parsed) ? (parsed as UserCampaign[]) : []
+
+    if (!Array.isArray(parsed)) return []
+
+    return (parsed as UserCampaign[]).map((campaign) => ({
+      ...campaign,
+      characters: (campaign.characters ?? []).map((character) => ({
+        ...character,
+        visibility: character.visibility ?? "PARTY",
+      })),
+      pendingMembers: campaign.pendingMembers ?? [],
+      homebrew: campaign.homebrew ?? {
+        approved: 0,
+        pending: 0,
+        rejected: 0,
+        revoked: 0,
+      },
+      homebrewSpells: campaign.homebrewSpells ?? [],
+    }))
   } catch {
     return []
   }
