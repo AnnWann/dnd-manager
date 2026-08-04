@@ -1,6 +1,6 @@
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 
-import { CharacterLevelUpWizard } from "../../features/characters/levelUp/CharacterLevelUpWizardV2"
+import { CharacterProgressionConfigurator } from "../../features/characters/progression/CharacterProgressionConfigurator"
 import { useCharacterWorkspace } from "../../features/characters/workspace/CharacterWorkspaceContext"
 import { UserCharacterWorkspace } from "../../features/characters/workspace/UserCharacterWorkspace"
 
@@ -26,7 +26,8 @@ function LevelUpContent() {
   const returnPath = `/user/characters/${encodeURIComponent(characterId)}/sheet`
 
   return (
-    <CharacterLevelUpWizard
+    <CharacterProgressionConfigurator
+      mode="level-up"
       character={activeCharacter}
       onCancel={() => navigate(returnPath)}
       onComplete={(updated) => {
