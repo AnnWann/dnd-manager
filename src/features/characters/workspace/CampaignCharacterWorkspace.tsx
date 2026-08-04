@@ -35,6 +35,21 @@ export function CampaignCharacterWorkspace({
     importCharacter: characterContext.importCharacter,
     completeLongRest: characterContext.completeLongRest,
     partyInventory: characterContext.partyInventory,
+    stowHandOccupant: characterContext.stowHandOccupant,
+    moveEquippedItem: (characterId, reference, destination) =>
+      characterContext.moveEquippedItem(
+        characterId,
+        reference,
+        destination,
+      ),
+    dropHandOccupant: characterContext.dropHandOccupant,
+    moveEquippedItemToGround: (characterId, reference) =>
+      characterContext.moveEquippedItem(
+        characterId,
+        reference,
+        "ground",
+      ),
+    canUseGroundInventory: true,
     canAssignOwners: characterContext.canAssignOwners,
     canEditCharacterType: characterContext.canEditCharacterType,
     owners,
