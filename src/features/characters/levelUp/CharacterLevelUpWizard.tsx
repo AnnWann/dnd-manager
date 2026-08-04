@@ -333,31 +333,33 @@ function applyLevelUp(
       ]
     : character.get("notes")
 
-  return character.withPatch({
-    sheet: {
-      ...sheet,
-      classes,
-      HP: {
-        ...currentHp,
-        max: currentHp.max + hpGain,
-        current: currentHp.current + hpGain,
-        hitDice: {
-          ...currentHitDice,
-          [hitDie]: {
-            max: {
-              quantity: currentDie.max.quantity + 1,
-              sides: hitDie,
-            },
-            current: {
-              quantity: currentDie.current.quantity + 1,
-              sides: hitDie,
+  return character
+    .withPatch({
+      sheet: {
+        ...sheet,
+        classes,
+        HP: {
+          ...currentHp,
+          max: currentHp.max + hpGain,
+          current: currentHp.current + hpGain,
+          hitDice: {
+            ...currentHitDice,
+            [hitDie]: {
+              max: {
+                quantity: currentDie.max.quantity + 1,
+                sides: hitDie,
+              },
+              current: {
+                quantity: currentDie.current.quantity + 1,
+                sides: hitDie,
+              },
             },
           },
         },
       },
-    },
-    notes: nextNotes,
-  })
+      notes: nextNotes,
+    })
+    .syncMagicWithClasses()
 }
 
 function createClass(className: ClassName): CharacterClassInterface {
