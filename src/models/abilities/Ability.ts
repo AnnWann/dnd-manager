@@ -1,4 +1,5 @@
 import type { BonusCollection } from "../bonuses/Bonus"
+import type { CharacterAcquisitionMetadata } from "../characters/CharacterAcquisition"
 import type { SpellGrant } from "../magic/spells/SpellGrant"
 import type { Proficiency } from "../sheet/Proficiency"
 
@@ -28,6 +29,8 @@ export interface Ability {
   sourceItemId?: string
   sourceItemName?: string
   originalAbilityId?: string
+  /** Audit trail describing when and why the character obtained this ability. */
+  acquisition?: CharacterAcquisitionMetadata
 }
 
 export interface Usage {
