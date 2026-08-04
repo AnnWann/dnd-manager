@@ -7,8 +7,10 @@ import {
 } from "react"
 
 import {
+  deleteMyCharacter,
   getMyCharacter,
   updateMyCharacter,
+  type CharacterVisibility,
 } from "../../../api/user-characters"
 import { authClient } from "../../../auth/auth-client"
 import {
@@ -58,6 +60,7 @@ export function UserCharacterWorkspace({
             ...result.data,
             id: result.id,
             name: result.name,
+            visibility: fromApiVisibility(result.visibility),
           }),
         )
       } catch {
@@ -79,6 +82,10 @@ export function UserCharacterWorkspace({
       void updateMyCharacter(
         updated.get("id"),
         updated.toJSON() as unknown as Record<string, unknown>,
+        {
+          name: updated.get("name"),
+          visibility: toApiVisibility(updated.get("visibility")),
+        },
       )
     },
     [],
@@ -101,6 +108,18 @@ export function UserCharacterWorkspace({
     },
     [persistCharacter],
   )
+
+  const deleteCharacter = useCallback((targetId: string) => {
+    setCharacter((current) => {
+      if (!current || current.get("id") !== targetId) return current
+
+      void deleteMyCharacter(targetId).catch(() => {
+        setNotFound(false)
+      })
+
+      return null
+    })
+  }, [])
 
   const currentOwner = useMemo<Player | undefined>(() => {
     if (!user) return undefined
@@ -157,7 +176,7 @@ export function UserCharacterWorkspace({
     selectedCharacterId: character.get("id"),
     setSelectedCharacterId: () => {},
     updateCharacter,
-    deleteCharacter: () => {},
+    deleteCharacter,
     completeLongRest: (targetId) => {
       updateCharacter(targetId, takeLongRest)
     },
@@ -191,4 +210,16 @@ export function UserCharacterWorkspace({
       {children}
     </CharacterWorkspaceProvider>
   )
+}
+
+function toApiVisibility(
+  visibility: "private" | "party" | "master",
+): CharacterVisibility {
+  return visibility.toUpperCase() as CharacterVisibility
+}
+
+function fromApiVisibility(
+  visibility: CharacterVisibility,
+): "private" | "party" | "master" {
+  return visibility.toLowerCase() as "private" | "party" | "master"
 }
