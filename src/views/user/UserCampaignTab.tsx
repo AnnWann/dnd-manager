@@ -9,6 +9,9 @@ import {
   requestCampaignJoin,
   reviewCampaignMember,
   unlinkCharacterFromCampaign,
+  updateCharacterCampaignVisibility,
+  type CampaignCharacterVisibility,
+  type CampaignSpellStatus,
   type UserCampaign,
 } from "../../api/user-campaigns"
 import {
@@ -31,6 +34,9 @@ export function UserCampaignsTab() {
   const [inviteCode, setInviteCode] = useState("")
   const [selectedCharacter, setSelectedCharacter] = useState<
     Record<string, string>
+  >({})
+  const [selectedVisibility, setSelectedVisibility] = useState<
+    Record<string, CampaignCharacterVisibility>
   >({})
   const [copiedCode, setCopiedCode] = useState("")
 
@@ -103,13 +109,18 @@ export function UserCampaignsTab() {
 
   async function linkCharacter(campaign: UserCampaign) {
     const characterId = selectedCharacter[campaign.id]
+    const visibility = selectedVisibility[campaign.id] ?? "PARTY"
     if (!characterId || working) return
 
     setWorking(true)
     setErrorMessage("")
 
     try {
-      await linkCharacterToCampaign(campaign.id, characterId)
+      await linkCharacterToCampaign(
+        campaign.id,
+        characterId,
+        visibility,
+      )
       const character = characterById.get(characterId)
       if (character) {
         setCampaigns((current) =>
@@ -120,18 +131,68 @@ export function UserCampaignsTab() {
                   characters: entry.characters.some(
                     (linked) => linked.id === characterId,
                   )
-                    ? entry.characters
+                    ? entry.characters.map((linked) =>
+                        linked.id === characterId
+                          ? { ...linked, visibility }
+                          : linked,
+                      )
                     : [
                         ...entry.characters,
-                        { id: character.id, name: character.name },
+                        {
+                          id: character.id,
+                          name: character.name,
+                          visibility,
+                        },
                       ],
                 }
               : entry,
           ),
         )
       }
+      setSelectedCharacter((current) => ({
+        ...current,
+        [campaign.id]: "",
+      }))
     } catch {
       setErrorMessage("Não foi possível vincular o personagem.")
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  async function changeCharacterVisibility(
+    campaignId: string,
+    characterId: string,
+    visibility: CampaignCharacterVisibility,
+  ) {
+    if (working) return
+    setWorking(true)
+    setErrorMessage("")
+
+    try {
+      await updateCharacterCampaignVisibility(
+        campaignId,
+        characterId,
+        visibility,
+      )
+      setCampaigns((current) =>
+        current.map((campaign) =>
+          campaign.id === campaignId
+            ? {
+                ...campaign,
+                characters: campaign.characters.map((character) =>
+                  character.id === characterId
+                    ? { ...character, visibility }
+                    : character,
+                ),
+              }
+            : campaign,
+        ),
+      )
+    } catch {
+      setErrorMessage(
+        "Não foi possível alterar a visibilidade do personagem.",
+      )
     } finally {
       setWorking(false)
     }
@@ -402,6 +463,43 @@ export function UserCampaignsTab() {
                         <Badge label={`${campaign.homebrew.rejected} rejeitadas`} />
                         <Badge label={`${campaign.homebrew.revoked} revogadas`} />
                       </div>
+
+                      {campaign.homebrewSpells.length ? (
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {campaign.homebrewSpells.map((spell) => (
+                            <article
+                              key={spell.linkId}
+                              className="rounded-xl border border-border bg-bg-subtle p-3"
+                            >
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                  <div className="font-medium text-textH">
+                                    {spell.name}
+                                  </div>
+                                  <div className="mt-1 text-xs text-textMuted">
+                                    Autor: {spell.author.name} · {spell.index}
+                                  </div>
+                                </div>
+                                <Badge label={spellStatusLabel(spell.status)} />
+                              </div>
+                              {spell.note ? (
+                                <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-text">
+                                  {spell.note}
+                                </p>
+                              ) : null}
+                              {spell.submittedByCurrentUser ? (
+                                <div className="mt-2 text-[11px] text-textMuted">
+                                  Enviada por você.
+                                </div>
+                              ) : null}
+                            </article>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs text-textMuted">
+                          Nenhuma magia homebrew visível nesta campanha.
+                        </p>
+                      )}
                     </section>
 
                     {campaign.isOwner && campaign.pendingMembers.length ? (
@@ -464,31 +562,50 @@ export function UserCampaignsTab() {
                       <h3 className="text-sm font-semibold text-textH">
                         Meus personagens vinculados
                       </h3>
+                      <p className="mt-1 text-xs leading-5 text-textMuted">
+                        Privado mantém o vínculo sem compartilhar a ficha; Mestres limita o acesso aos mestres; Campanha permite acesso aos membros ativos.
+                      </p>
 
                       {campaign.characters.length ? (
                         <div className="mt-2 grid gap-2">
                           {campaign.characters.map((character) => (
                             <div
                               key={character.id}
-                              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
+                              className="flex flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
                             >
-                              <span className="text-sm text-textH">
+                              <span className="text-sm font-medium text-textH">
                                 {character.name}
                               </span>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                disabled={working || !active}
-                                onClick={() =>
-                                  void unlinkCharacter(
-                                    campaign.id,
-                                    character.id,
-                                  )
-                                }
-                              >
-                                <Unlink className="h-4 w-4" />
-                                Desvincular
-                              </Button>
+                              <div className="flex flex-col gap-2 sm:flex-row">
+                                <select
+                                  className="h-9 rounded-lg border border-border bg-bg px-3 text-xs text-textH"
+                                  value={character.visibility}
+                                  disabled={working || !active}
+                                  onChange={(event) =>
+                                    void changeCharacterVisibility(
+                                      campaign.id,
+                                      character.id,
+                                      event.target.value as CampaignCharacterVisibility,
+                                    )
+                                  }
+                                >
+                                  <VisibilityOptions />
+                                </select>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={working || !active}
+                                  onClick={() =>
+                                    void unlinkCharacter(
+                                      campaign.id,
+                                      character.id,
+                                    )
+                                  }
+                                >
+                                  <Unlink className="h-4 w-4" />
+                                  Desvincular
+                                </Button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -499,9 +616,9 @@ export function UserCampaignsTab() {
                       )}
 
                       {active && availableCharacters.length ? (
-                        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px_auto]">
                           <select
-                            className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
+                            className="h-10 min-w-0 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
                             value={selectedCharacter[campaign.id] ?? ""}
                             onChange={(event) =>
                               setSelectedCharacter((current) => ({
@@ -516,6 +633,18 @@ export function UserCampaignsTab() {
                                 {character.name}
                               </option>
                             ))}
+                          </select>
+                          <select
+                            className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
+                            value={selectedVisibility[campaign.id] ?? "PARTY"}
+                            onChange={(event) =>
+                              setSelectedVisibility((current) => ({
+                                ...current,
+                                [campaign.id]: event.target.value as CampaignCharacterVisibility,
+                              }))
+                            }
+                          >
+                            <VisibilityOptions />
                           </select>
                           <Button
                             disabled={
@@ -538,6 +667,23 @@ export function UserCampaignsTab() {
       )}
     </div>
   )
+}
+
+function VisibilityOptions() {
+  return (
+    <>
+      <option value="PRIVATE">Privado</option>
+      <option value="MASTER">Somente mestres</option>
+      <option value="PARTY">Toda a campanha</option>
+    </>
+  )
+}
+
+function spellStatusLabel(status: CampaignSpellStatus): string {
+  if (status === "APPROVED") return "Aprovada"
+  if (status === "PENDING") return "Pendente"
+  if (status === "REJECTED") return "Rejeitada"
+  return "Revogada"
 }
 
 function Badge({ label }: { label: string }) {
