@@ -9,7 +9,14 @@ import { Check, Minus, Plus, X } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
+import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
+import type {
+  AbilityActionKind,
+  AbilityEffectDuration,
+  Usage,
+} from "../../../models/abilities/Ability"
+import { getProgressionChoiceDescription } from "../../../models/leveling/ProgressionChoiceDescriptions"
 import {
   DEFAULT_FEATS,
   encodeAsiAttributeSelection,
@@ -18,7 +25,6 @@ import {
   parseAsiSelection,
   type AsiAttributeIncrease,
 } from "../../../models/leveling/ProgressionFeatureFinalization"
-import { getProgressionChoiceDescription } from "../../../models/leveling/ProgressionChoiceDescriptions"
 import type { Attribute } from "../../../models/sheet/Attribute"
 import "./progressionFeatureModal.css"
 
@@ -51,6 +57,7 @@ type FeatureCardProxy = {
 }
 
 type AsiMode = "attributes" | "feat"
+type CustomFeatKind = "active" | "passive"
 
 type AsiDraft = {
   mode: AsiMode
@@ -59,6 +66,14 @@ type AsiDraft = {
   customFeat: boolean
   customName: string
   customDescription: string
+  customKind: CustomFeatKind
+  customActionKind: AbilityActionKind
+  customEffectDuration: AbilityEffectDuration
+  customEffectDurationText: string
+  customTrigger: string
+  customUsageEnabled: boolean
+  customUsageMax: string
+  customUsageReset: Usage["reset"]
 }
 
 export function ProgressionFeatureModalEnhancer() {
@@ -220,11 +235,57 @@ export function ProgressionFeatureModalEnhancer() {
         setValidationMessage("Informe o nome do talento personalizado.")
         return
       }
+      if (
+        asiDraft.customKind === "active" &&
+        asiDraft.customUsageEnabled &&
+        Math.trunc(Number(asiDraft.customUsageMax)) < 1 &&
+        asiDraft.customUsageReset !== "spellSlot"
+      ) {
+        setValidationMessage(
+          "Informe ao menos 1 uso para um talento ativo com usos limitados.",
+        )
+        return
+      }
+
+      const usage =
+        asiDraft.customKind === "active" && asiDraft.customUsageEnabled
+          ? {
+              max:
+                asiDraft.customUsageReset === "spellSlot"
+                  ? 1
+                  : Math.max(
+                      1,
+                      Math.trunc(Number(asiDraft.customUsageMax) || 1),
+                    ),
+              used: 0,
+              reset: asiDraft.customUsageReset,
+            }
+          : undefined
       setNativeInputValue(
         input,
         encodeCustomAsiFeatSelection(
           asiDraft.customName,
           asiDraft.customDescription,
+          {
+            kind: asiDraft.customKind,
+            actionKind:
+              asiDraft.customKind === "active"
+                ? asiDraft.customActionKind
+                : undefined,
+            usage,
+            effectDuration:
+              asiDraft.customKind === "active"
+                ? asiDraft.customEffectDuration
+                : "lasting",
+            effectDurationText:
+              asiDraft.customKind === "active" &&
+              asiDraft.customEffectDuration === "lasting"
+                ? asiDraft.customEffectDurationText
+                : undefined,
+            trigger:
+              asiDraft.customTrigger.trim() ||
+              (asiDraft.customKind === "passive" ? "always" : undefined),
+          },
         ),
       )
       close()
@@ -263,7 +324,7 @@ export function ProgressionFeatureModalEnhancer() {
               {currentCard.optional ? <Badge>Opcional</Badge> : null}
             </div>
             <p className="mt-2 text-xs leading-5 text-textMuted">
-              Clique nas opções abaixo para configurar a característica. A escolha é registrada diretamente no wizard.
+              A descrição e as escolhas desta característica são exibidas neste modal. As seleções são registradas diretamente no wizard.
             </p>
           </div>
           <button
@@ -385,25 +446,43 @@ export function ProgressionFeatureModalEnhancer() {
                   </label>
 
                   {asiDraft.customFeat ? (
-                    <div className="grid gap-3 rounded-xl border border-border bg-bg-subtle p-4">
-                      <label className="grid gap-1.5 text-xs text-text">
-                        Nome do talento
-                        <Input
-                          value={asiDraft.customName}
-                          placeholder="Nome do talento"
-                          onChange={(event) =>
-                            setAsiDraft((current) => ({
-                              ...current,
-                              customName: event.target.value,
-                            }))
-                          }
-                        />
-                      </label>
+                    <div className="grid gap-4 rounded-xl border border-border bg-bg-subtle p-4">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="grid gap-1.5 text-xs text-text">
+                          Nome do talento
+                          <Input
+                            value={asiDraft.customName}
+                            placeholder="Nome do talento"
+                            onChange={(event) =>
+                              setAsiDraft((current) => ({
+                                ...current,
+                                customName: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <label className="grid gap-1.5 text-xs text-text">
+                          Tipo de habilidade
+                          <Select
+                            value={asiDraft.customKind}
+                            onChange={(event) =>
+                              setAsiDraft((current) => ({
+                                ...current,
+                                customKind: event.target.value as CustomFeatKind,
+                              }))
+                            }
+                          >
+                            <option value="passive">Passiva</option>
+                            <option value="active">Ativa</option>
+                          </Select>
+                        </label>
+                      </div>
+
                       <label className="grid gap-1.5 text-xs text-text">
                         Descrição e efeitos
                         <Textarea
                           value={asiDraft.customDescription}
-                          placeholder="Descreva benefícios, condições, ação, usos e recarga. O talento será criado como uma habilidade do tipo talento."
+                          placeholder="Descreva benefícios, condições e limitações."
                           onChange={(event) =>
                             setAsiDraft((current) => ({
                               ...current,
@@ -412,6 +491,147 @@ export function ProgressionFeatureModalEnhancer() {
                           }
                         />
                       </label>
+
+                      {asiDraft.customKind === "active" ? (
+                        <div className="grid gap-4 rounded-xl border border-border bg-bg p-4">
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <label className="grid gap-1.5 text-xs text-text">
+                              Tipo de ação
+                              <Select
+                                value={asiDraft.customActionKind}
+                                onChange={(event) =>
+                                  setAsiDraft((current) => ({
+                                    ...current,
+                                    customActionKind: event.target
+                                      .value as AbilityActionKind,
+                                  }))
+                                }
+                              >
+                                <option value="action">Ação</option>
+                                <option value="bonusAction">Ação bônus</option>
+                                <option value="reaction">Reação</option>
+                                <option value="free">Sem ação</option>
+                              </Select>
+                            </label>
+                            <label className="grid gap-1.5 text-xs text-text">
+                              Duração do efeito
+                              <Select
+                                value={asiDraft.customEffectDuration}
+                                onChange={(event) =>
+                                  setAsiDraft((current) => ({
+                                    ...current,
+                                    customEffectDuration: event.target
+                                      .value as AbilityEffectDuration,
+                                  }))
+                                }
+                              >
+                                <option value="instant">Instantâneo</option>
+                                <option value="lasting">Duradouro</option>
+                              </Select>
+                            </label>
+                          </div>
+
+                          {asiDraft.customEffectDuration === "lasting" ? (
+                            <label className="grid gap-1.5 text-xs text-text">
+                              Duração narrativa
+                              <Input
+                                value={asiDraft.customEffectDurationText}
+                                placeholder="Ex.: por 1 minuto"
+                                onChange={(event) =>
+                                  setAsiDraft((current) => ({
+                                    ...current,
+                                    customEffectDurationText:
+                                      event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                          ) : null}
+
+                          <label className="grid gap-1.5 text-xs text-text">
+                            Gatilho opcional
+                            <Input
+                              value={asiDraft.customTrigger}
+                              placeholder="Ex.: ao acertar um ataque"
+                              onChange={(event) =>
+                                setAsiDraft((current) => ({
+                                  ...current,
+                                  customTrigger: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+
+                          <label className="flex items-center gap-2 text-xs text-text">
+                            <input
+                              type="checkbox"
+                              checked={asiDraft.customUsageEnabled}
+                              onChange={(event) =>
+                                setAsiDraft((current) => ({
+                                  ...current,
+                                  customUsageEnabled: event.target.checked,
+                                }))
+                              }
+                            />
+                            Possui quantidade limitada de usos
+                          </label>
+
+                          {asiDraft.customUsageEnabled ? (
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <label className="grid gap-1.5 text-xs text-text">
+                                Usos máximos
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  value={asiDraft.customUsageMax}
+                                  disabled={
+                                    asiDraft.customUsageReset === "spellSlot"
+                                  }
+                                  onChange={(event) =>
+                                    setAsiDraft((current) => ({
+                                      ...current,
+                                      customUsageMax: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </label>
+                              <label className="grid gap-1.5 text-xs text-text">
+                                Recuperação
+                                <Select
+                                  value={asiDraft.customUsageReset}
+                                  onChange={(event) =>
+                                    setAsiDraft((current) => ({
+                                      ...current,
+                                      customUsageReset: event.target
+                                        .value as Usage["reset"],
+                                    }))
+                                  }
+                                >
+                                  <option value="turn">A cada turno</option>
+                                  <option value="shortRest">Descanso curto</option>
+                                  <option value="longRest">Descanso longo</option>
+                                  <option value="limited">Não recupera automaticamente</option>
+                                  <option value="spellSlot">Gasta espaço de magia</option>
+                                </Select>
+                              </label>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <label className="grid gap-1.5 text-xs text-text">
+                          Gatilho ou condição passiva
+                          <Input
+                            value={asiDraft.customTrigger}
+                            placeholder="Ex.: sempre, ao atacar, ao realizar um teste"
+                            onChange={(event) =>
+                              setAsiDraft((current) => ({
+                                ...current,
+                                customTrigger: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                      )}
                     </div>
                   ) : (
                     <div className="grid max-h-[28rem] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
@@ -479,7 +699,8 @@ export function ProgressionFeatureModalEnhancer() {
               {currentCard.choice.optionButtons.length ? (
                 <div className="grid gap-2 sm:grid-cols-2">
                   {currentCard.choice.optionButtons.map((button, index) => {
-                    const label = button.textContent?.trim() || `Opção ${index + 1}`
+                    const label =
+                      button.textContent?.trim() || `Opção ${index + 1}`
                     const selected = isProxyButtonSelected(button)
                     return (
                       <button
@@ -712,8 +933,18 @@ function createAsiDraft(card: FeatureCardProxy): AsiDraft {
       ...emptyAsiDraft(),
       mode: "feat",
       customFeat: true,
-      customName: parsed.name,
-      customDescription: parsed.description,
+      customName: parsed.feat.name,
+      customDescription: parsed.feat.description,
+      customKind: parsed.feat.kind,
+      customActionKind: parsed.feat.actionKind ?? "action",
+      customEffectDuration:
+        parsed.feat.effectDuration ??
+        (parsed.feat.kind === "active" ? "instant" : "lasting"),
+      customEffectDurationText: parsed.feat.effectDurationText ?? "",
+      customTrigger: parsed.feat.trigger ?? "",
+      customUsageEnabled: Boolean(parsed.feat.usage),
+      customUsageMax: String(parsed.feat.usage?.max ?? 1),
+      customUsageReset: parsed.feat.usage?.reset ?? "longRest",
     }
   }
   return emptyAsiDraft()
@@ -727,6 +958,14 @@ function emptyAsiDraft(): AsiDraft {
     customFeat: false,
     customName: "",
     customDescription: "",
+    customKind: "passive",
+    customActionKind: "action",
+    customEffectDuration: "instant",
+    customEffectDurationText: "",
+    customTrigger: "",
+    customUsageEnabled: false,
+    customUsageMax: "1",
+    customUsageReset: "longRest",
   }
 }
 
