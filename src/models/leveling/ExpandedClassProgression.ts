@@ -5,6 +5,7 @@ import {
   getFeaturesAtLevel,
   type ClassProgressionDefinition,
 } from "./ClassProgression"
+import { localizeProgressionDefinitions } from "./ProgressionLocalization"
 import { XANATHAR_SUBCLASSES } from "./XanatharSubclasses"
 import type { ClassName } from "../sheet/Class"
 
@@ -30,6 +31,8 @@ function ensureExpandedProgressions(): void {
       ...additions.filter((subclass) => !existingIds.has(subclass.id)),
     ]
   }
+
+  localizeProgressionDefinitions(CLASS_PROGRESSIONS)
 }
 
 ensureExpandedProgressions()
