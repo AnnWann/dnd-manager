@@ -1,5 +1,6 @@
 // models/characters/characterMagic.ts
 
+import { createCharacterAcquisition } from "./CharacterAcquisition"
 import type { CharacterTemplate } from "./CharacterTemplate"
 import type { Magic } from "../magic/Magic"
 import type { Slot } from "../magic/spells/LeveledSlots"
@@ -10,8 +11,25 @@ import { derivePactSlotsFromClasses } from "../magic/spells/WarlockSpellSlotProg
 import type { MetamagicId } from "../magic/metamagic/Metamagic"
 import type { CharacterMetamagics } from "../magic/metamagic/CharacterMetamagics"
 import type { SpellSource } from "../magic/spells/SpellSource"
+import type { ClassName } from "../sheet/Class"
 
 type KnownSpellEntry = CharacterSpells["knownSpells"][number]
+
+const CLASS_NAMES = new Set<ClassName>([
+  "artificer",
+  "barbarian",
+  "bard",
+  "cleric",
+  "druid",
+  "fighter",
+  "monk",
+  "paladin",
+  "ranger",
+  "rogue",
+  "sorcerer",
+  "warlock",
+  "wizard",
+])
 
 export const MAX_SPELL_CASTING_DESCRIPTIONS = 5
 
@@ -61,9 +79,10 @@ export function addSpell(
   spellEntry: KnownSpellEntry,
 ): CharacterTemplate {
   const currentMagic = getOrCreateMagic(character)
+  const normalizedEntry = withSpellAcquisitionMetadata(character, spellEntry)
 
   const alreadyExists = currentMagic.spells.knownSpells.some(
-    (entry) => entry.spells.id === spellEntry.spells.id,
+    (entry) => entry.spells.id === normalizedEntry.spells.id,
   )
 
   if (alreadyExists) return character
@@ -74,7 +93,7 @@ export function addSpell(
       ...currentMagic.spells,
       knownSpells: [
         ...currentMagic.spells.knownSpells,
-        spellEntry,
+        normalizedEntry,
       ],
     },
   })
@@ -85,13 +104,16 @@ export function updateSpell(
   spellEntry: KnownSpellEntry,
 ): CharacterTemplate {
   const currentMagic = getOrCreateMagic(character)
-
-  const exists = currentMagic.spells.knownSpells.some(
+  const currentEntry = currentMagic.spells.knownSpells.find(
     (entry) => entry.spells.id === spellEntry.spells.id,
   )
+  const normalizedEntry = withSpellAcquisitionMetadata(character, {
+    ...spellEntry,
+    acquisition: spellEntry.acquisition ?? currentEntry?.acquisition,
+  })
 
-  if (!exists) {
-    return addSpell(character, spellEntry)
+  if (!currentEntry) {
+    return addSpell(character, normalizedEntry)
   }
 
   return character.with("magic", {
@@ -99,7 +121,9 @@ export function updateSpell(
     spells: {
       ...currentMagic.spells,
       knownSpells: currentMagic.spells.knownSpells.map((entry) =>
-        entry.spells.id === spellEntry.spells.id ? spellEntry : entry,
+        entry.spells.id === normalizedEntry.spells.id
+          ? normalizedEntry
+          : entry,
       ),
     },
   })
@@ -342,10 +366,10 @@ export function syncMagicWithClasses(
 function getDerivedSorceryPoints(character: CharacterTemplate) {
   const sorcererLevel = character.getClassLevel("sorcerer")
 
-  if (sorcererLevel < 2) 
+  if (sorcererLevel < 2)
     return {
       max: 0,
-      current: 0
+      current: 0,
     }
 
   return {
@@ -483,7 +507,7 @@ export function setSorceryPoints(
   current: number,
 ): CharacterTemplate {
   const currentMagic = getOrCreateMagic(character)
- const currentMetamagic = getOrCreateMetamagic(character)
+  const currentMetamagic = getOrCreateMetamagic(character)
 
   return character.with("magic", {
     ...currentMagic,
@@ -534,7 +558,7 @@ export function restoreSorceryPoint(
   character: CharacterTemplate,
 ): CharacterTemplate {
   const currentMagic = getOrCreateMagic(character)
- const currentMetamagic = getOrCreateMetamagic(character)
+  const currentMetamagic = getOrCreateMetamagic(character)
 
   return character.with("magic", {
     ...currentMagic,
@@ -557,7 +581,55 @@ export function getSpellSource(
 ): SpellSource | undefined {
   const spell = character
     .get("magic")
-    ?.spells.knownSpells.find((spell) => spell.spells.id === spellId)
+    ?.spells.knownSpells.find((entry) => entry.spells.id === spellId)
 
   return spell?.source
+}
+
+function withSpellAcquisitionMetadata(
+  character: CharacterTemplate,
+  spellEntry: KnownSpellEntry,
+): KnownSpellEntry {
+  const originalSourceName = spellEntry.source.name
+  const className =
+    spellEntry.source.type === "class" &&
+    CLASS_NAMES.has(spellEntry.source.sourceId as ClassName)
+      ? (spellEntry.source.sourceId as ClassName)
+      : undefined
+  const source =
+    className
+      ? {
+          ...spellEntry.source,
+          // Existing spell preparation and ritual rules use this stable class id.
+          name: className,
+        }
+      : spellEntry.source
+
+  if (spellEntry.acquisition) {
+    return {
+      ...spellEntry,
+      source,
+    }
+  }
+
+  const characterLevel = (character.get("sheet").classes ?? []).reduce(
+    (sum, entry) => sum + entry.level,
+    0,
+  )
+
+  return {
+    ...spellEntry,
+    source,
+    acquisition: createCharacterAcquisition({
+      characterLevel,
+      className,
+      classLevel: className
+        ? character.getClassLevel(className)
+        : undefined,
+      sourceType: source.type,
+      sourceId: source.sourceId,
+      sourceName: originalSourceName || source.name,
+      reason: "manual",
+    }),
+  }
 }
