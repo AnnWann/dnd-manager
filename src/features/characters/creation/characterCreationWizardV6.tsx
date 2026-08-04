@@ -2,6 +2,7 @@ import { useRef, useState } from "react"
 
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import "../../../models/leveling/ExpandedClassProgression"
+import { prepareCharacterForProgression } from "../../../models/leveling/prepareCharacterForProgression"
 import type { Player } from "../../../models/player/Player"
 import { CharacterProgressionConfigurator } from "../progression/CharacterProgressionConfigurator"
 import { hydrateCharacterStartingInventory } from "./backgroundStartingEquipment"
@@ -90,7 +91,9 @@ export function CharacterCreationWizard(props: Props) {
       onCreate={(character, plan) => {
         suppressBaseClose.current = true
         setPending({
-          character: hydrateCharacterStartingInventory(character),
+          character: prepareCharacterForProgression(
+            hydrateCharacterStartingInventory(character),
+          ),
           plan,
           stage: "progression",
         })
