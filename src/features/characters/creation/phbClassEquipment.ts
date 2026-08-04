@@ -1,8 +1,8 @@
 import type { DieSides } from "../../../models/dice/Die"
+import type { Armor } from "../../../models/items/equipment/Armor"
+import type { WeaponPropertyId } from "../../../models/items/equipment/Weapon"
 import type { Attribute } from "../../../models/sheet/Attribute"
 import type { ClassName } from "../../../models/sheet/Class"
-import type { WeaponPropertyId } from "../../../models/items/equipment/Weapon"
-import type { Armor } from "../../../models/items/equipment/Armor"
 
 export type StartingItemCategory =
   | "weapon"
@@ -129,23 +129,23 @@ const WEAPONS = {
       properties: ["heavy", "two-handed"],
       twoHanded: true,
     }),
-  longsword: () =>
-    weapon("longsword", "Espada longa", "d8", {
+  longsword: (id = "longsword") =>
+    weapon(id, "Espada longa", "d8", {
       weight: 1.4,
       properties: ["versatile"],
     }),
-  battleaxe: () =>
-    weapon("battleaxe", "Machado de batalha", "d8", {
+  battleaxe: (id = "battleaxe") =>
+    weapon(id, "Machado de batalha", "d8", {
       weight: 1.8,
       properties: ["versatile"],
     }),
-  warhammer: () =>
-    weapon("warhammer", "Martelo de guerra", "d8", {
+  warhammer: (id = "warhammer") =>
+    weapon(id, "Martelo de guerra", "d8", {
       weight: 0.9,
       properties: ["versatile"],
     }),
-  rapier: () =>
-    weapon("rapier", "Rapieira", "d8", {
+  rapier: (id = "rapier") =>
+    weapon(id, "Rapieira", "d8", {
       weight: 0.9,
       modifierAttribute: "dex",
       properties: ["finesse"],
@@ -157,8 +157,8 @@ const WEAPONS = {
       modifierAttribute: "dex",
       properties: ["finesse", "light"],
     }),
-  scimitar: () =>
-    weapon("scimitar", "Cimitarra", "d6", {
+  scimitar: (id = "scimitar") =>
+    weapon(id, "Cimitarra", "d6", {
       weight: 1.4,
       modifierAttribute: "dex",
       properties: ["finesse", "light"],
@@ -182,33 +182,34 @@ const WEAPONS = {
       weight: 0.9,
       properties: ["thrown"],
     }),
-  spear: () =>
-    weapon("spear", "Lança", "d6", {
+  spear: (id = "spear") =>
+    weapon(id, "Lança", "d6", {
       weight: 1.4,
       properties: ["thrown", "versatile"],
     }),
-  quarterstaff: () =>
-    weapon("quarterstaff", "Bordão", "d6", {
+  quarterstaff: (id = "quarterstaff") =>
+    weapon(id, "Bordão", "d6", {
       weight: 1.8,
       properties: ["versatile"],
     }),
-  mace: () => weapon("mace", "Maça", "d6", { weight: 1.8 }),
-  lightCrossbow: () =>
-    weapon("light-crossbow", "Besta leve", "d8", {
+  mace: (id = "mace") =>
+    weapon(id, "Maça", "d6", { weight: 1.8 }),
+  lightCrossbow: (id = "light-crossbow") =>
+    weapon(id, "Besta leve", "d8", {
       weight: 2.3,
       modifierAttribute: "dex",
       properties: ["ammunition", "loading", "range", "two-handed"],
       twoHanded: true,
     }),
-  longbow: () =>
-    weapon("longbow", "Arco longo", "d8", {
+  longbow: (id = "longbow") =>
+    weapon(id, "Arco longo", "d8", {
       weight: 0.9,
       modifierAttribute: "dex",
       properties: ["ammunition", "heavy", "range", "two-handed"],
       twoHanded: true,
     }),
-  shortbow: () =>
-    weapon("shortbow", "Arco curto", "d6", {
+  shortbow: (id = "shortbow") =>
+    weapon(id, "Arco curto", "d6", {
       weight: 0.9,
       modifierAttribute: "dex",
       properties: ["ammunition", "range", "two-handed"],
@@ -229,8 +230,8 @@ const WEAPONS = {
 
 const ammunition = (id: string, name: string, quantity: number) =>
   item(id, name, "ammunition", quantity, 0.03)
-
-const shield = () => item("shield", "Escudo", "shield", 1, 2.7)
+const shield = (id = "shield", name = "Escudo") =>
+  item(id, name, "shield", 1, 2.7)
 const componentPouch = () =>
   item("component-pouch", "Bolsa de componentes", "focus", 1, 0.9)
 const arcaneFocus = () =>
@@ -243,19 +244,56 @@ const thievesTools = () =>
   item("thieves-tools", "Ferramentas de ladrão", "tool", 1, 0.5)
 
 const PACKS = {
-  explorer: () => item("explorer-pack", "Pacote de explorador", "pack", 1, 26),
-  dungeoneer: () => item("dungeoneer-pack", "Pacote de aventureiro", "pack", 1, 27),
-  diplomat: () => item("diplomat-pack", "Pacote de diplomata", "pack", 1, 18),
-  entertainer: () => item("entertainer-pack", "Pacote de artista", "pack", 1, 19),
-  priest: () => item("priest-pack", "Pacote de sacerdote", "pack", 1, 11),
-  burglar: () => item("burglar-pack", "Pacote de assaltante", "pack", 1, 21),
-  scholar: () => item("scholar-pack", "Pacote de estudioso", "pack", 1, 5),
+  explorer: () =>
+    item("explorer-pack", "Pacote de explorador", "pack", 1, 26),
+  dungeoneer: () =>
+    item("dungeoneer-pack", "Pacote de aventureiro", "pack", 1, 27),
+  diplomat: () =>
+    item("diplomat-pack", "Pacote de diplomata", "pack", 1, 18),
+  entertainer: () =>
+    item("entertainer-pack", "Pacote de artista", "pack", 1, 19),
+  priest: () =>
+    item("priest-pack", "Pacote de sacerdote", "pack", 1, 11),
+  burglar: () =>
+    item("burglar-pack", "Pacote de assaltante", "pack", 1, 21),
+  scholar: () =>
+    item("scholar-pack", "Pacote de estudioso", "pack", 1, 5),
 }
 
-const PRESETS: Partial<Record<ClassName, ClassEquipmentPreset>> = {
+const PRESETS: Record<ClassName, ClassEquipmentPreset> = {
+  artificer: {
+    className: "artificer",
+    fixedItems: [
+      WEAPONS.simple("artificer-simple-a"),
+      WEAPONS.simple("artificer-simple-b"),
+      WEAPONS.lightCrossbow("artificer-crossbow"),
+      ammunition("artificer-bolts", "Virote", 20),
+      thievesTools(),
+      PACKS.dungeoneer(),
+    ],
+    choiceGroups: [
+      group("armor", "Armadura", [
+        option("studded-leather", "Armadura de couro batido", [
+          armor(
+            "artificer-studded-leather",
+            "Armadura de couro batido",
+            "light",
+            5.9,
+          ),
+        ]),
+        option("scale-mail", "Cota de escamas", [
+          armor("artificer-scale-mail", "Cota de escamas", "medium", 20.4),
+        ]),
+      ]),
+    ],
+    startingGold: { dice: 5, sides: 4, multiplier: 10 },
+  },
   barbarian: {
     className: "barbarian",
-    fixedItems: [PACKS.explorer(), WEAPONS.javelin("barbarian-javelin", 4)],
+    fixedItems: [
+      PACKS.explorer(),
+      WEAPONS.javelin("barbarian-javelin", 4),
+    ],
     choiceGroups: [
       group("primary-weapon", "Arma principal", [
         option("greataxe", "Machado grande", [WEAPONS.greataxe()]),
@@ -264,7 +302,9 @@ const PRESETS: Partial<Record<ClassName, ClassEquipmentPreset>> = {
         option("custom-martial", "Outra arma marcial", [WEAPONS.martial()]),
       ]),
       group("secondary-weapons", "Armas secundárias", [
-        option("two-handaxes", "Duas machadinhas", [WEAPONS.handaxe("barbarian-handaxe", 2)]),
+        option("two-handaxes", "Duas machadinhas", [
+          WEAPONS.handaxe("barbarian-handaxe", 2),
+        ]),
         option("spear", "Uma lança", [WEAPONS.spear()]),
         option("simple", "Outra arma simples", [WEAPONS.simple()]),
       ]),
@@ -273,11 +313,37 @@ const PRESETS: Partial<Record<ClassName, ClassEquipmentPreset>> = {
   },
   bard: {
     className: "bard",
-    fixedItems: [armor("bard-leather", "Armadura de couro", "light", 4.5), WEAPONS.dagger("bard-dagger")],
+    fixedItems: [
+      armor("bard-leather", "Armadura de couro", "light", 4.5),
+      WEAPONS.dagger("bard-dagger"),
+    ],
     choiceGroups: [
-      group("weapon", "Arma", [option("rapier", "Rapieira", [WEAPONS.rapier()]), option("longsword", "Espada longa", [WEAPONS.longsword()]), option("simple", "Arma simples", [WEAPONS.simple("bard-simple")])]),
-      group("pack", "Pacote", [option("diplomat", "Pacote de diplomata", [PACKS.diplomat()]), option("entertainer", "Pacote de artista", [PACKS.entertainer()])]),
-      group("instrument", "Instrumento", [option("lute", "Alaúde", [item("lute", "Alaúde", "instrument", 1, 0.9)]), option("flute", "Flauta", [item("flute", "Flauta", "instrument", 1, 0.5)]), option("custom-instrument", "Outro instrumento", [item("custom-instrument", "Instrumento musical à escolha", "instrument", 1, 0.8)])]),
+      group("weapon", "Arma", [
+        option("rapier", "Rapieira", [WEAPONS.rapier()]),
+        option("longsword", "Espada longa", [WEAPONS.longsword()]),
+        option("simple", "Arma simples", [WEAPONS.simple("bard-simple")]),
+      ]),
+      group("pack", "Pacote", [
+        option("diplomat", "Pacote de diplomata", [PACKS.diplomat()]),
+        option("entertainer", "Pacote de artista", [PACKS.entertainer()]),
+      ]),
+      group("instrument", "Instrumento", [
+        option("lute", "Alaúde", [
+          item("lute", "Alaúde", "instrument", 1, 0.9),
+        ]),
+        option("flute", "Flauta", [
+          item("flute", "Flauta", "instrument", 1, 0.5),
+        ]),
+        option("custom-instrument", "Outro instrumento", [
+          item(
+            "custom-instrument",
+            "Instrumento musical à escolha",
+            "instrument",
+            1,
+            0.8,
+          ),
+        ]),
+      ]),
     ],
     startingGold: { dice: 5, sides: 4, multiplier: 10 },
   },
@@ -285,19 +351,55 @@ const PRESETS: Partial<Record<ClassName, ClassEquipmentPreset>> = {
     className: "cleric",
     fixedItems: [shield(), holySymbol()],
     choiceGroups: [
-      group("weapon", "Arma principal", [option("mace", "Maça", [WEAPONS.mace()]), option("warhammer", "Martelo de guerra", [WEAPONS.warhammer()])]),
-      group("armor", "Armadura", [option("scale", "Cota de escamas", [armor("scale-mail", "Cota de escamas", "medium", 20.4)]), option("leather", "Armadura de couro", [armor("cleric-leather", "Armadura de couro", "light", 4.5)]), option("chain", "Cota de malha", [armor("cleric-chain", "Cota de malha", "heavy", 25)])]),
-      group("secondary", "Arma secundária", [option("crossbow", "Besta leve e 20 virotes", [WEAPONS.lightCrossbow(), ammunition("cleric-bolts", "Virote", 20)]), option("simple", "Arma simples", [WEAPONS.simple("cleric-simple")])]),
-      group("pack", "Pacote", [option("priest", "Pacote de sacerdote", [PACKS.priest()]), option("explorer", "Pacote de explorador", [PACKS.explorer()])]),
+      group("weapon", "Arma principal", [
+        option("mace", "Maça", [WEAPONS.mace()]),
+        option("warhammer", "Martelo de guerra", [WEAPONS.warhammer()]),
+      ]),
+      group("armor", "Armadura", [
+        option("scale", "Cota de escamas", [
+          armor("scale-mail", "Cota de escamas", "medium", 20.4),
+        ]),
+        option("leather", "Armadura de couro", [
+          armor("cleric-leather", "Armadura de couro", "light", 4.5),
+        ]),
+        option("chain", "Cota de malha", [
+          armor("cleric-chain", "Cota de malha", "heavy", 25),
+        ]),
+      ]),
+      group("secondary", "Arma secundária", [
+        option("crossbow", "Besta leve e 20 virotes", [
+          WEAPONS.lightCrossbow(),
+          ammunition("cleric-bolts", "Virote", 20),
+        ]),
+        option("simple", "Arma simples", [WEAPONS.simple("cleric-simple")]),
+      ]),
+      group("pack", "Pacote", [
+        option("priest", "Pacote de sacerdote", [PACKS.priest()]),
+        option("explorer", "Pacote de explorador", [PACKS.explorer()]),
+      ]),
     ],
     startingGold: { dice: 5, sides: 4, multiplier: 10 },
   },
   druid: {
     className: "druid",
-    fixedItems: [armor("druid-leather", "Armadura de couro", "light", 4.5), PACKS.explorer(), druidicFocus()],
+    fixedItems: [
+      armor("druid-leather", "Armadura de couro", "light", 4.5),
+      PACKS.explorer(),
+      druidicFocus(),
+    ],
     choiceGroups: [
-      group("first", "Primeiro item", [option("wooden-shield", "Escudo de madeira", [item("wooden-shield", "Escudo de madeira", "shield", 1, 2.7)]), option("simple", "Arma simples", [WEAPONS.simple("druid-simple-a")])]),
-      group("second", "Segundo item", [option("scimitar", "Cimitarra", [WEAPONS.scimitar()]), option("simple-melee", "Arma simples corpo a corpo", [WEAPONS.simple("druid-simple-b")])]),
+      group("first", "Primeiro item", [
+        option("wooden-shield", "Escudo de madeira", [
+          shield("wooden-shield", "Escudo de madeira"),
+        ]),
+        option("simple", "Arma simples", [WEAPONS.simple("druid-simple-a")]),
+      ]),
+      group("second", "Segundo item", [
+        option("scimitar", "Cimitarra", [WEAPONS.scimitar()]),
+        option("simple-melee", "Arma simples corpo a corpo", [
+          WEAPONS.simple("druid-simple-b"),
+        ]),
+      ]),
     ],
     startingGold: { dice: 2, sides: 4, multiplier: 10 },
   },
@@ -305,89 +407,296 @@ const PRESETS: Partial<Record<ClassName, ClassEquipmentPreset>> = {
     className: "fighter",
     fixedItems: [],
     choiceGroups: [
-      group("armor", "Armadura", [option("chain", "Cota de malha", [armor("fighter-chain", "Cota de malha", "heavy", 25)]), option("leather-bow", "Couro, arco longo e 20 flechas", [armor("fighter-leather", "Armadura de couro", "light", 4.5), WEAPONS.longbow(), ammunition("fighter-arrows", "Flecha", 20)])]),
-      group("primary", "Conjunto principal", [option("weapon-shield", "Arma marcial e escudo", [WEAPONS.martial("fighter-martial-a"), shield()]), option("two-weapons", "Duas armas marciais", [WEAPONS.martial("fighter-martial-b"), WEAPONS.martial("fighter-martial-c")])]),
-      group("secondary", "Armas secundárias", [option("crossbow", "Besta leve e 20 virotes", [WEAPONS.lightCrossbow(), ammunition("fighter-bolts", "Virote", 20)]), option("handaxes", "Duas machadinhas", [WEAPONS.handaxe("fighter-handaxes", 2)])]),
-      group("pack", "Pacote", [option("dungeoneer", "Pacote de aventureiro", [PACKS.dungeoneer()]), option("explorer", "Pacote de explorador", [PACKS.explorer()])]),
+      group("armor", "Armadura", [
+        option("chain", "Cota de malha", [
+          armor("fighter-chain", "Cota de malha", "heavy", 25),
+        ]),
+        option("leather-bow", "Couro, arco longo e 20 flechas", [
+          armor("fighter-leather", "Armadura de couro", "light", 4.5),
+          WEAPONS.longbow(),
+          ammunition("fighter-arrows", "Flecha", 20),
+        ]),
+      ]),
+      group("primary", "Conjunto principal", [
+        option("weapon-shield", "Arma marcial e escudo", [
+          WEAPONS.martial("fighter-martial-a"),
+          shield(),
+        ]),
+        option("two-weapons", "Duas armas marciais", [
+          WEAPONS.martial("fighter-martial-b"),
+          WEAPONS.martial("fighter-martial-c"),
+        ]),
+      ]),
+      group("secondary", "Armas secundárias", [
+        option("crossbow", "Besta leve e 20 virotes", [
+          WEAPONS.lightCrossbow(),
+          ammunition("fighter-bolts", "Virote", 20),
+        ]),
+        option("handaxes", "Duas machadinhas", [
+          WEAPONS.handaxe("fighter-handaxes", 2),
+        ]),
+      ]),
+      group("pack", "Pacote", [
+        option("dungeoneer", "Pacote de aventureiro", [PACKS.dungeoneer()]),
+        option("explorer", "Pacote de explorador", [PACKS.explorer()]),
+      ]),
     ],
     startingGold: { dice: 5, sides: 4, multiplier: 10 },
   },
   monk: {
     className: "monk",
     fixedItems: [WEAPONS.dart(10)],
-    choiceGroups: [group("weapon", "Arma", [option("shortsword", "Espada curta", [WEAPONS.shortsword("monk-shortsword")]), option("simple", "Arma simples", [WEAPONS.simple("monk-simple")])]), group("pack", "Pacote", [option("dungeoneer", "Pacote de aventureiro", [PACKS.dungeoneer()]), option("explorer", "Pacote de explorador", [PACKS.explorer()])])],
+    choiceGroups: [
+      group("weapon", "Arma", [
+        option("shortsword", "Espada curta", [
+          WEAPONS.shortsword("monk-shortsword"),
+        ]),
+        option("simple", "Arma simples", [WEAPONS.simple("monk-simple")]),
+      ]),
+      group("pack", "Pacote", [
+        option("dungeoneer", "Pacote de aventureiro", [PACKS.dungeoneer()]),
+        option("explorer", "Pacote de explorador", [PACKS.explorer()]),
+      ]),
+    ],
     startingGold: { dice: 5, sides: 4, multiplier: 1 },
   },
   paladin: {
     className: "paladin",
-    fixedItems: [armor("paladin-chain", "Cota de malha", "heavy", 25), holySymbol()],
-    choiceGroups: [group("primary", "Conjunto principal", [option("weapon-shield", "Arma marcial e escudo", [WEAPONS.martial("paladin-martial-a"), shield()]), option("two-weapons", "Duas armas marciais", [WEAPONS.martial("paladin-martial-b"), WEAPONS.martial("paladin-martial-c")])]), group("secondary", "Armas secundárias", [option("javelins", "Cinco azagaias", [WEAPONS.javelin("paladin-javelins", 5)]), option("simple", "Arma simples corpo a corpo", [WEAPONS.simple("paladin-simple")])]), group("pack", "Pacote", [option("priest", "Pacote de sacerdote", [PACKS.priest()]), option("explorer", "Pacote de explorador", [PACKS.explorer()])])],
+    fixedItems: [
+      armor("paladin-chain", "Cota de malha", "heavy", 25),
+      holySymbol(),
+    ],
+    choiceGroups: [
+      group("primary", "Conjunto principal", [
+        option("weapon-shield", "Arma marcial e escudo", [
+          WEAPONS.martial("paladin-martial-a"),
+          shield(),
+        ]),
+        option("two-weapons", "Duas armas marciais", [
+          WEAPONS.martial("paladin-martial-b"),
+          WEAPONS.martial("paladin-martial-c"),
+        ]),
+      ]),
+      group("secondary", "Armas secundárias", [
+        option("javelins", "Cinco azagaias", [
+          WEAPONS.javelin("paladin-javelins", 5),
+        ]),
+        option("simple", "Arma simples corpo a corpo", [
+          WEAPONS.simple("paladin-simple"),
+        ]),
+      ]),
+      group("pack", "Pacote", [
+        option("priest", "Pacote de sacerdote", [PACKS.priest()]),
+        option("explorer", "Pacote de explorador", [PACKS.explorer()]),
+      ]),
+    ],
     startingGold: { dice: 5, sides: 4, multiplier: 10 },
   },
   ranger: {
     className: "ranger",
-    fixedItems: [WEAPONS.longbow(), ammunition("ranger-arrows", "Flecha", 20)],
-    choiceGroups: [group("armor", "Armadura", [option("scale", "Cota de escamas", [armor("ranger-scale", "Cota de escamas", "medium", 20.4)]), option("leather", "Armadura de couro", [armor("ranger-leather", "Armadura de couro", "light", 4.5)])]), group("weapons", "Armas corpo a corpo", [option("shortswords", "Duas espadas curtas", [WEAPONS.shortsword("ranger-shortswords", 2)]), option("simple-melee", "Duas armas simples", [WEAPONS.simple("ranger-simple-a"), WEAPONS.simple("ranger-simple-b")])]), group("pack", "Pacote", [option("dungeoneer", "Pacote de aventureiro", [PACKS.dungeoneer()]), option("explorer", "Pacote de explorador", [PACKS.explorer()])])],
+    fixedItems: [
+      WEAPONS.longbow(),
+      ammunition("ranger-arrows", "Flecha", 20),
+    ],
+    choiceGroups: [
+      group("armor", "Armadura", [
+        option("scale", "Cota de escamas", [
+          armor("ranger-scale", "Cota de escamas", "medium", 20.4),
+        ]),
+        option("leather", "Armadura de couro", [
+          armor("ranger-leather", "Armadura de couro", "light", 4.5),
+        ]),
+      ]),
+      group("weapons", "Armas corpo a corpo", [
+        option("shortswords", "Duas espadas curtas", [
+          WEAPONS.shortsword("ranger-shortswords", 2),
+        ]),
+        option("simple-melee", "Duas armas simples", [
+          WEAPONS.simple("ranger-simple-a"),
+          WEAPONS.simple("ranger-simple-b"),
+        ]),
+      ]),
+      group("pack", "Pacote", [
+        option("dungeoneer", "Pacote de aventureiro", [PACKS.dungeoneer()]),
+        option("explorer", "Pacote de explorador", [PACKS.explorer()]),
+      ]),
+    ],
     startingGold: { dice: 5, sides: 4, multiplier: 10 },
   },
   rogue: {
     className: "rogue",
-    fixedItems: [armor("rogue-leather", "Armadura de couro", "light", 4.5), WEAPONS.dagger("rogue-daggers", 2), thievesTools()],
-    choiceGroups: [group("primary", "Arma principal", [option("rapier", "Rapieira", [WEAPONS.rapier()]), option("shortsword", "Espada curta", [WEAPONS.shortsword("rogue-shortsword-a")])]), group("secondary", "Arma secundária", [option("shortbow", "Arco curto e 20 flechas", [WEAPONS.shortbow(), ammunition("rogue-arrows", "Flecha", 20)]), option("shortsword", "Outra espada curta", [WEAPONS.shortsword("rogue-shortsword-b")])]), group("pack", "Pacote", [option("burglar", "Pacote de assaltante", [PACKS.burglar()]), option("dungeoneer", "Pacote de aventureiro", [PACKS.dungeoneer()]), option("explorer", "Pacote de explorador", [PACKS.explorer()])])],
+    fixedItems: [
+      armor("rogue-leather", "Armadura de couro", "light", 4.5),
+      WEAPONS.dagger("rogue-daggers", 2),
+      thievesTools(),
+    ],
+    choiceGroups: [
+      group("primary", "Arma principal", [
+        option("rapier", "Rapieira", [WEAPONS.rapier()]),
+        option("shortsword", "Espada curta", [
+          WEAPONS.shortsword("rogue-shortsword-a"),
+        ]),
+      ]),
+      group("secondary", "Arma secundária", [
+        option("shortbow", "Arco curto e 20 flechas", [
+          WEAPONS.shortbow(),
+          ammunition("rogue-arrows", "Flecha", 20),
+        ]),
+        option("shortsword", "Outra espada curta", [
+          WEAPONS.shortsword("rogue-shortsword-b"),
+        ]),
+      ]),
+      group("pack", "Pacote", [
+        option("burglar", "Pacote de assaltante", [PACKS.burglar()]),
+        option("dungeoneer", "Pacote de aventureiro", [PACKS.dungeoneer()]),
+        option("explorer", "Pacote de explorador", [PACKS.explorer()]),
+      ]),
+    ],
     startingGold: { dice: 4, sides: 4, multiplier: 10 },
   },
   sorcerer: {
     className: "sorcerer",
     fixedItems: [WEAPONS.dagger("sorcerer-daggers", 2)],
-    choiceGroups: [group("weapon", "Arma", [option("crossbow", "Besta leve e 20 virotes", [WEAPONS.lightCrossbow(), ammunition("sorcerer-bolts", "Virote", 20)]), option("simple", "Arma simples", [WEAPONS.simple("sorcerer-simple")])]), group("focus", "Foco", [option("pouch", "Bolsa de componentes", [componentPouch()]), option("focus", "Foco arcano", [arcaneFocus()])]), group("pack", "Pacote", [option("dungeoneer", "Pacote de aventureiro", [PACKS.dungeoneer()]), option("explorer", "Pacote de explorador", [PACKS.explorer()])])],
+    choiceGroups: [
+      group("weapon", "Arma", [
+        option("crossbow", "Besta leve e 20 virotes", [
+          WEAPONS.lightCrossbow(),
+          ammunition("sorcerer-bolts", "Virote", 20),
+        ]),
+        option("simple", "Arma simples", [
+          WEAPONS.simple("sorcerer-simple"),
+        ]),
+      ]),
+      group("focus", "Foco", [
+        option("pouch", "Bolsa de componentes", [componentPouch()]),
+        option("focus", "Foco arcano", [arcaneFocus()]),
+      ]),
+      group("pack", "Pacote", [
+        option("dungeoneer", "Pacote de aventureiro", [PACKS.dungeoneer()]),
+        option("explorer", "Pacote de explorador", [PACKS.explorer()]),
+      ]),
+    ],
     startingGold: { dice: 3, sides: 4, multiplier: 10 },
   },
   warlock: {
     className: "warlock",
-    fixedItems: [armor("warlock-leather", "Armadura de couro", "light", 4.5), WEAPONS.simple("warlock-simple-fixed"), WEAPONS.dagger("warlock-daggers", 2)],
-    choiceGroups: [group("weapon", "Arma à distância", [option("crossbow", "Besta leve e 20 virotes", [WEAPONS.lightCrossbow(), ammunition("warlock-bolts", "Virote", 20)]), option("simple", "Arma simples", [WEAPONS.simple("warlock-simple-choice")])]), group("focus", "Foco", [option("pouch", "Bolsa de componentes", [componentPouch()]), option("focus", "Foco arcano", [arcaneFocus()])]), group("pack", "Pacote", [option("scholar", "Pacote de estudioso", [PACKS.scholar()]), option("dungeoneer", "Pacote de aventureiro", [PACKS.dungeoneer()])])],
+    fixedItems: [
+      armor("warlock-leather", "Armadura de couro", "light", 4.5),
+      WEAPONS.simple("warlock-simple-fixed"),
+      WEAPONS.dagger("warlock-daggers", 2),
+    ],
+    choiceGroups: [
+      group("weapon", "Arma à distância", [
+        option("crossbow", "Besta leve e 20 virotes", [
+          WEAPONS.lightCrossbow(),
+          ammunition("warlock-bolts", "Virote", 20),
+        ]),
+        option("simple", "Arma simples", [
+          WEAPONS.simple("warlock-simple-choice"),
+        ]),
+      ]),
+      group("focus", "Foco", [
+        option("pouch", "Bolsa de componentes", [componentPouch()]),
+        option("focus", "Foco arcano", [arcaneFocus()]),
+      ]),
+      group("pack", "Pacote", [
+        option("scholar", "Pacote de estudioso", [PACKS.scholar()]),
+        option("dungeoneer", "Pacote de aventureiro", [PACKS.dungeoneer()]),
+      ]),
+    ],
     startingGold: { dice: 4, sides: 4, multiplier: 10 },
   },
   wizard: {
     className: "wizard",
     fixedItems: [item("spellbook", "Grimório", "gear", 1, 1.4)],
-    choiceGroups: [group("weapon", "Arma", [option("quarterstaff", "Bordão", [WEAPONS.quarterstaff()]), option("dagger", "Adaga", [WEAPONS.dagger("wizard-dagger")])]), group("focus", "Foco", [option("pouch", "Bolsa de componentes", [componentPouch()]), option("focus", "Foco arcano", [arcaneFocus()])]), group("pack", "Pacote", [option("scholar", "Pacote de estudioso", [PACKS.scholar()]), option("explorer", "Pacote de explorador", [PACKS.explorer()])])],
+    choiceGroups: [
+      group("weapon", "Arma", [
+        option("quarterstaff", "Bordão", [WEAPONS.quarterstaff()]),
+        option("dagger", "Adaga", [WEAPONS.dagger("wizard-dagger")]),
+      ]),
+      group("focus", "Foco", [
+        option("pouch", "Bolsa de componentes", [componentPouch()]),
+        option("focus", "Foco arcano", [arcaneFocus()]),
+      ]),
+      group("pack", "Pacote", [
+        option("scholar", "Pacote de estudioso", [PACKS.scholar()]),
+        option("explorer", "Pacote de explorador", [PACKS.explorer()]),
+      ]),
+    ],
     startingGold: { dice: 4, sides: 4, multiplier: 10 },
   },
 }
 
-export function getPhbClassEquipmentPreset(className: ClassName): ClassEquipmentPreset | undefined { return PRESETS[className] }
-
-export function getDefaultClassEquipmentSelections(className: ClassName): Record<string, string> {
-  const preset = getPhbClassEquipmentPreset(className)
-  if (!preset) return {}
-  return Object.fromEntries(preset.choiceGroups.map((choiceGroup) => [choiceGroup.id, choiceGroup.options[0]?.id ?? ""]))
+export function getPhbClassEquipmentPreset(
+  className: ClassName,
+): ClassEquipmentPreset {
+  return PRESETS[className]
 }
 
-export function getSelectedClassEquipment(className: ClassName, selections: Record<string, string>): StartingItemSpec[] {
+export function getDefaultClassEquipmentSelections(
+  className: ClassName,
+): Record<string, string> {
   const preset = getPhbClassEquipmentPreset(className)
-  if (!preset) return []
-  return [...preset.fixedItems, ...preset.choiceGroups.flatMap((choiceGroup) => {
-    const selectedOptionId = selections[choiceGroup.id]
-    return (choiceGroup.options.find((entry) => entry.id === selectedOptionId) ?? choiceGroup.options[0])?.items ?? []
-  })]
+  return Object.fromEntries(
+    preset.choiceGroups.map((choiceGroup) => [
+      choiceGroup.id,
+      choiceGroup.options[0]?.id ?? "",
+    ]),
+  )
 }
 
-export function formatStartingGoldFormula(formula: StartingGoldFormula): string {
+export function getSelectedClassEquipment(
+  className: ClassName,
+  selections: Record<string, string>,
+): StartingItemSpec[] {
+  const preset = getPhbClassEquipmentPreset(className)
+  return [
+    ...preset.fixedItems,
+    ...preset.choiceGroups.flatMap((choiceGroup) => {
+      const selectedOptionId = selections[choiceGroup.id]
+      return (
+        choiceGroup.options.find(
+          (entry) => entry.id === selectedOptionId,
+        ) ?? choiceGroup.options[0]
+      )?.items ?? []
+    }),
+  ]
+}
+
+export function formatStartingGoldFormula(
+  formula: StartingGoldFormula,
+): string {
   const multiplier = formula.multiplier === 1 ? "" : ` × ${formula.multiplier}`
   return `${formula.dice}d${formula.sides}${multiplier} po`
 }
 
-export function averageStartingGold(formula: StartingGoldFormula): number {
-  return Math.floor(formula.dice * ((formula.sides + 1) / 2) * formula.multiplier)
+export function averageStartingGold(
+  formula: StartingGoldFormula,
+): number {
+  return Math.floor(
+    formula.dice * ((formula.sides + 1) / 2) * formula.multiplier,
+  )
 }
 
 export function rollStartingGold(formula: StartingGoldFormula): number {
   let total = 0
-  for (let index = 0; index < formula.dice; index += 1) total += Math.floor(Math.random() * formula.sides) + 1
+  for (let index = 0; index < formula.dice; index += 1) {
+    total += Math.floor(Math.random() * formula.sides) + 1
+  }
   return total * formula.multiplier
 }
 
-export function getPhbClassStartingEquipmentText(className: ClassName): string {
-  return getSelectedClassEquipment(className, getDefaultClassEquipmentSelections(className)).map((entry) => (entry.quantity ?? 1) > 1 ? `${entry.name} ×${entry.quantity}` : entry.name).join("\n")
+export function getPhbClassStartingEquipmentText(
+  className: ClassName,
+): string {
+  return getSelectedClassEquipment(
+    className,
+    getDefaultClassEquipmentSelections(className),
+  )
+    .map((entry) =>
+      (entry.quantity ?? 1) > 1
+        ? `${entry.name} ×${entry.quantity}`
+        : entry.name,
+    )
+    .join("\n")
 }
