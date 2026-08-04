@@ -3,14 +3,51 @@ import { useMemo, useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Textarea } from "../../../components/ui/Textarea"
+import type { Itemmable } from "../../../models/items/item"
 import {
   STANDARD_ITEM_DEFINITIONS,
   findStandardItemDefinition,
   instantiateStandardItem,
 } from "../../items/standardItemCompendium"
-import type { Itemmable } from "../../../models/items/item"
 
 const CUSTOM_TEMPLATE_ID = "custom-item"
+
+type WizardCategory =
+  | "weapons"
+  | "armor"
+  | "shields"
+  | "ammunition"
+  | "consumables"
+  | "supplies"
+  | "tools"
+  | "foci"
+  | "instruments"
+  | "packs"
+  | "gear"
+  | "currency"
+  | "magic"
+  | "custom"
+
+const CATEGORIES: Array<{
+  value: WizardCategory
+  label: string
+  description: string
+}> = [
+  { value: "weapons", label: "Armas", description: "Armas simples, marciais e outros equipamentos ofensivos." },
+  { value: "armor", label: "Armaduras", description: "Armaduras leves, médias e pesadas." },
+  { value: "shields", label: "Escudos", description: "Escudos e defesas equipáveis." },
+  { value: "ammunition", label: "Munições", description: "Flechas, virotes e outros projéteis." },
+  { value: "consumables", label: "Consumíveis", description: "Poções e itens usados ao consumir." },
+  { value: "supplies", label: "Suprimentos", description: "Comida, água e recursos de viagem." },
+  { value: "tools", label: "Ferramentas", description: "Ferramentas e kits de ofício." },
+  { value: "foci", label: "Focos", description: "Focos arcanos, divinos e druídicos." },
+  { value: "instruments", label: "Instrumentos", description: "Instrumentos musicais." },
+  { value: "packs", label: "Pacotes", description: "Pacotes e conjuntos de equipamento." },
+  { value: "gear", label: "Equipamento geral", description: "Itens de exploração e aventura." },
+  { value: "currency", label: "Moedas", description: "Peças de cobre, prata, electrum, ouro e platina." },
+  { value: "magic", label: "Itens mágicos", description: "Itens canônicos com regras mágicas próprias, como a Bolsa Mágica." },
+  { value: "custom", label: "Item personalizado", description: "Crie um item quando nenhum padrão do compêndio servir." },
+]
 
 type Props = {
   onCancel: () => void
@@ -19,6 +56,7 @@ type Props = {
 
 export function ItemCreationWizard({ onCancel, onCreate }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [category, setCategory] = useState<WizardCategory | null>(null)
   const [query, setQuery] = useState("")
   const [templateId, setTemplateId] = useState("")
   const [quantity, setQuantity] = useState("1")
@@ -36,18 +74,25 @@ export function ItemCreationWizard({ onCancel, onCreate }: Props) {
   const isCustom = templateId === CUSTOM_TEMPLATE_ID
   const selectedItem = selectedDefinition?.item
 
+  const categoryDefinitions = useMemo(() => {
+    if (!category || category === "custom") return []
+    return STANDARD_ITEM_DEFINITIONS.filter((definition) =>
+      definitionCategory(definition.item) === category,
+    )
+  }, [category])
+
   const filteredDefinitions = useMemo(() => {
     const normalized = normalizeSearch(query)
-    if (!normalized) return STANDARD_ITEM_DEFINITIONS
+    if (!normalized) return categoryDefinitions
 
-    return STANDARD_ITEM_DEFINITIONS.filter(({ item, group }) =>
+    return categoryDefinitions.filter(({ item, group }) =>
       normalizeSearch(
         [item.name, item.desc, item.kind, item.category, group]
           .filter(Boolean)
           .join(" "),
       ).includes(normalized),
     )
-  }, [query])
+  }, [categoryDefinitions, query])
 
   const canContinue =
     step === 1
@@ -57,6 +102,18 @@ export function ItemCreationWizard({ onCancel, onCreate }: Props) {
           ? customName.trim().length > 0
           : true
         : true
+
+  function selectCategory(nextCategory: WizardCategory) {
+    setCategory(nextCategory)
+    setQuery("")
+    setTemplateId(nextCategory === "custom" ? CUSTOM_TEMPLATE_ID : "")
+  }
+
+  function returnToCategories() {
+    setCategory(null)
+    setQuery("")
+    setTemplateId("")
+  }
 
   function createItem(): Itemmable {
     const normalizedQuantity = Math.max(
@@ -97,58 +154,107 @@ export function ItemCreationWizard({ onCancel, onCreate }: Props) {
       </header>
 
       {step === 1 ? (
-        <div className="mt-4 grid gap-4">
-          <Input
-            value={query}
-            placeholder="Buscar no compêndio por nome, tipo ou descrição"
-            onChange={(event) => setQuery(event.target.value)}
-          />
+        category === null ? (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {CATEGORIES.map((entry) => {
+              const count =
+                entry.value === "custom"
+                  ? null
+                  : STANDARD_ITEM_DEFINITIONS.filter(
+                      ({ item }) => definitionCategory(item) === entry.value,
+                    ).length
 
-          <button
-            type="button"
-            className={
-              templateId === CUSTOM_TEMPLATE_ID
-                ? "rounded-xl border border-accentBorder bg-accentBg p-4 text-left"
-                : "rounded-xl border border-dashed border-border bg-bg-subtle p-4 text-left hover:bg-accentBg"
-            }
-            onClick={() => setTemplateId(CUSTOM_TEMPLATE_ID)}
-          >
-            <span className="block text-sm font-semibold text-textH">
-              Criar item personalizado
-            </span>
-            <span className="mt-1 block text-xs leading-5 text-textMuted">
-              Use apenas quando nenhum item padrão do compêndio representar o que você precisa.
-            </span>
-          </button>
-
-          <div className="grid max-h-[36rem] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredDefinitions.map(({ item, locked, group }) => (
-              <button
-                key={item.id}
-                type="button"
-                className={
-                  templateId === item.id
-                    ? "rounded-xl border border-accentBorder bg-accentBg p-4 text-left"
-                    : "rounded-xl border border-border bg-bg-subtle p-4 text-left hover:bg-accentBg"
-                }
-                onClick={() => setTemplateId(item.id)}
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold text-textH">
-                    {item.name}
+              return (
+                <button
+                  key={entry.value}
+                  type="button"
+                  className="rounded-xl border border-border bg-bg-subtle p-4 text-left hover:border-accentBorder hover:bg-accentBg"
+                  onClick={() => selectCategory(entry.value)}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-sm font-semibold text-textH">
+                      {entry.label}
+                    </span>
+                    {count !== null ? <Badge label={`${count} itens`} /> : null}
+                  </div>
+                  <span className="mt-1 block text-xs leading-5 text-textMuted">
+                    {entry.description}
                   </span>
-                  {locked ? <Badge label="Padrão fixo" /> : null}
-                </div>
-                <span className="mt-1 block text-[11px] uppercase tracking-wide text-textMuted">
-                  {groupLabel(group)} · {item.weight} kg
-                </span>
-                <span className="mt-2 line-clamp-3 block text-xs leading-5 text-text">
-                  {item.desc || "Sem descrição."}
-                </span>
-              </button>
-            ))}
+                </button>
+              )
+            })}
           </div>
-        </div>
+        ) : category === "custom" ? (
+          <div className="mt-4 grid gap-4">
+            <div className="flex flex-col gap-3 rounded-xl border border-warning bg-warningBg p-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-textH">Item personalizado</h2>
+                <p className="mt-1 text-xs leading-5 text-textMuted">
+                  Use esta opção apenas quando nenhum item padrão do compêndio representar o que você precisa.
+                </p>
+              </div>
+              <Button size="sm" variant="secondary" onClick={returnToCategories}>
+                Trocar categoria
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-4">
+            <div className="flex flex-col gap-3 rounded-xl border border-border bg-bg-subtle p-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-textH">
+                  {categoryLabel(category)}
+                </h2>
+                <p className="mt-1 text-xs text-textMuted">
+                  Escolha um item desta categoria.
+                </p>
+              </div>
+              <Button size="sm" variant="secondary" onClick={returnToCategories}>
+                Trocar categoria
+              </Button>
+            </div>
+
+            <Input
+              value={query}
+              placeholder={`Buscar em ${categoryLabel(category).toLocaleLowerCase("pt-BR")}`}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+
+            <div className="grid max-h-[36rem] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
+              {filteredDefinitions.map(({ item, locked, group }) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={
+                    templateId === item.id
+                      ? "rounded-xl border border-accentBorder bg-accentBg p-4 text-left"
+                      : "rounded-xl border border-border bg-bg-subtle p-4 text-left hover:bg-accentBg"
+                  }
+                  onClick={() => setTemplateId(item.id)}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-textH">
+                      {item.name}
+                    </span>
+                    {locked ? <Badge label="Padrão fixo" /> : null}
+                  </div>
+                  <span className="mt-1 block text-[11px] uppercase tracking-wide text-textMuted">
+                    {groupLabel(group)} · {item.weight} kg
+                  </span>
+                  <span className="mt-2 line-clamp-3 block text-xs leading-5 text-text">
+                    {item.desc || "Sem descrição."}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {filteredDefinitions.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-textMuted">
+                Nenhum item encontrado nesta categoria.
+              </div>
+            ) : null}
+          </div>
+        )
       ) : null}
 
       {step === 2 ? (
@@ -266,11 +372,15 @@ export function ItemCreationWizard({ onCancel, onCreate }: Props) {
         <Button
           variant="secondary"
           onClick={() => {
-            if (step === 1) onCancel()
-            else setStep((step - 1) as 1 | 2)
+            if (step === 1) {
+              if (category !== null) returnToCategories()
+              else onCancel()
+            } else {
+              setStep((step - 1) as 1 | 2)
+            }
           }}
         >
-          {step === 1 ? "Cancelar" : "Voltar"}
+          {step === 1 && category === null ? "Cancelar" : "Voltar"}
         </Button>
 
         {step < 3 ? (
@@ -283,6 +393,26 @@ export function ItemCreationWizard({ onCancel, onCreate }: Props) {
       </footer>
     </section>
   )
+}
+
+function definitionCategory(item: Itemmable): WizardCategory {
+  if (item.kind === "currency") return "currency"
+  if (item.category === "bagOfHolding" || item.magicItem) return "magic"
+  if (item.kind === "shield" || item.equipSlot === "shield") return "shields"
+  if (item.kind === "equipment" && item.equipSlot === "weapon") return "weapons"
+  if (item.kind === "equipment" && item.equipSlot === "armor") return "armor"
+  if (item.kind === "ammunition") return "ammunition"
+  if (item.kind === "consumable" || item.kind === "throwable") return "consumables"
+  if (item.kind === "supply") return "supplies"
+  if (item.kind === "tool") return "tools"
+  if (item.kind === "focus") return "foci"
+  if (item.kind === "instrument") return "instruments"
+  if (item.kind === "pack") return "packs"
+  return "gear"
+}
+
+function categoryLabel(category: WizardCategory): string {
+  return CATEGORIES.find((entry) => entry.value === category)?.label ?? category
 }
 
 function normalizeSearch(value: string): string {
