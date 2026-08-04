@@ -5,6 +5,7 @@ import {
   AppSidebar,
   IconCastle,
   IconCharacter,
+  IconMagic,
 } from "../../components/AppSidebar"
 import { authClient } from "../../auth/auth-client"
 import {
@@ -53,6 +54,12 @@ export function UserDashboardView() {
       icon: <IconCharacter />,
       active: location.pathname.startsWith("/user/characters"),
       onClick: () => navigate("/user/characters"),
+    },
+    {
+      label: "Magias",
+      icon: <IconMagic />,
+      active: location.pathname.startsWith("/user/spells"),
+      onClick: () => navigate("/user/spells"),
     },
     {
       label: "Campanhas",
