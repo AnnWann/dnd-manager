@@ -22,6 +22,7 @@ model User {
   homebrewSpells HomebrewSpell[] @relation("HomebrewSpellOwner")
   submittedCampaignSpells CampaignHomebrewSpell[] @relation("CampaignSpellSubmitter")
   reviewedCampaignSpells CampaignHomebrewSpell[] @relation("CampaignSpellReviewer")
+  grantedCharacterSpells CharacterHomebrewSpell[] @relation("CharacterSpellGranter")
 
   ownedCampaigns      Campaign[]       @relation("CampaignOwner")
   campaignMemberships CampaignMember[]
@@ -94,6 +95,7 @@ model Character {
   owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   campaignLinks CampaignCharacter[]
+  homebrewSpells CharacterHomebrewSpell[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -125,6 +127,7 @@ model Campaign {
   members    CampaignMember[]
   characters CampaignCharacter[]
   homebrewSpells CampaignHomebrewSpell[]
+  characterSpellGrants CharacterHomebrewSpell[] @relation("CharacterSpellSourceCampaign")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -194,6 +197,7 @@ model HomebrewSpell {
   owner   User @relation("HomebrewSpellOwner", fields: [ownerId], references: [id], onDelete: Cascade)
 
   campaignLinks CampaignHomebrewSpell[]
+  characterLinks CharacterHomebrewSpell[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -229,4 +233,28 @@ model CampaignHomebrewSpell {
   @@index([spellId])
   @@index([submittedById])
   @@map("campaign_homebrew_spell")
+}
+
+model CharacterHomebrewSpell {
+  id String @id @default(uuid())
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  spellId String
+  spell   HomebrewSpell @relation(fields: [spellId], references: [id], onDelete: Cascade)
+
+  grantedById String
+  grantedBy   User @relation("CharacterSpellGranter", fields: [grantedById], references: [id], onDelete: Cascade)
+
+  sourceCampaignId String?
+  sourceCampaign   Campaign? @relation("CharacterSpellSourceCampaign", fields: [sourceCampaignId], references: [id], onDelete: SetNull)
+
+  grantedAt DateTime @default(now())
+
+  @@unique([characterId, spellId])
+  @@index([spellId])
+  @@index([grantedById])
+  @@index([sourceCampaignId])
+  @@map("character_homebrew_spell")
 }
