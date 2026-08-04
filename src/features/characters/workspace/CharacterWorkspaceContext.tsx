@@ -4,6 +4,11 @@ import {
   type ReactNode,
 } from "react"
 
+import type {
+  EquippedItemDestination,
+  EquippedItemReference,
+} from "../../../models/characters/characterEquippedItemMovement"
+import type { HandOccupantReference } from "../../../models/characters/characterHands"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Itemmable } from "../../../models/items/item"
 import type { Player } from "../../../models/player/Player"
@@ -31,6 +36,25 @@ export type CharacterWorkspaceValue = {
   ) => void
 
   partyInventory: Itemmable[]
+
+  stowHandOccupant: (
+    characterId: string,
+    reference: HandOccupantReference,
+  ) => void
+  moveEquippedItem: (
+    characterId: string,
+    reference: EquippedItemReference,
+    destination: Exclude<EquippedItemDestination, "ground">,
+  ) => void
+  dropHandOccupant?: (
+    characterId: string,
+    reference: HandOccupantReference,
+  ) => void
+  moveEquippedItemToGround?: (
+    characterId: string,
+    reference: EquippedItemReference,
+  ) => void
+  canUseGroundInventory: boolean
 
   canAssignOwners: boolean
   canEditCharacterType: boolean
