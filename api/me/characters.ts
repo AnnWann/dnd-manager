@@ -8,6 +8,7 @@ import {
   jsonResponse,
   readJsonObject,
 } from "../../server/api"
+import { sanitizeCharacterAcquisitionData } from "../../server/character-acquisitions"
 import { sanitizeCharacterItemData } from "../../server/character-items"
 import { prisma } from "../../server/prisma"
 import { requireSession } from "../../server/session"
@@ -68,11 +69,17 @@ export async function POST(request: Request): Promise<Response> {
     const session = await requireSession(request)
     const rawBody = await readJsonObject(request)
     const body = parseCreateCharacterBody(rawBody)
+    const itemSafeData = sanitizeCharacterItemData(body.data)
+    const data = sanitizeCharacterAcquisitionData(itemSafeData, {
+      reason: "character-creation",
+      sourceType: "characterCreation",
+      sourceName: "Criação de personagem",
+    })
 
     const character = await prisma.character.create({
       data: {
         name: body.name,
-        data: sanitizeCharacterItemData(body.data),
+        data,
         visibility: body.visibility,
         ownerId: session.user.id,
       },
