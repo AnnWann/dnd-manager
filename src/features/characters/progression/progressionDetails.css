@@ -1,7 +1,0 @@
-.progression-readable-details .line-clamp-3,
-.progression-readable-details .line-clamp-4 {
-  display: block;
-  overflow: visible;
-  -webkit-box-orient: initial;
-  -webkit-line-clamp: unset;
-}
