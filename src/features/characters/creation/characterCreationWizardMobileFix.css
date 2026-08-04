@@ -1,23 +1,23 @@
-[aria-labelledby="character-creation-title"] {
+[role="dialog"][aria-labelledby="character-creation-title"] {
   height: 100vh !important;
   max-height: 100vh !important;
 }
 
 @supports (height: 100dvh) {
-  [aria-labelledby="character-creation-title"] {
+  [role="dialog"][aria-labelledby="character-creation-title"] {
     height: 100dvh !important;
     max-height: 100dvh !important;
   }
 }
 
 @media (min-width: 640px) {
-  [aria-labelledby="character-creation-title"] {
+  [role="dialog"][aria-labelledby="character-creation-title"] {
     height: auto !important;
     max-height: 94vh !important;
   }
 
   @supports (height: 100dvh) {
-    [aria-labelledby="character-creation-title"] {
+    [role="dialog"][aria-labelledby="character-creation-title"] {
       max-height: 94dvh !important;
     }
   }
