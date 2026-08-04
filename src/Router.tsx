@@ -25,6 +25,7 @@ import { RequireAuth } from "./auth/requireAuth"
 import { UserDashboardView } from "./views/user/UserDashboardView"
 import { UserCharacterDetailView } from "./views/user/UserCharacterDetailView"
 import { UserCharacterAddSpellsView } from "./views/user/UserCharacterAddSpellsView"
+import { UserCharacterCreateItemView } from "./views/user/UserCharacterCreateItemView"
 
 export function AppRouter() {
   return (
@@ -51,6 +52,10 @@ export function AppRouter() {
         <Route
           path="characters/:characterId/spells-list/add-spells"
           element={<UserCharacterAddSpellsView />}
+        />
+        <Route
+          path="characters/:characterId/inventory/add-item"
+          element={<UserCharacterCreateItemView />}
         />
         <Route
           path="characters/:characterId/:tab"
