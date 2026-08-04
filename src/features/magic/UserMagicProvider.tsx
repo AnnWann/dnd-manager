@@ -1,5 +1,7 @@
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useState,
@@ -15,6 +17,15 @@ import {
 } from "../../api/user-spells"
 import { MagicProvider } from "../../contexts/magicContext"
 import type { Spell } from "../../models/magic/spells/Spell"
+
+type UserMagicState = {
+  records: AccessibleHomebrewSpell[]
+  loading: boolean
+  errorMessage: string
+  reload: () => Promise<void>
+}
+
+const UserMagicStateContext = createContext<UserMagicState | null>(null)
 
 export function UserMagicProvider({
   children,
@@ -139,17 +150,6 @@ export function UserMagicProvider({
     </UserMagicStateContext.Provider>
   )
 }
-
-import { createContext, useContext } from "react"
-
-type UserMagicState = {
-  records: AccessibleHomebrewSpell[]
-  loading: boolean
-  errorMessage: string
-  reload: () => Promise<void>
-}
-
-const UserMagicStateContext = createContext<UserMagicState | null>(null)
 
 export function useUserMagicState(): UserMagicState {
   const context = useContext(UserMagicStateContext)
