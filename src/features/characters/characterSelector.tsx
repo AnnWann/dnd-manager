@@ -2,11 +2,9 @@ import { useMemo, useRef, useState } from "react"
 import { Download, Upload } from "lucide-react"
 
 import { Button } from "../../components/ui/Button"
-import { Card, CardContent, CardHeader } from "../../components/ui/Card"
 import { useCharacterContext } from "../../contexts/characterContext"
 import { useMagicContext } from "../../contexts/magicContext"
 import type { Ability } from "../../models/abilities/Ability"
-import { getCharacterGrantedSpells } from "../../models/characters/characterGrantedSpells"
 import type {
   CharacterTemplate,
   CharacterTemplateProps,
@@ -14,6 +12,8 @@ import type {
 import type { Equipment } from "../../models/items/equipment/EquipmentSlot"
 import type { Itemmable } from "../../models/items/item"
 import type { Spell } from "../../models/magic/spells/Spell"
+import { CharacterSelectorList } from "./selector/CharacterSelectorList"
+import { toCampaignCharacterSelectorItem } from "./selector/campaignCharacterSelectorAdapter"
 
 type Props = {
   characters: CharacterTemplate[]
@@ -44,41 +44,65 @@ export function CharacterSelector({
   showOwnerBadge,
 }: Props) {
   const { setSelectedCharacterId } = useCharacterContext()
-  const { getSpellByIndex, spellByIndex, saveSpell } = useMagicContext()
+  const {
+    getSpellByIndex,
+    spellByIndex,
+    saveSpell,
+  } = useMagicContext()
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [importError, setImportError] = useState("")
-  const [selectedCharacterId, setLocalSelectedCharacterId] = useState(
-    activeCharacter.get("id"),
-  )
-  const [openCandidateId, setOpenCandidateId] = useState("")
+
+  const [selectedCharacterId, setLocalSelectedCharacterId] =
+    useState(activeCharacter.get("id"))
 
   const selectedCharacter = useMemo(
     () =>
       characters.find(
-        (character) => character.get("id") === selectedCharacterId,
+        (character) =>
+          character.get("id") === selectedCharacterId,
       ) ?? activeCharacter,
     [activeCharacter, characters, selectedCharacterId],
   )
 
-  function selectOrOpenCharacter(characterId: string) {
-    if (openCandidateId === characterId) {
-      setOpenCandidateId("")
-      setActiveCharacterId(characterId)
-      return
-    }
+  const selectorCharacters = useMemo(
+    () =>
+      characters.map((character) =>
+        toCampaignCharacterSelectorItem(character, {
+          showOwnerBadge,
+          getSpellByIndex,
+        }),
+      ),
+    [
+      characters,
+      getSpellByIndex,
+      showOwnerBadge,
+    ],
+  )
 
+  function selectCharacter(characterId: string) {
     setLocalSelectedCharacterId(characterId)
     setSelectedCharacterId(characterId)
-    setOpenCandidateId(characterId)
+  }
+
+  function openCharacter(characterId: string) {
+    setLocalSelectedCharacterId(characterId)
+    setSelectedCharacterId(characterId)
+    setActiveCharacterId(characterId)
   }
 
   function exportSelectedCharacter() {
     const referencedSpellIndexes =
       collectReferencedSpellIndexes(selectedCharacter)
 
-    const homebrewSpells = Array.from(referencedSpellIndexes)
+    const homebrewSpells = Array.from(
+      referencedSpellIndexes,
+    )
       .map((spellIndex) => getSpellByIndex(spellIndex))
-      .filter((spell): spell is Spell => Boolean(spell?.homebrew))
+      .filter(
+        (spell): spell is Spell =>
+          Boolean(spell?.homebrew),
+      )
 
     const bundle: CharacterExportBundle = {
       format: "dnd-manager-character",
@@ -88,9 +112,12 @@ export function CharacterSelector({
     }
 
     const json = JSON.stringify(bundle, null, 2)
-    const blob = new Blob([json], { type: "application/json" })
+    const blob = new Blob([json], {
+      type: "application/json",
+    })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement("a")
+
     const safeName =
       selectedCharacter
         .get("name")
@@ -100,9 +127,11 @@ export function CharacterSelector({
 
     anchor.href = url
     anchor.download = `${safeName}.json`
+
     document.body.appendChild(anchor)
     anchor.click()
     anchor.remove()
+
     URL.revokeObjectURL(url)
   }
 
@@ -114,18 +143,20 @@ export function CharacterSelector({
       const parsed = JSON.parse(text) as unknown
       const bundle = parseCharacterExport(parsed)
 
-      for (const spell of getMissingEmbeddedSpells(
+      const missingSpells = getMissingEmbeddedSpells(
         bundle.homebrewSpells,
         spellByIndex,
-      )) {
+      )
+
+      for (const spell of missingSpells) {
         saveSpell(spell)
       }
 
       const imported = importCharacter(bundle.character)
       const importedId = imported.get("id")
+
       setLocalSelectedCharacterId(importedId)
       setSelectedCharacterId(importedId)
-      setOpenCandidateId(importedId)
       setImportError("")
     } catch (error) {
       setImportError(
@@ -134,38 +165,58 @@ export function CharacterSelector({
           : "Não foi possível importar o personagem.",
       )
     } finally {
-      if (fileInputRef.current) fileInputRef.current.value = ""
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
     }
   }
 
-  function confirmDeleteSelectedCharacter() {
+  function deleteSelectedCharacter(characterId: string) {
     if (disableDelete) return
 
+    const character =
+      characters.find(
+        (entry) => entry.get("id") === characterId,
+      ) ?? selectedCharacter
+
     const characterName =
-      selectedCharacter.get("name").trim() || "personagem selecionado"
+      character.get("name").trim() ||
+      "personagem selecionado"
+
     const confirmed = window.confirm(
-      `Tem certeza que deseja excluir permanentemente “${characterName}”?\n\nEssa ação não pode ser desfeita. Exporte o JSON antes se quiser manter uma cópia.`,
+      `Tem certeza que deseja excluir permanentemente “${characterName}”?\n\n` +
+        "Essa ação não pode ser desfeita. Exporte o JSON antes se quiser manter uma cópia.",
     )
 
-    if (confirmed) {
-      setSelectedCharacterId(selectedCharacter.get("id"))
-      deleteActiveCharacter()
-      setOpenCandidateId("")
-    }
+    if (!confirmed) return
+
+    setLocalSelectedCharacterId(characterId)
+    setSelectedCharacterId(characterId)
+    deleteActiveCharacter()
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="text-sm font-semibold text-textH">Personagens</div>
-            <p className="mt-1 text-xs text-text">
-              Clique uma vez para selecionar e novamente para abrir a ficha.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
+    <>
+      <CharacterSelectorList
+        title="Personagens"
+        characters={selectorCharacters}
+        selectedCharacterId={selectedCharacterId}
+        onSelectCharacter={selectCharacter}
+        onOpenCharacter={openCharacter}
+        onAddCharacter={addCharacter}
+        onDeleteCharacter={
+          disableDelete
+            ? undefined
+            : deleteSelectedCharacter
+        }
+        deleteDisabled={disableDelete}
+        deleteDisabledReason={
+          disableDelete
+            ? "Mantenha pelo menos 1 personagem"
+            : undefined
+        }
+        headerActions={
+          <>
             <Button
               size="sm"
               variant="secondary"
@@ -179,133 +230,36 @@ export function CharacterSelector({
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() =>
+                fileInputRef.current?.click()
+              }
             >
               <Upload className="h-4 w-4" />
               Importar JSON
             </Button>
+          </>
+        }
+      />
 
-            <Button size="sm" variant="primary" onClick={addCharacter}>
-              + Adicionar
-            </Button>
-          </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={(event) =>
+          void importFromFile(
+            event.target.files?.[0],
+          )
+        }
+      />
+
+      {importError ? (
+        <div className="mt-3 rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">
+          {importError}
         </div>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          onChange={(event) =>
-            void importFromFile(event.target.files?.[0])
-          }
-        />
-
-        {importError ? (
-          <div className="mt-3 rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">
-            {importError}
-          </div>
-        ) : null}
-      </CardHeader>
-
-      <CardContent>
-        <div className="flex flex-col gap-2">
-          {characters.map((character) => {
-            const id = character.get("id")
-            const name = character.get("name")
-            const sheet = character.get("sheet")
-            const visibility = character.get("visibility")
-            const owner = character.get("owner")
-            const isSelected = id === selectedCharacter.get("id")
-            const isReadyToOpen = openCandidateId === id
-            const classes = sheet.classes ?? []
-            const level = classes.reduce(
-              (total, entry) => total + (entry.level ?? 0),
-              0,
-            )
-            const spellCount = getAvailableSpellCount(
-              character,
-              getSpellByIndex,
-            )
-
-            return (
-              <button
-                key={id}
-                type="button"
-                className={
-                  isSelected
-                    ? "flex w-full items-center justify-between rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-left"
-                    : "flex w-full items-center justify-between rounded-lg border border-border bg-bg px-3 py-2 text-left hover:bg-[color:var(--social-bg)]"
-                }
-                onClick={() => selectOrOpenCharacter(id)}
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-textH">
-                    {name}
-                  </div>
-                  <div className="text-xs text-text">
-                    {spellCount > 0 ? `${spellCount} magias • ` : ""}
-                    {level} nv
-                  </div>
-                </div>
-
-                <div className="flex shrink-0 items-center gap-2">
-                  {showOwnerBadge
-                    ? badge(
-                        visibility === "master"
-                          ? "Master"
-                          : `Player: ${owner?.name?.trim() || "sem nome"}`,
-                      )
-                    : null}
-                  {isReadyToOpen
-                    ? badge("Clique novamente para abrir")
-                    : isSelected
-                      ? badge("Selecionado")
-                      : null}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="mt-3">
-          <Button
-            className="w-full"
-            variant="secondary"
-            onClick={confirmDeleteSelectedCharacter}
-            disabled={disableDelete}
-            title={
-              disableDelete
-                ? "Mantenha pelo menos 1 personagem"
-                : "Excluir personagem selecionado"
-            }
-          >
-            Excluir personagem selecionado
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+      ) : null}
+    </>
   )
-}
-
-function getAvailableSpellCount(
-  character: CharacterTemplate,
-  getSpellByIndex: (spellIndex: string) => Spell | undefined,
-): number {
-  const indexes = new Set<string>()
-
-  for (const knownSpell of
-    character.get("magic")?.spells.knownSpells ?? []) {
-    addSpellIndex(indexes, knownSpell.spells.id)
-  }
-
-  for (const grantedSpell of getCharacterGrantedSpells(character)) {
-    addSpellIndex(indexes, grantedSpell.index)
-  }
-
-  return Array.from(indexes).filter((index) =>
-    Boolean(getSpellByIndex(index)),
-  ).length
 }
 
 function collectReferencedSpellIndexes(
@@ -313,22 +267,36 @@ function collectReferencedSpellIndexes(
 ): Set<string> {
   const indexes = new Set<string>()
 
-  for (const knownSpell of
-    character.get("magic")?.spells.knownSpells ?? []) {
-    addSpellIndex(indexes, knownSpell.spells.id)
+  for (
+    const knownSpell of
+      character.get("magic")?.spells.knownSpells ?? []
+  ) {
+    addSpellIndex(
+      indexes,
+      knownSpell.spells.id,
+    )
   }
 
-  for (const ability of character.get("abilities") ?? []) {
+  for (
+    const ability of
+      character.get("abilities") ?? []
+  ) {
     collectAbilitySpellIndexes(indexes, ability)
   }
 
-  for (const ability of
-    character.get("sheet").race.naturalAbilities ?? []) {
+  for (
+    const ability of
+      character.get("sheet").race
+        .naturalAbilities ?? []
+  ) {
     collectAbilitySpellIndexes(indexes, ability)
   }
 
   const equipment = character.get("equipment")
-  const equippedItems: Array<Itemmable | undefined> = [
+
+  const equippedItems: Array<
+    Itemmable | undefined
+  > = [
     equipment.armor,
     equipment.shield,
     equipment.boots,
@@ -341,10 +309,14 @@ function collectReferencedSpellIndexes(
   ]
 
   for (const item of equippedItems) {
-    if (item) collectItemSpellIndexes(indexes, item)
+    if (item) {
+      collectItemSpellIndexes(indexes, item)
+    }
   }
 
-  for (const item of character.get("inventory")) {
+  for (
+    const item of character.get("inventory")
+  ) {
     collectItemSpellIndexes(indexes, item)
   }
 
@@ -355,7 +327,9 @@ function collectAbilitySpellIndexes(
   indexes: Set<string>,
   ability: Ability,
 ) {
-  for (const grant of ability.grantedSpells ?? []) {
+  for (
+    const grant of ability.grantedSpells ?? []
+  ) {
     addSpellIndex(indexes, grant.index)
   }
 }
@@ -364,39 +338,67 @@ function collectItemSpellIndexes(
   indexes: Set<string>,
   item: Itemmable,
 ) {
-  const equipment = item as Itemmable &
-    Partial<Pick<Equipment, "abilities" | "spells">>
+  const equipment =
+    item as Itemmable &
+      Partial<
+        Pick<
+          Equipment,
+          "abilities" | "spells"
+        >
+      >
 
-  for (const spell of equipment.spells ?? []) {
+  for (
+    const spell of equipment.spells ?? []
+  ) {
     addSpellIndex(indexes, spell.index)
   }
 
-  for (const ability of equipment.abilities ?? []) {
-    collectAbilitySpellIndexes(indexes, ability)
+  for (
+    const ability of equipment.abilities ?? []
+  ) {
+    collectAbilitySpellIndexes(
+      indexes,
+      ability,
+    )
   }
 }
 
-function addSpellIndex(indexes: Set<string>, index?: string) {
+function addSpellIndex(
+  indexes: Set<string>,
+  index?: string,
+) {
   const normalized = index?.trim()
-  if (normalized) indexes.add(normalized)
+
+  if (normalized) {
+    indexes.add(normalized)
+  }
 }
 
-function parseCharacterExport(parsed: unknown): {
+function parseCharacterExport(
+  parsed: unknown,
+): {
   character: unknown
   homebrewSpells: Spell[]
 } {
   if (!isRecord(parsed)) {
-    throw new Error("O arquivo não contém um personagem válido.")
+    throw new Error(
+      "O arquivo não contém um personagem válido.",
+    )
   }
 
   if (
-    parsed.format === "dnd-manager-character" &&
+    parsed.format ===
+      "dnd-manager-character" &&
     "character" in parsed
   ) {
     return {
       character: parsed.character,
-      homebrewSpells: Array.isArray(parsed.homebrewSpells)
-        ? parsed.homebrewSpells.filter(isEmbeddedHomebrewSpell)
+      homebrewSpells: Array.isArray(
+        parsed.homebrewSpells,
+      )
+        ? parsed.homebrewSpells.filter(
+            isEmbeddedHomebrewSpell,
+          )
         : [],
     }
   }
@@ -411,18 +413,26 @@ function getMissingEmbeddedSpells(
   spells: Spell[],
   existingSpells: Map<string, Spell>,
 ): Spell[] {
-  const uniqueMissingSpells = new Map<string, Spell>()
+  const missing = new Map<string, Spell>()
 
   for (const spell of spells) {
-    if (existingSpells.has(spell.index)) continue
-    if (uniqueMissingSpells.has(spell.index)) continue
-    uniqueMissingSpells.set(spell.index, spell)
+    if (existingSpells.has(spell.index)) {
+      continue
+    }
+
+    if (missing.has(spell.index)) {
+      continue
+    }
+
+    missing.set(spell.index, spell)
   }
 
-  return Array.from(uniqueMissingSpells.values())
+  return Array.from(missing.values())
 }
 
-function isEmbeddedHomebrewSpell(value: unknown): value is Spell {
+function isEmbeddedHomebrewSpell(
+  value: unknown,
+): value is Spell {
   if (!isRecord(value)) return false
 
   return (
@@ -433,18 +443,12 @@ function isEmbeddedHomebrewSpell(value: unknown): value is Spell {
   )
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(
+  value: unknown,
+): value is Record<string, unknown> {
   return (
     typeof value === "object" &&
     value !== null &&
     !Array.isArray(value)
-  )
-}
-
-function badge(label: string) {
-  return (
-    <span className="rounded-md border border-border px-2 py-1 text-xs text-text">
-      {label}
-    </span>
   )
 }

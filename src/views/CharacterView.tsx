@@ -41,6 +41,7 @@ import type {
   CustomSystemExistingCharacterTab,
 } from "../models/customSystems/CustomSystemDefinition"
 import type { Player } from "../models/player/Player"
+import { useCharacterWorkspace } from "../features/characters/workspace/CharacterWorkspaceContext"
 
 const TAB_SWIPE_MIN_DISTANCE = 88
 const TAB_SWIPE_PREVIEW_DISTANCE = 28
@@ -59,7 +60,8 @@ type SwipeState = {
 
 export function CharacterView() {
   const {
-    visibleCharacters: characters,
+    mode,
+    characters,
     activeCharacter,
     partyInventory,
     setSelectedCharacterId,
@@ -69,11 +71,10 @@ export function CharacterView() {
     completeLongRest,
     canAssignOwners,
     canEditCharacterType,
-    knownPlayerKeys: playerKeys,
-    getOwner,
-    createOwner,
-  } = useCharacterContext()
-  const { userKey } = useSyncContext()
+    owners,
+    currentOwner,
+  } = useCharacterWorkspace()
+
   const customSystemDefinitions = useCustomSystemDefinitions()
   const { characterId, tab } = useParams<{
     characterId?: string
@@ -102,17 +103,19 @@ export function CharacterView() {
     [getOwner, playerKeys],
   )
 
-  const defaultOwner = useMemo(() => {
-    const normalizedUserKey = userKey.trim()
-    if (normalizedUserKey) return getOwner(normalizedUserKey)
-
-    return (
+  const defaultOwner = useMemo(
+    () =>
+      currentOwner ??
       routeCharacter?.get("owner") ??
       activeCharacter?.get("owner") ??
-      owners[0] ??
-      createOwner("Jogador local")
-    )
-  }, [activeCharacter, createOwner, getOwner, owners, routeCharacter, userKey])
+      owners[0],
+    [
+      activeCharacter,
+      currentOwner,
+      owners,
+      routeCharacter,
+    ],
+  )
 
   const wizardOwners = useMemo(
     () => uniqueOwners([defaultOwner, ...owners]),

@@ -22,6 +22,7 @@ import { UserCampaignsTab } from "./views/user/UserCampaignTab"
 import { UnauthorizedView } from "./views/UnauthorisedView"
 import { RequireAuth } from "./auth/requireAuth"
 import { UserDashboardView } from "./views/user/UserDashboardView"
+import { UserCharacterDetailView } from "./views/user/UserCharacterDetailView"
 
 export function AppRouter() {
   return (
@@ -35,6 +36,9 @@ export function AppRouter() {
       <Route path="/user" element={ <RequireAuth> <UserDashboardView /> </RequireAuth> } >
         <Route index element={<Navigate to="characters" replace />} />
         <Route path="characters" element={<UserCharactersTab />} />
+        <Route path="characters/:characterId" element={<Navigate to="sheet" replace />} />
+        <Route path="characters/:characterId/:tab" element={<UserCharacterDetailView />}
+/>
         <Route path="campaigns" element={<UserCampaignsTab />} />
       </Route>
 
