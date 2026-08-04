@@ -34,6 +34,7 @@ export async function GET(
         id: true,
         campaignLinks: {
           select: {
+            visibility: true,
             campaign: {
               select: {
                 id: true,
@@ -135,6 +136,7 @@ export async function GET(
             id: campaign.id,
             name: campaign.name,
             master: campaign.owner,
+            visibility: link.visibility,
             role: isOwner
               ? CampaignRole.MASTER
               : membership?.role ?? CampaignRole.PLAYER,
