@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
@@ -16,7 +17,10 @@ import {
   areAllCurrenciesInBagOfHolding,
   setCurrenciesInsideBagOfHolding,
 } from "../../../models/items/Currency"
-import type { Itemmable } from "../../../models/items/item"
+import {
+  isBagOfHoldingItem,
+  type Itemmable,
+} from "../../../models/items/item"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { CharacterEncumbrancePanel } from "./characterEncumbrancePanel"
 import { EquipItemDialog } from "./equipItemDialog"
@@ -54,7 +58,9 @@ export function CharacterInventoryTab({
   character,
   updateCharacter,
 }: Props) {
+  const navigate = useNavigate()
   const {
+    mode,
     transferCharacters = [],
     transferItem,
     canTransferFromCharacter,
@@ -68,6 +74,7 @@ export function CharacterInventoryTab({
   const [searchQuery, setSearchQuery] = useState("")
 
   const items = character.get("inventory") ?? []
+  const hasBagOfHolding = items.some(isBagOfHoldingItem)
   const normalizedSearchQuery = normalizeSearchText(searchQuery)
   const visibleItems = normalizedSearchQuery
     ? items.filter((item) =>
@@ -81,17 +88,19 @@ export function CharacterInventoryTab({
     transferItem &&
       canTransferFromCharacter?.(character.get("id")),
   )
-  const bagWeight = getBagOfHoldingWeightKg(items)
+  const bagWeight = hasBagOfHolding ? getBagOfHoldingWeightKg(items) : 0
   const hasCurrency = items.some(
     (item) => item.kind === "currency" && (item.quantity ?? 0) > 0,
   )
   const currenciesInsideBagOfHolding =
-    areAllCurrenciesInBagOfHolding(items)
+    hasBagOfHolding && areAllCurrenciesInBagOfHolding(items)
   const attunedItemIds = items
     .filter((item) => item.attuned === true)
     .map((item) => item.id)
 
   function wouldExceedBagCapacity(candidateItems: Itemmable[]): boolean {
+    if (!hasBagOfHolding) return false
+
     const currentWeight = getBagOfHoldingWeightKg(items)
     const candidateWeight = getBagOfHoldingWeightKg(candidateItems)
 
@@ -111,22 +120,6 @@ export function CharacterInventoryTab({
     return true
   }
 
-  function addItem(item: Itemmable) {
-    const itemWithCurrencyState =
-      item.kind === "currency" && hasCurrency
-        ? {
-            ...item,
-            insideBagOfHolding: currenciesInsideBagOfHolding,
-          }
-        : item
-    const candidateItems = [...items, itemWithCurrencyState]
-    if (wouldExceedBagCapacity(candidateItems)) return
-
-    updateCharacter(character.get("id"), (current) =>
-      current.addInventoryItem(itemWithCurrencyState),
-    )
-  }
-
   function updateItem(
     itemId: string,
     updater: (item: Itemmable) => Itemmable,
@@ -142,9 +135,23 @@ export function CharacterInventoryTab({
   }
 
   function removeItem(itemId: string) {
-    updateCharacter(character.get("id"), (current) =>
-      current.removeInventoryItem(itemId),
-    )
+    const removedItem = items.find((item) => item.id === itemId)
+
+    updateCharacter(character.get("id"), (current) => {
+      let next = current.removeInventoryItem(itemId)
+
+      if (removedItem && isBagOfHoldingItem(removedItem)) {
+        next = next.with(
+          "inventory",
+          (next.get("inventory") ?? []).map((item) => ({
+            ...item,
+            insideBagOfHolding: false,
+          })),
+        )
+      }
+
+      return next
+    })
   }
 
   function consumeItem(itemId: string) {
@@ -154,6 +161,11 @@ export function CharacterInventoryTab({
   }
 
   function toggleBagOfHolding(itemId: string) {
+    if (!hasBagOfHolding) return
+
+    const target = items.find((item) => item.id === itemId)
+    if (!target || isBagOfHoldingItem(target)) return
+
     const candidateItems = items.map((item) =>
       item.id === itemId
         ? {
@@ -171,6 +183,8 @@ export function CharacterInventoryTab({
   }
 
   function setAllCurrenciesBagOfHolding(insideBagOfHolding: boolean) {
+    if (!hasBagOfHolding) return
+
     const candidateItems = setCurrenciesInsideBagOfHolding(
       items,
       insideBagOfHolding,
@@ -192,18 +206,32 @@ export function CharacterInventoryTab({
     <>
       <div className="mb-4 grid gap-4">
         <CharacterEncumbrancePanel character={character} />
-        <BagOfHoldingCounter weight={bagWeight} />
+        {hasBagOfHolding ? <BagOfHoldingCounter weight={bagWeight} /> : null}
       </div>
 
-      <label className="mb-3 grid gap-1 text-[11px] text-textMuted">
-        Buscar item
-        <Input
-          value={searchQuery}
-          placeholder="Digite o nome do item"
-          aria-label="Buscar item pelo nome"
-          onChange={(event) => setSearchQuery(event.target.value)}
-        />
-      </label>
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <label className="grid flex-1 gap-1 text-[11px] text-textMuted">
+          Buscar item
+          <Input
+            value={searchQuery}
+            placeholder="Digite o nome do item"
+            aria-label="Buscar item pelo nome"
+            onChange={(event) => setSearchQuery(event.target.value)}
+          />
+        </label>
+
+        {mode === "user" ? (
+          <Button
+            onClick={() =>
+              navigate(
+                `/user/characters/${encodeURIComponent(character.get("id"))}/inventory/add-item`,
+              )
+            }
+          >
+            Criar item
+          </Button>
+        ) : null}
+      </div>
 
       <InventoryEditor
         title={`Inventário pessoal: ${character.get("name")}`}
@@ -214,16 +242,17 @@ export function CharacterInventoryTab({
             ? "Nenhum item corresponde à busca."
             : "Nenhum item encontrado."
         }
-        onAddItem={addItem}
         onUpdateItem={updateItem}
         onRemoveItem={removeItem}
         onConsumeItem={consumeItem}
         onEquipItem={(itemId) =>
           setEquippingItem(items.find((item) => item.id === itemId) ?? null)
         }
-        onToggleBagOfHolding={toggleBagOfHolding}
+        onToggleBagOfHolding={
+          hasBagOfHolding ? toggleBagOfHolding : undefined
+        }
         onMoveAllCurrenciesToBagOfHolding={
-          hasCurrency
+          hasBagOfHolding && hasCurrency
             ? () =>
                 setAllCurrenciesBagOfHolding(
                   !currenciesInsideBagOfHolding,
