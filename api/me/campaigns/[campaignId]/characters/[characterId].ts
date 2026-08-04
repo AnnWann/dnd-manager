@@ -1,10 +1,12 @@
 import {
   CampaignMemberStatus,
+  CharacterVisibility,
 } from "../../../../../generated/prisma/client"
 import {
   ApiError,
   handleApiError,
   jsonResponse,
+  readJsonObject,
 } from "../../../../../server/api"
 import { prisma } from "../../../../../server/prisma"
 import { requireSession } from "../../../../../server/session"
@@ -23,6 +25,8 @@ export async function POST(
   try {
     const session = await requireSession(request)
     const { campaignId, characterId } = await context.params
+    const body = await readJsonObject(request)
+    const visibility = parseVisibility(body.visibility)
 
     await requireCampaignAccess(campaignId, session.user.id)
     await requireOwnedCharacter(characterId, session.user.id)
@@ -34,12 +38,16 @@ export async function POST(
           characterId,
         },
       },
-      update: {},
+      update: {
+        visibility,
+      },
       create: {
         campaignId,
         characterId,
+        visibility,
       },
       select: {
+        visibility: true,
         character: {
           select: {
             id: true,
@@ -49,7 +57,57 @@ export async function POST(
       },
     })
 
-    return jsonResponse({ character: link.character }, 201)
+    return jsonResponse(
+      {
+        character: {
+          ...link.character,
+          visibility: link.visibility,
+        },
+      },
+      201,
+    )
+  } catch (error) {
+    return handleApiError(error)
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  context: RouteContext,
+): Promise<Response> {
+  try {
+    const session = await requireSession(request)
+    const { campaignId, characterId } = await context.params
+    const body = await readJsonObject(request)
+    const visibility = parseVisibility(body.visibility)
+
+    await requireCampaignAccess(campaignId, session.user.id)
+    await requireOwnedCharacter(characterId, session.user.id)
+
+    const updated = await prisma.campaignCharacter.updateMany({
+      where: {
+        campaignId,
+        characterId,
+      },
+      data: {
+        visibility,
+      },
+    })
+
+    if (!updated.count) {
+      throw new ApiError(
+        404,
+        "CAMPAIGN_CHARACTER_NOT_FOUND",
+        "O personagem não está vinculado a esta campanha.",
+      )
+    }
+
+    return jsonResponse({
+      character: {
+        id: characterId,
+        visibility,
+      },
+    })
   } catch (error) {
     return handleApiError(error)
   }
@@ -77,6 +135,19 @@ export async function DELETE(
   } catch (error) {
     return handleApiError(error)
   }
+}
+
+function parseVisibility(value: unknown): CharacterVisibility {
+  if (value === undefined) return CharacterVisibility.PARTY
+  if (value === CharacterVisibility.PRIVATE) return CharacterVisibility.PRIVATE
+  if (value === CharacterVisibility.PARTY) return CharacterVisibility.PARTY
+  if (value === CharacterVisibility.MASTER) return CharacterVisibility.MASTER
+
+  throw new ApiError(
+    400,
+    "INVALID_CAMPAIGN_CHARACTER_VISIBILITY",
+    "A visibilidade precisa ser PRIVATE, PARTY ou MASTER.",
+  )
 }
 
 async function requireCampaignAccess(
