@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from "react"
 
 import { Button } from "../../../components/ui/Button"
-import { useCharacterContext } from "../../../contexts/characterContext"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatBonusName, formatBonusValue } from "../../../lib/formatBonus"
 import type {
@@ -9,6 +8,7 @@ import type {
   EquippedItemReference,
 } from "../../../models/characters/characterEquippedItemMovement"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { EquippedItemDestinationDialog } from "./equippedItemDestinationDialog"
 import { EquipmentFeaturesList } from "./equipmentFeaturesList"
 
@@ -73,10 +73,11 @@ export function EquipmentItemCard<T extends Equipment>({
   onUpdate,
   children,
 }: Props<T>) {
-  const { moveEquippedItem } = useCharacterContext()
+  const { moveEquippedItem } = useCharacterWorkspace()
   const [destinationOpen, setDestinationOpen] = useState(false)
 
   function handleMove(destination: EquippedItemDestination) {
+    if (destination === "ground") return
     moveEquippedItem(characterId, reference, destination)
   }
 
@@ -146,7 +147,11 @@ export function EquipmentItemCard<T extends Equipment>({
         <div className="p-4">
           {children}
           <EquipmentBonusList bonuses={item.bonuses} />
-          <EquipmentFeaturesList characterId={characterId} equipment={item} onUpdate={onUpdate} />
+          <EquipmentFeaturesList
+            characterId={characterId}
+            equipment={item}
+            onUpdate={onUpdate}
+          />
         </div>
       </article>
 
