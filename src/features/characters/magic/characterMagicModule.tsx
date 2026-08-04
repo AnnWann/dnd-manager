@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { Card, CardHeader } from "../../../components/ui/Card"
-import { useCharacterContext } from "../../../contexts/characterContext"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { getCharacterGrantedSpells } from "../../../models/characters/characterGrantedSpells"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
@@ -15,6 +14,7 @@ import type {
   CharacterClassInterface,
   ClassName,
 } from "../../../models/sheet/Class"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { ChannelDivinityModule } from "./channelDivinityModule"
 import { KnownSpellsList } from "./knownSpellsList"
 import { MetamagicModule } from "./metamagicModule"
@@ -40,14 +40,14 @@ export function CharacterMagicTab({
   character,
   updateCharacter,
 }: Props) {
-  const { visibleCharacters } = useCharacterContext()
+  const { characters, mode } = useCharacterWorkspace()
   const { spells, getSpellByIndex } = useMagicContext()
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle")
   const sorcererLevel = getSorcererLevel(character)
   const hasSorcererResources = sorcererLevel >= 2
   const spellListText = useMemo(
-    () => buildAllCharacterSpellList(visibleCharacters, getSpellByIndex),
-    [getSpellByIndex, visibleCharacters],
+    () => buildAllCharacterSpellList(characters, getSpellByIndex),
+    [characters, getSpellByIndex],
   )
   const canCopySpellList = spellListText.trim().length > 0
 
@@ -101,7 +101,9 @@ export function CharacterMagicTab({
                 disabled={!canCopySpellList}
                 onClick={copyAllSpellLists}
               >
-                Copiar listas do grupo
+                {mode === "campaign"
+                  ? "Copiar listas do grupo"
+                  : "Copiar lista do personagem"}
               </Button>
 
               {copyStatus === "copied" ? (
