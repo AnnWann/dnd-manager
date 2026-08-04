@@ -8,6 +8,7 @@ import {
   linkCharacterToCampaign,
   requestCampaignJoin,
   reviewCampaignMember,
+  reviewCampaignSpell,
   unlinkCharacterFromCampaign,
   updateCharacterCampaignVisibility,
   type CampaignCharacterVisibility,
@@ -280,6 +281,53 @@ export function UserCampaignsTab() {
     }
   }
 
+  async function reviewSpell(
+    campaignId: string,
+    spellId: string,
+    status: Exclude<CampaignSpellStatus, "PENDING">,
+  ) {
+    if (working) return
+
+    const note = window.prompt(
+      "Observação da revisão (opcional):",
+      "",
+    )
+    if (note === null) return
+
+    setWorking(true)
+    setErrorMessage("")
+
+    try {
+      await reviewCampaignSpell(campaignId, spellId, status, note)
+      setCampaigns((current) =>
+        current.map((campaign) => {
+          if (campaign.id !== campaignId) return campaign
+
+          const homebrewSpells = campaign.homebrewSpells.map((spell) =>
+            spell.id === spellId
+              ? {
+                  ...spell,
+                  status,
+                  note: note.trim() || null,
+                  reviewedAt: new Date().toISOString(),
+                }
+              : spell,
+          )
+
+          return {
+            ...campaign,
+            homebrewSpells,
+            homebrew: countSpellStatuses(homebrewSpells),
+          }
+        }),
+      )
+    } catch {
+      setErrorMessage("Não foi possível revisar a magia homebrew.")
+    } finally {
+      setWorking(false)
+    }
+  }
+
   async function copyInvite(code: string) {
     await navigator.clipboard.writeText(code)
     setCopiedCode(code)
@@ -378,6 +426,8 @@ export function UserCampaignsTab() {
               (character) => !linkedIds.has(character.id),
             )
             const active = campaign.status === "ACTIVE"
+            const canReviewSpells =
+              active && (campaign.isOwner || campaign.role === "MASTER")
 
             return (
               <Card key={campaign.id}>
@@ -490,6 +540,58 @@ export function UserCampaignsTab() {
                               {spell.submittedByCurrentUser ? (
                                 <div className="mt-2 text-[11px] text-textMuted">
                                   Enviada por você.
+                                </div>
+                              ) : null}
+
+                              {canReviewSpells ? (
+                                <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
+                                  {spell.status !== "APPROVED" ? (
+                                    <Button
+                                      size="sm"
+                                      disabled={working}
+                                      onClick={() =>
+                                        void reviewSpell(
+                                          campaign.id,
+                                          spell.id,
+                                          "APPROVED",
+                                        )
+                                      }
+                                    >
+                                      Aprovar
+                                    </Button>
+                                  ) : null}
+                                  {spell.status === "PENDING" ? (
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      disabled={working}
+                                      onClick={() =>
+                                        void reviewSpell(
+                                          campaign.id,
+                                          spell.id,
+                                          "REJECTED",
+                                        )
+                                      }
+                                    >
+                                      Rejeitar
+                                    </Button>
+                                  ) : null}
+                                  {spell.status === "APPROVED" ? (
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      disabled={working}
+                                      onClick={() =>
+                                        void reviewSpell(
+                                          campaign.id,
+                                          spell.id,
+                                          "REVOKED",
+                                        )
+                                      }
+                                    >
+                                      Revogar
+                                    </Button>
+                                  ) : null}
                                 </div>
                               ) : null}
                             </article>
@@ -667,6 +769,17 @@ export function UserCampaignsTab() {
       )}
     </div>
   )
+}
+
+function countSpellStatuses(
+  spells: UserCampaign["homebrewSpells"],
+): UserCampaign["homebrew"] {
+  return {
+    approved: spells.filter((spell) => spell.status === "APPROVED").length,
+    pending: spells.filter((spell) => spell.status === "PENDING").length,
+    rejected: spells.filter((spell) => spell.status === "REJECTED").length,
+    revoked: spells.filter((spell) => spell.status === "REVOKED").length,
+  }
 }
 
 function VisibilityOptions() {
