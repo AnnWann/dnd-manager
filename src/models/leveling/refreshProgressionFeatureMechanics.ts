@@ -1,16 +1,19 @@
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
+import { enforceAsiAttributeCaps } from "./enforceAsiAttributeCaps"
 import { normalizeProgressionAbility } from "./ProgressionFeatureFinalization"
 import { applyAdditionalProgressionFeatureMechanics } from "./ProgressionFeatureMechanicsAdditional"
 
 export function refreshProgressionFeatureMechanics(
   character: CharacterTemplate,
 ): CharacterTemplate {
-  return character.with(
+  const cappedCharacter = enforceAsiAttributeCaps(character)
+
+  return cappedCharacter.with(
     "abilities",
-    (character.get("abilities") ?? []).map((ability) =>
+    (cappedCharacter.get("abilities") ?? []).map((ability) =>
       applyAdditionalProgressionFeatureMechanics(
-        character,
-        normalizeProgressionAbility(character, ability),
+        cappedCharacter,
+        normalizeProgressionAbility(cappedCharacter, ability),
       ),
     ),
   )
