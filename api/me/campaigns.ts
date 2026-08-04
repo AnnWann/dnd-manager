@@ -71,6 +71,7 @@ export async function GET(request: Request): Promise<Response> {
             },
           },
           select: {
+            visibility: true,
             character: {
               select: {
                 id: true,
@@ -80,8 +81,40 @@ export async function GET(request: Request): Promise<Response> {
           },
         },
         homebrewSpells: {
+          where: {
+            OR: [
+              { status: CampaignSpellApprovalStatus.APPROVED },
+              { submittedById: session.user.id },
+              {
+                campaign: {
+                  ownerId: session.user.id,
+                },
+              },
+            ],
+          },
           select: {
+            id: true,
             status: true,
+            note: true,
+            submittedAt: true,
+            reviewedAt: true,
+            submittedById: true,
+            spell: {
+              select: {
+                id: true,
+                index: true,
+                name: true,
+                owner: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            updatedAt: "desc",
           },
         },
         createdAt: true,
@@ -112,7 +145,10 @@ export async function GET(request: Request): Promise<Response> {
           status: isOwner
             ? CampaignMemberStatus.ACTIVE
             : membership?.status ?? CampaignMemberStatus.REMOVED,
-          characters: campaign.characters.map((link) => link.character),
+          characters: campaign.characters.map((link) => ({
+            ...link.character,
+            visibility: link.visibility,
+          })),
           pendingMembers: isOwner
             ? campaign.members
                 .filter(
@@ -140,6 +176,16 @@ export async function GET(request: Request): Promise<Response> {
                 link.status === CampaignSpellApprovalStatus.REVOKED,
             ).length,
           },
+          homebrewSpells: campaign.homebrewSpells.map((link) => ({
+            linkId: link.id,
+            status: link.status,
+            note: link.note,
+            submittedAt: link.submittedAt,
+            reviewedAt: link.reviewedAt,
+            submittedByCurrentUser:
+              link.submittedById === session.user.id,
+            ...link.spell,
+          })),
           createdAt: campaign.createdAt,
           updatedAt: campaign.updatedAt,
         }
@@ -204,6 +250,7 @@ export async function POST(request: Request): Promise<Response> {
             rejected: 0,
             revoked: 0,
           },
+          homebrewSpells: [],
         },
       },
       201,
