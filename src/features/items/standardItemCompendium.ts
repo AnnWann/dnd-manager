@@ -1,6 +1,7 @@
 import {
   createCurrencyCompendiumItems,
   createCurrencyItem,
+  normalizeCurrencyItem,
   type CurrencyType,
 } from "../../models/items/Currency"
 import type { Itemmable } from "../../models/items/item"
@@ -65,6 +66,19 @@ export function findStandardItemDefinition(
 export function findStandardDefinitionForItem(
   item: Itemmable,
 ): StandardItemDefinition | undefined {
+  // Moedas e Bolsa Mágica são categorias intrinsecamente canônicas. A forma
+  // do item prevalece sobre metadados removidos ou adulterados no JSON.
+  if (item.category === "bagOfHolding") {
+    return findStandardItemDefinition(BAG_OF_HOLDING_COMPENDIUM_ITEM.id)
+  }
+
+  if (item.kind === "currency") {
+    const currencyType = normalizeCurrencyItem(item).currencyType
+    return findStandardItemDefinition(
+      `compendium-currency-${currencyType}`,
+    )
+  }
+
   const sourceId = item.compendiumItemId?.trim()
   if (sourceId) return findStandardItemDefinition(sourceId)
 
