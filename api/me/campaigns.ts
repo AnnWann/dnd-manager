@@ -178,13 +178,16 @@ export async function GET(request: Request): Promise<Response> {
           },
           homebrewSpells: campaign.homebrewSpells.map((link) => ({
             linkId: link.id,
+            id: link.spell.id,
+            index: link.spell.index,
+            name: link.spell.name,
+            author: link.spell.owner,
             status: link.status,
             note: link.note,
             submittedAt: link.submittedAt,
             reviewedAt: link.reviewedAt,
             submittedByCurrentUser:
               link.submittedById === session.user.id,
-            ...link.spell,
           })),
           createdAt: campaign.createdAt,
           updatedAt: campaign.updatedAt,
