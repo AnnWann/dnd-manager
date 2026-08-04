@@ -16,6 +16,7 @@ import type {
 } from "../../../models/sheet/Class"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { ChannelDivinityModule } from "./channelDivinityModule"
+import { CharacterSpellLibrary } from "./CharacterSpellLibrary"
 import { KnownSpellsList } from "./knownSpellsList"
 import { MetamagicModule } from "./metamagicModule"
 import { SpellSlotsEditor } from "./slots"
@@ -146,6 +147,11 @@ export function CharacterMagicTab({
           updateCharacter={updateCharacter}
         />
       </Card>
+
+      <CharacterSpellLibrary
+        character={character}
+        updateCharacter={updateCharacter}
+      />
     </div>
   )
 }
