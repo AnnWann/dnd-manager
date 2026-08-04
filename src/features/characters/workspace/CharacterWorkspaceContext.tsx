@@ -4,6 +4,7 @@ import {
   type ReactNode,
 } from "react"
 
+import type { TransferItemRequest } from "../../../contexts/characterContext"
 import type {
   EquippedItemDestination,
   EquippedItemReference,
@@ -54,7 +55,13 @@ export type CharacterWorkspaceValue = {
     characterId: string,
     reference: EquippedItemReference,
   ) => void
+  addGroundItem?: (item: Itemmable) => void
   canUseGroundInventory: boolean
+
+  transferCharacters?: CharacterTemplate[]
+  transferItem?: (request: TransferItemRequest) => void
+  canTransferFromCharacter?: (characterId: string) => boolean
+  canViewCharacterDetails?: (characterId: string) => boolean
 
   canAssignOwners: boolean
   canEditCharacterType: boolean
