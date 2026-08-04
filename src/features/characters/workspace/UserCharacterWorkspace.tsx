@@ -17,6 +17,7 @@ import {
   getLocalUser,
   LOCAL_AUTH_BYPASS,
 } from "../../../auth/local-auth"
+import { normalizeStandardItemsInValue } from "../../items/standardItemCompendium"
 import { moveEquippedItemToCharacterStorage } from "../../../models/characters/characterEquippedItemMovement"
 import { stowHandOccupant as stowCharacterHandOccupant } from "../../../models/characters/characterHands"
 import { takeLongRest } from "../../../models/characters/characterRest"
@@ -55,14 +56,14 @@ export function UserCharacterWorkspace({
 
         if (!active) return
 
-        setCharacter(
-          CharacterTemplate.fromJSON({
-            ...result.data,
-            id: result.id,
-            name: result.name,
-            visibility: fromApiVisibility(result.visibility),
-          }),
-        )
+        const normalized = normalizeStandardItemsInValue({
+          ...result.data,
+          id: result.id,
+          name: result.name,
+          visibility: fromApiVisibility(result.visibility),
+        }) as Record<string, unknown>
+
+        setCharacter(CharacterTemplate.fromJSON(normalized))
       } catch {
         if (active) setNotFound(true)
       } finally {
@@ -79,9 +80,13 @@ export function UserCharacterWorkspace({
 
   const persistCharacter = useCallback(
     (updated: CharacterTemplate) => {
+      const data = normalizeStandardItemsInValue(
+        updated.toJSON(),
+      ) as Record<string, unknown>
+
       void updateMyCharacter(
         updated.get("id"),
-        updated.toJSON() as unknown as Record<string, unknown>,
+        data,
         {
           name: updated.get("name"),
           visibility: toApiVisibility(updated.get("visibility")),
@@ -101,9 +106,15 @@ export function UserCharacterWorkspace({
           return current
         }
 
-        const updated = updater(current)
-        persistCharacter(updated)
-        return updated
+        const requested = updater(current)
+        const normalized = CharacterTemplate.fromJSON(
+          normalizeStandardItemsInValue(
+            requested.toJSON(),
+          ) as Record<string, unknown>,
+        )
+
+        persistCharacter(normalized)
+        return normalized
       })
     },
     [persistCharacter],
