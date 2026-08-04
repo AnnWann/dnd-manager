@@ -237,12 +237,14 @@ export function CharacterView() {
         ) : null}
       </header>
 
-      <CharacterRestControls
-        character={routeCharacter}
-        partyInventory={partyInventory}
-        updateCharacter={updateCharacter}
-        completeLongRest={completeLongRest}
-      />
+      {mode === "campaign" ? (
+        <CharacterRestControls
+          character={routeCharacter}
+          partyInventory={partyInventory}
+          updateCharacter={updateCharacter}
+          completeLongRest={completeLongRest}
+        />
+      ) : null}
 
       <div className="sticky top-0 z-20 bg-[color:var(--surface-app)] py-2">
         <CharacterViewTabs
@@ -258,6 +260,7 @@ export function CharacterView() {
             character={routeCharacter}
             updateCharacter={updateCharacter}
             canAssignOwners={canAssignOwners}
+            showConditions={mode === "campaign"}
           />
         ) : null}
 
