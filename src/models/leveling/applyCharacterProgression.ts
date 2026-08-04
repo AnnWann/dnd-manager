@@ -5,10 +5,10 @@ import {
 } from "../characters/CharacterAcquisition"
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import { ensureCharacterAcquisitionMetadata } from "../characters/characterAcquisitionMetadata"
-import type { DieSides } from "../dice/Die"
 import type { MetamagicId } from "../magic/metamagic/Metamagic"
 import type { Spell } from "../magic/spells/Spell"
-import type { ClassLevel, ClassName } from "../sheet/Class"
+import type { ClassName } from "../sheet/Class"
+import type { HP } from "../sheet/HP"
 import {
   getClassProgression,
   getFeaturesAtLevel,
@@ -67,7 +67,7 @@ export function applyCharacterProgression(
     (sum, plan) => sum + plan.level,
     0,
   )
-  const classLabels = new Map(
+  const classLabels = new Map<ClassName, string>(
     application.classPlans.map((plan) => [
       plan.className,
       getClassProgression(plan.className).label,
@@ -79,6 +79,7 @@ export function applyCharacterProgression(
     const subclass = progression.subclasses.find(
       (entry) => entry.id === plan.subclassId,
     )
+
     return {
       ...createClassEntry(plan.className, plan.level),
       subclass: subclass
@@ -96,7 +97,10 @@ export function applyCharacterProgression(
 
   if (application.mode === "creation") {
     updated = recalculateCreationHp(updated, application.classPlans)
-  } else if (application.advancedClassName && application.hpGain) {
+  } else if (
+    application.advancedClassName &&
+    application.hpGain !== undefined
+  ) {
     updated = addLevelUpHp(
       updated,
       application.advancedClassName,
@@ -123,6 +127,7 @@ export function applyCharacterProgression(
       const classPlan = application.classPlans.find(
         (plan) => plan.className === className,
       )
+
       return stampAbility(entry.ability, {
         eventId,
         addedAt,
@@ -172,6 +177,7 @@ export function applyCharacterProgression(
         sourceName: raceName,
       }),
     )
+
   updated = updated.withSheet("race", {
     ...race,
     naturalAbilities: [
@@ -187,7 +193,7 @@ export function applyCharacterProgression(
     addedAt,
     reason,
     classLabels,
-  )
+  ).syncMagicWithClasses()
 
   const currentMagic = updated.get("magic") ?? {
     spells: {
@@ -199,39 +205,52 @@ export function applyCharacterProgression(
   const sorcererLevel =
     application.classPlans.find((plan) => plan.className === "sorcerer")
       ?.level ?? 0
+  const nextSorceryPointMax = sorcererLevel >= 2 ? sorcererLevel : 0
+  const previousSorceryPoints =
+    character.get("magic")?.metamagic?.sorceryPoints
+  const gainedSorceryPoints = Math.max(
+    0,
+    nextSorceryPointMax - (previousSorceryPoints?.max ?? 0),
+  )
+  const nextSorceryPointCurrent =
+    application.mode === "creation"
+      ? nextSorceryPointMax
+      : Math.min(
+          nextSorceryPointMax,
+          (previousSorceryPoints?.current ?? 0) + gainedSorceryPoints,
+        )
+
   updated = updated.with("magic", {
     ...currentMagic,
     metamagic: {
       metamagics: application.metamagics,
       sorceryPoints: {
-        max: sorcererLevel >= 2 ? sorcererLevel : 0,
-        current: sorcererLevel >= 2 ? sorcererLevel : 0,
+        max: nextSorceryPointMax,
+        current: nextSorceryPointCurrent,
       },
     },
   })
 
-  return ensureCharacterAcquisitionMetadata(
-    updated.syncMagicWithClasses(),
-    {
-      eventId,
-      addedAt,
-      reason,
-      characterLevel: totalLevel,
-      className: application.advancedClassName,
-      classLevel: application.advancedClassName
-        ? application.classPlans.find(
-            (plan) => plan.className === application.advancedClassName,
-          )?.level
-        : undefined,
-      sourceType: application.mode === "creation" ? "characterCreation" : "class",
-      sourceName:
-        application.mode === "creation"
-          ? "Criação de personagem"
-          : application.advancedClassName
-            ? classLabels.get(application.advancedClassName)
-            : "Subida de nível",
-    },
-  )
+  return ensureCharacterAcquisitionMetadata(updated, {
+    eventId,
+    addedAt,
+    reason,
+    characterLevel: totalLevel,
+    className: application.advancedClassName,
+    classLevel: application.advancedClassName
+      ? application.classPlans.find(
+          (plan) => plan.className === application.advancedClassName,
+        )?.level
+      : undefined,
+    sourceType:
+      application.mode === "creation" ? "characterCreation" : "class",
+    sourceName:
+      application.mode === "creation"
+        ? "Criação de personagem"
+        : application.advancedClassName
+          ? classLabels.get(application.advancedClassName)
+          : "Subida de nível",
+  })
 }
 
 function buildProgressionAbilities(
@@ -244,6 +263,8 @@ function buildProgressionAbilities(
 ): Ability[] {
   const abilities: Ability[] = []
   let previousClassesTotal = 0
+  const finalTotal = plans.reduce((sum, entry) => sum + entry.level, 0)
+  const characterLevelBefore = getCharacterLevelBeforePlan(plans)
 
   for (const plan of plans) {
     const progression = getClassProgression(plan.className)
@@ -267,12 +288,11 @@ function buildProgressionAbilities(
           : []
         const characterLevel =
           mode === "creation"
-            ? Math.min(
-                plans.reduce((sum, entry) => sum + entry.level, 0),
-                previousClassesTotal + level,
+            ? Math.min(finalTotal, previousClassesTotal + level)
+            : Math.min(
+                finalTotal,
+                characterLevelBefore + Math.max(1, level - plan.previousLevel),
               )
-            : getCharacterLevelBeforePlan(character, plans) +
-              Math.max(1, level - plan.previousLevel)
 
         abilities.push(
           featureToAbility(feature, plan, choices, {
@@ -311,15 +331,17 @@ function featureToAbility(
   const choiceText = choices.length
     ? `\n\nEscolhas: ${choices.join(", ")}.`
     : ""
+
   return stampAbility(
     {
       id: `progression:${plan.className}:${plan.subclassId ?? "base"}:${feature.id}`,
       name: feature.name,
-      description:
-        `${feature.description?.trim() || `Característica de ${getClassProgression(plan.className).label} adquirida no nível ${feature.level}.`}${choiceText}`,
+      description: `${
+        feature.description?.trim() ||
+        `Característica de ${getClassProgression(plan.className).label} adquirida no nível ${feature.level}.`
+      }${choiceText}`,
       kind: "feature",
-      category:
-        feature.choice?.kind === "asi" ? "feat" : "general",
+      category: feature.choice?.kind === "asi" ? "feat" : "general",
       source: "class",
     },
     acquisitionInput,
@@ -331,6 +353,7 @@ function stampAbility(
   acquisitionInput: Parameters<typeof createCharacterAcquisition>[0],
 ): Ability {
   const acquisition = createCharacterAcquisition(acquisitionInput)
+
   return {
     ...ability,
     acquisition,
@@ -366,7 +389,8 @@ function applySpellSelections(
       pactSlots: { level: 0, max: 0, current: 0 },
     },
   }
-  const retained = currentMagic.spells.knownSpells.filter(
+  const currentKnownSpells = currentMagic.spells.knownSpells
+  const retained = currentKnownSpells.filter(
     (entry) =>
       entry.source.type !== "class" ||
       !affectedClasses.has(
@@ -376,14 +400,15 @@ function applySpellSelections(
   const byIndex = new Map(
     application.spells.map((spell) => [spell.index, spell]),
   )
-  const additions = [] as typeof currentMagic.spells.knownSpells
+  const additions = [] as typeof currentKnownSpells
 
   for (const selection of application.spellSelections) {
     const plan = application.classPlans.find(
       (entry) => entry.className === selection.className,
     )
     if (!plan) continue
-    const acquisition = createCharacterAcquisition({
+
+    const classAcquisition = createCharacterAcquisition({
       eventId,
       addedAt,
       reason,
@@ -397,11 +422,27 @@ function applySpellSelections(
       sourceId: selection.className,
       sourceName: classLabels.get(selection.className),
     })
+    const existingForClass = new Map(
+      currentKnownSpells
+        .filter(
+          (entry) =>
+            entry.source.type === "class" &&
+            resolveSpellSourceClass(
+              entry.source.sourceId,
+              entry.source.name,
+            ) === selection.className,
+        )
+        .map((entry) => [entry.spells.id, entry]),
+    )
 
     for (const spellIndex of selection.spellIndexes) {
-      if (!byIndex.has(spellIndex)) continue
+      const spell = byIndex.get(spellIndex)
+      if (!spell) continue
+
+      const existing = existingForClass.get(spellIndex)
       additions.push({
         source: {
+          ...(existing?.source ?? {}),
           type: "class",
           name: selection.className,
           sourceId: selection.className,
@@ -409,7 +450,7 @@ function applySpellSelections(
             createClassEntry(selection.className, plan.level)
               .castingAttribute ?? "int",
           extendedList: isExpandedSubclassSpell(
-            byIndex.get(spellIndex)!,
+            spell,
             selection.className,
             plan.subclassId,
             plan.level,
@@ -419,7 +460,7 @@ function applySpellSelections(
           id: spellIndex,
           prepared: selection.preparedSpellIndexes.includes(spellIndex),
         },
-        acquisition,
+        acquisition: existing?.acquisition ?? classAcquisition,
       })
     }
 
@@ -429,26 +470,31 @@ function applySpellSelections(
       plan.level,
     )) {
       if (grant.mode === "expanded-list") continue
+
       for (const spellName of grant.spellNames) {
         const spell = application.spells.find(
           (candidate) =>
-            normalizeSpellName(candidate.name) === normalizeSpellName(spellName) ||
+            normalizeSpellName(candidate.name) ===
+              normalizeSpellName(spellName) ||
             normalizeSpellName(candidate.displayName ?? "") ===
               normalizeSpellName(spellName),
         )
         if (!spell) continue
-        if (additions.some((entry) => entry.spells.id === spell.index)) {
-          const existing = additions.find(
-            (entry) => entry.spells.id === spell.index,
-          )
-          if (existing && grant.mode === "always-prepared") {
-            existing.spells.prepared = true
+
+        const alreadyAdded = additions.find(
+          (entry) => entry.spells.id === spell.index,
+        )
+        if (alreadyAdded) {
+          if (grant.mode === "always-prepared") {
+            alreadyAdded.spells.prepared = true
           }
           continue
         }
 
+        const existing = existingForClass.get(spell.index)
         additions.push({
           source: {
+            ...(existing?.source ?? {}),
             type: "class",
             name: selection.className,
             sourceId: selection.className,
@@ -461,26 +507,28 @@ function applySpellSelections(
             id: spell.index,
             prepared: grant.mode === "always-prepared",
           },
-          acquisition: createCharacterAcquisition({
-            eventId,
-            addedAt,
-            reason,
-            characterLevel: application.classPlans.reduce(
-              (sum, entry) => sum + entry.level,
-              0,
-            ),
-            className: selection.className,
-            classLevel: grant.classLevel,
-            sourceType: "class",
-            sourceId: plan.subclassId
-              ? `${selection.className}:${plan.subclassId}`
-              : selection.className,
-            sourceName: plan.subclassId
-              ? getClassProgression(selection.className).subclasses.find(
-                  (entry) => entry.id === plan.subclassId,
-                )?.name
-              : classLabels.get(selection.className),
-          }),
+          acquisition:
+            existing?.acquisition ??
+            createCharacterAcquisition({
+              eventId,
+              addedAt,
+              reason,
+              characterLevel: application.classPlans.reduce(
+                (sum, entry) => sum + entry.level,
+                0,
+              ),
+              className: selection.className,
+              classLevel: grant.classLevel,
+              sourceType: "class",
+              sourceId: plan.subclassId
+                ? `${selection.className}:${plan.subclassId}`
+                : selection.className,
+              sourceName: plan.subclassId
+                ? getClassProgression(selection.className).subclasses.find(
+                    (entry) => entry.id === plan.subclassId,
+                  )?.name
+                : classLabels.get(selection.className),
+            }),
         })
       }
     }
@@ -502,13 +550,15 @@ function isExpandedSubclassSpell(
   classLevel: number,
 ): boolean {
   if (spell.classes.includes(className)) return false
+
   return getSubclassSpellGrants(className, subclassId, classLevel).some(
     (grant) =>
       grant.mode === "expanded-list" &&
       grant.spellNames.some(
         (name) =>
           normalizeSpellName(name) === normalizeSpellName(spell.name) ||
-          normalizeSpellName(name) === normalizeSpellName(spell.displayName ?? ""),
+          normalizeSpellName(name) ===
+            normalizeSpellName(spell.displayName ?? ""),
       ),
   )
 }
@@ -518,21 +568,28 @@ function recalculateCreationHp(
   plans: ProgressionClassPlan[],
 ): CharacterTemplate {
   const conModifier = character.getAttributeModifier("con")
-  const hitDice: CharacterTemplate["toJSON"] extends () => infer _T
-    ? Record<string, { max: { quantity: number; sides: DieSides }; current: { quantity: number; sides: DieSides } }>
-    : never = {}
+  const hitDice: HP["hitDice"] = {}
   let max = 0
   let firstLevel = true
 
   for (const plan of plans) {
     const hitDie = getClassProgression(plan.className).hitDie
     const sides = Number(hitDie.slice(1)) || 6
-    hitDice[hitDie] = hitDice[hitDie] ?? {
+    const currentHitDice = hitDice[hitDie] ?? {
       max: { quantity: 0, sides: hitDie },
       current: { quantity: 0, sides: hitDie },
     }
-    hitDice[hitDie].max.quantity += plan.level
-    hitDice[hitDie].current.quantity += plan.level
+
+    hitDice[hitDie] = {
+      max: {
+        quantity: currentHitDice.max.quantity + plan.level,
+        sides: hitDie,
+      },
+      current: {
+        quantity: currentHitDice.current.quantity + plan.level,
+        sides: hitDie,
+      },
+    }
 
     for (let level = 1; level <= plan.level; level += 1) {
       max += Math.max(
@@ -565,8 +622,8 @@ function addLevelUpHp(
 
   return character.withSheet("HP", {
     ...hp,
-    max: hp.max + hpGain,
-    current: hp.current + hpGain,
+    max: hp.max + Math.max(1, hpGain),
+    current: hp.current + Math.max(1, hpGain),
     hitDice: {
       ...hp.hitDice,
       [hitDie]: {
@@ -583,8 +640,11 @@ function addLevelUpHp(
   })
 }
 
-function uniqueKnownSpells<T extends { spells: { id: string } }>(entries: T[]): T[] {
+function uniqueKnownSpells<T extends { spells: { id: string } }>(
+  entries: T[],
+): T[] {
   const seen = new Set<string>()
+
   return entries.filter((entry) => {
     if (seen.has(entry.spells.id)) return false
     seen.add(entry.spells.id)
@@ -610,7 +670,6 @@ function resolveSpellSourceClass(
 }
 
 function getCharacterLevelBeforePlan(
-  character: CharacterTemplate,
   plans: ProgressionClassPlan[],
 ): number {
   const gained = plans.reduce(
