@@ -1,14 +1,15 @@
-import { useEffect, useMemo } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useMemo } from "react"
+import { useLocation, useNavigate, useParams } from "react-router-dom"
 
-import { useCharacterContext } from '../contexts/characterContext'
+import { useCharacterContext } from "../contexts/characterContext"
+import { CampaignCharacterWorkspace } from "../features/characters/workspace/CampaignCharacterWorkspace"
 import {
   readLocalStorageJson,
   writeLocalStorageJson,
-} from '../lib/storage'
-import { CharacterView } from './CharacterView'
+} from "../lib/storage"
+import { CharacterView } from "./CharacterView"
 
-const LAST_OPENED_CHARACTER_KEY = 'dndmm.lastOpenedCharacter.v1'
+const LAST_OPENED_CHARACTER_KEY = "dndmm.lastOpenedCharacter.v1"
 
 type LastOpenedCharacterCache = {
   characterId: string
@@ -25,8 +26,10 @@ export function CharacterIndexView() {
   const navigate = useNavigate()
 
   const shouldAutoOpen =
-    location.key === 'default' ||
-    Boolean((location.state as CharacterIndexLocationState | null)?.autoOpenLast)
+    location.key === "default" ||
+    Boolean(
+      (location.state as CharacterIndexLocationState | null)?.autoOpenLast,
+    )
 
   const cachedCharacter = useMemo(() => {
     if (!shouldAutoOpen) return undefined
@@ -37,21 +40,26 @@ export function CharacterIndexView() {
     if (!cached?.characterId) return undefined
 
     return visibleCharacters.find(
-      (character) => character.get('id') === cached.characterId,
+      (character) => character.get("id") === cached.characterId,
     )
   }, [shouldAutoOpen, visibleCharacters])
 
   useEffect(() => {
     if (!shouldAutoOpen || !cachedCharacter) return
 
-    navigate(characterPath(cachedCharacter.get('id'), 'sheet'), {
+    navigate(characterPath(cachedCharacter.get("id"), "sheet"), {
       replace: true,
       state: null,
     })
   }, [cachedCharacter, navigate, shouldAutoOpen])
 
   if (shouldAutoOpen && cachedCharacter) return null
-  return <CharacterView />
+
+  return (
+    <CampaignCharacterWorkspace>
+      <CharacterView />
+    </CampaignCharacterWorkspace>
+  )
 }
 
 export function CharacterDetailView() {
@@ -66,7 +74,11 @@ export function CharacterDetailView() {
     } satisfies LastOpenedCharacterCache)
   }, [characterId])
 
-  return <CharacterView />
+  return (
+    <CampaignCharacterWorkspace>
+      <CharacterView />
+    </CampaignCharacterWorkspace>
+  )
 }
 
 function characterPath(characterId: string, tab: string): string {
