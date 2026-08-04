@@ -19,12 +19,15 @@ import {
   getMyCharacters,
   type UserCharacterSummary,
 } from "../../api/user-characters"
+import { submitOwnedHomebrewSpellToCampaign } from "../../api/user-spells"
 import { Button } from "../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../components/ui/Card"
 import { Input } from "../../components/ui/Input"
 import { Textarea } from "../../components/ui/Textarea"
+import { useUserMagicState } from "../../features/magic/UserMagicProvider"
 
 export function UserCampaignsTab() {
+  const { records: spellRecords, reload: reloadSpells } = useUserMagicState()
   const [campaigns, setCampaigns] = useState<UserCampaign[]>([])
   const [characters, setCharacters] = useState<UserCharacterSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -39,6 +42,7 @@ export function UserCampaignsTab() {
   const [selectedVisibility, setSelectedVisibility] = useState<
     Record<string, CampaignCharacterVisibility>
   >({})
+  const [selectedSpell, setSelectedSpell] = useState<Record<string, string>>({})
   const [copiedCode, setCopiedCode] = useState("")
 
   async function reload() {
@@ -66,6 +70,10 @@ export function UserCampaignsTab() {
   const characterById = useMemo(
     () => new Map(characters.map((character) => [character.id, character])),
     [characters],
+  )
+  const ownedSpellRecords = useMemo(
+    () => spellRecords.filter((record) => record.ownedByCurrentUser),
+    [spellRecords],
   )
 
   async function createCampaign() {
@@ -321,8 +329,39 @@ export function UserCampaignsTab() {
           }
         }),
       )
+      await reloadSpells()
     } catch {
       setErrorMessage("Não foi possível revisar a magia homebrew.")
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  async function submitSpell(campaign: UserCampaign) {
+    const recordId = selectedSpell[campaign.id]
+    const record = ownedSpellRecords.find((entry) => entry.id === recordId)
+    if (!record || working) return
+
+    setWorking(true)
+    setErrorMessage("")
+
+    try {
+      await submitOwnedHomebrewSpellToCampaign(record, {
+        id: campaign.id,
+        name: campaign.name,
+        autoApprove: campaign.isOwner || campaign.role === "MASTER",
+      })
+      setSelectedSpell((current) => ({
+        ...current,
+        [campaign.id]: "",
+      }))
+      await Promise.all([reloadSpells(), reload()])
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível enviar a magia para a campanha.",
+      )
     } finally {
       setWorking(false)
     }
@@ -424,6 +463,12 @@ export function UserCampaignsTab() {
             )
             const availableCharacters = characters.filter(
               (character) => !linkedIds.has(character.id),
+            )
+            const linkedSpellIds = new Set(
+              campaign.homebrewSpells.map((spell) => spell.id),
+            )
+            const availableOwnedSpells = ownedSpellRecords.filter(
+              (record) => !linkedSpellIds.has(record.id),
             )
             const active = campaign.status === "ACTIVE"
             const canReviewSpells =
@@ -602,6 +647,34 @@ export function UserCampaignsTab() {
                           Nenhuma magia homebrew visível nesta campanha.
                         </p>
                       )}
+
+                      {active && availableOwnedSpells.length ? (
+                        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                          <select
+                            className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
+                            value={selectedSpell[campaign.id] ?? ""}
+                            onChange={(event) =>
+                              setSelectedSpell((current) => ({
+                                ...current,
+                                [campaign.id]: event.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">Selecione uma magia própria</option>
+                            {availableOwnedSpells.map((record) => (
+                              <option key={record.id} value={record.id}>
+                                {record.name}
+                              </option>
+                            ))}
+                          </select>
+                          <Button
+                            disabled={!selectedSpell[campaign.id] || working}
+                            onClick={() => void submitSpell(campaign)}
+                          >
+                            Enviar para aprovação
+                          </Button>
+                        </div>
+                      ) : null}
                     </section>
 
                     {campaign.isOwner && campaign.pendingMembers.length ? (
