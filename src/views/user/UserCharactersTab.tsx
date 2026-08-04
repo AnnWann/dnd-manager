@@ -12,13 +12,16 @@ import {
   deleteMyCharacter,
   getMyCharacter,
   getMyCharacters,
+  updateMyCharacter,
   type UserCharacterSummary,
 } from "../../api/user-characters"
 import { getApiStatus } from "../../api/api-client"
+import { createOwnedHomebrewSpell } from "../../api/user-spells"
 import { Button } from "../../components/ui/Button"
 import { useMagicContext } from "../../contexts/magicContext"
 import { CharacterSelectorList } from "../../features/characters/selector/CharacterSelectorList"
 import { toUserCharacterSelectorItem } from "../../features/characters/selector/userCharacterSelectorAdapter"
+import { useUserMagicState } from "../../features/magic/UserMagicProvider"
 import type { Spell } from "../../models/magic/spells/Spell"
 
 type CharacterExportBundle = {
@@ -31,7 +34,8 @@ type CharacterExportBundle = {
 export function UserCharactersTab() {
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { savedSpells, spellByIndex, saveSpell } = useMagicContext()
+  const { savedSpells, spellByIndex } = useMagicContext()
+  const { reload: reloadHomebrewSpells } = useUserMagicState()
 
   const [characters, setCharacters] =
     useState<UserCharacterSummary[]>([])
@@ -169,32 +173,57 @@ export function UserCharactersTab() {
     try {
       const parsed = JSON.parse(await file.text()) as unknown
       const bundle = parseCharacterExport(parsed)
+      const indexMap = new Map<string, string>()
 
       for (const spell of bundle.homebrewSpells) {
-        if (!spellByIndex.has(spell.index)) saveSpell(spell)
+        if (spellByIndex.has(spell.index)) continue
+
+        const created = await createOwnedHomebrewSpell(spell)
+        indexMap.set(spell.index, created.index)
       }
 
+      const remappedCharacter = remapSpellIndexes(
+        bundle.character,
+        indexMap,
+      ) as Record<string, unknown>
       const name =
-        typeof bundle.character.name === "string" &&
-        bundle.character.name.trim()
-          ? bundle.character.name.trim()
+        typeof remappedCharacter.name === "string" &&
+        remappedCharacter.name.trim()
+          ? remappedCharacter.name.trim()
           : "Personagem importado"
+      const characterData = {
+        ...remappedCharacter,
+        id: crypto.randomUUID(),
+        name,
+        visibility: "private",
+      }
 
       const created = await createMyCharacter({
         name,
         visibility: "PRIVATE",
-        data: {
-          ...bundle.character,
-          id: crypto.randomUUID(),
-          name,
-          visibility: "private",
-        },
+        data: characterData,
       })
 
-      setCharacters((current) => [created, ...current])
-      setSelectedCharacterId(created.id)
+      // O POST cria a ficha; o PATCH executa a sincronização relacional das
+      // magias homebrew agora que os novos índices já existem no banco.
+      const synchronized = await updateMyCharacter(
+        created.id,
+        characterData,
+        {
+          name,
+          visibility: "PRIVATE",
+        },
+      )
+
+      if (indexMap.size) await reloadHomebrewSpells()
+
+      setCharacters((current) => [
+        synchronized,
+        ...current.filter((entry) => entry.id !== synchronized.id),
+      ])
+      setSelectedCharacterId(synchronized.id)
       navigate(
-        `/user/characters/${encodeURIComponent(created.id)}/profile`,
+        `/user/characters/${encodeURIComponent(synchronized.id)}/profile`,
       )
     } catch (error) {
       setErrorMessage(
@@ -222,13 +251,12 @@ export function UserCharactersTab() {
 
     try {
       await deleteMyCharacter(characterId)
-      setCharacters((current) =>
-        current.filter((entry) => entry.id !== characterId),
+      const remaining = characters.filter(
+        (entry) => entry.id !== characterId,
       )
+      setCharacters(remaining)
       setSelectedCharacterId((current) =>
-        current === characterId
-          ? characters.find((entry) => entry.id !== characterId)?.id ?? ""
-          : current,
+        current === characterId ? remaining[0]?.id ?? "" : current,
       )
     } catch {
       setErrorMessage("Não foi possível excluir o personagem.")
@@ -320,6 +348,33 @@ function collectReferencedSpellIndexes(value: unknown): Set<string> {
 
   visit(value)
   return indexes
+}
+
+function remapSpellIndexes(
+  value: unknown,
+  indexMap: ReadonlyMap<string, string>,
+  parentKey = "",
+): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) =>
+      remapSpellIndexes(entry, indexMap, parentKey),
+    )
+  }
+
+  if (!isRecord(value)) return value
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, child]) => {
+      const isSpellIndexField =
+        key === "index" || (key === "id" && parentKey === "spells")
+      const mapped =
+        isSpellIndexField && typeof child === "string"
+          ? indexMap.get(child) ?? child
+          : remapSpellIndexes(child, indexMap, key)
+
+      return [key, mapped]
+    }),
+  )
 }
 
 function parseCharacterExport(value: unknown): {
