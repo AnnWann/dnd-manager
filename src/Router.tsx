@@ -25,10 +25,6 @@ import { RequireAuth } from "./auth/requireAuth"
 import { UserDashboardView } from "./views/user/UserDashboardView"
 import { UserCharacterDetailView } from "./views/user/UserCharacterDetailView"
 import { UserCharacterAddSpellsView } from "./views/user/UserCharacterAddSpellsView"
-import {
-  UserCharacterSpellsLegacyRedirect,
-  UserCharacterSpellsView,
-} from "./views/user/UserCharacterSpellsView"
 
 export function AppRouter() {
   return (
@@ -51,14 +47,6 @@ export function AppRouter() {
         <Route
           path="characters/:characterId"
           element={<Navigate to="sheet" replace />}
-        />
-        <Route
-          path="characters/:characterId/spells-list"
-          element={<UserCharacterSpellsView />}
-        />
-        <Route
-          path="characters/:characterId/spellsList"
-          element={<UserCharacterSpellsLegacyRedirect />}
         />
         <Route
           path="characters/:characterId/spells-list/add-spells"
