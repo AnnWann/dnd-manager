@@ -27,6 +27,7 @@ import { UserCharacterDetailView } from "./views/user/UserCharacterDetailView"
 import { UserCharacterAddSpellsView } from "./views/user/UserCharacterAddSpellsView"
 import { UserCharacterCreateItemView } from "./views/user/UserCharacterCreateItemView"
 import { UserCharacterCreateView } from "./views/user/UserCharacterCreateView"
+import { UserCharacterLevelUpView } from "./views/user/UserCharacterLevelUpView"
 
 export function AppRouter() {
   return (
@@ -50,6 +51,10 @@ export function AppRouter() {
         <Route
           path="characters/:characterId"
           element={<Navigate to="sheet" replace />}
+        />
+        <Route
+          path="characters/:characterId/level-up"
+          element={<UserCharacterLevelUpView />}
         />
         <Route
           path="characters/:characterId/spells-list/add-spells"
