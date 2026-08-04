@@ -18,19 +18,19 @@ import {
   getDynamicSubclassSpellGrants,
 } from "../../../models/leveling/DynamicSubclassSpellRules"
 import { getClassNamePt } from "../../../models/leveling/ClassLocalization"
+import { finalizeProgressionFeatures } from "../../../models/leveling/ProgressionFeatureFinalization"
 import {
   createClassEntry,
   normalizeSpellName,
 } from "../../../models/leveling/SpellSelectionRules"
 import type { Spell } from "../../../models/magic/spells/Spell"
 import type { CharacterSpells } from "../../../models/magic/spells/CharacterSpells"
+import { ATTRIBUTE_KEYS } from "../../../models/sheet/Attribute"
 import type { ClassName } from "../../../models/sheet/Class"
 import type { Skill } from "../../../models/sheet/Skills"
-import { ATTRIBUTE_KEYS } from "../../../models/sheet/Attribute"
 import { SKILL_LABELS } from "../creation/phbPresets"
 import { CharacterProgressionConfigurator } from "./CharacterProgressionConfigurator"
-import { ProgressionReferencePanel } from "./ProgressionReferencePanel"
-import "./progressionDetails.css"
+import { ProgressionFeatureModalEnhancer } from "./ProgressionFeatureModalEnhancer"
 
 type Props = ComponentProps<typeof CharacterProgressionConfigurator>
 type KnownSpell = CharacterSpells["knownSpells"][number]
@@ -69,9 +69,10 @@ export function CharacterProgressionFlow({
   )
 
   function finish(character: CharacterTemplate) {
+    const finalizedFeatures = finalizeProgressionFeatures(character)
     onComplete(
       finalizeDynamicSubclassSpells(
-        character,
+        finalizedFeatures,
         spells,
         props.mode,
       ),
@@ -266,17 +267,14 @@ export function CharacterProgressionFlow({
   }
 
   return (
-    <div className="progression-readable-details">
+    <>
       <CharacterProgressionConfigurator
         {...props}
         character={calculationCharacter}
         onComplete={receiveProgression}
       />
-      <ProgressionReferencePanel
-        character={props.character}
-        spells={spells}
-      />
-    </div>
+      <ProgressionFeatureModalEnhancer />
+    </>
   )
 }
 
