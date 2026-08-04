@@ -1,102 +1,98 @@
-import { Navigate, NavLink, Outlet, useNavigate } from "react-router-dom"
-import type { ReactNode } from "react"
+import { LogOut } from "lucide-react"
+import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom"
 
+import {
+  AppSidebar,
+  IconCastle,
+  IconCharacter,
+} from "../../components/AppSidebar"
 import { authClient } from "../../auth/auth-client"
-import { Button } from "../../components/ui/Button"
-import { clearLocalDevelopmentSession, getLocalUser, LOCAL_AUTH_BYPASS } from "../../auth/local-auth"
+import {
+  clearLocalDevelopmentSession,
+  getLocalUser,
+  LOCAL_AUTH_BYPASS,
+} from "../../auth/local-auth"
 
 export function UserDashboardView() {
   const navigate = useNavigate()
-  const { data: session } = authClient.useSession()
+  const location = useLocation()
+  const { data: session, isPending } = authClient.useSession()
 
   const localUser =
     LOCAL_AUTH_BYPASS ? getLocalUser() : null
 
   const user = session?.user ?? localUser
 
-if (!user) {
-  return <Navigate to="/unauthorized" replace />
-}
-
-  const userName = session?.user?.name ?? "Usuário local"
-  const userEmail =
-    session?.user?.email ?? "Ambiente de desenvolvimento"
-
-  async function signOut() {
-  if (session?.user) {
-    await authClient.signOut()
+  if (!LOCAL_AUTH_BYPASS && isPending) {
+    return (
+      <div className="grid min-h-dvh place-items-center text-sm text-textMuted">
+        Verificando sessão...
+      </div>
+    )
   }
 
-  clearLocalDevelopmentSession()
+  if (!user) {
+    return <Navigate to="/unauthorized" replace />
+  }
 
-  navigate("/auth", {
-    replace: true,
-  })
-}
+  async function signOut() {
+    if (session?.user) {
+      await authClient.signOut()
+    }
+
+    clearLocalDevelopmentSession()
+
+    navigate("/auth", {
+      replace: true,
+    })
+  }
+
+  const sidebarItems = [
+    {
+      label: "Meus personagens",
+      icon: <IconCharacter />,
+      active: location.pathname.startsWith("/user/characters"),
+      onClick: () => navigate("/user/characters"),
+    },
+    {
+      label: "Campanhas",
+      icon: <IconCastle />,
+      active: location.pathname.startsWith("/user/campaigns"),
+      onClick: () => navigate("/user/campaigns"),
+    },
+    {
+      label: "Sair",
+      icon: <LogOut />,
+      active: false,
+      onClick: () => {
+        void signOut()
+      },
+    },
+  ]
 
   return (
-    <div className="min-h-dvh bg-[color:var(--surface-app)] text-text">
-      <header className="border-b border-border bg-bg-elevated">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4">
-          <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold text-textH">
-              D&D Manager
-            </h1>
-
-            <p className="truncate text-xs text-textMuted">
-              {userName} · {userEmail}
-            </p>
+    <div className="fixed inset-0 flex w-full max-w-full flex-col overflow-hidden bg-[color:var(--surface-app)] text-text">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-bg-elevated px-4">
+        <div className="min-w-0 pl-12 md:pl-0">
+          <div className="truncate font-heading text-base font-semibold text-textH">
+            Área do usuário
           </div>
 
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={signOut}
-          >
-            Sair
-          </Button>
+          <div className="truncate text-xs text-textMuted">
+            {user.name} · {user.email}
+          </div>
         </div>
       </header>
 
-      <div className="mx-auto grid w-full max-w-6xl gap-4 px-4 py-6">
-        <nav className="flex gap-2 overflow-x-auto">
-          <DashboardTab to="/user/characters">
-            Meus personagens
-          </DashboardTab>
+      <div className="flex min-h-0 min-w-0 max-w-full flex-1 overflow-hidden">
+        <AppSidebar items={sidebarItems} />
 
-          <DashboardTab to="/user/campaigns">
-            Campanhas
-          </DashboardTab>
-        </nav>
-
-        <main>
-          <Outlet />
+        <main className="min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto">
+          <div className="mx-auto w-full min-w-0 max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
-  )
-}
-
-function DashboardTab({
-  to,
-  children,
-}: {
-  to: string
-  children: ReactNode
-}) {
-  return (
-    <NavLink
-      to={to}
-      className={({ isActive }) =>
-        [
-          "shrink-0 rounded-lg border px-4 py-2 text-sm font-medium",
-          isActive
-            ? "border-accentBorder bg-accentBg text-textH"
-            : "border-border bg-bg text-text hover:bg-bg-subtle",
-        ].join(" ")
-      }
-    >
-      {children}
-    </NavLink>
   )
 }

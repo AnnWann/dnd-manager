@@ -15,6 +15,7 @@ import {
   Swords,
   UserRound,
   X,
+  LucideCastle
 } from "lucide-react"
 import { useEffect, useState, type ReactNode } from "react"
 
@@ -292,4 +293,5 @@ export {
   Flame as IconCamp,
   NotebookText as IconNotes,
   ShieldX as IconDeathSaves,
+  LucideCastle as IconCastle
 }
