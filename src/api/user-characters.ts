@@ -24,6 +24,7 @@ export type UserCharacterAccess = {
       id: string
       name: string
     }
+    visibility: CharacterVisibility
     role: "MASTER" | "PLAYER"
     status: "ACTIVE" | "INVITED" | "REMOVED"
   }>
@@ -107,6 +108,7 @@ export async function getMyCharacterAccess(
           id: "local-development-user",
           name: "Usuário local",
         },
+        visibility: "PARTY" as const,
         role: "MASTER" as const,
         status: "ACTIVE" as const,
       })),
