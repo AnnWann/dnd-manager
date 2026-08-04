@@ -4,6 +4,7 @@ import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
 import { ItemCreationDialog } from "../../items/ItemCreationDialog"
+import { findStandardDefinitionForItem } from "../../items/standardItemCompendium"
 import type { ItemKind, Itemmable } from "../../../models/items/item"
 import { isConsumableItemKind } from "../../../models/items/itemConsumption"
 import type { SupplyItem } from "../../../models/items/SupplyItem"
@@ -183,6 +184,7 @@ export function InventoryEditor({
           <div className="grid gap-3">
             {filteredItems.map((item, index) => {
               const isAttuned = attunedItemIds.includes(item.id)
+              const definition = findStandardDefinitionForItem(item)
 
               return (
                 <article
@@ -195,6 +197,10 @@ export function InventoryEditor({
                         <span className="truncate text-sm font-medium text-textH">
                           {item.name || "Item sem nome"}
                         </span>
+                        {definition ? <ItemBadge label="Compêndio" /> : null}
+                        {definition?.locked ? (
+                          <ItemBadge label="Definição protegida" />
+                        ) : null}
                         {item.magicItem ? <ItemBadge label="Mágico" /> : null}
                         {item.requiresAttunement ? (
                           <ItemBadge label="Requer sintonia" />
@@ -353,6 +359,9 @@ function ItemDetailsDialog({
 }) {
   if (!item) return null
 
+  const definition = findStandardDefinitionForItem(item)
+  const protectedDefinition = definition?.locked === true
+
   return (
     <div
       className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-4"
@@ -367,6 +376,10 @@ function ItemDetailsDialog({
               <h2 id="item-details-title" className="text-lg font-semibold text-textH">
                 {item.name || "Item sem nome"}
               </h2>
+              {definition ? <ItemBadge label="Compêndio" /> : null}
+              {protectedDefinition ? (
+                <ItemBadge label="Definição protegida" />
+              ) : null}
               {item.magicItem ? <ItemBadge label="Mágico" /> : null}
               {item.requiresAttunement ? (
                 <ItemBadge label="Requer sintonia" />
@@ -378,7 +391,7 @@ function ItemDetailsDialog({
           </div>
 
           <div className="flex gap-2">
-            {canEdit ? (
+            {canEdit && !protectedDefinition ? (
               <Button size="sm" onClick={() => onEdit(item)}>
                 Editar
               </Button>
@@ -388,6 +401,12 @@ function ItemDetailsDialog({
             </Button>
           </div>
         </div>
+
+        {protectedDefinition ? (
+          <div className="mt-4 rounded-lg border border-accentBorder bg-accentBg p-3 text-xs leading-5 text-textH">
+            Nome, tipo, peso e propriedades deste item vêm da definição canônica do compêndio. Os controles operacionais, como quantidade de moedas e conteúdo da Bolsa Mágica, continuam disponíveis no inventário.
+          </div>
+        ) : null}
 
         <ItemDropdownDetails item={item} onUpdate={onUpdate} />
       </div>
@@ -456,8 +475,11 @@ function CurrencyWallet({
               key={item.id}
               className="rounded-lg border border-border bg-bg p-3"
             >
-              <div className="truncate text-sm font-medium text-textH">
-                {item.name || "Moedas"}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="truncate text-sm font-medium text-textH">
+                  {item.name || "Moedas"}
+                </div>
+                <ItemBadge label="Definição protegida" />
               </div>
               <label className="mt-2 grid gap-1.5">
                 <span className="text-[11px] text-textMuted">Quantidade</span>
