@@ -1,6 +1,7 @@
 import {
   CampaignMemberStatus,
   CampaignSpellApprovalStatus,
+  CharacterVisibility,
   HomebrewSpellStatus,
   Prisma,
 } from "../../../generated/prisma/client"
@@ -39,6 +40,16 @@ export async function GET(
         visibility: true,
         createdAt: true,
         updatedAt: true,
+        campaignLinks: {
+          select: {
+            campaign: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
     })
 
@@ -50,7 +61,13 @@ export async function GET(
       )
     }
 
-    return jsonResponse({ character })
+    return jsonResponse({
+      character: {
+        ...character,
+        campaigns: character.campaignLinks.map((link) => link.campaign),
+        campaignLinks: undefined,
+      },
+    })
   } catch (error) {
     return handleApiError(error)
   }
@@ -93,6 +110,7 @@ export async function PATCH(
 
     const requestedName =
       typeof body.name === "string" ? body.name.trim() : ""
+    const requestedVisibility = parseVisibility(body.visibility)
     const data = body.data as Prisma.InputJsonObject
     const knownSpellIndexes = extractKnownSpellIndexes(data)
     const accessibleHomebrewSpells = knownSpellIndexes.length
@@ -144,6 +162,7 @@ export async function PATCH(
         data: {
           data,
           ...(requestedName ? { name: requestedName.slice(0, 120) } : {}),
+          ...(requestedVisibility ? { visibility: requestedVisibility } : {}),
         },
         select: {
           id: true,
@@ -186,6 +205,65 @@ export async function PATCH(
   } catch (error) {
     return handleApiError(error)
   }
+}
+
+export async function DELETE(
+  request: Request,
+  context: RouteContext,
+): Promise<Response> {
+  try {
+    const session = await requireSession(request)
+    const { characterId } = await context.params
+
+    const existing = await prisma.character.findFirst({
+      where: {
+        id: characterId,
+        ownerId: session.user.id,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    if (!existing) {
+      throw new ApiError(
+        404,
+        "CHARACTER_NOT_FOUND",
+        "Personagem não encontrado.",
+      )
+    }
+
+    await prisma.character.delete({
+      where: {
+        id: existing.id,
+      },
+    })
+
+    return new Response(null, { status: 204 })
+  } catch (error) {
+    return handleApiError(error)
+  }
+}
+
+function parseVisibility(value: unknown): CharacterVisibility | undefined {
+  if (typeof value !== "string") return undefined
+
+  const normalized = value.trim().toUpperCase()
+  if (normalized === CharacterVisibility.PRIVATE) {
+    return CharacterVisibility.PRIVATE
+  }
+  if (normalized === CharacterVisibility.PARTY) {
+    return CharacterVisibility.PARTY
+  }
+  if (normalized === CharacterVisibility.MASTER) {
+    return CharacterVisibility.MASTER
+  }
+
+  throw new ApiError(
+    400,
+    "INVALID_CHARACTER_VISIBILITY",
+    "A visibilidade informada é inválida.",
+  )
 }
 
 function extractKnownSpellIndexes(
