@@ -157,7 +157,8 @@ model CampaignMember {
 }
 
 model CampaignCharacter {
-  id String @id @default(uuid())
+  id         String              @id @default(uuid())
+  visibility CharacterVisibility @default(PARTY)
 
   campaignId String
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
