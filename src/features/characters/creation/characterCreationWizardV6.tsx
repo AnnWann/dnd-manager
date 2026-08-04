@@ -4,7 +4,7 @@ import type { CharacterTemplate } from "../../../models/characters/CharacterTemp
 import "../../../models/leveling/ExpandedClassProgression"
 import { prepareCharacterForProgression } from "../../../models/leveling/prepareCharacterForProgression"
 import type { Player } from "../../../models/player/Player"
-import { CharacterProgressionConfigurator } from "../progression/CharacterProgressionConfigurator"
+import { CharacterProgressionFlow } from "../progression/CharacterProgressionFlow"
 import { hydrateCharacterStartingInventory } from "./backgroundStartingEquipment"
 import {
   CharacterCreationWizard as BaseCharacterCreationWizard,
@@ -48,7 +48,7 @@ export function CharacterCreationWizard(props: Props) {
         }
       >
         {pending.stage === "progression" ? (
-          <CharacterProgressionConfigurator
+          <CharacterProgressionFlow
             mode="creation"
             character={pending.character}
             targetTotalLevel={pending.plan.targetLevel}
