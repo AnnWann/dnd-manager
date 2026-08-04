@@ -29,6 +29,15 @@ export async function GET(request: Request): Promise<Response> {
         OR: [
           { ownerId: userId },
           {
+            characterLinks: {
+              some: {
+                character: {
+                  ownerId: userId,
+                },
+              },
+            },
+          },
+          {
             campaignLinks: {
               some: {
                 status: CampaignSpellApprovalStatus.APPROVED,
@@ -60,6 +69,21 @@ export async function GET(request: Request): Promise<Response> {
         ownerId: true,
         createdAt: true,
         updatedAt: true,
+        characterLinks: {
+          where: {
+            character: {
+              ownerId: userId,
+            },
+          },
+          select: {
+            character: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
         campaignLinks: {
           where: {
             campaign: {
@@ -101,6 +125,7 @@ export async function GET(request: Request): Promise<Response> {
       spells: spells.map((spell) => ({
         ...spell,
         ownedByCurrentUser: spell.ownerId === userId,
+        characters: spell.characterLinks.map((link) => link.character),
         campaigns: spell.campaignLinks.map((link) => ({
           linkId: link.id,
           status: link.status,
@@ -109,6 +134,7 @@ export async function GET(request: Request): Promise<Response> {
           reviewedAt: link.reviewedAt,
           ...link.campaign,
         })),
+        characterLinks: undefined,
         campaignLinks: undefined,
       })),
     })
@@ -150,6 +176,7 @@ export async function POST(request: Request): Promise<Response> {
         spell: {
           ...spell,
           ownedByCurrentUser: true,
+          characters: [],
           campaigns: [],
         },
       },
