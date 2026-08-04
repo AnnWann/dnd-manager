@@ -8,6 +8,9 @@ import {
   type ClassName,
 } from "../sheet/Class"
 import {
+  getDynamicSubclassSpellGrants,
+} from "./DynamicSubclassSpellRules"
+import {
   getExpandedCantripsKnownAtLevel,
   getExpandedClassProgression,
 } from "./ExpandedClassProgression"
@@ -37,6 +40,8 @@ export type ClassSpellSelectionRule = {
   allowedSchools?: string[]
   unrestrictedLeveledSpellCount?: number
   additionalClassLists?: ClassName[]
+  dynamicAutomaticSpellNames?: string[]
+  dynamicExpandedSpellNames?: string[]
 }
 
 export type SubclassSpellGrantMode =
@@ -310,6 +315,12 @@ export function getClassSpellSelectionRule(
     subclassId,
     normalizedLevel,
   )
+  const dynamicGrants = getDynamicSubclassSpellGrants(
+    character,
+    className,
+    subclassId,
+    normalizedLevel,
+  )
   const mode = subclassCaster?.mode ?? getBaseMode(className)
 
   return {
@@ -334,6 +345,12 @@ export function getClassSpellSelectionRule(
     unrestrictedLeveledSpellCount:
       subclassCaster?.unrestrictedLeveledSpellCount,
     additionalClassLists: subclassCaster?.additionalClassLists,
+    dynamicAutomaticSpellNames: dynamicGrants
+      .filter((grant) => grant.mode !== "expanded-list")
+      .map((grant) => grant.spellName),
+    dynamicExpandedSpellNames: dynamicGrants
+      .filter((grant) => grant.mode === "expanded-list")
+      .map((grant) => grant.spellName),
   }
 }
 
@@ -364,9 +381,12 @@ export function isSpellAllowedForClassSelection(
     rule.subclassId,
     rule.classLevel,
   )
-  const automaticNames = grants
-    .filter((grant) => grant.mode !== "expanded-list")
-    .flatMap((grant) => grant.spellNames)
+  const automaticNames = [
+    ...grants
+      .filter((grant) => grant.mode !== "expanded-list")
+      .flatMap((grant) => grant.spellNames),
+    ...(rule.dynamicAutomaticSpellNames ?? []),
+  ]
   if (spellMatchesAnyName(spell, automaticNames)) return false
 
   if (spell.classes.includes(rule.className)) return true
@@ -378,9 +398,12 @@ export function isSpellAllowedForClassSelection(
     return true
   }
 
-  const expandedNames = grants
-    .filter((grant) => grant.mode === "expanded-list")
-    .flatMap((grant) => grant.spellNames)
+  const expandedNames = [
+    ...grants
+      .filter((grant) => grant.mode === "expanded-list")
+      .flatMap((grant) => grant.spellNames),
+    ...(rule.dynamicExpandedSpellNames ?? []),
+  ]
   return spellMatchesAnyName(spell, expandedNames)
 }
 
