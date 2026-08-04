@@ -24,7 +24,7 @@ export type CharacterTab =
   | "proficiencies"
   | "equipment"
   | "inventory"
-  | "spellsList"
+  | "spells-list"
 
 export type CharacterViewTabDefinition = {
   key: string
@@ -41,7 +41,7 @@ type Props = {
 export const CHARACTER_TABS: Array<CharacterViewTabDefinition & { key: CharacterTab }> = [
   { key: "sheet", label: "Ficha", icon: ScrollText },
   { key: "abilities", label: "Habilidades", icon: Sparkles },
-  { key: "spellsList", label: "Magias", icon: WandSparkles },
+  { key: "spells-list", label: "Magias", icon: WandSparkles },
   { key: "equipment", label: "Equipamento", icon: Shield },
   { key: "inventory", label: "Inventário", icon: Backpack },
   { key: "race", label: "Raça", icon: Leaf },
