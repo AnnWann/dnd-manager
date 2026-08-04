@@ -20,6 +20,7 @@ const officialMetamagics = Object.values(
 
 type MagicContextValue = {
   spells: Spell[]
+  savedSpells: Spell[]
   spellByIndex: Map<string, Spell>
   getSpellByIndex: (spellIndex: string) => Spell | undefined
   getSpellsByIndexes: (spellIndexes: string[]) => Spell[]
@@ -38,6 +39,8 @@ type MagicProviderProps = {
   spells: Spell[]
   setAppState?: React.Dispatch<React.SetStateAction<AppStateV1>>
   onSpellsChange?: (spells: Spell[]) => void
+  onSaveSpell?: (spell: Spell) => void
+  onDeleteSpell?: (spellIndex: string) => void
 }
 
 export function MagicProvider({
@@ -45,7 +48,14 @@ export function MagicProvider({
   spells,
   setAppState,
   onSpellsChange,
+  onSaveSpell,
+  onDeleteSpell,
 }: MagicProviderProps) {
+  const normalizedSavedSpells = useMemo(
+    () => spells.map(normalizeSpellText),
+    [spells],
+  )
+
   const spellByIndex = useMemo(() => {
     const map = new Map<string, Spell>()
 
@@ -54,14 +64,13 @@ export function MagicProvider({
       if (index) map.set(index, spell)
     }
 
-    for (const rawSpell of spells) {
-      const spell = normalizeSpellText(rawSpell)
+    for (const spell of normalizedSavedSpells) {
       const index = spell.index?.trim()
       if (index) map.set(index, spell)
     }
 
     return map
-  }, [spells])
+  }, [normalizedSavedSpells])
 
   const allSpells = useMemo(
     () => Array.from(spellByIndex.values()),
@@ -106,20 +115,32 @@ export function MagicProvider({
 
   function saveSpell(spell: Spell) {
     const normalizedSpell = normalizeSpellText(spell)
-    const nextSpells = [
-      ...spells.filter(
+
+    if (onSaveSpell) {
+      onSaveSpell(normalizedSpell)
+      return
+    }
+
+    commitSavedSpells([
+      ...normalizedSavedSpells.filter(
         (existing) => existing.index !== normalizedSpell.index,
       ),
       normalizedSpell,
-    ]
-
-    commitSavedSpells(nextSpells)
+    ])
   }
 
   function deleteSpell(spellIndex: string) {
     const normalizedIndex = spellIndex.trim()
+
+    if (onDeleteSpell) {
+      onDeleteSpell(normalizedIndex)
+      return
+    }
+
     commitSavedSpells(
-      spells.filter((existing) => existing.index !== normalizedIndex),
+      normalizedSavedSpells.filter(
+        (existing) => existing.index !== normalizedIndex,
+      ),
     )
   }
 
@@ -127,6 +148,7 @@ export function MagicProvider({
     <MagicContext.Provider
       value={{
         spells: allSpells,
+        savedSpells: normalizedSavedSpells,
         spellByIndex,
         getSpellByIndex,
         getSpellsByIndexes,
