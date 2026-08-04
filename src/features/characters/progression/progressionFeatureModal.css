@@ -7,8 +7,18 @@
 
 .progression-feature-card-enhanced:hover {
   border-color: var(--color-accent-border, currentColor);
+  background: var(--surface-subtle);
 }
 
 .progression-feature-card-enhanced .progression-feature-inline-hidden {
   display: none;
+}
+
+.progression-feature-card-enhanced::after {
+  content: "Abrir detalhes e escolhas";
+  display: block;
+  margin-top: 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
 }
