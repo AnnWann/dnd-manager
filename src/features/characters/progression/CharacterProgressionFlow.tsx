@@ -43,7 +43,7 @@ export function CharacterProgressionFlow({
   )
 }
 
-function finalizeDynamicSubclassSpells(
+export function finalizeDynamicSubclassSpells(
   character: CharacterTemplate,
   spells: Spell[],
   mode: "creation" | "level-up",
