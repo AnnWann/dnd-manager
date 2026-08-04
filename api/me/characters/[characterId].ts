@@ -1,4 +1,9 @@
-import { Prisma } from "../../../generated/prisma/client"
+import {
+  CampaignMemberStatus,
+  CampaignSpellApprovalStatus,
+  HomebrewSpellStatus,
+  Prisma,
+} from "../../../generated/prisma/client"
 import {
   ApiError,
   handleApiError,
@@ -60,11 +65,7 @@ export async function PATCH(
     const { characterId } = await context.params
     const body = await readJsonObject(request)
 
-    if (
-      !body.data ||
-      typeof body.data !== "object" ||
-      Array.isArray(body.data)
-    ) {
+    if (!isJsonObject(body.data)) {
       throw new ApiError(
         400,
         "INVALID_CHARACTER_DATA",
@@ -92,27 +93,133 @@ export async function PATCH(
 
     const requestedName =
       typeof body.name === "string" ? body.name.trim() : ""
+    const data = body.data as Prisma.InputJsonObject
+    const knownSpellIndexes = extractKnownSpellIndexes(data)
+    const accessibleHomebrewSpells = knownSpellIndexes.length
+      ? await prisma.homebrewSpell.findMany({
+          where: {
+            index: {
+              in: knownSpellIndexes,
+            },
+            status: HomebrewSpellStatus.ACTIVE,
+            OR: [
+              { ownerId: session.user.id },
+              {
+                campaignLinks: {
+                  some: {
+                    status: CampaignSpellApprovalStatus.APPROVED,
+                    campaign: {
+                      OR: [
+                        { ownerId: session.user.id },
+                        {
+                          members: {
+                            some: {
+                              userId: session.user.id,
+                              status: CampaignMemberStatus.ACTIVE,
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+            ],
+          },
+          select: {
+            id: true,
+          },
+        })
+      : []
 
-    const character = await prisma.character.update({
-      where: {
-        id: existing.id,
-      },
-      data: {
-        data: body.data as Prisma.InputJsonObject,
-        ...(requestedName ? { name: requestedName.slice(0, 120) } : {}),
-      },
-      select: {
-        id: true,
-        name: true,
-        data: true,
-        visibility: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const accessibleSpellIds = accessibleHomebrewSpells.map(
+      (spell) => spell.id,
+    )
+
+    const character = await prisma.$transaction(async (transaction) => {
+      const updated = await transaction.character.update({
+        where: {
+          id: existing.id,
+        },
+        data: {
+          data,
+          ...(requestedName ? { name: requestedName.slice(0, 120) } : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          data: true,
+          visibility: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      })
+
+      await transaction.characterHomebrewSpell.deleteMany({
+        where: {
+          characterId: existing.id,
+          ...(accessibleSpellIds.length
+            ? {
+                spellId: {
+                  notIn: accessibleSpellIds,
+                },
+              }
+            : {}),
+        },
+      })
+
+      if (accessibleSpellIds.length) {
+        await transaction.characterHomebrewSpell.createMany({
+          data: accessibleSpellIds.map((spellId) => ({
+            characterId: existing.id,
+            spellId,
+            grantedById: session.user.id,
+          })),
+          skipDuplicates: true,
+        })
+      }
+
+      return updated
     })
 
     return jsonResponse({ character })
   } catch (error) {
     return handleApiError(error)
   }
+}
+
+function extractKnownSpellIndexes(
+  data: Prisma.InputJsonObject,
+): string[] {
+  const magic = asObject(data.magic)
+  const spells = asObject(magic?.spells)
+  const knownSpells = Array.isArray(spells?.knownSpells)
+    ? spells.knownSpells
+    : []
+  const indexes = new Set<string>()
+
+  for (const entry of knownSpells) {
+    const knownSpell = asObject(entry)
+    const spellReference = asObject(knownSpell?.spells)
+    const index =
+      typeof spellReference?.id === "string"
+        ? spellReference.id.trim()
+        : ""
+
+    if (index) indexes.add(index)
+  }
+
+  return Array.from(indexes)
+}
+
+function asObject(
+  value: unknown,
+): Record<string, unknown> | null {
+  return isJsonObject(value) ? value : null
+}
+
+function isJsonObject(
+  value: unknown,
+): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
