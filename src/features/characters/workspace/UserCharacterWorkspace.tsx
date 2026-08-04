@@ -17,12 +17,13 @@ import {
   getLocalUser,
   LOCAL_AUTH_BYPASS,
 } from "../../../auth/local-auth"
-import { normalizeStandardItemsInValue } from "../../items/standardItemCompendium"
 import { moveEquippedItemToCharacterStorage } from "../../../models/characters/characterEquippedItemMovement"
 import { stowHandOccupant as stowCharacterHandOccupant } from "../../../models/characters/characterHands"
 import { takeLongRest } from "../../../models/characters/characterRest"
 import { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { ensureCharacterAcquisitionMetadata } from "../../../models/characters/characterAcquisitionMetadata"
 import type { Player } from "../../../models/player/Player"
+import { normalizeStandardItemsInValue } from "../../items/standardItemCompendium"
 import {
   CharacterWorkspaceProvider,
   type CharacterWorkspaceValue,
@@ -62,8 +63,15 @@ export function UserCharacterWorkspace({
           name: result.name,
           visibility: fromApiVisibility(result.visibility),
         }) as Record<string, unknown>
+        const parsed = CharacterTemplate.fromJSON(normalized)
 
-        setCharacter(CharacterTemplate.fromJSON(normalized))
+        setCharacter(
+          ensureCharacterAcquisitionMetadata(parsed, {
+            reason: "import",
+            sourceType: "import",
+            sourceName: "Compatibilidade de ficha existente",
+          }),
+        )
       } catch {
         if (active) setNotFound(true)
       } finally {
@@ -80,16 +88,21 @@ export function UserCharacterWorkspace({
 
   const persistCharacter = useCallback(
     (updated: CharacterTemplate) => {
+      const withMetadata = ensureCharacterAcquisitionMetadata(updated, {
+        reason: "manual",
+        sourceType: "manual",
+        sourceName: "Edição da ficha",
+      })
       const data = normalizeStandardItemsInValue(
-        updated.toJSON(),
+        withMetadata.toJSON(),
       ) as Record<string, unknown>
 
       void updateMyCharacter(
-        updated.get("id"),
+        withMetadata.get("id"),
         data,
         {
-          name: updated.get("name"),
-          visibility: toApiVisibility(updated.get("visibility")),
+          name: withMetadata.get("name"),
+          visibility: toApiVisibility(withMetadata.get("visibility")),
         },
       )
     },
@@ -112,9 +125,14 @@ export function UserCharacterWorkspace({
             requested.toJSON(),
           ) as Record<string, unknown>,
         )
+        const withMetadata = ensureCharacterAcquisitionMetadata(normalized, {
+          reason: "manual",
+          sourceType: "manual",
+          sourceName: "Edição da ficha",
+        })
 
-        persistCharacter(normalized)
-        return normalized
+        persistCharacter(withMetadata)
+        return withMetadata
       })
     },
     [persistCharacter],
