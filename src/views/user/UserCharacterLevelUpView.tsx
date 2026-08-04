@@ -4,6 +4,7 @@ import { CharacterProgressionConfigurator } from "../../features/characters/prog
 import { useCharacterWorkspace } from "../../features/characters/workspace/CharacterWorkspaceContext"
 import { UserCharacterWorkspace } from "../../features/characters/workspace/UserCharacterWorkspace"
 import "../../models/leveling/ExpandedClassProgression"
+import { prepareCharacterForProgression } from "../../models/leveling/prepareCharacterForProgression"
 
 export function UserCharacterLevelUpView() {
   const { characterId } = useParams<{ characterId?: string }>()
@@ -25,11 +26,12 @@ function LevelUpContent() {
 
   const characterId = activeCharacter.get("id")
   const returnPath = `/user/characters/${encodeURIComponent(characterId)}/sheet`
+  const preparedCharacter = prepareCharacterForProgression(activeCharacter)
 
   return (
     <CharacterProgressionConfigurator
       mode="level-up"
-      character={activeCharacter}
+      character={preparedCharacter}
       onCancel={() => navigate(returnPath)}
       onComplete={(updated) => {
         updateCharacter(characterId, () => updated)
