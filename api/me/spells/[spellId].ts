@@ -12,9 +12,9 @@ import { prisma } from "../../../server/prisma"
 import { requireSession } from "../../../server/session"
 
 type RouteContext = {
-  params?: {
-    spellId?: string
-  }
+  params: Promise<{
+    spellId: string
+  }>
 }
 
 export async function GET(
@@ -23,7 +23,7 @@ export async function GET(
 ): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const spellId = requireSpellId(context)
+    const { spellId } = await context.params
 
     const spell = await prisma.homebrewSpell.findFirst({
       where: {
@@ -53,7 +53,7 @@ export async function PATCH(
 ): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const spellId = requireSpellId(context)
+    const { spellId } = await context.params
     const body = await readJsonObject(request)
 
     const current = await prisma.homebrewSpell.findFirst({
@@ -141,7 +141,7 @@ export async function DELETE(
 ): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const spellId = requireSpellId(context)
+    const { spellId } = await context.params
 
     const result = await prisma.homebrewSpell.updateMany({
       where: {
@@ -169,20 +169,6 @@ export async function DELETE(
   } catch (error) {
     return handleApiError(error)
   }
-}
-
-function requireSpellId(context: RouteContext): string {
-  const spellId = context.params?.spellId?.trim()
-
-  if (!spellId) {
-    throw new ApiError(
-      400,
-      "SPELL_ID_REQUIRED",
-      "O identificador da magia é obrigatório.",
-    )
-  }
-
-  return spellId
 }
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
