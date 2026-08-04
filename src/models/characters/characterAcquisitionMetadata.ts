@@ -149,8 +149,10 @@ export function ensureCharacterAcquisitionMetadata(
     normalizeAbility(
       ability,
       inferAbilitySource(ability, defaults.sourceType),
-      ability.sourceItemId ?? defaults.sourceId,
-      ability.sourceItemName ?? defaults.sourceName,
+      ability.sourceItemId ?? inferAbilitySourceId(ability) ?? defaults.sourceId,
+      ability.sourceItemName ?? inferAbilitySourceName(ability) ?? defaults.sourceName,
+      inferAbilityClass(ability) ?? defaults.className,
+      ability.acquisition?.classLevel ?? defaults.classLevel,
     ),
   )
   const naturalAbilities = (race.naturalAbilities ?? []).map((ability) =>
@@ -288,9 +290,32 @@ function inferAbilitySource(
   fallback?: CharacterAcquisitionSourceType,
 ): CharacterAcquisitionSourceType {
   if (ability.source === "race") return "race"
+  if (ability.source === "background") return "background"
+  if (ability.source === "class") return "class"
   if (ability.source === "equipment") return "equipment"
   if (ability.category === "feat") return "feat"
   return fallback ?? "manual"
+}
+
+function inferAbilitySourceId(ability: Ability): string | undefined {
+  if (ability.acquisition?.sourceId) return ability.acquisition.sourceId
+  if (ability.source === "background") return "background"
+  if (isClassName(String(ability.source))) return String(ability.source)
+  return undefined
+}
+
+function inferAbilitySourceName(ability: Ability): string | undefined {
+  if (ability.acquisition?.sourceName) return ability.acquisition.sourceName
+  if (ability.source === "background") return "Antecedente"
+  if (ability.source === "class") return "Classe"
+  return undefined
+}
+
+function inferAbilityClass(ability: Ability): ClassName | undefined {
+  if (ability.acquisition?.className) return ability.acquisition.className
+  return isClassName(String(ability.source))
+    ? (ability.source as ClassName)
+    : undefined
 }
 
 function mapSpellSource(value: string): CharacterAcquisitionSourceType {
