@@ -1,6 +1,6 @@
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 
-import { CharacterProgressionConfigurator } from "../../features/characters/progression/CharacterProgressionConfigurator"
+import { CharacterProgressionFlow } from "../../features/characters/progression/CharacterProgressionFlow"
 import { useCharacterWorkspace } from "../../features/characters/workspace/CharacterWorkspaceContext"
 import { UserCharacterWorkspace } from "../../features/characters/workspace/UserCharacterWorkspace"
 import "../../models/leveling/ExpandedClassProgression"
@@ -29,7 +29,7 @@ function LevelUpContent() {
   const preparedCharacter = prepareCharacterForProgression(activeCharacter)
 
   return (
-    <CharacterProgressionConfigurator
+    <CharacterProgressionFlow
       mode="level-up"
       character={preparedCharacter}
       onCancel={() => navigate(returnPath)}
