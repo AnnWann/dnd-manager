@@ -2,7 +2,6 @@ import { useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
-import { useCharacterContext } from "../../../contexts/characterContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { consumeCharacterInventoryItem } from "../../../models/characters/characterConsumables"
 import { getEncumbranceInfo } from "../../../models/characters/characterEncumbrance"
@@ -18,6 +17,7 @@ import {
   setCurrenciesInsideBagOfHolding,
 } from "../../../models/items/Currency"
 import type { Itemmable } from "../../../models/items/item"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { CharacterEncumbrancePanel } from "./characterEncumbrancePanel"
 import { EquipItemDialog } from "./equipItemDialog"
 import { InventoryEditor } from "./inventoryEditor"
@@ -55,11 +55,12 @@ export function CharacterInventoryTab({
   updateCharacter,
 }: Props) {
   const {
-    transferCharacters,
+    transferCharacters = [],
     transferItem,
     canTransferFromCharacter,
     canViewCharacterDetails,
-  } = useCharacterContext()
+  } = useCharacterWorkspace()
+
   const [transferringItem, setTransferringItem] =
     useState<Itemmable | null>(null)
   const [equippingItem, setEquippingItem] = useState<Itemmable | null>(null)
@@ -76,7 +77,10 @@ export function CharacterInventoryTab({
       )
     : items
   const encumbrance = getEncumbranceInfo(character)
-  const canTransfer = canTransferFromCharacter(character.get("id"))
+  const canTransfer = Boolean(
+    transferItem &&
+      canTransferFromCharacter?.(character.get("id")),
+  )
   const bagWeight = getBagOfHoldingWeightKg(items)
   const hasCurrency = items.some(
     (item) => item.kind === "currency" && (item.quantity ?? 0) > 0,
@@ -261,18 +265,20 @@ export function CharacterInventoryTab({
         }}
       />
 
-      <TransferItemDialog
-        open={transferringItem !== null}
-        item={transferringItem}
-        from={{
-          type: "character",
-          characterId: character.get("id"),
-        }}
-        characters={transferCharacters}
-        canViewCharacterDetails={canViewCharacterDetails}
-        onClose={() => setTransferringItem(null)}
-        onTransfer={transferItem}
-      />
+      {transferItem && canViewCharacterDetails ? (
+        <TransferItemDialog
+          open={transferringItem !== null}
+          item={transferringItem}
+          from={{
+            type: "character",
+            characterId: character.get("id"),
+          }}
+          characters={transferCharacters}
+          canViewCharacterDetails={canViewCharacterDetails}
+          onClose={() => setTransferringItem(null)}
+          onTransfer={transferItem}
+        />
+      ) : null}
 
       <BagOfHoldingLimitPopup
         message={bagLimitMessage}
