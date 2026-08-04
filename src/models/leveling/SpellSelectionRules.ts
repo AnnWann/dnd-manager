@@ -1,16 +1,16 @@
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import type { Spell } from "../magic/spells/Spell"
 import type { MagicCircleLevel } from "../magic/spells/spellDefinitions"
-import type {
-  CharacterClassInterface,
-  ClassLevel,
-  ClassName,
-} from "../sheet/Class"
-import { CharacterClassBuilder } from "../sheet/Class"
 import {
-  getCantripsKnownAtLevel,
-  getClassProgression,
-} from "./ClassProgression"
+  CharacterClassBuilder,
+  type CharacterClassInterface,
+  type ClassLevel,
+  type ClassName,
+} from "../sheet/Class"
+import {
+  getExpandedCantripsKnownAtLevel,
+  getExpandedClassProgression,
+} from "./ExpandedClassProgression"
 
 export type SpellSelectionMode =
   | "none"
@@ -36,6 +36,7 @@ export type ClassSpellSelectionRule = {
   swap: SpellSwapRule
   allowedSchools?: string[]
   unrestrictedLeveledSpellCount?: number
+  additionalClassLists?: ClassName[]
 }
 
 export type SubclassSpellGrantMode =
@@ -85,8 +86,17 @@ const FALLBACK_CANTRIPS: Partial<Record<ClassName, Record<number, number>>> = {
   wizard: thresholdTable([[1, 3], [4, 4], [10, 5]]),
 }
 
+const ASI_LEVELS = [4, 8, 12, 16, 19]
+const CANTRIP_VERSATILITY_CLASSES: ClassName[] = [
+  "artificer",
+  "bard",
+  "cleric",
+  "druid",
+  "sorcerer",
+  "warlock",
+]
+
 const SUBCLASS_SPELL_GRANTS: SubclassSpellGrant[] = [
-  // Cleric domains: domain spells are always prepared and do not count.
   ...domain("knowledge", [
     [1, "Command", "Identify"],
     [3, "Augury", "Suggestion"],
@@ -136,6 +146,20 @@ const SUBCLASS_SPELL_GRANTS: SubclassSpellGrant[] = [
     [7, "Freedom of Movement", "Stoneskin"],
     [9, "Flame Strike", "Hold Monster"],
   ]),
+  ...domain("forge", [
+    [1, "Identify", "Searing Smite"],
+    [3, "Heat Metal", "Magic Weapon"],
+    [5, "Elemental Weapon", "Protection from Energy"],
+    [7, "Fabricate", "Wall of Fire"],
+    [9, "Animate Objects", "Creation"],
+  ]),
+  ...domain("grave", [
+    [1, "Bane", "False Life"],
+    [3, "Gentle Repose", "Ray of Enfeeblement"],
+    [5, "Revivify", "Vampiric Touch"],
+    [7, "Blight", "Death Ward"],
+    [9, "Antilife Shell", "Raise Dead"],
+  ]),
   ...domain("order", [
     [1, "Command", "Heroism"],
     [3, "Hold Person", "Zone of Truth"],
@@ -158,7 +182,6 @@ const SUBCLASS_SPELL_GRANTS: SubclassSpellGrant[] = [
     [9, "Circle of Power", "Mislead"],
   ]),
 
-  // Paladin oath spells: always prepared and do not count.
   ...oath("devotion", [
     [3, "Protection from Evil and Good", "Sanctuary"],
     [5, "Lesser Restoration", "Zone of Truth"],
@@ -180,6 +203,20 @@ const SUBCLASS_SPELL_GRANTS: SubclassSpellGrant[] = [
     [13, "Banishment", "Dimension Door"],
     [17, "Hold Monster", "Scrying"],
   ]),
+  ...oath("conquest", [
+    [3, "Armor of Agathys", "Command"],
+    [5, "Hold Person", "Spiritual Weapon"],
+    [9, "Bestow Curse", "Fear"],
+    [13, "Dominate Beast", "Stoneskin"],
+    [17, "Cloudkill", "Dominate Person"],
+  ]),
+  ...oath("redemption", [
+    [3, "Sanctuary", "Sleep"],
+    [5, "Calm Emotions", "Hold Person"],
+    [9, "Counterspell", "Hypnotic Pattern"],
+    [13, "Otiluke's Resilient Sphere", "Stoneskin"],
+    [17, "Hold Monster", "Wall of Force"],
+  ]),
   ...oath("glory", [
     [3, "Guiding Bolt", "Heroism"],
     [5, "Enhance Ability", "Magic Weapon"],
@@ -195,7 +232,6 @@ const SUBCLASS_SPELL_GRANTS: SubclassSpellGrant[] = [
     [17, "Hold Monster", "Scrying"],
   ]),
 
-  // Warlock patron spells expand the list but still count when selected.
   ...patron("archfey", [
     [1, "Faerie Fire", "Sleep"],
     [3, "Calm Emotions", "Phantasmal Force"],
@@ -217,6 +253,20 @@ const SUBCLASS_SPELL_GRANTS: SubclassSpellGrant[] = [
     [7, "Dominate Beast", "Evard's Black Tentacles"],
     [9, "Dominate Person", "Telekinesis"],
   ]),
+  ...patron("celestial", [
+    [1, "Cure Wounds", "Guiding Bolt"],
+    [3, "Flaming Sphere", "Lesser Restoration"],
+    [5, "Daylight", "Revivify"],
+    [7, "Guardian of Faith", "Wall of Fire"],
+    [9, "Flame Strike", "Greater Restoration"],
+  ]),
+  ...patron("hexblade", [
+    [1, "Shield", "Wrathful Smite"],
+    [3, "Blur", "Branding Smite"],
+    [5, "Blink", "Elemental Weapon"],
+    [7, "Phantasmal Killer", "Staggering Smite"],
+    [9, "Banishing Smite", "Cone of Cold"],
+  ]),
   ...patron("fathomless", [
     [1, "Create or Destroy Water", "Thunderwave"],
     [3, "Gust of Wind", "Silence"],
@@ -232,16 +282,18 @@ const SUBCLASS_SPELL_GRANTS: SubclassSpellGrant[] = [
     [9, "Creation"],
     [17, "Wish"],
   ]),
+  ...bonusKnown("warlock", "celestial", [
+    [1, "Light", "Sacred Flame"],
+  ]),
 
-  // Tasha sorcerer origins: bonus known spells do not count.
-  ...origin("aberrant-mind", [
+  ...bonusKnown("sorcerer", "aberrant-mind", [
     [1, "Arms of Hadar", "Dissonant Whispers"],
     [3, "Calm Emotions", "Detect Thoughts"],
     [5, "Hunger of Hadar", "Sending"],
     [7, "Evard's Black Tentacles", "Summon Aberration"],
     [9, "Rary's Telepathic Bond", "Telekinesis"],
   ]),
-  ...origin("clockwork-soul", [
+  ...bonusKnown("sorcerer", "clockwork-soul", [
     [1, "Alarm", "Protection from Evil and Good"],
     [3, "Aid", "Lesser Restoration"],
     [5, "Dispel Magic", "Protection from Energy"],
@@ -249,39 +301,63 @@ const SUBCLASS_SPELL_GRANTS: SubclassSpellGrant[] = [
     [9, "Greater Restoration", "Wall of Force"],
   ]),
 
-  // Ranger subclass spells are bonus known spells.
-  ...rangerBonus("fey-wanderer", [
+  ...bonusKnown("ranger", "fey-wanderer", [
     [3, "Charm Person"], [5, "Misty Step"], [9, "Dispel Magic"],
     [13, "Dimension Door"], [17, "Mislead"],
   ]),
-  ...rangerBonus("swarmkeeper", [
+  ...bonusKnown("ranger", "swarmkeeper", [
     [3, "Faerie Fire"], [5, "Web"], [9, "Gaseous Form"],
     [13, "Arcane Eye"], [17, "Insect Plague"],
   ]),
+  ...bonusKnown("ranger", "gloom-stalker", [
+    [3, "Disguise Self"], [5, "Rope Trick"], [9, "Fear"],
+    [13, "Greater Invisibility"], [17, "Seeming"],
+  ]),
+  ...bonusKnown("ranger", "horizon-walker", [
+    [3, "Protection from Evil and Good"], [5, "Misty Step"],
+    [9, "Haste"], [13, "Banishment"], [17, "Teleportation Circle"],
+  ]),
+  ...bonusKnown("ranger", "monster-slayer", [
+    [3, "Protection from Evil and Good"], [5, "Zone of Truth"],
+    [9, "Magic Circle"], [13, "Banishment"], [17, "Hold Monster"],
+  ]),
 
-  // Artificer specialist spells are always prepared.
-  ...artificerSpecialist("alchemist", [
+  ...alwaysPrepared("druid", "spores", [
+    [3, "Blindness/Deafness", "Gentle Repose"],
+    [5, "Animate Dead", "Gaseous Form"],
+    [7, "Blight", "Confusion"],
+    [9, "Cloudkill", "Contagion"],
+  ]),
+  ...alwaysPrepared("druid", "wildfire", [
+    [3, "Burning Hands", "Cure Wounds"],
+    [5, "Flaming Sphere", "Scorching Ray"],
+    [7, "Plant Growth", "Revivify"],
+    [9, "Aura of Life", "Fire Shield"],
+    [11, "Flame Strike", "Mass Cure Wounds"],
+  ]),
+
+  ...alwaysPrepared("artificer", "alchemist", [
     [3, "Healing Word", "Ray of Sickness"],
     [5, "Flaming Sphere", "Melf's Acid Arrow"],
     [9, "Gaseous Form", "Mass Healing Word"],
     [13, "Blight", "Death Ward"],
     [17, "Cloudkill", "Raise Dead"],
   ]),
-  ...artificerSpecialist("artillerist", [
+  ...alwaysPrepared("artificer", "artillerist", [
     [3, "Shield", "Thunderwave"],
     [5, "Scorching Ray", "Shatter"],
     [9, "Fireball", "Wind Wall"],
     [13, "Ice Storm", "Wall of Fire"],
     [17, "Cone of Cold", "Wall of Force"],
   ]),
-  ...artificerSpecialist("battle-smith", [
+  ...alwaysPrepared("artificer", "battle-smith", [
     [3, "Heroism", "Shield"],
     [5, "Branding Smite", "Warding Bond"],
     [9, "Aura of Vitality", "Conjure Barrage"],
     [13, "Aura of Purity", "Fire Shield"],
     [17, "Banishing Smite", "Mass Cure Wounds"],
   ]),
-  ...artificerSpecialist("armorer", [
+  ...alwaysPrepared("artificer", "armorer", [
     [3, "Magic Missile", "Thunderwave"],
     [5, "Mirror Image", "Shatter"],
     [9, "Hypnotic Pattern", "Lightning Bolt"],
@@ -304,10 +380,8 @@ export function getClassSpellSelectionRule(
     normalizedLevel,
   )
   const mode = subclassCaster?.mode ?? getBaseMode(className)
-  const maxCantrips = subclassCaster?.maxCantrips ?? getCantripLimit(
-    className,
-    normalizedLevel,
-  )
+  const maxCantrips =
+    subclassCaster?.maxCantrips ?? getCantripLimit(className, normalizedLevel)
   const maxLeveledSpells =
     subclassCaster?.maxLeveledSpells ??
     getLeveledSpellLimit(character, classEntry, normalizedLevel)
@@ -330,6 +404,7 @@ export function getClassSpellSelectionRule(
     allowedSchools: subclassCaster?.allowedSchools,
     unrestrictedLeveledSpellCount:
       subclassCaster?.unrestrictedLeveledSpellCount,
+    additionalClassLists: subclassCaster?.additionalClassLists,
   }
 }
 
@@ -355,8 +430,16 @@ export function isSpellAllowedForClassSelection(
   if (spell.slotLevel > rule.maxSpellLevel) return false
   if (spell.slotLevel === 0 && rule.maxCantrips <= 0) return false
   if (spell.classes.includes(rule.className)) return true
+  if (
+    rule.additionalClassLists?.some((className) =>
+      spell.classes.includes(className),
+    )
+  ) {
+    return true
+  }
   return subclassSpellNames.some(
-    (name) => normalizeSpellName(name) === normalizeSpellName(spell.name) ||
+    (name) =>
+      normalizeSpellName(name) === normalizeSpellName(spell.name) ||
       normalizeSpellName(name) === normalizeSpellName(spell.displayName ?? ""),
   )
 }
@@ -369,11 +452,11 @@ export function getMetamagicLimit(sorcererLevel: number): number {
 }
 
 export function canReplaceMetamagicAtLevel(sorcererLevel: number): boolean {
-  return [4, 8, 12, 16, 19].includes(sorcererLevel)
+  return ASI_LEVELS.includes(sorcererLevel)
 }
 
 export function getSubclassOptions(className: ClassName) {
-  return getClassProgression(className).subclasses
+  return getExpandedClassProgression(className).subclasses
 }
 
 export function createClassEntry(
@@ -384,19 +467,45 @@ export function createClassEntry(
   let entry: CharacterClassInterface
 
   switch (className) {
-    case "artificer": entry = builder.artificer(); break
-    case "barbarian": entry = builder.barbarian(); break
-    case "bard": entry = builder.bard(); break
-    case "cleric": entry = builder.cleric(); break
-    case "druid": entry = builder.druid(); break
-    case "fighter": entry = builder.fighter(); break
-    case "monk": entry = builder.monk(); break
-    case "paladin": entry = builder.paladin(); break
-    case "ranger": entry = builder.ranger(); break
-    case "rogue": entry = builder.rogue(); break
-    case "sorcerer": entry = builder.sorcerer(); break
-    case "warlock": entry = builder.warlock(); break
-    case "wizard": entry = builder.wizard(); break
+    case "artificer":
+      entry = builder.artificer()
+      break
+    case "barbarian":
+      entry = builder.barbarian()
+      break
+    case "bard":
+      entry = builder.bard()
+      break
+    case "cleric":
+      entry = builder.cleric()
+      break
+    case "druid":
+      entry = builder.druid()
+      break
+    case "fighter":
+      entry = builder.fighter()
+      break
+    case "monk":
+      entry = builder.monk()
+      break
+    case "paladin":
+      entry = builder.paladin()
+      break
+    case "ranger":
+      entry = builder.ranger()
+      break
+    case "rogue":
+      entry = builder.rogue()
+      break
+    case "sorcerer":
+      entry = builder.sorcerer()
+      break
+    case "warlock":
+      entry = builder.warlock()
+      break
+    case "wizard":
+      entry = builder.wizard()
+      break
   }
 
   return {
@@ -449,14 +558,26 @@ function getPreparedSpellLimit(
 ): number {
   switch (className) {
     case "artificer":
-      return Math.max(1, Math.floor(level / 2) + character.getAttributeModifier("int"))
+      return Math.max(
+        1,
+        Math.floor(level / 2) + character.getAttributeModifier("int"),
+      )
     case "cleric":
     case "druid":
-      return Math.max(1, level + character.getAttributeModifier("wis"))
+      return Math.max(
+        1,
+        level + character.getAttributeModifier("wis"),
+      )
     case "paladin":
-      return Math.max(1, Math.floor(level / 2) + character.getAttributeModifier("cha"))
+      return Math.max(
+        1,
+        Math.floor(level / 2) + character.getAttributeModifier("cha"),
+      )
     case "wizard":
-      return Math.max(1, level + character.getAttributeModifier("int"))
+      return Math.max(
+        1,
+        level + character.getAttributeModifier("int"),
+      )
     default:
       return 0
   }
@@ -469,20 +590,24 @@ function getMaximumSpellLevel(
   if (className === "warlock") {
     return Math.min(5, Math.ceil(level / 2)) as MagicCircleLevel
   }
-  if (["bard", "cleric", "druid", "sorcerer", "wizard"].includes(className)) {
+  if (
+    ["bard", "cleric", "druid", "sorcerer", "wizard"].includes(className)
+  ) {
     return Math.min(9, Math.ceil(level / 2)) as MagicCircleLevel
   }
   if (className === "artificer") {
     return Math.min(5, Math.ceil(level / 4)) as MagicCircleLevel
   }
   if (["paladin", "ranger"].includes(className)) {
-    return (level < 2 ? 0 : Math.min(5, Math.ceil(level / 4))) as MagicCircleLevel
+    return (level < 2
+      ? 0
+      : Math.min(5, Math.ceil(level / 4))) as MagicCircleLevel
   }
   return 0
 }
 
 function getCantripLimit(className: ClassName, level: number): number {
-  const fromProgression = getCantripsKnownAtLevel(className, level)
+  const fromProgression = getExpandedCantripsKnownAtLevel(className, level)
   if (fromProgression > 0) return fromProgression
   return FALLBACK_CANTRIPS[className]?.[level] ?? 0
 }
@@ -492,23 +617,16 @@ function getSpellSwapRule(
   level: number,
   mode: SpellSelectionMode,
 ): SpellSwapRule {
-  if (mode !== "limited-known") {
-    return {
-      leveledKnown: 0,
-      cantrips: className === "wizard" ? 1 : 0,
-      onlyAtAsiLevel: className !== "wizard",
-    }
-  }
+  const cantripSwap =
+    CANTRIP_VERSATILITY_CLASSES.includes(className) &&
+    ASI_LEVELS.includes(level)
+      ? 1
+      : 0
 
   return {
-    leveledKnown: ["bard", "ranger", "sorcerer", "warlock"].includes(className)
-      ? 1
-      : 0,
-    cantrips: ["bard", "sorcerer", "warlock"].includes(className) &&
-      [4, 8, 12, 16, 19].includes(level)
-      ? 1
-      : 0,
-    onlyAtAsiLevel: true,
+    leveledKnown: mode === "limited-known" ? 1 : 0,
+    cantrips: cantripSwap,
+    onlyAtAsiLevel: cantripSwap > 0,
   }
 }
 
@@ -517,6 +635,15 @@ function getSubclassCasterRule(
   subclassId: string | undefined,
   level: number,
 ): Partial<ClassSpellSelectionRule> | undefined {
+  if (
+    className === "sorcerer" &&
+    subclassId === "divine-soul"
+  ) {
+    return {
+      additionalClassLists: ["cleric"],
+    }
+  }
+
   if (level < 3) return undefined
 
   if (className === "fighter" && subclassId === "eldritch-knight") {
@@ -527,7 +654,9 @@ function getSubclassCasterRule(
       maxLeveledSpells: THIRD_CASTER_KNOWN[level] ?? 0,
       maxSpellLevel: Math.min(4, Math.ceil(level / 6)) as MagicCircleLevel,
       allowedSchools: ["abjuration", "evocation"],
-      unrestrictedLeveledSpellCount: [3, 8, 14, 20].filter((entry) => entry <= level).length,
+      unrestrictedLeveledSpellCount: [3, 8, 14, 20].filter(
+        (entry) => entry <= level,
+      ).length,
     }
   }
 
@@ -539,7 +668,9 @@ function getSubclassCasterRule(
       maxLeveledSpells: THIRD_CASTER_KNOWN[level] ?? 0,
       maxSpellLevel: Math.min(4, Math.ceil(level / 6)) as MagicCircleLevel,
       allowedSchools: ["enchantment", "illusion"],
-      unrestrictedLeveledSpellCount: [3, 8, 14, 20].filter((entry) => entry <= level).length,
+      unrestrictedLeveledSpellCount: [3, 8, 14, 20].filter(
+        (entry) => entry <= level,
+      ).length,
     }
   }
 
@@ -554,14 +685,18 @@ function table(values: number[]): Record<number, number> {
   return Object.fromEntries(values.map((value, index) => [index + 1, value]))
 }
 
-function thresholdTable(entries: Array<[number, number]>): Record<number, number> {
+function thresholdTable(
+  entries: Array<[number, number]>,
+): Record<number, number> {
   const result: Record<number, number> = {}
   let current = 0
+
   for (let level = 1; level <= 20; level += 1) {
     const threshold = entries.find(([entryLevel]) => entryLevel === level)
     if (threshold) current = threshold[1]
     result[level] = current
   }
+
   return result
 }
 
@@ -581,20 +716,29 @@ function grants(
 }
 
 function domain(id: string, entries: Array<[number, ...string[]]>) {
-  return grants("cleric", id, "always-prepared", entries)
+  return alwaysPrepared("cleric", id, entries)
 }
+
 function oath(id: string, entries: Array<[number, ...string[]]>) {
-  return grants("paladin", id, "always-prepared", entries)
+  return alwaysPrepared("paladin", id, entries)
 }
+
 function patron(id: string, entries: Array<[number, ...string[]]>) {
   return grants("warlock", id, "expanded-list", entries)
 }
-function origin(id: string, entries: Array<[number, ...string[]]>) {
-  return grants("sorcerer", id, "bonus-known", entries)
+
+function bonusKnown(
+  className: ClassName,
+  id: string,
+  entries: Array<[number, ...string[]]>,
+) {
+  return grants(className, id, "bonus-known", entries)
 }
-function rangerBonus(id: string, entries: Array<[number, ...string[]]>) {
-  return grants("ranger", id, "bonus-known", entries)
-}
-function artificerSpecialist(id: string, entries: Array<[number, ...string[]]>) {
-  return grants("artificer", id, "always-prepared", entries)
+
+function alwaysPrepared(
+  className: ClassName,
+  id: string,
+  entries: Array<[number, ...string[]]>,
+) {
+  return grants(className, id, "always-prepared", entries)
 }
