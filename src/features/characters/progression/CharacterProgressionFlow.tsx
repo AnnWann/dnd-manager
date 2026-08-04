@@ -30,6 +30,7 @@ import type { ClassName } from "../../../models/sheet/Class"
 import type { Skill } from "../../../models/sheet/Skills"
 import { SKILL_LABELS } from "../creation/phbPresets"
 import { CharacterProgressionConfigurator } from "./CharacterProgressionConfigurator"
+import { ProgressionFeatureDescriptionBridge } from "./ProgressionFeatureDescriptionBridge"
 import { ProgressionFeatureModalEnhancer } from "./ProgressionFeatureModalEnhancer"
 
 type Props = ComponentProps<typeof CharacterProgressionConfigurator>
@@ -273,6 +274,7 @@ export function CharacterProgressionFlow({
         character={calculationCharacter}
         onComplete={receiveProgression}
       />
+      <ProgressionFeatureDescriptionBridge />
       <ProgressionFeatureModalEnhancer />
     </>
   )
