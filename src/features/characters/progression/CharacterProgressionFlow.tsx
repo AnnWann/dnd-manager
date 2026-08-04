@@ -19,6 +19,7 @@ import {
 } from "../../../models/leveling/DynamicSubclassSpellRules"
 import { getClassNamePt } from "../../../models/leveling/ClassLocalization"
 import { finalizeProgressionFeatures } from "../../../models/leveling/ProgressionFeatureFinalization"
+import { refreshProgressionFeatureMechanics } from "../../../models/leveling/refreshProgressionFeatureMechanics"
 import {
   createClassEntry,
   normalizeSpellName,
@@ -70,7 +71,9 @@ export function CharacterProgressionFlow({
   )
 
   function finish(character: CharacterTemplate) {
-    const finalizedFeatures = finalizeProgressionFeatures(character)
+    const finalizedFeatures = refreshProgressionFeatureMechanics(
+      finalizeProgressionFeatures(character),
+    )
     onComplete(
       finalizeDynamicSubclassSpells(
         finalizedFeatures,
