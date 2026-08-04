@@ -115,12 +115,12 @@ export async function PATCH(
     const data = sanitizeCharacterItemData(
       body.data as Prisma.InputJsonObject,
     )
-    const knownSpellIndexes = extractKnownSpellIndexes(data)
-    const accessibleHomebrewSpells = knownSpellIndexes.length
+    const referencedSpellIndexes = extractReferencedSpellIndexes(data)
+    const accessibleHomebrewSpells = referencedSpellIndexes.length
       ? await prisma.homebrewSpell.findMany({
           where: {
             index: {
-              in: knownSpellIndexes,
+              in: referencedSpellIndexes,
             },
             status: HomebrewSpellStatus.ACTIVE,
             OR: [
@@ -269,34 +269,40 @@ function parseVisibility(value: unknown): CharacterVisibility | undefined {
   )
 }
 
-function extractKnownSpellIndexes(
+function extractReferencedSpellIndexes(
   data: Prisma.InputJsonObject,
 ): string[] {
-  const magic = asObject(data.magic)
-  const spells = asObject(magic?.spells)
-  const knownSpells = Array.isArray(spells?.knownSpells)
-    ? spells.knownSpells
-    : []
   const indexes = new Set<string>()
 
-  for (const entry of knownSpells) {
-    const knownSpell = asObject(entry)
-    const spellReference = asObject(knownSpell?.spells)
-    const index =
-      typeof spellReference?.id === "string"
-        ? spellReference.id.trim()
-        : ""
+  function visit(value: unknown) {
+    if (Array.isArray(value)) {
+      value.forEach(visit)
+      return
+    }
 
-    if (index) indexes.add(index)
+    if (!isJsonObject(value)) return
+
+    if (
+      typeof value.index === "string" &&
+      value.index.trim() &&
+      ("castingMode" in value || "usage" in value)
+    ) {
+      indexes.add(value.index.trim())
+    }
+
+    if (
+      isJsonObject(value.spells) &&
+      typeof value.spells.id === "string" &&
+      value.spells.id.trim()
+    ) {
+      indexes.add(value.spells.id.trim())
+    }
+
+    Object.values(value).forEach(visit)
   }
 
+  visit(data)
   return Array.from(indexes)
-}
-
-function asObject(
-  value: unknown,
-): Record<string, unknown> | null {
-  return isJsonObject(value) ? value : null
 }
 
 function isJsonObject(
