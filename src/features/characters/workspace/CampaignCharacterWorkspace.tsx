@@ -12,65 +12,36 @@ export function CampaignCharacterWorkspace({
 }: {
   children: ReactNode
 }) {
-  const characterContext =
-    useCharacterContext()
-
+  const characterContext = useCharacterContext()
   const { userKey } = useSyncContext()
 
-  const owners =
-    characterContext.knownPlayerKeys.map(
-      (key) => characterContext.getOwner(key),
-    )
+  const owners = characterContext.knownPlayerKeys.map((key) =>
+    characterContext.getOwner(key),
+  )
 
-  const currentOwner =
-    userKey.trim()
-      ? characterContext.getOwner(
-          userKey.trim(),
-        )
-      : undefined
+  const normalizedUserKey = userKey.trim()
+  const currentOwner = normalizedUserKey
+    ? characterContext.getOwner(normalizedUserKey)
+    : undefined
 
   const value: CharacterWorkspaceValue = {
     mode: "campaign",
-
-    characters:
-      characterContext.visibleCharacters,
-
-    activeCharacter:
-      characterContext.activeCharacter,
-
-    selectedCharacterId:
-      characterContext.activeCharacter?.get("id"),
-
-    setSelectedCharacterId:
-      characterContext.setSelectedCharacterId,
-
-    updateCharacter:
-      characterContext.updateCharacter,
-
-    deleteCharacter: (characterId) => {
-      characterContext.setSelectedCharacterId(
-        characterId,
-      )
-      characterContext.deleteCharacter()
-    },
-
-    importCharacter:
-      characterContext.importCharacter,
-
-    completeLongRest:
-      characterContext.completeLongRest,
-
-    partyInventory:
-      characterContext.partyInventory,
-
-    canAssignOwners:
-      characterContext.canAssignOwners,
-
-    canEditCharacterType:
-      characterContext.canEditCharacterType,
-
+    characters: characterContext.visibleCharacters,
+    activeCharacter: characterContext.activeCharacter,
+    selectedCharacterId: characterContext.activeCharacter?.get("id"),
+    setSelectedCharacterId: characterContext.setSelectedCharacterId,
+    updateCharacter: characterContext.updateCharacter,
+    deleteCharacter: characterContext.deleteCharacter,
+    importCharacter: characterContext.importCharacter,
+    completeLongRest: characterContext.completeLongRest,
+    partyInventory: characterContext.partyInventory,
+    canAssignOwners: characterContext.canAssignOwners,
+    canEditCharacterType: characterContext.canEditCharacterType,
     owners,
     currentOwner,
+    knownPlayerKeys: characterContext.knownPlayerKeys,
+    getOwner: characterContext.getOwner,
+    createOwner: characterContext.createOwner,
   }
 
   return (
