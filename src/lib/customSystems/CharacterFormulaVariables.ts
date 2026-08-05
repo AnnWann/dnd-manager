@@ -1,4 +1,5 @@
 import type { CharacterTemplate } from '../../models/characters/CharacterTemplate'
+import { CLASS_DEFINITIONS } from '../../models/leveling/ClassDefinitions'
 import type { Attribute } from '../../models/sheet/Attribute'
 import type { ClassName } from '../../models/sheet/Class'
 import type { Skill } from '../../models/sheet/Skills'
@@ -21,21 +22,12 @@ const ATTRIBUTES: Array<{ id: Attribute; label: string }> = [
   { id: 'cha', label: 'Carisma' },
 ]
 
-const CLASSES: Array<{ id: ClassName; label: string }> = [
-  { id: 'artificer', label: 'Artífice' },
-  { id: 'barbarian', label: 'Bárbaro' },
-  { id: 'bard', label: 'Bardo' },
-  { id: 'cleric', label: 'Clérigo' },
-  { id: 'druid', label: 'Druida' },
-  { id: 'fighter', label: 'Guerreiro' },
-  { id: 'monk', label: 'Monge' },
-  { id: 'paladin', label: 'Paladino' },
-  { id: 'ranger', label: 'Patrulheiro' },
-  { id: 'rogue', label: 'Ladino' },
-  { id: 'sorcerer', label: 'Feiticeiro' },
-  { id: 'warlock', label: 'Bruxo' },
-  { id: 'wizard', label: 'Mago' },
-]
+const CLASSES: Array<{ id: ClassName; label: string }> = Object.values(
+  CLASS_DEFINITIONS,
+).map((definition) => ({
+  id: definition.className,
+  label: definition.displayName,
+}))
 
 const SKILLS: SkillDefinition[] = [
   { id: 'acrobatics', label: 'Acrobacia', attribute: 'dex' },
