@@ -1,5 +1,6 @@
 import type { ActionType } from "../models/actions/Actions";
 import type { DieSides } from "../models/dice/Die";
+import { CLASS_DEFINITIONS } from "../models/leveling/ClassDefinitions";
 import type { MagicSchool } from "../models/magic/spells/spellDefinitions";
 import type { Attribute } from "../models/sheet/Attribute";
 import type { ClassName } from "../models/sheet/Class";
@@ -26,50 +27,24 @@ export const MAGIC_SCHOOLS_MAP: Record<MagicSchool | string, string> = {
   "transmutation": "Transmutação"
 }
 
-export const CLASS_OPTIONS: Array<{ value: ClassName; label: string }> = [
-  { value: "artificer", label: "Artífice" },
-  { value: "barbarian", label: "Bárbaro" },
-  { value: "bard", label: "Bardo" },
-  { value: "cleric", label: "Clérigo" },
-  { value: "druid", label: "Druida" },
-  { value: "fighter", label: "Guerreiro" },
-  { value: "monk", label: "Monge" },
-  { value: "paladin", label: "Paladino" },
-  { value: "ranger", label: "Patrulheiro" },
-  { value: "rogue", label: "Ladino" },
-  { value: "sorcerer", label: "Feiticeiro" },
-  { value: "warlock", label: "Bruxo" },
-  { value: "wizard", label: "Mago" },
-]
+export const CLASS_OPTIONS: Array<{ value: ClassName; label: string }> =
+  Object.values(CLASS_DEFINITIONS).map((definition) => ({
+    value: definition.className,
+    label: definition.displayName,
+  }));
 
-export const SPELL_CLASS_OPTIONS:  Array<{ value: ClassName; label: string }> = [
-  { value: "artificer", label: "Artífice" },
-  { value: "bard", label: "Bardo" },
-  { value: "cleric", label: "Clérigo" },
-  { value: "druid", label: "Druida" },
-  { value: "monk", label: "Monge" },
-  { value: "paladin", label: "Paladino" },
-  { value: "ranger", label: "Patrulheiro" },
-  { value: "sorcerer", label: "Feiticeiro" },
-  { value: "warlock", label: "Bruxo" },
-  { value: "wizard", label: "Mago" },
-]
+export const SPELL_CLASS_OPTIONS: Array<{ value: ClassName; label: string }> =
+  CLASS_OPTIONS.filter(
+    ({ value }) =>
+      value !== "barbarian" && value !== "fighter" && value !== "rogue",
+  );
 
-export const CLASS_NAMES: Record<ClassName, string> = {
-  artificer: "Artífice",
-  barbarian: "Bárbaro",
-  bard: "Bardo",
-  cleric: "Clérigo",
-  druid: "Druida",
-  fighter: "Guerreiro",
-  monk: "Monge",
-  paladin: "Paladino",
-  ranger: "Patrulheiro",
-  rogue: "Ladino",
-  sorcerer: "Feiticeiro",
-  warlock: "Bruxo",
-  wizard: "Mago",
-}
+export const CLASS_NAMES: Record<ClassName, string> = Object.fromEntries(
+  Object.values(CLASS_DEFINITIONS).map((definition) => [
+    definition.className,
+    definition.displayName,
+  ]),
+) as Record<ClassName, string>;
 
 export const ACTION_NAMES: Record<ActionType, string> = {
   action: "Ação",
