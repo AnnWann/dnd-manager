@@ -4,9 +4,11 @@ import { Button } from "../../../components/ui/Button"
 import { useCharacterContext } from "../../../contexts/characterContext"
 import { useMagicContext } from "../../../contexts/magicContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import {
+  getClassPreparedSpellLimit,
+} from "../../../models/leveling/ClassDefinitions"
 import type { Spell } from "../../../models/magic/spells/Spell"
 import type { SpellSource } from "../../../models/magic/spells/SpellSource"
-import type { CharacterClassInterface } from "../../../models/sheet/Class"
 import { SpellCard } from "./spellCard"
 
 type Props = {
@@ -137,9 +139,9 @@ function canPrepareSpell(
   const classData = (character.get("sheet").classes ?? []).find(
     (entry) => entry.className === source.name,
   )
-  if (!classData?.knownSpells?.canPrepare) return true
+  if (!classData) return true
 
-  const limit = getPreparedSpellLimit(character, classData)
+  const limit = getClassPreparedSpellLimit(character, classData)
   if (limit === undefined) return true
 
   const preparedCount = (
@@ -158,33 +160,6 @@ function canPrepareSpell(
   }).length
 
   return preparedCount < limit
-}
-
-function getPreparedSpellLimit(
-  character: CharacterTemplate,
-  classData: CharacterClassInterface,
-): number | undefined {
-  if (!classData.knownSpells) return undefined
-
-  const mode = classData.knownSpells.mode
-  if (mode !== "prepared-only" && mode !== "spellbook") return undefined
-
-  const modifier = classData.castingAttribute
-    ? character.getEffectiveAttributeModifier(classData.castingAttribute)
-    : 0
-
-  switch (classData.className) {
-    case "artificer":
-      return Math.max(1, Math.floor(classData.level / 2) + modifier)
-    case "cleric":
-    case "druid":
-    case "wizard":
-      return Math.max(1, classData.level + modifier)
-    case "paladin":
-      return Math.max(1, Math.floor(classData.level / 2) + modifier)
-    default:
-      return undefined
-  }
 }
 
 function formatSpellLevel(spell: Spell): string {
