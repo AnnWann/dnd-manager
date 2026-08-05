@@ -4,6 +4,8 @@ import "../../../models/leveling/ExpandedClassProgression"
 import { finalizeProgressionFeatures } from "../../../models/leveling/ProgressionFeatureFinalization"
 import { refreshProgressionFeatureMechanics } from "../../../models/leveling/refreshProgressionFeatureMechanics"
 import { ProgressionFeatureModalEnhancer } from "../progression/ProgressionFeatureModalEnhancer"
+import { ProgressionModalInstantSelectionBridge } from "../progression/ProgressionModalInstantSelectionBridge"
+import { ProgressionSpellSelectionModal } from "../progression/ProgressionSpellSelectionModal"
 import { IntegratedCharacterCreationWizard } from "./IntegratedCharacterCreationWizard"
 
 export type { CharacterCreationProgressionPlan } from "./characterCreationWizardV5"
@@ -25,6 +27,8 @@ export function CharacterCreationWizard(
         }
       />
       <ProgressionFeatureModalEnhancer />
+      <ProgressionModalInstantSelectionBridge />
+      <ProgressionSpellSelectionModal />
     </>
   )
 }
