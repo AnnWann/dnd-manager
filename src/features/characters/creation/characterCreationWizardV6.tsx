@@ -1,4 +1,9 @@
-import { useCallback, useState, type ComponentProps } from "react"
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type ComponentProps,
+} from "react"
 
 import "../../../models/leveling/ExpandedClassProgression"
 import type { Itemmable } from "../../../models/items/item"
@@ -18,9 +23,9 @@ import {
   type BackgroundChoiceOverride,
 } from "./CharacterCreationBackgroundChoices"
 import {
-  CharacterCreationEquipmentChoices,
+  CharacterCreationEquipmentChoicesStable,
   type EquipmentOverride,
-} from "./CharacterCreationEquipmentChoices"
+} from "./CharacterCreationEquipmentChoicesStable"
 import {
   CharacterCreationGenericRacialChoices,
   type GenericRacialChoiceOverride,
@@ -29,6 +34,7 @@ import {
   CharacterCreationRacialChoices,
   type RacialChoiceOverride,
 } from "./CharacterCreationRacialChoices"
+import { CreationSpellGrantLocalizationBridge } from "./CreationSpellGrantLocalizationBridge"
 import { IntegratedCharacterCreationWizard } from "./IntegratedCharacterCreationWizard"
 
 export type { CharacterCreationProgressionPlan } from "./characterCreationWizardV5"
@@ -50,6 +56,47 @@ export function CharacterCreationWizard(
   const [backgroundChoiceError, setBackgroundChoiceError] = useState("")
   const [blockingError, setBlockingError] = useState("")
 
+  const clearErrors = useCallback(() => {
+    setBlockingError("")
+    setRacialChoiceError("")
+    setBackgroundChoiceError("")
+  }, [])
+
+  useEffect(() => {
+    if (!props.open) {
+      clearErrors()
+      return
+    }
+
+    const onInteraction = (event: Event) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+
+      if (event.type === "input" || event.type === "change") {
+        clearErrors()
+        return
+      }
+
+      const button = target.closest("button")
+      if (!button) return
+      const text = button.textContent?.trim() ?? ""
+      const isNavigation =
+        text === "Voltar" ||
+        text === "Continuar" ||
+        /^\d+\./.test(text)
+      if (isNavigation) clearErrors()
+    }
+
+    document.addEventListener("input", onInteraction, true)
+    document.addEventListener("change", onInteraction, true)
+    document.addEventListener("click", onInteraction, true)
+    return () => {
+      document.removeEventListener("input", onInteraction, true)
+      document.removeEventListener("change", onInteraction, true)
+      document.removeEventListener("click", onInteraction, true)
+    }
+  }, [clearErrors, props.open])
+
   const handleEquipmentChange = useCallback(
     (next: EquipmentOverride | null) => {
       setEquipmentOverride(next)
@@ -67,32 +114,23 @@ export function CharacterCreationWizard(
   const handleRacialChoiceChange = useCallback(
     (next: RacialChoiceOverride | null) => {
       setRacialChoiceOverride(next)
-      if (next?.valid) {
-        setRacialChoiceError("")
-        setBlockingError("")
-      }
+      if (next?.valid) clearErrors()
     },
-    [],
+    [clearErrors],
   )
   const handleGenericRacialChange = useCallback(
     (next: GenericRacialChoiceOverride | null) => {
       setGenericRacialOverride(next)
-      if (next?.valid) {
-        setRacialChoiceError("")
-        setBlockingError("")
-      }
+      if (next?.valid) clearErrors()
     },
-    [],
+    [clearErrors],
   )
   const handleBackgroundChoiceChange = useCallback(
     (next: BackgroundChoiceOverride | null) => {
       setBackgroundChoiceOverride(next)
-      if (next?.valid) {
-        setBackgroundChoiceError("")
-        setBlockingError("")
-      }
+      if (next?.valid) clearErrors()
     },
-    [],
+    [clearErrors],
   )
 
   return (
@@ -196,7 +234,7 @@ export function CharacterCreationWizard(
               },
             },
           })
-          setBlockingError("")
+          clearErrors()
           props.onCreate(
             refreshProgressionFeatureMechanics(
               materializeProgressionChoices(
@@ -208,7 +246,9 @@ export function CharacterCreationWizard(
         }}
       />
 
-      <CharacterCreationEquipmentChoices onChange={handleEquipmentChange} />
+      <CharacterCreationEquipmentChoicesStable
+        onChange={handleEquipmentChange}
+      />
       <CharacterCreationAbilityScoreRules onChange={handleAbilityScoreChange} />
       <CharacterCreationRacialChoices
         onChange={handleRacialChoiceChange}
@@ -222,12 +262,13 @@ export function CharacterCreationWizard(
         onChange={handleBackgroundChoiceChange}
         externalError={backgroundChoiceError}
       />
+      <CreationSpellGrantLocalizationBridge />
       <ProgressionFeatureModalEnhancer />
       <ProgressionModalInstantSelectionBridge />
       <ProgressionSpellSelectionModal />
 
       {blockingError ? (
-        <div className="fixed left-1/2 top-4 z-[260] w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger shadow-theme-lg">
+        <div className="pointer-events-none fixed left-1/2 top-4 z-[260] w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger shadow-theme-lg">
           {blockingError}
         </div>
       ) : null}
