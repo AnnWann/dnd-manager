@@ -162,7 +162,7 @@ function validateVisibleStep(root: HTMLElement): string {
   }
 
   const incompleteCounter = Array.from(
-    visibleText.matchAll(/(?:^|\s)(\d+)\s*\/\s*(\d+)(?:\s|$)/g),
+    visibleText.matchAll(/(\d+)\s*\/\s*(\d+)/g),
   ).find((match) => Number(match[1]) < Number(match[2]))
   if (incompleteCounter) {
     return `Complete as escolhas obrigatórias (${incompleteCounter[1]}/${incompleteCounter[2]}).`
