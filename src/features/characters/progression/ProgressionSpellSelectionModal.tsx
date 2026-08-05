@@ -8,7 +8,7 @@ import { MAGIC_SCHOOLS_MAP } from "../../../contexts/consts"
 import { useMagicContext } from "../../../contexts/magicContext"
 import type { Spell } from "../../../models/magic/spells/Spell"
 
-const TARGET_CLASS = "progression-spell-selector-enhanced"
+const FULL_LIST_CLASSES = ["artifice", "clerigo", "druida", "paladino"]
 
 type SpellProxy = {
   spell: Spell
@@ -20,10 +20,10 @@ type SpellProxy = {
 
 type Target = {
   element: HTMLDetailsElement
-  key: string
   title: string
   maxCantrips: number
   maxLeveled: number
+  fullPreparedList: boolean
 }
 
 type LevelFilter = "all" | "cantrip" | `${number}`
@@ -37,57 +37,46 @@ export function ProgressionSpellSelectionModal() {
   const [selectedOnly, setSelectedOnly] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [preparedIds, setPreparedIds] = useState<Set<string>>(new Set())
-  const [refreshToken, setRefreshToken] = useState(0)
   const [errorMessage, setErrorMessage] = useState("")
 
   useEffect(() => {
-    if (typeof document === "undefined") return
-
-    let frame = 0
-    const scan = () => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(enhanceSpellSelectors)
-    }
-
-    scan()
-    const observer = new MutationObserver(scan)
-    observer.observe(document.body, { childList: true, subtree: true })
-
     const onClick = (event: MouseEvent) => {
       const clicked = event.target
       if (!(clicked instanceof Element)) return
-      const summary = clicked.closest<HTMLElement>(
-        `details.${TARGET_CLASS} > summary`,
-      )
+      const summary = clicked.closest<HTMLElement>("details > summary")
       if (!summary) return
-
-      event.preventDefault()
-      event.stopPropagation()
       const details = summary.parentElement
       if (!(details instanceof HTMLDetailsElement)) return
       const parsed = parseTarget(details)
       if (!parsed) return
 
-      const proxies = parseSpellProxies(details, spells)
+      event.preventDefault()
+      event.stopPropagation()
+      const proxies = parseSpellProxies(details, spells, parsed.fullPreparedList)
       setTarget(parsed)
       setQuery("")
-      setLevelFilter("all")
+      setLevelFilter(parsed.fullPreparedList ? "cantrip" : "all")
       setSchoolFilter("all")
       setSelectedOnly(false)
-      setSelectedIds(new Set(proxies.filter((entry) => entry.selected).map((entry) => entry.spell.index)))
-      setPreparedIds(new Set(proxies.filter((entry) => entry.prepared).map((entry) => entry.spell.index)))
+      setSelectedIds(
+        new Set(
+          proxies
+            .filter((entry) => entry.selected)
+            .map((entry) => entry.spell.index),
+        ),
+      )
+      setPreparedIds(
+        new Set(
+          proxies
+            .filter((entry) => entry.prepared)
+            .map((entry) => entry.spell.index),
+        ),
+      )
       setErrorMessage("")
     }
 
     document.addEventListener("click", onClick, true)
-    return () => {
-      cancelAnimationFrame(frame)
-      observer.disconnect()
-      document.removeEventListener("click", onClick, true)
-      document
-        .querySelectorAll(`details.${TARGET_CLASS}`)
-        .forEach((element) => element.classList.remove(TARGET_CLASS))
-    }
+    return () => document.removeEventListener("click", onClick, true)
   }, [spells])
 
   useEffect(() => {
@@ -99,19 +88,13 @@ export function ProgressionSpellSelectionModal() {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [target])
 
-  const liveTarget = useMemo(() => {
-    void refreshToken
-    if (!target) return null
-    if (target.element.isConnected) return parseTarget(target.element) ?? target
-    return findTarget(target.key) ?? target
-  }, [refreshToken, target])
-
-  const proxies = useMemo(() => {
-    void refreshToken
-    if (!liveTarget) return []
-    return parseSpellProxies(liveTarget.element, spells)
-  }, [liveTarget, refreshToken, spells])
-
+  const proxies = useMemo(
+    () =>
+      target
+        ? parseSpellProxies(target.element, spells, target.fullPreparedList)
+        : [],
+    [spells, target],
+  )
   const schools = useMemo(
     () =>
       Array.from(new Set(proxies.map((entry) => String(entry.spell.school))))
@@ -122,7 +105,6 @@ export function ProgressionSpellSelectionModal() {
         .toSorted((left, right) => left.label.localeCompare(right.label, "pt-BR")),
     [proxies],
   )
-
   const visible = useMemo(() => {
     const normalizedQuery = normalize(query)
     return proxies.filter(({ spell }) => {
@@ -142,7 +124,7 @@ export function ProgressionSpellSelectionModal() {
     })
   }, [levelFilter, proxies, query, schoolFilter, selectedIds, selectedOnly])
 
-  if (!liveTarget || typeof document === "undefined") return null
+  if (!target || typeof document === "undefined") return null
 
   const selectedSpells = proxies
     .map((entry) => entry.spell)
@@ -156,20 +138,16 @@ export function ProgressionSpellSelectionModal() {
   }
 
   function toggleSpell(proxy: SpellProxy) {
-    const { spell } = proxy
-    const selected = selectedIds.has(spell.index)
-
+    const selected = selectedIds.has(proxy.spell.index)
     if (!selected) {
-      const current = spell.slotLevel === 0 ? cantripCount : leveledCount
-      const limit =
-        spell.slotLevel === 0
-          ? liveTarget?.maxCantrips ?? 0
-          : liveTarget?.maxLeveled ?? 0
+      const isCantrip = proxy.spell.slotLevel === 0
+      const current = isCantrip ? cantripCount : leveledCount
+      const limit = isCantrip ? target!.maxCantrips : target!.maxLeveled
       if (current >= limit) {
         setErrorMessage(
-          spell.slotLevel === 0
+          isCantrip
             ? `O limite de ${limit} truques já foi atingido.`
-            : `O limite de ${limit} magias já foi atingido. Remova ou substitua uma magia antes de continuar.`,
+            : `O limite de ${limit} magias já foi atingido.`,
         )
         return
       }
@@ -178,20 +156,18 @@ export function ProgressionSpellSelectionModal() {
     setErrorMessage("")
     setSelectedIds((current) => {
       const next = new Set(current)
-      if (selected) next.delete(spell.index)
-      else next.add(spell.index)
+      if (selected) next.delete(proxy.spell.index)
+      else next.add(proxy.spell.index)
       return next
     })
     if (selected) {
       setPreparedIds((current) => {
         const next = new Set(current)
-        next.delete(spell.index)
+        next.delete(proxy.spell.index)
         return next
       })
     }
-
     proxy.button.click()
-    window.setTimeout(() => setRefreshToken((value) => value + 1), 0)
   }
 
   function togglePrepared(proxy: SpellProxy) {
@@ -204,7 +180,6 @@ export function ProgressionSpellSelectionModal() {
       return next
     })
     proxy.checkbox.click()
-    window.setTimeout(() => setRefreshToken((value) => value + 1), 0)
   }
 
   return createPortal(
@@ -212,7 +187,7 @@ export function ProgressionSpellSelectionModal() {
       className="fixed inset-0 z-[150] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm sm:p-6"
       role="dialog"
       aria-modal="true"
-      aria-label={liveTarget.title}
+      aria-label={target.title}
       onMouseDown={close}
     >
       <section
@@ -221,18 +196,21 @@ export function ProgressionSpellSelectionModal() {
       >
         <header className="flex items-start justify-between gap-4 border-b border-border p-4 sm:p-5">
           <div>
-            <h2 className="text-lg font-semibold text-textH">{liveTarget.title}</h2>
+            <h2 className="text-lg font-semibold text-textH">{target.title}</h2>
             <div className="mt-2 flex flex-wrap gap-2 text-xs text-textMuted">
-              <Badge label={`Truques ${cantripCount}/${liveTarget.maxCantrips}`} />
-              <Badge label={`Magias ${leveledCount}/${liveTarget.maxLeveled}`} />
-              <span>As escolhas são aplicadas imediatamente ao personagem em criação.</span>
+              <Badge label={`Truques ${cantripCount}/${target.maxCantrips}`} />
+              {target.fullPreparedList ? (
+                <Badge label="Magias de nível: lista completa da classe" />
+              ) : (
+                <Badge label={`Magias ${leveledCount}/${target.maxLeveled}`} />
+              )}
             </div>
           </div>
           <button
             type="button"
             aria-label="Fechar"
             onClick={close}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-textMuted hover:bg-bg-subtle hover:text-textH"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-textMuted hover:bg-bg-subtle hover:text-textH"
           >
             <X className="h-4 w-4" />
           </button>
@@ -251,6 +229,7 @@ export function ProgressionSpellSelectionModal() {
           <select
             className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
             value={levelFilter}
+            disabled={target.fullPreparedList}
             onChange={(event) => setLevelFilter(event.target.value as LevelFilter)}
           >
             <option value="all">Todos os níveis</option>
@@ -280,6 +259,11 @@ export function ProgressionSpellSelectionModal() {
         </div>
 
         <main className="min-h-0 overflow-y-auto p-4 sm:p-5">
+          {target.fullPreparedList ? (
+            <div className="mb-4 rounded-xl border border-accentBorder bg-accentBg p-3 text-sm text-textH">
+              Esta classe conhece toda a lista de magias de nível disponível. Selecione apenas os truques; as magias preparadas podem ser alteradas posteriormente na ficha.
+            </div>
+          ) : null}
           {errorMessage ? (
             <div className="mb-4 rounded-xl border border-danger bg-dangerBg p-3 text-sm text-danger">
               {errorMessage}
@@ -288,12 +272,11 @@ export function ProgressionSpellSelectionModal() {
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {visible.map((proxy) => {
-              const { spell } = proxy
-              const selected = selectedIds.has(spell.index)
-              const prepared = preparedIds.has(spell.index)
+              const selected = selectedIds.has(proxy.spell.index)
+              const prepared = preparedIds.has(proxy.spell.index)
               return (
                 <article
-                  key={spell.index}
+                  key={proxy.spell.index}
                   className={
                     selected
                       ? "rounded-xl border border-accentBorder bg-accentBg p-4"
@@ -308,37 +291,21 @@ export function ProgressionSpellSelectionModal() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="font-semibold text-textH">{spellLabel(spell)}</div>
+                        <div className="font-semibold text-textH">{spellLabel(proxy.spell)}</div>
                         <div className="mt-1 flex flex-wrap gap-2">
-                          <Badge label={spell.slotLevel === 0 ? "Truque" : `${spell.slotLevel}º nível`} />
-                          <Badge label={MAGIC_SCHOOLS_MAP[spell.school] ?? String(spell.school)} />
-                          {spell.concentration ? <Badge label="Concentração" /> : null}
-                          {spell.ritual ? <Badge label="Ritual" /> : null}
+                          <Badge label={proxy.spell.slotLevel === 0 ? "Truque" : `${proxy.spell.slotLevel}º nível`} />
+                          <Badge label={MAGIC_SCHOOLS_MAP[proxy.spell.school] ?? String(proxy.spell.school)} />
+                          {proxy.spell.concentration ? <Badge label="Concentração" /> : null}
+                          {proxy.spell.ritual ? <Badge label="Ritual" /> : null}
                         </div>
                       </div>
-                      {selected ? <Check className="h-4 w-4 shrink-0 text-textH" /> : null}
+                      {selected ? <Check className="h-4 w-4 text-textH" /> : null}
                     </div>
-                    <p className="mt-3 line-clamp-3 text-xs leading-5 text-textMuted">
-                      {spell.description || "Sem descrição cadastrada."}
+                    <p className="mt-3 text-xs leading-5 text-textMuted">
+                      {proxy.spell.description || "Sem descrição cadastrada."}
                     </p>
                   </button>
-
-                  <details className="mt-3 text-xs text-text">
-                    <summary className="cursor-pointer font-medium text-textH">
-                      Ler detalhes completos
-                    </summary>
-                    <div className="mt-2 grid gap-2 leading-5 text-textMuted">
-                      <p className="whitespace-pre-wrap">{spell.description || "Sem descrição cadastrada."}</p>
-                      {spell.higherLevelText?.trim() ? (
-                        <p className="whitespace-pre-wrap">
-                          <strong className="text-textH">Em níveis superiores: </strong>
-                          {spell.higherLevelText}
-                        </p>
-                      ) : null}
-                    </div>
-                  </details>
-
-                  {proxy.checkbox && selected && spell.slotLevel > 0 ? (
+                  {proxy.checkbox && selected && proxy.spell.slotLevel > 0 ? (
                     <label className="mt-3 flex items-center gap-2 border-t border-border pt-3 text-xs text-text">
                       <input
                         type="checkbox"
@@ -352,12 +319,6 @@ export function ProgressionSpellSelectionModal() {
               )
             })}
           </div>
-
-          {!visible.length ? (
-            <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-textMuted">
-              Nenhuma magia corresponde aos filtros atuais.
-            </div>
-          ) : null}
         </main>
 
         <footer className="flex justify-end border-t border-border p-4 sm:p-5">
@@ -369,72 +330,84 @@ export function ProgressionSpellSelectionModal() {
   )
 }
 
-function enhanceSpellSelectors() {
-  document.querySelectorAll<HTMLDetailsElement>("details").forEach((details) => {
-    const summary = details.querySelector(":scope > summary")
-    const text = summary?.textContent?.trim() ?? ""
-    if (!normalize(text).startsWith("selecionar e ler magias de")) return
-    details.classList.add(TARGET_CLASS)
-    details.open = false
-  })
-}
-
 function parseTarget(element: HTMLDetailsElement): Target | undefined {
   const raw = element.querySelector(":scope > summary")?.textContent?.trim() ?? ""
+  const normalized = normalize(raw)
+  if (!normalized.startsWith("selecionar e ler magias de")) return undefined
   const limits = raw.match(/truques\s+\d+\/(\d+)\s*·\s*magias\s+\d+\/(\d+)/i)
-  if (!raw || !limits) return undefined
-  const title = raw.split("·")[0]?.trim() || "Selecionar magias"
+  const fullPreparedList = FULL_LIST_CLASSES.some((className) =>
+    normalized.includes(className),
+  )
   return {
     element,
-    key: normalize(title),
-    title,
-    maxCantrips: Number(limits[1]) || 0,
-    maxLeveled: Number(limits[2]) || 0,
+    title: raw.split("·")[0]?.trim() || "Selecionar magias",
+    maxCantrips: Number(limits?.[1]) || 0,
+    maxLeveled: fullPreparedList ? 0 : Number(limits?.[2]) || 0,
+    fullPreparedList,
   }
-}
-
-function findTarget(key: string): Target | undefined {
-  for (const element of Array.from(
-    document.querySelectorAll<HTMLDetailsElement>(`details.${TARGET_CLASS}`),
-  )) {
-    const parsed = parseTarget(element)
-    if (parsed?.key === key) return parsed
-  }
-  return undefined
 }
 
 function parseSpellProxies(
   element: HTMLDetailsElement,
   spells: Spell[],
+  fullPreparedList: boolean,
 ): SpellProxy[] {
-  const byName = new Map<string, Spell>()
-  for (const spell of spells) {
-    byName.set(normalize(spell.name), spell)
-    if (spell.displayName?.trim()) byName.set(normalize(spell.displayName), spell)
-  }
-
+  const spellMap = buildSpellMap(spells)
   return Array.from(element.querySelectorAll<HTMLElement>("article"))
     .map((article) => {
-      const button = article.querySelector<HTMLButtonElement>(":scope > button")
-      const label = article.querySelector("strong")?.textContent?.trim() ?? ""
-      const spell = byName.get(normalize(label))
-      if (!button || !spell) return undefined
+      const button = article.querySelector<HTMLButtonElement>("button")
+      const title = article.querySelector<HTMLElement>("strong")?.textContent?.trim()
+      if (!button || !title) return undefined
+      const spell = resolveSpell(spellMap, title)
+      if (!spell || (fullPreparedList && spell.slotLevel > 0)) return undefined
       const checkbox = article.querySelector<HTMLInputElement>('input[type="checkbox"]') ?? undefined
       return {
         spell,
         button,
         checkbox,
         selected:
-          article.classList.contains("border-accentBorder") ||
-          article.classList.contains("bg-accentBg"),
-        prepared: checkbox?.checked === true,
+          article.classList.contains("bg-accentBg") ||
+          button.getAttribute("aria-pressed") === "true",
+        prepared: checkbox?.checked ?? false,
       }
     })
     .filter((entry): entry is SpellProxy => Boolean(entry))
 }
 
+function buildSpellMap(spells: Spell[]): Map<string, Spell> {
+  const map = new Map<string, Spell>()
+  for (const spell of spells) {
+    map.set(normalize(spell.index), spell)
+    map.set(normalize(spell.name), spell)
+    if (spell.displayName?.trim()) map.set(normalize(spell.displayName), spell)
+  }
+  return map
+}
+
+function resolveSpell(map: Map<string, Spell>, value: string): Spell | undefined {
+  return map.get(normalize(value)) ?? map.get(normalize(toIndex(value)))
+}
+
+function toIndex(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/['’]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLocaleLowerCase("en-US")
+}
+
 function spellLabel(spell: Spell): string {
   return spell.displayName?.trim() || spell.name
+}
+
+function Badge({ label }: { label: string }) {
+  return (
+    <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
+      {label}
+    </span>
+  )
 }
 
 function normalize(value: string): string {
@@ -444,12 +417,4 @@ function normalize(value: string): string {
     .toLocaleLowerCase("pt-BR")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
-}
-
-function Badge({ label }: { label: string }) {
-  return (
-    <span className="inline-flex rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
-      {label}
-    </span>
-  )
 }
