@@ -1,4 +1,11 @@
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
+import {
+  getClassCastingAttribute,
+  getClassKnownSpellLimit,
+  getClassKnownSpellsRule,
+  getClassSpellcastingProgression,
+  getLegacyClassRuleOverrides,
+} from "../leveling/ClassDefinitions"
 import type { Attribute } from "./Attribute"
 
 export type SpellcastingProgression = "full" | "half" | "third"
@@ -24,15 +31,26 @@ export type CharacterSubclassSelection = {
   source: ClassSourceBook
 }
 
+export type CharacterClassRuleOverrides = {
+  castingAttribute?: Attribute | null
+  spellcastingProgression?: SpellcastingProgression | null
+  knownSpells?: KnownSpellsRule | null
+}
+
 export interface CharacterClassInterface {
   className: ClassName
   level: ClassLevel
-  castingAttribute?: Attribute
 
-  /** Optional: override for multiclass spell slot progression. */
-  spellcastingProgression?: SpellcastingProgression
+  /**
+   * Resolved from the class definition unless explicitly overridden.
+   * Legacy serialized values remain accepted during migration.
+   */
+  readonly castingAttribute?: Attribute
+  readonly spellcastingProgression?: SpellcastingProgression
+  readonly knownSpells?: KnownSpellsRule
 
-  knownSpells?: KnownSpellsRule
+  /** Explicit per-character exceptions to the canonical class definition. */
+  ruleOverrides?: CharacterClassRuleOverrides
 
   /** Selected 2014 subclass, when the class has reached its subclass level. */
   subclass?: CharacterSubclassSelection
@@ -41,14 +59,17 @@ export interface CharacterClassInterface {
   levelChoices?: Record<string, string[]>
 }
 
+export type SerializedCharacterClass = Pick<
+  CharacterClassInterface,
+  "className" | "level" | "subclass" | "levelChoices" | "ruleOverrides"
+>
+
 export class CharacterClass implements CharacterClassInterface {
   className: ClassName
   level: ClassLevel
-  castingAttribute?: Attribute
-  spellcastingProgression?: SpellcastingProgression
-  knownSpells?: KnownSpellsRule
   subclass?: CharacterSubclassSelection
   levelChoices?: Record<string, string[]>
+  ruleOverrides?: CharacterClassRuleOverrides
 
   constructor(
     className: ClassName,
@@ -58,26 +79,58 @@ export class CharacterClass implements CharacterClassInterface {
     knownSpells: KnownSpellsRule | undefined = undefined,
     subclass: CharacterSubclassSelection | undefined = undefined,
     levelChoices: Record<string, string[]> | undefined = undefined,
+    ruleOverrides: CharacterClassRuleOverrides | undefined = undefined,
   ) {
     this.className = className
     this.level = classLevel
-    this.castingAttribute = castingAttribute
-    this.spellcastingProgression = spellcastingProgression
-    this.knownSpells = knownSpells
     this.subclass = subclass
     this.levelChoices = levelChoices
+
+    const migratedOverrides = getLegacyClassRuleOverrides({
+      className,
+      level: classLevel,
+      castingAttribute,
+      spellcastingProgression,
+      knownSpells,
+      subclass,
+      levelChoices,
+      ruleOverrides,
+    })
+
+    this.ruleOverrides = Object.keys(migratedOverrides).length
+      ? migratedOverrides
+      : undefined
+  }
+
+  static fromJSON(classData: CharacterClassInterface): CharacterClass {
+    if (classData instanceof CharacterClass) return classData
+
+    return new CharacterClass(
+      classData.className,
+      classData.level,
+      classData.castingAttribute,
+      classData.spellcastingProgression,
+      classData.knownSpells,
+      classData.subclass,
+      classData.levelChoices,
+      classData.ruleOverrides,
+    )
+  }
+
+  get castingAttribute(): Attribute | undefined {
+    return getClassCastingAttribute(this)
+  }
+
+  get spellcastingProgression(): SpellcastingProgression | undefined {
+    return getClassSpellcastingProgression(this)
+  }
+
+  get knownSpells(): KnownSpellsRule | undefined {
+    return getClassKnownSpellsRule(this)
   }
 
   getKnownSpellLimit(): number | undefined {
-    if (!this.knownSpells) return undefined
-
-    const override = this.knownSpells.overrides?.[this.level]
-    if (override !== undefined) return override
-
-    return (
-      this.knownSpells.baseAtLevel1 +
-      Math.max(0, this.level - 1) * this.knownSpells.perLevel
-    )
+    return getClassKnownSpellLimit(this)
   }
 
   getKnownSpellMode(): KnownSpellMode | undefined {
@@ -95,142 +148,47 @@ export class CharacterClass implements CharacterClassInterface {
   isPreparedOnlyCaster(): boolean {
     return this.knownSpells?.mode === "prepared-only"
   }
-}
 
-const BARD_KNOWN_SPELLS: KnownSpellsRule = {
-  mode: "limited",
-  baseAtLevel1: 4,
-  perLevel: 1,
-  overrides: {
-    10: 14,
-    11: 15,
-    12: 15,
-    13: 16,
-    14: 18,
-    15: 19,
-    16: 19,
-    17: 20,
-    18: 22,
-    19: 22,
-    20: 22,
-  },
-}
+  withLevel(level: ClassLevel): CharacterClass {
+    return new CharacterClass(
+      this.className,
+      level,
+      undefined,
+      undefined,
+      undefined,
+      this.subclass,
+      this.levelChoices,
+      this.ruleOverrides,
+    )
+  }
 
-const SORCERER_KNOWN_SPELLS: KnownSpellsRule = {
-  mode: "limited",
-  baseAtLevel1: 2,
-  perLevel: 1,
-  overrides: {
-    12: 12,
-    14: 13,
-    16: 14,
-    18: 15,
-    19: 15,
-    20: 15,
-  },
-}
+  withRuleOverrides(
+    patch: Partial<CharacterClassRuleOverrides>,
+  ): CharacterClass {
+    return new CharacterClass(
+      this.className,
+      this.level,
+      undefined,
+      undefined,
+      undefined,
+      this.subclass,
+      this.levelChoices,
+      {
+        ...(this.ruleOverrides ?? {}),
+        ...patch,
+      },
+    )
+  }
 
-const WARLOCK_KNOWN_SPELLS: KnownSpellsRule = {
-  mode: "limited",
-  baseAtLevel1: 2,
-  perLevel: 1,
-  overrides: {
-    10: 10,
-    12: 11,
-    14: 12,
-    16: 13,
-    18: 14,
-    20: 15,
-  },
-}
-
-const RANGER_KNOWN_SPELLS: KnownSpellsRule = {
-  mode: "limited",
-  baseAtLevel1: 0,
-  perLevel: 1,
-  overrides: {
-    1: 0,
-    2: 2,
-    3: 3,
-    4: 3,
-    5: 4,
-    6: 4,
-    7: 5,
-    8: 5,
-    9: 6,
-    10: 6,
-    11: 7,
-    12: 7,
-    13: 8,
-    14: 8,
-    15: 9,
-    16: 9,
-    17: 10,
-    18: 10,
-    19: 11,
-    20: 11,
-  },
-}
-
-const WIZARD_KNOWN_SPELLS: KnownSpellsRule = {
-  mode: "spellbook",
-  baseAtLevel1: 6,
-  perLevel: 2,
-}
-
-const PREPARED_ONLY_SPELLS: KnownSpellsRule = {
-  mode: "prepared-only",
-  baseAtLevel1: 0,
-  perLevel: 0,
-}
-
-function minimumOne(value: number): number {
-  return Math.max(1, value)
-}
-
-const ARTIFICER_PREPARED_SPELLS: KnownSpellsRule = {
-  ...PREPARED_ONLY_SPELLS,
-  canPrepare: (character) =>
-    minimumOne(
-      Math.floor(character.getClassLevel("artificer") / 2) +
-        character.getAttributeModifier("int"),
-    ),
-}
-
-const CLERIC_PREPARED_SPELLS: KnownSpellsRule = {
-  ...PREPARED_ONLY_SPELLS,
-  canPrepare: (character) =>
-    minimumOne(
-      character.getClassLevel("cleric") +
-        character.getAttributeModifier("wis"),
-    ),
-}
-
-const DRUID_PREPARED_SPELLS: KnownSpellsRule = {
-  ...PREPARED_ONLY_SPELLS,
-  canPrepare: (character) =>
-    minimumOne(
-      character.getClassLevel("druid") +
-        character.getAttributeModifier("wis"),
-    ),
-}
-
-const PALADIN_PREPARED_SPELLS: KnownSpellsRule = {
-  ...PREPARED_ONLY_SPELLS,
-  canPrepare: (character) =>
-    minimumOne(
-      Math.floor(character.getClassLevel("paladin") / 2) +
-        character.getAttributeModifier("cha"),
-    ),
-}
-
-const WIZARD_PREPARED_SPELLS: KnownSpellsRule = {
-  ...WIZARD_KNOWN_SPELLS,
-  canPrepare: (character) =>
-    minimumOne(
-      character.getClassLevel("wizard") +
-        character.getAttributeModifier("int"),
-    ),
+  toJSON(): SerializedCharacterClass {
+    return {
+      className: this.className,
+      level: this.level,
+      subclass: this.subclass,
+      levelChoices: this.levelChoices,
+      ruleOverrides: this.ruleOverrides,
+    }
+  }
 }
 
 export class CharacterClassBuilder {
@@ -239,33 +197,15 @@ export class CharacterClassBuilder {
   }
 
   bard() {
-    return new CharacterClass(
-      "bard",
-      1,
-      "cha",
-      "full",
-      BARD_KNOWN_SPELLS,
-    )
+    return new CharacterClass("bard", 1)
   }
 
   cleric() {
-    return new CharacterClass(
-      "cleric",
-      1,
-      "wis",
-      "full",
-      CLERIC_PREPARED_SPELLS,
-    )
+    return new CharacterClass("cleric", 1)
   }
 
   druid() {
-    return new CharacterClass(
-      "druid",
-      1,
-      "wis",
-      "full",
-      DRUID_PREPARED_SPELLS,
-    )
+    return new CharacterClass("druid", 1)
   }
 
   fighter() {
@@ -277,23 +217,11 @@ export class CharacterClassBuilder {
   }
 
   paladin() {
-    return new CharacterClass(
-      "paladin",
-      1,
-      "cha",
-      "half",
-      PALADIN_PREPARED_SPELLS,
-    )
+    return new CharacterClass("paladin", 1)
   }
 
   ranger() {
-    return new CharacterClass(
-      "ranger",
-      1,
-      "wis",
-      "half",
-      RANGER_KNOWN_SPELLS,
-    )
+    return new CharacterClass("ranger", 1)
   }
 
   rogue() {
@@ -301,43 +229,19 @@ export class CharacterClassBuilder {
   }
 
   sorcerer() {
-    return new CharacterClass(
-      "sorcerer",
-      1,
-      "cha",
-      "full",
-      SORCERER_KNOWN_SPELLS,
-    )
+    return new CharacterClass("sorcerer", 1)
   }
 
   warlock() {
-    return new CharacterClass(
-      "warlock",
-      1,
-      "cha",
-      "full",
-      WARLOCK_KNOWN_SPELLS,
-    )
+    return new CharacterClass("warlock", 1)
   }
 
   wizard() {
-    return new CharacterClass(
-      "wizard",
-      1,
-      "int",
-      "full",
-      WIZARD_PREPARED_SPELLS,
-    )
+    return new CharacterClass("wizard", 1)
   }
 
   artificer() {
-    return new CharacterClass(
-      "artificer",
-      1,
-      "int",
-      "half",
-      ARTIFICER_PREPARED_SPELLS,
-    )
+    return new CharacterClass("artificer", 1)
   }
 }
 
