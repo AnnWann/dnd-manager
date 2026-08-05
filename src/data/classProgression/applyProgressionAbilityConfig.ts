@@ -1,7 +1,7 @@
+import type { Ability } from "../../models/abilities/Ability"
 import {
   createCharacterAcquisition,
 } from "../../models/characters/CharacterAcquisition"
-import type { Ability } from "../../models/abilities/Ability"
 import {
   getClassProgression,
   type LevelFeatureDefinition,
@@ -28,14 +28,12 @@ const CLASS_NAMES: readonly ClassName[] = [
 
 /**
  * Applies the complete Ability template attached to the source progression
- * feature. The current acquisition and consumed-use state remain runtime-owned.
+ * feature. Identity, acquisition, and consumed-use state remain runtime-owned.
  */
 export function applyProgressionAbilityConfig(ability: Ability): Ability {
   const configuration = getProgressionAbilityConfig(ability)
   if (!configuration) return ability
 
-  const sourceAbilityId = ability.originalAbilityId ?? ability.id
-  const configuredId = configuration.id ?? ability.id
   const configuredUsage = Object.prototype.hasOwnProperty.call(
     configuration,
     "usage",
@@ -54,14 +52,11 @@ export function applyProgressionAbilityConfig(ability: Ability): Ability {
   const configured: Ability = {
     ...ability,
     ...configuration,
-    id: configuredId,
+    id: ability.id,
     name: configuration.name ?? ability.name,
     description: configuration.description ?? ability.description,
     usage: configuredUsage,
-    originalAbilityId:
-      configuredId === sourceAbilityId
-        ? ability.originalAbilityId
-        : sourceAbilityId,
+    originalAbilityId: ability.originalAbilityId,
     acquisition: ability.acquisition,
   }
 
