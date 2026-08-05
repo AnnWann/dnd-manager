@@ -33,28 +33,54 @@ const ALIGNMENTS: Array<{
 ]
 
 const RACE_LABELS: Record<string, string> = {
-  human: "Humano",
-  elf: "Elfo",
-  dwarf: "Anão",
-  halfling: "Halfling",
-  dragonborn: "Draconato",
-  gnome: "Gnomo",
-  "half-elf": "Meio-Elfo",
-  "half-orc": "Meio-Orc",
-  tiefling: "Tiefling",
-  aasimar: "Aasimar",
-  goliath: "Golias",
-  firbolg: "Firbolg",
-  kenku: "Kenku",
-  tabaxi: "Tabaxi",
-  triton: "Tritão",
-  goblin: "Goblin",
-  hobgoblin: "Hobgoblin",
-  bugbear: "Bugbear",
-  kobold: "Kobold",
-  orc: "Orc",
-  yuanTi: "Yuan-ti",
   custom: "Personalizada",
+  aarakocra: "Aarakocra",
+  aasimar: "Aasimar",
+  bugbear: "Bugbear",
+  centaur: "Centauro",
+  changeling: "Metamorfo",
+  dragonborn: "Draconato",
+  dwarf: "Anão",
+  duergar: "Duergar",
+  elf: "Elfo",
+  eladrin: "Eladrin",
+  fairy: "Fada",
+  firbolg: "Firbolg",
+  genasi: "Genasi",
+  giff: "Giff",
+  githyanki: "Githyanki",
+  githzerai: "Githzerai",
+  gnome: "Gnomo",
+  "deep-gnome": "Gnomo das Profundezas",
+  goblin: "Goblin",
+  goliath: "Golias",
+  "half-elf": "Meio-Elfo",
+  "half-giant": "Meio-Gigante",
+  "half-orc": "Meio-Orc",
+  halfling: "Halfling",
+  harengon: "Heregon",
+  hobgoblin: "Hobgoblin",
+  human: "Humano",
+  kenku: "Kenku",
+  kobold: "Kobold",
+  leonin: "Leonino",
+  lizardfolk: "Povo-Lagarto",
+  loxodon: "Loxodon",
+  minotaur: "Minotauro",
+  orc: "Orc",
+  owlin: "Corujino",
+  satyr: "Sátiro",
+  "shadar-kai": "Shadar-kai",
+  shifter: "Transmorfo",
+  tabaxi: "Tabaxi",
+  "thri-kreen": "Thri-kreen",
+  tiefling: "Tiefling",
+  tortle: "Tortle",
+  triton: "Tritão",
+  vedalken: "Vedalken",
+  verdan: "Verdan",
+  warforged: "Forjado Bélico",
+  "yuan-ti": "Yuan-ti",
 }
 
 export function CharacterCreationIdentityStep({
@@ -65,14 +91,19 @@ export function CharacterCreationIdentityStep({
 }: Props) {
   const [host, setHost] = useState<HTMLElement | null>(null)
   const hostRef = useRef<HTMLElement | null>(null)
+  const nameRef = useRef(value.name)
+
+  useEffect(() => {
+    nameRef.current = value.name
+    const reviewSection = findReviewSection()
+    if (reviewSection) updateReviewName(reviewSection, value.name)
+  }, [value.name])
 
   useEffect(() => {
     if (!open) return
 
     const locate = () => {
-      const heading = Array.from(document.querySelectorAll<HTMLElement>("main h2"))
-        .find((entry) => entry.textContent?.trim() === "Confirmar personagem")
-      const reviewSection = heading?.closest<HTMLElement>("section")
+      const reviewSection = findReviewSection()
       const parent = reviewSection?.parentElement
 
       if (!reviewSection || !parent) {
@@ -93,7 +124,7 @@ export function CharacterCreationIdentityStep({
       }
 
       localizeReviewRace(reviewSection)
-      updateReviewName(reviewSection, value.name)
+      updateReviewName(reviewSection, nameRef.current)
     }
 
     locate()
@@ -104,7 +135,7 @@ export function CharacterCreationIdentityStep({
       hostRef.current = null
       setHost(null)
     }
-  }, [open, value.name])
+  }, [open])
 
   if (!host) return null
 
@@ -317,6 +348,12 @@ export function CharacterCreationIdentityStep({
   )
 }
 
+function findReviewSection(): HTMLElement | null {
+  const heading = Array.from(document.querySelectorAll<HTMLElement>("main h2"))
+    .find((entry) => entry.textContent?.trim() === "Confirmar personagem")
+  return heading?.closest<HTMLElement>("section") ?? null
+}
+
 function localizeReviewRace(section: HTMLElement) {
   const rows = Array.from(section.querySelectorAll<HTMLElement>("div"))
   const row = rows.find((entry) => {
@@ -326,7 +363,10 @@ function localizeReviewRace(section: HTMLElement) {
   const value = row?.querySelector<HTMLElement>("strong")
   if (!value) return
   const raw = value.textContent?.trim() ?? ""
-  value.textContent = RACE_LABELS[raw] ?? RACE_LABELS[raw.toLocaleLowerCase("en-US")] ?? raw
+  value.textContent =
+    RACE_LABELS[raw] ??
+    RACE_LABELS[raw.toLocaleLowerCase("en-US")] ??
+    raw
 }
 
 function updateReviewName(section: HTMLElement, name: string) {
