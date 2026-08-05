@@ -4,13 +4,6 @@ import { useMagicContext } from "../../../contexts/magicContext"
 import type { Spell } from "../../../models/magic/spells/Spell"
 
 const GRANT_SUMMARY = "ler detalhes das magias concedidas pela subclasse"
-const PREPARED_FULL_LIST_CLASSES = [
-  "artífice",
-  "clerigo",
-  "clérigo",
-  "druida",
-  "paladino",
-]
 
 export function CreationSpellGrantLocalizationBridge() {
   const { spells } = useMagicContext()
@@ -19,10 +12,7 @@ export function CreationSpellGrantLocalizationBridge() {
   useEffect(() => {
     if (typeof document === "undefined") return
 
-    const apply = () => {
-      localizeGrantedSpellCards(spellMap)
-      clarifyPreparedFullListSelectors()
-    }
+    const apply = () => localizeGrantedSpellCards(spellMap)
 
     apply()
     const interval = window.setInterval(apply, 500)
@@ -63,27 +53,6 @@ function localizeGrantedSpellCards(spellMap: Map<string, Spell>) {
   })
 }
 
-function clarifyPreparedFullListSelectors() {
-  document.querySelectorAll<HTMLDetailsElement>("details").forEach((details) => {
-    const summary = details.querySelector<HTMLElement>(":scope > summary")
-    if (!summary) return
-    const normalized = normalize(summary.textContent ?? "")
-    if (!normalized.startsWith("selecionar e ler magias de")) return
-
-    const isFullListClass = PREPARED_FULL_LIST_CLASSES.some((className) =>
-      normalized.includes(normalize(className)),
-    )
-    if (!isFullListClass) return
-
-    const original = summary.dataset.originalSpellSelectorText || summary.textContent || ""
-    summary.dataset.originalSpellSelectorText = original
-    const cantripMatch = original.match(/truques\s+(\d+\/\d+)/i)
-    summary.textContent = cantripMatch
-      ? `${original.split("·")[0]?.trim()} · truques ${cantripMatch[1]} · magias de nível: lista completa da classe`
-      : `${original.split("·")[0]?.trim()} · magias de nível: lista completa da classe`
-  })
-}
-
 function buildSpellMap(spells: Spell[]): Map<string, Spell> {
   const map = new Map<string, Spell>()
   for (const spell of spells) {
@@ -95,11 +64,7 @@ function buildSpellMap(spells: Spell[]): Map<string, Spell> {
 }
 
 function resolveSpell(map: Map<string, Spell>, rawName: string): Spell | undefined {
-  const normalized = normalize(rawName)
-  return (
-    map.get(normalized) ??
-    map.get(normalize(toSpellIndex(rawName)))
-  )
+  return map.get(normalize(rawName)) ?? map.get(normalize(toSpellIndex(rawName)))
 }
 
 function toSpellIndex(value: string): string {
