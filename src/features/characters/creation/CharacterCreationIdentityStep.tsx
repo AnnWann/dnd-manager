@@ -1,4 +1,9 @@
-import { useEffect, useRef, useState } from "react"
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react"
 import { createPortal } from "react-dom"
 import { Plus, Trash2 } from "lucide-react"
 
@@ -39,6 +44,7 @@ export function CharacterCreationIdentityStep({
   useEffect(() => {
     if (!open) return
 
+    let frame = 0
     const locate = () => {
       const reviewSection = findReviewSection()
       const parent = reviewSection?.parentElement
@@ -60,11 +66,17 @@ export function CharacterCreationIdentityStep({
       localizeReviewRace(reviewSection)
       updateReviewName(reviewSection, nameRef.current)
     }
+    const scheduleLocate = () => {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(locate)
+    }
 
     locate()
-    const interval = window.setInterval(locate, 250)
+    const observer = new MutationObserver(scheduleLocate)
+    observer.observe(document.body, { childList: true, subtree: true })
     return () => {
-      window.clearInterval(interval)
+      observer.disconnect()
+      window.cancelAnimationFrame(frame)
       removeHost(hostRef, setHost)
     }
   }, [open])
@@ -338,7 +350,7 @@ function findReviewRow(
 }
 
 function removeHost(
-  hostRef: React.MutableRefObject<HTMLElement | null>,
+  hostRef: MutableRefObject<HTMLElement | null>,
   setHost: (host: HTMLElement | null) => void,
 ) {
   hostRef.current?.remove()
