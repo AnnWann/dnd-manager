@@ -90,27 +90,19 @@ export function CharacterCreationWizard(
       return
     }
 
-    const onInteraction = (event: Event) => {
-      const target = event.target
-      if (!(target instanceof Element)) return
-      if (event.type === "input" || event.type === "change") {
-        clearErrors()
-        return
-      }
-      const button = target.closest("button")
-      const text = button?.textContent?.trim() ?? ""
-      if (text === "Voltar" || text === "Continuar" || /^\d+\./.test(text)) {
-        clearErrors()
-      }
+    // Validation messages are created by an explicit attempt to advance or
+    // confirm. They must not be cleared by that same click. Only editing a
+    // field dismisses the previous attempt's message.
+    const onFieldChange = (event: Event) => {
+      if (!(event.target instanceof Element)) return
+      clearErrors()
     }
 
-    document.addEventListener("input", onInteraction, true)
-    document.addEventListener("change", onInteraction, true)
-    document.addEventListener("click", onInteraction, true)
+    document.addEventListener("input", onFieldChange, true)
+    document.addEventListener("change", onFieldChange, true)
     return () => {
-      document.removeEventListener("input", onInteraction, true)
-      document.removeEventListener("change", onInteraction, true)
-      document.removeEventListener("click", onInteraction, true)
+      document.removeEventListener("input", onFieldChange, true)
+      document.removeEventListener("change", onFieldChange, true)
     }
   }, [clearErrors, props.open])
 
@@ -339,17 +331,28 @@ function InitialIdentityStepSkipper({ open }: { open: boolean }) {
   useEffect(() => {
     if (!open) return
 
-    const apply = () => {
+    let cancelled = false
+    let frame = 0
+
+    const initializeOnce = () => {
+      if (cancelled) return
+
       const creatorTitle = Array.from(document.querySelectorAll("h1")).find(
         (entry) => entry.textContent?.trim() === "Criar personagem",
       )
       const root = creatorTitle?.closest<HTMLElement>("div.grid")
-      if (!root) return
+      if (!root) {
+        frame = window.requestAnimationFrame(initializeOnce)
+        return
+      }
 
       const stepButtons = Array.from(
         root.querySelectorAll<HTMLButtonElement>("header button"),
       ).filter((button) => /^\d+\./.test(button.textContent?.trim() ?? ""))
-      if (stepButtons.length < 2) return
+      if (stepButtons.length < 2) {
+        frame = window.requestAnimationFrame(initializeOnce)
+        return
+      }
 
       stepButtons[0].hidden = true
       stepButtons.slice(1).forEach((button, index) => {
@@ -364,35 +367,29 @@ function InitialIdentityStepSkipper({ open }: { open: boolean }) {
         }`
       })
 
-      const identityHeading = Array.from(
+      const initialIdentityHeading = Array.from(
         root.querySelectorAll<HTMLElement>("main h2"),
       ).find((heading) => heading.textContent?.trim() === "Identidade")
-      if (!identityHeading) return
 
-      const nameInput = root.querySelector<HTMLInputElement>(
-        "main input[placeholder='Nome do personagem']",
-      )
-      if (nameInput && !nameInput.value) {
-        const setter = Object.getOwnPropertyDescriptor(
-          HTMLInputElement.prototype,
-          "value",
-        )?.set
-        setter?.call(nameInput, "Personagem em criação")
-        nameInput.dispatchEvent(new Event("input", { bubbles: true }))
-      }
-      stepButtons[1]?.click()
+      // The hidden legacy identity is skipped once, without filling any field.
+      // The final identity rendered before confirmation is never redirected.
+      if (initialIdentityHeading) stepButtons[1]?.click()
     }
 
-    apply()
-    const interval = window.setInterval(apply, 400)
-    return () => window.clearInterval(interval)
+    initializeOnce()
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(frame)
+    }
   }, [open])
 
   return null
 }
 
 function validateIdentity(identity: FinalCharacterIdentity): string {
-  if (!identity.name.trim()) return "Informe o nome do personagem na etapa de identidade."
+  if (!identity.name.trim()) {
+    return "Informe o nome do personagem na etapa de identidade."
+  }
   const incomplete = identity.relationships.find(
     (entry) => !entry.name.trim() || !entry.relation.trim(),
   )
