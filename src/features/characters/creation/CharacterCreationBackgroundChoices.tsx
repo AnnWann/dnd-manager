@@ -2,26 +2,12 @@ import { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { Input } from "../../../components/ui/Input"
+import {
+  getBackgroundProficiencyChoices,
+  type BackgroundProficiencyChoice,
+} from "../../../models/characters/BackgroundProficiencyChoice"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
-
-const STANDARD_LANGUAGES = [
-  "Comum",
-  "Anão",
-  "Élfico",
-  "Gigante",
-  "Gnômico",
-  "Goblin",
-  "Halfling",
-  "Orc",
-  "Abissal",
-  "Celestial",
-  "Dialeto Subterrâneo",
-  "Dracônico",
-  "Infernal",
-  "Primordial",
-  "Silvestre",
-  "Subcomum",
-]
+import { PHB_BACKGROUND_PRESETS } from "./phbPresets"
 
 type BackgroundChoiceOverride = {
   valid: boolean
@@ -39,7 +25,8 @@ export function CharacterCreationBackgroundChoices({
   externalError,
 }: Props) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
-  const [prompts, setPrompts] = useState<string[]>([])
+  const [backgroundId, setBackgroundId] = useState<string | undefined>()
+  const [choices, setChoices] = useState<BackgroundProficiencyChoice[]>([])
   const [values, setValues] = useState<Record<string, string>>({})
   const [presetLocked, setPresetLocked] = useState(true)
 
@@ -67,16 +54,24 @@ export function CharacterCreationBackgroundChoices({
           document.querySelectorAll<HTMLElement>("h2"),
         ).find((entry) => entry.textContent?.trim() === "Antecedente")
         const presetSection = presetHeading?.closest<HTMLElement>("section")
-        const customButton = Array.from(
+        const presetButtons = Array.from(
           presetSection?.querySelectorAll<HTMLButtonElement>("button") ?? [],
-        ).find((button) =>
-          normalize(button.textContent ?? "").startsWith("personalizado"),
         )
+        const selectedButton = presetButtons.find(isSelectedButton)
+        const selectedPreset = selectedButton
+          ? PHB_BACKGROUND_PRESETS.find((preset) =>
+              normalize(selectedButton.textContent ?? "").startsWith(
+                normalize(preset.name),
+              ),
+            )
+          : undefined
         const customSelected =
-          customButton?.classList.contains("border-accentBorder") === true ||
-          customButton?.classList.contains("bg-accentBg") === true
+          normalize(selectedButton?.textContent ?? "").startsWith(
+            "personalizado",
+          ) || selectedPreset?.custom === true
 
         setPresetLocked(!customSelected)
+        setBackgroundId(selectedPreset?.id)
 
         const skillHeading = Array.from(
           builderSection.querySelectorAll<HTMLElement>("div"),
@@ -94,18 +89,6 @@ export function CharacterCreationBackgroundChoices({
               ? ""
               : "As perícias de um antecedente pronto são fixas. Selecione Antecedente personalizado para editá-las."
           })
-
-        const detected = Array.from(
-          builderSection.querySelectorAll<HTMLElement>("div,strong,span"),
-        )
-          .filter((entry) => entry.childElementCount === 0)
-          .map((entry) => entry.textContent?.trim() ?? "")
-          .filter(isBackgroundChoicePrompt)
-        const nextPrompts = Array.from(new Set(detected))
-
-        setPrompts((current) =>
-          sameStrings(current, nextPrompts) ? current : nextPrompts,
-        )
 
         let portalAnchor = builderSection.querySelector<HTMLElement>(
           "[data-background-choice-anchor]",
@@ -147,24 +130,31 @@ export function CharacterCreationBackgroundChoices({
   }, [])
 
   useEffect(() => {
+    const nextChoices = getBackgroundProficiencyChoices(backgroundId)
+    setChoices(nextChoices)
     setValues((current) =>
       Object.fromEntries(
-        prompts.map((prompt) => [prompt, current[prompt] ?? ""]),
+        nextChoices.map((choice) => [
+          choice.proficiencyId,
+          current[choice.proficiencyId] ?? "",
+        ]),
       ),
     )
-  }, [prompts])
+  }, [backgroundId])
 
-  const valid = prompts.every((prompt) => values[prompt]?.trim())
-  const duplicateLanguage = prompts.some((prompt, index) => {
-    if (!isLanguagePrompt(prompt)) return false
-    const value = normalize(values[prompt] ?? "")
+  const valid = choices.every((choice) =>
+    values[choice.proficiencyId]?.trim(),
+  )
+  const duplicateLanguage = choices.some((choice, index) => {
+    if (choice.category !== "language") return false
+    const value = normalize(values[choice.proficiencyId] ?? "")
     if (!value) return false
 
-    return prompts.some(
+    return choices.some(
       (other, otherIndex) =>
         otherIndex !== index &&
-        isLanguagePrompt(other) &&
-        normalize(values[other] ?? "") === value,
+        other.category === "language" &&
+        normalize(values[other.proficiencyId] ?? "") === value,
     )
   })
   const fullyValid = valid && !duplicateLanguage
@@ -173,25 +163,26 @@ export function CharacterCreationBackgroundChoices({
     () => ({
       valid: fullyValid,
       error: !valid
-        ? "Escolha todos os idiomas, ferramentas ou outras proficiências adicionais do antecedente."
+        ? "Complete todas as escolhas obrigatórias do antecedente."
         : duplicateLanguage
           ? "Escolha idiomas diferentes para cada proficiência adicional."
           : undefined,
       apply: (proficiencies) =>
         deduplicate(
           proficiencies.flatMap((entry) => {
-            const prompt = prompts.find(
-              (candidate) => normalize(candidate) === normalize(entry.name),
+            const choice = choices.find(
+              (candidate) => candidate.proficiencyId === entry.id,
             )
-            if (!prompt) return [entry]
+            if (!choice) return [entry]
 
-            const value = values[prompt]?.trim()
+            const value = values[choice.proficiencyId]?.trim()
             if (!value) return []
 
             return [
               {
                 ...entry,
                 name: value,
+                category: choice.category,
                 notes: mergeNotes(
                   entry.notes,
                   `Escolha do antecedente que substitui: ${entry.name}.`,
@@ -201,14 +192,14 @@ export function CharacterCreationBackgroundChoices({
           }),
         ),
     }),
-    [duplicateLanguage, fullyValid, prompts, valid, values],
+    [choices, duplicateLanguage, fullyValid, valid, values],
   )
 
   useEffect(() => {
     onChange(override)
   }, [onChange, override])
 
-  if (!anchor || !prompts.length) return null
+  if (!anchor || !choices.length) return null
 
   const showAttemptError = Boolean(externalError)
 
@@ -227,8 +218,8 @@ export function CharacterCreationBackgroundChoices({
           Escolhas obrigatórias do antecedente
         </h3>
         <p className="mt-1 text-xs leading-5 text-textMuted">
-          Escolha uma opção padrão ou digite livremente um idioma ou proficiência.
-          Marcadores genéricos não serão salvos.
+          Somente proficiências explicitamente marcadas pelo antecedente como
+          escolhas aparecem aqui. Proficiências fixas são concedidas sem edição.
         </p>
         {presetLocked ? (
           <p className="mt-1 text-xs text-textMuted">
@@ -238,51 +229,55 @@ export function CharacterCreationBackgroundChoices({
         ) : null}
       </div>
 
-      <datalist id="character-creation-standard-languages">
-        {STANDARD_LANGUAGES.map((language) => (
-          <option key={language} value={language} />
-        ))}
-      </datalist>
-
       <div className="grid gap-3 sm:grid-cols-2">
-        {prompts.map((prompt) => {
-          const value = values[prompt] ?? ""
+        {choices.map((choice) => {
+          const value = values[choice.proficiencyId] ?? ""
           const repeated =
-            isLanguagePrompt(prompt) &&
+            choice.category === "language" &&
             Boolean(value.trim()) &&
-            prompts.some(
+            choices.some(
               (other) =>
-                other !== prompt &&
-                isLanguagePrompt(other) &&
-                normalize(values[other] ?? "") === normalize(value),
+                other.proficiencyId !== choice.proficiencyId &&
+                other.category === "language" &&
+                normalize(values[other.proficiencyId] ?? "") ===
+                  normalize(value),
             )
           const invalidAfterAttempt =
             showAttemptError && (!value.trim() || repeated)
+          const listId = choice.options?.length
+            ? `background-choice-${choice.proficiencyId}`
+            : undefined
 
           return (
-            <label key={prompt} className="grid gap-1 text-xs text-textMuted">
+            <label
+              key={choice.proficiencyId}
+              className="grid gap-1 text-xs text-textMuted"
+            >
               <span className={invalidAfterAttempt ? "text-danger" : ""}>
-                {prompt} · obrigatório
+                {choice.label} · obrigatório
               </span>
+              {listId ? (
+                <datalist id={listId}>
+                  {choice.options?.map((option) => (
+                    <option key={option} value={option} />
+                  ))}
+                </datalist>
+              ) : null}
               <Input
-                list={
-                  isLanguagePrompt(prompt)
-                    ? "character-creation-standard-languages"
-                    : undefined
-                }
+                list={listId}
                 value={value}
                 className={
                   invalidAfterAttempt ? "border-danger bg-dangerBg" : ""
                 }
                 placeholder={
-                  isLanguagePrompt(prompt)
-                    ? "Escolha um idioma ou digite outro"
-                    : "Escolha uma opção ou digite a proficiência"
+                  choice.allowCustom
+                    ? "Escolha uma opção ou digite outra"
+                    : "Escolha uma opção"
                 }
                 onChange={(event) =>
                   setValues((current) => ({
                     ...current,
-                    [prompt]: event.target.value,
+                    [choice.proficiencyId]: event.target.value,
                   }))
                 }
               />
@@ -301,32 +296,11 @@ export function CharacterCreationBackgroundChoices({
   )
 }
 
-function isBackgroundChoicePrompt(value: string): boolean {
-  const normalized = normalize(value)
-
+function isSelectedButton(button: HTMLButtonElement): boolean {
   return (
-    /^(?:um |uma )?idioma adicional(?: \d+)?$/.test(normalized) ||
-    /^(?:um |uma )?idioma(?: adicional)? a escolha$/.test(normalized) ||
-    /^(?:uma )?ferramenta(?: de artesao)?(?: adicional)?(?: a escolha)?$/.test(
-      normalized,
-    ) ||
-    /^(?:um )?instrumento(?: musical)?(?: adicional)?(?: a escolha)?$/.test(
-      normalized,
-    ) ||
-    /^(?:um )?(?:conjunto de )?jogo(?: adicional)?(?: a escolha)?$/.test(
-      normalized,
-    ) ||
-    /^(?:um |uma )?veiculo(?: adicional)?(?: a escolha)?$/.test(normalized) ||
-    normalized.includes("idioma a escolha") ||
-    normalized.includes("ferramenta a escolha") ||
-    normalized.includes("instrumento a escolha") ||
-    normalized.includes("jogo a escolha") ||
-    normalized.includes("veiculo a escolha")
+    button.classList.contains("border-accentBorder") ||
+    button.classList.contains("bg-accentBg")
   )
-}
-
-function isLanguagePrompt(value: string): boolean {
-  return normalize(value).includes("idioma")
 }
 
 function deduplicate(entries: Proficiency[]): Proficiency[] {
@@ -343,13 +317,6 @@ function deduplicate(entries: Proficiency[]): Proficiency[] {
 function mergeNotes(current: string | undefined, next: string): string {
   return Array.from(new Set([current?.trim(), next.trim()].filter(Boolean))).join(
     " ",
-  )
-}
-
-function sameStrings(left: string[], right: string[]): boolean {
-  return (
-    left.length === right.length &&
-    left.every((entry, index) => entry === right[index])
   )
 }
 
