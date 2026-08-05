@@ -45,6 +45,7 @@ export function CharacterCreationBackgroundChoices({
 
   useEffect(() => {
     let frame = 0
+
     const scan = () => {
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
@@ -56,6 +57,7 @@ export function CharacterCreationBackgroundChoices({
             "Construir características do antecedente",
         )
         const builderSection = builderHeading?.closest<HTMLElement>("section")
+
         if (!builderSection) {
           setAnchor(null)
           return
@@ -73,6 +75,7 @@ export function CharacterCreationBackgroundChoices({
         const customSelected =
           customButton?.classList.contains("border-accentBorder") === true ||
           customButton?.classList.contains("bg-accentBg") === true
+
         setPresetLocked(!customSelected)
 
         const skillHeading = Array.from(
@@ -81,6 +84,7 @@ export function CharacterCreationBackgroundChoices({
           (entry) => entry.textContent?.trim() === "Perícias do antecedente",
         )
         const skillContainer = skillHeading?.parentElement
+
         skillContainer
           ?.querySelectorAll<HTMLButtonElement>("button")
           .forEach((button) => {
@@ -98,6 +102,7 @@ export function CharacterCreationBackgroundChoices({
           .map((entry) => entry.textContent?.trim() ?? "")
           .filter(isBackgroundChoicePrompt)
         const nextPrompts = Array.from(new Set(detected))
+
         setPrompts((current) =>
           sameStrings(current, nextPrompts) ? current : nextPrompts,
         )
@@ -122,6 +127,7 @@ export function CharacterCreationBackgroundChoices({
       attributes: true,
       attributeFilter: ["class"],
     })
+
     return () => {
       cancelAnimationFrame(frame)
       observer.disconnect()
@@ -153,6 +159,7 @@ export function CharacterCreationBackgroundChoices({
     if (!isLanguagePrompt(prompt)) return false
     const value = normalize(values[prompt] ?? "")
     if (!value) return false
+
     return prompts.some(
       (other, otherIndex) =>
         otherIndex !== index &&
@@ -161,6 +168,7 @@ export function CharacterCreationBackgroundChoices({
     )
   })
   const fullyValid = valid && !duplicateLanguage
+
   const override = useMemo<BackgroundChoiceOverride>(
     () => ({
       valid: fullyValid,
@@ -176,8 +184,10 @@ export function CharacterCreationBackgroundChoices({
               (candidate) => normalize(candidate) === normalize(entry.name),
             )
             if (!prompt) return [entry]
+
             const value = values[prompt]?.trim()
             if (!value) return []
+
             return [
               {
                 ...entry,
@@ -293,8 +303,20 @@ export function CharacterCreationBackgroundChoices({
 
 function isBackgroundChoicePrompt(value: string): boolean {
   const normalized = normalize(value)
+
   return (
-    /^idioma adicional(?: \d+)?$/.test(normalized) ||
+    /^(?:um |uma )?idioma adicional(?: \d+)?$/.test(normalized) ||
+    /^(?:um |uma )?idioma(?: adicional)? a escolha$/.test(normalized) ||
+    /^(?:uma )?ferramenta(?: de artesao)?(?: adicional)?(?: a escolha)?$/.test(
+      normalized,
+    ) ||
+    /^(?:um )?instrumento(?: musical)?(?: adicional)?(?: a escolha)?$/.test(
+      normalized,
+    ) ||
+    /^(?:um )?(?:conjunto de )?jogo(?: adicional)?(?: a escolha)?$/.test(
+      normalized,
+    ) ||
+    /^(?:um |uma )?veiculo(?: adicional)?(?: a escolha)?$/.test(normalized) ||
     normalized.includes("idioma a escolha") ||
     normalized.includes("ferramenta a escolha") ||
     normalized.includes("instrumento a escolha") ||
@@ -309,6 +331,7 @@ function isLanguagePrompt(value: string): boolean {
 
 function deduplicate(entries: Proficiency[]): Proficiency[] {
   const seen = new Set<string>()
+
   return entries.filter((entry) => {
     const key = `${entry.category}:${normalize(entry.name)}`
     if (seen.has(key)) return false
