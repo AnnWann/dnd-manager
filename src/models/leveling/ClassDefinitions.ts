@@ -3,6 +3,7 @@ import type { Attribute } from "../sheet/Attribute"
 import type {
   CharacterClassInterface,
   ClassName,
+  KnownSpellMode,
   KnownSpellsRule,
   SpellcastingProgression,
 } from "../sheet/Class"
@@ -109,22 +110,25 @@ const RANGER_KNOWN_SPELLS: KnownSpellsRule = {
   },
 }
 
-const WIZARD_KNOWN_SPELLS: KnownSpellsRule = {
-  mode: "spellbook",
-  baseAtLevel1: 6,
-  perLevel: 2,
-  canPrepare: (character) =>
-    Math.max(
-      1,
-      character.getClassLevel("wizard") +
-        character.getAttributeModifier("int"),
-    ),
-}
-
-const PREPARED_ONLY_SPELLS: Omit<KnownSpellsRule, "canPrepare"> = {
-  mode: "prepared-only",
-  baseAtLevel1: 0,
-  perLevel: 0,
+function preparedSpells(
+  className: ClassName,
+  castingAttribute: Attribute,
+  levelDivisor = 1,
+  mode: KnownSpellMode = "prepared-only",
+  baseAtLevel1 = 0,
+  perLevel = 0,
+): KnownSpellsRule {
+  return {
+    mode,
+    baseAtLevel1,
+    perLevel,
+    canPrepare: (character) =>
+      Math.max(
+        1,
+        Math.floor(character.getClassLevel(className) / levelDivisor) +
+          character.getEffectiveAttributeModifier(castingAttribute),
+      ),
+  }
 }
 
 const CLASS_STATIC_RULES: Record<
@@ -137,15 +141,7 @@ const CLASS_STATIC_RULES: Record<
   artificer: {
     castingAttribute: "int",
     spellcastingProgression: "half",
-    knownSpells: {
-      ...PREPARED_ONLY_SPELLS,
-      canPrepare: (character) =>
-        Math.max(
-          1,
-          Math.floor(character.getClassLevel("artificer") / 2) +
-            character.getAttributeModifier("int"),
-        ),
-    },
+    knownSpells: preparedSpells("artificer", "int", 2),
   },
   barbarian: {},
   bard: {
@@ -156,43 +152,19 @@ const CLASS_STATIC_RULES: Record<
   cleric: {
     castingAttribute: "wis",
     spellcastingProgression: "full",
-    knownSpells: {
-      ...PREPARED_ONLY_SPELLS,
-      canPrepare: (character) =>
-        Math.max(
-          1,
-          character.getClassLevel("cleric") +
-            character.getAttributeModifier("wis"),
-        ),
-    },
+    knownSpells: preparedSpells("cleric", "wis"),
   },
   druid: {
     castingAttribute: "wis",
     spellcastingProgression: "full",
-    knownSpells: {
-      ...PREPARED_ONLY_SPELLS,
-      canPrepare: (character) =>
-        Math.max(
-          1,
-          character.getClassLevel("druid") +
-            character.getAttributeModifier("wis"),
-        ),
-    },
+    knownSpells: preparedSpells("druid", "wis"),
   },
   fighter: {},
   monk: {},
   paladin: {
     castingAttribute: "cha",
     spellcastingProgression: "half",
-    knownSpells: {
-      ...PREPARED_ONLY_SPELLS,
-      canPrepare: (character) =>
-        Math.max(
-          1,
-          Math.floor(character.getClassLevel("paladin") / 2) +
-            character.getAttributeModifier("cha"),
-        ),
-    },
+    knownSpells: preparedSpells("paladin", "cha", 2),
   },
   ranger: {
     castingAttribute: "wis",
@@ -213,7 +185,14 @@ const CLASS_STATIC_RULES: Record<
   wizard: {
     castingAttribute: "int",
     spellcastingProgression: "full",
-    knownSpells: WIZARD_KNOWN_SPELLS,
+    knownSpells: preparedSpells(
+      "wizard",
+      "int",
+      1,
+      "spellbook",
+      6,
+      2,
+    ),
   },
 }
 
@@ -330,7 +309,14 @@ export function getClassPreparedSpellLimit(
     return undefined
   }
 
-  return rule.canPrepare?.(character)
+  if (typeof rule.canPrepare === "function") {
+    return rule.canPrepare(character)
+  }
+
+  const canonicalRule = getClassDefinition(classData.className).knownSpells
+  return typeof canonicalRule?.canPrepare === "function"
+    ? canonicalRule.canPrepare(character)
+    : undefined
 }
 
 export function getLegacyClassRuleOverrides(
@@ -402,7 +388,10 @@ function getOwnLegacyValue<
   classData: CharacterClassInterface,
   key: Key,
 ): CharacterClassInterface[Key] | undefined {
-  if (!Object.prototype.hasOwnProperty.call(classData, key)) {
+  if (
+    classData.definitionSnapshot ||
+    !Object.prototype.hasOwnProperty.call(classData, key)
+  ) {
     return undefined
   }
 
