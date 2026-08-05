@@ -4,6 +4,12 @@ import { Check, Plus } from "lucide-react"
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
+import {
+  PHB_RACE_PRESETS,
+  SKILL_LABELS,
+  racePresetToCharacterRace,
+  type RacePreset,
+} from "../../../data/characterCreation/phbPresets"
 import { attributeShort } from "../../../lib/attributeShorts"
 import type { Ability } from "../../../models/abilities/Ability"
 import {
@@ -22,12 +28,6 @@ import type { Attribute } from "../../../models/sheet/Attribute"
 import { ATTRIBUTE_KEYS } from "../../../models/sheet/Attribute"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
 import type { Skill } from "../../../models/sheet/Skills"
-import {
-  PHB_RACE_PRESETS,
-  SKILL_LABELS,
-  racePresetToCharacterRace,
-  type RacePreset,
-} from "../creation/phbPresets"
 import { AbilityCard } from "../abilities/abilityCard"
 import { AbilityDialog } from "../abilities/abilityDialog"
 import { GrantedProficienciesEditor } from "../proficiencies/grantedProficienciesEditor"
