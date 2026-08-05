@@ -31,7 +31,7 @@ import {
 import {
   CharacterCreationEquipmentChoices,
   type EquipmentOverride,
-} from "./CharacterCreationEquipmentChoices"
+} from "./components/CharacterCreationEquipmentChoices"
 import {
   CharacterCreationGenericRacialChoices,
   type GenericRacialChoiceOverride,
