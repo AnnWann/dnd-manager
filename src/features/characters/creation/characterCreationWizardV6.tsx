@@ -5,6 +5,7 @@ import type { Itemmable } from "../../../models/items/item"
 import { finalizeProgressionFeatures } from "../../../models/leveling/ProgressionFeatureFinalization"
 import { materializeProgressionChoices } from "../../../models/leveling/materializeProgressionChoices"
 import { refreshProgressionFeatureMechanics } from "../../../models/leveling/refreshProgressionFeatureMechanics"
+import type { RacialAttributeBonusRule } from "../../../models/races/CharacterRace"
 import { ProgressionFeatureModalEnhancer } from "../progression/ProgressionFeatureModalEnhancer"
 import { ProgressionModalInstantSelectionBridge } from "../progression/ProgressionModalInstantSelectionBridge"
 import { ProgressionSpellSelectionModal } from "../progression/ProgressionSpellSelectionModal"
@@ -154,6 +155,7 @@ export function CharacterCreationWizard(
                 attributeBonus:
                   abilityScoreOverride?.racialBonuses ??
                   sheet.race.attributeBonus,
+                attributeBonusRule: readRacialBonusRule(),
               },
             },
           })
@@ -205,6 +207,29 @@ function replaceClassStartingEquipment(
     )
   })
   return [...retained, ...replacement]
+}
+
+function readRacialBonusRule(): RacialAttributeBonusRule {
+  const buttons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>("button"),
+  )
+  const selected = buttons.find(
+    (button) =>
+      button.classList.contains("bg-accentBg") &&
+      [
+        "Predefinidos",
+        "+1 / +1",
+        "Móveis +2 / +1",
+        "Móveis +1 / +1 / +1",
+        "Personalizados",
+      ].includes(button.textContent?.trim() ?? ""),
+  )
+  const label = selected?.textContent?.trim()
+  if (label === "+1 / +1") return "variant-1-1"
+  if (label === "Móveis +2 / +1") return "flexible-2-1"
+  if (label === "Móveis +1 / +1 / +1") return "flexible-1-1-1"
+  if (label === "Personalizados") return "custom"
+  return "fixed"
 }
 
 function normalize(value: string): string {
