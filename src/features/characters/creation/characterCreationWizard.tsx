@@ -40,13 +40,13 @@ import { CharacterCreationIdentityStep } from "./CharacterCreationIdentityStep"
 import {
   CharacterCreationLegacyBridge,
   readSelectedRacialBonusRule,
-} from "./CharacterCreationLegacyBridge"
+} from "./bridges/CharacterCreationLegacyBridge"
 import {
   CharacterCreationRacialChoices,
   type RacialChoiceOverride,
 } from "./CharacterCreationRacialChoices"
-import { CreationRequiredFieldHighlighter } from "./CreationRequiredFieldHighlighter"
-import { CreationSpellGrantLocalizationBridge } from "./CreationSpellGrantLocalizationBridge"
+import { CreationRequiredFieldHighlighter } from "./bridges/CreationRequiredFieldHighlighter"
+import { CreationSpellGrantLocalizationBridge } from "./bridges/CreationSpellGrantLocalizationBridge"
 import { IntegratedCharacterCreationWizard } from "./IntegratedCharacterCreationWizard"
 
 export type { CharacterCreationProgressionPlan }
