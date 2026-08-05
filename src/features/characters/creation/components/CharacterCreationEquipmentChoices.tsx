@@ -106,9 +106,10 @@ export function CharacterCreationEquipmentChoices({ onChange }: Props) {
       const className = label ? CLASS_BY_LABEL.get(label) : undefined
       if (!className) return
 
-      let anchor = source.previousElementSibling
+      const previous = source.previousElementSibling
+      let anchor = previous instanceof HTMLElement ? previous : null
       if (
-        !(anchor instanceof HTMLElement) ||
+        !anchor ||
         anchor.dataset.characterCreationEquipmentAnchor !== "true"
       ) {
         anchor = document.createElement("div")
@@ -119,7 +120,7 @@ export function CharacterCreationEquipmentChoices({ onChange }: Props) {
       source.dataset.characterCreationEquipmentSource = "true"
       source.style.display = "none"
 
-      const next = { anchor, source, className }
+      const next: EquipmentTarget = { anchor, source, className }
       targetRef.current = next
       setTarget(next)
     }
