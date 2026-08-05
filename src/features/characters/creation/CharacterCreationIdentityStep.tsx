@@ -173,10 +173,7 @@ export function CharacterCreationIdentityStep({
                 : ""
             }
             placeholder="Nome do personagem"
-            onChange={(event) => {
-              if (!event.nativeEvent.isTrusted) return
-              patch({ name: event.target.value })
-            }}
+            onChange={(event) => patch({ name: event.target.value })}
           />
         </label>
 
