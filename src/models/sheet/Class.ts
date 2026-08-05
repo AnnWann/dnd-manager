@@ -59,10 +59,23 @@ export interface CharacterClassInterface {
   levelChoices?: Record<string, string[]>
 }
 
+export type SerializedKnownSpellsRule = Omit<
+  KnownSpellsRule,
+  "canPrepare"
+> & {
+  /** Compatibility marker for consumers not yet using ClassDefinitions. */
+  canPrepare?: true
+}
+
 export type SerializedCharacterClass = Pick<
   CharacterClassInterface,
   "className" | "level" | "subclass" | "levelChoices" | "ruleOverrides"
->
+> & {
+  /** Derived compatibility snapshot; never the canonical rule source. */
+  castingAttribute?: Attribute
+  spellcastingProgression?: SpellcastingProgression
+  knownSpells?: SerializedKnownSpellsRule
+}
 
 export class CharacterClass implements CharacterClassInterface {
   className: ClassName
@@ -181,12 +194,25 @@ export class CharacterClass implements CharacterClassInterface {
   }
 
   toJSON(): SerializedCharacterClass {
+    const knownSpells = this.knownSpells
+
     return {
       className: this.className,
       level: this.level,
       subclass: this.subclass,
       levelChoices: this.levelChoices,
       ruleOverrides: this.ruleOverrides,
+      castingAttribute: this.castingAttribute,
+      spellcastingProgression: this.spellcastingProgression,
+      knownSpells: knownSpells
+        ? {
+            mode: knownSpells.mode,
+            baseAtLevel1: knownSpells.baseAtLevel1,
+            perLevel: knownSpells.perLevel,
+            overrides: knownSpells.overrides,
+            canPrepare: knownSpells.canPrepare ? true : undefined,
+          }
+        : undefined,
     }
   }
 }
