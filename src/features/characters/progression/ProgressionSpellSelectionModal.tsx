@@ -353,25 +353,23 @@ function parseSpellProxies(
   fullPreparedList: boolean,
 ): SpellProxy[] {
   const spellMap = buildSpellMap(spells)
-  return Array.from(element.querySelectorAll<HTMLElement>("article"))
-    .map((article) => {
-      const button = article.querySelector<HTMLButtonElement>("button")
-      const title = article.querySelector<HTMLElement>("strong")?.textContent?.trim()
-      if (!button || !title) return undefined
-      const spell = resolveSpell(spellMap, title)
-      if (!spell || (fullPreparedList && spell.slotLevel > 0)) return undefined
-      const checkbox = article.querySelector<HTMLInputElement>('input[type="checkbox"]') ?? undefined
-      return {
-        spell,
-        button,
-        checkbox,
-        selected:
-          article.classList.contains("bg-accentBg") ||
-          button.getAttribute("aria-pressed") === "true",
-        prepared: checkbox?.checked ?? false,
-      }
-    })
-    .filter((entry): entry is SpellProxy => Boolean(entry))
+  return Array.from(element.querySelectorAll<HTMLElement>("article")).flatMap<SpellProxy>((article) => {
+    const button = article.querySelector<HTMLButtonElement>("button")
+    const title = article.querySelector<HTMLElement>("strong")?.textContent?.trim()
+    if (!button || !title) return []
+    const spell = resolveSpell(spellMap, title)
+    if (!spell || (fullPreparedList && spell.slotLevel > 0)) return []
+    const checkbox = article.querySelector<HTMLInputElement>('input[type="checkbox"]') ?? undefined
+    return [{
+      spell,
+      button,
+      checkbox,
+      selected:
+        article.classList.contains("bg-accentBg") ||
+        button.getAttribute("aria-pressed") === "true",
+      prepared: checkbox?.checked ?? false,
+    }]
+  })
 }
 
 function buildSpellMap(spells: Spell[]): Map<string, Spell> {
