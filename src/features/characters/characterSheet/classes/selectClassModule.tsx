@@ -4,6 +4,11 @@ import { Select } from "../../../../components/ui/Select"
 import { attributeShort } from "../../../../lib/attributeShorts"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
 import {
+  getClassCastingAttribute,
+  getClassDefinition,
+  getClassSpellcastingProgression,
+} from "../../../../models/leveling/ClassDefinitions"
+import {
   getDerivedSorceryPointMaximum,
   getSorceryPointPool,
   setSorceryPointCurrent,
@@ -12,27 +17,12 @@ import {
   ATTRIBUTE_KEYS,
   type Attribute,
 } from "../../../../models/sheet/Attribute"
-import type {
-  CharacterClassInterface,
-  ClassLevel,
-  ClassName,
+import {
+  CharacterClass,
+  type CharacterClassInterface,
+  type ClassLevel,
+  type SpellcastingProgression,
 } from "../../../../models/sheet/Class"
-
-const CLASS_PT: Record<ClassName, string> = {
-  artificer: "Artífice",
-  barbarian: "Bárbaro",
-  bard: "Bardo",
-  cleric: "Clérigo",
-  druid: "Druida",
-  fighter: "Guerreiro",
-  monk: "Monge",
-  paladin: "Paladino",
-  ranger: "Patrulheiro",
-  rogue: "Ladino",
-  sorcerer: "Feiticeiro",
-  warlock: "Bruxo",
-  wizard: "Mago",
-}
 
 type Props = {
   character: CharacterTemplate
@@ -57,6 +47,11 @@ export function SelectClassModule({
   maxLevel,
   updateCharacter,
 }: Props) {
+  const classInstance = CharacterClass.fromJSON(classData)
+  const classDefinition = getClassDefinition(classData.className)
+  const spellcastingProgression =
+    getClassSpellcastingProgression(classData)
+  const castingAttribute = getClassCastingAttribute(classData)
   const canEditCasting =
     classData.className === "fighter" || classData.className === "rogue"
 
@@ -87,7 +82,7 @@ export function SelectClassModule({
   function updateClass(nextClass: CharacterClassInterface) {
     updateCharacterClasses((classes) => {
       const nextClasses = [...classes]
-      nextClasses[classIndex] = nextClass
+      nextClasses[classIndex] = CharacterClass.fromJSON(nextClass)
       return nextClasses
     })
   }
@@ -105,7 +100,7 @@ export function SelectClassModule({
       <div className="min-w-0">
         <div className="text-xs text-text">Classe</div>
         <div className="truncate text-sm text-textH">
-          {CLASS_PT[classData.className]}
+          {classDefinition.displayName}
         </div>
       </div>
 
@@ -119,10 +114,11 @@ export function SelectClassModule({
           value={classData.level}
           title={`Máximo para esta classe: ${safeMaxLevel}`}
           onChange={(event) =>
-            updateClass({
-              ...classData,
-              level: clampLevel(Number(event.target.value), safeMaxLevel),
-            })
+            updateClass(
+              classInstance.withLevel(
+                clampLevel(Number(event.target.value), safeMaxLevel),
+              ),
+            )
           }
         />
       </div>
@@ -132,17 +128,18 @@ export function SelectClassModule({
 
         <Select
           className="mt-1 h-9 px-2 py-1"
-          value={classData.spellcastingProgression ?? "none"}
+          value={spellcastingProgression ?? "none"}
           onChange={(event) => {
             const value = event.target.value
 
-            updateClass({
-              ...classData,
-              spellcastingProgression:
-                value === "none"
-                  ? undefined
-                  : (value as "full" | "half" | "third"),
-            })
+            updateClass(
+              classInstance.withRuleOverrides({
+                spellcastingProgression:
+                  value === "none"
+                    ? null
+                    : (value as SpellcastingProgression),
+              }),
+            )
           }}
         >
           <option value="none">Nenhuma</option>
@@ -157,13 +154,16 @@ export function SelectClassModule({
 
         <Select
           className="mt-1 h-9 px-2 py-1"
-          value={classData.castingAttribute ?? ""}
-          disabled={!classData.spellcastingProgression && !canEditCasting}
+          value={castingAttribute ?? ""}
+          disabled={!spellcastingProgression && !canEditCasting}
           onChange={(event) =>
-            updateClass({
-              ...classData,
-              castingAttribute: event.target.value as Attribute,
-            })
+            updateClass(
+              classInstance.withRuleOverrides({
+                castingAttribute: event.target.value
+                  ? (event.target.value as Attribute)
+                  : null,
+              }),
+            )
           }
         >
           <option value="">Nenhum</option>
