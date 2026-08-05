@@ -1,5 +1,6 @@
 // models/magic/spells/spellSlotProgression.ts
 
+import { getClassSpellcastingProgression } from "../../leveling/ClassDefinitions"
 import type { CharacterClassInterface } from "../../sheet/Class"
 import type { Slot } from "./LeveledSlots"
 import type { MagicCircleLevel } from "./spellDefinitions"
@@ -30,11 +31,13 @@ const FULL_CASTER_SLOTS: Record<number, Partial<Record<MagicCircleLevel, number>
 function getSingleClassCasterLevel(
   classData: CharacterClassInterface,
 ): number {
-  if (classData.spellcastingProgression === "full") {
+  const progression = getClassSpellcastingProgression(classData)
+
+  if (progression === "full") {
     return classData.level
   }
 
-  if (classData.spellcastingProgression === "half") {
+  if (progression === "half") {
     if (classData.className !== "artificer" && classData.level < 2) {
       return 0
     }
@@ -42,7 +45,7 @@ function getSingleClassCasterLevel(
     return Math.ceil(classData.level / 2)
   }
 
-  if (classData.spellcastingProgression === "third") {
+  if (progression === "third") {
     return classData.level < 3 ? 0 : Math.ceil(classData.level / 3)
   }
 
@@ -52,17 +55,19 @@ function getSingleClassCasterLevel(
 function getMulticlassCasterLevelContribution(
   classData: CharacterClassInterface,
 ): number {
-  if (classData.spellcastingProgression === "full") {
+  const progression = getClassSpellcastingProgression(classData)
+
+  if (progression === "full") {
     return classData.level
   }
 
-  if (classData.spellcastingProgression === "half") {
+  if (progression === "half") {
     return classData.className === "artificer"
       ? Math.ceil(classData.level / 2)
       : Math.floor(classData.level / 2)
   }
 
-  if (classData.spellcastingProgression === "third") {
+  if (progression === "third") {
     return Math.floor(classData.level / 3)
   }
 
@@ -73,7 +78,7 @@ export function getCasterLevel(classes: CharacterClassInterface[]): number {
   const spellcastingClasses = classes.filter(
     (classData) =>
       classData.className !== "warlock" &&
-      classData.spellcastingProgression !== undefined,
+      getClassSpellcastingProgression(classData) !== undefined,
   )
 
   if (spellcastingClasses.length === 1) {
