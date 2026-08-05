@@ -29,7 +29,6 @@ import {
   CharacterCreationRacialChoices,
   type RacialChoiceOverride,
 } from "./CharacterCreationRacialChoices"
-import { CharacterCreationStepGuard } from "./CharacterCreationStepGuard"
 import { IntegratedCharacterCreationWizard } from "./IntegratedCharacterCreationWizard"
 
 export type { CharacterCreationProgressionPlan } from "./characterCreationWizardV5"
@@ -149,9 +148,9 @@ export function CharacterCreationWizard(
           const originalRaceProficiencyIds = new Set(
             (sheet.race.proficiencies ?? []).map((entry) => entry.id),
           )
-          const backgroundProficiencies = backgroundChoiceOverride?.apply(
-            sheet.proficiencies ?? [],
-          ) ?? sheet.proficiencies
+          const backgroundProficiencies =
+            backgroundChoiceOverride?.apply(sheet.proficiencies ?? []) ??
+            sheet.proficiencies
           const specificRace = racialChoiceOverride?.apply(
             sheet.race.naturalAbilities ?? [],
             sheet.race.proficiencies ?? [],
@@ -181,7 +180,8 @@ export function CharacterCreationWizard(
             inventory,
             sheet: {
               ...sheet,
-              attributes: abilityScoreOverride?.attributes ?? sheet.attributes,
+              attributes:
+                abilityScoreOverride?.attributes ?? sheet.attributes,
               skills,
               proficiencies,
               race: {
@@ -222,7 +222,6 @@ export function CharacterCreationWizard(
         onChange={handleBackgroundChoiceChange}
         externalError={backgroundChoiceError}
       />
-      <CharacterCreationStepGuard />
       <ProgressionFeatureModalEnhancer />
       <ProgressionModalInstantSelectionBridge />
       <ProgressionSpellSelectionModal />
