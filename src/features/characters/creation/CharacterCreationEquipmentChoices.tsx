@@ -8,11 +8,11 @@ import type { Itemmable } from "../../../models/items/item"
 import { getClassNamePt } from "../../../models/leveling/ClassLocalization"
 import type { ClassName } from "../../../models/sheet/Class"
 import { ItemCreationDialog } from "../../items/ItemCreationDialog"
+import { normalizeStandardItem } from "../../items/standardItemCompendium"
 import {
-  STANDARD_ITEM_DEFINITIONS,
-  instantiateStandardItem,
-  normalizeStandardItem,
-} from "../../items/standardItemCompendium"
+  CharacterCreationWeaponPicker,
+  type StartingWeaponCategory,
+} from "./CharacterCreationWeaponPicker"
 import {
   averageStartingGold,
   formatStartingGoldFormula,
@@ -22,12 +22,17 @@ import {
   rollStartingGold,
   type StartingItemSpec,
 } from "./phbClassEquipment"
-import { matchesPhbWeaponCategory } from "./phbWeaponCategory"
 import { createStartingInventoryItem } from "./startingEquipmentItems"
 
 type EquipmentMode = "equipment" | "gold"
 
-type EquipmentOverride = {
+type EquipmentTarget = {
+  anchor: HTMLElement
+  source: HTMLElement
+  className: ClassName
+}
+
+export type EquipmentOverride = {
   className: ClassName
   mode: EquipmentMode
   items: Itemmable[]
@@ -40,109 +45,119 @@ type Props = {
   onChange: (override: EquipmentOverride | null) => void
 }
 
-const CLASS_LABELS = new Map<ClassName, string>(
-  ([
-    "artificer",
-    "barbarian",
-    "bard",
-    "cleric",
-    "druid",
-    "fighter",
-    "monk",
-    "paladin",
-    "ranger",
-    "rogue",
-    "sorcerer",
-    "warlock",
-    "wizard",
-  ] as ClassName[]).map((className) => [className, getClassNamePt(className)]),
+const CLASS_NAMES = [
+  "artificer",
+  "barbarian",
+  "bard",
+  "cleric",
+  "druid",
+  "fighter",
+  "monk",
+  "paladin",
+  "ranger",
+  "rogue",
+  "sorcerer",
+  "warlock",
+  "wizard",
+] as const satisfies readonly ClassName[]
+
+const CLASS_BY_LABEL = new Map(
+  CLASS_NAMES.map((className) => [getClassNamePt(className), className]),
 )
 
 export function CharacterCreationEquipmentChoices({ onChange }: Props) {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null)
-  const [className, setClassName] = useState<ClassName | null>(null)
+  const [target, setTarget] = useState<EquipmentTarget | null>(null)
+  const targetRef = useRef<EquipmentTarget | null>(null)
 
   useEffect(() => {
-    let frame = 0
+    targetRef.current = target
+  }, [target])
 
-    const scan = () => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => {
-        const heading = Array.from(
-          document.querySelectorAll<HTMLElement>("h2"),
-        ).find(
-          (entry) =>
-            entry.textContent
-              ?.trim()
-              .startsWith("Equipamento de nível 1 de") &&
-            !entry.closest("[data-class-equipment-configurator]"),
-        )
+  useEffect(() => {
+    let disposed = false
 
-        if (!heading) {
-          setAnchor(null)
-          setClassName(null)
-          return
+    const findTarget = () => {
+      if (disposed) return
+      const current = targetRef.current
+      if (current?.anchor.isConnected && current.source.isConnected) return
+
+      const heading = Array.from(
+        document.querySelectorAll<HTMLElement>("h2"),
+      ).find(
+        (entry) =>
+          entry.textContent?.trim().startsWith("Equipamento de nível 1 de") &&
+          !entry.closest("[data-character-creation-equipment]"),
+      )
+
+      if (!heading) {
+        if (current) {
+          targetRef.current = null
+          setTarget(null)
         }
+        return
+      }
 
-        const section = heading.closest<HTMLElement>("section")
-        if (!section) return
+      const source = heading.closest<HTMLElement>("section")
+      if (!source) return
 
-        const label =
-          heading.textContent
-            ?.replace("Equipamento de nível 1 de", "")
-            .trim() ?? ""
-        const resolved = Array.from(CLASS_LABELS.entries()).find(
-          ([, value]) => value === label,
-        )?.[0]
-        if (!resolved) return
+      const label = heading.textContent
+        ?.replace("Equipamento de nível 1 de", "")
+        .trim()
+      const className = label ? CLASS_BY_LABEL.get(label) : undefined
+      if (!className) return
 
-        let portalAnchor = section.previousElementSibling
-        if (
-          !(portalAnchor instanceof HTMLElement) ||
-          portalAnchor.dataset.classEquipmentChoiceAnchor !== "true"
-        ) {
-          portalAnchor = document.createElement("div")
-          portalAnchor.dataset.classEquipmentChoiceAnchor = "true"
-          section.parentElement?.insertBefore(portalAnchor, section)
-        }
+      let anchor = source.previousElementSibling
+      if (
+        !(anchor instanceof HTMLElement) ||
+        anchor.dataset.characterCreationEquipmentAnchor !== "true"
+      ) {
+        anchor = document.createElement("div")
+        anchor.dataset.characterCreationEquipmentAnchor = "true"
+        source.parentElement?.insertBefore(anchor, source)
+      }
 
-        section.dataset.classEquipmentSource = "true"
-        section.style.display = "none"
-        setClassName(resolved)
-        setAnchor(portalAnchor)
-      })
+      source.dataset.characterCreationEquipmentSource = "true"
+      source.style.display = "none"
+
+      const next = { anchor, source, className }
+      targetRef.current = next
+      setTarget(next)
     }
 
-    scan()
-    const observer = new MutationObserver(scan)
-    observer.observe(document.body, { childList: true, subtree: true })
-
+    findTarget()
+    const interval = window.setInterval(findTarget, 300)
     return () => {
-      cancelAnimationFrame(frame)
-      observer.disconnect()
+      disposed = true
+      window.clearInterval(interval)
       document
         .querySelectorAll<HTMLElement>(
-          "[data-class-equipment-choice-anchor]",
+          "[data-character-creation-equipment-source]",
         )
-        .forEach((entry) => entry.remove())
-      document
-        .querySelectorAll<HTMLElement>("[data-class-equipment-source]")
-        .forEach((section) => {
-          section.style.display = ""
-          delete section.dataset.classEquipmentSource
+        .forEach((source) => {
+          source.style.display = ""
+          delete source.dataset.characterCreationEquipmentSource
         })
+      document
+        .querySelectorAll<HTMLElement>(
+          "[data-character-creation-equipment-anchor]",
+        )
+        .forEach((anchor) => anchor.remove())
     }
   }, [])
 
-  if (!anchor || !className) return null
+  useEffect(() => {
+    if (!target) onChange(null)
+  }, [onChange, target])
+
+  if (!target) return null
 
   return createPortal(
     <ClassEquipmentConfigurator
-      key={className}
-      className={className}
+      key={target.className}
+      className={target.className}
       onChange={onChange}
     />,
-    anchor,
+    target.anchor,
   )
 }
 
@@ -166,10 +181,9 @@ function ClassEquipmentConfigurator({
   )
   const [weaponPicker, setWeaponPicker] = useState<{
     key: string
-    category: "simple" | "martial"
+    category: StartingWeaponCategory
   } | null>(null)
   const [customOpen, setCustomOpen] = useState(false)
-  const latestOverride = useRef<EquipmentOverride | null>(null)
 
   const selectedSpecs = useMemo(
     () => getSelectedClassEquipment(className, selections),
@@ -182,7 +196,6 @@ function ClassEquipmentConfigurator({
         .filter((spec) => !genericWeapons[spec.id]),
     [genericWeapons, selectedSpecs],
   )
-
   const items = useMemo(() => {
     if (mode === "gold") {
       return [
@@ -194,11 +207,11 @@ function ClassEquipmentConfigurator({
     }
 
     return selectedSpecs.map((spec) => {
-      const generic = genericWeapons[spec.id]
-      const item = generic ?? createStartingInventoryItem(spec)
+      const selectedWeapon = genericWeapons[spec.id]
+      const item = selectedWeapon ?? createStartingInventoryItem(spec)
       return normalizeStandardItem({
         ...item,
-        id: generic?.id ?? `starting-${className}-${spec.id}`,
+        id: selectedWeapon?.id ?? `starting-${className}-${spec.id}`,
         notes: mergeNotes(
           item.notes,
           `Equipamento inicial da classe ${getClassNamePt(className)}.`,
@@ -223,24 +236,12 @@ function ClassEquipmentConfigurator({
   )
 
   useEffect(() => {
-    latestOverride.current = override
     onChange(override)
   }, [onChange, override])
 
-  useEffect(
-    () => () => {
-      if (latestOverride.current?.className === className) onChange(null)
-    },
-    [className, onChange],
-  )
-
-  function setChoice(groupId: string, optionId: string) {
-    setSelections((current) => ({ ...current, [groupId]: optionId }))
-  }
-
   return (
     <section
-      data-class-equipment-configurator="true"
+      data-character-creation-equipment="true"
       data-creation-step-valid={valid ? "true" : "false"}
       data-creation-step-error={override.error ?? ""}
       className="grid gap-5 rounded-xl border border-border bg-bg-subtle p-4"
@@ -249,8 +250,8 @@ function ClassEquipmentConfigurator({
         <h2 className="font-semibold text-textH">
           Equipamento de nível 1 de {getClassNamePt(className)}
         </h2>
-        <p className="mt-1 text-xs leading-5 text-textMuted">
-          Escolha uma opção de cada grupo ou substitua o pacote pelo ouro inicial.
+        <p className="mt-1 text-xs text-textMuted">
+          Escolha uma opção de cada grupo ou use o ouro inicial.
         </p>
       </header>
 
@@ -258,7 +259,7 @@ function ClassEquipmentConfigurator({
         <ChoiceCard
           selected={mode === "equipment"}
           title="Equipamento inicial"
-          description="Escolha uma opção de cada grupo e resolva todas as armas genéricas."
+          description="Escolha uma opção de cada grupo e resolva as armas genéricas."
           onClick={() => setMode("equipment")}
         />
         <ChoiceCard
@@ -274,16 +275,11 @@ function ClassEquipmentConfigurator({
       {mode === "gold" ? (
         <section className="rounded-xl border border-accentBorder bg-accentBg p-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-textH">
-                Ouro inicial
-              </div>
-              <div className="mt-1 text-xs text-textMuted">
-                Fórmula: {formatStartingGoldFormula(preset.startingGold)}. Média:{" "}
-                {averageStartingGold(preset.startingGold)} PO.
-              </div>
+            <div className="text-xs text-textMuted">
+              Fórmula: {formatStartingGoldFormula(preset.startingGold)}. Média:{" "}
+              {averageStartingGold(preset.startingGold)} PO.
             </div>
-            <div className="flex flex-wrap items-end gap-2">
+            <div className="flex items-end gap-2">
               <label className="grid gap-1 text-xs text-textMuted">
                 Peças de ouro
                 <Input
@@ -303,121 +299,76 @@ function ClassEquipmentConfigurator({
               </label>
               <Button
                 variant="secondary"
-                onClick={() =>
-                  setGold(rollStartingGold(preset.startingGold))
-                }
+                onClick={() => setGold(rollStartingGold(preset.startingGold))}
               >
-                Rolar {formatStartingGoldFormula(preset.startingGold)}
+                Rolar
               </Button>
             </div>
           </div>
         </section>
       ) : (
         <div className="grid gap-4">
-          {preset.choiceGroups.map((choiceGroup) => {
-            const selectedOption =
-              choiceGroup.options.find(
-                (entry) => entry.id === selections[choiceGroup.id],
-              ) ?? choiceGroup.options[0]
+          {preset.choiceGroups.map((group) => {
+            const selected =
+              group.options.find(
+                (option) => option.id === selections[group.id],
+              ) ?? group.options[0]
 
             return (
               <section
-                key={choiceGroup.id}
+                key={group.id}
                 className="rounded-xl border border-border bg-bg p-4"
               >
                 <div className="text-sm font-semibold text-textH">
-                  {choiceGroup.label}
+                  {group.label}
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {choiceGroup.options.map((entry) => (
+                  {group.options.map((option) => (
                     <ChoiceCard
-                      key={entry.id}
-                      selected={selectedOption?.id === entry.id}
-                      title={entry.label}
-                      description={entry.items.map(formatSpec).join(" · ")}
-                      onClick={() => setChoice(choiceGroup.id, entry.id)}
+                      key={option.id}
+                      selected={selected?.id === option.id}
+                      title={option.label}
+                      description={option.items.map(formatSpec).join(" · ")}
+                      onClick={() =>
+                        setSelections((current) => ({
+                          ...current,
+                          [group.id]: option.id,
+                        }))
+                      }
                     />
                   ))}
                 </div>
 
-                {(selectedOption?.items ?? [])
+                {(selected?.items ?? [])
                   .filter(isGenericWeapon)
-                  .map((spec) => {
-                    const current = genericWeapons[spec.id]
-                    const category = isMartialPlaceholder(spec)
-                      ? "martial"
-                      : "simple"
-                    return (
-                      <div
-                        key={spec.id}
-                        className="mt-3 flex flex-col gap-2 rounded-lg border border-warning bg-warningBg p-3 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div>
-                          <div className="text-xs font-semibold text-textH">
-                            Escolha obrigatória: {spec.name}
-                          </div>
-                          <div className="mt-1 text-xs text-textMuted">
-                            {current
-                              ? `Selecionada: ${current.name}`
-                              : "Nenhuma arma selecionada."}
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() =>
-                              setWeaponPicker({ key: spec.id, category })
-                            }
-                          >
-                            Escolher arma
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => {
-                              setWeaponPicker({ key: spec.id, category })
-                              setCustomOpen(true)
-                            }}
-                          >
-                            Criar arma personalizada
-                          </Button>
-                        </div>
-                      </div>
-                    )
-                  })}
+                  .map((spec) => (
+                    <GenericWeaponChoice
+                      key={spec.id}
+                      spec={spec}
+                      selected={genericWeapons[spec.id]}
+                      onChoose={() =>
+                        setWeaponPicker({
+                          key: spec.id,
+                          category: getWeaponCategory(spec),
+                        })
+                      }
+                      onCreate={() => {
+                        setWeaponPicker({
+                          key: spec.id,
+                          category: getWeaponCategory(spec),
+                        })
+                        setCustomOpen(true)
+                      }}
+                    />
+                  ))}
               </section>
             )
           })}
-
-          {preset.fixedItems.length ? (
-            <section className="rounded-xl border border-border bg-bg p-4">
-              <div className="text-sm font-semibold text-textH">
-                Itens fixos
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {preset.fixedItems.map((spec) => (
-                  <span
-                    key={spec.id}
-                    className="rounded-full border border-accentBorder bg-accentBg px-3 py-1 text-xs text-textH"
-                  >
-                    {formatSpec(spec)}
-                  </span>
-                ))}
-              </div>
-            </section>
-          ) : null}
         </div>
       )}
 
-      {!valid ? (
-        <div className="rounded-lg border border-danger bg-dangerBg p-3 text-xs text-danger">
-          {override.error}
-        </div>
-      ) : null}
-
       {weaponPicker && !customOpen ? (
-        <WeaponPicker
+        <CharacterCreationWeaponPicker
           category={weaponPicker.category}
           current={genericWeapons[weaponPicker.key]}
           onClose={() => setWeaponPicker(null)}
@@ -453,111 +404,33 @@ function ClassEquipmentConfigurator({
   )
 }
 
-function WeaponPicker({
-  category,
-  current,
-  onClose,
-  onSelect,
+function GenericWeaponChoice({
+  spec,
+  selected,
+  onChoose,
+  onCreate,
 }: {
-  category: "simple" | "martial"
-  current?: Itemmable
-  onClose: () => void
-  onSelect: (item: Itemmable) => void
+  spec: StartingItemSpec
+  selected?: Itemmable
+  onChoose: () => void
+  onCreate: () => void
 }) {
-  const [query, setQuery] = useState("")
-  const definitions = useMemo(() => {
-    const normalized = normalize(query)
-    return STANDARD_ITEM_DEFINITIONS.filter((definition) => {
-      const item = definition.item
-      if (!(item.kind === "equipment" && item.equipSlot === "weapon")) {
-        return false
-      }
-      if (!matchesPhbWeaponCategory(item, category)) return false
-      return (
-        !normalized ||
-        normalize(`${item.name} ${item.desc ?? ""}`).includes(normalized)
-      )
-    })
-  }, [category, query])
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[180] flex items-center justify-center bg-black/75 p-4"
-      onMouseDown={onClose}
-    >
-      <section
-        className="grid max-h-[90dvh] w-full max-w-4xl grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-border bg-bg-elevated shadow-theme-lg"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <header className="flex items-start justify-between gap-3 border-b border-border p-4">
-          <div>
-            <h2 className="font-semibold text-textH">
-              Escolher arma {category === "martial" ? "marcial" : "simples"}
-            </h2>
-            <p className="mt-1 text-xs text-textMuted">
-              Somente armas válidas para esta categoria são exibidas.
-            </p>
-          </div>
-          <Button size="sm" variant="secondary" onClick={onClose}>
-            Fechar
-          </Button>
-        </header>
-        <div className="border-b border-border p-4">
-          <Input
-            value={query}
-            placeholder="Buscar arma"
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </div>
-        <div className="grid gap-2 overflow-y-auto p-4 sm:grid-cols-2">
-          {definitions.map((definition) => {
-            const selected =
-              current?.compendiumItemId === definition.item.id
-            return (
-              <button
-                key={definition.item.id}
-                type="button"
-                onClick={() =>
-                  onSelect(instantiateStandardItem(definition.item.id, 1))
-                }
-                className={
-                  selected
-                    ? "rounded-xl border border-accentBorder bg-accentBg p-3 text-left"
-                    : "rounded-xl border border-border bg-bg p-3 text-left hover:border-accentBorder"
-                }
-              >
-                <div className="font-semibold text-textH">
-                  {definition.item.name}
-                </div>
-                <div className="mt-1 text-xs leading-5 text-textMuted">
-                  {definition.item.desc || "Sem descrição."}
-                </div>
-              </button>
-            )
-          })}
-          {!definitions.length ? (
-            <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-textMuted sm:col-span-2">
-              Nenhuma arma corresponde aos filtros atuais.
-            </div>
-          ) : null}
-        </div>
-      </section>
-    </div>,
-    document.body,
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-bg-subtle p-3">
+      <div className="text-xs font-semibold text-textH">{spec.name}</div>
+      <div className="mt-1 text-xs text-textMuted">
+        {selected ? `Selecionada: ${selected.name}` : "Escolha uma arma."}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button size="sm" variant="secondary" onClick={onChoose}>
+          Escolher arma
+        </Button>
+        <Button size="sm" variant="secondary" onClick={onCreate}>
+          Criar arma personalizada
+        </Button>
+      </div>
+    </div>
   )
-}
-
-function isGenericWeapon(spec: StartingItemSpec): boolean {
-  return spec.category === "weapon" && normalize(spec.name).includes("a escolha")
-}
-
-function isMartialPlaceholder(spec: StartingItemSpec): boolean {
-  return normalize(spec.name).includes("marcial")
-}
-
-function formatSpec(spec: StartingItemSpec): string {
-  const quantity = spec.quantity ?? 1
-  return quantity > 1 ? `${spec.name} ×${quantity}` : spec.name
 }
 
 function ChoiceCard({
@@ -578,21 +451,32 @@ function ChoiceCard({
       className={
         selected
           ? "rounded-xl border border-accentBorder bg-accentBg p-4 text-left"
-          : "rounded-xl border border-border bg-bg-subtle p-4 text-left hover:border-accentBorder"
+          : "rounded-xl border border-border bg-bg-subtle p-4 text-left"
       }
     >
       <span className="block text-sm font-semibold text-textH">{title}</span>
-      <span className="mt-1 block text-xs leading-5 text-textMuted">
-        {description}
-      </span>
+      <span className="mt-1 block text-xs text-textMuted">{description}</span>
     </button>
   )
 }
 
+function isGenericWeapon(spec: StartingItemSpec): boolean {
+  return spec.category === "weapon" && normalize(spec.name).includes("a escolha")
+}
+
+function getWeaponCategory(spec: StartingItemSpec): StartingWeaponCategory {
+  return normalize(spec.name).includes("marcial") ? "martial" : "simple"
+}
+
+function formatSpec(spec: StartingItemSpec): string {
+  const quantity = spec.quantity ?? 1
+  return quantity > 1 ? `${spec.name} ×${quantity}` : spec.name
+}
+
 function mergeNotes(current: string | undefined, next: string): string {
-  return Array.from(
-    new Set([current?.trim(), next.trim()].filter(Boolean)),
-  ).join(" ")
+  return Array.from(new Set([current?.trim(), next.trim()].filter(Boolean))).join(
+    " ",
+  )
 }
 
 function normalize(value: string): string {
@@ -603,5 +487,3 @@ function normalize(value: string): string {
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
 }
-
-export type { EquipmentOverride }
