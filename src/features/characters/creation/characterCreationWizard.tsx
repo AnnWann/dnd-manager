@@ -28,26 +28,24 @@ import {
   CharacterCreationBackgroundChoices,
   type BackgroundChoiceOverride,
 } from "./CharacterCreationBackgroundChoices"
+import { CharacterCreationFlowBootstrap } from "./bridges/CharacterCreationFlowBootstrap"
+import { CreationRequiredFieldHighlighter } from "./bridges/CreationRequiredFieldHighlighter"
+import { CreationSpellGrantLocalizationBridge } from "./bridges/CreationSpellGrantLocalizationBridge"
 import {
   CharacterCreationEquipmentChoices,
   type EquipmentOverride,
 } from "./components/CharacterCreationEquipmentChoices"
+import { CharacterCreationIdentityStep } from "./components/CharacterCreationIdentityStep"
 import {
   CharacterCreationGenericRacialChoices,
   type GenericRacialChoiceOverride,
 } from "./CharacterCreationGenericRacialChoices"
-import { CharacterCreationIdentityStep } from "./components/CharacterCreationIdentityStep"
-import {
-  CharacterCreationLegacyBridge,
-  readSelectedRacialBonusRule,
-} from "./bridges/CharacterCreationLegacyBridge"
 import {
   CharacterCreationRacialChoices,
   type RacialChoiceOverride,
 } from "./CharacterCreationRacialChoices"
-import { CreationRequiredFieldHighlighter } from "./bridges/CreationRequiredFieldHighlighter"
-import { CreationSpellGrantLocalizationBridge } from "./bridges/CreationSpellGrantLocalizationBridge"
 import { IntegratedCharacterCreationWizard } from "./IntegratedCharacterCreationWizard"
+import { readSelectedRacialBonusRule } from "./logic/readSelectedRacialBonusRule"
 
 export type { CharacterCreationProgressionPlan }
 
@@ -142,7 +140,7 @@ export function CharacterCreationWizard(props: WizardProps) {
     <>
       <IntegratedCharacterCreationWizard {...props} onCreate={handleCreate} />
 
-      <CharacterCreationLegacyBridge open={props.open} />
+      <CharacterCreationFlowBootstrap open={props.open} />
       <CharacterCreationIdentityStep
         open={props.open}
         value={identity}
