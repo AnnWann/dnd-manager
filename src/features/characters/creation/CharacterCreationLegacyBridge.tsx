@@ -1,6 +1,7 @@
 import { useEffect } from "react"
 
 import type { RacialAttributeBonusRule } from "../../../models/races/CharacterRace"
+import { findCharacterCreationRoot } from "./characterCreationStepValidation"
 
 const LEGACY_DRAFT_NAME = "__character_creation_draft__"
 
@@ -21,7 +22,7 @@ export function CharacterCreationLegacyBridge({ open }: { open: boolean }) {
         return
       }
 
-      hideLegacyIdentityStep(stepButtons)
+      stepButtons[0].hidden = true
       renameVisibleSteps(stepButtons)
 
       const main = root.querySelector<HTMLElement>("main")
@@ -91,21 +92,10 @@ export function readSelectedRacialBonusRule(): RacialAttributeBonusRule {
   }
 }
 
-function findCharacterCreationRoot(): HTMLElement | null {
-  const title = Array.from(document.querySelectorAll<HTMLElement>("h1")).find(
-    (heading) => heading.textContent?.trim() === "Criar personagem",
-  )
-  return title?.closest<HTMLElement>("div.grid") ?? null
-}
-
 function getStepButtons(root: HTMLElement): HTMLButtonElement[] {
   return Array.from(root.querySelectorAll<HTMLButtonElement>("header button")).filter(
     (button) => /^\d+\./.test(button.textContent?.trim() ?? ""),
   )
-}
-
-function hideLegacyIdentityStep(stepButtons: HTMLButtonElement[]) {
-  stepButtons[0].hidden = true
 }
 
 function renameVisibleSteps(stepButtons: HTMLButtonElement[]) {
