@@ -6,7 +6,6 @@ import {
 } from "react"
 
 import "../../../models/leveling/ExpandedClassProgression"
-import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Itemmable } from "../../../models/items/item"
 import { finalizeProgressionFeatures } from "../../../models/leveling/ProgressionFeatureFinalization"
 import { materializeProgressionChoices } from "../../../models/leveling/materializeProgressionChoices"
@@ -35,20 +34,21 @@ import {
   CharacterCreationRacialChoices,
   type RacialChoiceOverride,
 } from "./CharacterCreationRacialChoices"
+import { CharacterCreationIdentityStep } from "./CharacterCreationIdentityStep"
 import { CreationRequiredFieldHighlighter } from "./CreationRequiredFieldHighlighter"
 import { CreationSpellGrantLocalizationBridge } from "./CreationSpellGrantLocalizationBridge"
-import {
-  FinalCharacterIdentityDialog,
-  type FinalCharacterIdentity,
-} from "./FinalCharacterIdentityDialog"
+import type { FinalCharacterIdentity } from "./FinalCharacterIdentityDialog"
 import { IntegratedCharacterCreationWizard } from "./IntegratedCharacterCreationWizard"
-import type { CharacterCreationProgressionPlan } from "./characterCreationWizardV5"
 
 export type { CharacterCreationProgressionPlan } from "./characterCreationWizardV5"
 
-type PendingCreation = {
-  character: CharacterTemplate
-  plan: CharacterCreationProgressionPlan
+const EMPTY_IDENTITY: FinalCharacterIdentity = {
+  name: "",
+  alignment: "true-neutral",
+  backgroundDescription: "",
+  physicalAppearance: "",
+  personalityTraits: "",
+  relationships: [],
 }
 
 export function CharacterCreationWizard(
@@ -64,14 +64,16 @@ export function CharacterCreationWizard(
     useState<GenericRacialChoiceOverride | null>(null)
   const [backgroundChoiceOverride, setBackgroundChoiceOverride] =
     useState<BackgroundChoiceOverride | null>(null)
+  const [identity, setIdentity] =
+    useState<FinalCharacterIdentity>(EMPTY_IDENTITY)
+  const [identityError, setIdentityError] = useState("")
   const [racialChoiceError, setRacialChoiceError] = useState("")
   const [backgroundChoiceError, setBackgroundChoiceError] = useState("")
   const [blockingError, setBlockingError] = useState("")
-  const [pendingCreation, setPendingCreation] =
-    useState<PendingCreation | null>(null)
 
   const clearErrors = useCallback(() => {
     setBlockingError("")
+    setIdentityError("")
     setRacialChoiceError("")
     setBackgroundChoiceError("")
   }, [])
@@ -84,27 +86,22 @@ export function CharacterCreationWizard(
       setRacialChoiceOverride(null)
       setGenericRacialOverride(null)
       setBackgroundChoiceOverride(null)
-      setPendingCreation(null)
+      setIdentity(EMPTY_IDENTITY)
       return
     }
 
     const onInteraction = (event: Event) => {
       const target = event.target
       if (!(target instanceof Element)) return
-
       if (event.type === "input" || event.type === "change") {
         clearErrors()
         return
       }
-
       const button = target.closest("button")
-      if (!button) return
-      const text = button.textContent?.trim() ?? ""
-      const isNavigation =
-        text === "Voltar" ||
-        text === "Continuar" ||
-        /^\d+\./.test(text)
-      if (isNavigation) clearErrors()
+      const text = button?.textContent?.trim() ?? ""
+      if (text === "Voltar" || text === "Continuar" || /^\d+\./.test(text)) {
+        clearErrors()
+      }
     }
 
     document.addEventListener("input", onInteraction, true)
@@ -158,150 +155,155 @@ export function CharacterCreationWizard(
     [clearErrors],
   )
 
-  function stageCharacter(
-    character: CharacterTemplate,
-    plan: CharacterCreationProgressionPlan,
-  ) {
-    const bonusRule = readRacialBonusRule()
-    const racialBonusError = validateRacialBonusDistribution(
-      bonusRule,
-      abilityScoreOverride?.racialBonuses,
-    )
-    if (racialBonusError) {
-      setBlockingError(racialBonusError)
-      return
-    }
-
-    if (equipmentOverride && !equipmentOverride.valid) {
-      setBlockingError(
-        equipmentOverride.error ??
-          "Complete todas as escolhas de equipamento da classe inicial.",
-      )
-      return
-    }
-
-    const invalidRaceChoice =
-      (racialChoiceOverride && !racialChoiceOverride.valid
-        ? racialChoiceOverride.error
-        : undefined) ??
-      (genericRacialOverride && !genericRacialOverride.valid
-        ? genericRacialOverride.error
-        : undefined)
-    if (invalidRaceChoice) {
-      setRacialChoiceError(invalidRaceChoice)
-      setBlockingError(invalidRaceChoice)
-      return
-    }
-
-    if (backgroundChoiceOverride && !backgroundChoiceOverride.valid) {
-      const error =
-        backgroundChoiceOverride.error ??
-        "Complete todas as escolhas obrigatórias do antecedente."
-      setBackgroundChoiceError(error)
-      setBlockingError(error)
-      return
-    }
-
-    const inventory = replaceClassStartingEquipment(
-      character.get("inventory") ?? [],
-      equipmentOverride?.items,
-    )
-    const sheet = character.get("sheet")
-    const originalRaceProficiencyIds = new Set(
-      (sheet.race.proficiencies ?? []).map((entry) => entry.id),
-    )
-    const backgroundProficiencies =
-      backgroundChoiceOverride?.apply(sheet.proficiencies ?? []) ??
-      sheet.proficiencies
-    const specificRace = racialChoiceOverride?.apply(
-      sheet.race.naturalAbilities ?? [],
-      sheet.race.proficiencies ?? [],
-    )
-    const genericRace = genericRacialOverride?.apply(
-      specificRace?.proficiencies ?? sheet.race.proficiencies,
-    )
-    const raceProficiencies =
-      genericRace?.proficiencies ??
-      specificRace?.proficiencies ??
-      sheet.race.proficiencies
-    const proficiencies = [
-      ...(backgroundProficiencies ?? []).filter(
-        (entry) => !originalRaceProficiencyIds.has(entry.id),
-      ),
-      ...raceProficiencies,
-    ]
-    const skills = { ...sheet.skills }
-    for (const skill of [
-      ...(specificRace?.skills ?? []),
-      ...(genericRace?.skills ?? []),
-    ]) {
-      skills[skill] = "proficient"
-    }
-
-    const patched = character.withPatch({
-      inventory,
-      sheet: {
-        ...sheet,
-        attributes: abilityScoreOverride?.attributes ?? sheet.attributes,
-        skills,
-        proficiencies,
-        race: {
-          ...sheet.race,
-          naturalAbilities:
-            specificRace?.abilities ?? sheet.race.naturalAbilities,
-          proficiencies: raceProficiencies,
-          attributeBonus:
-            abilityScoreOverride?.racialBonuses ?? sheet.race.attributeBonus,
-          attributeBonusRule: bonusRule,
-        },
-      },
-    })
-    clearErrors()
-    setPendingCreation({
-      character: refreshProgressionFeatureMechanics(
-        materializeProgressionChoices(
-          finalizeProgressionFeatures(patched),
-        ),
-      ),
-      plan,
-    })
-  }
-
-  function finishIdentity(identity: FinalCharacterIdentity) {
-    if (!pendingCreation) return
-    const profile = pendingCreation.character.get("profile")
-    const backgroundTitle = extractBackgroundTitle(profile.history)
-    const history = [
-      backgroundTitle,
-      identity.backgroundDescription,
-    ]
-      .filter(Boolean)
-      .join("\n")
-
-    const character = pendingCreation.character.withPatch({
-      name: identity.name,
-      profile: {
-        ...profile,
-        alignment: identity.alignment,
-        history,
-        physicalAppearance: identity.physicalAppearance,
-        traits: identity.personalityTraits,
-        relationships: identity.relationships,
-      },
-    })
-    const plan = pendingCreation.plan
-    setPendingCreation(null)
-    props.onCreate(character, plan)
-  }
-
   return (
     <>
       <IntegratedCharacterCreationWizard
         {...props}
-        onCreate={stageCharacter}
+        onCreate={(character, plan) => {
+          const identityValidation = validateIdentity(identity)
+          if (identityValidation) {
+            setIdentityError(identityValidation)
+            setBlockingError(identityValidation)
+            return
+          }
+
+          const bonusRule = readRacialBonusRule()
+          const racialBonusError = validateRacialBonusDistribution(
+            bonusRule,
+            abilityScoreOverride?.racialBonuses,
+          )
+          if (racialBonusError) {
+            setBlockingError(racialBonusError)
+            return
+          }
+
+          if (equipmentOverride && !equipmentOverride.valid) {
+            setBlockingError(
+              equipmentOverride.error ??
+                "Complete todas as escolhas de equipamento da classe inicial.",
+            )
+            return
+          }
+
+          const invalidRaceChoice =
+            (racialChoiceOverride && !racialChoiceOverride.valid
+              ? racialChoiceOverride.error
+              : undefined) ??
+            (genericRacialOverride && !genericRacialOverride.valid
+              ? genericRacialOverride.error
+              : undefined)
+          if (invalidRaceChoice) {
+            setRacialChoiceError(invalidRaceChoice)
+            setBlockingError(invalidRaceChoice)
+            return
+          }
+
+          if (backgroundChoiceOverride && !backgroundChoiceOverride.valid) {
+            const error =
+              backgroundChoiceOverride.error ??
+              "Complete todas as escolhas obrigatórias do antecedente."
+            setBackgroundChoiceError(error)
+            setBlockingError(error)
+            return
+          }
+
+          const inventory = replaceClassStartingEquipment(
+            character.get("inventory") ?? [],
+            equipmentOverride?.items,
+          )
+          const sheet = character.get("sheet")
+          const originalRaceProficiencyIds = new Set(
+            (sheet.race.proficiencies ?? []).map((entry) => entry.id),
+          )
+          const backgroundProficiencies =
+            backgroundChoiceOverride?.apply(sheet.proficiencies ?? []) ??
+            sheet.proficiencies
+          const specificRace = racialChoiceOverride?.apply(
+            sheet.race.naturalAbilities ?? [],
+            sheet.race.proficiencies ?? [],
+          )
+          const genericRace = genericRacialOverride?.apply(
+            specificRace?.proficiencies ?? sheet.race.proficiencies,
+          )
+          const raceProficiencies =
+            genericRace?.proficiencies ??
+            specificRace?.proficiencies ??
+            sheet.race.proficiencies
+          const proficiencies = [
+            ...(backgroundProficiencies ?? []).filter(
+              (entry) => !originalRaceProficiencyIds.has(entry.id),
+            ),
+            ...raceProficiencies,
+          ]
+          const skills = { ...sheet.skills }
+          for (const skill of [
+            ...(specificRace?.skills ?? []),
+            ...(genericRace?.skills ?? []),
+          ]) {
+            skills[skill] = "proficient"
+          }
+
+          const profile = character.get("profile")
+          const backgroundTitle = extractBackgroundTitle(profile.history)
+          const history = [backgroundTitle, identity.backgroundDescription]
+            .filter(Boolean)
+            .join("\n")
+          const patched = character.withPatch({
+            name: identity.name.trim(),
+            inventory,
+            profile: {
+              ...profile,
+              alignment: identity.alignment,
+              history,
+              physicalAppearance: identity.physicalAppearance.trim(),
+              traits: identity.personalityTraits.trim(),
+              relationships: identity.relationships.map((entry) => ({
+                ...entry,
+                name: entry.name.trim(),
+                relation: entry.relation.trim(),
+                description: entry.description?.trim() || undefined,
+              })),
+            },
+            sheet: {
+              ...sheet,
+              attributes: abilityScoreOverride?.attributes ?? sheet.attributes,
+              skills,
+              proficiencies,
+              race: {
+                ...sheet.race,
+                naturalAbilities:
+                  specificRace?.abilities ?? sheet.race.naturalAbilities,
+                proficiencies: raceProficiencies,
+                attributeBonus:
+                  abilityScoreOverride?.racialBonuses ??
+                  sheet.race.attributeBonus,
+                attributeBonusRule: bonusRule,
+              },
+            },
+          })
+          clearErrors()
+          props.onCreate(
+            refreshProgressionFeatureMechanics(
+              materializeProgressionChoices(
+                finalizeProgressionFeatures(patched),
+              ),
+            ),
+            plan,
+          )
+        }}
       />
 
-      <InitialIdentityStepSkipper open={props.open && !pendingCreation} />
+      <InitialIdentityStepSkipper open={props.open} />
+      <CharacterCreationIdentityStep
+        open={props.open}
+        value={identity}
+        onChange={(next) => {
+          setIdentity(next)
+          setIdentityError("")
+          setBlockingError("")
+        }}
+        externalError={identityError}
+      />
       <CharacterCreationEquipmentChoicesStable
         onChange={handleEquipmentChange}
       />
@@ -324,19 +326,6 @@ export function CharacterCreationWizard(
       <ProgressionModalInstantSelectionBridge />
       <ProgressionSpellSelectionModal />
 
-      <FinalCharacterIdentityDialog
-        open={pendingCreation !== null}
-        initialBackgroundDescription={
-          pendingCreation
-            ? extractBackgroundDescription(
-                pendingCreation.character.get("profile").history,
-              )
-            : ""
-        }
-        onCancel={() => setPendingCreation(null)}
-        onConfirm={finishIdentity}
-      />
-
       {blockingError ? (
         <div className="pointer-events-none fixed left-1/2 top-4 z-[260] w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger shadow-theme-lg">
           {blockingError}
@@ -357,31 +346,38 @@ function InitialIdentityStepSkipper({ open }: { open: boolean }) {
       const root = creatorTitle?.closest<HTMLElement>("div.grid")
       if (!root) return
 
-      const stepButtons = Array.from(root.querySelectorAll<HTMLButtonElement>("header button"))
-        .filter((button) => /^\d+\./.test(button.textContent?.trim() ?? ""))
+      const stepButtons = Array.from(
+        root.querySelectorAll<HTMLButtonElement>("header button"),
+      ).filter((button) => /^\d+\./.test(button.textContent?.trim() ?? ""))
       if (stepButtons.length < 2) return
 
-      const identityButton = stepButtons[0]
-      identityButton.hidden = true
+      stepButtons[0].hidden = true
       stepButtons.slice(1).forEach((button, index) => {
-        const original = button.dataset.originalCreationStepLabel || button.textContent?.trim() || ""
+        const original =
+          button.dataset.originalCreationStepLabel ||
+          button.textContent?.trim() ||
+          ""
         button.dataset.originalCreationStepLabel = original
         const label = original.replace(/^\d+\.\s*/, "")
-        button.textContent = `${index + 1}. ${label === "Confirmação" ? "Confirmação e identidade" : label}`
+        button.textContent = `${index + 1}. ${
+          label === "Confirmação" ? "Identidade e confirmação" : label
+        }`
       })
 
-      const identityHeading = Array.from(root.querySelectorAll<HTMLElement>("main h2")).find(
-        (heading) => heading.textContent?.trim() === "Identidade",
-      )
+      const identityHeading = Array.from(
+        root.querySelectorAll<HTMLElement>("main h2"),
+      ).find((heading) => heading.textContent?.trim() === "Identidade")
       if (!identityHeading) return
 
-      const nameInput = root.querySelector<HTMLInputElement>("main input[placeholder='Nome do personagem']")
+      const nameInput = root.querySelector<HTMLInputElement>(
+        "main input[placeholder='Nome do personagem']",
+      )
       if (nameInput && !nameInput.value) {
-        const valueSetter = Object.getOwnPropertyDescriptor(
+        const setter = Object.getOwnPropertyDescriptor(
           HTMLInputElement.prototype,
           "value",
         )?.set
-        valueSetter?.call(nameInput, "Personagem em criação")
+        setter?.call(nameInput, "Personagem em criação")
         nameInput.dispatchEvent(new Event("input", { bubbles: true }))
       }
       stepButtons[1]?.click()
@@ -393,6 +389,17 @@ function InitialIdentityStepSkipper({ open }: { open: boolean }) {
   }, [open])
 
   return null
+}
+
+function validateIdentity(identity: FinalCharacterIdentity): string {
+  if (!identity.name.trim()) return "Informe o nome do personagem na etapa de identidade."
+  const incomplete = identity.relationships.find(
+    (entry) => !entry.name.trim() || !entry.relation.trim(),
+  )
+  if (incomplete) {
+    return "Preencha o nome e o tipo de relação de cada relacionamento adicionado."
+  }
+  return ""
 }
 
 function replaceClassStartingEquipment(
@@ -459,19 +466,12 @@ function validateRacialBonusDistribution(
 }
 
 function extractBackgroundTitle(history: string): string {
-  return history
-    .split("\n")
-    .find((line) => line.trim().toLocaleLowerCase("pt-BR").startsWith("antecedente:"))
-    ?.trim() ?? ""
-}
-
-function extractBackgroundDescription(history: string): string {
-  return history
-    .split("\n")
-    .filter(
-      (line) =>
-        !line.trim().toLocaleLowerCase("pt-BR").startsWith("antecedente:"),
-    )
-    .join("\n")
-    .trim()
+  return (
+    history
+      .split("\n")
+      .find((line) =>
+        line.trim().toLocaleLowerCase("pt-BR").startsWith("antecedente:"),
+      )
+      ?.trim() ?? ""
+  )
 }
