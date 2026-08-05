@@ -3,6 +3,7 @@ import { useCallback, useState, type ComponentProps } from "react"
 import "../../../models/leveling/ExpandedClassProgression"
 import type { Itemmable } from "../../../models/items/item"
 import { finalizeProgressionFeatures } from "../../../models/leveling/ProgressionFeatureFinalization"
+import { materializeProgressionChoices } from "../../../models/leveling/materializeProgressionChoices"
 import { refreshProgressionFeatureMechanics } from "../../../models/leveling/refreshProgressionFeatureMechanics"
 import { ProgressionFeatureModalEnhancer } from "../progression/ProgressionFeatureModalEnhancer"
 import { ProgressionModalInstantSelectionBridge } from "../progression/ProgressionModalInstantSelectionBridge"
@@ -60,7 +61,9 @@ export function CharacterCreationWizard(
           })
           props.onCreate(
             refreshProgressionFeatureMechanics(
-              finalizeProgressionFeatures(patched),
+              materializeProgressionChoices(
+                finalizeProgressionFeatures(patched),
+              ),
             ),
             plan,
           )
