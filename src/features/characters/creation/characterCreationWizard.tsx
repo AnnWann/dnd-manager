@@ -7,6 +7,16 @@ import {
 } from "react"
 
 import "../../../models/leveling/ExpandedClassProgression"
+import {
+  createEmptyCharacterCreationIdentity,
+  type CharacterCreationIdentity,
+  type CharacterCreationProgressionPlan,
+} from "../../../models/characters/creation/CharacterCreation"
+import {
+  finalizeCreatedCharacter,
+  validateCharacterCreationOverrides,
+  type CharacterCreationValidationError,
+} from "../../../lib/characterCreation/finalizeCharacterCreation"
 import { ProgressionFeatureModalEnhancer } from "../progression/ProgressionFeatureModalEnhancer"
 import { ProgressionModalInstantSelectionBridge } from "../progression/ProgressionModalInstantSelectionBridge"
 import { ProgressionSpellSelectionModal } from "../progression/ProgressionSpellSelectionModal"
@@ -23,11 +33,6 @@ import {
   type EquipmentOverride,
 } from "./CharacterCreationEquipmentChoices"
 import {
-  finalizeCreatedCharacter,
-  validateCharacterCreationOverrides,
-  type CharacterCreationValidationError,
-} from "./characterCreationFinalization"
-import {
   CharacterCreationGenericRacialChoices,
   type GenericRacialChoiceOverride,
 } from "./CharacterCreationGenericRacialChoices"
@@ -40,15 +45,11 @@ import {
   CharacterCreationRacialChoices,
   type RacialChoiceOverride,
 } from "./CharacterCreationRacialChoices"
-import {
-  createEmptyCharacterCreationIdentity,
-  type CharacterCreationIdentity,
-} from "./characterCreationTypes"
 import { CreationRequiredFieldHighlighter } from "./CreationRequiredFieldHighlighter"
 import { CreationSpellGrantLocalizationBridge } from "./CreationSpellGrantLocalizationBridge"
 import { IntegratedCharacterCreationWizard } from "./IntegratedCharacterCreationWizard"
 
-export type { CharacterCreationProgressionPlan } from "./characterCreationTypes"
+export type { CharacterCreationProgressionPlan }
 
 type WizardProps = ComponentProps<typeof IntegratedCharacterCreationWizard>
 
