@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 
 import { useCharacterContext } from "../contexts/characterContext"
 import { useSyncContext } from "../contexts/syncContext"
-import { CharacterCreationWizard } from "../features/characters/creation/characterCreationWizardV6"
+import { CharacterCreationWizard } from "../features/characters/creation/characterCreationWizard"
 import { ensureCharacterBackgroundFromHistory } from "../features/characters/creation/inferCharacterBackground"
 import type { Player } from "../models/player/Player"
 
