@@ -34,6 +34,7 @@ import {
   CharacterCreationRacialChoices,
   type RacialChoiceOverride,
 } from "./CharacterCreationRacialChoices"
+import { CreationRequiredFieldHighlighter } from "./CreationRequiredFieldHighlighter"
 import { CreationSpellGrantLocalizationBridge } from "./CreationSpellGrantLocalizationBridge"
 import { IntegratedCharacterCreationWizard } from "./IntegratedCharacterCreationWizard"
 
@@ -65,6 +66,11 @@ export function CharacterCreationWizard(
   useEffect(() => {
     if (!props.open) {
       clearErrors()
+      setEquipmentOverride(null)
+      setAbilityScoreOverride(null)
+      setRacialChoiceOverride(null)
+      setGenericRacialOverride(null)
+      setBackgroundChoiceOverride(null)
       return
     }
 
@@ -99,13 +105,15 @@ export function CharacterCreationWizard(
 
   const handleEquipmentChange = useCallback(
     (next: EquipmentOverride | null) => {
+      if (!next) return
       setEquipmentOverride(next)
-      if (next?.valid) setBlockingError("")
+      if (next.valid) setBlockingError("")
     },
     [],
   )
   const handleAbilityScoreChange = useCallback(
     (next: AbilityScoreOverride | null) => {
+      if (!next) return
       setAbilityScoreOverride(next)
       setBlockingError("")
     },
@@ -113,22 +121,25 @@ export function CharacterCreationWizard(
   )
   const handleRacialChoiceChange = useCallback(
     (next: RacialChoiceOverride | null) => {
+      if (!next) return
       setRacialChoiceOverride(next)
-      if (next?.valid) clearErrors()
+      if (next.valid) clearErrors()
     },
     [clearErrors],
   )
   const handleGenericRacialChange = useCallback(
     (next: GenericRacialChoiceOverride | null) => {
+      if (!next) return
       setGenericRacialOverride(next)
-      if (next?.valid) clearErrors()
+      if (next.valid) clearErrors()
     },
     [clearErrors],
   )
   const handleBackgroundChoiceChange = useCallback(
     (next: BackgroundChoiceOverride | null) => {
+      if (!next) return
       setBackgroundChoiceOverride(next)
-      if (next?.valid) clearErrors()
+      if (next.valid) clearErrors()
     },
     [clearErrors],
   )
@@ -262,6 +273,7 @@ export function CharacterCreationWizard(
         onChange={handleBackgroundChoiceChange}
         externalError={backgroundChoiceError}
       />
+      <CreationRequiredFieldHighlighter />
       <CreationSpellGrantLocalizationBridge />
       <ProgressionFeatureModalEnhancer />
       <ProgressionModalInstantSelectionBridge />
