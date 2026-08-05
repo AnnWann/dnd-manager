@@ -5,6 +5,12 @@ import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
+import {
+  PHB_BACKGROUND_PRESETS,
+  SKILL_LABELS,
+  type BackgroundPreset,
+} from "../../../data/characterCreation/phbPresets"
+import { inferBackgroundFromHistory } from "../../../lib/characterCreation/inferCharacterBackground"
 import type { CharacterBackground } from "../../../models/characters/CharacterBackground"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
@@ -15,12 +21,6 @@ import {
 } from "../../../models/characters/characterBackgroundStorage"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
 import type { Skill } from "../../../models/sheet/Skills"
-import {
-  PHB_BACKGROUND_PRESETS,
-  SKILL_LABELS,
-  type BackgroundPreset,
-} from "../creation/phbPresets"
-import { inferBackgroundFromHistory } from "../creation/inferCharacterBackground"
 
 type Props = {
   character: CharacterTemplate
