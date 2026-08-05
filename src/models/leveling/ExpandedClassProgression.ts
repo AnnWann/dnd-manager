@@ -7,6 +7,7 @@ import {
 } from "./ClassProgression"
 import { applyAdditionalProgressionLocalization } from "./ProgressionAdditionalLocalization"
 import { localizeProgressionDefinitions } from "./ProgressionLocalization"
+import { localizeRemainingSubclasses } from "./SubclassLocalization"
 import { XANATHAR_SUBCLASSES } from "./XanatharSubclasses"
 import type { ClassName } from "../sheet/Class"
 
@@ -35,6 +36,7 @@ function ensureExpandedProgressions(): void {
 
   localizeProgressionDefinitions(CLASS_PROGRESSIONS)
   applyAdditionalProgressionLocalization(CLASS_PROGRESSIONS)
+  localizeRemainingSubclasses(CLASS_PROGRESSIONS)
 }
 
 ensureExpandedProgressions()
