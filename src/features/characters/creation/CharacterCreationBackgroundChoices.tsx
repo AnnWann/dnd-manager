@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { Input } from "../../../components/ui/Input"
+import { PHB_BACKGROUND_PRESETS } from "../../../data/characterCreation/phbPresets"
 import {
   getBackgroundProficiencyChoices,
   type BackgroundProficiencyChoice,
 } from "../../../models/characters/BackgroundProficiencyChoice"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
-import { PHB_BACKGROUND_PRESETS } from "./phbPresets"
 
 type BackgroundChoiceOverride = {
   valid: boolean
