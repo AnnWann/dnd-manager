@@ -1,3 +1,4 @@
+import { applyProgressionAbilityConfig } from "../../data/classProgression/applyProgressionAbilityConfig"
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import { enforceAsiAttributeCaps } from "./enforceAsiAttributeCaps"
 import { normalizeProgressionAbility } from "./ProgressionFeatureFinalization"
@@ -11,9 +12,11 @@ export function refreshProgressionFeatureMechanics(
   return cappedCharacter.with(
     "abilities",
     (cappedCharacter.get("abilities") ?? []).map((ability) =>
-      applyAdditionalProgressionFeatureMechanics(
-        cappedCharacter,
-        normalizeProgressionAbility(cappedCharacter, ability),
+      applyProgressionAbilityConfig(
+        applyAdditionalProgressionFeatureMechanics(
+          cappedCharacter,
+          normalizeProgressionAbility(cappedCharacter, ability),
+        ),
       ),
     ),
   )
