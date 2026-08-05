@@ -1,3 +1,4 @@
+import { PHB_BACKGROUND_PRESETS } from "../../data/characterCreation/phbPresets"
 import type { CharacterBackground } from "../../models/characters/CharacterBackground"
 import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
 import {
@@ -5,7 +6,6 @@ import {
   getCharacterBackground,
   withCharacterBackground,
 } from "../../models/characters/characterBackgroundStorage"
-import { PHB_BACKGROUND_PRESETS } from "../../features/characters/creation/phbPresets"
 
 export function ensureCharacterBackgroundFromHistory(
   character: CharacterTemplate,
