@@ -327,17 +327,19 @@ function localizeReviewRace(section: HTMLElement) {
   if (!value) return
 
   const raw = value.textContent?.trim() ?? ""
-  value.textContent =
+  const localized =
     CHARACTER_RACE_LABELS[raw] ??
     CHARACTER_RACE_LABELS[raw.toLocaleLowerCase("en-US")] ??
     raw
+  if (value.textContent !== localized) value.textContent = localized
 }
 
 function updateReviewName(section: HTMLElement, name: string) {
   const value = findReviewRow(section, "Nome")?.querySelector<HTMLElement>(
     "strong",
   )
-  if (value) value.textContent = name.trim() || "—"
+  const next = name.trim() || "—"
+  if (value && value.textContent !== next) value.textContent = next
 }
 
 function findReviewRow(
