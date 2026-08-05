@@ -37,6 +37,17 @@ export function CharacterCreationStepGuard() {
       })
     }
 
+    const block = (event: MouseEvent, root: HTMLElement, error: string) => {
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      setMessage(error)
+      root.querySelector<HTMLElement>(":scope > main")?.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      })
+    }
+
     const handleClick = (event: MouseEvent) => {
       const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(
         "button",
@@ -59,20 +70,22 @@ export function CharacterCreationStepGuard() {
 
       if (!isForwardTab && !isContinue) return
 
+      if (isForwardTab && requestedIndex > activeIndex + 1) {
+        block(
+          event,
+          root,
+          "Avance pelas etapas em ordem. Cada etapa precisa ser aberta e validada antes das seguintes.",
+        )
+        return
+      }
+
       const error = validateVisibleStep(root)
       if (!error) {
         setMessage("")
         return
       }
 
-      event.preventDefault()
-      event.stopPropagation()
-      event.stopImmediatePropagation()
-      setMessage(error)
-      root.querySelector<HTMLElement>(":scope > main")?.scrollTo({
-        top: 0,
-        behavior: "smooth",
-      })
+      block(event, root, error)
     }
 
     scan()
