@@ -45,7 +45,10 @@ export function CreationRequiredFieldHighlighter() {
         )
         const targetsRace = /raça/i.test(button.textContent?.trim() ?? "")
 
-        if (initialIdentityVisible && targetsRace) return
+        if (initialIdentityVisible && targetsRace) {
+          seedLegacyIdentityName(main)
+          return
+        }
 
         event.preventDefault()
         event.stopPropagation()
@@ -335,6 +338,21 @@ function collectMissingFields(root: HTMLElement): HTMLElement[] {
     }
     return false
   })
+}
+
+function seedLegacyIdentityName(main: HTMLElement) {
+  const input = main.querySelector<HTMLInputElement>(
+    'input[placeholder="Nome do personagem"]',
+  )
+  if (!input || input.value.trim()) return
+
+  const setter = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )?.set
+  setter?.call(input, "__identidade_final_pendente__")
+  input.dispatchEvent(new Event("input", { bubbles: true }))
+  input.dispatchEvent(new Event("change", { bubbles: true }))
 }
 
 function highlight(elements: HTMLElement[]) {
