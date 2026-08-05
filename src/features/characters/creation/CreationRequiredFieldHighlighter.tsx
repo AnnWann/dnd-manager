@@ -35,10 +35,11 @@ export function CreationRequiredFieldHighlighter() {
 }
 
 function highlightRequiredFields() {
-  const root = Array.from(document.querySelectorAll<HTMLElement>("h1")).find(
+  const title = Array.from(document.querySelectorAll<HTMLElement>("h1")).find(
     (entry) => entry.textContent?.trim() === "Criar personagem",
-  )?.closest<HTMLElement>("div")
-  if (!root) return
+  )
+  const root = title?.closest("header")?.parentElement
+  if (!(root instanceof HTMLElement)) return
 
   root
     .querySelectorAll<HTMLElement>("[data-creation-required-highlight]")
@@ -46,22 +47,29 @@ function highlightRequiredFields() {
 
   root.querySelectorAll<HTMLElement>("section").forEach((section) => {
     const heading = section.querySelector<HTMLElement>("h2,h3")
-    const title = normalize(heading?.textContent ?? "")
-    if (!REQUIRED_SECTION_TITLES.some((candidate) => title.includes(candidate))) {
+    const titleText = normalize(heading?.textContent ?? "")
+    if (
+      !REQUIRED_SECTION_TITLES.some((candidate) =>
+        titleText.includes(candidate),
+      )
+    ) {
       return
     }
 
-    section.querySelectorAll<HTMLInputElement | HTMLSelectElement>("input,select").forEach((field) => {
-      if (field.disabled || field.type === "hidden") return
-      const missing = !String(field.value ?? "").trim()
-      if (!missing) return
-      field.dataset.creationRequiredHighlight = "true"
-      field.setAttribute("aria-invalid", "true")
-      field.classList.add("border-danger", "bg-dangerBg")
-      const label = field.closest<HTMLElement>("label")
-      label?.classList.add("text-danger")
-      if (label) label.dataset.creationRequiredHighlight = "true"
-    })
+    section
+      .querySelectorAll<HTMLInputElement | HTMLSelectElement>("input,select")
+      .forEach((field) => {
+        if (field.disabled || field.type === "hidden") return
+        const missing = !String(field.value ?? "").trim()
+        if (!missing) return
+
+        field.dataset.creationRequiredHighlight = "true"
+        field.setAttribute("aria-invalid", "true")
+        field.classList.add("border-danger", "bg-dangerBg")
+        const label = field.closest<HTMLElement>("label")
+        label?.classList.add("text-danger")
+        if (label) label.dataset.creationRequiredHighlight = "true"
+      })
   })
 }
 
