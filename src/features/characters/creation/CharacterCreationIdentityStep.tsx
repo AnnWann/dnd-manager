@@ -118,6 +118,7 @@ export function CharacterCreationIdentityStep({
       if (!hostRef.current || !hostRef.current.isConnected) {
         const nextHost = document.createElement("div")
         nextHost.dataset.characterCreationIdentityStep = "true"
+        nextHost.className = "min-w-0 max-w-full overflow-x-hidden"
         parent.insertBefore(nextHost, reviewSection)
         hostRef.current = nextHost
         setHost(nextHost)
@@ -155,14 +156,14 @@ export function CharacterCreationIdentityStep({
   }
 
   return createPortal(
-    <section className="mb-4 rounded-xl border border-accentBorder bg-accentBg p-4">
+    <section className="mb-4 min-w-0 max-w-full overflow-x-hidden rounded-xl border border-accentBorder bg-accentBg p-3 sm:p-4">
       <h2 className="font-semibold text-textH">Identidade</h2>
-      <p className="mt-1 text-xs leading-5 text-textMuted">
+      <p className="mt-1 max-w-full text-xs leading-5 text-textMuted">
         Defina a identidade narrativa antes de confirmar e criar a ficha.
       </p>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <label className="grid gap-1.5 text-xs text-text">
+      <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+        <label className="grid min-w-0 gap-1.5 text-xs text-text">
           Nome do personagem <span className="text-danger">Obrigatório</span>
           <Input
             value={value.name}
@@ -172,11 +173,19 @@ export function CharacterCreationIdentityStep({
                 : ""
             }
             placeholder="Nome do personagem"
-            onChange={(event) => patch({ name: event.target.value })}
+            onChange={(event) => {
+              if (
+                !event.nativeEvent.isTrusted &&
+                event.target.value === "Personagem em criação"
+              ) {
+                return
+              }
+              patch({ name: event.target.value })
+            }}
           />
         </label>
 
-        <label className="grid gap-1.5 text-xs text-text">
+        <label className="grid min-w-0 gap-1.5 text-xs text-text">
           Alinhamento
           <Select
             value={value.alignment}
@@ -195,7 +204,7 @@ export function CharacterCreationIdentityStep({
           </Select>
         </label>
 
-        <label className="grid gap-1.5 text-xs text-text md:col-span-2">
+        <label className="grid min-w-0 gap-1.5 text-xs text-text sm:col-span-2">
           Descrição do antecedente
           <Textarea
             value={value.backgroundDescription}
@@ -206,7 +215,7 @@ export function CharacterCreationIdentityStep({
           />
         </label>
 
-        <label className="grid gap-1.5 text-xs text-text">
+        <label className="grid min-w-0 gap-1.5 text-xs text-text">
           Aparência física
           <Textarea
             value={value.physicalAppearance}
@@ -215,7 +224,7 @@ export function CharacterCreationIdentityStep({
           />
         </label>
 
-        <label className="grid gap-1.5 text-xs text-text">
+        <label className="grid min-w-0 gap-1.5 text-xs text-text">
           Traços de personalidade
           <Textarea
             value={value.personalityTraits}
@@ -225,9 +234,9 @@ export function CharacterCreationIdentityStep({
         </label>
       </div>
 
-      <div className="mt-5 rounded-xl border border-border bg-bg p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+      <div className="mt-5 min-w-0 max-w-full rounded-xl border border-border bg-bg p-3 sm:p-4">
+        <div className="flex min-w-0 flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <h3 className="text-sm font-semibold text-textH">Relacionamentos</h3>
             <p className="mt-1 text-xs text-textMuted">
               Adicione até três vínculos importantes do personagem.
@@ -236,6 +245,7 @@ export function CharacterCreationIdentityStep({
           <Button
             size="sm"
             variant="secondary"
+            className="w-full sm:w-auto"
             disabled={value.relationships.length >= 3}
             onClick={() =>
               patch({
@@ -256,7 +266,7 @@ export function CharacterCreationIdentityStep({
           </Button>
         </div>
 
-        <div className="mt-3 grid gap-3">
+        <div className="mt-3 grid min-w-0 gap-3">
           {value.relationships.map((relationship, index) => {
             const invalid =
               Boolean(externalError) &&
@@ -266,17 +276,18 @@ export function CharacterCreationIdentityStep({
                 key={relationship.id}
                 className={
                   invalid
-                    ? "rounded-xl border border-danger bg-dangerBg p-3"
-                    : "rounded-xl border border-border bg-bg-subtle p-3"
+                    ? "min-w-0 rounded-xl border border-danger bg-dangerBg p-3"
+                    : "min-w-0 rounded-xl border border-border bg-bg-subtle p-3"
                 }
               >
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <strong className="text-sm text-textH">
                     Relacionamento {index + 1}
                   </strong>
                   <Button
                     size="sm"
                     variant="ghost"
+                    className="w-full sm:w-auto"
                     onClick={() =>
                       patch({
                         relationships: value.relationships.filter(
@@ -289,8 +300,8 @@ export function CharacterCreationIdentityStep({
                     Remover
                   </Button>
                 </div>
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  <label className="grid gap-1.5 text-xs text-text">
+                <div className="mt-3 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="grid min-w-0 gap-1.5 text-xs text-text">
                     Nome <span className="text-danger">Obrigatório</span>
                     <Input
                       value={relationship.name}
@@ -302,7 +313,7 @@ export function CharacterCreationIdentityStep({
                       }
                     />
                   </label>
-                  <label className="grid gap-1.5 text-xs text-text">
+                  <label className="grid min-w-0 gap-1.5 text-xs text-text">
                     Relação <span className="text-danger">Obrigatório</span>
                     <Input
                       value={relationship.relation}
@@ -314,7 +325,7 @@ export function CharacterCreationIdentityStep({
                       }
                     />
                   </label>
-                  <label className="grid gap-1.5 text-xs text-text md:col-span-2">
+                  <label className="grid min-w-0 gap-1.5 text-xs text-text sm:col-span-2">
                     Descrição
                     <Textarea
                       value={relationship.description ?? ""}
@@ -331,7 +342,7 @@ export function CharacterCreationIdentityStep({
             )
           })}
           {!value.relationships.length ? (
-            <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-textMuted">
+            <div className="min-w-0 rounded-lg border border-dashed border-border p-4 text-center text-xs text-textMuted">
               Nenhum relacionamento adicionado.
             </div>
           ) : null}
@@ -339,7 +350,7 @@ export function CharacterCreationIdentityStep({
       </div>
 
       {externalError ? (
-        <div className="mt-4 rounded-lg border border-danger bg-dangerBg p-3 text-sm text-danger">
+        <div className="mt-4 max-w-full rounded-lg border border-danger bg-dangerBg p-3 text-sm text-danger">
           {externalError}
         </div>
       ) : null}
