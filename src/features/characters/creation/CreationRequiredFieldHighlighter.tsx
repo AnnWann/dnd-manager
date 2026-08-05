@@ -31,20 +31,25 @@ export function CreationRequiredFieldHighlighter() {
       const wizardRoot = findWizardRoot(button)
       if (!wizardRoot) return
 
-      // O componente legado que oculta a primeira etapa chama .click() em Raça.
-      // Permitimos somente a inicialização automática uma vez. Cliques posteriores
-      // disparados pelo intervalo não podem retirar o usuário da identidade final.
       if (!event.isTrusted) {
         const isStepButton = /^\d+\./.test(button.textContent?.trim() ?? "")
-        if (isStepButton) {
-          if (wizardRoot.dataset.creationInitialSkipComplete === "true") {
-            event.preventDefault()
-            event.stopPropagation()
-            event.stopImmediatePropagation()
-          } else {
-            wizardRoot.dataset.creationInitialSkipComplete = "true"
-          }
-        }
+        if (!isStepButton) return
+
+        const main = wizardRoot.querySelector<HTMLElement>("main")
+        const initialIdentityVisible = Boolean(
+          main &&
+            Array.from(main.querySelectorAll<HTMLElement>("h2")).some(
+              (heading) => heading.textContent?.trim() === "Identidade",
+            ) &&
+            !main.querySelector('[data-character-creation-identity-step="true"]'),
+        )
+        const targetsRace = /raça/i.test(button.textContent?.trim() ?? "")
+
+        if (initialIdentityVisible && targetsRace) return
+
+        event.preventDefault()
+        event.stopPropagation()
+        event.stopImmediatePropagation()
         return
       }
 
@@ -77,10 +82,7 @@ export function CreationRequiredFieldHighlighter() {
       document.removeEventListener("input", onInput, true)
       document.removeEventListener("change", onInput, true)
       clearAttemptHighlights()
-      if (root) {
-        delete root.dataset.characterCreationMobile
-        delete root.dataset.creationInitialSkipComplete
-      }
+      if (root) delete root.dataset.characterCreationMobile
     }
   }, [])
 
