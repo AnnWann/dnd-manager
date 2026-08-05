@@ -1,5 +1,8 @@
 import { useEffect } from "react"
 
+import { ProgressionModalInstantSelectionBridge } from "./ProgressionModalInstantSelectionBridge"
+import { ProgressionSpellSelectionModal } from "./ProgressionSpellSelectionModal"
+
 const BRIDGE_ATTRIBUTE = "data-progression-description-bridge"
 
 export function ProgressionFeatureDescriptionBridge() {
@@ -23,7 +26,12 @@ export function ProgressionFeatureDescriptionBridge() {
     }
   }, [])
 
-  return null
+  return (
+    <>
+      <ProgressionModalInstantSelectionBridge />
+      <ProgressionSpellSelectionModal />
+    </>
+  )
 }
 
 function bridgeLevelUpDescriptions() {
