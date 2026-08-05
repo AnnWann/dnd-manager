@@ -67,7 +67,9 @@ export function CharacterCreationBackgroundChoices({
         const presetSection = presetHeading?.closest<HTMLElement>("section")
         const customButton = Array.from(
           presetSection?.querySelectorAll<HTMLButtonElement>("button") ?? [],
-        ).find((button) => normalize(button.textContent ?? "").startsWith("personalizado"))
+        ).find((button) =>
+          normalize(button.textContent ?? "").startsWith("personalizado"),
+        )
         const customSelected =
           customButton?.classList.contains("border-accentBorder") === true ||
           customButton?.classList.contains("bg-accentBg") === true
@@ -75,7 +77,9 @@ export function CharacterCreationBackgroundChoices({
 
         const skillHeading = Array.from(
           builderSection.querySelectorAll<HTMLElement>("div"),
-        ).find((entry) => entry.textContent?.trim() === "Perícias do antecedente")
+        ).find(
+          (entry) => entry.textContent?.trim() === "Perícias do antecedente",
+        )
         const skillContainer = skillHeading?.parentElement
         skillContainer
           ?.querySelectorAll<HTMLButtonElement>("button")
@@ -196,14 +200,16 @@ export function CharacterCreationBackgroundChoices({
 
   if (!anchor || !prompts.length) return null
 
+  const showAttemptError = Boolean(externalError)
+
   return createPortal(
     <section
       data-creation-step-valid={fullyValid ? "true" : "false"}
       data-creation-step-error={override.error ?? ""}
       className={
-        fullyValid
-          ? "mt-4 grid gap-4 rounded-xl border border-warning bg-warningBg p-4"
-          : "mt-4 grid gap-4 rounded-xl border border-danger bg-dangerBg p-4"
+        showAttemptError
+          ? "mt-4 grid gap-4 rounded-xl border border-danger bg-dangerBg p-4"
+          : "mt-4 grid gap-4 rounded-xl border border-border bg-bg-subtle p-4"
       }
     >
       <div>
@@ -240,9 +246,12 @@ export function CharacterCreationBackgroundChoices({
                 isLanguagePrompt(other) &&
                 normalize(values[other] ?? "") === normalize(value),
             )
+          const invalidAfterAttempt =
+            showAttemptError && (!value.trim() || repeated)
+
           return (
             <label key={prompt} className="grid gap-1 text-xs text-textMuted">
-              <span className={!value.trim() || repeated ? "text-danger" : ""}>
+              <span className={invalidAfterAttempt ? "text-danger" : ""}>
                 {prompt} · obrigatório
               </span>
               <Input
@@ -253,9 +262,7 @@ export function CharacterCreationBackgroundChoices({
                 }
                 value={value}
                 className={
-                  !value.trim() || repeated
-                    ? "border-danger bg-dangerBg"
-                    : ""
+                  invalidAfterAttempt ? "border-danger bg-dangerBg" : ""
                 }
                 placeholder={
                   isLanguagePrompt(prompt)
@@ -274,13 +281,9 @@ export function CharacterCreationBackgroundChoices({
         })}
       </div>
 
-      {externalError ? (
+      {showAttemptError ? (
         <div className="rounded-lg border border-danger bg-dangerBg p-3 text-xs text-danger">
           {externalError}
-        </div>
-      ) : !fullyValid ? (
-        <div className="text-xs font-medium text-danger">
-          {override.error}
         </div>
       ) : null}
     </section>,
