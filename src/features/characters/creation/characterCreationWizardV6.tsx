@@ -8,6 +8,10 @@ import { ProgressionFeatureModalEnhancer } from "../progression/ProgressionFeatu
 import { ProgressionModalInstantSelectionBridge } from "../progression/ProgressionModalInstantSelectionBridge"
 import { ProgressionSpellSelectionModal } from "../progression/ProgressionSpellSelectionModal"
 import {
+  CharacterCreationAbilityScoreRules,
+  type AbilityScoreOverride,
+} from "./CharacterCreationAbilityScoreRules"
+import {
   CharacterCreationEquipmentChoices,
   type EquipmentOverride,
 } from "./CharacterCreationEquipmentChoices"
@@ -20,8 +24,14 @@ export function CharacterCreationWizard(
 ) {
   const [equipmentOverride, setEquipmentOverride] =
     useState<EquipmentOverride | null>(null)
+  const [abilityScoreOverride, setAbilityScoreOverride] =
+    useState<AbilityScoreOverride | null>(null)
   const handleEquipmentChange = useCallback(
     (next: EquipmentOverride | null) => setEquipmentOverride(next),
+    [],
+  )
+  const handleAbilityScoreChange = useCallback(
+    (next: AbilityScoreOverride | null) => setAbilityScoreOverride(next),
     [],
   )
 
@@ -34,17 +44,30 @@ export function CharacterCreationWizard(
             character.get("inventory") ?? [],
             equipmentOverride?.items,
           )
+          const sheet = character.get("sheet")
+          const patched = character.withPatch({
+            inventory,
+            sheet: {
+              ...sheet,
+              attributes: abilityScoreOverride?.attributes ?? sheet.attributes,
+              race: {
+                ...sheet.race,
+                attributeBonus:
+                  abilityScoreOverride?.racialBonuses ??
+                  sheet.race.attributeBonus,
+              },
+            },
+          })
           props.onCreate(
             refreshProgressionFeatureMechanics(
-              finalizeProgressionFeatures(
-                character.with("inventory", inventory),
-              ),
+              finalizeProgressionFeatures(patched),
             ),
             plan,
           )
         }}
       />
       <CharacterCreationEquipmentChoices onChange={handleEquipmentChange} />
+      <CharacterCreationAbilityScoreRules onChange={handleAbilityScoreChange} />
       <ProgressionFeatureModalEnhancer />
       <ProgressionModalInstantSelectionBridge />
       <ProgressionSpellSelectionModal />
