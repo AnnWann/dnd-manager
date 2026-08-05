@@ -64,28 +64,49 @@ export function CharacterCreationEquipmentChoices({ onChange }: Props) {
 
   useEffect(() => {
     let frame = 0
+
     const scan = () => {
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
-        const heading = Array.from(document.querySelectorAll<HTMLElement>("h2")).find(
-          (entry) => entry.textContent?.trim().startsWith("Equipamento de nível 1 de"),
+        const heading = Array.from(
+          document.querySelectorAll<HTMLElement>("h2"),
+        ).find(
+          (entry) =>
+            entry.textContent
+              ?.trim()
+              .startsWith("Equipamento de nível 1 de") &&
+            !entry.closest("[data-class-equipment-configurator]"),
         )
+
         if (!heading) {
           setAnchor(null)
+          setClassName(null)
           return
         }
+
         const section = heading.closest<HTMLElement>("section")
         if (!section) return
-        const label = heading.textContent?.replace("Equipamento de nível 1 de", "").trim() ?? ""
-        const resolved = Array.from(CLASS_LABELS.entries()).find(([, value]) => value === label)?.[0]
+
+        const label =
+          heading.textContent
+            ?.replace("Equipamento de nível 1 de", "")
+            .trim() ?? ""
+        const resolved = Array.from(CLASS_LABELS.entries()).find(
+          ([, value]) => value === label,
+        )?.[0]
         if (!resolved) return
 
         let portalAnchor = section.previousElementSibling
-        if (!(portalAnchor instanceof HTMLElement) || portalAnchor.dataset.classEquipmentChoiceAnchor !== "true") {
+        if (
+          !(portalAnchor instanceof HTMLElement) ||
+          portalAnchor.dataset.classEquipmentChoiceAnchor !== "true"
+        ) {
           portalAnchor = document.createElement("div")
           portalAnchor.dataset.classEquipmentChoiceAnchor = "true"
           section.parentElement?.insertBefore(portalAnchor, section)
         }
+
+        section.dataset.classEquipmentSource = "true"
         section.style.display = "none"
         setClassName(resolved)
         setAnchor(portalAnchor)
@@ -95,21 +116,32 @@ export function CharacterCreationEquipmentChoices({ onChange }: Props) {
     scan()
     const observer = new MutationObserver(scan)
     observer.observe(document.body, { childList: true, subtree: true })
+
     return () => {
       cancelAnimationFrame(frame)
       observer.disconnect()
-      document.querySelectorAll<HTMLElement>("[data-class-equipment-choice-anchor]").forEach((entry) => entry.remove())
-      document.querySelectorAll<HTMLElement>("section").forEach((section) => {
-        if (section.querySelector("h2")?.textContent?.trim().startsWith("Equipamento de nível 1 de")) {
+      document
+        .querySelectorAll<HTMLElement>(
+          "[data-class-equipment-choice-anchor]",
+        )
+        .forEach((entry) => entry.remove())
+      document
+        .querySelectorAll<HTMLElement>("[data-class-equipment-source]")
+        .forEach((section) => {
           section.style.display = ""
-        }
-      })
+          delete section.dataset.classEquipmentSource
+        })
     }
   }, [])
 
   if (!anchor || !className) return null
+
   return createPortal(
-    <ClassEquipmentConfigurator key={className} className={className} onChange={onChange} />,
+    <ClassEquipmentConfigurator
+      key={className}
+      className={className}
+      onChange={onChange}
+    />,
     anchor,
   )
 }
@@ -123,11 +155,15 @@ function ClassEquipmentConfigurator({
 }) {
   const preset = getPhbClassEquipmentPreset(className)
   const [mode, setMode] = useState<EquipmentMode>("equipment")
-  const [selections, setSelections] = useState<Record<string, string>>(
+  const [selections, setSelections] = useState<Record<string, string>>(() =>
     getDefaultClassEquipmentSelections(className),
   )
-  const [genericWeapons, setGenericWeapons] = useState<Record<string, Itemmable>>({})
-  const [gold, setGold] = useState(averageStartingGold(preset.startingGold))
+  const [genericWeapons, setGenericWeapons] = useState<
+    Record<string, Itemmable>
+  >({})
+  const [gold, setGold] = useState(() =>
+    averageStartingGold(preset.startingGold),
+  )
   const [weaponPicker, setWeaponPicker] = useState<{
     key: string
     category: "simple" | "martial"
@@ -140,7 +176,10 @@ function ClassEquipmentConfigurator({
     [className, selections],
   )
   const unresolvedWeapons = useMemo(
-    () => selectedSpecs.filter(isGenericWeapon).filter((spec) => !genericWeapons[spec.id]),
+    () =>
+      selectedSpecs
+        .filter(isGenericWeapon)
+        .filter((spec) => !genericWeapons[spec.id]),
     [genericWeapons, selectedSpecs],
   )
 
@@ -160,7 +199,10 @@ function ClassEquipmentConfigurator({
       return normalizeStandardItem({
         ...item,
         id: generic?.id ?? `starting-${className}-${spec.id}`,
-        notes: mergeNotes(item.notes, `Equipamento inicial da classe ${getClassNamePt(className)}.`),
+        notes: mergeNotes(
+          item.notes,
+          `Equipamento inicial da classe ${getClassNamePt(className)}.`,
+        ),
       })
     })
   }, [className, genericWeapons, gold, mode, selectedSpecs])
@@ -198,6 +240,7 @@ function ClassEquipmentConfigurator({
 
   return (
     <section
+      data-class-equipment-configurator="true"
       data-creation-step-valid={valid ? "true" : "false"}
       data-creation-step-error={override.error ?? ""}
       className="grid gap-5 rounded-xl border border-border bg-bg-subtle p-4"
@@ -221,7 +264,9 @@ function ClassEquipmentConfigurator({
         <ChoiceCard
           selected={mode === "gold"}
           title="Ouro inicial"
-          description={`${formatStartingGoldFormula(preset.startingGold)} em vez do equipamento.`}
+          description={`${formatStartingGoldFormula(
+            preset.startingGold,
+          )} em vez do equipamento.`}
           onClick={() => setMode("gold")}
         />
       </div>
@@ -230,9 +275,12 @@ function ClassEquipmentConfigurator({
         <section className="rounded-xl border border-accentBorder bg-accentBg p-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-textH">Ouro inicial</div>
+              <div className="text-sm font-semibold text-textH">
+                Ouro inicial
+              </div>
               <div className="mt-1 text-xs text-textMuted">
-                Fórmula: {formatStartingGoldFormula(preset.startingGold)}. Média: {averageStartingGold(preset.startingGold)} PO.
+                Fórmula: {formatStartingGoldFormula(preset.startingGold)}. Média:{" "}
+                {averageStartingGold(preset.startingGold)} PO.
               </div>
             </div>
             <div className="flex flex-wrap items-end gap-2">
@@ -243,10 +291,22 @@ function ClassEquipmentConfigurator({
                   type="number"
                   min={0}
                   value={gold}
-                  onChange={(event) => setGold(Math.max(0, Math.trunc(Number(event.target.value) || 0)))}
+                  onChange={(event) =>
+                    setGold(
+                      Math.max(
+                        0,
+                        Math.trunc(Number(event.target.value) || 0),
+                      ),
+                    )
+                  }
                 />
               </label>
-              <Button variant="secondary" onClick={() => setGold(rollStartingGold(preset.startingGold))}>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  setGold(rollStartingGold(preset.startingGold))
+                }
+              >
                 Rolar {formatStartingGoldFormula(preset.startingGold)}
               </Button>
             </div>
@@ -255,12 +315,19 @@ function ClassEquipmentConfigurator({
       ) : (
         <div className="grid gap-4">
           {preset.choiceGroups.map((choiceGroup) => {
-            const selectedOption = choiceGroup.options.find(
-              (entry) => entry.id === selections[choiceGroup.id],
-            ) ?? choiceGroup.options[0]
+            const selectedOption =
+              choiceGroup.options.find(
+                (entry) => entry.id === selections[choiceGroup.id],
+              ) ?? choiceGroup.options[0]
+
             return (
-              <section key={choiceGroup.id} className="rounded-xl border border-border bg-bg p-4">
-                <div className="text-sm font-semibold text-textH">{choiceGroup.label}</div>
+              <section
+                key={choiceGroup.id}
+                className="rounded-xl border border-border bg-bg p-4"
+              >
+                <div className="text-sm font-semibold text-textH">
+                  {choiceGroup.label}
+                </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {choiceGroup.options.map((entry) => (
                     <ChoiceCard
@@ -273,49 +340,67 @@ function ClassEquipmentConfigurator({
                   ))}
                 </div>
 
-                {(selectedOption?.items ?? []).filter(isGenericWeapon).map((spec) => {
-                  const current = genericWeapons[spec.id]
-                  const category = isMartialPlaceholder(spec) ? "martial" : "simple"
-                  return (
-                    <div key={spec.id} className="mt-3 flex flex-col gap-2 rounded-lg border border-warning bg-warningBg p-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <div className="text-xs font-semibold text-textH">Escolha obrigatória: {spec.name}</div>
-                        <div className="mt-1 text-xs text-textMuted">
-                          {current ? `Selecionada: ${current.name}` : "Nenhuma arma selecionada."}
+                {(selectedOption?.items ?? [])
+                  .filter(isGenericWeapon)
+                  .map((spec) => {
+                    const current = genericWeapons[spec.id]
+                    const category = isMartialPlaceholder(spec)
+                      ? "martial"
+                      : "simple"
+                    return (
+                      <div
+                        key={spec.id}
+                        className="mt-3 flex flex-col gap-2 rounded-lg border border-warning bg-warningBg p-3 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div>
+                          <div className="text-xs font-semibold text-textH">
+                            Escolha obrigatória: {spec.name}
+                          </div>
+                          <div className="mt-1 text-xs text-textMuted">
+                            {current
+                              ? `Selecionada: ${current.name}`
+                              : "Nenhuma arma selecionada."}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() =>
+                              setWeaponPicker({ key: spec.id, category })
+                            }
+                          >
+                            Escolher arma
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setWeaponPicker({ key: spec.id, category })
+                              setCustomOpen(true)
+                            }}
+                          >
+                            Criar arma personalizada
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => setWeaponPicker({ key: spec.id, category })}
-                        >
-                          Escolher arma
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => {
-                            setWeaponPicker({ key: spec.id, category })
-                            setCustomOpen(true)
-                          }}
-                        >
-                          Criar arma personalizada
-                        </Button>
-                      </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
               </section>
             )
           })}
 
           {preset.fixedItems.length ? (
             <section className="rounded-xl border border-border bg-bg p-4">
-              <div className="text-sm font-semibold text-textH">Itens fixos</div>
+              <div className="text-sm font-semibold text-textH">
+                Itens fixos
+              </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {preset.fixedItems.map((spec) => (
-                  <span key={spec.id} className="rounded-full border border-accentBorder bg-accentBg px-3 py-1 text-xs text-textH">
+                  <span
+                    key={spec.id}
+                    className="rounded-full border border-accentBorder bg-accentBg px-3 py-1 text-xs text-textH"
+                  >
                     {formatSpec(spec)}
                   </span>
                 ))}
@@ -337,7 +422,10 @@ function ClassEquipmentConfigurator({
           current={genericWeapons[weaponPicker.key]}
           onClose={() => setWeaponPicker(null)}
           onSelect={(item) => {
-            setGenericWeapons((current) => ({ ...current, [weaponPicker.key]: item }))
+            setGenericWeapons((current) => ({
+              ...current,
+              [weaponPicker.key]: item,
+            }))
             setWeaponPicker(null)
           }}
         />
@@ -352,7 +440,10 @@ function ClassEquipmentConfigurator({
         }}
         onSave={(item) => {
           if (weaponPicker) {
-            setGenericWeapons((current) => ({ ...current, [weaponPicker.key]: item }))
+            setGenericWeapons((current) => ({
+              ...current,
+              [weaponPicker.key]: item,
+            }))
           }
           setCustomOpen(false)
           setWeaponPicker(null)
@@ -378,41 +469,69 @@ function WeaponPicker({
     const normalized = normalize(query)
     return STANDARD_ITEM_DEFINITIONS.filter((definition) => {
       const item = definition.item
-      if (!(item.kind === "equipment" && item.equipSlot === "weapon")) return false
+      if (!(item.kind === "equipment" && item.equipSlot === "weapon")) {
+        return false
+      }
       if (!matchesPhbWeaponCategory(item, category)) return false
-      return !normalized || normalize(`${item.name} ${item.desc ?? ""}`).includes(normalized)
+      return (
+        !normalized ||
+        normalize(`${item.name} ${item.desc ?? ""}`).includes(normalized)
+      )
     })
   }, [category, query])
 
   return createPortal(
-    <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/75 p-4" onMouseDown={onClose}>
-      <section className="grid max-h-[90dvh] w-full max-w-4xl grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-border bg-bg-elevated shadow-theme-lg" onMouseDown={(event) => event.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-[180] flex items-center justify-center bg-black/75 p-4"
+      onMouseDown={onClose}
+    >
+      <section
+        className="grid max-h-[90dvh] w-full max-w-4xl grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-border bg-bg-elevated shadow-theme-lg"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <header className="flex items-start justify-between gap-3 border-b border-border p-4">
           <div>
             <h2 className="font-semibold text-textH">
               Escolher arma {category === "martial" ? "marcial" : "simples"}
             </h2>
-            <p className="mt-1 text-xs text-textMuted">Somente armas válidas para esta categoria são exibidas.</p>
+            <p className="mt-1 text-xs text-textMuted">
+              Somente armas válidas para esta categoria são exibidas.
+            </p>
           </div>
-          <Button size="sm" variant="secondary" onClick={onClose}>Fechar</Button>
+          <Button size="sm" variant="secondary" onClick={onClose}>
+            Fechar
+          </Button>
         </header>
         <div className="border-b border-border p-4">
-          <Input value={query} placeholder="Buscar arma" onChange={(event) => setQuery(event.target.value)} />
+          <Input
+            value={query}
+            placeholder="Buscar arma"
+            onChange={(event) => setQuery(event.target.value)}
+          />
         </div>
         <div className="grid gap-2 overflow-y-auto p-4 sm:grid-cols-2">
           {definitions.map((definition) => {
-            const selected = current?.compendiumItemId === definition.item.id
+            const selected =
+              current?.compendiumItemId === definition.item.id
             return (
               <button
                 key={definition.item.id}
                 type="button"
-                onClick={() => onSelect(instantiateStandardItem(definition.item.id, 1))}
-                className={selected
-                  ? "rounded-xl border border-accentBorder bg-accentBg p-3 text-left"
-                  : "rounded-xl border border-border bg-bg p-3 text-left hover:border-accentBorder"}
+                onClick={() =>
+                  onSelect(instantiateStandardItem(definition.item.id, 1))
+                }
+                className={
+                  selected
+                    ? "rounded-xl border border-accentBorder bg-accentBg p-3 text-left"
+                    : "rounded-xl border border-border bg-bg p-3 text-left hover:border-accentBorder"
+                }
               >
-                <div className="font-semibold text-textH">{definition.item.name}</div>
-                <div className="mt-1 text-xs leading-5 text-textMuted">{definition.item.desc || "Sem descrição."}</div>
+                <div className="font-semibold text-textH">
+                  {definition.item.name}
+                </div>
+                <div className="mt-1 text-xs leading-5 text-textMuted">
+                  {definition.item.desc || "Sem descrição."}
+                </div>
               </button>
             )
           })}
@@ -456,18 +575,24 @@ function ChoiceCard({
     <button
       type="button"
       onClick={onClick}
-      className={selected
-        ? "rounded-xl border border-accentBorder bg-accentBg p-4 text-left"
-        : "rounded-xl border border-border bg-bg-subtle p-4 text-left hover:border-accentBorder"}
+      className={
+        selected
+          ? "rounded-xl border border-accentBorder bg-accentBg p-4 text-left"
+          : "rounded-xl border border-border bg-bg-subtle p-4 text-left hover:border-accentBorder"
+      }
     >
       <span className="block text-sm font-semibold text-textH">{title}</span>
-      <span className="mt-1 block text-xs leading-5 text-textMuted">{description}</span>
+      <span className="mt-1 block text-xs leading-5 text-textMuted">
+        {description}
+      </span>
     </button>
   )
 }
 
 function mergeNotes(current: string | undefined, next: string): string {
-  return Array.from(new Set([current?.trim(), next.trim()].filter(Boolean))).join(" ")
+  return Array.from(
+    new Set([current?.trim(), next.trim()].filter(Boolean)),
+  ).join(" ")
 }
 
 function normalize(value: string): string {
