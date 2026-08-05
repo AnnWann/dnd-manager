@@ -8,6 +8,8 @@ import {
 import { XANATHAR_SUBCLASSES } from "./XanatharSubclasses"
 import type { ClassName } from "../sheet/Class"
 
+export type { ClassProgressionDefinition } from "./ClassProgression"
+
 let expanded = false
 
 function ensureExpandedProgressions(): void {
