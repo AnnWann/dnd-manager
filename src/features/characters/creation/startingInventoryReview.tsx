@@ -4,6 +4,7 @@ import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { ensureCharacterAcquisitionMetadata } from "../../../models/characters/characterAcquisitionMetadata"
+import type { CharacterCreationProgressionPlan } from "../../../models/characters/creation/CharacterCreation"
 import { mergeCurrencyStacks } from "../../../models/items/Currency"
 import type { Itemmable } from "../../../models/items/item"
 import { ItemCreationDialog } from "../../items/ItemCreationDialog"
@@ -15,7 +16,6 @@ import {
   normalizeStandardItem,
   type StandardItemDefinition,
 } from "../../items/standardItemCompendium"
-import type { CharacterCreationProgressionPlan } from "./characterCreationWizardV5"
 
 type InventoryCategory =
   | "weapons"
