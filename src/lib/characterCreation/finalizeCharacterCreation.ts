@@ -7,7 +7,7 @@ import type { RacialAttributeBonusRule } from "../../models/races/CharacterRace"
 import type { CharacterCreationIdentity } from "../../models/characters/creation/CharacterCreation"
 import type { AbilityScoreOverride } from "../../features/characters/creation/CharacterCreationAbilityScoreRules"
 import type { BackgroundChoiceOverride } from "../../features/characters/creation/CharacterCreationBackgroundChoices"
-import type { EquipmentOverride } from "../../features/characters/creation/CharacterCreationEquipmentChoices"
+import type { EquipmentOverride } from "../../features/characters/creation/components/CharacterCreationEquipmentChoices"
 import type { GenericRacialChoiceOverride } from "../../features/characters/creation/CharacterCreationGenericRacialChoices"
 import type { RacialChoiceOverride } from "../../features/characters/creation/CharacterCreationRacialChoices"
 
