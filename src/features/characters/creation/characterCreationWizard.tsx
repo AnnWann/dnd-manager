@@ -18,7 +18,7 @@ import {
   type CharacterCreationValidationError,
 } from "../../../lib/characterCreation/finalizeCharacterCreation"
 import { ProgressionFeatureModalEnhancer } from "../progression/ProgressionFeatureModalEnhancer"
-import { ProgressionModalInstantSelectionBridge } from "../progression/ProgressionModalInstantSelectionBridge"
+import { ProgressionModalSelectionSync } from "../progression/bridges/ProgressionModalSelectionSync"
 import { ProgressionSpellSelectionModal } from "../progression/ProgressionSpellSelectionModal"
 import {
   CharacterCreationAbilityScoreRules,
@@ -189,7 +189,7 @@ export function CharacterCreationWizard(props: WizardProps) {
       <CreationRequiredFieldHighlighter />
       <CreationSpellGrantLocalizationBridge />
       <ProgressionFeatureModalEnhancer />
-      <ProgressionModalInstantSelectionBridge />
+      <ProgressionModalSelectionSync />
       <ProgressionSpellSelectionModal />
 
       {blockingError ? (
