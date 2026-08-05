@@ -5,13 +5,13 @@ import {
   type Weapon,
 } from "../../models/items/equipment/Weapon"
 import type { Itemmable, ItemKind } from "../../models/items/item"
+import type { StartingItemSpec } from "../../data/characterCreation/phbClassEquipment"
 import {
   findStandardItemDefinition,
   findStandardItemDefinitionByName,
   instantiateStandardItem,
   normalizeStandardItem,
 } from "../../features/items/standardItemCompendium"
-import type { StartingItemSpec } from "../../features/characters/creation/phbClassEquipment"
 
 const CATEGORY_LABELS: Record<StartingItemSpec["category"], string> = {
   weapon: "Arma",
