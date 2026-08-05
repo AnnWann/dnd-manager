@@ -409,7 +409,7 @@ function BonusDetails({
       }
     } else if (typeof rawValue === "object" && "bonus" in rawValue) {
       rows.push(
-        `${formatBonusName(key)}: ${formatBonusValue((rawValue as { bonus: never }).bonus)}`,
+        `${formatBonusName(key)}: ${formatBonusValue((rawValue as unknown as { bonus: never }).bonus)}`,
       )
     }
   }
