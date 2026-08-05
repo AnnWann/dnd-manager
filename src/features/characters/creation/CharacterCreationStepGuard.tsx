@@ -1,28 +1,24 @@
 import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 
-type Props = {
-  externalErrors?: string[]
-}
-
-export function CharacterCreationStepGuard({
-  externalErrors = [],
-}: Props) {
+export function CharacterCreationStepGuard() {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   const [message, setMessage] = useState("")
 
   useEffect(() => {
     let frame = 0
 
+    const findRoot = (): HTMLElement | null => {
+      const title = Array.from(document.querySelectorAll<HTMLElement>("h1")).find(
+        (entry) => entry.textContent?.trim() === "Criar personagem",
+      )
+      return title?.closest("header")?.parentElement ?? null
+    }
+
     const scan = () => {
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
-        const title = Array.from(document.querySelectorAll<HTMLElement>("h1")).find(
-          (entry) => entry.textContent?.trim() === "Criar personagem",
-        )
-        const root = title?.closest<HTMLElement>(
-          ".grid.h-\\[100dvh\\], .grid.min-h-\\[calc\\(100dvh-10rem\\)\\]",
-        ) ?? title?.parentElement?.parentElement?.parentElement
+        const root = findRoot()
         const main = root?.querySelector<HTMLElement>(":scope > main")
         if (!root || !main) {
           setAnchor(null)
@@ -45,15 +41,8 @@ export function CharacterCreationStepGuard({
       const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>(
         "button",
       )
-      if (!button) return
-
-      const title = Array.from(document.querySelectorAll<HTMLElement>("h1")).find(
-        (entry) => entry.textContent?.trim() === "Criar personagem",
-      )
-      const root = title?.closest<HTMLElement>(
-        ".grid.h-\\[100dvh\\], .grid.min-h-\\[calc\\(100dvh-10rem\\)\\]",
-      ) ?? title?.parentElement?.parentElement?.parentElement
-      if (!root || !root.contains(button)) return
+      const root = findRoot()
+      if (!button || !root || !root.contains(button)) return
 
       const headerButtons = Array.from(
         root.querySelectorAll<HTMLButtonElement>(":scope > header button"),
@@ -70,7 +59,7 @@ export function CharacterCreationStepGuard({
 
       if (!isForwardTab && !isContinue) return
 
-      const error = validateVisibleStep(root, externalErrors)
+      const error = validateVisibleStep(root)
       if (!error) {
         setMessage("")
         return
@@ -99,7 +88,7 @@ export function CharacterCreationStepGuard({
         .querySelectorAll("[data-creation-step-error-anchor]")
         .forEach((entry) => entry.remove())
     }
-  }, [externalErrors])
+  }, [])
 
   if (!anchor || !message) return null
 
@@ -111,12 +100,19 @@ export function CharacterCreationStepGuard({
   )
 }
 
-function validateVisibleStep(
-  root: HTMLElement,
-  externalErrors: string[],
-): string {
+function validateVisibleStep(root: HTMLElement): string {
   const main = root.querySelector<HTMLElement>(":scope > main")
   if (!main) return ""
+
+  const identityHeading = Array.from(main.querySelectorAll<HTMLElement>("h2")).find(
+    (entry) => entry.textContent?.trim() === "Identidade",
+  )
+  if (identityHeading) {
+    const nameInput = Array.from(main.querySelectorAll<HTMLInputElement>("input")).find(
+      (input) => input.placeholder === "Nome do personagem",
+    )
+    if (!nameInput?.value.trim()) return "Informe o nome do personagem."
+  }
 
   const invalidSection = main.querySelector<HTMLElement>(
     '[data-creation-step-valid="false"]',
@@ -131,8 +127,9 @@ function validateVisibleStep(
   const emptyRequiredSelect = Array.from(
     main.querySelectorAll<HTMLSelectElement>("select"),
   ).find((select) => {
-    if (select.disabled || select.offsetParent === null) return false
-    if (select.value.trim()) return false
+    if (select.disabled || select.offsetParent === null || select.value.trim()) {
+      return false
+    }
     const placeholder = select.options[0]?.textContent ?? ""
     return /selecione|escolha/i.test(placeholder)
   })
@@ -141,6 +138,16 @@ function validateVisibleStep(
   }
 
   const visibleText = main.innerText
+  const explicitIncompleteMessage = [
+    "complete todas as escolhas acima",
+    "complete todas as escolhas antes de continuar",
+    "nenhuma arma selecionada",
+    "selecione uma subclasse",
+  ].find((fragment) => normalize(visibleText).includes(fragment))
+  if (explicitIncompleteMessage) {
+    return "Complete todas as escolhas obrigatórias desta etapa."
+  }
+
   const incompleteCounter = Array.from(
     visibleText.matchAll(/(?:^|\s)(\d+)\s*\/\s*(\d+)(?:\s|$)/g),
   ).find((match) => Number(match[1]) < Number(match[2]))
@@ -148,19 +155,19 @@ function validateVisibleStep(
     return `Complete as escolhas obrigatórias (${incompleteCounter[1]}/${incompleteCounter[2]}).`
   }
 
-  const unresolvedEquipment = Array.from(
-    main.querySelectorAll<HTMLElement>("div"),
-  ).find(
-    (entry) =>
-      entry.offsetParent !== null &&
-      normalize(entry.textContent ?? "").includes("nenhuma arma selecionada"),
-  )
-  if (unresolvedEquipment) {
-    return "Escolha uma arma concreta para cada entrada de arma simples ou marcial."
+  const requiredWarning = Array.from(
+    main.querySelectorAll<HTMLElement>("section,div"),
+  ).find((entry) => {
+    if (entry.offsetParent === null) return false
+    const text = normalize(entry.textContent ?? "")
+    return (
+      text.includes("escolha obrigatoria") &&
+      (text.includes("nenhuma") || text.includes("complete"))
+    )
+  })
+  if (requiredWarning) {
+    return "Complete todas as escolhas obrigatórias desta etapa."
   }
-
-  const contextualError = externalErrors.find(Boolean)
-  if (contextualError) return contextualError
 
   return ""
 }
