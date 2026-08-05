@@ -1,1 +1,1 @@
-export type { CharacterCreationProgressionPlan } from "./characterCreationTypes"
+export type { CharacterCreationProgressionPlan } from "../../../models/characters/creation/CharacterCreation"
