@@ -13,6 +13,9 @@ export function CreationRequiredFieldHighlighter() {
   messageRef.current = message
 
   useEffect(() => {
+    const root = findWizardRoot()
+    if (root) root.dataset.characterCreationMobile = "true"
+
     const clear = () => {
       if (messageRef.current) setMessage("")
       clearAttemptHighlights()
@@ -25,16 +28,33 @@ export function CreationRequiredFieldHighlighter() {
       const button = target.closest<HTMLButtonElement>("button")
       if (!button) return
 
-      const root = findWizardRoot(button)
-      if (!root) return
+      const wizardRoot = findWizardRoot(button)
+      if (!wizardRoot) return
 
-      const intent = getNavigationIntent(root, button)
+      // O componente legado que oculta a primeira etapa chama .click() em Raça.
+      // Permitimos somente a inicialização automática uma vez. Cliques posteriores
+      // disparados pelo intervalo não podem retirar o usuário da identidade final.
+      if (!event.isTrusted) {
+        const isStepButton = /^\d+\./.test(button.textContent?.trim() ?? "")
+        if (isStepButton) {
+          if (wizardRoot.dataset.creationInitialSkipComplete === "true") {
+            event.preventDefault()
+            event.stopPropagation()
+            event.stopImmediatePropagation()
+          } else {
+            wizardRoot.dataset.creationInitialSkipComplete = "true"
+          }
+        }
+        return
+      }
+
+      const intent = getNavigationIntent(wizardRoot, button)
       if (!intent.forward) {
         clear()
         return
       }
 
-      const main = root.querySelector<HTMLElement>("main")
+      const main = wizardRoot.querySelector<HTMLElement>("main")
       if (!main) return
       const error = validateVisibleStep(main)
       if (!error) {
@@ -57,15 +77,22 @@ export function CreationRequiredFieldHighlighter() {
       document.removeEventListener("input", onInput, true)
       document.removeEventListener("change", onInput, true)
       clearAttemptHighlights()
+      if (root) {
+        delete root.dataset.characterCreationMobile
+        delete root.dataset.creationInitialSkipComplete
+      }
     }
   }, [])
 
-  if (!message) return null
-
   return (
-    <div className="pointer-events-none fixed left-1/2 top-4 z-[360] w-[min(46rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm font-medium text-danger shadow-theme-lg">
-      {message}
-    </div>
+    <>
+      <style>{MOBILE_WIZARD_CSS}</style>
+      {message ? (
+        <div className="pointer-events-none fixed left-1/2 top-4 z-[360] w-[min(46rem,calc(100vw-1rem))] -translate-x-1/2 rounded-xl border border-danger bg-dangerBg px-3 py-3 text-sm font-medium text-danger shadow-theme-lg sm:px-4">
+          {message}
+        </div>
+      ) : null}
+    </>
   )
 }
 
@@ -82,11 +109,10 @@ function validateVisibleStep(main: HTMLElement): ValidationResult | null {
     const message =
       invalidOriginSection.dataset.creationStepError?.trim() ||
       "Complete todas as escolhas obrigatórias antes de continuar."
+    const missingFields = collectMissingFields(invalidOriginSection)
     return {
       message,
-      elements: collectMissingFields(invalidOriginSection).length
-        ? collectMissingFields(invalidOriginSection)
-        : [invalidOriginSection],
+      elements: missingFields.length ? missingFields : [invalidOriginSection],
     }
   }
 
@@ -270,10 +296,11 @@ function validateSpellSelections(main: HTMLElement): ValidationResult | null {
   return null
 }
 
-function findWizardRoot(element: Element): HTMLElement | null {
+function findWizardRoot(element?: Element): HTMLElement | null {
   const title = Array.from(document.querySelectorAll<HTMLElement>("h1"))
     .find((heading) => heading.textContent?.trim() === "Criar personagem")
-  const root = title?.closest<HTMLElement>("div.grid")
+  const root = title?.closest<HTMLElement>("div.grid") ?? null
+  if (!element) return root
   return root && root.contains(element) ? root : null
 }
 
@@ -294,7 +321,7 @@ function getStepButtons(root: HTMLElement): HTMLButtonElement[] {
 }
 
 function collectMissingFields(root: HTMLElement): HTMLElement[] {
-  const fields = Array.from(
+  return Array.from(
     root.querySelectorAll<HTMLElement>("input,select,textarea"),
   ).filter((field) => {
     if (
@@ -306,7 +333,6 @@ function collectMissingFields(root: HTMLElement): HTMLElement[] {
     }
     return false
   })
-  return fields
 }
 
 function highlight(elements: HTMLElement[]) {
@@ -336,3 +362,68 @@ function clearAttemptHighlights() {
         .forEach((input) => input.removeAttribute("aria-invalid"))
     })
 }
+
+const MOBILE_WIZARD_CSS = `
+@media (max-width: 640px) {
+  [data-character-creation-mobile="true"] {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+    border-radius: 0 !important;
+  }
+
+  [data-character-creation-mobile="true"] *,
+  [data-character-creation-mobile="true"] *::before,
+  [data-character-creation-mobile="true"] *::after {
+    box-sizing: border-box;
+    min-width: 0;
+  }
+
+  [data-character-creation-mobile="true"] > header,
+  [data-character-creation-mobile="true"] > main,
+  [data-character-creation-mobile="true"] > footer {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  [data-character-creation-mobile="true"] main .grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  [data-character-creation-mobile="true"] input,
+  [data-character-creation-mobile="true"] select,
+  [data-character-creation-mobile="true"] textarea,
+  [data-character-creation-mobile="true"] article,
+  [data-character-creation-mobile="true"] section,
+  [data-character-creation-mobile="true"] details {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  [data-character-creation-mobile="true"] textarea {
+    resize: vertical;
+  }
+
+  [data-character-creation-mobile="true"] .overflow-x-auto {
+    max-width: 100% !important;
+    overscroll-behavior-x: contain;
+  }
+
+  [data-character-creation-mobile="true"] pre,
+  [data-character-creation-mobile="true"] table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  [data-character-creation-mobile="true"] button {
+    max-width: 100%;
+    white-space: normal;
+  }
+}
+`
