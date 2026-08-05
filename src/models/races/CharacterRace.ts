@@ -11,6 +11,13 @@ export type CreatureSize =
   | "huge"
   | "gargantuan"
 
+export type RacialAttributeBonusRule =
+  | "fixed"
+  | "variant-1-1"
+  | "flexible-2-1"
+  | "flexible-1-1-1"
+  | "custom"
+
 export type RaceSupplyConsumption = {
   /** Standard food portions consumed per long rest. */
   food: number
@@ -25,6 +32,8 @@ export type CharacterRace = {
   subrace: string
   naturalAbilities: Ability[]
   attributeBonus: Partial<Record<Attribute, number>>
+  /** Regra usada para distribuir os bônus, preservada para futuras edições. */
+  attributeBonusRule?: RacialAttributeBonusRule
   proficiencies: Proficiency[]
   size?: CreatureSize
   /** Mobilidade racial base em metros. */
