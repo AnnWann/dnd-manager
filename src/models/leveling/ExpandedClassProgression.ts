@@ -1,3 +1,5 @@
+import { applyConfiguredClassProgressions } from "../../data/classProgression"
+import type { ClassName } from "../sheet/Class"
 import {
   CLASS_PROGRESSIONS,
   getCantripsKnownAtLevel,
@@ -9,7 +11,6 @@ import { applyAdditionalProgressionLocalization } from "./ProgressionAdditionalL
 import { localizeProgressionDefinitions } from "./ProgressionLocalization"
 import { localizeRemainingSubclasses } from "./SubclassLocalization"
 import { XANATHAR_SUBCLASSES } from "./XanatharSubclasses"
-import type { ClassName } from "../sheet/Class"
 
 let expanded = false
 
@@ -34,6 +35,7 @@ function ensureExpandedProgressions(): void {
     ]
   }
 
+  applyConfiguredClassProgressions(CLASS_PROGRESSIONS)
   localizeProgressionDefinitions(CLASS_PROGRESSIONS)
   applyAdditionalProgressionLocalization(CLASS_PROGRESSIONS)
   localizeRemainingSubclasses(CLASS_PROGRESSIONS)
