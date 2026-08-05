@@ -17,6 +17,10 @@ import {
   type EquipmentOverride,
 } from "./CharacterCreationEquipmentChoices"
 import {
+  CharacterCreationGenericRacialChoices,
+  type GenericRacialChoiceOverride,
+} from "./CharacterCreationGenericRacialChoices"
+import {
   CharacterCreationRacialChoices,
   type RacialChoiceOverride,
 } from "./CharacterCreationRacialChoices"
@@ -33,6 +37,8 @@ export function CharacterCreationWizard(
     useState<AbilityScoreOverride | null>(null)
   const [racialChoiceOverride, setRacialChoiceOverride] =
     useState<RacialChoiceOverride | null>(null)
+  const [genericRacialOverride, setGenericRacialOverride] =
+    useState<GenericRacialChoiceOverride | null>(null)
   const [racialChoiceError, setRacialChoiceError] = useState("")
   const handleEquipmentChange = useCallback(
     (next: EquipmentOverride | null) => setEquipmentOverride(next),
@@ -49,17 +55,28 @@ export function CharacterCreationWizard(
     },
     [],
   )
+  const handleGenericRacialChange = useCallback(
+    (next: GenericRacialChoiceOverride | null) => {
+      setGenericRacialOverride(next)
+      if (next?.valid) setRacialChoiceError("")
+    },
+    [],
+  )
 
   return (
     <>
       <IntegratedCharacterCreationWizard
         {...props}
         onCreate={(character, plan) => {
-          if (racialChoiceOverride && !racialChoiceOverride.valid) {
-            setRacialChoiceError(
-              racialChoiceOverride.error ??
-                "Complete todas as escolhas raciais obrigatórias.",
-            )
+          const invalidRaceChoice =
+            (racialChoiceOverride && !racialChoiceOverride.valid
+              ? racialChoiceOverride.error
+              : undefined) ??
+            (genericRacialOverride && !genericRacialOverride.valid
+              ? genericRacialOverride.error
+              : undefined)
+          if (invalidRaceChoice) {
+            setRacialChoiceError(invalidRaceChoice)
             return
           }
 
@@ -71,12 +88,17 @@ export function CharacterCreationWizard(
           const originalRaceProficiencyIds = new Set(
             (sheet.race.proficiencies ?? []).map((entry) => entry.id),
           )
-          const racial = racialChoiceOverride?.apply(
+          const specificRace = racialChoiceOverride?.apply(
             sheet.race.naturalAbilities ?? [],
             sheet.race.proficiencies ?? [],
           )
+          const genericRace = genericRacialOverride?.apply(
+            specificRace?.proficiencies ?? sheet.race.proficiencies,
+          )
           const raceProficiencies =
-            racial?.proficiencies ?? sheet.race.proficiencies
+            genericRace?.proficiencies ??
+            specificRace?.proficiencies ??
+            sheet.race.proficiencies
           const proficiencies = [
             ...(sheet.proficiencies ?? []).filter(
               (entry) => !originalRaceProficiencyIds.has(entry.id),
@@ -84,7 +106,10 @@ export function CharacterCreationWizard(
             ...raceProficiencies,
           ]
           const skills = { ...sheet.skills }
-          for (const skill of racial?.skills ?? []) {
+          for (const skill of [
+            ...(specificRace?.skills ?? []),
+            ...(genericRace?.skills ?? []),
+          ]) {
             skills[skill] = "proficient"
           }
 
@@ -98,7 +123,7 @@ export function CharacterCreationWizard(
               race: {
                 ...sheet.race,
                 naturalAbilities:
-                  racial?.abilities ?? sheet.race.naturalAbilities,
+                  specificRace?.abilities ?? sheet.race.naturalAbilities,
                 proficiencies: raceProficiencies,
                 attributeBonus:
                   abilityScoreOverride?.racialBonuses ??
@@ -120,6 +145,10 @@ export function CharacterCreationWizard(
       <CharacterCreationAbilityScoreRules onChange={handleAbilityScoreChange} />
       <CharacterCreationRacialChoices
         onChange={handleRacialChoiceChange}
+        externalError={racialChoiceError}
+      />
+      <CharacterCreationGenericRacialChoices
+        onChange={handleGenericRacialChange}
         externalError={racialChoiceError}
       />
       <ProgressionFeatureModalEnhancer />
