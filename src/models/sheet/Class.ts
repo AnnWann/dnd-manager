@@ -52,6 +52,9 @@ export interface CharacterClassInterface {
   /** Explicit per-character exceptions to the canonical class definition. */
   ruleOverrides?: CharacterClassRuleOverrides
 
+  /** Marks legacy-shaped fields as a derived compatibility snapshot. */
+  definitionSnapshot?: true
+
   /** Selected 2014 subclass, when the class has reached its subclass level. */
   subclass?: CharacterSubclassSelection
 
@@ -72,6 +75,7 @@ export type SerializedCharacterClass = Pick<
   "className" | "level" | "subclass" | "levelChoices" | "ruleOverrides"
 > & {
   /** Derived compatibility snapshot; never the canonical rule source. */
+  definitionSnapshot: true
   castingAttribute?: Attribute
   spellcastingProgression?: SpellcastingProgression
   knownSpells?: SerializedKnownSpellsRule
@@ -118,12 +122,16 @@ export class CharacterClass implements CharacterClassInterface {
   static fromJSON(classData: CharacterClassInterface): CharacterClass {
     if (classData instanceof CharacterClass) return classData
 
+    const shouldMigrateLegacyRules = classData.definitionSnapshot !== true
+
     return new CharacterClass(
       classData.className,
       classData.level,
-      classData.castingAttribute,
-      classData.spellcastingProgression,
-      classData.knownSpells,
+      shouldMigrateLegacyRules ? classData.castingAttribute : undefined,
+      shouldMigrateLegacyRules
+        ? classData.spellcastingProgression
+        : undefined,
+      shouldMigrateLegacyRules ? classData.knownSpells : undefined,
       classData.subclass,
       classData.levelChoices,
       classData.ruleOverrides,
@@ -202,6 +210,7 @@ export class CharacterClass implements CharacterClassInterface {
       subclass: this.subclass,
       levelChoices: this.levelChoices,
       ruleOverrides: this.ruleOverrides,
+      definitionSnapshot: true,
       castingAttribute: this.castingAttribute,
       spellcastingProgression: this.spellcastingProgression,
       knownSpells: knownSpells
