@@ -1,8 +1,8 @@
 import {
   createCurrencyCompendiumItems,
   createCurrencyItem,
+  isCurrencyItem,
   normalizeCurrencyItem,
-  type CurrencyType,
 } from "../../models/items/Currency"
 import type { Itemmable } from "../../models/items/item"
 import {
@@ -138,10 +138,9 @@ export function instantiateStandardItem(
     throw new Error("Item padrão não encontrado no compêndio.")
   }
 
-  if (definition.item.kind === "currency") {
-    const currencyType = definition.item.currencyType as CurrencyType
+  if (isCurrencyItem(definition.item)) {
     return {
-      ...createCurrencyItem(currencyType, quantity),
+      ...createCurrencyItem(definition.item.currencyType, quantity),
       compendiumItemId: definition.item.id,
       itemOrigin: "standard",
     }
@@ -198,9 +197,9 @@ export function normalizeStandardItem(item: Itemmable): Itemmable {
     }
   }
 
-  if (definition.item.kind === "currency") {
+  if (isCurrencyItem(definition.item)) {
     const canonical = createCurrencyItem(
-      definition.item.currencyType as CurrencyType,
+      definition.item.currencyType,
       item.quantity,
       item.id,
       item.insideBagOfHolding === true,
