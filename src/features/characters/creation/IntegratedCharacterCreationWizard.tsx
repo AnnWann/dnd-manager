@@ -6,10 +6,26 @@ import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
 import { useMagicContext } from "../../../contexts/magicContext"
+import {
+  getDefaultClassEquipmentSelections,
+  getSelectedClassEquipment,
+} from "../../../data/characterCreation/phbClassEquipment"
+import {
+  PHB_BACKGROUND_PRESETS,
+  PHB_CLASS_PRESETS,
+  PHB_RACE_PRESETS,
+  SKILL_LABELS,
+  racePresetToCharacterRace,
+  type BackgroundPreset,
+  type RacePreset,
+} from "../../../data/characterCreation/phbPresets"
+import { hydrateBackgroundStartingItems } from "../../../lib/characterCreation/backgroundStartingEquipment"
+import { createStartingInventoryItem } from "../../../lib/characterCreation/startingEquipmentItems"
 import { newCharacterTemplate } from "../../../lib/newCharacterTemplate"
 import type { Ability } from "../../../models/abilities/Ability"
 import type { CharacterBackground } from "../../../models/characters/CharacterBackground"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import type { CharacterCreationProgressionPlan } from "../../../models/characters/creation/CharacterCreation"
 import type { Itemmable } from "../../../models/items/item"
 import {
   getDynamicSubclassSpellGrants,
@@ -56,23 +72,7 @@ import { getClassNamePt } from "../../../models/leveling/ClassLocalization"
 import { AbilityDialog } from "../abilities/abilityDialog"
 import { GrantedProficienciesEditor } from "../proficiencies/grantedProficienciesEditor"
 import { finalizeDynamicSubclassSpells } from "../progression/CharacterProgressionFlow"
-import { hydrateBackgroundStartingItems } from "./backgroundStartingEquipment"
-import { InlineStartingEquipmentEditor } from "./InlineStartingEquipmentEditor"
-import {
-  getDefaultClassEquipmentSelections,
-  getSelectedClassEquipment,
-} from "./phbClassEquipment"
-import {
-  PHB_BACKGROUND_PRESETS,
-  PHB_CLASS_PRESETS,
-  PHB_RACE_PRESETS,
-  SKILL_LABELS,
-  racePresetToCharacterRace,
-  type BackgroundPreset,
-  type RacePreset,
-} from "./phbPresets"
-import { createStartingInventoryItem } from "./startingEquipmentItems"
-import type { CharacterCreationProgressionPlan } from "./characterCreationWizardV5"
+import { InlineStartingEquipmentEditor } from "./components/InlineStartingEquipmentEditor"
 
 const STEPS = [
   "Identidade",
