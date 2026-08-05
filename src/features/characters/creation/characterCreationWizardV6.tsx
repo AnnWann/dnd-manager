@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type ComponentProps,
 } from "react"
@@ -66,6 +67,7 @@ export function CharacterCreationWizard(
     useState<BackgroundChoiceOverride | null>(null)
   const [identity, setIdentity] =
     useState<FinalCharacterIdentity>(EMPTY_IDENTITY)
+  const identityRef = useRef<FinalCharacterIdentity>(EMPTY_IDENTITY)
   const [identityError, setIdentityError] = useState("")
   const [racialChoiceError, setRacialChoiceError] = useState("")
   const [backgroundChoiceError, setBackgroundChoiceError] = useState("")
@@ -86,13 +88,11 @@ export function CharacterCreationWizard(
       setRacialChoiceOverride(null)
       setGenericRacialOverride(null)
       setBackgroundChoiceOverride(null)
+      identityRef.current = EMPTY_IDENTITY
       setIdentity(EMPTY_IDENTITY)
       return
     }
 
-    // Validation messages are created by an explicit attempt to advance or
-    // confirm. They must not be cleared by that same click. Only editing a
-    // field dismisses the previous attempt's message.
     const onFieldChange = (event: Event) => {
       if (!(event.target instanceof Element)) return
       clearErrors()
@@ -152,7 +152,8 @@ export function CharacterCreationWizard(
       <IntegratedCharacterCreationWizard
         {...props}
         onCreate={(character, plan) => {
-          const identityValidation = validateIdentity(identity)
+          const currentIdentity = identityRef.current
+          const identityValidation = validateIdentity(currentIdentity)
           if (identityValidation) {
             setIdentityError(identityValidation)
             setBlockingError(identityValidation)
@@ -237,19 +238,22 @@ export function CharacterCreationWizard(
 
           const profile = character.get("profile")
           const backgroundTitle = extractBackgroundTitle(profile.history)
-          const history = [backgroundTitle, identity.backgroundDescription]
+          const history = [
+            backgroundTitle,
+            currentIdentity.backgroundDescription,
+          ]
             .filter(Boolean)
             .join("\n")
           const patched = character.withPatch({
-            name: identity.name.trim(),
+            name: currentIdentity.name.trim(),
             inventory,
             profile: {
               ...profile,
-              alignment: identity.alignment,
+              alignment: currentIdentity.alignment,
               history,
-              physicalAppearance: identity.physicalAppearance.trim(),
-              traits: identity.personalityTraits.trim(),
-              relationships: identity.relationships.map((entry) => ({
+              physicalAppearance: currentIdentity.physicalAppearance.trim(),
+              traits: currentIdentity.personalityTraits.trim(),
+              relationships: currentIdentity.relationships.map((entry) => ({
                 ...entry,
                 name: entry.name.trim(),
                 relation: entry.relation.trim(),
@@ -290,6 +294,7 @@ export function CharacterCreationWizard(
         open={props.open}
         value={identity}
         onChange={(next) => {
+          identityRef.current = next
           setIdentity(next)
           setIdentityError("")
           setBlockingError("")
@@ -371,8 +376,6 @@ function InitialIdentityStepSkipper({ open }: { open: boolean }) {
         root.querySelectorAll<HTMLElement>("main h2"),
       ).find((heading) => heading.textContent?.trim() === "Identidade")
 
-      // The hidden legacy identity is skipped once, without filling any field.
-      // The final identity rendered before confirmation is never redirected.
       if (initialIdentityHeading) stepButtons[1]?.click()
     }
 
