@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Plus, Trash2 } from "lucide-react"
 
@@ -92,6 +92,34 @@ export function CharacterCreationIdentityStep({
   const [host, setHost] = useState<HTMLElement | null>(null)
   const hostRef = useRef<HTMLElement | null>(null)
   const nameRef = useRef(value.name)
+
+  useLayoutEffect(() => {
+    if (!open) return
+
+    const creatorTitle = Array.from(document.querySelectorAll("h1")).find(
+      (entry) => entry.textContent?.trim() === "Criar personagem",
+    )
+    const root = creatorTitle?.closest<HTMLElement>("div.grid")
+    const main = root?.querySelector<HTMLElement>("main")
+    if (!main) return
+
+    const legacyIdentityHeading = Array.from(
+      main.querySelectorAll<HTMLElement>("h2"),
+    ).find((heading) => heading.textContent?.trim() === "Identidade")
+    const legacySection = legacyIdentityHeading?.closest<HTMLElement>("section")
+    const legacyNameInput = legacySection?.querySelector<HTMLInputElement>(
+      'input[placeholder="Nome do personagem"]',
+    )
+    if (!legacyNameInput) return
+
+    const valueSetter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )?.set
+    valueSetter?.call(legacyNameInput, "__identidade_final_pendente__")
+    legacyNameInput.dispatchEvent(new Event("input", { bubbles: true }))
+    legacyNameInput.dispatchEvent(new Event("change", { bubbles: true }))
+  }, [open])
 
   useEffect(() => {
     nameRef.current = value.name
