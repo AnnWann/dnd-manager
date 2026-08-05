@@ -62,7 +62,7 @@ export function getCreationNavigationIntent(
   return { forward: clicked > current }
 }
 
-export function isAllowedLegacySyntheticNavigation(
+export function isAllowedBootstrapNavigation(
   root: HTMLElement,
   button: HTMLButtonElement,
 ): boolean {
