@@ -1,0 +1,230 @@
+import { useEffect, useMemo, useState } from "react"
+import { createPortal } from "react-dom"
+
+import { Input } from "../../../components/ui/Input"
+import { Select } from "../../../components/ui/Select"
+import type { Proficiency } from "../../../models/sheet/Proficiency"
+import type { Skill } from "../../../models/sheet/Skills"
+import { SKILL_LABELS } from "./phbPresets"
+
+type GenericRacialChoiceOverride = {
+  valid: boolean
+  error?: string
+  apply: (proficiencies: Proficiency[]) => {
+    proficiencies: Proficiency[]
+    skills: Skill[]
+  }
+}
+
+type Props = {
+  onChange: (override: GenericRacialChoiceOverride | null) => void
+  externalError?: string
+}
+
+export function CharacterCreationGenericRacialChoices({
+  onChange,
+  externalError,
+}: Props) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null)
+  const [prompts, setPrompts] = useState<string[]>([])
+  const [values, setValues] = useState<Record<string, string>>({})
+  const [raceName, setRaceName] = useState("")
+
+  useEffect(() => {
+    let frame = 0
+    const scan = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const heading = Array.from(document.querySelectorAll<HTMLElement>("h2")).find(
+          (entry) => entry.textContent?.trim() === "Construir características raciais",
+        )
+        const section = heading?.closest<HTMLElement>("section")
+        if (!section) {
+          setAnchor(null)
+          return
+        }
+        const nameInput = Array.from(section.querySelectorAll<HTMLInputElement>("input")).find(
+          (input) => input.closest("label")?.textContent?.includes("Nome da raça"),
+        )
+        const nextRaceName = nameInput?.value ?? ""
+        if (nextRaceName !== raceName) {
+          setRaceName(nextRaceName)
+          setValues({})
+        }
+
+        const detected = Array.from(section.querySelectorAll<HTMLElement>("div,span,strong"))
+          .map((entry) => entry.childElementCount === 0 ? entry.textContent?.trim() ?? "" : "")
+          .filter(isChoiceLabel)
+          .filter((entry) => !isHandledBySpecificRace(entry, nextRaceName))
+        setPrompts(Array.from(new Set(detected)))
+
+        let portalAnchor = section.querySelector<HTMLElement>("[data-generic-racial-choice-anchor]")
+        if (!portalAnchor) {
+          portalAnchor = document.createElement("div")
+          portalAnchor.dataset.genericRacialChoiceAnchor = "true"
+          section.append(portalAnchor)
+        }
+        setAnchor(portalAnchor)
+      })
+    }
+    scan()
+    const observer = new MutationObserver(scan)
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+      document.querySelectorAll("[data-generic-racial-choice-anchor]").forEach((entry) => entry.remove())
+    }
+  }, [raceName])
+
+  const valid = prompts.every((prompt) => values[prompt]?.trim())
+  const override = useMemo<GenericRacialChoiceOverride>(
+    () => ({
+      valid,
+      error: valid
+        ? undefined
+        : "Complete as proficiências raciais marcadas como escolha obrigatória.",
+      apply: (proficiencies) => {
+        const skills: Skill[] = []
+        const next = proficiencies.flatMap((entry) => {
+          const prompt = prompts.find(
+            (candidate) => normalize(candidate) === normalize(entry.name),
+          )
+          if (!prompt) return [entry]
+          const value = values[prompt]?.trim()
+          if (!value) return []
+          if (entry.category === "skill") {
+            const skill = value as Skill
+            skills.push(skill)
+            return [
+              {
+                ...entry,
+                name: SKILL_LABELS[skill],
+                notes: `Escolha racial que substitui: ${entry.name}.`,
+              },
+            ]
+          }
+          return [
+            {
+              ...entry,
+              name: value,
+              notes: `Escolha racial que substitui: ${entry.name}.`,
+            },
+          ]
+        })
+        return {
+          proficiencies: deduplicate(next),
+          skills: Array.from(new Set(skills)),
+        }
+      },
+    }),
+    [prompts, valid, values],
+  )
+
+  useEffect(() => {
+    onChange(override)
+    return () => onChange(null)
+  }, [onChange, override])
+
+  if (!anchor || !prompts.length) return null
+
+  return createPortal(
+    <section className="mt-4 grid gap-4 rounded-xl border border-warning bg-warningBg p-4">
+      <div>
+        <h3 className="text-sm font-semibold text-textH">
+          Outras escolhas raciais obrigatórias
+        </h3>
+        <p className="mt-1 text-xs text-textMuted">
+          Cada marcador genérico precisa ser substituído por uma proficiência concreta.
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {prompts.map((prompt) =>
+          normalize(prompt).includes("pericia") ? (
+            <label key={prompt} className="grid gap-1 text-xs text-textMuted">
+              {prompt}
+              <Select
+                value={values[prompt] ?? ""}
+                onChange={(event) =>
+                  setValues((current) => ({
+                    ...current,
+                    [prompt]: event.target.value,
+                  }))
+                }
+              >
+                <option value="">Selecione uma perícia</option>
+                {Object.entries(SKILL_LABELS).map(([skill, label]) => (
+                  <option key={skill} value={skill}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          ) : (
+            <label key={prompt} className="grid gap-1 text-xs text-textMuted">
+              {prompt}
+              <Input
+                value={values[prompt] ?? ""}
+                placeholder="Digite a escolha concreta"
+                onChange={(event) =>
+                  setValues((current) => ({
+                    ...current,
+                    [prompt]: event.target.value,
+                  }))
+                }
+              />
+            </label>
+          ),
+        )}
+      </div>
+      {externalError ? (
+        <div className="rounded-lg border border-danger bg-dangerBg p-3 text-xs text-danger">
+          {externalError}
+        </div>
+      ) : !valid ? (
+        <div className="text-xs font-medium text-danger">
+          Complete todas as escolhas acima.
+        </div>
+      ) : null}
+    </section>,
+    anchor,
+  )
+}
+
+function isChoiceLabel(value: string): boolean {
+  const normalized = normalize(value)
+  return (
+    normalized.includes("a escolha") ||
+    normalized.startsWith("uma pericia") ||
+    normalized.startsWith("duas pericias")
+  )
+}
+
+function isHandledBySpecificRace(prompt: string, raceName: string): boolean {
+  const race = normalize(raceName)
+  const value = normalize(prompt)
+  if (race.includes("humano variante") && value.includes("pericia")) return true
+  if (race.includes("meio elfo") && value.includes("pericia")) return true
+  return false
+}
+
+function deduplicate(entries: Proficiency[]): Proficiency[] {
+  const seen = new Set<string>()
+  return entries.filter((entry) => {
+    const key = `${entry.category}:${normalize(entry.name)}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function normalize(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+}
+
+export type { GenericRacialChoiceOverride }
