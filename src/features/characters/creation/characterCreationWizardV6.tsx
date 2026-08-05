@@ -16,6 +16,10 @@ import {
   CharacterCreationEquipmentChoices,
   type EquipmentOverride,
 } from "./CharacterCreationEquipmentChoices"
+import {
+  CharacterCreationRacialChoices,
+  type RacialChoiceOverride,
+} from "./CharacterCreationRacialChoices"
 import { IntegratedCharacterCreationWizard } from "./IntegratedCharacterCreationWizard"
 
 export type { CharacterCreationProgressionPlan } from "./characterCreationWizardV5"
@@ -27,6 +31,9 @@ export function CharacterCreationWizard(
     useState<EquipmentOverride | null>(null)
   const [abilityScoreOverride, setAbilityScoreOverride] =
     useState<AbilityScoreOverride | null>(null)
+  const [racialChoiceOverride, setRacialChoiceOverride] =
+    useState<RacialChoiceOverride | null>(null)
+  const [racialChoiceError, setRacialChoiceError] = useState("")
   const handleEquipmentChange = useCallback(
     (next: EquipmentOverride | null) => setEquipmentOverride(next),
     [],
@@ -35,24 +42,64 @@ export function CharacterCreationWizard(
     (next: AbilityScoreOverride | null) => setAbilityScoreOverride(next),
     [],
   )
+  const handleRacialChoiceChange = useCallback(
+    (next: RacialChoiceOverride | null) => {
+      setRacialChoiceOverride(next)
+      if (next?.valid) setRacialChoiceError("")
+    },
+    [],
+  )
 
   return (
     <>
       <IntegratedCharacterCreationWizard
         {...props}
         onCreate={(character, plan) => {
+          if (racialChoiceOverride && !racialChoiceOverride.valid) {
+            setRacialChoiceError(
+              racialChoiceOverride.error ??
+                "Complete todas as escolhas raciais obrigatórias.",
+            )
+            return
+          }
+
           const inventory = replaceClassStartingEquipment(
             character.get("inventory") ?? [],
             equipmentOverride?.items,
           )
           const sheet = character.get("sheet")
+          const originalRaceProficiencyIds = new Set(
+            (sheet.race.proficiencies ?? []).map((entry) => entry.id),
+          )
+          const racial = racialChoiceOverride?.apply(
+            sheet.race.naturalAbilities ?? [],
+            sheet.race.proficiencies ?? [],
+          )
+          const raceProficiencies =
+            racial?.proficiencies ?? sheet.race.proficiencies
+          const proficiencies = [
+            ...(sheet.proficiencies ?? []).filter(
+              (entry) => !originalRaceProficiencyIds.has(entry.id),
+            ),
+            ...raceProficiencies,
+          ]
+          const skills = { ...sheet.skills }
+          for (const skill of racial?.skills ?? []) {
+            skills[skill] = "proficient"
+          }
+
           const patched = character.withPatch({
             inventory,
             sheet: {
               ...sheet,
               attributes: abilityScoreOverride?.attributes ?? sheet.attributes,
+              skills,
+              proficiencies,
               race: {
                 ...sheet.race,
+                naturalAbilities:
+                  racial?.abilities ?? sheet.race.naturalAbilities,
+                proficiencies: raceProficiencies,
                 attributeBonus:
                   abilityScoreOverride?.racialBonuses ??
                   sheet.race.attributeBonus,
@@ -71,6 +118,10 @@ export function CharacterCreationWizard(
       />
       <CharacterCreationEquipmentChoices onChange={handleEquipmentChange} />
       <CharacterCreationAbilityScoreRules onChange={handleAbilityScoreChange} />
+      <CharacterCreationRacialChoices
+        onChange={handleRacialChoiceChange}
+        externalError={racialChoiceError}
+      />
       <ProgressionFeatureModalEnhancer />
       <ProgressionModalInstantSelectionBridge />
       <ProgressionSpellSelectionModal />
