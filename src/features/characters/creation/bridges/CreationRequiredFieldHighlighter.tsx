@@ -6,7 +6,7 @@ import {
   findCharacterCreationRoot,
   getCreationNavigationIntent,
   highlightCreationAttempt,
-  isAllowedLegacySyntheticNavigation,
+  isAllowedBootstrapNavigation,
   validateVisibleCreationStep,
 } from "../logic/characterCreationStepValidation"
 
@@ -35,7 +35,7 @@ export function CreationRequiredFieldHighlighter() {
       if (!wizardRoot) return
 
       if (!event.isTrusted) {
-        if (isAllowedLegacySyntheticNavigation(wizardRoot, button)) return
+        if (isAllowedBootstrapNavigation(wizardRoot, button)) return
         stopNavigation(event)
         return
       }
