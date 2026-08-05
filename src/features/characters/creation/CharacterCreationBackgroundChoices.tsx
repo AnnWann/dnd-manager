@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { Input } from "../../../components/ui/Input"
-import { Select } from "../../../components/ui/Select"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
 
 const STANDARD_LANGUAGES = [
@@ -146,12 +145,26 @@ export function CharacterCreationBackgroundChoices({
   }, [prompts])
 
   const valid = prompts.every((prompt) => values[prompt]?.trim())
+  const duplicateLanguage = prompts.some((prompt, index) => {
+    if (!isLanguagePrompt(prompt)) return false
+    const value = normalize(values[prompt] ?? "")
+    if (!value) return false
+    return prompts.some(
+      (other, otherIndex) =>
+        otherIndex !== index &&
+        isLanguagePrompt(other) &&
+        normalize(values[other] ?? "") === value,
+    )
+  })
+  const fullyValid = valid && !duplicateLanguage
   const override = useMemo<BackgroundChoiceOverride>(
     () => ({
-      valid,
-      error: valid
-        ? undefined
-        : "Escolha todos os idiomas, ferramentas ou outras proficiências adicionais do antecedente.",
+      valid: fullyValid,
+      error: !valid
+        ? "Escolha todos os idiomas, ferramentas ou outras proficiências adicionais do antecedente."
+        : duplicateLanguage
+          ? "Escolha idiomas diferentes para cada proficiência adicional."
+          : undefined,
       apply: (proficiencies) =>
         deduplicate(
           proficiencies.flatMap((entry) => {
@@ -174,29 +187,32 @@ export function CharacterCreationBackgroundChoices({
           }),
         ),
     }),
-    [prompts, valid, values],
+    [duplicateLanguage, fullyValid, prompts, valid, values],
   )
 
   useEffect(() => {
     onChange(override)
-    return () => onChange(null)
   }, [onChange, override])
 
   if (!anchor || !prompts.length) return null
 
   return createPortal(
     <section
-      data-creation-step-valid={valid ? "true" : "false"}
+      data-creation-step-valid={fullyValid ? "true" : "false"}
       data-creation-step-error={override.error ?? ""}
-      className="mt-4 grid gap-4 rounded-xl border border-warning bg-warningBg p-4"
+      className={
+        fullyValid
+          ? "mt-4 grid gap-4 rounded-xl border border-warning bg-warningBg p-4"
+          : "mt-4 grid gap-4 rounded-xl border border-danger bg-dangerBg p-4"
+      }
     >
       <div>
         <h3 className="text-sm font-semibold text-textH">
           Escolhas obrigatórias do antecedente
         </h3>
         <p className="mt-1 text-xs leading-5 text-textMuted">
-          Marcadores genéricos não são salvos. Cada idioma ou proficiência deve
-          ser definido agora.
+          Escolha uma opção padrão ou digite livremente um idioma ou proficiência.
+          Marcadores genéricos não serão salvos.
         </p>
         {presetLocked ? (
           <p className="mt-1 text-xs text-textMuted">
@@ -206,40 +222,46 @@ export function CharacterCreationBackgroundChoices({
         ) : null}
       </div>
 
+      <datalist id="character-creation-standard-languages">
+        {STANDARD_LANGUAGES.map((language) => (
+          <option key={language} value={language} />
+        ))}
+      </datalist>
+
       <div className="grid gap-3 sm:grid-cols-2">
-        {prompts.map((prompt) =>
-          isLanguagePrompt(prompt) ? (
+        {prompts.map((prompt) => {
+          const value = values[prompt] ?? ""
+          const repeated =
+            isLanguagePrompt(prompt) &&
+            Boolean(value.trim()) &&
+            prompts.some(
+              (other) =>
+                other !== prompt &&
+                isLanguagePrompt(other) &&
+                normalize(values[other] ?? "") === normalize(value),
+            )
+          return (
             <label key={prompt} className="grid gap-1 text-xs text-textMuted">
-              {prompt}
-              <Select
-                value={values[prompt] ?? ""}
-                onChange={(event) =>
-                  setValues((current) => ({
-                    ...current,
-                    [prompt]: event.target.value,
-                  }))
-                }
-              >
-                <option value="">Selecione um idioma</option>
-                {STANDARD_LANGUAGES.filter(
-                  (language) =>
-                    !Object.entries(values).some(
-                      ([otherPrompt, selected]) =>
-                        otherPrompt !== prompt && selected === language,
-                    ),
-                ).map((language) => (
-                  <option key={language} value={language}>
-                    {language}
-                  </option>
-                ))}
-              </Select>
-            </label>
-          ) : (
-            <label key={prompt} className="grid gap-1 text-xs text-textMuted">
-              {prompt}
+              <span className={!value.trim() || repeated ? "text-danger" : ""}>
+                {prompt} · obrigatório
+              </span>
               <Input
-                value={values[prompt] ?? ""}
-                placeholder="Digite a escolha concreta"
+                list={
+                  isLanguagePrompt(prompt)
+                    ? "character-creation-standard-languages"
+                    : undefined
+                }
+                value={value}
+                className={
+                  !value.trim() || repeated
+                    ? "border-danger bg-dangerBg"
+                    : ""
+                }
+                placeholder={
+                  isLanguagePrompt(prompt)
+                    ? "Escolha um idioma ou digite outro"
+                    : "Escolha uma opção ou digite a proficiência"
+                }
                 onChange={(event) =>
                   setValues((current) => ({
                     ...current,
@@ -248,17 +270,17 @@ export function CharacterCreationBackgroundChoices({
                 }
               />
             </label>
-          ),
-        )}
+          )
+        })}
       </div>
 
       {externalError ? (
         <div className="rounded-lg border border-danger bg-dangerBg p-3 text-xs text-danger">
           {externalError}
         </div>
-      ) : !valid ? (
+      ) : !fullyValid ? (
         <div className="text-xs font-medium text-danger">
-          Complete todas as escolhas antes de continuar.
+          {override.error}
         </div>
       ) : null}
     </section>,
@@ -269,7 +291,7 @@ export function CharacterCreationBackgroundChoices({
 function isBackgroundChoicePrompt(value: string): boolean {
   const normalized = normalize(value)
   return (
-    /^idioma adicional \d+$/.test(normalized) ||
+    /^idioma adicional(?: \d+)?$/.test(normalized) ||
     normalized.includes("idioma a escolha") ||
     normalized.includes("ferramenta a escolha") ||
     normalized.includes("instrumento a escolha") ||
