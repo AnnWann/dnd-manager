@@ -36,7 +36,7 @@ import {
   CharacterCreationGenericRacialChoices,
   type GenericRacialChoiceOverride,
 } from "./CharacterCreationGenericRacialChoices"
-import { CharacterCreationIdentityStep } from "./CharacterCreationIdentityStep"
+import { CharacterCreationIdentityStep } from "./components/CharacterCreationIdentityStep"
 import {
   CharacterCreationLegacyBridge,
   readSelectedRacialBonusRule,
