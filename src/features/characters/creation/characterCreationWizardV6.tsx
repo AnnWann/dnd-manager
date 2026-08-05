@@ -25,6 +25,7 @@ import {
   CharacterCreationRacialChoices,
   type RacialChoiceOverride,
 } from "./CharacterCreationRacialChoices"
+import { CharacterCreationWeaponCategoryFilter } from "./CharacterCreationWeaponCategoryFilter"
 import { IntegratedCharacterCreationWizard } from "./IntegratedCharacterCreationWizard"
 
 export type { CharacterCreationProgressionPlan } from "./characterCreationWizardV5"
@@ -82,6 +83,16 @@ export function CharacterCreationWizard(
       <IntegratedCharacterCreationWizard
         {...props}
         onCreate={(character, plan) => {
+          const bonusRule = readRacialBonusRule()
+          const racialBonusError = validateRacialBonusDistribution(
+            bonusRule,
+            abilityScoreOverride?.racialBonuses,
+          )
+          if (racialBonusError) {
+            setBlockingError(racialBonusError)
+            return
+          }
+
           const unresolvedEquipment =
             equipmentOverride?.mode === "equipment" &&
             equipmentOverride.items.some((item) =>
@@ -155,7 +166,7 @@ export function CharacterCreationWizard(
                 attributeBonus:
                   abilityScoreOverride?.racialBonuses ??
                   sheet.race.attributeBonus,
-                attributeBonusRule: readRacialBonusRule(),
+                attributeBonusRule: bonusRule,
               },
             },
           })
@@ -171,6 +182,7 @@ export function CharacterCreationWizard(
         }}
       />
       <CharacterCreationEquipmentChoices onChange={handleEquipmentChange} />
+      <CharacterCreationWeaponCategoryFilter />
       <CharacterCreationAbilityScoreRules onChange={handleAbilityScoreChange} />
       <CharacterCreationRacialChoices
         onChange={handleRacialChoiceChange}
@@ -230,6 +242,29 @@ function readRacialBonusRule(): RacialAttributeBonusRule {
   if (label === "Móveis +1 / +1 / +1") return "flexible-1-1-1"
   if (label === "Personalizados") return "custom"
   return "fixed"
+}
+
+function validateRacialBonusDistribution(
+  rule: RacialAttributeBonusRule,
+  bonuses: Partial<Record<string, number>> | undefined,
+): string {
+  if (!bonuses) return "Defina os bônus raciais antes de confirmar."
+  const values = Object.values(bonuses)
+    .map((value) => Math.max(0, Math.trunc(Number(value) || 0)))
+    .filter((value) => value > 0)
+    .toSorted((left, right) => right - left)
+  const signature = values.join(",")
+
+  if (rule === "variant-1-1" && signature !== "1,1") {
+    return "A regra +1/+1 exige dois atributos distintos, cada um recebendo +1."
+  }
+  if (rule === "flexible-2-1" && signature !== "2,1") {
+    return "A regra móvel +2/+1 exige dois atributos distintos."
+  }
+  if (rule === "flexible-1-1-1" && signature !== "1,1,1") {
+    return "A regra móvel +1/+1/+1 exige três atributos distintos."
+  }
+  return ""
 }
 
 function normalize(value: string): string {
