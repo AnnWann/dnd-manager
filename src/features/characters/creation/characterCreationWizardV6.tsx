@@ -14,6 +14,10 @@ import {
   type AbilityScoreOverride,
 } from "./CharacterCreationAbilityScoreRules"
 import {
+  CharacterCreationBackgroundChoices,
+  type BackgroundChoiceOverride,
+} from "./CharacterCreationBackgroundChoices"
+import {
   CharacterCreationEquipmentChoices,
   type EquipmentOverride,
 } from "./CharacterCreationEquipmentChoices"
@@ -25,7 +29,7 @@ import {
   CharacterCreationRacialChoices,
   type RacialChoiceOverride,
 } from "./CharacterCreationRacialChoices"
-import { CharacterCreationWeaponCategoryFilter } from "./CharacterCreationWeaponCategoryFilter"
+import { CharacterCreationStepGuard } from "./CharacterCreationStepGuard"
 import { IntegratedCharacterCreationWizard } from "./IntegratedCharacterCreationWizard"
 
 export type { CharacterCreationProgressionPlan } from "./characterCreationWizardV5"
@@ -41,12 +45,16 @@ export function CharacterCreationWizard(
     useState<RacialChoiceOverride | null>(null)
   const [genericRacialOverride, setGenericRacialOverride] =
     useState<GenericRacialChoiceOverride | null>(null)
+  const [backgroundChoiceOverride, setBackgroundChoiceOverride] =
+    useState<BackgroundChoiceOverride | null>(null)
   const [racialChoiceError, setRacialChoiceError] = useState("")
+  const [backgroundChoiceError, setBackgroundChoiceError] = useState("")
   const [blockingError, setBlockingError] = useState("")
+
   const handleEquipmentChange = useCallback(
     (next: EquipmentOverride | null) => {
       setEquipmentOverride(next)
-      setBlockingError("")
+      if (next?.valid) setBlockingError("")
     },
     [],
   )
@@ -77,6 +85,16 @@ export function CharacterCreationWizard(
     },
     [],
   )
+  const handleBackgroundChoiceChange = useCallback(
+    (next: BackgroundChoiceOverride | null) => {
+      setBackgroundChoiceOverride(next)
+      if (next?.valid) {
+        setBackgroundChoiceError("")
+        setBlockingError("")
+      }
+    },
+    [],
+  )
 
   return (
     <>
@@ -93,14 +111,10 @@ export function CharacterCreationWizard(
             return
           }
 
-          const unresolvedEquipment =
-            equipmentOverride?.mode === "equipment" &&
-            equipmentOverride.items.some((item) =>
-              normalize(item.name).includes("a escolha"),
-            )
-          if (unresolvedEquipment) {
+          if (equipmentOverride && !equipmentOverride.valid) {
             setBlockingError(
-              "Escolha uma arma concreta do compêndio ou crie uma arma personalizada para cada entrada genérica do equipamento inicial.",
+              equipmentOverride.error ??
+                "Complete todas as escolhas de equipamento da classe inicial.",
             )
             return
           }
@@ -118,6 +132,15 @@ export function CharacterCreationWizard(
             return
           }
 
+          if (backgroundChoiceOverride && !backgroundChoiceOverride.valid) {
+            const error =
+              backgroundChoiceOverride.error ??
+              "Complete todas as escolhas obrigatórias do antecedente."
+            setBackgroundChoiceError(error)
+            setBlockingError(error)
+            return
+          }
+
           const inventory = replaceClassStartingEquipment(
             character.get("inventory") ?? [],
             equipmentOverride?.items,
@@ -126,6 +149,9 @@ export function CharacterCreationWizard(
           const originalRaceProficiencyIds = new Set(
             (sheet.race.proficiencies ?? []).map((entry) => entry.id),
           )
+          const backgroundProficiencies = backgroundChoiceOverride?.apply(
+            sheet.proficiencies ?? [],
+          ) ?? sheet.proficiencies
           const specificRace = racialChoiceOverride?.apply(
             sheet.race.naturalAbilities ?? [],
             sheet.race.proficiencies ?? [],
@@ -138,7 +164,7 @@ export function CharacterCreationWizard(
             specificRace?.proficiencies ??
             sheet.race.proficiencies
           const proficiencies = [
-            ...(sheet.proficiencies ?? []).filter(
+            ...(backgroundProficiencies ?? []).filter(
               (entry) => !originalRaceProficiencyIds.has(entry.id),
             ),
             ...raceProficiencies,
@@ -181,8 +207,8 @@ export function CharacterCreationWizard(
           )
         }}
       />
+
       <CharacterCreationEquipmentChoices onChange={handleEquipmentChange} />
-      <CharacterCreationWeaponCategoryFilter />
       <CharacterCreationAbilityScoreRules onChange={handleAbilityScoreChange} />
       <CharacterCreationRacialChoices
         onChange={handleRacialChoiceChange}
@@ -192,9 +218,15 @@ export function CharacterCreationWizard(
         onChange={handleGenericRacialChange}
         externalError={racialChoiceError}
       />
+      <CharacterCreationBackgroundChoices
+        onChange={handleBackgroundChoiceChange}
+        externalError={backgroundChoiceError}
+      />
+      <CharacterCreationStepGuard />
       <ProgressionFeatureModalEnhancer />
       <ProgressionModalInstantSelectionBridge />
       <ProgressionSpellSelectionModal />
+
       {blockingError ? (
         <div className="fixed left-1/2 top-4 z-[260] w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger shadow-theme-lg">
           {blockingError}
@@ -265,13 +297,4 @@ function validateRacialBonusDistribution(
     return "A regra móvel +1/+1/+1 exige três atributos distintos."
   }
   return ""
-}
-
-function normalize(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("pt-BR")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
 }
