@@ -3,9 +3,9 @@ import { createPortal } from "react-dom"
 
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
+import { SKILL_LABELS } from "../../../data/characterCreation/phbPresets"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
 import type { Skill } from "../../../models/sheet/Skills"
-import { SKILL_LABELS } from "./phbPresets"
 
 type GenericRacialChoiceOverride = {
   valid: boolean
