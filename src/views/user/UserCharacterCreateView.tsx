@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 
 import { createMyCharacter } from "../../api/user-characters"
 import { CharacterCreationWizard } from "../../features/characters/creation/characterCreationWizard"
-import { ensureCharacterBackgroundFromHistory } from "../../features/characters/creation/inferCharacterBackground"
+import { ensureCharacterBackgroundFromHistory } from "../../lib/characterCreation/inferCharacterBackground"
 import type { Player } from "../../models/player/Player"
 
 const USER_OWNER: Player = {
