@@ -11,6 +11,7 @@ import {
 import { useMagicContext } from "../../../contexts/magicContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Spell } from "../../../models/magic/spells/Spell"
+import type { SpellSourceType } from "../../../models/magic/spells/spellDefinitions"
 import type { ClassName } from "../../../models/sheet/Class"
 
 type SourceChoice = "" | "feat" | "ability" | `class:${ClassName}`
@@ -151,6 +152,7 @@ export function CharacterSpellLibrary({
     }
 
     const spellToAdd = selectedSpell
+    const sourceType = getSpellSourceType(selectedSource)
 
     updateCharacter(character.get("id"), (current) => {
       const alreadyKnown =
@@ -169,9 +171,7 @@ export function CharacterSpellLibrary({
 
       return current.addSpell({
         source: {
-          type: selectedSource.startsWith("class:")
-            ? "class"
-            : selectedSource,
+          type: sourceType,
           name: selectedClassName ?? selectedSource,
           sourceId: selectedClassName ?? selectedSource,
           attribute,
@@ -477,6 +477,13 @@ export function CharacterSpellLibrary({
       ) : null}
     </Card>
   )
+}
+
+function getSpellSourceType(
+  source: Exclude<SourceChoice, "">,
+): SpellSourceType {
+  if (source.startsWith("class:")) return "class"
+  return source as "feat" | "ability"
 }
 
 function getSelectedClassName(source: SourceChoice): ClassName | undefined {
