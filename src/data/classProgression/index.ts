@@ -3,6 +3,7 @@ import type { ClassName } from "../../models/sheet/Class"
 import { applyClassProgressionModules } from "./applyClassProgressionModules"
 import { CLASS_PROGRESSION_MODULES } from "./registry"
 
+export * from "./applyProgressionAbilityConfig"
 export * from "./builders"
 export * from "./types"
 export { CLASS_PROGRESSION_MODULES }
