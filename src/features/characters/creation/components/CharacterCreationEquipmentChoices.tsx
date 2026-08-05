@@ -3,6 +3,16 @@ import { createPortal } from "react-dom"
 
 import { Button } from "../../../../components/ui/Button"
 import { Input } from "../../../../components/ui/Input"
+import {
+  averageStartingGold,
+  formatStartingGoldFormula,
+  getDefaultClassEquipmentSelections,
+  getPhbClassEquipmentPreset,
+  getSelectedClassEquipment,
+  rollStartingGold,
+  type StartingItemSpec,
+} from "../../../../data/characterCreation/phbClassEquipment"
+import { createStartingInventoryItem } from "../../../../lib/characterCreation/startingEquipmentItems"
 import { createCurrencyItem } from "../../../../models/items/Currency"
 import type { Itemmable } from "../../../../models/items/item"
 import { getClassNamePt } from "../../../../models/leveling/ClassLocalization"
@@ -13,16 +23,6 @@ import {
   CharacterCreationWeaponPicker,
   type StartingWeaponCategory,
 } from "./CharacterCreationWeaponPicker"
-import {
-  averageStartingGold,
-  formatStartingGoldFormula,
-  getDefaultClassEquipmentSelections,
-  getPhbClassEquipmentPreset,
-  getSelectedClassEquipment,
-  rollStartingGold,
-  type StartingItemSpec,
-} from "../phbClassEquipment"
-import { createStartingInventoryItem } from "../../../../lib/characterCreation/startingEquipmentItems"
 
 type EquipmentMode = "equipment" | "gold"
 
