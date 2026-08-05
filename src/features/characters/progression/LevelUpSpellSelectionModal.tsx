@@ -142,6 +142,7 @@ export function LevelUpSpellSelectionModal() {
   }, [levelFilter, proxies, query, schoolFilter, selectedIds, selectedOnly])
 
   if (!liveTarget || typeof document === "undefined") return null
+  const activeTarget = liveTarget
 
   const selectedSpells = proxies.map((entry) => entry.spell).filter((spell) => selectedIds.has(spell.index))
   const cantripCount = selectedSpells.filter((spell) => spell.slotLevel === 0).length
@@ -151,7 +152,7 @@ export function LevelUpSpellSelectionModal() {
     const selected = selectedIds.has(proxy.spell.index)
     if (!selected) {
       const current = proxy.spell.slotLevel === 0 ? cantripCount : leveledCount
-      const limit = proxy.spell.slotLevel === 0 ? liveTarget!.maxCantrips : liveTarget!.maxLeveled
+      const limit = proxy.spell.slotLevel === 0 ? activeTarget.maxCantrips : activeTarget.maxLeveled
       if (current >= limit) {
         setError(
           proxy.spell.slotLevel === 0
@@ -183,8 +184,8 @@ export function LevelUpSpellSelectionModal() {
   function togglePrepared(proxy: Proxy) {
     if (!proxy.checkbox || !selectedIds.has(proxy.spell.index)) return
     const prepared = preparedIds.has(proxy.spell.index)
-    if (!prepared && liveTarget.maxPrepared > 0 && preparedIds.size >= liveTarget.maxPrepared) {
-      setError(`O limite de ${liveTarget.maxPrepared} magias preparadas já foi atingido.`)
+    if (!prepared && activeTarget.maxPrepared > 0 && preparedIds.size >= activeTarget.maxPrepared) {
+      setError(`O limite de ${activeTarget.maxPrepared} magias preparadas já foi atingido.`)
       return
     }
     setError("")
@@ -203,11 +204,11 @@ export function LevelUpSpellSelectionModal() {
       <section className="grid max-h-[94dvh] w-full max-w-6xl grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-bg-elevated shadow-theme-lg" onMouseDown={(event) => event.stopPropagation()}>
         <header className="flex items-start justify-between gap-4 border-b border-border p-4 sm:p-5">
           <div>
-            <h2 className="text-lg font-semibold text-textH">{liveTarget.title}</h2>
+            <h2 className="text-lg font-semibold text-textH">{activeTarget.title}</h2>
             <div className="mt-2 flex flex-wrap gap-2">
-              <Badge label={`Truques ${cantripCount}/${liveTarget.maxCantrips}`} />
-              <Badge label={`Magias ${leveledCount}/${liveTarget.maxLeveled}`} />
-              {liveTarget.maxPrepared ? <Badge label={`Preparadas ${preparedIds.size}/${liveTarget.maxPrepared}`} /> : null}
+              <Badge label={`Truques ${cantripCount}/${activeTarget.maxCantrips}`} />
+              <Badge label={`Magias ${leveledCount}/${activeTarget.maxLeveled}`} />
+              {activeTarget.maxPrepared ? <Badge label={`Preparadas ${preparedIds.size}/${activeTarget.maxPrepared}`} /> : null}
             </div>
           </div>
           <button type="button" aria-label="Fechar" onClick={() => setTarget(null)} className="flex h-9 w-9 items-center justify-center rounded-lg text-textMuted hover:bg-bg-subtle hover:text-textH">
@@ -351,22 +352,20 @@ function parseProxies(section: HTMLElement, spells: Spell[]): Proxy[] {
     byName.set(normalize(spell.name), spell)
     if (spell.displayName?.trim()) byName.set(normalize(spell.displayName), spell)
   }
-  return Array.from(section.querySelectorAll<HTMLElement>("article"))
-    .map((article) => {
-      const button = article.querySelector<HTMLButtonElement>(":scope > button")
-      const label = article.querySelector("span.font-medium, strong, .font-medium")?.textContent?.trim() ?? ""
-      const spell = byName.get(normalize(label))
-      if (!button || !spell) return undefined
-      const checkbox = article.querySelector<HTMLInputElement>('input[type="checkbox"]') ?? undefined
-      return {
-        spell,
-        button,
-        checkbox,
-        selected: article.classList.contains("border-accentBorder") || article.classList.contains("bg-accentBg"),
-        prepared: checkbox?.checked === true,
-      }
-    })
-    .filter((entry): entry is Proxy => Boolean(entry))
+  return Array.from(section.querySelectorAll<HTMLElement>("article")).flatMap<Proxy>((article) => {
+    const button = article.querySelector<HTMLButtonElement>(":scope > button")
+    const label = article.querySelector("span.font-medium, strong, .font-medium")?.textContent?.trim() ?? ""
+    const spell = byName.get(normalize(label))
+    if (!button || !spell) return []
+    const checkbox = article.querySelector<HTMLInputElement>('input[type="checkbox"]') ?? undefined
+    return [{
+      spell,
+      button,
+      checkbox,
+      selected: article.classList.contains("border-accentBorder") || article.classList.contains("bg-accentBg"),
+      prepared: checkbox?.checked === true,
+    }]
+  })
 }
 
 function clearUnderlyingSearch(section: HTMLElement) {
