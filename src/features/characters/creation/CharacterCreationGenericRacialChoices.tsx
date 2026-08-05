@@ -40,7 +40,8 @@ export function CharacterCreationGenericRacialChoices({
         )
         const section = heading?.closest<HTMLElement>("section")
         if (!section) {
-          setAnchor(null)
+          setAnchor((current) => (current === null ? current : null))
+          setPrompts((current) => (current.length ? [] : current))
           return
         }
         const nameInput = Array.from(section.querySelectorAll<HTMLInputElement>("input")).find(
@@ -53,18 +54,29 @@ export function CharacterCreationGenericRacialChoices({
         }
 
         const detected = Array.from(section.querySelectorAll<HTMLElement>("div,span,strong"))
-          .map((entry) => entry.childElementCount === 0 ? entry.textContent?.trim() ?? "" : "")
+          .map((entry) =>
+            entry.childElementCount === 0
+              ? entry.textContent?.trim() ?? ""
+              : "",
+          )
           .filter(isChoiceLabel)
           .filter((entry) => !isHandledBySpecificRace(entry, nextRaceName))
-        setPrompts(Array.from(new Set(detected)))
+        const nextPrompts = Array.from(new Set(detected))
+        setPrompts((current) =>
+          sameStrings(current, nextPrompts) ? current : nextPrompts,
+        )
 
-        let portalAnchor = section.querySelector<HTMLElement>("[data-generic-racial-choice-anchor]")
+        let portalAnchor = section.querySelector<HTMLElement>(
+          "[data-generic-racial-choice-anchor]",
+        )
         if (!portalAnchor) {
           portalAnchor = document.createElement("div")
           portalAnchor.dataset.genericRacialChoiceAnchor = "true"
           section.append(portalAnchor)
         }
-        setAnchor(portalAnchor)
+        setAnchor((current) =>
+          current === portalAnchor ? current : portalAnchor,
+        )
       })
     }
     scan()
@@ -73,7 +85,9 @@ export function CharacterCreationGenericRacialChoices({
     return () => {
       cancelAnimationFrame(frame)
       observer.disconnect()
-      document.querySelectorAll("[data-generic-racial-choice-anchor]").forEach((entry) => entry.remove())
+      document
+        .querySelectorAll("[data-generic-racial-choice-anchor]")
+        .forEach((entry) => entry.remove())
     }
   }, [raceName])
 
@@ -216,6 +230,13 @@ function deduplicate(entries: Proficiency[]): Proficiency[] {
     seen.add(key)
     return true
   })
+}
+
+function sameStrings(left: string[], right: string[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((entry, index) => entry === right[index])
+  )
 }
 
 function normalize(value: string): string {
