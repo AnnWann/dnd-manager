@@ -1,9 +1,9 @@
+import type { ClassName } from "../../models/sheet/Class"
 import type {
   ClassProgressionDefinition,
   LevelFeatureDefinition,
   SubclassDefinition,
-} from "../../models/leveling/ClassProgression"
-import type { ClassName } from "../../models/sheet/Class"
+} from "./catalog/ClassProgression"
 import type {
   ClassProgressionModule,
   SubclassProgressionModule,
