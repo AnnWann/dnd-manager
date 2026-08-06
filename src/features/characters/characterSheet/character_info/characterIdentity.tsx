@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { createPortal } from "react-dom"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
+import { getTotalCharacterLevel } from "../../../../models/characters/CharacterProgression"
 
 import { Button } from "../../../../components/ui/Button"
 import { Input } from "../../../../components/ui/Input"
@@ -23,10 +24,7 @@ export function CharacterIdentity({
 }: Props) {
   const [classEditorOpen, setClassEditorOpen] = useState(false)
   const classes = character.get("sheet").classes ?? []
-  const totalLevel = classes.reduce(
-    (total, characterClass) => total + characterClass.level,
-    0,
-  )
+  const totalLevel = getTotalCharacterLevel(character)
   const classDescription =
     classes.length > 0
       ? classes
