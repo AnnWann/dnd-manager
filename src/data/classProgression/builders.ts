@@ -1,52 +1,37 @@
-import type { ClassSourceBook, ClassName } from "../../models/sheet/Class"
+import type { ClassName, ClassSourceBook } from "../../models/sheet/Class"
 import type {
-  ClassProgressionModule,
-  ConfiguredLevelFeatureDefinition,
-  SubclassProgressionModule,
+  ClassProgressionDefinition,
+  LevelFeatureDefinition,
+  SubclassDefinition,
 } from "./types"
 
 export type FeatureConfigurationInput = Omit<
-  ConfiguredLevelFeatureDefinition,
+  LevelFeatureDefinition,
   "id"
 > & {
-  /**
-   * Prefer explicit stable IDs. When omitted, an ID is generated from the
-   * original feature name and level for compatibility with the current data.
-   */
   id?: string
 }
 
+export type FeatureExtra = Omit<
+  Partial<LevelFeatureDefinition>,
+  "level" | "name" | "source"
+>
+
 export function defineFeature(
   input: FeatureConfigurationInput,
-): ConfiguredLevelFeatureDefinition {
+): LevelFeatureDefinition {
   return {
     ...input,
     id: input.id ?? createFeatureId(input.name, input.level),
   }
 }
 
-export function defineSubclass<TClassName extends ClassName>(
-  input: SubclassProgressionModule<TClassName>,
-): SubclassProgressionModule<TClassName> {
-  return input
-}
-
-export function defineClassProgression<TClassName extends ClassName>(
-  input: ClassProgressionModule<TClassName>,
-): ClassProgressionModule<TClassName> {
-  return input
-}
-
-export function createFeatureId(name: string, level: number): string {
-  return `${slug(name)}-${level}`
-}
-
-export function createSubclassFeature(
+export function feature(
   level: number,
   name: string,
   source: ClassSourceBook = "PHB",
-  extra: Omit<Partial<ConfiguredLevelFeatureDefinition>, "level" | "name" | "source"> = {},
-): ConfiguredLevelFeatureDefinition {
+  extra: FeatureExtra = {},
+): LevelFeatureDefinition {
   return defineFeature({
     level,
     name,
@@ -55,11 +40,54 @@ export function createSubclassFeature(
   })
 }
 
-function slug(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("en-US")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+export function defineSubclass<TClassName extends ClassName>(
+  input: SubclassDefinition<TClassName>,
+): SubclassDefinition<TClassName> {
+  return input
+}
+
+export function defineClassProgression<TClassName extends ClassName>(
+  input: ClassProgressionDefinition<TClassName>,
+): ClassProgressionDefinition<TClassName> {
+  return input
+}
+
+export function createFeatureId(name: string, level: number): string {
+  return `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${level}`
+}
+
+const ASI_LEVELS: Record<ClassName, number[]> = {
+  artificer: [4, 8, 12, 16, 19],
+  barbarian: [4, 8, 12, 16, 19],
+  bard: [4, 8, 12, 16, 19],
+  cleric: [4, 8, 12, 16, 19],
+  druid: [4, 8, 12, 16, 19],
+  fighter: [4, 6, 8, 12, 14, 16, 19],
+  monk: [4, 8, 12, 16, 19],
+  paladin: [4, 8, 12, 16, 19],
+  ranger: [4, 8, 12, 16, 19],
+  rogue: [4, 8, 10, 12, 16, 19],
+  sorcerer: [4, 8, 12, 16, 19],
+  warlock: [4, 8, 12, 16, 19],
+  wizard: [4, 8, 12, 16, 19],
+}
+
+export function withAbilityScoreImprovements(
+  className: ClassName,
+  features: LevelFeatureDefinition[],
+): LevelFeatureDefinition[] {
+  return [
+    ...features,
+    ...ASI_LEVELS[className].map((level) =>
+      feature(level, "Ability Score Improvement", "PHB", {
+        choice: {
+          id: `asi-${className}-${level}`,
+          label: "Ability Score Improvement or feat",
+          kind: "asi",
+          count: 1,
+          allowCustom: true,
+        },
+      }),
+    ),
+  ].toSorted((left, right) => left.level - right.level)
 }

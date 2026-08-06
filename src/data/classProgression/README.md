@@ -1,149 +1,123 @@
 # Class progression data
 
 This directory is the canonical source for class and subclass progression rules.
-The former aggregate files in `src/models/leveling` now only re-export this data
-for compatibility with older imports.
+Consumers must import progression definitions and lookup functions from
+`src/data/classProgression`, not from `src/models/leveling`.
 
-## Current structure
+## Folder convention
 
 ```text
 classProgression/
-├── applyClassProgressionModules.ts
 ├── builders.ts
-├── fromCatalog.ts
 ├── index.ts
 ├── registry.ts
 ├── types.ts
-├── catalog/
-│   ├── ClassProgression.ts
-│   └── XanatharSubclasses.ts
 └── classes/
-    ├── artificer/
-    ├── barbarian/
-    ├── bard/
-    ├── cleric/
-    ├── druid/
-    ├── fighter/
-    ├── monk/
-    ├── paladin/
-    ├── ranger/
-    ├── rogue/
-    ├── sorcerer/
-    ├── warlock/
-    └── wizard/
+    └── warlock/
+        ├── index.ts
+        └── subclasses/
+            ├── index.ts
+            └── hexblade/
+                └── index.ts
 ```
 
-`catalog/` contains the progression definitions migrated from the old model,
-including their stable feature IDs. `fromCatalog.ts` converts each class into an
-authoritative `ClassProgressionModule`, and `registry.ts` registers all thirteen
-classes.
+Each class owns its metadata, level features, cantrip progression, and the
+subclass collection exported by its `subclasses/index.ts`.
 
-`ExpandedClassProgression.ts` consumes this registry directly. It no longer
-merges a separate Xanathar fallback from `models/leveling`.
+Each concrete subclass owns its features in a nested folder. The class-level
+subclass index only imports and collects those modules.
 
-## Compatibility
+## Adding a class
 
-These files remain as thin compatibility exports:
-
-- `src/models/leveling/ClassProgression.ts`
-- `src/models/leveling/XanatharSubclasses.ts`
-
-They contain no progression data. Existing imports continue to work while new
-code should import from `src/data/classProgression`.
-
-## Adding or replacing class data
-
-A class module may replace or extend catalog data:
+Define the complete class progression in its class module:
 
 ```ts
-import { defineClassProgression, defineFeature } from "../../builders"
+import {
+  defineClassProgression,
+  feature,
+  withAbilityScoreImprovements,
+} from "../../builders"
 import { warlockSubclasses } from "./subclasses"
 
 export const warlockProgression = defineClassProgression({
   className: "warlock",
-  featureMergeMode: "replace",
-  features: [
-    defineFeature({
-      id: "pact-magic-1",
-      name: "Pact Magic",
-      level: 1,
-      source: "PHB",
-    }),
-  ],
+  label: "Warlock",
+  hitDie: "d8",
+  source: "PHB",
+  subclassLevel: 1,
+  cantripsKnown: { 1: 2, 4: 3, 10: 4 },
+  features: withAbilityScoreImprovements("warlock", [
+    feature(1, "Otherworldly Patron"),
+    feature(1, "Pact Magic"),
+  ]),
   subclasses: warlockSubclasses,
 })
 ```
 
-Use explicit feature IDs whenever possible. Persisted abilities refer to these
-IDs, so changing an existing ID is a data migration rather than a translation.
+Then register the module in `registry.ts`.
 
-## Adding or replacing subclass data
+## Adding a subclass
 
-A concrete subclass can live in a nested module such as
+Create a nested module such as
 `classes/warlock/subclasses/hexblade/index.ts`:
 
 ```ts
-import { defineSubclass, defineFeature } from "../../../../builders"
+import { defineSubclass, feature } from "../../../../builders"
 
 export const hexblade = defineSubclass({
   id: "hexblade",
   name: "The Hexblade",
   className: "warlock",
   source: "Xanathar",
-  mergeMode: "replace",
   features: [
-    defineFeature({
-      id: "hexblades-curse-1",
-      name: "Hexblade's Curse",
-      level: 1,
-      source: "Xanathar",
-    }),
+    feature(1, "Hexblade's Curse", "Xanathar"),
+    feature(1, "Hex Warrior", "Xanathar"),
   ],
 })
 ```
 
-Then import it from the class-level `subclasses/index.ts` and replace the
-catalog-derived class module when that class is migrated to fully explicit
-files.
+Then import it from `classes/warlock/subclasses/index.ts`.
 
-## Complete Ability configuration
+## Stable feature IDs
 
-A feature may carry an optional `ability` object. It accepts every behavioral
-and content field from `Ability`. The progression feature owns the stable ID,
-while `originalAbilityId` and acquisition metadata remain runtime-generated.
+`feature()` derives the existing stable ID from the original feature name and
+level. Pass an explicit `id` in the extra configuration only when the generated
+ID must be overridden. Persisted abilities refer to these IDs, so changing one
+requires a data migration.
+
+## Complete ability configuration
+
+A feature may provide an `ability` configuration. The progression feature owns
+the stable feature ID, while runtime acquisition metadata and consumed-use
+state remain character-owned.
 
 ```ts
-import { defineProgressionAbility } from "../../models/leveling/ProgressionAbilityConfig"
+import { feature } from "../../builders"
+import { defineProgressionAbility } from "../../../models/leveling/ProgressionAbilityConfig"
 
-const ability = defineProgressionAbility({
-  kind: "active",
-  category: "general",
-  actionKind: "bonusAction",
-  effectDuration: "lasting",
-  effectDurationText: "For 1 minute.",
-  effectPersistence: "untilEnd",
-  trigger: "onHit",
-  usage: {
-    max: 1,
-    maxFormula: "character.proficiencyBonus",
-    used: 0,
-    reset: "longRest",
-  },
-  grantedSpells: [],
-  grantedProficiencies: [],
-  bonuses: {},
-  benefitsActive: false,
+const configuredFeature = feature(3, "Example Feature", "PHB", {
+  ability: defineProgressionAbility({
+    kind: "active",
+    category: "general",
+    actionKind: "bonusAction",
+    effectDuration: "lasting",
+    effectDurationText: "For 1 minute.",
+    effectPersistence: "untilEnd",
+    trigger: "onHit",
+    usage: {
+      max: 1,
+      maxFormula: "character.proficiencyBonus",
+      used: 0,
+      reset: "longRest",
+    },
+    grantedSpells: [],
+    grantedProficiencies: [],
+    bonuses: {},
+    benefitsActive: false,
+  }),
 })
 ```
 
-Explicit ability configuration is applied after inferred mechanics and is
-therefore authoritative.
-
-## Merge behavior
-
-- Omitted sections keep the current catalog data.
-- `extend` replaces matching IDs and keeps unmatched definitions.
-- `replace` makes the module authoritative for that class or subclass section.
-
-The migrated class modules currently use `replace` for definitions, features,
-and subclasses, so the application is fed entirely from the new data layer.
+There is no aggregate catalog or legacy fallback. The class and subclass files
+under `classes/` are the runtime source used by character creation, level-up,
+spell selection, and feature materialization.

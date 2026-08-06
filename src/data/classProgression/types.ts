@@ -1,50 +1,70 @@
+import type { DieSides } from "../../models/dice/Die"
 import type { ProgressionAbilityConfig } from "../../models/leveling/ProgressionAbilityConfig"
-import type { ClassName } from "../../models/sheet/Class"
-import type {
-  ClassProgressionDefinition,
-  LevelFeatureDefinition,
-  SubclassDefinition,
-} from "./catalog/ClassProgression"
+import type { ClassName, ClassSourceBook } from "../../models/sheet/Class"
 
-export type ProgressionMergeMode = "extend" | "replace"
+export type LevelChoiceKind =
+  | "fighting-style"
+  | "expertise"
+  | "metamagic"
+  | "pact-boon"
+  | "invocation"
+  | "maneuver"
+  | "infusion"
+  | "elemental-discipline"
+  | "rune"
+  | "subclass-option"
+  | "asi"
+  | "optional-feature"
+  | "custom"
 
-/**
- * LevelFeatureDefinition with an optional complete Ability template.
- *
- * Existing progression features remain valid because `ability` is optional.
- */
-export type ConfiguredLevelFeatureDefinition = LevelFeatureDefinition & {
+export type LevelChoiceDefinition = {
+  id: string
+  label: string
+  kind: LevelChoiceKind
+  count: number
+  options?: string[]
+  allowCustom?: boolean
+  description?: string
+}
+
+export type LevelFeatureDefinition = {
+  id: string
+  name: string
+  level: number
+  source: ClassSourceBook
+  optional?: boolean
+  description?: string
+  choice?: LevelChoiceDefinition
   ability?: ProgressionAbilityConfig
 }
 
-/**
- * One subclass module. Each concrete subclass can live in its own nested folder
- * and be collected by the class-level `subclasses/index.ts` file.
- */
-export type SubclassProgressionModule<
+export type SubclassDefinition<
   TClassName extends ClassName = ClassName,
-> = Omit<SubclassDefinition, "className" | "features"> & {
+> = {
+  id: string
+  name: string
   className: TClassName
-  features: ConfiguredLevelFeatureDefinition[]
-  mergeMode?: ProgressionMergeMode
+  source: ClassSourceBook
+  features: LevelFeatureDefinition[]
 }
 
-/**
- * Incremental module for one class. Omitted properties keep their current
- * values, while `replace` makes the module authoritative for that section.
- */
-export type ClassProgressionModule<
+export type ClassProgressionDefinition<
   TClassName extends ClassName = ClassName,
 > = {
   className: TClassName
-  definition?: Partial<
-    Pick<
-      ClassProgressionDefinition,
-      "label" | "hitDie" | "source" | "subclassLevel" | "cantripsKnown"
-    >
-  >
-  features?: ConfiguredLevelFeatureDefinition[]
-  featureMergeMode?: ProgressionMergeMode
-  subclasses?: SubclassProgressionModule<TClassName>[]
-  subclassMergeMode?: ProgressionMergeMode
+  label: string
+  hitDie: DieSides
+  source: ClassSourceBook
+  subclassLevel: number
+  features: LevelFeatureDefinition[]
+  subclasses: SubclassDefinition<TClassName>[]
+  cantripsKnown?: Partial<Record<number, number>>
 }
+
+export type ConfiguredLevelFeatureDefinition = LevelFeatureDefinition
+export type SubclassProgressionModule<
+  TClassName extends ClassName = ClassName,
+> = SubclassDefinition<TClassName>
+export type ClassProgressionModule<
+  TClassName extends ClassName = ClassName,
+> = ClassProgressionDefinition<TClassName>
