@@ -1,2 +1,3 @@
 Trigger the one-time progression migration workflow.
 Retry after adding the remaining direct consumers.
+Retry with lockfile-preserving dependency installation.
