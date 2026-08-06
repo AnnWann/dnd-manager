@@ -4,7 +4,7 @@ import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import { getExperienceProgress } from "../../../models/characters/characterExperience"
+import { getExperienceProgress } from "../../../models/characters/CharacterProgression"
 
 type Props = {
   character: CharacterTemplate
