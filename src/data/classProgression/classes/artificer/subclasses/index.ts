@@ -1,3 +1,11 @@
-import type { SubclassProgressionModule } from "../../../types"
+import { alchemist } from "./alchemist"
+import { armorer } from "./armorer"
+import { artillerist } from "./artillerist"
+import { battleSmith } from "./battle-smith"
 
-export const artificerSubclasses: SubclassProgressionModule<"artificer">[] = []
+export const artificerSubclasses = [
+  alchemist,
+  armorer,
+  artillerist,
+  battleSmith,
+]
