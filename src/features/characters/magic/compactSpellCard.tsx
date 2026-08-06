@@ -6,7 +6,7 @@ import { useMagicContext } from "../../../contexts/magicContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
   getClassPreparedSpellLimit,
-} from "../../../models/leveling/ClassDefinitions"
+} from "../../../models/characters/CharacterProgression"
 import type { Spell } from "../../../models/magic/spells/Spell"
 import type { SpellSource } from "../../../models/magic/spells/SpellSource"
 import { SpellCard } from "./spellCard"
