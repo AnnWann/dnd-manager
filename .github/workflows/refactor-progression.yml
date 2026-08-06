@@ -57,10 +57,42 @@ jobs:
           } from "../../../data/classProgression"''',
           )
 
+          for path, import_line in [
+              (
+                  "src/features/characters/progression/CharacterProgressionFlow.tsx",
+                  'import "../../../models/leveling/ExpandedClassProgression"\n',
+              ),
+              (
+                  "src/features/characters/creation/characterCreationWizard.tsx",
+                  'import "../../../models/leveling/ExpandedClassProgression"\n',
+              ),
+              (
+                  "src/views/user/UserCharacterLevelUpView.tsx",
+                  'import "../../models/leveling/ExpandedClassProgression"\n',
+              ),
+          ]:
+              replace(path, import_line, "")
+
           replace(
-              "src/features/characters/progression/CharacterProgressionFlow.tsx",
-              'import "../../../models/leveling/ExpandedClassProgression"\n',
-              "",
+              "src/features/characters/creation/IntegratedCharacterCreationWizard.tsx",
+              '''import {
+            getExpandedClassProgression,
+            getExpandedFeaturesAtLevel,
+          } from "../../../models/leveling/ExpandedClassProgression"''',
+              '''import {
+            getClassProgression,
+            getFeaturesAtLevel,
+          } from "../../../data/classProgression"''',
+          )
+          replace(
+              "src/features/characters/creation/IntegratedCharacterCreationWizard.tsx",
+              "getExpandedClassProgression",
+              "getClassProgression",
+          )
+          replace(
+              "src/features/characters/creation/IntegratedCharacterCreationWizard.tsx",
+              "getExpandedFeaturesAtLevel",
+              "getFeaturesAtLevel",
           )
 
           replace(
