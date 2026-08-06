@@ -10,7 +10,7 @@ import type {
 import {
   EXPANDED_CLASS_PROGRESSIONS,
   type ClassProgressionDefinition,
-} from "../leveling/ExpandedClassProgression"
+} from "./ExpandedClassProgression"
 
 export type ClassDefinition = ClassProgressionDefinition & {
   displayName: string
