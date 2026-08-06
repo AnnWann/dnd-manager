@@ -1,6 +1,6 @@
 import type { ActionType } from "../models/actions/Actions";
 import type { DieSides } from "../models/dice/Die";
-import { CLASS_DEFINITIONS } from "../models/leveling/ClassDefinitions";
+import { CLASS_DEFINITIONS } from "../models/characters/CharacterProgression";
 import type { MagicSchool } from "../models/magic/spells/spellDefinitions";
 import type { Attribute } from "../models/sheet/Attribute";
 import type { ClassName } from "../models/sheet/Class";
