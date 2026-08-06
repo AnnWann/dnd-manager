@@ -1,7 +1,5 @@
 import { defineSubclass, feature } from "../../../../builders"
 
-const KENSEI_WEAPONS = ["Battleaxe", "Longsword", "Warhammer", "Whip", "Longbow", "Shortbow", "Heavy Crossbow", "Hand Crossbow", "Light Crossbow"]
-
 export const kensei = defineSubclass({
   id: "kensei",
   name: "Way of the Kensei",

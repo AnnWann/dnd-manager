@@ -11,9 +11,9 @@ import {
   getDynamicSubclassSpellGrants,
 } from "./DynamicSubclassSpellRules"
 import {
-  getExpandedCantripsKnownAtLevel,
-  getExpandedClassProgression,
-} from "./ExpandedClassProgression"
+  getCantripsKnownAtLevel,
+  getClassProgression,
+} from "../../data/classProgression"
 
 export type SpellSelectionMode =
   | "none"
@@ -419,7 +419,7 @@ export function canReplaceMetamagicAtLevel(sorcererLevel: number): boolean {
 }
 
 export function getSubclassOptions(className: ClassName) {
-  return getExpandedClassProgression(className).subclasses
+  return getClassProgression(className).subclasses
 }
 
 export function createClassEntry(
@@ -544,7 +544,7 @@ function getMaximumSpellLevel(
 }
 
 function getCantripLimit(className: ClassName, level: number): number {
-  const fromProgression = getExpandedCantripsKnownAtLevel(className, level)
+  const fromProgression = getCantripsKnownAtLevel(className, level)
   if (fromProgression > 0) return fromProgression
   return FALLBACK_CANTRIPS[className]?.[level] ?? 0
 }

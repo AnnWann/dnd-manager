@@ -6,7 +6,6 @@ import {
   type ComponentProps,
 } from "react"
 
-import "../../../models/leveling/ExpandedClassProgression"
 import {
   createEmptyCharacterCreationIdentity,
   type CharacterCreationIdentity,

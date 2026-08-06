@@ -31,9 +31,9 @@ import {
   getDynamicSubclassSpellGrants,
 } from "../../../models/leveling/DynamicSubclassSpellRules"
 import {
-  getExpandedClassProgression,
-  getExpandedFeaturesAtLevel,
-} from "../../../models/leveling/ExpandedClassProgression"
+  getClassProgression,
+  getFeaturesAtLevel,
+} from "../../../data/classProgression"
 import {
   applyClassProficiencies,
   getClassProficiencyRule,
@@ -576,7 +576,7 @@ export function IntegratedCharacterCreationWizard({
     }
 
     for (const plan of classPlans) {
-      const progression = getExpandedClassProgression(plan.className)
+      const progression = getClassProgression(plan.className)
       if (
         plan.level >= progression.subclassLevel &&
         progression.subclasses.length &&
@@ -586,7 +586,7 @@ export function IntegratedCharacterCreationWizard({
       }
 
       for (let level = 1; level <= plan.level; level += 1) {
-        for (const feature of getExpandedFeaturesAtLevel(
+        for (const feature of getFeaturesAtLevel(
           plan.className,
           level,
           plan.subclassId,
@@ -663,7 +663,7 @@ export function IntegratedCharacterCreationWizard({
       ).map((skill) => [skill, "proficient"]),
     )
     const classes = classPlans.map((plan) => {
-      const subclass = getExpandedClassProgression(
+      const subclass = getClassProgression(
         plan.className,
       ).subclasses.find((entry) => entry.id === plan.subclassId)
       return {
@@ -1536,7 +1536,7 @@ function ClassesStep({
       </StepSection>
 
       {classPlans.map((plan, index) => {
-        const progression = getExpandedClassProgression(plan.className)
+        const progression = getClassProgression(plan.className)
         const subclassRequired = plan.level >= progression.subclassLevel
         const proficiencyRule = getClassProficiencyRule(plan.className)
         const skillRule =
@@ -1548,7 +1548,7 @@ function ClassesStep({
           { length: plan.level },
           (_, levelIndex) => levelIndex + 1,
         ).flatMap((level) =>
-          getExpandedFeaturesAtLevel(
+          getFeaturesAtLevel(
             plan.className,
             level,
             plan.subclassId,
@@ -2197,7 +2197,7 @@ function ReviewStep({
             value={classPlans
               .map(
                 (plan) =>
-                  `${getClassNamePt(plan.className)} ${plan.level}${plan.subclassId ? ` — ${getExpandedClassProgression(plan.className).subclasses.find((entry) => entry.id === plan.subclassId)?.name ?? plan.subclassId}` : ""}`,
+                  `${getClassNamePt(plan.className)} ${plan.level}${plan.subclassId ? ` — ${getClassProgression(plan.className).subclasses.find((entry) => entry.id === plan.subclassId)?.name ?? plan.subclassId}` : ""}`,
               )
               .join(" / ")}
           />
@@ -2534,7 +2534,7 @@ function createDraftCharacter({
         attributes,
         race,
         classes: classPlans.map((plan) => {
-          const subclass = getExpandedClassProgression(
+          const subclass = getClassProgression(
             plan.className,
           ).subclasses.find((entry) => entry.id === plan.subclassId)
           return {

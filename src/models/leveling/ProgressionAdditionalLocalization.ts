@@ -1,4 +1,4 @@
-import type { ClassProgressionDefinition } from "./ClassProgression"
+import type { ClassProgressionDefinition } from "../../data/classProgression/types"
 import type { ClassName } from "../sheet/Class"
 
 const FEATURE_NAMES: Record<string, string> = {

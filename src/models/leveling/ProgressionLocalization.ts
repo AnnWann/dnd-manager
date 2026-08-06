@@ -2,7 +2,7 @@ import type {
   ClassProgressionDefinition,
   LevelChoiceDefinition,
   LevelFeatureDefinition,
-} from "./ClassProgression"
+} from "../../data/classProgression/types"
 import type { ClassName } from "../sheet/Class"
 
 const CLASS_LABELS: Record<ClassName, string> = {

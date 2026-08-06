@@ -1,7 +1,5 @@
 import { defineSubclass, feature } from "../../../../builders"
 
-const RUNE_KNIGHT_RUNES = ["Cloud Rune", "Fire Rune", "Frost Rune", "Stone Rune", "Hill Rune", "Storm Rune"]
-
 export const runeKnight = defineSubclass({
   id: "rune-knight",
   name: "Rune Knight",

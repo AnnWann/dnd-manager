@@ -5,8 +5,6 @@ import {
 } from "../../builders"
 import { artificerSubclasses } from "./subclasses"
 
-const ARTIFICER_INFUSIONS = ["Arcane Propulsion Armor", "Armor of Magical Strength", "Boots of the Winding Path", "Enhanced Arcane Focus", "Enhanced Defense", "Enhanced Weapon", "Helm of Awareness", "Homunculus Servant", "Mind Sharpener", "Radiant Weapon", "Repeating Shot", "Replicate Magic Item", "Repulsion Shield", "Resistant Armor", "Returning Weapon", "Spell-Refueling Ring"]
-
 export const artificerProgression = defineClassProgression({
   className: "artificer",
   label: "Artificer",

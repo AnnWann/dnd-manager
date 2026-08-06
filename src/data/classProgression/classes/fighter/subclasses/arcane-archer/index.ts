@@ -1,7 +1,5 @@
 import { defineSubclass, feature } from "../../../../builders"
 
-const ARCANE_SHOTS = ["Banishing Arrow", "Beguiling Arrow", "Bursting Arrow", "Enfeebling Arrow", "Grasping Arrow", "Piercing Arrow", "Seeking Arrow", "Shadow Arrow"]
-
 export const arcaneArcher = defineSubclass({
   id: "arcane-archer",
   name: "Arcane Archer",

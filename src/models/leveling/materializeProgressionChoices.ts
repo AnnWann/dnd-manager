@@ -2,9 +2,9 @@ import type { Ability } from "../abilities/Ability"
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import type { ClassName } from "../sheet/Class"
 import {
-  getExpandedClassProgression,
-  getExpandedFeaturesAtLevel,
-} from "./ExpandedClassProgression"
+  getClassProgression,
+  getFeaturesAtLevel,
+} from "../../data/classProgression"
 import { getProgressionChoiceDescription } from "./ProgressionChoiceDescriptions"
 
 const SUBCLASS_MARKER_NAMES: Record<ClassName, string[]> = {
@@ -31,7 +31,7 @@ export function materializeProgressionChoices(
   const subclassRenames = new Map<string, { name: string; description: string }>()
 
   for (const classEntry of character.get("sheet").classes ?? []) {
-    const progression = getExpandedClassProgression(classEntry.className)
+    const progression = getClassProgression(classEntry.className)
     const subclass = progression.subclasses.find(
       (entry) => entry.id === classEntry.subclass?.id,
     )
@@ -46,7 +46,7 @@ export function materializeProgressionChoices(
     }
 
     for (let level = 1; level <= classEntry.level; level += 1) {
-      for (const feature of getExpandedFeaturesAtLevel(
+      for (const feature of getFeaturesAtLevel(
         classEntry.className,
         level,
         classEntry.subclass?.id,

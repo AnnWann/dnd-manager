@@ -13,7 +13,7 @@ import {
   getClassProgression,
   getFeaturesAtLevel,
   type LevelFeatureDefinition,
-} from "../../../models/leveling/ClassProgression"
+} from "../../../data/classProgression"
 import {
   checkMulticlassRequirements,
   formatClassMulticlassRequirement,

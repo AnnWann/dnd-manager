@@ -1,7 +1,5 @@
 import { defineSubclass, feature } from "../../../../builders"
 
-const BATTLE_MASTER_MANEUVERS = ["Commander's Strike", "Disarming Attack", "Distracting Strike", "Evasive Footwork", "Feinting Attack", "Goading Attack", "Lunging Attack", "Maneuvering Attack", "Menacing Attack", "Parry", "Precision Attack", "Pushing Attack", "Rally", "Riposte", "Sweeping Attack", "Trip Attack", "Ambush", "Bait and Switch", "Brace", "Commanding Presence", "Grappling Strike", "Quick Toss", "Tactical Assessment"]
-
 export const battleMaster = defineSubclass({
   id: "battle-master",
   name: "Battle Master",

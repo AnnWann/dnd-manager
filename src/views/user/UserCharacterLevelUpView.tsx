@@ -4,7 +4,6 @@ import { CharacterProgressionFlow } from "../../features/characters/progression/
 import { LevelUpSpellSelectionModal } from "../../features/characters/progression/LevelUpSpellSelectionModal"
 import { useCharacterWorkspace } from "../../features/characters/workspace/CharacterWorkspaceContext"
 import { UserCharacterWorkspace } from "../../features/characters/workspace/UserCharacterWorkspace"
-import "../../models/leveling/ExpandedClassProgression"
 import { materializeProgressionChoices } from "../../models/leveling/materializeProgressionChoices"
 import { prepareCharacterForProgression } from "../../models/leveling/prepareCharacterForProgression"
 import { refreshProgressionFeatureMechanics } from "../../models/leveling/refreshProgressionFeatureMechanics"

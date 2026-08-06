@@ -13,7 +13,7 @@ import {
   getClassProgression,
   getFeaturesAtLevel,
   type LevelFeatureDefinition,
-} from "./ClassProgression"
+} from "../../data/classProgression"
 import {
   createClassEntry,
   getSubclassSpellGrants,

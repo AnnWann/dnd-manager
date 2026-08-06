@@ -7,7 +7,6 @@ import {
   restoreStoredProgressionAttributes,
 } from "../../../lib/characterProgression/progressionCharacterSnapshot"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import "../../../models/leveling/ExpandedClassProgression"
 import {
   applyClassProficiencies,
   validateClassProficiencySelections,
