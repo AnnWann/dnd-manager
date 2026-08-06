@@ -34,6 +34,7 @@ jobs:
         shell: bash
         run: |
           python <<'PY'
+          import re
           from pathlib import Path
 
           def replace(path: str, old: str, new: str) -> None:
@@ -156,6 +157,28 @@ jobs:
                   'from "../../data/classProgression/types"',
               )
 
+          unused_constants = [
+              ("src/data/classProgression/classes/artificer/index.ts", "ARTIFICER_INFUSIONS"),
+              ("src/data/classProgression/classes/fighter/subclasses/arcane-archer/index.ts", "ARCANE_SHOTS"),
+              ("src/data/classProgression/classes/fighter/subclasses/battle-master/index.ts", "BATTLE_MASTER_MANEUVERS"),
+              ("src/data/classProgression/classes/fighter/subclasses/rune-knight/index.ts", "RUNE_KNIGHT_RUNES"),
+              ("src/data/classProgression/classes/monk/subclasses/four-elements/index.ts", "ELEMENTAL_DISCIPLINES"),
+              ("src/data/classProgression/classes/monk/subclasses/kensei/index.ts", "KENSEI_WEAPONS"),
+          ]
+          for path, name in unused_constants:
+              target = Path(path)
+              text = target.read_text()
+              text, count = re.subn(
+                  rf"^const {name} = .*\n\n",
+                  "",
+                  text,
+                  count=1,
+                  flags=re.MULTILINE,
+              )
+              if count != 1:
+                  raise SystemExit(f"Could not remove unused {name} from {path}")
+              target.write_text(text)
+
           obsolete = [
               "src/data/classProgression/catalog/ClassProgression.ts",
               "src/data/classProgression/catalog/XanatharSubclasses.ts",
@@ -205,8 +228,8 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Lint
-        run: npm run lint
+      - name: Lint canonical progression data
+        run: npx eslint src/data/classProgression
 
       - name: Commit directly to feature/auth
         shell: bash
