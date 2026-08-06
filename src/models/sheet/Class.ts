@@ -5,7 +5,7 @@ import {
   getClassKnownSpellsRule,
   getClassSpellcastingProgression,
   getLegacyClassRuleOverrides,
-} from "../leveling/ClassDefinitions"
+} from "../characters/CharacterProgression"
 import type { Attribute } from "./Attribute"
 
 export type SpellcastingProgression = "full" | "half" | "third"
@@ -66,7 +66,7 @@ export type SerializedKnownSpellsRule = Omit<
   KnownSpellsRule,
   "canPrepare"
 > & {
-  /** Compatibility marker for consumers not yet using ClassDefinitions. */
+  /** Compatibility marker for consumers not yet using CharacterProgression. */
   canPrepare?: true
 }
 
