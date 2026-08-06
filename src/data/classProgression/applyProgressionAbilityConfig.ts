@@ -2,13 +2,13 @@ import type { Ability } from "../../models/abilities/Ability"
 import {
   createCharacterAcquisition,
 } from "../../models/characters/CharacterAcquisition"
-import {
-  getClassProgression,
-  type LevelFeatureDefinition,
-} from "../../models/leveling/ClassProgression"
 import type { ProgressionAbilityConfig } from "../../models/leveling/ProgressionAbilityConfig"
 import type { ClassName } from "../../models/sheet/Class"
-import type { ConfiguredLevelFeatureDefinition } from "./types"
+import { getClassProgression } from "./registry"
+import type {
+  ConfiguredLevelFeatureDefinition,
+  LevelFeatureDefinition,
+} from "./types"
 
 const CLASS_NAMES: readonly ClassName[] = [
   "artificer",
