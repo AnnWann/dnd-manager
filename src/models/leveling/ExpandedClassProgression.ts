@@ -1,39 +1,21 @@
-import { applyConfiguredClassProgressions } from "../../data/classProgression"
-import type { ClassName } from "../sheet/Class"
 import {
+  applyConfiguredClassProgressions,
   CLASS_PROGRESSIONS,
   getCantripsKnownAtLevel,
   getClassProgression,
   getFeaturesAtLevel,
   type ClassProgressionDefinition,
-} from "./ClassProgression"
+} from "../../data/classProgression"
+import type { ClassName } from "../sheet/Class"
 import { applyAdditionalProgressionLocalization } from "./ProgressionAdditionalLocalization"
 import { localizeProgressionDefinitions } from "./ProgressionLocalization"
 import { localizeRemainingSubclasses } from "./SubclassLocalization"
-import { XANATHAR_SUBCLASSES } from "./XanatharSubclasses"
 
 let expanded = false
 
 function ensureExpandedProgressions(): void {
   if (expanded) return
   expanded = true
-
-  for (const [rawClassName, additions] of Object.entries(
-    XANATHAR_SUBCLASSES,
-  )) {
-    const className = rawClassName as ClassName
-    const progression = CLASS_PROGRESSIONS[className]
-    if (!progression || !additions?.length) continue
-
-    const existingIds = new Set(
-      progression.subclasses.map((subclass) => subclass.id),
-    )
-
-    progression.subclasses = [
-      ...progression.subclasses,
-      ...additions.filter((subclass) => !existingIds.has(subclass.id)),
-    ]
-  }
 
   applyConfiguredClassProgressions(CLASS_PROGRESSIONS)
   localizeProgressionDefinitions(CLASS_PROGRESSIONS)
