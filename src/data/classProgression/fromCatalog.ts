@@ -21,16 +21,14 @@ export function defineCatalogClassProgression<
     SubclassProgressionModule<TClassName>
   >()
 
-  for (const subclass of [
-    ...progression.subclasses,
-    ...(XANATHAR_SUBCLASSES[className] ?? []),
-  ]) {
-    subclasses.set(subclass.id, {
-      ...subclass,
-      className,
-      features: [...subclass.features],
-      mergeMode: "replace",
-    })
+  for (const subclass of progression.subclasses) {
+    subclasses.set(subclass.id, toModule(className, subclass))
+  }
+
+  for (const subclass of XANATHAR_SUBCLASSES[className] ?? []) {
+    if (!subclasses.has(subclass.id)) {
+      subclasses.set(subclass.id, toModule(className, subclass))
+    }
   }
 
   return defineClassProgression({
@@ -49,4 +47,16 @@ export function defineCatalogClassProgression<
     subclasses: Array.from(subclasses.values()),
     subclassMergeMode: "replace",
   })
+}
+
+function toModule<TClassName extends ClassName>(
+  className: TClassName,
+  subclass: (typeof CLASS_PROGRESSIONS)[ClassName]["subclasses"][number],
+): SubclassProgressionModule<TClassName> {
+  return {
+    ...subclass,
+    className,
+    features: [...subclass.features],
+    mergeMode: "replace",
+  }
 }
