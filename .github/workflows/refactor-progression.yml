@@ -199,6 +199,8 @@ jobs:
 
       - name: Install dependencies without rewriting the existing lockfile
         run: npm install --package-lock=false
+        env:
+          DIRECT_URL: postgresql://user:password@localhost:5432/dnd_manager
 
       - name: Build
         run: npm run build
