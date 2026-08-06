@@ -1,31 +1,59 @@
 # Class progression data
 
-This directory is the destination for class and subclass progression rules.
-The existing aggregate in `src/models/leveling/ClassProgression.ts` remains the
-fallback while definitions are migrated gradually.
+This directory is the canonical source for class and subclass progression rules.
+The former aggregate files in `src/models/leveling` now only re-export this data
+for compatibility with older imports.
 
-## Folder convention
+## Current structure
 
 ```text
 classProgression/
+├── applyClassProgressionModules.ts
 ├── builders.ts
-├── types.ts
+├── fromCatalog.ts
+├── index.ts
 ├── registry.ts
+├── types.ts
+├── catalog/
+│   ├── ClassProgression.ts
+│   └── XanatharSubclasses.ts
 └── classes/
-    └── warlock/
-        ├── index.ts
-        └── subclasses/
-            ├── index.ts
-            └── hexblade/
-                └── index.ts
+    ├── artificer/
+    ├── barbarian/
+    ├── bard/
+    ├── cleric/
+    ├── druid/
+    ├── fighter/
+    ├── monk/
+    ├── paladin/
+    ├── ranger/
+    ├── rogue/
+    ├── sorcerer/
+    ├── warlock/
+    └── wizard/
 ```
 
-Each class is registered in `registry.ts`. Each class-level `subclasses/index.ts`
-collects concrete subclass modules from nested folders.
+`catalog/` contains the progression definitions migrated from the old model,
+including their stable feature IDs. `fromCatalog.ts` converts each class into an
+authoritative `ClassProgressionModule`, and `registry.ts` registers all thirteen
+classes.
 
-## Migrating one class
+`ExpandedClassProgression.ts` consumes this registry directly. It no longer
+merges a separate Xanathar fallback from `models/leveling`.
 
-Populate the class module and mark the features as authoritative:
+## Compatibility
+
+These files remain as thin compatibility exports:
+
+- `src/models/leveling/ClassProgression.ts`
+- `src/models/leveling/XanatharSubclasses.ts`
+
+They contain no progression data. Existing imports continue to work while new
+code should import from `src/data/classProgression`.
+
+## Adding or replacing class data
+
+A class module may replace or extend catalog data:
 
 ```ts
 import { defineClassProgression, defineFeature } from "../../builders"
@@ -46,12 +74,12 @@ export const warlockProgression = defineClassProgression({
 })
 ```
 
-Use explicit feature IDs whenever possible. Persisted abilities include these
+Use explicit feature IDs whenever possible. Persisted abilities refer to these
 IDs, so changing an existing ID is a data migration rather than a translation.
 
-## Migrating one subclass
+## Adding or replacing subclass data
 
-Create a nested module such as
+A concrete subclass can live in a nested module such as
 `classes/warlock/subclasses/hexblade/index.ts`:
 
 ```ts
@@ -74,7 +102,9 @@ export const hexblade = defineSubclass({
 })
 ```
 
-Then import it from the class-level `subclasses/index.ts`.
+Then import it from the class-level `subclasses/index.ts` and replace the
+catalog-derived class module when that class is migrated to fully explicit
+files.
 
 ## Complete Ability configuration
 
@@ -83,46 +113,37 @@ and content field from `Ability`. The progression feature owns the stable ID,
 while `originalAbilityId` and acquisition metadata remain runtime-generated.
 
 ```ts
-import { defineProgressionAbility } from "../../../../../models/leveling/ProgressionAbilityConfig"
+import { defineProgressionAbility } from "../../models/leveling/ProgressionAbilityConfig"
 
-const feature = defineFeature({
-  id: "example-feature-3",
-  name: "Example Feature",
-  level: 3,
-  source: "PHB",
-  description: "Rules text shown by the progression wizard.",
-  ability: defineProgressionAbility({
-    kind: "active",
-    category: "general",
-    actionKind: "bonusAction",
-    effectDuration: "lasting",
-    effectDurationText: "For 1 minute.",
-    effectPersistence: "untilEnd",
-    trigger: "onHit",
-    usage: {
-      max: 1,
-      maxFormula: "character.proficiencyBonus",
-      used: 0,
-      reset: "longRest",
-    },
-    grantedSpells: [],
-    grantedProficiencies: [],
-    bonuses: {},
-    benefitsActive: false,
-  }),
+const ability = defineProgressionAbility({
+  kind: "active",
+  category: "general",
+  actionKind: "bonusAction",
+  effectDuration: "lasting",
+  effectDurationText: "For 1 minute.",
+  effectPersistence: "untilEnd",
+  trigger: "onHit",
+  usage: {
+    max: 1,
+    maxFormula: "character.proficiencyBonus",
+    used: 0,
+    reset: "longRest",
+  },
+  grantedSpells: [],
+  grantedProficiencies: [],
+  bonuses: {},
+  benefitsActive: false,
 })
 ```
 
-Configured ability fields are applied after inferred mechanics, so the explicit
-configuration is authoritative. Existing features without `ability` continue to
-use `ProgressionFeatureMechanics.ts` and
-`ProgressionFeatureMechanicsAdditional.ts`.
+Explicit ability configuration is applied after inferred mechanics and is
+therefore authoritative.
 
 ## Merge behavior
 
-- Omitted sections keep the existing aggregate data.
+- Omitted sections keep the current catalog data.
 - `extend` replaces matching IDs and keeps unmatched definitions.
 - `replace` makes the module authoritative for that class or subclass section.
 
-This permits migration one feature, subclass, or class at a time without a
-single large cutover.
+The migrated class modules currently use `replace` for definitions, features,
+and subclasses, so the application is fed entirely from the new data layer.
