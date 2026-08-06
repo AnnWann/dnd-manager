@@ -1,5 +1,5 @@
 import type { CharacterTemplate } from '../../models/characters/CharacterTemplate'
-import { CLASS_DEFINITIONS } from '../../models/leveling/ClassDefinitions'
+import { CLASS_DEFINITIONS } from '../../models/characters/CharacterProgression'
 import type { Attribute } from '../../models/sheet/Attribute'
 import type { ClassName } from '../../models/sheet/Class'
 import type { Skill } from '../../models/sheet/Skills'
