@@ -1,3 +1,40 @@
-import { defineCatalogClassProgression } from "../../fromCatalog"
+import {
+  defineClassProgression,
+  feature,
+  withAbilityScoreImprovements,
+} from "../../builders"
+import { monkSubclasses } from "./subclasses"
 
-export const monkProgression = defineCatalogClassProgression("monk")
+export const monkProgression = defineClassProgression({
+  className: "monk",
+  label: "Monk",
+  hitDie: "d8",
+  source: "PHB",
+  subclassLevel: 3,
+  subclasses: monkSubclasses,
+  features: withAbilityScoreImprovements("monk", [
+    feature(1, "Unarmored Defense"),
+    feature(1, "Martial Arts"),
+    feature(2, "Ki"),
+    feature(2, "Unarmored Movement"),
+    feature(2, "Dedicated Weapon", "Tasha", { optional: true }),
+    feature(3, "Monastic Tradition"),
+    feature(3, "Deflect Missiles"),
+    feature(3, "Ki-Fueled Attack", "Tasha", { optional: true }),
+    feature(4, "Slow Fall"),
+    feature(4, "Quickened Healing", "Tasha", { optional: true }),
+    feature(5, "Extra Attack"),
+    feature(5, "Stunning Strike"),
+    feature(5, "Focused Aim", "Tasha", { optional: true }),
+    feature(6, "Ki-Empowered Strikes"),
+    feature(7, "Evasion"),
+    feature(7, "Stillness of Mind"),
+    feature(9, "Unarmored Movement Improvement"),
+    feature(10, "Purity of Body"),
+    feature(13, "Tongue of the Sun and Moon"),
+    feature(14, "Diamond Soul"),
+    feature(15, "Timeless Body"),
+    feature(18, "Empty Body"),
+    feature(20, "Perfect Self"),
+  ]),
+})
