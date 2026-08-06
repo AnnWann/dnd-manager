@@ -1,6 +1,6 @@
 // models/magic/spells/spellSlotProgression.ts
 
-import { getClassSpellcastingProgression } from "../../leveling/ClassDefinitions"
+import { getClassSpellcastingProgression } from "../../characters/CharacterProgression"
 import type { CharacterClassInterface } from "../../sheet/Class"
 import type { Slot } from "./LeveledSlots"
 import type { MagicCircleLevel } from "./spellDefinitions"
