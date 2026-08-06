@@ -7,7 +7,7 @@ import {
   getClassCastingAttribute,
   getClassDefinition,
   getClassSpellcastingProgression,
-} from "../../../../models/leveling/ClassDefinitions"
+} from "../../../../models/characters/CharacterProgression"
 import {
   getDerivedSorceryPointMaximum,
   getSorceryPointPool,
