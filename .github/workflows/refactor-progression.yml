@@ -6,6 +6,9 @@ on:
       - feature/auth
     paths:
       - .github/workflows/refactor-progression.yml
+  pull_request:
+    branches:
+      - feature/auth
   workflow_dispatch:
 
 permissions:
