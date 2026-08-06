@@ -1,1 +1,2 @@
 Trigger the one-time progression migration workflow.
+Retry after adding the remaining direct consumers.
