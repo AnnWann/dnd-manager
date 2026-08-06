@@ -1,7 +1,3 @@
-import { defineClassProgression } from "../../builders"
-import { artificerSubclasses } from "./subclasses"
+import { defineCatalogClassProgression } from "../../fromCatalog"
 
-export const artificerProgression = defineClassProgression({
-  className: "artificer",
-  subclasses: artificerSubclasses,
-})
+export const artificerProgression = defineCatalogClassProgression("artificer")
