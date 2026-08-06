@@ -1,10 +1,10 @@
 import type { ProgressionAbilityConfig } from "../../models/leveling/ProgressionAbilityConfig"
+import type { ClassName } from "../../models/sheet/Class"
 import type {
   ClassProgressionDefinition,
   LevelFeatureDefinition,
   SubclassDefinition,
-} from "../../models/leveling/ClassProgression"
-import type { ClassName } from "../../models/sheet/Class"
+} from "./catalog/ClassProgression"
 
 export type ProgressionMergeMode = "extend" | "replace"
 
@@ -30,9 +30,8 @@ export type SubclassProgressionModule<
 }
 
 /**
- * Incremental module for one class. During migration, omitted properties keep
- * their current values from the legacy aggregate. Setting a merge mode to
- * `replace` makes the module authoritative for that section.
+ * Incremental module for one class. Omitted properties keep their current
+ * values, while `replace` makes the module authoritative for that section.
  */
 export type ClassProgressionModule<
   TClassName extends ClassName = ClassName,
