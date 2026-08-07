@@ -50,6 +50,15 @@ function clampLevel(value: number, maxLevel: number): ClassLevel {
   return Math.max(1, Math.min(safeMaxLevel, value)) as ClassLevel
 }
 
+function slug(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("en-US")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+}
+
 export function SelectClassModule({
   character,
   classData,
@@ -92,6 +101,31 @@ export function SelectClassModule({
     })
   }
 
+  function updateSubclass(name: string) {
+    const trimmed = name.trim()
+    updateClass({
+      ...classData,
+      subclass: trimmed
+        ? {
+            id: classData.subclass?.id || slug(trimmed),
+            name,
+            source: classData.subclass?.source || "Manual",
+          }
+        : undefined,
+    })
+  }
+
+  function updateSubclassSource(source: string) {
+    if (!classData.subclass) return
+    updateClass({
+      ...classData,
+      subclass: {
+        ...classData.subclass,
+        source,
+      },
+    })
+  }
+
   function removeClass() {
     updateCharacterClasses((classes) =>
       classes.filter((_, index) => index !== classIndex),
@@ -101,11 +135,34 @@ export function SelectClassModule({
   const safeMaxLevel = Math.max(1, Math.min(20, Math.trunc(maxLevel) || 1))
 
   return (
-    <div className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 md:grid-cols-[1fr_100px_220px_220px_44px]">
-      <div className="min-w-0">
-        <div className="text-xs text-text">Classe</div>
-        <div className="truncate text-sm text-textH">
-          {CLASS_PT[classData.className]}
+    <div className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 md:grid-cols-[minmax(260px,1fr)_100px_220px_220px_44px]">
+      <div className="grid min-w-0 gap-2">
+        <div>
+          <div className="text-xs text-text">Classe</div>
+          <div className="truncate text-sm text-textH">
+            {CLASS_PT[classData.className]}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="text-xs text-text">
+            Subclasse
+            <Input
+              className="mt-1 h-9 px-2"
+              value={classData.subclass?.name ?? ""}
+              placeholder="Digite manualmente"
+              onChange={(event) => updateSubclass(event.target.value)}
+            />
+          </label>
+          <label className="text-xs text-text">
+            Fonte
+            <Input
+              className="mt-1 h-9 px-2"
+              value={classData.subclass?.source ?? ""}
+              disabled={!classData.subclass}
+              placeholder="Opcional"
+              onChange={(event) => updateSubclassSource(event.target.value)}
+            />
+          </label>
         </div>
       </div>
 
