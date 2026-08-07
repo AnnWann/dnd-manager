@@ -20,6 +20,33 @@ export const ALL_CLASS_NAMES: readonly ClassName[] = [
   "wizard",
 ]
 
+function thresholdTable(
+  entries: Array<[number, number]>,
+): Partial<Record<number, number>> {
+  const result: Partial<Record<number, number>> = {}
+  let current = 0
+
+  for (let level = 1; level <= 20; level += 1) {
+    const threshold = entries.find(([entryLevel]) => entryLevel === level)
+    if (threshold) current = threshold[1]
+    result[level] = current
+  }
+
+  return result
+}
+
+const CANTRIP_PROGRESSION: Partial<
+  Record<ClassName, Partial<Record<number, number>>>
+> = {
+  artificer: thresholdTable([[1, 2], [10, 3], [14, 4]]),
+  bard: thresholdTable([[1, 2], [4, 3], [10, 4]]),
+  cleric: thresholdTable([[1, 3], [4, 4], [10, 5]]),
+  druid: thresholdTable([[1, 2], [4, 3], [10, 4]]),
+  sorcerer: thresholdTable([[1, 4], [4, 5], [10, 6]]),
+  warlock: thresholdTable([[1, 2], [4, 3], [10, 4]]),
+  wizard: thresholdTable([[1, 3], [4, 4], [10, 5]]),
+}
+
 function classReference(
   className: ClassName,
   label: string,
@@ -33,14 +60,14 @@ function classReference(
     subclassLevel: 20,
     features: [],
     subclasses: [],
-    cantripsKnown: {},
+    cantripsKnown: CANTRIP_PROGRESSION[className] ?? {},
   }
 }
 
 /**
- * Only minimal mechanical class references are bundled. No subclass names,
- * feature names, feature text, choice lists, spell grants or progression tables
- * are shipped here.
+ * Only structural class metadata is bundled: identifiers, labels, hit dice and
+ * public spell-count progression. No subclass names, feature names, rules text,
+ * choice catalogs or spell grants are shipped here.
  */
 export const CLASS_PROGRESSIONS: Record<ClassName, ClassProgressionDefinition> = {
   artificer: classReference("artificer", "Artífice", "d8"),
@@ -58,7 +85,7 @@ export const CLASS_PROGRESSIONS: Record<ClassName, ClassProgressionDefinition> =
   wizard: classReference("wizard", "Mago", "d6"),
 }
 
-/** Compatibility export: there are intentionally no bundled progression modules. */
+/** Compatibility export: there are intentionally no bundled feature modules. */
 export const CLASS_PROGRESSION_MODULES = [] as const
 
 export function getClassProgression(
@@ -76,10 +103,10 @@ export function getFeaturesAtLevel(
   return []
 }
 
-/** Cantrip limits are no longer inferred by progression. */
 export function getCantripsKnownAtLevel(
-  _className: ClassName,
-  _level: number,
+  className: ClassName,
+  level: number,
 ): number {
-  return 0
+  const normalizedLevel = Math.max(1, Math.min(20, Math.trunc(level || 1)))
+  return CLASS_PROGRESSIONS[className].cantripsKnown?.[normalizedLevel] ?? 0
 }
