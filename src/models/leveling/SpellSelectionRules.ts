@@ -1,3 +1,4 @@
+import { getCantripsKnownAtLevel } from "../../data/classProgression"
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import type { Spell } from "../magic/spells/Spell"
 import type { MagicCircleLevel } from "../magic/spells/spellDefinitions"
@@ -69,16 +70,6 @@ const LIMITED_KNOWN: Partial<Record<ClassName, Record<number, number>>> = {
   ]),
 }
 
-const CANTRIPS: Partial<Record<ClassName, Record<number, number>>> = {
-  artificer: thresholdTable([[1, 2], [10, 3], [14, 4]]),
-  bard: thresholdTable([[1, 2], [4, 3], [10, 4]]),
-  cleric: thresholdTable([[1, 3], [4, 4], [10, 5]]),
-  druid: thresholdTable([[1, 2], [4, 3], [10, 4]]),
-  sorcerer: thresholdTable([[1, 4], [4, 5], [10, 6]]),
-  warlock: thresholdTable([[1, 2], [4, 3], [10, 4]]),
-  wizard: thresholdTable([[1, 3], [4, 4], [10, 5]]),
-}
-
 /**
  * Only structural caster progression is encoded here: selection counts,
  * preparation counts and maximum spell level. Spell names, subclass grants and
@@ -105,7 +96,7 @@ export function getClassSpellSelectionRule(
       | "cha"
       | undefined,
     maxSpellLevel: getMaximumSpellLevel(className, level),
-    maxCantrips: getCantripLimit(className, level),
+    maxCantrips: getCantripsKnownAtLevel(className, level),
     maxLeveledSpells: getLeveledSpellLimit(character, classEntry, level),
     swap: { leveledKnown: 0, cantrips: 0 },
   }
@@ -172,7 +163,7 @@ export function createClassEntry(
 
   return {
     ...entry,
-    level: level as ClassLevel,
+    level: clampLevel(level) as ClassLevel,
   }
 }
 
@@ -268,29 +259,10 @@ function getMaximumSpellLevel(
   return 0
 }
 
-function getCantripLimit(className: ClassName, level: number): number {
-  return CANTRIPS[className]?.[level] ?? 0
-}
-
 function clampLevel(value: number): number {
   return Math.max(1, Math.min(20, Math.trunc(value || 1)))
 }
 
 function levelTable(values: number[]): Record<number, number> {
   return Object.fromEntries(values.map((value, index) => [index + 1, value]))
-}
-
-function thresholdTable(
-  entries: Array<[number, number]>,
-): Record<number, number> {
-  const result: Record<number, number> = {}
-  let current = 0
-
-  for (let level = 1; level <= 20; level += 1) {
-    const threshold = entries.find(([entryLevel]) => entryLevel === level)
-    if (threshold) current = threshold[1]
-    result[level] = current
-  }
-
-  return result
 }
