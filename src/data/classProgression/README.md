@@ -18,9 +18,9 @@ classProgression/
     └── warlock/
         ├── index.ts
         └── subclasses/
-  ├── index.ts
-  └── hexblade/
-      └── index.ts
+            ├── index.ts
+            └── hexblade/
+                └── index.ts
 ```
 
 Each class owns its metadata, level features, cantrip progression and subclass
