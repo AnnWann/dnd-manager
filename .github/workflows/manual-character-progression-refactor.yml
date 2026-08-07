@@ -30,6 +30,7 @@ jobs:
           git fetch origin agent/manual-character-progression
           git show origin/agent/manual-character-progression:scripts/manual-character-progression.py > /tmp/manual-character-progression.py
           git show origin/agent/manual-character-progression:scripts/manual-character-progression-fix.py > /tmp/manual-character-progression-fix.py
+          git show origin/agent/manual-character-progression:scripts/manual-character-progression-build-fix.py > /tmp/manual-character-progression-build-fix.py
           python - <<'PY'
           from pathlib import Path
           path = Path('/tmp/manual-character-progression.py')
@@ -41,6 +42,7 @@ jobs:
           PY
           python /tmp/manual-character-progression.py
           python /tmp/manual-character-progression-fix.py
+          python /tmp/manual-character-progression-build-fix.py
           rm .github/workflows/manual-character-progression-refactor.yml
 
       - name: Install dependencies without rewriting lockfile
