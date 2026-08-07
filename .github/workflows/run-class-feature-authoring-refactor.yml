@@ -32,7 +32,10 @@ jobs:
             | sed -n "/^          python <<'PY'$/,/^          PY$/p" \
             | sed '1d;$d;s/^          //' \
             > /tmp/simplify-class-feature-authoring.py
+          git show origin/agent/simplify-class-feature-authoring:scripts/fix-class-feature-authoring-refactor.py \
+            > /tmp/fix-class-feature-authoring-refactor.py
           python /tmp/simplify-class-feature-authoring.py
+          python /tmp/fix-class-feature-authoring-refactor.py
           rm .github/workflows/run-class-feature-authoring-refactor.yml
 
       - name: Install dependencies without changing lockfile
