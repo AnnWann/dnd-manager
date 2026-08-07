@@ -83,12 +83,12 @@ export function applyProgressionAbilityTemplate(
   const usage = hasUsageConfiguration
     ? usageConfiguration
       ? {
-...usageConfiguration,
-used: clampUsedUses(
-  ability.usage?.used ?? 0,
-  usageConfiguration,
-),
-cooldownRemaining: ability.usage?.cooldownRemaining,
+          ...usageConfiguration,
+          used: clampUsedUses(
+            ability.usage?.used ?? 0,
+            usageConfiguration,
+          ),
+          cooldownRemaining: ability.usage?.cooldownRemaining,
         }
       : undefined
     : ability.usage
@@ -121,5 +121,8 @@ function clampUsedUses(
 ): number {
   const normalized = Math.max(0, Math.trunc(Number(used) || 0))
   if (usage.maxFormula?.trim()) return normalized
-  return Math.min(Math.max(0, Math.trunc(Number(usage.max) || 0)), normalized)
+  return Math.min(
+    Math.max(0, Math.trunc(Number(usage.max) || 0)),
+    normalized,
+  )
 }
