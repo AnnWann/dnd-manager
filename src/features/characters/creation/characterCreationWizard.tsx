@@ -11,6 +11,7 @@ import {
   type CharacterCreationIdentity,
   type CharacterCreationProgressionPlan,
 } from "../../../models/characters/creation/CharacterCreation"
+import type { ClassName } from "../../../models/sheet/Class"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
 import {
   finalizeCreatedCharacter,
@@ -27,6 +28,10 @@ import {
 } from "./CharacterCreationBackgroundChoices"
 import { CharacterCreationFlowBootstrap } from "./bridges/CharacterCreationFlowBootstrap"
 import { CreationManualClassProficiencies } from "./bridges/CreationManualClassProficiencies"
+import {
+  CreationManualSubclassEditor,
+  type ManualSubclassSelection,
+} from "./bridges/CreationManualSubclassEditor"
 import { CreationRequiredFieldHighlighter } from "./bridges/CreationRequiredFieldHighlighter"
 import {
   CharacterCreationEquipmentChoices,
@@ -59,6 +64,9 @@ export function CharacterCreationWizard(props: WizardProps) {
   const [backgroundChoices, setBackgroundChoices] =
     useState<BackgroundChoiceOverride | null>(null)
   const [classProficiencies, setClassProficiencies] = useState<Proficiency[]>([])
+  const [subclasses, setSubclasses] = useState<
+    Partial<Record<ClassName, ManualSubclassSelection>>
+  >({})
   const [identity, setIdentity] = useState<CharacterCreationIdentity>(() =>
     createEmptyCharacterCreationIdentity(),
   )
@@ -87,6 +95,7 @@ export function CharacterCreationWizard(props: WizardProps) {
       setGenericRacialChoices(null)
       setBackgroundChoices(null)
       setClassProficiencies([])
+      setSubclasses({})
       clearErrors()
       return
     }
@@ -133,10 +142,26 @@ export function CharacterCreationWizard(props: WizardProps) {
 
     clearErrors()
     const finalized = finalizeCreatedCharacter(character, overrides)
-    const withClassProficiencies = finalized.withSheet(
+    const withManualClasses = finalized.withSheet(
+      "classes",
+      (finalized.get("sheet").classes ?? []).map((entry) => {
+        const selection = subclasses[entry.className]
+        const name = selection?.name.trim()
+        if (!name) return entry
+        return {
+          ...entry,
+          subclass: {
+            id: entry.subclass?.id || slug(name),
+            name,
+            source: selection?.source.trim() || "Manual",
+          },
+        }
+      }),
+    )
+    const withClassProficiencies = withManualClasses.withSheet(
       "proficiencies",
       mergeProficiencies(
-        finalized.get("sheet").proficiencies ?? [],
+        withManualClasses.get("sheet").proficiencies ?? [],
         classProficiencies,
       ),
     )
@@ -197,6 +222,16 @@ export function CharacterCreationWizard(props: WizardProps) {
         proficiencies={classProficiencies}
         onChange={setClassProficiencies}
       />
+      <CreationManualSubclassEditor
+        open={props.open}
+        selections={subclasses}
+        onChange={(className, selection) =>
+          setSubclasses((current) => ({
+            ...current,
+            [className]: selection,
+          }))
+        }
+      />
 
       <CreationRequiredFieldHighlighter />
 
@@ -236,6 +271,15 @@ function normalizeProficiencyName(value: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .trim()
     .toLocaleLowerCase("pt-BR")
+}
+
+function slug(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("en-US")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
 }
 
 function showValidationError(
