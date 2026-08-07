@@ -51,8 +51,9 @@ export type SubclassSpellGrant = {
 }
 
 /**
- * Progression intentionally does not infer spell-selection rules. Spells may be
- * added manually from the character sheet or by generic ability grants.
+ * Progression never infers the legal spell list or limits. Caster classes get a
+ * deliberately unrestricted manual picker; the user consults their own rules
+ * reference and chooses only the spells they are entitled to.
  */
 export function getClassSpellSelectionRule(
   _character: CharacterTemplate,
@@ -60,14 +61,22 @@ export function getClassSpellSelectionRule(
   classLevel: number,
   subclassId?: string,
 ): ClassSpellSelectionRule {
+  const classEntry = createClassEntry(className, classLevel)
+  const isCaster = Boolean(classEntry.castingAttribute)
+
   return {
     className,
     classLevel: clampLevel(classLevel),
     subclassId,
-    mode: "none",
-    maxSpellLevel: 0,
-    maxCantrips: 0,
-    maxLeveledSpells: 0,
+    mode: isCaster ? "prepared" : "none",
+    castingAttribute: classEntry.castingAttribute as
+      | "int"
+      | "wis"
+      | "cha"
+      | undefined,
+    maxSpellLevel: isCaster ? 9 : 0,
+    maxCantrips: isCaster ? 99 : 0,
+    maxLeveledSpells: isCaster ? 99 : 0,
     swap: { leveledKnown: 0, cantrips: 0 },
   }
 }
@@ -80,12 +89,13 @@ export function getSubclassSpellGrants(
   return []
 }
 
+/** Manual spell selection intentionally exposes the whole loaded compendium. */
 export function isSpellAllowedForClassSelection(
   _spell: Spell,
-  _rule: ClassSpellSelectionRule,
+  rule: ClassSpellSelectionRule,
   _subclassSpellNames: string[],
 ): boolean {
-  return false
+  return rule.mode !== "none"
 }
 
 export function getMetamagicLimit(_sorcererLevel: number): number {
