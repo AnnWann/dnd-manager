@@ -29,7 +29,9 @@ jobs:
         run: |
           git fetch origin agent/manual-character-progression
           git show origin/agent/manual-character-progression:scripts/manual-character-progression.py > /tmp/manual-character-progression.py
+          git show origin/agent/manual-character-progression:scripts/manual-character-progression-fix.py > /tmp/manual-character-progression-fix.py
           python /tmp/manual-character-progression.py
+          python /tmp/manual-character-progression-fix.py
           rm .github/workflows/manual-character-progression-refactor.yml
 
       - name: Install dependencies without rewriting lockfile
@@ -52,6 +54,8 @@ jobs:
           src/features/characters/progression/CharacterProgressionConfigurator.tsx
           src/features/characters/progression/CharacterProgressionFlow.tsx
           src/features/characters/creation/IntegratedCharacterCreationWizard.tsx
+          src/lib/characterCreation/finalizeCharacterCreation.ts
+          src/views/user/UserCharacterLevelUpView.tsx
 
       - name: Commit directly to feature/auth
         shell: bash
