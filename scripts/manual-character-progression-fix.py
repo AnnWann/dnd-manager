@@ -3,14 +3,6 @@ from pathlib import Path
 ROOT = Path('.')
 
 
-def replace(path: str, old: str, new: str, count: int = 1) -> None:
-    target = ROOT / path
-    text = target.read_text()
-    if old not in text:
-        raise SystemExit(f"Expected text not found in {path}: {old[:160]!r}")
-    target.write_text(text.replace(old, new, count))
-
-
 # Character creation should no longer materialize or refresh catalog features.
 finalize = ROOT / 'src/lib/characterCreation/finalizeCharacterCreation.ts'
 text = finalize.read_text()
@@ -65,10 +57,12 @@ text = text.replace(
 text = text.replace('      <LevelUpSpellSelectionModal />\n', '')
 level_up.write_text(text)
 
-# These modules existed only to derive or present bundled progression content.
+# These modules existed only to derive, constrain or present bundled progression
+# content. ASI increases may still be entered manually as ordinary sheet edits.
 for file_path in [
     'src/models/leveling/materializeProgressionChoices.ts',
     'src/models/leveling/ProgressionChoiceDescriptions.ts',
+    'src/models/leveling/enforceAsiAttributeCaps.ts',
     'src/features/characters/progression/LevelUpSpellSelectionModal.tsx',
     'src/features/characters/progression/bridges/ProgressionFeatureDescriptionSync.tsx',
 ]:
@@ -83,6 +77,7 @@ forbidden_tokens = [
     'ProgressionFeatureMechanics',
     'ProgressionFeatureFinalization',
     'refreshProgressionFeatureMechanics',
+    'enforceAsiAttributeCaps',
     'LevelUpSpellSelectionModal',
     'ProgressionFeatureDescriptionSync',
 ]
