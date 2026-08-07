@@ -54,6 +54,10 @@ export type SubclassSpellGrant = {
  * Progression never infers the legal spell list or limits. Caster classes get a
  * deliberately unrestricted manual picker; the user consults their own rules
  * reference and chooses only the spells they are entitled to.
+ *
+ * `spellbook` is used here only as the existing UI mode that lets the user mark
+ * each selected leveled spell as prepared or not. It does not imply that every
+ * caster actually uses a spellbook.
  */
 export function getClassSpellSelectionRule(
   _character: CharacterTemplate,
@@ -68,7 +72,7 @@ export function getClassSpellSelectionRule(
     className,
     classLevel: clampLevel(classLevel),
     subclassId,
-    mode: isCaster ? "prepared" : "none",
+    mode: isCaster ? "spellbook" : "none",
     castingAttribute: classEntry.castingAttribute as
       | "int"
       | "wis"
