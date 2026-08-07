@@ -1,8 +1,5 @@
 import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
 import type { Itemmable } from "../../models/items/item"
-import { finalizeProgressionFeatures } from "../../models/leveling/ProgressionFeatureFinalization"
-import { materializeProgressionChoices } from "../../models/leveling/materializeProgressionChoices"
-import { refreshProgressionFeatureMechanics } from "../../models/leveling/refreshProgressionFeatureMechanics"
 import type { RacialAttributeBonusRule } from "../../models/races/CharacterRace"
 import type { CharacterCreationIdentity } from "../../models/characters/creation/CharacterCreation"
 import type { AbilityScoreOverride } from "../../features/characters/creation/CharacterCreationAbilityScoreRules"
@@ -126,7 +123,7 @@ export function finalizeCreatedCharacter(
     .filter(Boolean)
     .join("\n")
 
-  const patched = character.withPatch({
+  return character.withPatch({
     name: identity.name.trim(),
     inventory,
     profile: {
@@ -158,10 +155,6 @@ export function finalizeCreatedCharacter(
       },
     },
   })
-
-  return refreshProgressionFeatureMechanics(
-    materializeProgressionChoices(finalizeProgressionFeatures(patched)),
-  )
 }
 
 function validateIdentity(identity: CharacterCreationIdentity): string {
