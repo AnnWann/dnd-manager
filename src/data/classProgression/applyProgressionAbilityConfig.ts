@@ -86,10 +86,10 @@ function withGrantedSpellAcquisition(ability: Ability): Ability {
       acquisition:
         grant.acquisition ??
         createCharacterAcquisition({
-...ability.acquisition!,
-sourceType: "ability",
-sourceId: ability.id,
-sourceName: ability.name,
+          ...ability.acquisition!,
+          sourceType: "ability",
+          sourceId: ability.id,
+          sourceName: ability.name,
         }),
     })),
   }
