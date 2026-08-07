@@ -1,6 +1,5 @@
 import type { DieSides } from "../../models/dice/Die"
 import type { ClassName, ClassSourceBook } from "../../models/sheet/Class"
-import type { ProgressionAbilityConfig } from "./ability"
 
 export type LevelChoiceKind =
   | "fighting-style"
@@ -27,6 +26,7 @@ export type LevelChoiceDefinition = {
   description?: string
 }
 
+/** Generic shape retained for user-authored/imported feature data. */
 export type LevelFeatureDefinition = {
   id: string
   name: string
@@ -35,12 +35,10 @@ export type LevelFeatureDefinition = {
   optional?: boolean
   description?: string
   choice?: LevelChoiceDefinition
-  ability?: ProgressionAbilityConfig
 }
 
-export type SubclassDefinition<
-  TClassName extends ClassName = ClassName,
-> = {
+/** Generic shape retained for user-authored/imported subclass data. */
+export type SubclassDefinition<TClassName extends ClassName = ClassName> = {
   id: string
   name: string
   className: TClassName
@@ -48,9 +46,11 @@ export type SubclassDefinition<
   features: LevelFeatureDefinition[]
 }
 
-export type ClassProgressionDefinition<
-  TClassName extends ClassName = ClassName,
-> = {
+/**
+ * Minimal class metadata used by the sheet. Bundled progression content is
+ * intentionally empty; users configure subclasses and features themselves.
+ */
+export type ClassProgressionDefinition<TClassName extends ClassName = ClassName> = {
   className: TClassName
   label: string
   hitDie: DieSides
@@ -60,11 +60,3 @@ export type ClassProgressionDefinition<
   subclasses: SubclassDefinition<TClassName>[]
   cantripsKnown?: Partial<Record<number, number>>
 }
-
-export type ConfiguredLevelFeatureDefinition = LevelFeatureDefinition
-export type SubclassProgressionModule<
-  TClassName extends ClassName = ClassName,
-> = SubclassDefinition<TClassName>
-export type ClassProgressionModule<
-  TClassName extends ClassName = ClassName,
-> = ClassProgressionDefinition<TClassName>
