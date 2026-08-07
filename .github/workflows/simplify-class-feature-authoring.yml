@@ -1,0 +1,817 @@
+name: Simplify class feature authoring
+
+on:
+  pull_request:
+    branches:
+      - feature/auth
+    paths:
+      - .github/workflows/simplify-class-feature-authoring.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature/auth
+        uses: actions/checkout@v4
+        with:
+          ref: feature/auth
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Simplify progression feature definitions
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str, count: int = 1) -> None:
+              target = Path(path)
+              text = target.read_text()
+              if old not in text:
+                  raise SystemExit(f"Expected text not found in {path}: {old[:120]!r}")
+              target.write_text(text.replace(old, new, count))
+
+          Path("src/data/classProgression/ability.ts").write_text('''import type { Ability, Usage } from "../../models/abilities/Ability"
+import type { SpellGrant } from "../../models/magic/spells/SpellGrant"
+
+export type ProgressionAbilityUsageConfig = Omit<
+  Usage,
+  "used" | "cooldownRemaining"
+>
+
+export type ProgressionSpellGrant = Omit<SpellGrant, "acquisition">
+
+type RuntimeOwnedAbilityField =
+  | "id"
+  | "originalAbilityId"
+  | "acquisition"
+  | "usage"
+  | "benefitsActive"
+  | "modifiersActive"
+  | "source"
+  | "sourceItemId"
+  | "sourceItemName"
+  | "grantedSpells"
+
+/**
+ * Static class/subclass feature configuration.
+ *
+ * Identity, provenance and mutable state are character-owned and therefore
+ * cannot be declared in progression data.
+ */
+export type ProgressionAbilityConfig = Partial<
+  Omit<Ability, RuntimeOwnedAbilityField>
+> & {
+  usage?: ProgressionAbilityUsageConfig
+  grantedSpells?: ProgressionSpellGrant[]
+}
+
+export type ApplyProgressionAbilityTemplateOptions = {
+  /** Keep the projected name/description of choice-derived abilities. */
+  preserveContent?: boolean
+}
+
+/** Declares a feature ability without widening literal values. */
+export function defineProgressionAbility<
+  const T extends ProgressionAbilityConfig,
+>(configuration: T): T {
+  return configuration
+}
+
+/** Creates a static usage definition; consumed uses remain character-owned. */
+export function progressionUsage(
+  max: number,
+  reset: ProgressionAbilityUsageConfig["reset"],
+  options: Partial<
+    Omit<ProgressionAbilityUsageConfig, "max" | "reset">
+  > = {},
+): ProgressionAbilityUsageConfig {
+  return { max, reset, ...options }
+}
+
+/** Creates a spell grant without runtime acquisition metadata. */
+export function grantProgressionSpell(
+  index: string,
+  options: Omit<ProgressionSpellGrant, "index"> = {},
+): ProgressionSpellGrant {
+  return { index, ...options }
+}
+
+/**
+ * Applies static progression data while preserving runtime identity and state.
+ * This function is used both for newly materialized features and migrations.
+ */
+export function applyProgressionAbilityTemplate(
+  ability: Ability,
+  configuration: ProgressionAbilityConfig | undefined,
+  options: ApplyProgressionAbilityTemplateOptions = {},
+): Ability {
+  if (!configuration) return ability
+
+  const { usage: usageConfiguration, ...staticConfiguration } = configuration
+  const hasUsageConfiguration = Object.prototype.hasOwnProperty.call(
+    configuration,
+    "usage",
+  )
+  const usage = hasUsageConfiguration
+    ? usageConfiguration
+      ? {
+          ...usageConfiguration,
+          used: clampUsedUses(
+            ability.usage?.used ?? 0,
+            usageConfiguration,
+          ),
+          cooldownRemaining: ability.usage?.cooldownRemaining,
+        }
+      : undefined
+    : ability.usage
+  const preserveContent = options.preserveContent === true
+
+  return {
+    ...ability,
+    ...staticConfiguration,
+    id: ability.id,
+    name: preserveContent
+      ? ability.name
+      : staticConfiguration.name ?? ability.name,
+    description: preserveContent
+      ? ability.description
+      : staticConfiguration.description ?? ability.description,
+    usage,
+    source: ability.source,
+    sourceItemId: ability.sourceItemId,
+    sourceItemName: ability.sourceItemName,
+    originalAbilityId: ability.originalAbilityId,
+    acquisition: ability.acquisition,
+    benefitsActive: ability.benefitsActive,
+    modifiersActive: ability.modifiersActive,
+  }
+}
+
+function clampUsedUses(
+  used: number,
+  usage: ProgressionAbilityUsageConfig,
+): number {
+  const normalized = Math.max(0, Math.trunc(Number(used) || 0))
+  if (usage.maxFormula?.trim()) return normalized
+  return Math.min(Math.max(0, Math.trunc(Number(usage.max) || 0)), normalized)
+}
+''')
+
+          Path("src/data/classProgression/types.ts").write_text('''import type { DieSides } from "../../models/dice/Die"
+import type { ClassName, ClassSourceBook } from "../../models/sheet/Class"
+import type { ProgressionAbilityConfig } from "./ability"
+
+export type LevelChoiceKind =
+  | "fighting-style"
+  | "expertise"
+  | "metamagic"
+  | "pact-boon"
+  | "invocation"
+  | "maneuver"
+  | "infusion"
+  | "elemental-discipline"
+  | "rune"
+  | "subclass-option"
+  | "asi"
+  | "optional-feature"
+  | "custom"
+
+export type LevelChoiceDefinition = {
+  id: string
+  label: string
+  kind: LevelChoiceKind
+  count: number
+  options?: string[]
+  allowCustom?: boolean
+  description?: string
+}
+
+export type LevelFeatureDefinition = {
+  id: string
+  name: string
+  level: number
+  source: ClassSourceBook
+  optional?: boolean
+  description?: string
+  choice?: LevelChoiceDefinition
+  ability?: ProgressionAbilityConfig
+}
+
+export type SubclassDefinition<
+  TClassName extends ClassName = ClassName,
+> = {
+  id: string
+  name: string
+  className: TClassName
+  source: ClassSourceBook
+  features: LevelFeatureDefinition[]
+}
+
+export type ClassProgressionDefinition<
+  TClassName extends ClassName = ClassName,
+> = {
+  className: TClassName
+  label: string
+  hitDie: DieSides
+  source: ClassSourceBook
+  subclassLevel: number
+  features: LevelFeatureDefinition[]
+  subclasses: SubclassDefinition<TClassName>[]
+  cantripsKnown?: Partial<Record<number, number>>
+}
+
+export type ConfiguredLevelFeatureDefinition = LevelFeatureDefinition
+export type SubclassProgressionModule<
+  TClassName extends ClassName = ClassName,
+> = SubclassDefinition<TClassName>
+export type ClassProgressionModule<
+  TClassName extends ClassName = ClassName,
+> = ClassProgressionDefinition<TClassName>
+''')
+
+          Path("src/data/classProgression/applyProgressionAbilityConfig.ts").write_text('''import type { Ability } from "../../models/abilities/Ability"
+import { createCharacterAcquisition } from "../../models/characters/CharacterAcquisition"
+import type { ClassName } from "../../models/sheet/Class"
+import {
+  applyProgressionAbilityTemplate,
+  type ProgressionAbilityConfig,
+} from "./ability"
+import { getClassProgression } from "./registry"
+import type { LevelFeatureDefinition } from "./types"
+
+const CLASS_NAMES: readonly ClassName[] = [
+  "artificer",
+  "barbarian",
+  "bard",
+  "cleric",
+  "druid",
+  "fighter",
+  "monk",
+  "paladin",
+  "ranger",
+  "rogue",
+  "sorcerer",
+  "warlock",
+  "wizard",
+]
+
+/**
+ * Refreshes content and mechanics from the canonical class/subclass feature.
+ * Identity, acquisition and mutable state remain character-owned.
+ */
+export function applyProgressionAbilityConfig(ability: Ability): Ability {
+  const feature = getProgressionFeatureDefinition(ability)
+  if (!feature) return ability
+
+  const isChoiceProjection = Boolean(
+    ability.originalAbilityId && ability.originalAbilityId !== ability.id,
+  )
+  const sourcedAbility: Ability = {
+    ...ability,
+    name: isChoiceProjection ? ability.name : feature.name,
+    description: isChoiceProjection
+      ? ability.description
+      : feature.description?.trim() || ability.description,
+  }
+  const configured = applyProgressionAbilityTemplate(
+    sourcedAbility,
+    feature.ability,
+    { preserveContent: isChoiceProjection },
+  )
+
+  return withGrantedSpellAcquisition(configured)
+}
+
+export function getProgressionFeatureDefinition(
+  ability: Ability,
+): LevelFeatureDefinition | undefined {
+  const sourceAbilityId = ability.originalAbilityId ?? ability.id
+  const parsed = parseProgressionAbilityId(sourceAbilityId)
+  if (!parsed) return undefined
+
+  const progression = getClassProgression(parsed.className)
+  return parsed.subclassId === "base"
+    ? progression.features.find((entry) => entry.id === parsed.featureId)
+    : progression.subclasses
+        .find((entry) => entry.id === parsed.subclassId)
+        ?.features.find((entry) => entry.id === parsed.featureId)
+}
+
+export function getProgressionAbilityConfig(
+  ability: Ability,
+): ProgressionAbilityConfig | undefined {
+  return getProgressionFeatureDefinition(ability)?.ability
+}
+
+export function hasProgressionAbilityConfig(ability: Ability): boolean {
+  return Boolean(getProgressionAbilityConfig(ability))
+}
+
+function withGrantedSpellAcquisition(ability: Ability): Ability {
+  if (!ability.grantedSpells?.length || !ability.acquisition) return ability
+
+  return {
+    ...ability,
+    grantedSpells: ability.grantedSpells.map((grant) => ({
+      ...grant,
+      acquisition:
+        grant.acquisition ??
+        createCharacterAcquisition({
+          ...ability.acquisition!,
+          sourceType: "ability",
+          sourceId: ability.id,
+          sourceName: ability.name,
+        }),
+    })),
+  }
+}
+
+function parseProgressionAbilityId(value: string): {
+  className: ClassName
+  subclassId: string
+  featureId: string
+} | undefined {
+  const [prefix, rawClassName, subclassId, ...featureParts] = value.split(":")
+  if (
+    prefix !== "progression" ||
+    !isClassName(rawClassName) ||
+    !subclassId ||
+    !featureParts.length
+  ) {
+    return undefined
+  }
+
+  return {
+    className: rawClassName,
+    subclassId,
+    featureId: featureParts.join(":"),
+  }
+}
+
+function isClassName(value: string): value is ClassName {
+  return CLASS_NAMES.includes(value as ClassName)
+}
+''')
+
+          Path("src/data/classProgression/migration.ts").write_text('''import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
+import { refreshProgressionAbilityDefinitions } from "../../models/leveling/refreshProgressionFeatureMechanics"
+
+/** Increment whenever canonical feature content or mechanics require resync. */
+export const CLASS_PROGRESSION_DATA_VERSION = 1
+
+export function migrateCharacterProgressionData(
+  character: CharacterTemplate,
+): CharacterTemplate {
+  const currentVersion = character.get("classProgressionVersion") ?? 0
+  if (currentVersion >= CLASS_PROGRESSION_DATA_VERSION) return character
+
+  return refreshProgressionAbilityDefinitions(character).with(
+    "classProgressionVersion",
+    CLASS_PROGRESSION_DATA_VERSION,
+  )
+}
+''')
+
+          Path("src/data/classProgression/index.ts").write_text('''export * from "./ability"
+export * from "./applyProgressionAbilityConfig"
+export * from "./builders"
+export * from "./migration"
+export * from "./registry"
+export * from "./types"
+''')
+
+          builders = Path("src/data/classProgression/builders.ts")
+          builders_text = builders.read_text()
+          builder_exports = '''export {
+  defineProgressionAbility,
+  grantProgressionSpell,
+  progressionUsage,
+} from "./ability"
+export type {
+  ProgressionAbilityConfig,
+  ProgressionAbilityUsageConfig,
+  ProgressionSpellGrant,
+} from "./ability"
+
+'''
+          if not builders_text.startswith('export {\n  defineProgressionAbility'):
+              builders.write_text(builder_exports + builders_text)
+
+          replace(
+              "src/models/leveling/applyCharacterProgression.ts",
+              '''import {
+  getClassProgression,
+  getFeaturesAtLevel,
+  type LevelFeatureDefinition,
+} from "../../data/classProgression"''',
+              '''import {
+  applyProgressionAbilityTemplate,
+  getClassProgression,
+  getFeaturesAtLevel,
+  type LevelFeatureDefinition,
+} from "../../data/classProgression"''',
+          )
+
+          replace(
+              "src/models/leveling/applyCharacterProgression.ts",
+              '''function featureToAbility(
+  feature: LevelFeatureDefinition,
+  plan: ProgressionClassPlan,
+  choices: string[],
+  acquisitionInput: Parameters<typeof createCharacterAcquisition>[0],
+): Ability {
+  const choiceText = choices.length
+    ? `\\n\\nEscolhas: ${choices.join(", ")}.`
+    : ""
+
+  return stampAbility(
+    {
+      id: `progression:${plan.className}:${plan.subclassId ?? "base"}:${feature.id}`,
+      name: feature.name,
+      description: `${
+        feature.description?.trim() ||
+        `Característica de ${getClassProgression(plan.className).label} adquirida no nível ${feature.level}.`
+      }${choiceText}`,
+      kind: "feature",
+      category: feature.choice?.kind === "asi" ? "feat" : "general",
+      source: "class",
+    },
+    acquisitionInput,
+  )
+}''',
+              '''function featureToAbility(
+  feature: LevelFeatureDefinition,
+  plan: ProgressionClassPlan,
+  choices: string[],
+  acquisitionInput: Parameters<typeof createCharacterAcquisition>[0],
+): Ability {
+  const choiceText = choices.length
+    ? `\\n\\nEscolhas: ${choices.join(", ")}.`
+    : ""
+  const fallbackDescription =
+    feature.description?.trim() ||
+    `Característica de ${getClassProgression(plan.className).label} adquirida no nível ${feature.level}.`
+  const configured = applyProgressionAbilityTemplate(
+    {
+      id: `progression:${plan.className}:${plan.subclassId ?? "base"}:${feature.id}`,
+      name: feature.name,
+      description: fallbackDescription,
+      kind: "feature",
+      category: feature.choice?.kind === "asi" ? "feat" : "general",
+      source: "class",
+    },
+    feature.ability,
+  )
+
+  return stampAbility(
+    {
+      ...configured,
+      description: `${
+        configured.description?.trim() || fallbackDescription
+      }${choiceText}`,
+    },
+    acquisitionInput,
+  )
+}''',
+          )
+
+          replace(
+              "src/models/leveling/ProgressionFeatureFinalization.ts",
+              '''import type {
+  Ability,
+  AbilityActionKind,
+  AbilityEffectDuration,
+  AbilityKind,
+  Usage,
+} from "../abilities/Ability"''',
+              '''import { hasProgressionAbilityConfig } from "../../data/classProgression/applyProgressionAbilityConfig"
+import type {
+  Ability,
+  AbilityActionKind,
+  AbilityEffectDuration,
+  AbilityKind,
+  Usage,
+} from "../abilities/Ability"''',
+          )
+          replace(
+              "src/models/leveling/ProgressionFeatureFinalization.ts",
+              '''export function normalizeProgressionAbility(
+  character: CharacterTemplate,
+  ability: Ability,
+): Ability {
+  if (!ability.id.startsWith("progression:")) return ability
+  if (ability.category === "feat") return ability
+
+  return mergeProgressionMechanics(
+    ability,
+    getProgressionFeatureMechanics(character, ability),
+  )
+}''',
+              '''export function normalizeProgressionAbility(
+  character: CharacterTemplate,
+  ability: Ability,
+): Ability {
+  if (!ability.id.startsWith("progression:")) return ability
+  if (ability.category === "feat") return ability
+  if (hasProgressionAbilityConfig(ability)) return ability
+
+  return mergeProgressionMechanics(
+    ability,
+    getProgressionFeatureMechanics(character, ability),
+  )
+}''',
+          )
+
+          Path("src/models/leveling/refreshProgressionFeatureMechanics.ts").write_text('''import {
+  applyProgressionAbilityConfig,
+  hasProgressionAbilityConfig,
+} from "../../data/classProgression/applyProgressionAbilityConfig"
+import type { Ability } from "../abilities/Ability"
+import type { CharacterTemplate } from "../characters/CharacterTemplate"
+import { enforceAsiAttributeCaps } from "./enforceAsiAttributeCaps"
+import { normalizeProgressionAbility } from "./ProgressionFeatureFinalization"
+import { applyAdditionalProgressionFeatureMechanics } from "./ProgressionFeatureMechanicsAdditional"
+
+/** Refreshes only progression abilities, preserving character-owned state. */
+export function refreshProgressionAbilityDefinitions(
+  character: CharacterTemplate,
+): CharacterTemplate {
+  return character.with(
+    "abilities",
+    (character.get("abilities") ?? []).map((ability) =>
+      refreshProgressionAbility(character, ability),
+    ),
+  )
+}
+
+export function refreshProgressionFeatureMechanics(
+  character: CharacterTemplate,
+): CharacterTemplate {
+  return refreshProgressionAbilityDefinitions(enforceAsiAttributeCaps(character))
+}
+
+function refreshProgressionAbility(
+  character: CharacterTemplate,
+  ability: Ability,
+): Ability {
+  const hasCanonicalConfiguration = hasProgressionAbilityConfig(ability)
+  const normalized = hasCanonicalConfiguration
+    ? ability
+    : normalizeProgressionAbility(character, ability)
+  const withLegacyFallback = hasCanonicalConfiguration
+    ? normalized
+    : applyAdditionalProgressionFeatureMechanics(character, normalized)
+
+  return applyProgressionAbilityConfig(withLegacyFallback)
+}
+''')
+
+          character_path = Path("src/models/characters/CharacterTemplate.ts")
+          character_text = character_path.read_text()
+          if 'migrateCharacterProgressionData' not in character_text:
+              character_text = (
+                  'import { migrateCharacterProgressionData } from "../../data/classProgression/migration"\n'
+                  + character_text
+              )
+          character_text = character_text.replace(
+              '''  unique: boolean
+
+  abilities?: Ability[]''',
+              '''  unique: boolean
+  /** Canonical class/subclass feature data applied to this character. */
+  classProgressionVersion?: number
+
+  abilities?: Ability[]''',
+              1,
+          )
+          character_text = character_text.replace(
+              '    return new CharacterTemplate({',
+              '    const character = new CharacterTemplate({',
+              1,
+          )
+          character_text = character_text.replace(
+              '''      owner: props.owner ?? {
+        id: "",
+        name: "",
+        role: "player"
+      },
+      visibility: props.visibility ?? "party",
+    })
+  }
+
+  toJSON(): CharacterTemplateProps {''',
+              '''      owner: props.owner ?? {
+        id: "",
+        name: "",
+        role: "player"
+      },
+      classProgressionVersion: props.classProgressionVersion ?? 0,
+      visibility: props.visibility ?? "party",
+    })
+
+    return migrateCharacterProgressionData(character)
+  }
+
+  toJSON(): CharacterTemplateProps {''',
+              1,
+          )
+          character_path.write_text(character_text)
+
+          Path("src/models/leveling/ProgressionAbilityConfig.ts").unlink()
+
+          Path("src/data/classProgression/README.md").write_text('''# Class progression data
+
+This directory is the canonical runtime source for class and subclass
+progression. Consumers must import from `src/data/classProgression`, never from
+legacy files under `src/models/leveling`.
+
+## Folder convention
+
+```text
+classProgression/
+├── ability.ts
+├── builders.ts
+├── index.ts
+├── migration.ts
+├── registry.ts
+├── types.ts
+└── classes/
+    └── warlock/
+        ├── index.ts
+        └── subclasses/
+            ├── index.ts
+            └── hexblade/
+                └── index.ts
+```
+
+Each class owns its metadata, level features, cantrip progression and subclass
+collection. Each concrete subclass owns its features in its nested folder.
+
+## Adding a complete feature
+
+Use `feature()` for progression metadata and `ability` for behavior. The class
+file is the only source that needs to be edited.
+
+```ts
+import {
+  defineProgressionAbility,
+  feature,
+  grantProgressionSpell,
+  progressionUsage,
+} from "../../builders"
+
+const example = feature(3, "Arcane Reserve", "PHB", {
+  description:
+    "You draw on a limited reserve of arcane power to produce this effect.",
+  ability: defineProgressionAbility({
+    kind: "active",
+    category: "general",
+    actionKind: "bonusAction",
+    effectDuration: "instant",
+    trigger: "onSpellCast",
+    usage: progressionUsage(1, "longRest", {
+      maxFormula: "max(1, character.attributeModifier.cha)",
+    }),
+    grantedSpells: [
+      grantProgressionSpell("misty-step", {
+        castingMode: "source",
+        attribute: "cha",
+      }),
+    ],
+    grantedProficiencies: [],
+    bonuses: {},
+  }),
+})
+```
+
+`description` is the canonical displayed rules text. Put behavior in `ability`;
+do not duplicate the description unless the runtime ability intentionally needs
+different wording.
+
+## State is not declared in class files
+
+Progression configuration deliberately excludes runtime-owned fields such as:
+
+- ability IDs and acquisition metadata;
+- consumed uses and remaining cooldown;
+- active/inactive benefit state;
+- equipment provenance.
+
+Therefore `progressionUsage()` does not accept `used` or
+`cooldownRemaining`. New abilities start with zero consumed uses, while refresh
+and migration preserve the character's current state.
+
+## Formula variables
+
+`usage.maxFormula` and bonus `formula` fields use character-sheet variables,
+including:
+
+```text
+character.level
+character.proficiencyBonus
+character.attributeModifier.cha
+character.class.warlock.level
+character.skill.perception
+character.hp.maximum
+```
+
+The formula engine supports arithmetic, comparisons, boolean operators and
+`min`, `max`, `round`, `floor`, `ceil`, `abs`, `clamp` and `if`.
+Always provide a numeric fallback (`max` or `value`) alongside a formula.
+
+## Spell grants
+
+Use `grantProgressionSpell()`:
+
+- `castingMode: "source"` uses the ability's own usage counter;
+- `castingMode: "known"` adds the spell as a known spell;
+- set `attribute` explicitly instead of relying on the Charisma fallback.
+
+Runtime acquisition metadata is attached automatically.
+
+## Legacy mechanics fallback
+
+A feature with an `ability` configuration bypasses
+`ProgressionFeatureMechanics.ts` and
+`ProgressionFeatureMechanicsAdditional.ts`. Unconfigured features continue to
+use those maps, which permits incremental migration.
+
+After fully configuring a feature in its class/subclass module, remove its old
+hardcoded branch from the fallback files.
+
+## Updating existing characters
+
+`CLASS_PROGRESSION_DATA_VERSION` in `migration.ts` controls automatic refresh
+when a character is hydrated. Increment it whenever canonical descriptions or
+mechanics change and existing characters need to be synchronized.
+
+The refresh updates source-controlled content and mechanics while preserving:
+
+- IDs and acquisition history;
+- used charges and cooldown remaining;
+- active effects;
+- choice-projected names and descriptions.
+
+## Stable feature IDs
+
+`feature()` derives an ID from the original name and level. Pass an explicit
+`id` only when the generated value must be overridden. Persisted abilities refer
+to these IDs, so changing one requires a dedicated data migration.
+''')
+
+          forbidden = [
+              "models/leveling/ProgressionAbilityConfig",
+              "ProgressionAbilityConfig.ts",
+          ]
+          leftovers = []
+          for target in Path("src").rglob("*"):
+              if not target.is_file() or target.suffix not in {".ts", ".tsx", ".md"}:
+                  continue
+              text = target.read_text()
+              for token in forbidden:
+                  if token in text:
+                      leftovers.append(f"{target}: {token}")
+          if leftovers:
+              raise SystemExit("Legacy ability configuration references remain:\n" + "\n".join(leftovers))
+          PY
+
+      - name: Install dependencies without changing lockfile
+        run: npm install --package-lock=false
+        env:
+          DIRECT_URL: postgresql://user:password@localhost:5432/dnd_manager
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint changed progression architecture
+        run: >-
+          npx eslint
+          src/data/classProgression
+          src/models/characters/CharacterTemplate.ts
+          src/models/leveling/applyCharacterProgression.ts
+          src/models/leveling/ProgressionFeatureFinalization.ts
+          src/models/leveling/refreshProgressionFeatureMechanics.ts
+
+      - name: Commit directly to feature/auth
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Simplify class feature authoring"
+          git fetch origin feature/auth
+          if ! git merge-base --is-ancestor origin/feature/auth HEAD; then
+            git rebase origin/feature/auth
+            npm run build
+            npx eslint src/data/classProgression src/models/characters/CharacterTemplate.ts src/models/leveling/applyCharacterProgression.ts src/models/leveling/ProgressionFeatureFinalization.ts src/models/leveling/refreshProgressionFeatureMechanics.ts
+          fi
+          git push origin HEAD:feature/auth
