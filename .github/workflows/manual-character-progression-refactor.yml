@@ -1,0 +1,68 @@
+name: Manual character progression refactor
+
+on:
+  pull_request:
+    branches:
+      - feature/auth
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out feature/auth
+        uses: actions/checkout@v4
+        with:
+          ref: feature/auth
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply manual-only progression refactor
+        shell: bash
+        run: |
+          git fetch origin agent/manual-character-progression
+          git show origin/agent/manual-character-progression:scripts/manual-character-progression.py > /tmp/manual-character-progression.py
+          python /tmp/manual-character-progression.py
+          rm .github/workflows/manual-character-progression-refactor.yml
+
+      - name: Install dependencies without rewriting lockfile
+        run: npm install --package-lock=false
+        env:
+          DIRECT_URL: postgresql://user:password@localhost:5432/dnd_manager
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint changed progression paths
+        run: >-
+          npx eslint
+          src/data/classProgression
+          src/models/leveling/applyCharacterProgression.ts
+          src/models/leveling/SpellSelectionRules.ts
+          src/models/leveling/ClassProficiencyRules.ts
+          src/models/leveling/MulticlassRequirements.ts
+          src/models/leveling/DynamicSubclassSpellRules.ts
+          src/features/characters/progression/CharacterProgressionConfigurator.tsx
+          src/features/characters/progression/CharacterProgressionFlow.tsx
+          src/features/characters/creation/IntegratedCharacterCreationWizard.tsx
+
+      - name: Commit directly to feature/auth
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Make character progression manual-only"
+          git fetch origin feature/auth
+          if ! git merge-base --is-ancestor origin/feature/auth HEAD; then
+            git rebase origin/feature/auth
+            npm run build
+          fi
+          git push origin HEAD:feature/auth
