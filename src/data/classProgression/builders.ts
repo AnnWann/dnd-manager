@@ -1,3 +1,14 @@
+export {
+  defineProgressionAbility,
+  grantProgressionSpell,
+  progressionUsage,
+} from "./ability"
+export type {
+  ProgressionAbilityConfig,
+  ProgressionAbilityUsageConfig,
+  ProgressionSpellGrant,
+} from "./ability"
+
 import type { ClassName, ClassSourceBook } from "../../models/sheet/Class"
 import type {
   ClassProgressionDefinition,

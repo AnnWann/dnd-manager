@@ -1,6 +1,6 @@
 import type { DieSides } from "../../models/dice/Die"
-import type { ProgressionAbilityConfig } from "../../models/leveling/ProgressionAbilityConfig"
 import type { ClassName, ClassSourceBook } from "../../models/sheet/Class"
+import type { ProgressionAbilityConfig } from "./ability"
 
 export type LevelChoiceKind =
   | "fighting-style"

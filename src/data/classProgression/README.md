@@ -1,123 +1,138 @@
 # Class progression data
 
-This directory is the canonical source for class and subclass progression rules.
-Consumers must import progression definitions and lookup functions from
-`src/data/classProgression`, not from `src/models/leveling`.
+This directory is the canonical runtime source for class and subclass
+progression. Consumers must import from `src/data/classProgression`, never from
+legacy files under `src/models/leveling`.
 
 ## Folder convention
 
 ```text
 classProgression/
+├── ability.ts
 ├── builders.ts
 ├── index.ts
+├── migration.ts
 ├── registry.ts
 ├── types.ts
 └── classes/
     └── warlock/
         ├── index.ts
         └── subclasses/
-            ├── index.ts
-            └── hexblade/
-                └── index.ts
+  ├── index.ts
+  └── hexblade/
+      └── index.ts
 ```
 
-Each class owns its metadata, level features, cantrip progression, and the
-subclass collection exported by its `subclasses/index.ts`.
+Each class owns its metadata, level features, cantrip progression and subclass
+collection. Each concrete subclass owns its features in its nested folder.
 
-Each concrete subclass owns its features in a nested folder. The class-level
-subclass index only imports and collects those modules.
+## Adding a complete feature
 
-## Adding a class
-
-Define the complete class progression in its class module:
+Use `feature()` for progression metadata and `ability` for behavior. The class
+file is the only source that needs to be edited.
 
 ```ts
 import {
-  defineClassProgression,
+  defineProgressionAbility,
   feature,
-  withAbilityScoreImprovements,
+  grantProgressionSpell,
+  progressionUsage,
 } from "../../builders"
-import { warlockSubclasses } from "./subclasses"
 
-export const warlockProgression = defineClassProgression({
-  className: "warlock",
-  label: "Warlock",
-  hitDie: "d8",
-  source: "PHB",
-  subclassLevel: 1,
-  cantripsKnown: { 1: 2, 4: 3, 10: 4 },
-  features: withAbilityScoreImprovements("warlock", [
-    feature(1, "Otherworldly Patron"),
-    feature(1, "Pact Magic"),
-  ]),
-  subclasses: warlockSubclasses,
-})
-```
-
-Then register the module in `registry.ts`.
-
-## Adding a subclass
-
-Create a nested module such as
-`classes/warlock/subclasses/hexblade/index.ts`:
-
-```ts
-import { defineSubclass, feature } from "../../../../builders"
-
-export const hexblade = defineSubclass({
-  id: "hexblade",
-  name: "The Hexblade",
-  className: "warlock",
-  source: "Xanathar",
-  features: [
-    feature(1, "Hexblade's Curse", "Xanathar"),
-    feature(1, "Hex Warrior", "Xanathar"),
-  ],
-})
-```
-
-Then import it from `classes/warlock/subclasses/index.ts`.
-
-## Stable feature IDs
-
-`feature()` derives the existing stable ID from the original feature name and
-level. Pass an explicit `id` in the extra configuration only when the generated
-ID must be overridden. Persisted abilities refer to these IDs, so changing one
-requires a data migration.
-
-## Complete ability configuration
-
-A feature may provide an `ability` configuration. The progression feature owns
-the stable feature ID, while runtime acquisition metadata and consumed-use
-state remain character-owned.
-
-```ts
-import { feature } from "../../builders"
-import { defineProgressionAbility } from "../../../models/leveling/ProgressionAbilityConfig"
-
-const configuredFeature = feature(3, "Example Feature", "PHB", {
+const example = feature(3, "Arcane Reserve", "PHB", {
+  description:
+    "You draw on a limited reserve of arcane power to produce this effect.",
   ability: defineProgressionAbility({
     kind: "active",
     category: "general",
     actionKind: "bonusAction",
-    effectDuration: "lasting",
-    effectDurationText: "For 1 minute.",
-    effectPersistence: "untilEnd",
-    trigger: "onHit",
-    usage: {
-      max: 1,
-      maxFormula: "character.proficiencyBonus",
-      used: 0,
-      reset: "longRest",
-    },
-    grantedSpells: [],
+    effectDuration: "instant",
+    trigger: "onSpellCast",
+    usage: progressionUsage(1, "longRest", {
+      maxFormula: "max(1, character.attributeModifier.cha)",
+    }),
+    grantedSpells: [
+      grantProgressionSpell("misty-step", {
+        castingMode: "source",
+        attribute: "cha",
+      }),
+    ],
     grantedProficiencies: [],
     bonuses: {},
-    benefitsActive: false,
   }),
 })
 ```
 
-There is no aggregate catalog or legacy fallback. The class and subclass files
-under `classes/` are the runtime source used by character creation, level-up,
-spell selection, and feature materialization.
+`description` is the canonical displayed rules text. Put behavior in `ability`;
+do not duplicate the description unless the runtime ability intentionally needs
+different wording.
+
+## State is not declared in class files
+
+Progression configuration deliberately excludes runtime-owned fields such as:
+
+- ability IDs and acquisition metadata;
+- consumed uses and remaining cooldown;
+- active/inactive benefit state;
+- equipment provenance.
+
+Therefore `progressionUsage()` does not accept `used` or
+`cooldownRemaining`. New abilities start with zero consumed uses, while refresh
+and migration preserve the character's current state.
+
+## Formula variables
+
+`usage.maxFormula` and bonus `formula` fields use character-sheet variables,
+including:
+
+```text
+character.level
+character.proficiencyBonus
+character.attributeModifier.cha
+character.class.warlock.level
+character.skill.perception
+character.hp.maximum
+```
+
+The formula engine supports arithmetic, comparisons, boolean operators and
+`min`, `max`, `round`, `floor`, `ceil`, `abs`, `clamp` and `if`.
+Always provide a numeric fallback (`max` or `value`) alongside a formula.
+
+## Spell grants
+
+Use `grantProgressionSpell()`:
+
+- `castingMode: "source"` uses the ability's own usage counter;
+- `castingMode: "known"` adds the spell as a known spell;
+- set `attribute` explicitly instead of relying on the Charisma fallback.
+
+Runtime acquisition metadata is attached automatically.
+
+## Legacy mechanics fallback
+
+A feature with an `ability` configuration bypasses
+`ProgressionFeatureMechanics.ts` and
+`ProgressionFeatureMechanicsAdditional.ts`. Unconfigured features continue to
+use those maps, which permits incremental migration.
+
+After fully configuring a feature in its class/subclass module, remove its old
+hardcoded branch from the fallback files.
+
+## Updating existing characters
+
+`CLASS_PROGRESSION_DATA_VERSION` in `migration.ts` controls automatic refresh
+when a character is hydrated. Increment it whenever canonical descriptions or
+mechanics change and existing characters need to be synchronized.
+
+The refresh updates source-controlled content and mechanics while preserving:
+
+- IDs and acquisition history;
+- used charges and cooldown remaining;
+- active effects;
+- choice-projected names and descriptions.
+
+## Stable feature IDs
+
+`feature()` derives an ID from the original name and level. Pass an explicit
+`id` only when the generated value must be overridden. Persisted abilities refer
+to these IDs, so changing one requires a dedicated data migration.

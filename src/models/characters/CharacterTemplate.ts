@@ -1,3 +1,4 @@
+import { migrateCharacterProgressionData } from "../../data/classProgression/migration"
 import type { Ability, Usage } from "../abilities/Ability"
 import type { ActionsPerTurn, ActionType } from "../actions/Actions"
 import type { Die, DieSides } from "../dice/Die"
@@ -160,6 +161,8 @@ export type CharacterTemplateProps = {
     failures: number
   }
   unique: boolean
+  /** Canonical class/subclass feature data applied to this character. */
+  classProgressionVersion?: number
 
   abilities?: Ability[]
   magic?: Magic
@@ -191,7 +194,7 @@ export class CharacterTemplate {
   }
 
   static fromJSON(props: Partial<CharacterTemplateProps>): CharacterTemplate {
-    return new CharacterTemplate({
+    const character = new CharacterTemplate({
       id: props.id ?? crypto.randomUUID(),
       name: props.name ?? "Personagem",
       profile: {
@@ -283,8 +286,11 @@ export class CharacterTemplate {
         name: "",
         role: "player"
       },
+      classProgressionVersion: props.classProgressionVersion ?? 0,
       visibility: props.visibility ?? "party",
     })
+
+    return migrateCharacterProgressionData(character)
   }
 
   toJSON(): CharacterTemplateProps {

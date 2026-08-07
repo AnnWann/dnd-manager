@@ -1,3 +1,4 @@
+import { hasProgressionAbilityConfig } from "../../data/classProgression/applyProgressionAbilityConfig"
 import type {
   Ability,
   AbilityActionKind,
@@ -440,6 +441,7 @@ export function normalizeProgressionAbility(
 ): Ability {
   if (!ability.id.startsWith("progression:")) return ability
   if (ability.category === "feat") return ability
+  if (hasProgressionAbilityConfig(ability)) return ability
 
   return mergeProgressionMechanics(
     ability,

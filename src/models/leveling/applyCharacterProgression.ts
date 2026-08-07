@@ -10,6 +10,7 @@ import type { Spell } from "../magic/spells/Spell"
 import type { ClassName } from "../sheet/Class"
 import type { HP } from "../sheet/HP"
 import {
+  applyProgressionAbilityTemplate,
   getClassProgression,
   getFeaturesAtLevel,
   type LevelFeatureDefinition,
@@ -331,18 +332,27 @@ function featureToAbility(
   const choiceText = choices.length
     ? `\n\nEscolhas: ${choices.join(", ")}.`
     : ""
-
-  return stampAbility(
+  const fallbackDescription =
+    feature.description?.trim() ||
+    `Característica de ${getClassProgression(plan.className).label} adquirida no nível ${feature.level}.`
+  const configured = applyProgressionAbilityTemplate(
     {
       id: `progression:${plan.className}:${plan.subclassId ?? "base"}:${feature.id}`,
       name: feature.name,
-      description: `${
-        feature.description?.trim() ||
-        `Característica de ${getClassProgression(plan.className).label} adquirida no nível ${feature.level}.`
-      }${choiceText}`,
+      description: fallbackDescription,
       kind: "feature",
       category: feature.choice?.kind === "asi" ? "feat" : "general",
       source: "class",
+    },
+    feature.ability,
+  )
+
+  return stampAbility(
+    {
+      ...configured,
+      description: `${
+        configured.description?.trim() || fallbackDescription
+      }${choiceText}`,
     },
     acquisitionInput,
   )
