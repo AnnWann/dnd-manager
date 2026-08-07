@@ -11,14 +11,12 @@ import {
   type CharacterCreationIdentity,
   type CharacterCreationProgressionPlan,
 } from "../../../models/characters/creation/CharacterCreation"
+import type { Proficiency } from "../../../models/sheet/Proficiency"
 import {
   finalizeCreatedCharacter,
   validateCharacterCreationOverrides,
   type CharacterCreationValidationError,
 } from "../../../lib/characterCreation/finalizeCharacterCreation"
-import { ProgressionFeatureModalEnhancer } from "../progression/ProgressionFeatureModalEnhancer"
-import { ProgressionModalSelectionSync } from "../progression/bridges/ProgressionModalSelectionSync"
-import { ProgressionSpellSelectionModal } from "../progression/ProgressionSpellSelectionModal"
 import {
   CharacterCreationAbilityScoreRules,
   type AbilityScoreOverride,
@@ -28,8 +26,8 @@ import {
   type BackgroundChoiceOverride,
 } from "./CharacterCreationBackgroundChoices"
 import { CharacterCreationFlowBootstrap } from "./bridges/CharacterCreationFlowBootstrap"
+import { CreationManualClassProficiencies } from "./bridges/CreationManualClassProficiencies"
 import { CreationRequiredFieldHighlighter } from "./bridges/CreationRequiredFieldHighlighter"
-import { CreationSpellGrantLocalizationBridge } from "./bridges/CreationSpellGrantLocalizationBridge"
 import {
   CharacterCreationEquipmentChoices,
   type EquipmentOverride,
@@ -60,6 +58,7 @@ export function CharacterCreationWizard(props: WizardProps) {
     useState<GenericRacialChoiceOverride | null>(null)
   const [backgroundChoices, setBackgroundChoices] =
     useState<BackgroundChoiceOverride | null>(null)
+  const [classProficiencies, setClassProficiencies] = useState<Proficiency[]>([])
   const [identity, setIdentity] = useState<CharacterCreationIdentity>(() =>
     createEmptyCharacterCreationIdentity(),
   )
@@ -87,6 +86,7 @@ export function CharacterCreationWizard(props: WizardProps) {
       setRacialChoices(null)
       setGenericRacialChoices(null)
       setBackgroundChoices(null)
+      setClassProficiencies([])
       clearErrors()
       return
     }
@@ -132,7 +132,15 @@ export function CharacterCreationWizard(props: WizardProps) {
     }
 
     clearErrors()
-    props.onCreate(finalizeCreatedCharacter(character, overrides), plan)
+    const finalized = finalizeCreatedCharacter(character, overrides)
+    const withClassProficiencies = finalized.withSheet(
+      "proficiencies",
+      mergeProficiencies(
+        finalized.get("sheet").proficiencies ?? [],
+        classProficiencies,
+      ),
+    )
+    props.onCreate(withClassProficiencies, plan)
   }
 
   return (
@@ -184,12 +192,13 @@ export function CharacterCreationWizard(props: WizardProps) {
         }}
         externalError={backgroundError}
       />
+      <CreationManualClassProficiencies
+        open={props.open}
+        proficiencies={classProficiencies}
+        onChange={setClassProficiencies}
+      />
 
       <CreationRequiredFieldHighlighter />
-      <CreationSpellGrantLocalizationBridge />
-      <ProgressionFeatureModalEnhancer />
-      <ProgressionModalSelectionSync />
-      <ProgressionSpellSelectionModal />
 
       {blockingError ? (
         <div className="pointer-events-none fixed left-1/2 top-4 z-[260] w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger shadow-theme-lg">
@@ -198,6 +207,35 @@ export function CharacterCreationWizard(props: WizardProps) {
       ) : null}
     </>
   )
+}
+
+function mergeProficiencies(
+  current: Proficiency[],
+  additions: Proficiency[],
+): Proficiency[] {
+  const merged = [...current]
+  const keys = new Set(
+    current.map(
+      (entry) => `${entry.category}:${normalizeProficiencyName(entry.name)}`,
+    ),
+  )
+
+  for (const proficiency of additions) {
+    const key = `${proficiency.category}:${normalizeProficiencyName(proficiency.name)}`
+    if (keys.has(key)) continue
+    keys.add(key)
+    merged.push(proficiency)
+  }
+
+  return merged
+}
+
+function normalizeProficiencyName(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLocaleLowerCase("pt-BR")
 }
 
 function showValidationError(
