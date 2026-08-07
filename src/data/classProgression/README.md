@@ -1,138 +1,39 @@
-# Class progression data
+# Manual class progression
 
-This directory is the canonical runtime source for class and subclass
-progression. Consumers must import from `src/data/classProgression`, never from
-legacy files under `src/models/leveling`.
+This directory intentionally contains **no bundled class features, subclass
+catalog, option lists or subclass spell grants**.
 
-## Folder convention
+The application keeps only minimal class metadata needed by the character sheet
+(class identifier, display label and hit die). Character creation and level-up
+are data-entry workflows: the player uses their own rules reference and enters
+the subclass and every gained ability manually.
 
-```text
-classProgression/
-├── ability.ts
-├── builders.ts
-├── index.ts
-├── migration.ts
-├── registry.ts
-├── types.ts
-└── classes/
-    └── warlock/
-        ├── index.ts
-        └── subclasses/
-            ├── index.ts
-            └── hexblade/
-                └── index.ts
-```
+## What the application does not infer
 
-Each class owns its metadata, level features, cantrip progression and subclass
-collection. Each concrete subclass owns its features in its nested folder.
+- when a subclass is gained;
+- which subclasses exist;
+- which class or subclass features are gained at a level;
+- feature descriptions;
+- invocations, maneuvers, fighting styles, metamagic or similar choice lists;
+- automatic subclass spell grants;
+- class spell-selection limits inside progression;
+- multiclass prerequisites or class proficiency packages.
 
-## Adding a complete feature
+## Adding a class feature
 
-Use `feature()` for progression metadata and `ability` for behavior. The class
-file is the only source that needs to be edited.
+During character creation or level-up, use **Adicionar característica**. The
+normal ability editor supports descriptions, actions, usage counters, formulas,
+bonuses, granted spells, granted proficiencies and other generic ability fields.
+The entered data belongs to the user's character; it is not copied from a
+bundled rules catalog.
 
-```ts
-import {
-  defineProgressionAbility,
-  feature,
-  grantProgressionSpell,
-  progressionUsage,
-} from "../../builders"
+## Subclasses
 
-const example = feature(3, "Arcane Reserve", "PHB", {
-  description:
-    "You draw on a limited reserve of arcane power to produce this effect.",
-  ability: defineProgressionAbility({
-    kind: "active",
-    category: "general",
-    actionKind: "bonusAction",
-    effectDuration: "instant",
-    trigger: "onSpellCast",
-    usage: progressionUsage(1, "longRest", {
-      maxFormula: "max(1, character.attributeModifier.cha)",
-    }),
-    grantedSpells: [
-      grantProgressionSpell("misty-step", {
-        castingMode: "source",
-        attribute: "cha",
-      }),
-    ],
-    grantedProficiencies: [],
-    bonuses: {},
-  }),
-})
-```
+Subclass name and optional source/reference are free-text fields. The app stores
+what the user enters and does not validate the name against a catalog.
 
-`description` is the canonical displayed rules text. Put behavior in `ability`;
-do not duplicate the description unless the runtime ability intentionally needs
-different wording.
+## Existing characters
 
-## State is not declared in class files
-
-Progression configuration deliberately excludes runtime-owned fields such as:
-
-- ability IDs and acquisition metadata;
-- consumed uses and remaining cooldown;
-- active/inactive benefit state;
-- equipment provenance.
-
-Therefore `progressionUsage()` does not accept `used` or
-`cooldownRemaining`. New abilities start with zero consumed uses, while refresh
-and migration preserve the character's current state.
-
-## Formula variables
-
-`usage.maxFormula` and bonus `formula` fields use character-sheet variables,
-including:
-
-```text
-character.level
-character.proficiencyBonus
-character.attributeModifier.cha
-character.class.warlock.level
-character.skill.perception
-character.hp.maximum
-```
-
-The formula engine supports arithmetic, comparisons, boolean operators and
-`min`, `max`, `round`, `floor`, `ceil`, `abs`, `clamp` and `if`.
-Always provide a numeric fallback (`max` or `value`) alongside a formula.
-
-## Spell grants
-
-Use `grantProgressionSpell()`:
-
-- `castingMode: "source"` uses the ability's own usage counter;
-- `castingMode: "known"` adds the spell as a known spell;
-- set `attribute` explicitly instead of relying on the Charisma fallback.
-
-Runtime acquisition metadata is attached automatically.
-
-## Legacy mechanics fallback
-
-A feature with an `ability` configuration bypasses
-`ProgressionFeatureMechanics.ts` and
-`ProgressionFeatureMechanicsAdditional.ts`. Unconfigured features continue to
-use those maps, which permits incremental migration.
-
-After fully configuring a feature in its class/subclass module, remove its old
-hardcoded branch from the fallback files.
-
-## Updating existing characters
-
-`CLASS_PROGRESSION_DATA_VERSION` in `migration.ts` controls automatic refresh
-when a character is hydrated. Increment it whenever canonical descriptions or
-mechanics change and existing characters need to be synchronized.
-
-The refresh updates source-controlled content and mechanics while preserving:
-
-- IDs and acquisition history;
-- used charges and cooldown remaining;
-- active effects;
-- choice-projected names and descriptions.
-
-## Stable feature IDs
-
-`feature()` derives an ID from the original name and level. Pass an explicit
-`id` only when the generated value must be overridden. Persisted abilities refer
-to these IDs, so changing one requires a dedicated data migration.
+Existing abilities and subclass selections remain character-owned data. Removing
+the bundled catalog does not delete them. New progression events simply stop
+generating rules content automatically.
