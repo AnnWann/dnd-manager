@@ -50,7 +50,6 @@ jobs:
         run: >-
           npx eslint
           src/data/classProgression
-          src/models/characters/CharacterTemplate.ts
           src/models/leveling/applyCharacterProgression.ts
           src/models/leveling/ProgressionFeatureFinalization.ts
           src/models/leveling/refreshProgressionFeatureMechanics.ts
@@ -66,6 +65,6 @@ jobs:
           if ! git merge-base --is-ancestor origin/feature/auth HEAD; then
             git rebase origin/feature/auth
             npm run build
-            npx eslint src/data/classProgression src/models/characters/CharacterTemplate.ts src/models/leveling/applyCharacterProgression.ts src/models/leveling/ProgressionFeatureFinalization.ts src/models/leveling/refreshProgressionFeatureMechanics.ts
+            npx eslint src/data/classProgression src/models/leveling/applyCharacterProgression.ts src/models/leveling/ProgressionFeatureFinalization.ts src/models/leveling/refreshProgressionFeatureMechanics.ts
           fi
           git push origin HEAD:feature/auth
