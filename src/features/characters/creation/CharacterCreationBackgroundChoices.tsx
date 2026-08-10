@@ -8,6 +8,10 @@ import {
   type BackgroundProficiencyChoice,
 } from "../../../models/characters/BackgroundProficiencyChoice"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
+import {
+  readCharacterCreationDraftSection,
+  writeCharacterCreationDraftSection,
+} from "./characterCreationDraftCache"
 
 type BackgroundChoiceOverride = {
   valid: boolean
@@ -15,20 +19,46 @@ type BackgroundChoiceOverride = {
   apply: (proficiencies: Proficiency[]) => Proficiency[]
 }
 
+type BackgroundChoiceDraft = {
+  backgroundId?: string
+  values: Record<string, string>
+}
+
 type Props = {
+  draftId: string
   onChange: (override: BackgroundChoiceOverride | null) => void
   externalError?: string
 }
 
 export function CharacterCreationBackgroundChoices({
+  draftId,
   onChange,
   externalError,
 }: Props) {
+  const initialDraft = useMemo(
+    () =>
+      readCharacterCreationDraftSection<BackgroundChoiceDraft>(
+        draftId,
+        "background-choices",
+      ),
+    [draftId],
+  )
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
-  const [backgroundId, setBackgroundId] = useState<string | undefined>()
+  const [backgroundId, setBackgroundId] = useState<string | undefined>(
+    initialDraft?.backgroundId,
+  )
   const [choices, setChoices] = useState<BackgroundProficiencyChoice[]>([])
-  const [values, setValues] = useState<Record<string, string>>({})
+  const [values, setValues] = useState<Record<string, string>>(
+    initialDraft?.values ?? {},
+  )
   const [presetLocked, setPresetLocked] = useState(true)
+
+  useEffect(() => {
+    writeCharacterCreationDraftSection(draftId, "background-choices", {
+      backgroundId,
+      values,
+    } satisfies BackgroundChoiceDraft)
+  }, [backgroundId, draftId, values])
 
   useEffect(() => {
     let frame = 0
