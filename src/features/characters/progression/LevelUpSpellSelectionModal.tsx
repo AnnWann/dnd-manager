@@ -3,6 +3,10 @@ import { createPortal } from "react-dom"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
+import {
+  CLASS_NAMES,
+  MAGIC_SCHOOLS_MAP,
+} from "../../../contexts/consts"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Spell } from "../../../models/magic/spells/Spell"
 import type { ClassName } from "../../../models/sheet/Class"
@@ -15,6 +19,8 @@ export type LevelUpSpellSelection = {
   selected: string[]
   prepared: string[]
 }
+
+type LevelFilter = "all" | "cantrip" | `${number}`
 
 type Props = {
   open: boolean
@@ -42,10 +48,16 @@ export function LevelUpSpellSelectionModal({
   onClose,
 }: Props) {
   const [query, setQuery] = useState("")
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>("all")
+  const [schoolFilter, setSchoolFilter] = useState("all")
+  const [selectedOnly, setSelectedOnly] = useState(false)
 
   useEffect(() => {
     if (!open) return
     setQuery("")
+    setLevelFilter("all")
+    setSchoolFilter("all")
+    setSelectedOnly(false)
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = "hidden"
     return () => {
@@ -65,6 +77,8 @@ export function LevelUpSpellSelectionModal({
     Math.max(1, previousLevel),
     subclassId,
   )
+  const canLearnSpells =
+    rule.mode === "limited-known" || rule.mode === "spellbook"
   const previousCantrips = previousLevel > 0 ? previousRule.maxCantrips : 0
   const previousLeveled = previousLevel > 0 ? previousRule.maxLeveledSpells : 0
 
@@ -78,29 +92,71 @@ export function LevelUpSpellSelectionModal({
   const selectedLeveled = selectedSpells.filter(
     (spell) => spell.slotLevel > 0,
   ).length
+
+  const classSpells = useMemo(
+    () =>
+      spells.filter(
+        (spell) =>
+          spell.classes.includes(className) &&
+          isSpellAllowedForClassSelection(spell, rule, []),
+      ),
+    [className, rule, spells],
+  )
+  const availableSchools = useMemo(
+    () =>
+      Array.from(new Set(classSpells.map((spell) => String(spell.school))))
+        .map((school) => ({
+          value: school,
+          label: MAGIC_SCHOOLS_MAP[school] ?? school,
+        }))
+        .toSorted((left, right) =>
+          left.label.localeCompare(right.label, "pt-BR"),
+        ),
+    [classSpells],
+  )
   const normalizedQuery = normalize(query)
   const visible = useMemo(
     () =>
-      spells
-        .filter((spell) =>
-          isSpellAllowedForClassSelection(spell, rule, []),
-        )
-        .filter(
-          (spell) =>
+      classSpells
+        .filter((spell) => {
+          const matchesQuery =
             !normalizedQuery ||
             normalize(
-              `${spell.displayName ?? ""} ${spell.name} ${spell.school}`,
-            ).includes(normalizedQuery),
-        )
+              `${spell.displayName ?? ""} ${spell.name} ${spell.description} ${MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}`,
+            ).includes(normalizedQuery)
+          const matchesLevel =
+            levelFilter === "all" ||
+            (levelFilter === "cantrip"
+              ? spell.slotLevel === 0
+              : spell.slotLevel === Number(levelFilter))
+          const matchesSchool =
+            schoolFilter === "all" || String(spell.school) === schoolFilter
+          const matchesSelected =
+            !selectedOnly || selection.selected.includes(spell.index)
+
+          return (
+            matchesQuery &&
+            matchesLevel &&
+            matchesSchool &&
+            matchesSelected
+          )
+        })
         .toSorted(
           (left, right) =>
             left.slotLevel - right.slotLevel ||
             spellName(left).localeCompare(spellName(right), "pt-BR"),
         ),
-    [normalizedQuery, rule, spells],
+    [
+      classSpells,
+      levelFilter,
+      normalizedQuery,
+      schoolFilter,
+      selectedOnly,
+      selection.selected,
+    ],
   )
 
-  if (!open || rule.mode === "none") return null
+  if (!open || !canLearnSpells) return null
 
   function toggleSpell(spell: Spell) {
     const selected = selection.selected.includes(spell.index)
@@ -120,45 +176,28 @@ export function LevelUpSpellSelectionModal({
 
     onChange({
       selected: [...selection.selected, spell.index],
-      prepared:
-        rule.mode === "prepared" && spell.slotLevel > 0
-          ? [...selection.prepared, spell.index]
-          : selection.prepared,
-    })
-  }
-
-  function togglePrepared(spellIndex: string) {
-    if (!selection.selected.includes(spellIndex)) return
-    onChange({
-      ...selection,
-      prepared: selection.prepared.includes(spellIndex)
-        ? selection.prepared.filter((entry) => entry !== spellIndex)
-        : [...selection.prepared, spellIndex],
+      prepared: selection.prepared,
     })
   }
 
   const leveledLabel =
-    rule.mode === "spellbook"
-      ? "Magias no grimório"
-      : rule.mode === "prepared"
-        ? "Magias preparadas"
-        : "Magias conhecidas"
+    rule.mode === "spellbook" ? "Magias no grimório" : "Magias conhecidas"
 
   return createPortal(
     <div className="fixed inset-0 z-[12500] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/55 p-3 backdrop-blur-sm sm:p-4">
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Escolher magias"
-        className="grid max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-bg-elevated p-4 shadow-theme-lg sm:max-h-[calc(100dvh-2rem)]"
+        aria-label={`Aprender magias de ${CLASS_NAMES[className]}`}
+        className="grid max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-bg-elevated p-4 shadow-theme-lg sm:max-h-[calc(100dvh-2rem)]"
       >
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold text-textH">
-              Escolher magias
+              Aprender magias — {CLASS_NAMES[className]}
             </h2>
             <p className="mt-1 text-xs leading-5 text-textMuted">
-              O aplicativo aplica os limites numéricos da progressão. Consulte sua referência para verificar quais magias pertencem à classe.
+              Somente magias da lista de {CLASS_NAMES[className]} são exibidas. Este modal altera magias aprendidas; preparação é tratada separadamente na ficha.
             </p>
           </div>
           <Button size="sm" variant="ghost" onClick={onClose}>
@@ -169,7 +208,7 @@ export function LevelUpSpellSelectionModal({
         <div className="mt-4 grid gap-3 border-b border-border pb-4">
           <div className="grid gap-2 sm:grid-cols-3">
             <Counter
-              label="Truques"
+              label="Truques conhecidos"
               current={selectedCantrips}
               maximum={rule.maxCantrips}
               gained={Math.max(0, rule.maxCantrips - previousCantrips)}
@@ -181,70 +220,136 @@ export function LevelUpSpellSelectionModal({
               gained={Math.max(0, rule.maxLeveledSpells - previousLeveled)}
             />
             <div className="rounded-lg border border-border bg-bg p-3 text-xs">
-              <div className="text-textMuted">Nível máximo de magia</div>
+              <div className="text-textMuted">Círculo máximo disponível</div>
               <strong className="mt-1 block text-sm text-textH">
-                {rule.maxSpellLevel}
+                {formatSpellLevel(rule.maxSpellLevel)}
               </strong>
             </div>
           </div>
-          <Input
-            value={query}
-            placeholder="Buscar magia no compêndio"
-            onChange={(event) => setQuery(event.target.value)}
-          />
+
+          <div className="grid gap-2 md:grid-cols-[minmax(0,2fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_auto]">
+            <Input
+              value={query}
+              placeholder="Buscar por nome ou descrição"
+              onChange={(event) => setQuery(event.target.value)}
+            />
+
+            <select
+              className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
+              value={levelFilter}
+              onChange={(event) =>
+                setLevelFilter(event.target.value as LevelFilter)
+              }
+            >
+              <option value="all">Todos os círculos</option>
+              <option value="cantrip">Truques</option>
+              {Array.from(
+                { length: Math.max(0, Number(rule.maxSpellLevel)) },
+                (_, index) => index + 1,
+              ).map((level) => (
+                <option key={level} value={level}>
+                  {level}º círculo
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
+              value={schoolFilter}
+              onChange={(event) => setSchoolFilter(event.target.value)}
+            >
+              <option value="all">Todas as escolas</option>
+              {availableSchools.map((school) => (
+                <option key={school.value} value={school.value}>
+                  {school.label}
+                </option>
+              ))}
+            </select>
+
+            <label className="flex items-center gap-2 rounded-lg border border-border bg-bg px-3 text-xs text-text">
+              <input
+                type="checkbox"
+                checked={selectedOnly}
+                onChange={(event) => setSelectedOnly(event.target.checked)}
+              />
+              Selecionadas
+            </label>
+          </div>
         </div>
 
-        <div className="mt-4 grid min-h-0 gap-2 overflow-y-auto pr-1 md:grid-cols-2">
-          {visible.map((spell) => {
-            const selected = selection.selected.includes(spell.index)
-            const prepared = selection.prepared.includes(spell.index)
-            const atLimit =
-              spell.slotLevel === 0
-                ? selectedCantrips >= rule.maxCantrips
-                : selectedLeveled >= rule.maxLeveledSpells
-            return (
-              <article
-                key={spell.index}
-                className={
-                  selected
-                    ? "rounded-lg border border-accentBorder bg-accentBg p-3"
-                    : "rounded-lg border border-border bg-bg p-3"
-                }
-              >
-                <button
-                  type="button"
-                  disabled={!selected && atLimit}
-                  className="w-full text-left disabled:opacity-45"
-                  onClick={() => toggleSpell(spell)}
-                >
-                  <div className="font-medium text-textH">
-                    {spellName(spell)}
-                  </div>
-                  <div className="mt-1 text-xs text-textMuted">
-                    {spell.slotLevel === 0
-                      ? "Truque"
-                      : `Nível ${spell.slotLevel}`} · {String(spell.school)}
-                  </div>
-                </button>
+        <div className="mt-4 min-h-0 overflow-y-auto pr-1">
+          {visible.length ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {visible.map((spell) => {
+                const selected = selection.selected.includes(spell.index)
+                const atLimit =
+                  spell.slotLevel === 0
+                    ? selectedCantrips >= rule.maxCantrips
+                    : selectedLeveled >= rule.maxLeveledSpells
+                return (
+                  <article
+                    key={spell.index}
+                    className={
+                      selected
+                        ? "rounded-xl border border-accentBorder bg-accentBg p-4"
+                        : "rounded-xl border border-border bg-bg p-4"
+                    }
+                  >
+                    <button
+                      type="button"
+                      disabled={!selected && atLimit}
+                      className="w-full text-left disabled:opacity-45"
+                      onClick={() => toggleSpell(spell)}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-medium text-textH">
+                            {spellName(spell)}
+                          </div>
+                          <div className="mt-1 text-xs text-textMuted">
+                            {formatSpellLevel(spell.slotLevel)} · {MAGIC_SCHOOLS_MAP[spell.school] ?? String(spell.school)}
+                            {spell.concentration ? " · Concentração" : ""}
+                            {spell.ritual ? " · Ritual" : ""}
+                          </div>
+                        </div>
+                        <span className="shrink-0 text-xs font-semibold text-textH">
+                          {selected ? "Selecionada" : ""}
+                        </span>
+                      </div>
+                    </button>
 
-                {selected && rule.mode === "spellbook" && spell.slotLevel > 0 ? (
-                  <label className="mt-3 flex items-center gap-2 text-xs text-text">
-                    <input
-                      type="checkbox"
-                      checked={prepared}
-                      onChange={() => togglePrepared(spell.index)}
-                    />
-                    Preparar esta magia
-                  </label>
-                ) : null}
-              </article>
-            )
-          })}
+                    <p className="mt-3 line-clamp-3 text-xs leading-5 text-textMuted">
+                      {spell.description?.trim() || "Sem descrição cadastrada."}
+                    </p>
+
+                    <details className="mt-3 border-t border-border pt-3 text-xs text-text">
+                      <summary className="cursor-pointer font-medium text-textH">
+                        Ver descrição completa
+                      </summary>
+                      <div className="mt-2 whitespace-pre-wrap leading-5 text-textMuted">
+                        {spell.description?.trim() || "Sem descrição cadastrada."}
+                      </div>
+                      {spell.higherLevelText?.trim() ? (
+                        <div className="mt-3 whitespace-pre-wrap leading-5 text-textMuted">
+                          <strong className="text-textH">Em círculos superiores: </strong>
+                          {spell.higherLevelText.trim()}
+                        </div>
+                      ) : null}
+                    </details>
+                  </article>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-textMuted">
+              Nenhuma magia da lista de {CLASS_NAMES[className]} corresponde aos filtros.
+            </div>
+          )}
         </div>
 
         <div className="mt-4 flex justify-end border-t border-border pt-4">
           <Button variant="primary" onClick={onClose}>
-            Concluir
+            Concluir seleção
           </Button>
         </div>
       </div>
@@ -271,7 +376,9 @@ function Counter({
         {current}/{maximum}
       </strong>
       <div className="mt-1 text-[10px] text-textMuted">
-        {gained > 0 ? `+${gained} de capacidade neste nível` : "Sem aumento neste nível"}
+        {gained > 0
+          ? `+${gained} de capacidade neste nível`
+          : "Sem aumento de capacidade neste nível"}
       </div>
     </div>
   )
@@ -288,9 +395,13 @@ function spellName(spell: Spell): string {
   return spell.displayName?.trim() || spell.name
 }
 
+function formatSpellLevel(level: number): string {
+  return level === 0 ? "Truque" : `${level}º círculo`
+}
+
 function normalize(value: string): string {
   return value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("en-US")
+    .toLocaleLowerCase("pt-BR")
 }
