@@ -98,11 +98,41 @@ export function LevelUpSpellSelectionModal({
   const maximum =
     kind === "cantrip" ? rule.maxCantrips : rule.maxLeveledSpells
   const gained = Math.max(0, maximum - previousMaximum)
+  const replacementLimit =
+    kind === "cantrip" ? rule.swap.cantrips : rule.swap.leveledKnown
 
   const localizedSpells = useMemo(
     () => spells.map(localizeOfficialSpell),
     [spells],
   )
+  const spellByIndex = useMemo(
+    () => new Map(localizedSpells.map((spell) => [spell.index, spell])),
+    [localizedSpells],
+  )
+  const originalIndexes = useMemo(
+    () =>
+      (character.get("magic")?.spells.knownSpells ?? [])
+        .filter((entry) => {
+          if (entry.source.type !== "class") return false
+          if (
+            resolveSourceClass(entry.source.sourceId, entry.source.name) !==
+            className
+          ) {
+            return false
+          }
+          const spell = spellByIndex.get(entry.spells.id)
+          return kind === "cantrip"
+            ? spell?.slotLevel === 0
+            : Boolean(spell && spell.slotLevel > 0)
+        })
+        .map((entry) => entry.spells.id),
+    [character, className, kind, spellByIndex],
+  )
+  const originalSet = useMemo(() => new Set(originalIndexes), [originalIndexes])
+  const replacementsUsed = originalIndexes.filter(
+    (index) => !selection.selected.includes(index),
+  ).length
+
   const selectedSpells = useMemo(
     () => resolveSpells(selection.selected, localizedSpells),
     [selection.selected, localizedSpells],
@@ -185,6 +215,11 @@ export function LevelUpSpellSelectionModal({
   function toggleSpell(spell: Spell) {
     const selected = selection.selected.includes(spell.index)
     if (selected) {
+      if (originalSet.has(spell.index)) {
+        if (replacementLimit <= 0 || replacementsUsed >= replacementLimit) {
+          return
+        }
+      }
       onChange({
         selected: selection.selected.filter((entry) => entry !== spell.index),
         prepared: selection.prepared.filter((entry) => entry !== spell.index),
@@ -199,12 +234,7 @@ export function LevelUpSpellSelectionModal({
     })
   }
 
-  const title =
-    kind === "cantrip"
-      ? `Aprender truques — ${CLASS_NAMES[className]}`
-      : rule.mode === "spellbook"
-        ? `Adicionar ao grimório — ${CLASS_NAMES[className]}`
-        : `Aprender magias — ${CLASS_NAMES[className]}`
+  const title = getTitle(kind, rule.mode, className, gained, replacementLimit)
   const counterLabel =
     kind === "cantrip"
       ? "Truques conhecidos"
@@ -239,6 +269,8 @@ export function LevelUpSpellSelectionModal({
               current={selectedCount}
               maximum={maximum}
               gained={gained}
+              replacementsUsed={replacementsUsed}
+              replacementLimit={replacementLimit}
             />
             {kind === "leveled" ? (
               <div className="rounded-lg border border-border bg-bg p-3 text-xs">
@@ -312,7 +344,15 @@ export function LevelUpSpellSelectionModal({
             <div className="grid gap-3 md:grid-cols-2">
               {visible.map((spell) => {
                 const selected = selection.selected.includes(spell.index)
+                const isOriginal = originalSet.has(spell.index)
+                const cannotRemoveOriginal =
+                  selected &&
+                  isOriginal &&
+                  (replacementLimit <= 0 || replacementsUsed >= replacementLimit)
                 const atLimit = selectedCount >= maximum
+                const disabled =
+                  cannotRemoveOriginal || (!selected && atLimit)
+
                 return (
                   <article
                     key={spell.index}
@@ -324,7 +364,7 @@ export function LevelUpSpellSelectionModal({
                   >
                     <button
                       type="button"
-                      disabled={!selected && atLimit}
+                      disabled={disabled}
                       className="w-full text-left disabled:opacity-45"
                       onClick={() => toggleSpell(spell)}
                     >
@@ -341,7 +381,7 @@ export function LevelUpSpellSelectionModal({
                           </div>
                         </div>
                         <span className="shrink-0 text-xs font-semibold text-textH">
-                          {selected ? "Selecionada" : ""}
+                          {selected ? (isOriginal ? "Conhecida" : "Nova") : ""}
                         </span>
                       </div>
                     </button>
@@ -409,11 +449,15 @@ function Counter({
   current,
   maximum,
   gained,
+  replacementsUsed,
+  replacementLimit,
 }: {
   label: string
   current: number
   maximum: number
   gained: number
+  replacementsUsed: number
+  replacementLimit: number
 }) {
   return (
     <div className="rounded-lg border border-border bg-bg p-3 text-xs">
@@ -422,12 +466,36 @@ function Counter({
         {current}/{maximum}
       </strong>
       <div className="mt-1 text-[10px] text-textMuted">
-        {gained > 0
-          ? `+${gained} neste nível`
-          : "Sem aumento neste nível"}
+        {gained > 0 ? `+${gained} neste nível` : "Sem aumento neste nível"}
+        {replacementLimit > 0
+          ? ` · ${replacementsUsed}/${replacementLimit} substituição`
+          : ""}
       </div>
     </div>
   )
+}
+
+function getTitle(
+  kind: LevelUpSpellSelectionKind,
+  mode: ReturnType<typeof getClassSpellSelectionRule>["mode"],
+  className: ClassName,
+  gained: number,
+  replacementLimit: number,
+): string {
+  const classLabel = CLASS_NAMES[className]
+  if (kind === "cantrip") {
+    if (gained > 0 && replacementLimit > 0) {
+      return `Aprender / substituir truques — ${classLabel}`
+    }
+    if (replacementLimit > 0) return `Substituir truque — ${classLabel}`
+    return `Aprender truques — ${classLabel}`
+  }
+  if (mode === "spellbook") return `Adicionar ao grimório — ${classLabel}`
+  if (gained > 0 && replacementLimit > 0) {
+    return `Aprender / substituir magias — ${classLabel}`
+  }
+  if (replacementLimit > 0) return `Substituir magia — ${classLabel}`
+  return `Aprender magias — ${classLabel}`
 }
 
 function resolveSpells(indexes: string[], spells: Spell[]): Spell[] {
@@ -435,6 +503,10 @@ function resolveSpells(indexes: string[], spells: Spell[]): Spell[] {
   return indexes
     .map((index) => byIndex.get(index))
     .filter((spell): spell is Spell => Boolean(spell))
+}
+
+function resolveSourceClass(sourceId: string | undefined, sourceName: string): ClassName {
+  return String(sourceId ?? sourceName).split(":")[0] as ClassName
 }
 
 function spellName(spell: Spell): string {
