@@ -71,9 +71,9 @@ const LIMITED_KNOWN: Partial<Record<ClassName, Record<number, number>>> = {
 }
 
 /**
- * Structural rules for spells a class actually learns or records in a
- * spellbook. Prepared-only casting is deliberately not represented as spell
- * learning here.
+ * Structural spell progression. Prepared casters keep mode="prepared" so their
+ * cantrip progression can be selected without treating prepared leveled spells
+ * as learned spells.
  */
 export function getClassSpellSelectionRule(
   _character: CharacterTemplate,
@@ -118,18 +118,23 @@ export function getSubclassSpellGrants(
 }
 
 /**
- * Learned-spell selection is limited to the spell list of the class being
- * advanced, the maximum spell circle available and the class's cantrip rules.
+ * Cantrips may be learned by prepared casters. Leveled spell selection is only
+ * exposed for limited-known casters and spellbooks.
  */
 export function isSpellAllowedForClassSelection(
   spell: Spell,
   rule: ClassSpellSelectionRule,
   _subclassSpellNames: string[],
 ): boolean {
-  if (rule.mode === "none" || rule.mode === "prepared") return false
+  if (rule.mode === "none") return false
   if (!spell.classes.includes(rule.className)) return false
+
+  if (spell.slotLevel === 0) {
+    return rule.maxCantrips > 0
+  }
+
+  if (rule.mode === "prepared") return false
   if (spell.slotLevel > rule.maxSpellLevel) return false
-  if (spell.slotLevel === 0 && rule.maxCantrips <= 0) return false
   return true
 }
 
@@ -193,9 +198,9 @@ function getBaseMode(className: ClassName): SpellSelectionMode {
     return "limited-known"
   }
   if (className === "wizard") return "spellbook"
-
-  // Artificer, cleric, druid and paladin prepare from their class lists rather
-  // than learning a limited set here. Preparation is a separate concern.
+  if (["artificer", "cleric", "druid", "paladin"].includes(className)) {
+    return "prepared"
+  }
   return "none"
 }
 
