@@ -26,7 +26,7 @@ type LevelFilter = "all" | `${number}`
 
 type Props = {
   open: boolean
-  kind: LevelUpSpellSelectionKind
+  kind?: LevelUpSpellSelectionKind
   character: CharacterTemplate
   className: ClassName
   previousLevel: number
@@ -44,7 +44,7 @@ const LOCALIZED_SPELLS = new Map(
 
 export function LevelUpSpellSelectionModal({
   open,
-  kind,
+  kind = "leveled",
   character,
   className,
   previousLevel,
