@@ -2,6 +2,7 @@ import type { Ability, Usage } from "../abilities/Ability"
 import type { Equipment } from "../items/equipment/EquipmentSlot"
 import type { SpellSource } from "../magic/spells/SpellSource"
 import type { SpellGrantCastingMode } from "../magic/spells/SpellGrant"
+import { getCharacterAsis } from "./CharacterAsi"
 import type { CharacterTemplate } from "./CharacterTemplate"
 
 export type CharacterGrantedSpell = {
@@ -20,8 +21,27 @@ export function getCharacterGrantedSpells(
   for (const ability of character.get("abilities") ?? []) {
     addAbilitySpellGrants(results, ability, {
       type: ability.category === "feat" ? "feat" : "ability",
-      name: ability.name || (ability.category === "feat" ? "Talento" : "Habilidade"),
+      name:
+        ability.name ||
+        (ability.category === "feat" ? "Talento" : "Habilidade"),
       sourceId: ability.id,
+    })
+  }
+
+  for (const invocation of character.get("magic")?.invocations ?? []) {
+    addAbilitySpellGrants(results, invocation, {
+      type: "ability",
+      name: invocation.name || "Evocação",
+      sourceId: invocation.id,
+    })
+  }
+
+  for (const asi of getCharacterAsis(character)) {
+    if (!asi.ability) continue
+    addAbilitySpellGrants(results, asi.ability, {
+      type: "feat",
+      name: asi.ability.name || "Talento",
+      sourceId: asi.ability.id,
     })
   }
 
