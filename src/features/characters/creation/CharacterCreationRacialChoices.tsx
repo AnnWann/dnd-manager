@@ -8,6 +8,10 @@ import { SKILL_LABELS } from "../../../data/characterCreation/phbPresets"
 import type { Ability } from "../../../models/abilities/Ability"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
 import type { Skill } from "../../../models/sheet/Skills"
+import {
+  readCharacterCreationDraftSection,
+  writeCharacterCreationDraftSection,
+} from "./characterCreationDraftCache"
 
 const DRACONIC_ANCESTRIES = [
   ["Preto", "ácido"],
@@ -37,6 +41,18 @@ const DEFAULT_FEATS = [
   ["Sortudo", "Concede pontos de sorte para repetir jogadas importantes."],
 ] as const
 
+type RacialChoicesDraft = {
+  raceName: string
+  skillOne: Skill
+  skillTwo: Skill
+  featName: string
+  customFeatName: string
+  customFeatDescription: string
+  cantripIndex: string
+  ancestry: string
+  genericChoices: Record<string, string>
+}
+
 type Override = {
   valid: boolean
   error?: string
@@ -48,25 +64,72 @@ type Override = {
 }
 
 type Props = {
+  draftId: string
   onChange: (override: Override | null) => void
   externalError?: string
 }
 
 export function CharacterCreationRacialChoices({
+  draftId,
   onChange,
   externalError,
 }: Props) {
   const { spells } = useMagicContext()
+  const initialDraft = useMemo(
+    () =>
+      readCharacterCreationDraftSection<RacialChoicesDraft>(
+        draftId,
+        "racial-required-choices",
+      ),
+    [draftId],
+  )
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
-  const [raceName, setRaceName] = useState("")
-  const [skillOne, setSkillOne] = useState<Skill>("perception")
-  const [skillTwo, setSkillTwo] = useState<Skill>("stealth")
-  const [featName, setFeatName] = useState("")
-  const [customFeatName, setCustomFeatName] = useState("")
-  const [customFeatDescription, setCustomFeatDescription] = useState("")
-  const [cantripIndex, setCantripIndex] = useState("")
-  const [ancestry, setAncestry] = useState("")
-  const [genericChoices, setGenericChoices] = useState<Record<string, string>>({})
+  const [raceName, setRaceName] = useState(initialDraft?.raceName ?? "")
+  const [skillOne, setSkillOne] = useState<Skill>(
+    initialDraft?.skillOne ?? "perception",
+  )
+  const [skillTwo, setSkillTwo] = useState<Skill>(
+    initialDraft?.skillTwo ?? "stealth",
+  )
+  const [featName, setFeatName] = useState(initialDraft?.featName ?? "")
+  const [customFeatName, setCustomFeatName] = useState(
+    initialDraft?.customFeatName ?? "",
+  )
+  const [customFeatDescription, setCustomFeatDescription] = useState(
+    initialDraft?.customFeatDescription ?? "",
+  )
+  const [cantripIndex, setCantripIndex] = useState(
+    initialDraft?.cantripIndex ?? "",
+  )
+  const [ancestry, setAncestry] = useState(initialDraft?.ancestry ?? "")
+  const [genericChoices, setGenericChoices] = useState<Record<string, string>>(
+    initialDraft?.genericChoices ?? {},
+  )
+
+  useEffect(() => {
+    writeCharacterCreationDraftSection(draftId, "racial-required-choices", {
+      raceName,
+      skillOne,
+      skillTwo,
+      featName,
+      customFeatName,
+      customFeatDescription,
+      cantripIndex,
+      ancestry,
+      genericChoices,
+    } satisfies RacialChoicesDraft)
+  }, [
+    ancestry,
+    cantripIndex,
+    customFeatDescription,
+    customFeatName,
+    draftId,
+    featName,
+    genericChoices,
+    raceName,
+    skillOne,
+    skillTwo,
+  ])
 
   const wizardCantrips = useMemo(
     () =>
@@ -95,6 +158,8 @@ export function CharacterCreationRacialChoices({
         if (nameInput?.value && nameInput.value !== raceName) {
           setRaceName(nameInput.value)
           setFeatName("")
+          setCustomFeatName("")
+          setCustomFeatDescription("")
           setCantripIndex("")
           setAncestry("")
           setGenericChoices({})
@@ -155,7 +220,7 @@ export function CharacterCreationRacialChoices({
               featName === "custom"
                 ? customFeatDescription.trim() || "Talento racial personalizado."
                 : DEFAULT_FEATS.find(([name]) => name === feat)?.[1] ?? "Talento inicial do Humano Variante.",
-            kind: "passive",
+            kind: "feature",
             category: "feat",
             source: "race",
           })
