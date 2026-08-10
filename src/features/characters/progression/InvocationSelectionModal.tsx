@@ -88,10 +88,12 @@ export function InvocationSelectionModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[11000] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/55 p-3 backdrop-blur-sm sm:p-4">
-      <section className="w-full max-w-3xl rounded-2xl border border-border bg-bg-elevated p-4 shadow-theme-lg">
-        <header className="flex items-start justify-between gap-3 border-b border-border pb-4">
-          <div>
-            <h2 className="text-base font-semibold text-textH">Evocações</h2>
+      <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-3xl min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-bg-elevated p-4 shadow-theme-lg">
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border pb-4">
+          <div className="min-w-0">
+            <h2 className="break-words text-base font-semibold text-textH [overflow-wrap:anywhere]">
+              Evocações
+            </h2>
             <div className="mt-1 text-xs text-textMuted">
               {invocations.length}/{max} configuradas
               {replacementLimit > 0
@@ -99,12 +101,12 @@ export function InvocationSelectionModal({
                 : ""}
             </div>
           </div>
-          <Button size="sm" variant="ghost" onClick={onClose}>
+          <Button className="shrink-0" size="sm" variant="ghost" onClick={onClose}>
             Fechar
           </Button>
         </header>
 
-        <div className="mt-4 grid max-h-[60dvh] gap-2 overflow-y-auto pr-1">
+        <div className="mt-4 grid min-h-0 min-w-0 flex-1 gap-2 overflow-y-auto overflow-x-hidden pr-1">
           {invocations.length ? (
             invocations.map((invocation) => {
               const isOriginal = originalIds.has(invocation.id)
@@ -116,12 +118,14 @@ export function InvocationSelectionModal({
               return (
                 <article
                   key={invocation.id}
-                  className="flex items-start justify-between gap-3 rounded-xl border border-border bg-bg p-3"
+                  className="flex min-w-0 items-start justify-between gap-3 overflow-hidden rounded-xl border border-border bg-bg p-3"
                 >
-                  <div className="min-w-0">
-                    <div className="font-medium text-textH">{invocation.name}</div>
+                  <div className="min-w-0 flex-1 overflow-hidden">
+                    <div className="break-words font-medium text-textH [overflow-wrap:anywhere]">
+                      {invocation.name}
+                    </div>
                     {invocation.description?.trim() ? (
-                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-textMuted">
+                      <p className="mt-1 line-clamp-3 max-w-full overflow-hidden break-words text-xs leading-5 text-textMuted [overflow-wrap:anywhere]">
                         {invocation.description}
                       </p>
                     ) : null}
@@ -172,7 +176,7 @@ export function InvocationSelectionModal({
           )}
         </div>
 
-        <footer className="mt-4 flex justify-end border-t border-border pt-4">
+        <footer className="mt-4 flex shrink-0 justify-end border-t border-border pt-4">
           <Button disabled={max <= 0 || invocations.length >= max} onClick={openNew}>
             Adicionar evocação
           </Button>
