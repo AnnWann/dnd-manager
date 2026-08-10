@@ -120,6 +120,8 @@ export function InvocationSelectionModal({
         <AbilityDialog
           open={editorOpen}
           ability={editing}
+          title={editing ? "Editar evocação" : "Adicionar evocação"}
+          fixedCategory="invocation"
           onClose={() => {
             setEditorOpen(false)
             setEditing(null)
