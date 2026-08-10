@@ -13,7 +13,7 @@ export type CharacterAsi = {
   kind: CharacterAsiKind
   /** Feats remain full abilities, but are owned by the ASI entry. */
   ability?: Ability
-  /** Permanent base-score increases granted by this ASI. */
+  /** Permanent score increases granted by this ASI. */
   increases: Partial<Record<Attribute, number>>
   acquisition?: CharacterAcquisitionMetadata
 }
@@ -23,6 +23,16 @@ export function getCharacterAsis(character: CharacterTemplate): CharacterAsi[] {
   if (Array.isArray(direct)) return direct
   const mirrored = character.get("magic")?.asi
   return Array.isArray(mirrored) ? mirrored : []
+}
+
+export function getAsiAttributeIncrease(
+  character: CharacterTemplate,
+  attribute: Attribute,
+): number {
+  return getCharacterAsis(character).reduce(
+    (total, entry) => total + Math.max(0, entry.increases[attribute] ?? 0),
+    0,
+  )
 }
 
 export function withCharacterAsis(
