@@ -8,7 +8,9 @@ import { AbilityDialog } from "../abilities/abilityDialog"
 type Props = {
   open: boolean
   invocations: Ability[]
+  originalInvocations?: Ability[]
   max: number
+  replacementLimit?: number
   onChange: (invocations: Ability[]) => void
   onClose: () => void
 }
@@ -16,17 +18,41 @@ type Props = {
 export function InvocationSelectionModal({
   open,
   invocations,
+  originalInvocations = [],
   max,
+  replacementLimit = 0,
   onChange,
   onClose,
 }: Props) {
   const [editing, setEditing] = useState<Ability | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
+  const [replacingId, setReplacingId] = useState<string | null>(null)
 
   if (!open) return null
 
+  const originalIds = new Set(originalInvocations.map((entry) => entry.id))
+  const currentIds = new Set(invocations.map((entry) => entry.id))
+  const replacementsUsed = originalInvocations.filter(
+    (entry) => !currentIds.has(entry.id),
+  ).length
+
   function openNew() {
     if (invocations.length >= max) return
+    setReplacingId(null)
+    setEditing(null)
+    setEditorOpen(true)
+  }
+
+  function openEdit(invocation: Ability) {
+    setReplacingId(null)
+    setEditing(invocation)
+    setEditorOpen(true)
+  }
+
+  function openReplacement(invocation: Ability) {
+    if (!originalIds.has(invocation.id)) return
+    if (replacementLimit <= 0 || replacementsUsed >= replacementLimit) return
+    setReplacingId(invocation.id)
     setEditing(null)
     setEditorOpen(true)
   }
@@ -37,16 +63,27 @@ export function InvocationSelectionModal({
       category: "invocation",
       source: "class",
     }
-    const exists = invocations.some((entry) => entry.id === invocation.id)
-    onChange(
-      exists
-        ? invocations.map((entry) =>
-            entry.id === invocation.id ? invocation : entry,
-          )
-        : [...invocations, invocation].slice(0, max),
-    )
+
+    if (replacingId) {
+      onChange(
+        invocations.map((entry) =>
+          entry.id === replacingId ? invocation : entry,
+        ),
+      )
+    } else {
+      const exists = invocations.some((entry) => entry.id === invocation.id)
+      onChange(
+        exists
+          ? invocations.map((entry) =>
+              entry.id === invocation.id ? invocation : entry,
+            )
+          : [...invocations, invocation].slice(0, max),
+      )
+    }
+
     setEditorOpen(false)
     setEditing(null)
+    setReplacingId(null)
   }
 
   return createPortal(
@@ -57,6 +94,9 @@ export function InvocationSelectionModal({
             <h2 className="text-base font-semibold text-textH">Evocações</h2>
             <div className="mt-1 text-xs text-textMuted">
               {invocations.length}/{max} configuradas
+              {replacementLimit > 0
+                ? ` · ${replacementsUsed}/${replacementLimit} substituição`
+                : ""}
             </div>
           </div>
           <Button size="sm" variant="ghost" onClick={onClose}>
@@ -66,44 +106,65 @@ export function InvocationSelectionModal({
 
         <div className="mt-4 grid max-h-[60dvh] gap-2 overflow-y-auto pr-1">
           {invocations.length ? (
-            invocations.map((invocation) => (
-              <article
-                key={invocation.id}
-                className="flex items-start justify-between gap-3 rounded-xl border border-border bg-bg p-3"
-              >
-                <div className="min-w-0">
-                  <div className="font-medium text-textH">{invocation.name}</div>
-                  {invocation.description?.trim() ? (
-                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-textMuted">
-                      {invocation.description}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setEditing(invocation)
-                      setEditorOpen(true)
-                    }}
-                  >
-                    Editar
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      onChange(
-                        invocations.filter((entry) => entry.id !== invocation.id),
-                      )
-                    }
-                  >
-                    Remover
-                  </Button>
-                </div>
-              </article>
-            ))
+            invocations.map((invocation) => {
+              const isOriginal = originalIds.has(invocation.id)
+              const canReplace =
+                isOriginal &&
+                replacementLimit > 0 &&
+                replacementsUsed < replacementLimit
+
+              return (
+                <article
+                  key={invocation.id}
+                  className="flex items-start justify-between gap-3 rounded-xl border border-border bg-bg p-3"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium text-textH">{invocation.name}</div>
+                    {invocation.description?.trim() ? (
+                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-textMuted">
+                        {invocation.description}
+                      </p>
+                    ) : null}
+                    {isOriginal ? (
+                      <div className="mt-1 text-[10px] text-textMuted">
+                        Evocação anterior
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openEdit(invocation)}
+                    >
+                      Editar
+                    </Button>
+                    {isOriginal ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={!canReplace}
+                        onClick={() => openReplacement(invocation)}
+                      >
+                        Substituir
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          onChange(
+                            invocations.filter((entry) => entry.id !== invocation.id),
+                          )
+                        }
+                      >
+                        Remover
+                      </Button>
+                    )}
+                  </div>
+                </article>
+              )
+            })
           ) : (
             <div className="rounded-xl border border-dashed border-border p-5 text-center text-xs text-textMuted">
               Nenhuma evocação configurada.
@@ -120,11 +181,18 @@ export function InvocationSelectionModal({
         <AbilityDialog
           open={editorOpen}
           ability={editing}
-          title={editing ? "Editar evocação" : "Adicionar evocação"}
+          title={
+            replacingId
+              ? "Substituir evocação"
+              : editing
+                ? "Editar evocação"
+                : "Adicionar evocação"
+          }
           fixedCategory="invocation"
           onClose={() => {
             setEditorOpen(false)
             setEditing(null)
+            setReplacingId(null)
           }}
           onSave={save}
         />
