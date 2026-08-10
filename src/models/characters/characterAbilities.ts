@@ -246,7 +246,7 @@ function getAsiScoreBonusAbilities(character: CharacterTemplate): Ability[] {
     .map((entry) => ({
       id: `asi-score:${entry.id}`,
       name: `ASI — nível ${entry.classLevel}`,
-      kind: "passive" as const,
+      kind: "feature" as const,
       category: "general" as const,
       source: "asi",
       acquisition: entry.acquisition,
