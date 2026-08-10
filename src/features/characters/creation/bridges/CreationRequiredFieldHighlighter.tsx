@@ -11,16 +11,16 @@ import {
 } from "../logic/characterCreationStepValidation"
 
 export function CreationRequiredFieldHighlighter() {
-  const [message, setMessage] = useState("")
-  const messageRef = useRef(message)
-  messageRef.current = message
+  const [feedback, setFeedback] = useState("")
+  const feedbackRef = useRef(feedback)
+  feedbackRef.current = feedback
 
   useEffect(() => {
     const root = findCharacterCreationRoot()
     if (root) root.dataset.characterCreationMobile = "true"
 
-    const clear = () => {
-      if (messageRef.current) setMessage("")
+    const clearFeedback = () => {
+      if (feedbackRef.current) setFeedback("")
       clearCreationAttemptHighlights()
     }
 
@@ -29,10 +29,20 @@ export function CreationRequiredFieldHighlighter() {
       if (!(target instanceof Element)) return
 
       const button = target.closest<HTMLButtonElement>("button")
-      if (!button) return
+      if (!button) {
+        clearFeedback()
+        return
+      }
 
       const wizardRoot = findCharacterCreationRoot(button)
-      if (!wizardRoot) return
+
+      // Shared creation modals are rendered through portals outside the wizard
+      // root. Interacting with them is an edit, not a navigation attempt. Any
+      // previous validation feedback becomes informationally stale immediately.
+      if (!wizardRoot) {
+        if (event.isTrusted) clearFeedback()
+        return
+      }
 
       if (!event.isTrusted) {
         if (isAllowedBootstrapNavigation(wizardRoot, button)) return
@@ -42,39 +52,41 @@ export function CreationRequiredFieldHighlighter() {
 
       const intent = getCreationNavigationIntent(wizardRoot, button)
       if (!intent.forward) {
-        clear()
+        clearFeedback()
         return
       }
 
       const main = wizardRoot.querySelector<HTMLElement>("main")
       if (!main) return
 
+      // Navigation is decided only by this fresh validation result. The
+      // feedback state below never controls whether the user can continue.
       const error = validateVisibleCreationStep(main)
       if (!error) {
-        clear()
+        clearFeedback()
         return
       }
 
       stopNavigation(event)
-      setMessage(error.message)
+      setFeedback(error.message)
       highlightCreationAttempt(error.elements)
     }
 
     document.addEventListener("click", onClick, true)
-    document.addEventListener("input", clear, true)
-    document.addEventListener("change", clear, true)
+    document.addEventListener("input", clearFeedback, true)
+    document.addEventListener("change", clearFeedback, true)
     return () => {
       document.removeEventListener("click", onClick, true)
-      document.removeEventListener("input", clear, true)
-      document.removeEventListener("change", clear, true)
+      document.removeEventListener("input", clearFeedback, true)
+      document.removeEventListener("change", clearFeedback, true)
       clearCreationAttemptHighlights()
       if (root) delete root.dataset.characterCreationMobile
     }
   }, [])
 
-  return message ? (
+  return feedback ? (
     <div className="pointer-events-none fixed left-1/2 top-4 z-[360] w-[min(46rem,calc(100vw-1rem))] -translate-x-1/2 rounded-xl border border-danger bg-dangerBg px-3 py-3 text-sm font-medium text-danger shadow-theme-lg sm:px-4">
-      {message}
+      {feedback}
     </div>
   ) : null
 }
