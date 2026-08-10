@@ -148,6 +148,7 @@ import type { MetamagicId } from "../magic/metamagic/Metamagic"
 import type { SpellSource } from "../magic/spells/SpellSource"
 import type { Proficiency, ProficiencyCategory } from "../sheet/Proficiency"
 import { addProficiency, hasProficiency, removeProficiency, updateProficiency } from "./characterProficiencies"
+import type { CharacterAsi } from "./CharacterAsi"
 import type { CharacterProfile } from "./characterProfile"
 
 export type CharacterTemplateProps = {
@@ -165,6 +166,8 @@ export type CharacterTemplateProps = {
   classProgressionVersion?: number
 
   abilities?: Ability[]
+  /** Feats and ability-score improvements selected through class ASI levels. */
+  asi?: CharacterAsi[]
   magic?: Magic
 
   equipment: CharacterEquipment
@@ -267,6 +270,11 @@ export class CharacterTemplate {
       deathSaves: props.deathSaves,
       unique: props.unique ?? true,
       abilities: Array.isArray(props.abilities) ? props.abilities : [],
+      asi: Array.isArray(props.asi)
+        ? props.asi
+        : Array.isArray(props.magic?.asi)
+          ? props.magic.asi
+          : [],
 
       magic: props.magic ?? undefined,
 
@@ -389,7 +397,7 @@ export class CharacterTemplate {
   useRing(ring: Equipment): CharacterTemplate {return useRing(this, ring)}
   updateRing(index: number, ring: Equipment): CharacterTemplate {return updateRing(this, index, ring)}
   removeRing(index: number): CharacterTemplate {return removeRing(this, index)}
-  unequipRing(index: number): CharacterTemplate {return unequipRing(this, index)}
+  unequipRing(index: number): CharacterTemplate {return unequipRing(this)}
   addToPocketItem(item: Itemmable): CharacterTemplate {return addToPocketItem(this, item)}
   pocketInventoryItem(itemId: string): CharacterTemplate {return pocketInventoryItem(this, itemId)}
   usePocketItem(index: number): CharacterTemplate {return usePocketItem(this, index)}
@@ -472,7 +480,7 @@ export class CharacterTemplate {
   getEffectivePassivePerception(): number {return getEffectivePassivePerception(this)}
   getEffectiveMobility(): number {return getEffectiveMobility(this)}
   applyBonus(baseValue: number, bonus: Bonus): number {return applyBonus(baseValue, bonus)}
-  applyBonuses(baseValue: number, bonuses: Bonus[]): number {return applyBonuses(baseValue, bonuses)}
+  applyBonuses(baseValue: number, bonuses: Bonus[]): number {return applyBonuses(this, bonuses)}
   isSavingThrowProficient(attribute: Attribute): boolean {return isSavingThrowProficient(this, attribute)}
   getSavingThrowBonus(attribute: Attribute): number {return getSavingThrowBonus(this, attribute)}
   setSavingThrowProficiency(attribute: Attribute,proficient: boolean): CharacterTemplate {return setSavingThrowProficiency(this,attribute,proficient)}
