@@ -8,7 +8,7 @@ export type BackgroundProficiencyChoice = {
   allowCustom: boolean
 }
 
-const STANDARD_LANGUAGES = [
+export const STANDARD_LANGUAGES = [
   "Comum",
   "Anão",
   "Élfico",
