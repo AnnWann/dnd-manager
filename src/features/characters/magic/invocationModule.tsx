@@ -28,20 +28,17 @@ export function InvocationModule({ character, updateCharacter }: Props) {
   function save(ability: Ability) {
     updateCharacter(character.get("id"), (current) => {
       const currentInvocations = collectInvocations(current)
-      const invocation = {
+      const invocation: Ability = {
         ...ability,
-        category: "invocation" as const,
+        category: "invocation",
         source: "class",
       }
       const exists = currentInvocations.some(
         (entry) => entry.id === invocation.id,
       )
-      const next = exists
-        ? currentInvocations.map((entry) =>
-            entry.id === invocation.id ? invocation : entry,
-          )
-        : [...currentInvocations, invocation].slice(0, maximum)
-      return persistInvocations(current, next)
+      if (!exists && currentInvocations.length >= maximum) return current
+
+      return current.saveAbility(invocation)
     })
     setEditorOpen(false)
     setEditing(null)
@@ -49,10 +46,7 @@ export function InvocationModule({ character, updateCharacter }: Props) {
 
   function remove(id: string) {
     updateCharacter(character.get("id"), (current) =>
-      persistInvocations(
-        current,
-        collectInvocations(current).filter((entry) => entry.id !== id),
-      ),
+      current.removeAbility(id),
     )
   }
 
@@ -150,26 +144,4 @@ function collectInvocations(character: CharacterTemplate): Ability[] {
     if (ability.category === "invocation") byId.set(ability.id, ability)
   }
   return Array.from(byId.values())
-}
-
-function persistInvocations(
-  character: CharacterTemplate,
-  invocations: Ability[],
-): CharacterTemplate {
-  const magic = character.getOrCreateMagic()
-  return character
-    .with(
-      "abilities",
-      (character.get("abilities") ?? []).filter(
-        (ability) => ability.category !== "invocation",
-      ),
-    )
-    .with("magic", {
-      ...magic,
-      invocations: invocations.map((ability) => ({
-        ...ability,
-        category: "invocation",
-        source: "class",
-      })),
-    })
 }
