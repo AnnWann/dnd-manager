@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from "react"
-import { Check, Plus } from "lucide-react"
+import { Check, Plus, Trash2 } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
+import { useMagicContext } from "../../../contexts/magicContext"
 import {
   PHB_RACE_PRESETS,
   SKILL_LABELS,
   racePresetToCharacterRace,
   type RacePreset,
 } from "../../../data/characterCreation/phbPresets"
+import { RACIAL_SPELLCASTING_PRESETS } from "../../../data/characterCreation/racialSpellcastingPresets"
 import { attributeShort } from "../../../lib/attributeShorts"
 import type { Ability } from "../../../models/abilities/Ability"
 import {
@@ -18,6 +20,7 @@ import {
   getAbilityUsageMax,
   restoreAbilityUse,
 } from "../../../models/abilities/abilityActivation"
+import { createCharacterAcquisition } from "../../../models/characters/CharacterAcquisition"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type {
   CharacterRace,
@@ -31,6 +34,11 @@ import type { Skill } from "../../../models/sheet/Skills"
 import { AbilityCard } from "../abilities/abilityCard"
 import { AbilityDialog } from "../abilities/abilityDialog"
 import { GrantedProficienciesEditor } from "../proficiencies/grantedProficienciesEditor"
+import {
+  RacialSpellSelectionModal,
+  type RacialSpellSelectionKind,
+} from "../progression/RacialSpellSelectionModal"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 
 type Props = {
   character: CharacterTemplate
@@ -108,13 +116,16 @@ const ATTRIBUTE_LABELS: Record<Attribute, string> = {
   cha: "Carisma",
 }
 
-
 export function CharacterRaceTab({
   character,
   updateCharacter,
 }: Props) {
+  const { spells, getSpellByIndex } = useMagicContext()
+  const { updateCharacterDomain } = useCharacterWorkspace()
   const [creatingAbility, setCreatingAbility] = useState(false)
   const [editingAbility, setEditingAbility] = useState<Ability | null>(null)
+  const [racialSpellModalKind, setRacialSpellModalKind] =
+    useState<RacialSpellSelectionKind | null>(null)
   const [selectedPresetId, setSelectedPresetId] = useState(
     detectRacePresetId(character.get("sheet").race),
   )
@@ -125,13 +136,40 @@ export function CharacterRaceTab({
     () => PHB_RACE_PRESETS.find((preset) => preset.id === selectedPresetId),
     [selectedPresetId],
   )
+  const racialSpellcastingPreset = RACIAL_SPELLCASTING_PRESETS[selectedPresetId]
+  const raceName =
+    race.customName?.trim() ||
+    race.subrace?.trim() ||
+    selectedPreset?.name ||
+    String(race.race)
+  const racialSpellEntries = (character.get("magic")?.spells.knownSpells ?? []).filter(
+    (entry) => entry.source.type === "race",
+  )
+  const racialCantripIndexes = racialSpellEntries
+    .filter((entry) => getSpellByIndex(entry.spells.id)?.slotLevel === 0)
+    .map((entry) => entry.spells.id)
+  const racialLeveledSpellIndexes = racialSpellEntries
+    .filter((entry) => (getSpellByIndex(entry.spells.id)?.slotLevel ?? 0) > 0)
+    .map((entry) => entry.spells.id)
+  const [racialCastingAttribute, setRacialCastingAttribute] = useState<Attribute>(
+    racialSpellEntries[0]?.source.attribute ??
+      racialSpellcastingPreset?.defaultAttribute ??
+      "cha",
+  )
 
   useEffect(() => {
     setSelectedPresetId(detectRacePresetId(character.get("sheet").race))
   }, [character])
 
+  useEffect(() => {
+    const existing = racialSpellEntries[0]?.source.attribute
+    setRacialCastingAttribute(
+      existing ?? racialSpellcastingPreset?.defaultAttribute ?? "cha",
+    )
+  }, [racialSpellcastingPreset?.defaultAttribute, selectedPresetId])
+
   function updateRace(updater: (race: CharacterRace) => CharacterRace) {
-    updateCharacter(character.get("id"), (current) =>
+    updateCharacterDomain(character.get("id"), "sheet", (current) =>
       current.withSheet("race", updater(current.get("sheet").race)),
     )
   }
@@ -159,7 +197,7 @@ export function CharacterRaceTab({
   }
 
   function applyPreset(preset: RacePreset) {
-    updateCharacter(character.get("id"), (current) => {
+    updateCharacterDomain(character.get("id"), "sheet", (current) => {
       const sheet = current.get("sheet")
       const currentRace = sheet.race
       const presetRace = racePresetToCharacterRace(preset)
@@ -198,6 +236,9 @@ export function CharacterRaceTab({
       })
     })
     setSelectedPresetId(preset.id)
+    setRacialCastingAttribute(
+      RACIAL_SPELLCASTING_PRESETS[preset.id]?.defaultAttribute ?? "cha",
+    )
   }
 
   function saveAbility(ability: Ability) {
@@ -263,7 +304,7 @@ export function CharacterRaceTab({
   }
 
   function setRaceProficiencies(proficiencies: Proficiency[]) {
-    updateCharacter(character.get("id"), (current) => {
+    updateCharacterDomain(character.get("id"), "sheet", (current) => {
       const sheet = current.get("sheet")
       const skills = { ...sheet.skills }
       const savingThrowProficiencies = {
@@ -299,15 +340,112 @@ export function CharacterRaceTab({
     setSelectedPresetId("custom")
   }
 
+  function changeRacialCastingAttribute(attribute: Attribute) {
+    setRacialCastingAttribute(attribute)
+    updateCharacterDomain(character.get("id"), "magic", (current) => {
+      const magic = current.getOrCreateMagic()
+      return current.with("magic", {
+        ...magic,
+        spells: {
+          ...magic.spells,
+          knownSpells: magic.spells.knownSpells.map((entry) =>
+            entry.source.type === "race"
+              ? {
+                  ...entry,
+                  source: { ...entry.source, attribute },
+                }
+              : entry,
+          ),
+        },
+      })
+    })
+  }
+
+  function setRacialSpells(
+    kind: RacialSpellSelectionKind,
+    selected: string[],
+  ) {
+    updateCharacterDomain(character.get("id"), "magic", (current) => {
+      const magic = current.getOrCreateMagic()
+      const existingRaceEntries = magic.spells.knownSpells.filter(
+        (entry) => entry.source.type === "race",
+      )
+      const existingByIndex = new Map(
+        existingRaceEntries.map((entry) => [entry.spells.id, entry]),
+      )
+      const retained = magic.spells.knownSpells.filter((entry) => {
+        if (entry.source.type !== "race") return true
+        const spell = getSpellByIndex(entry.spells.id)
+        if (!spell) return true
+        return kind === "cantrip" ? spell.slotLevel > 0 : spell.slotLevel === 0
+      })
+      const characterLevel = (current.get("sheet").classes ?? []).reduce(
+        (total, entry) => total + entry.level,
+        0,
+      )
+      const acquisition = createCharacterAcquisition({
+        reason: "manual",
+        characterLevel,
+        sourceType: "race",
+        sourceId: String(race.race),
+        sourceName: raceName,
+        notes: "Magia racial configurada manualmente conforme a referência do jogador.",
+      })
+      const raceEntries = Array.from(new Set(selected)).map((spellIndex) => {
+        const existing = existingByIndex.get(spellIndex)
+        return {
+          source: {
+            type: "race" as const,
+            name: raceName,
+            sourceId: `race:${String(race.race)}`,
+            attribute: racialCastingAttribute,
+          },
+          spells: {
+            id: spellIndex,
+            prepared: true,
+          },
+          acquisition: existing?.acquisition ?? acquisition,
+        }
+      })
+
+      return current.with("magic", {
+        ...magic,
+        spells: {
+          ...magic.spells,
+          knownSpells: [...retained, ...raceEntries],
+        },
+      })
+    })
+  }
+
+  function removeRacialSpell(spellIndex: string) {
+    updateCharacterDomain(character.get("id"), "magic", (current) => {
+      const magic = current.getOrCreateMagic()
+      return current.with("magic", {
+        ...magic,
+        spells: {
+          ...magic.spells,
+          knownSpells: magic.spells.knownSpells.filter(
+            (entry) =>
+              !(
+                entry.source.type === "race" && entry.spells.id === spellIndex
+              ),
+          ),
+        },
+      })
+    })
+  }
+
   return (
     <div className="grid min-w-0 gap-4">
       <section className="min-w-0 rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
         <div className="mb-4">
           <h2 className="text-base font-semibold text-textH">Preset racial</h2>
           <p className="mt-1 text-xs leading-5 text-textMuted">
-            Aplique um dos presets do PHB usados na criação de personagens. Isso
+            Aplique um dos presets usados na criação de personagens. Isso
             substitui identidade, bônus, habilidades e proficiências raciais,
-            preservando a configuração de suprimentos.
+            preservando a configuração de suprimentos e as magias raciais já
+            escolhidas.
           </p>
         </div>
 
@@ -467,6 +605,60 @@ export function CharacterRaceTab({
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-textH">
+              Magias raciais
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-textMuted">
+              Apenas magias cuja origem é a raça aparecem aqui. Consulte sua
+              referência e adicione as opções liberadas para o nível atual do
+              personagem.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setRacialSpellModalKind("cantrip")}
+            >
+              <Plus className="h-4 w-4" />
+              Aprender truque
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => setRacialSpellModalKind("leveled")}
+            >
+              <Plus className="h-4 w-4" />
+              Aprender magia
+            </Button>
+          </div>
+        </div>
+
+        {racialSpellcastingPreset ? (
+          <div className="mb-4 rounded-lg border border-accentBorder bg-accentBg p-3 text-xs leading-5 text-text">
+            {racialSpellcastingPreset.guidance}
+          </div>
+        ) : null}
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <RacialSpellGroup
+            title="Truques raciais"
+            indexes={racialCantripIndexes}
+            getSpellByIndex={getSpellByIndex}
+            onRemove={removeRacialSpell}
+          />
+          <RacialSpellGroup
+            title="Magias raciais"
+            indexes={racialLeveledSpellIndexes}
+            getSpellByIndex={getSpellByIndex}
+            onRemove={removeRacialSpell}
+          />
+        </div>
+      </section>
+
+      <section className="min-w-0 rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-textH">
               Habilidades naturais
             </h2>
             <p className="mt-1 text-xs text-textMuted">
@@ -530,7 +722,86 @@ export function CharacterRaceTab({
         }}
         onSave={saveAbility}
       />
+
+      {racialSpellModalKind ? (
+        <RacialSpellSelectionModal
+          open
+          kind={racialSpellModalKind}
+          raceName={raceName}
+          spells={spells}
+          selected={
+            racialSpellModalKind === "cantrip"
+              ? racialCantripIndexes
+              : racialLeveledSpellIndexes
+          }
+          attribute={racialCastingAttribute}
+          onAttributeChange={changeRacialCastingAttribute}
+          onChange={(selected) => setRacialSpells(racialSpellModalKind, selected)}
+          onClose={() => setRacialSpellModalKind(null)}
+        />
+      ) : null}
     </div>
+  )
+}
+
+function RacialSpellGroup({
+  title,
+  indexes,
+  getSpellByIndex,
+  onRemove,
+}: {
+  title: string
+  indexes: string[]
+  getSpellByIndex: ReturnType<typeof useMagicContext>["getSpellByIndex"]
+  onRemove: (spellIndex: string) => void
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-bg-subtle p-3">
+      <div className="text-xs font-semibold text-textH">{title}</div>
+      <div className="mt-3 grid gap-2">
+        {indexes.length ? (
+          indexes.map((index) => {
+            const spell = getSpellByIndex(index)
+            return (
+              <div
+                key={index}
+                className="flex min-w-0 items-start justify-between gap-3 rounded-lg border border-border bg-bg p-3"
+              >
+                <div className="min-w-0">
+                  <div className="break-words text-sm font-medium text-textH">
+                    {spell?.displayName?.trim() || spell?.name || index}
+                  </div>
+                  <div className="mt-1 text-[10px] text-textMuted">
+                    {spell
+                      ? spell.slotLevel === 0
+                        ? "Truque"
+                        : `${spell.slotLevel}º círculo`
+                      : "Magia racial"}
+                  </div>
+                  {spell?.description?.trim() ? (
+                    <p className="mt-2 line-clamp-2 break-words text-xs leading-5 text-textMuted [overflow-wrap:anywhere]">
+                      {spell.description}
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  aria-label={`Remover ${spell?.displayName || spell?.name || index}`}
+                  onClick={() => onRemove(index)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-textMuted hover:bg-dangerBg hover:text-danger"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            )
+          })
+        ) : (
+          <div className="rounded-lg border border-dashed border-border bg-bg px-3 py-4 text-center text-xs text-textMuted">
+            Nenhuma magia cadastrada nesta categoria.
+          </div>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -541,7 +812,6 @@ function EmptyCard({ text }: { text: string }) {
     </div>
   )
 }
-
 
 function detectRacePresetId(race: CharacterRace): string {
   const match = PHB_RACE_PRESETS.find(
