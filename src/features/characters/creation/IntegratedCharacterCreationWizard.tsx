@@ -364,7 +364,12 @@ export function IntegratedCharacterCreationWizard({
       ...current,
       race: "custom",
       customName:
-        current.customName?.trim() || current.subrace?.trim() || "Raça personalizada",
+        current.customName?.trim() ||
+        current.subrace?.trim() ||
+        "Raça personalizada",
+      subrace: current.subrace ?? "",
+      size: current.size ?? "medium",
+      mobility: current.mobility ?? 9,
       naturalAbilities: (current.naturalAbilities ?? []).map(cloneAbility),
       proficiencies: (current.proficiencies ?? []).map((entry) => ({ ...entry })),
       attributeBonus: { ...current.attributeBonus },
@@ -1182,123 +1187,243 @@ function RaceStep({
   onAddAbility: () => void
   onEditAbility: (ability: Ability) => void
 }) {
+  const custom = selectedPresetId === "custom"
+  const selectedPreset = PHB_RACE_PRESETS.find(
+    (preset) => preset.id === selectedPresetId,
+  )
+  const displayName = custom
+    ? race.customName?.trim() || race.subrace?.trim() || "Raça personalizada"
+    : selectedPreset?.name ??
+      race.customName?.trim() ??
+      race.subrace?.trim() ??
+      String(race.race)
+  const fixedBonuses = selectedPreset?.attributeBonus ?? race.attributeBonus
+
   return (
     <div className="grid gap-5">
       <StepSection
         title="Raça"
-        description="Escolha uma raça padrão e depois edite características, proficiências e bônus antes de continuar."
+        description="Escolha um preset racial para usar seus dados como definidos. Para alterar os dados-base da raça, selecione Personalizada."
       >
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {PHB_RACE_PRESETS.map((preset) => (
-            <PresetCard
-              key={preset.id}
-              selected={selectedPresetId === preset.id}
-              title={preset.name}
-              description={preset.summary}
-              onClick={() => onSelectPreset(preset)}
-            />
-          ))}
-          <PresetCard
-            selected={selectedPresetId === "custom"}
-            title="Personalizada"
-            description="Use a raça atual como base e altere todos os campos."
-            onClick={onSelectCustom}
-          />
+{PHB_RACE_PRESETS.map((preset) => (
+  <PresetCard
+    key={preset.id}
+    selected={selectedPresetId === preset.id}
+    title={preset.name}
+    description={preset.summary}
+    onClick={() => onSelectPreset(preset)}
+  />
+))}
+<PresetCard
+  selected={custom}
+  title="Personalizada"
+  description="Use a raça atual como base e edite identidade, tamanho, mobilidade, bônus, características e proficiências."
+  onClick={onSelectCustom}
+/>
         </div>
       </StepSection>
 
-      <StepSection title="Construir características raciais">
-        <div className="grid gap-4 md:grid-cols-3">
-          <Field label="Nome da raça">
-            <Input
-              value={race.customName ?? race.subrace ?? String(race.race)}
-              onChange={(event) =>
-                onChange({
-                  ...race,
-                  customName: event.target.value,
-                })
-              }
-            />
-          </Field>
-          <Field label="Sub-raça">
-            <Input
-              value={race.subrace ?? ""}
-              onChange={(event) =>
-                onChange({ ...race, subrace: event.target.value })
-              }
-            />
-          </Field>
-          <Field label="Tamanho">
-            <Select
-              value={race.size ?? "medium"}
-              onChange={(event) =>
-                onChange({
-                  ...race,
-                  size: event.target.value as CreatureSize,
-                })
-              }
-            >
-              {Object.entries(SIZE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
+      <div
+        data-character-creation-race-details="true"
+        data-race-preset-id={selectedPresetId}
+        data-race-name={displayName}
+        data-race-fixed-bonuses={JSON.stringify(fixedBonuses)}
+      >
+        <StepSection
+title={
+  custom
+    ? "Construir raça personalizada"
+    : `Visualização do preset racial: ${displayName}`
+}
+description={
+  custom
+    ? "Todos os dados raciais abaixo pertencem à raça personalizada e podem ser editados."
+    : "Os dados-base abaixo vêm do preset selecionado e são somente leitura. Selecione Personalizada para editá-los."
+}
+        >
+{custom ? (
+  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <Field label="Nome da raça">
+      <Input
+        value={race.customName ?? ""}
+        placeholder="Nome da raça"
+        onChange={(event) =>
+          onChange({
+            ...race,
+            customName: event.target.value,
+          })
+        }
+      />
+    </Field>
+    <Field label="Sub-raça">
+      <Input
+        value={race.subrace ?? ""}
+        placeholder="Opcional"
+        onChange={(event) =>
+          onChange({ ...race, subrace: event.target.value })
+        }
+      />
+    </Field>
+    <Field label="Tamanho">
+      <Select
+        value={race.size ?? "medium"}
+        onChange={(event) =>
+          onChange({
+            ...race,
+            size: event.target.value as CreatureSize,
+          })
+        }
+      >
+        {Object.entries(SIZE_LABELS).map(([value, label]) => (
+          <option key={value} value={value}>
+            {label}
+          </option>
+        ))}
+      </Select>
+    </Field>
+    <Field label="Mobilidade base (m)">
+      <Input
+        type="number"
+        min={0}
+        step={0.5}
+        value={race.mobility ?? 9}
+        onChange={(event) =>
+          onChange({
+            ...race,
+            mobility: Math.max(0, Number(event.target.value) || 0),
+            speedBonus: undefined,
+          })
+        }
+      />
+    </Field>
+  </div>
+) : (
+  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <Summary label="Nome" value={displayName} />
+    <Summary label="Sub-raça" value={race.subrace?.trim() || "—"} />
+    <Summary
+      label="Tamanho"
+      value={SIZE_LABELS[race.size ?? "medium"]}
+    />
+    <Summary
+      label="Mobilidade base"
+      value={`${race.mobility ?? 9} m`}
+    />
+  </div>
+)}
 
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {ATTRIBUTE_KEYS.map((attribute) => (
-            <Field key={attribute} label={`Bônus de ${ATTRIBUTE_LABELS[attribute]}`}>
-              <Input
-                type="number"
-                min={0}
-                max={4}
-                value={race.attributeBonus[attribute] ?? 0}
-                onChange={(event) =>
-                  onChange({
-                    ...race,
-                    attributeBonus: {
-                      ...race.attributeBonus,
-                      [attribute]: Math.max(
-                        0,
-                        Math.min(4, Number(event.target.value) || 0),
-                      ),
-                    },
-                  })
-                }
-              />
-            </Field>
-          ))}
-        </div>
+{!custom ? (
+  <div className="mt-4 rounded-xl border border-border bg-bg p-3">
+    <div className="text-xs font-semibold text-textH">
+      Bônus raciais atuais
+    </div>
+    <div className="mt-2 flex flex-wrap gap-2">
+      {ATTRIBUTE_KEYS.map((attribute) => {
+        const value = race.attributeBonus[attribute] ?? 0
+        return value ? (
+          <Badge key={attribute}>
+            {ATTRIBUTE_LABELS[attribute]} +{value}
+          </Badge>
+        ) : null
+      })}
+    </div>
+  </div>
+) : null}
 
-        <FeatureList
-          title="Características raciais"
-          abilities={race.naturalAbilities ?? []}
-          onAdd={onAddAbility}
-          onEdit={onEditAbility}
-          onRemove={(abilityId) =>
+<div className="hidden" aria-hidden="true">
+  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    {ATTRIBUTE_KEYS.map((attribute) => (
+      <Field
+        key={attribute}
+        label={`Bônus de ${ATTRIBUTE_LABELS[attribute]}`}
+      >
+        <Input
+          type="number"
+          min={0}
+          max={4}
+          value={race.attributeBonus[attribute] ?? 0}
+          onChange={(event) =>
             onChange({
               ...race,
-              naturalAbilities: (race.naturalAbilities ?? []).filter(
-                (entry) => entry.id !== abilityId,
-              ),
+              attributeBonus: {
+                ...race.attributeBonus,
+                [attribute]: Math.max(
+                  0,
+                  Math.min(4, Number(event.target.value) || 0),
+                ),
+              },
             })
           }
         />
+      </Field>
+    ))}
+  </div>
+</div>
 
-        <div className="mt-4">
-          <GrantedProficienciesEditor
-            proficiencies={race.proficiencies ?? []}
-            onChange={(proficiencies: Proficiency[]) =>
-              onChange({ ...race, proficiencies })
-            }
-            title="Proficiências raciais"
-            description="Edite idiomas, perícias, armas, armaduras e ferramentas concedidos pela raça."
-            emptyMessage="Nenhuma proficiência racial cadastrada."
-          />
-        </div>
-      </StepSection>
+<FeatureList
+  title="Características raciais"
+  abilities={race.naturalAbilities ?? []}
+  onAdd={onAddAbility}
+  onEdit={onEditAbility}
+  onRemove={(abilityId) =>
+    onChange({
+      ...race,
+      naturalAbilities: (race.naturalAbilities ?? []).filter(
+        (entry) => entry.id !== abilityId,
+      ),
+    })
+  }
+  readOnly={!custom}
+/>
+
+<div className="mt-4">
+  {custom ? (
+    <GrantedProficienciesEditor
+      proficiencies={race.proficiencies ?? []}
+      onChange={(proficiencies: Proficiency[]) =>
+        onChange({ ...race, proficiencies })
+      }
+      title="Proficiências raciais"
+      description="Edite idiomas, perícias, armas, armaduras e ferramentas concedidos pela raça."
+      emptyMessage="Nenhuma proficiência racial cadastrada."
+    />
+  ) : (
+    <section className="rounded-xl border border-border bg-bg-subtle p-3">
+      <div className="text-xs font-semibold text-textH">
+        Proficiências raciais
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {(race.proficiencies ?? []).length ? (
+          race.proficiencies.map((entry) => (
+            <div
+              key={entry.id}
+              className="rounded-lg border border-border bg-bg p-3"
+            >
+              <span className="block text-xs font-medium text-textH">
+                {entry.name}
+              </span>
+              <span className="mt-1 block text-[10px] text-textMuted">
+                {entry.category}
+              </span>
+              {entry.notes ? (
+                <span className="mt-1 block text-[10px] text-textMuted">
+                  {entry.notes}
+                </span>
+              ) : null}
+            </div>
+          ))
+        ) : (
+          <div className="text-xs text-textMuted">
+            Nenhuma proficiência racial cadastrada.
+          </div>
+        )}
+      </div>
+    </section>
+  )}
+</div>
+        </StepSection>
+      </div>
     </div>
   )
 }
@@ -2335,61 +2460,67 @@ function FeatureList({
   onAdd,
   onEdit,
   onRemove,
+  readOnly = false,
 }: {
   title: string
   abilities: Ability[]
   onAdd: () => void
   onEdit: (ability: Ability) => void
   onRemove: (abilityId: string) => void
+  readOnly?: boolean
 }) {
   return (
     <section className="mt-4 rounded-xl border border-border bg-bg-subtle p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="text-xs font-semibold text-textH">{title}</div>
-        <Button size="sm" variant="secondary" onClick={onAdd}>
-          <Plus className="h-4 w-4" />
-          Característica
-        </Button>
+        {!readOnly ? (
+<Button size="sm" variant="secondary" onClick={onAdd}>
+  <Plus className="h-4 w-4" />
+  Característica
+</Button>
+        ) : null}
       </div>
       <div className="mt-3 grid gap-2">
         {abilities.length ? (
-          abilities.map((ability) => (
-            <article
-              key={ability.id}
-              className="rounded-lg border border-border bg-bg p-3"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <strong className="text-sm text-textH">{ability.name}</strong>
-                  <details className="mt-2 text-xs">
-                    <summary className="cursor-pointer font-medium text-textH">
-                      Ler detalhes da característica
-                    </summary>
-                    <p className="mt-2 whitespace-pre-wrap leading-5 text-textMuted">
-                      {ability.description || "Sem descrição cadastrada."}
-                    </p>
-                    {ability.grantedSpells?.length ? (
-                      <div className="mt-2">
-                        Magias concedidas: {ability.grantedSpells.map((grant) => grant.index).join(", ")}
-                      </div>
-                    ) : null}
-                  </details>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="ghost" onClick={() => onEdit(ability)}>
-                    Editar
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => onRemove(ability.id)}>
-                    Remover
-                  </Button>
-                </div>
-              </div>
-            </article>
-          ))
+abilities.map((ability) => (
+  <article
+    key={ability.id}
+    className="rounded-lg border border-border bg-bg p-3"
+  >
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <strong className="text-sm text-textH">{ability.name}</strong>
+        <details className="mt-2 text-xs">
+          <summary className="cursor-pointer font-medium text-textH">
+            Ler detalhes da característica
+          </summary>
+          <p className="mt-2 whitespace-pre-wrap leading-5 text-textMuted">
+            {ability.description || "Sem descrição cadastrada."}
+          </p>
+          {ability.grantedSpells?.length ? (
+            <div className="mt-2">
+              Magias concedidas: {ability.grantedSpells.map((grant) => grant.index).join(", ")}
+            </div>
+          ) : null}
+        </details>
+      </div>
+      {!readOnly ? (
+        <div className="flex gap-2">
+          <Button size="sm" variant="ghost" onClick={() => onEdit(ability)}>
+            Editar
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => onRemove(ability.id)}>
+            Remover
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  </article>
+))
         ) : (
-          <div className="rounded-lg border border-dashed border-border bg-bg p-4 text-center text-xs text-textMuted">
-            Nenhuma característica cadastrada.
-          </div>
+<div className="rounded-lg border border-dashed border-border bg-bg p-4 text-center text-xs text-textMuted">
+  Nenhuma característica cadastrada.
+</div>
         )}
       </div>
     </section>

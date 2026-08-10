@@ -43,6 +43,7 @@ const DEFAULT_FEATS = [
 
 type RacialChoicesDraft = {
   raceName: string
+  racePresetId?: string
   skillOne: Skill
   skillTwo: Skill
   featName: string
@@ -85,6 +86,9 @@ export function CharacterCreationRacialChoices({
   )
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   const [raceName, setRaceName] = useState(initialDraft?.raceName ?? "")
+  const [racePresetId, setRacePresetId] = useState(
+    initialDraft?.racePresetId ?? "",
+  )
   const [skillOne, setSkillOne] = useState<Skill>(
     initialDraft?.skillOne ?? "perception",
   )
@@ -109,6 +113,7 @@ export function CharacterCreationRacialChoices({
   useEffect(() => {
     writeCharacterCreationDraftSection(draftId, "racial-required-choices", {
       raceName,
+      racePresetId,
       skillOne,
       skillTwo,
       featName,
@@ -127,6 +132,7 @@ export function CharacterCreationRacialChoices({
     featName,
     genericChoices,
     raceName,
+    racePresetId,
     skillOne,
     skillTwo,
   ])
@@ -144,26 +150,26 @@ export function CharacterCreationRacialChoices({
     const scan = () => {
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
-        const heading = Array.from(document.querySelectorAll<HTMLElement>("h2")).find(
-          (entry) => entry.textContent?.trim() === "Construir características raciais",
+        const section = document.querySelector<HTMLElement>(
+'[data-character-creation-race-details="true"]',
         )
-        const section = heading?.closest<HTMLElement>("section")
         if (!section) {
-          setAnchor(null)
-          return
+setAnchor(null)
+return
         }
-        const nameInput = Array.from(section.querySelectorAll<HTMLInputElement>("input")).find(
-          (input) => input.closest("label")?.textContent?.includes("Nome da raça"),
-        )
-        if (nameInput?.value && nameInput.value !== raceName) {
-          setRaceName(nameInput.value)
-          setFeatName("")
-          setCustomFeatName("")
-          setCustomFeatDescription("")
-          setCantripIndex("")
-          setAncestry("")
-          setGenericChoices({})
+        const nextRaceName = section.dataset.raceName ?? ""
+        const nextPresetId = section.dataset.racePresetId ?? ""
+        const presetChanged = Boolean(racePresetId) && nextPresetId !== racePresetId
+        if (nextRaceName !== raceName || presetChanged) {
+setRaceName(nextRaceName)
+setFeatName("")
+setCustomFeatName("")
+setCustomFeatDescription("")
+setCantripIndex("")
+setAncestry("")
+setGenericChoices({})
         }
+        if (nextPresetId !== racePresetId) setRacePresetId(nextPresetId)
         let portalAnchor = section.querySelector<HTMLElement>("[data-racial-choice-anchor]")
         if (!portalAnchor) {
           portalAnchor = document.createElement("div")
@@ -181,13 +187,18 @@ export function CharacterCreationRacialChoices({
       observer.disconnect()
       document.querySelectorAll("[data-racial-choice-anchor]").forEach((entry) => entry.remove())
     }
-  }, [raceName])
+  }, [raceName, racePresetId])
 
   const normalizedRace = normalize(raceName)
-  const variantHuman = normalizedRace.includes("humano variante")
-  const halfElf = normalizedRace.includes("meio elfo")
-  const highElf = normalizedRace.includes("alto elfo")
-  const dragonborn = normalizedRace.includes("draconato")
+  const usesPresetSpecificChoices = racePresetId !== "custom"
+  const variantHuman =
+    usesPresetSpecificChoices && normalizedRace.includes("humano variante")
+  const halfElf =
+    usesPresetSpecificChoices && normalizedRace.includes("meio elfo")
+  const highElf =
+    usesPresetSpecificChoices && normalizedRace.includes("alto elfo")
+  const dragonborn =
+    usesPresetSpecificChoices && normalizedRace.includes("draconato")
   const feat = featName === "custom" ? customFeatName.trim() : featName
   const needsChoice = variantHuman || halfElf || highElf || dragonborn
   const valid =

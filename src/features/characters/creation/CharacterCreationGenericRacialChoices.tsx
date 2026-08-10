@@ -63,19 +63,15 @@ export function CharacterCreationGenericRacialChoices({
     const scan = () => {
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
-        const heading = Array.from(document.querySelectorAll<HTMLElement>("h2")).find(
-          (entry) => entry.textContent?.trim() === "Construir características raciais",
+        const section = document.querySelector<HTMLElement>(
+'[data-character-creation-race-details="true"]',
         )
-        const section = heading?.closest<HTMLElement>("section")
         if (!section) {
-          setAnchor((current) => (current === null ? current : null))
-          setPrompts((current) => (current.length ? [] : current))
-          return
+setAnchor((current) => (current === null ? current : null))
+setPrompts((current) => (current.length ? [] : current))
+return
         }
-        const nameInput = Array.from(section.querySelectorAll<HTMLInputElement>("input")).find(
-          (input) => input.closest("label")?.textContent?.includes("Nome da raça"),
-        )
-        const nextRaceName = nameInput?.value ?? ""
+        const nextRaceName = section.dataset.raceName ?? ""
         if (nextRaceName !== raceName) {
           setRaceName(nextRaceName)
           setValues({})
