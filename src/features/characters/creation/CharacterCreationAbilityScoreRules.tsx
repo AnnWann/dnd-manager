@@ -6,6 +6,10 @@ import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import type { Attribute } from "../../../models/sheet/Attribute"
 import { ATTRIBUTE_KEYS } from "../../../models/sheet/Attribute"
+import {
+  readCharacterCreationDraftSection,
+  writeCharacterCreationDraftSection,
+} from "./characterCreationDraftCache"
 
 const ATTRIBUTE_LABELS: Record<Attribute, string> = {
   str: "Força",
@@ -31,30 +35,92 @@ const POINT_BUY_COST: Record<number, number> = {
 type BonusMode = "fixed" | "variant" | "flex21" | "flex111" | "custom"
 type ScoreMode = "standard" | "roll" | "point-buy"
 
+type RacialBonusDraft = {
+  mode: BonusMode
+  first: Attribute
+  second: Attribute
+  third: Attribute
+  custom: Partial<Record<Attribute, number>>
+}
+
+type ScoreDraft = {
+  mode: ScoreMode
+  rolled: number[]
+  assignment: Record<Attribute, number>
+  pointBuy: Record<Attribute, number>
+}
+
+type AbilityScoreDraft = {
+  raceName: string
+  racialBonuses: Partial<Record<Attribute, number>>
+  attributes: Record<Attribute, number>
+  racialBonusDraft?: RacialBonusDraft
+  scoreDraft?: ScoreDraft
+}
+
 type AbilityScoreOverride = {
   attributes: Record<Attribute, number>
   racialBonuses: Partial<Record<Attribute, number>>
 }
 
 type Props = {
+  draftId: string
   onChange: (override: AbilityScoreOverride | null) => void
 }
 
-export function CharacterCreationAbilityScoreRules({ onChange }: Props) {
+export function CharacterCreationAbilityScoreRules({
+  draftId,
+  onChange,
+}: Props) {
+  const initialDraft = useMemo(
+    () =>
+      readCharacterCreationDraftSection<AbilityScoreDraft>(
+        draftId,
+        "ability-scores",
+      ),
+    [draftId],
+  )
   const [raceAnchor, setRaceAnchor] = useState<HTMLElement | null>(null)
   const [attributeAnchor, setAttributeAnchor] = useState<HTMLElement | null>(null)
   const [raceInputs, setRaceInputs] = useState<Record<Attribute, HTMLInputElement> | null>(null)
   const [attributeInputs, setAttributeInputs] = useState<Record<Attribute, HTMLInputElement> | null>(null)
-  const [raceName, setRaceName] = useState("")
-  const [racialBonuses, setRacialBonuses] = useState<Partial<Record<Attribute, number>>>({})
-  const [attributes, setAttributes] = useState<Record<Attribute, number>>({
-    str: 15,
-    dex: 14,
-    con: 13,
-    int: 12,
-    wis: 10,
-    cha: 8,
-  })
+  const [raceName, setRaceName] = useState(initialDraft?.raceName ?? "")
+  const [racialBonuses, setRacialBonuses] = useState<Partial<Record<Attribute, number>>>(
+    initialDraft?.racialBonuses ?? {},
+  )
+  const [attributes, setAttributes] = useState<Record<Attribute, number>>(
+    initialDraft?.attributes ?? {
+      str: 15,
+      dex: 14,
+      con: 13,
+      int: 12,
+      wis: 10,
+      cha: 8,
+    },
+  )
+  const [racialBonusDraft, setRacialBonusDraft] = useState<
+    RacialBonusDraft | undefined
+  >(initialDraft?.racialBonusDraft)
+  const [scoreDraft, setScoreDraft] = useState<ScoreDraft | undefined>(
+    initialDraft?.scoreDraft,
+  )
+
+  useEffect(() => {
+    writeCharacterCreationDraftSection(draftId, "ability-scores", {
+      raceName,
+      racialBonuses,
+      attributes,
+      racialBonusDraft,
+      scoreDraft,
+    } satisfies AbilityScoreDraft)
+  }, [
+    attributes,
+    draftId,
+    raceName,
+    racialBonusDraft,
+    racialBonuses,
+    scoreDraft,
+  ])
 
   useEffect(() => {
     let frame = 0
@@ -73,6 +139,7 @@ export function CharacterCreationAbilityScoreRules({ onChange }: Props) {
             )
             const nextName = nameInput?.value ?? ""
             if (nextName && nextName !== raceName) {
+              if (raceName) setRacialBonusDraft(undefined)
               setRaceName(nextName)
               const current = readValues(inputs)
               setRacialBonuses(current)
@@ -152,6 +219,8 @@ export function CharacterCreationAbilityScoreRules({ onChange }: Props) {
             <RacialBonusRules
               raceName={raceName}
               initial={racialBonuses}
+              draft={racialBonusDraft}
+              onDraftChange={setRacialBonusDraft}
               onChange={setRacialBonuses}
             />,
             raceAnchor,
@@ -162,6 +231,8 @@ export function CharacterCreationAbilityScoreRules({ onChange }: Props) {
             <AbilityScoreRules
               values={attributes}
               racialBonuses={racialBonuses}
+              draft={scoreDraft}
+              onDraftChange={setScoreDraft}
               onChange={setAttributes}
             />,
             attributeAnchor,
@@ -174,27 +245,43 @@ export function CharacterCreationAbilityScoreRules({ onChange }: Props) {
 function RacialBonusRules({
   raceName,
   initial,
+  draft,
+  onDraftChange,
   onChange,
 }: {
   raceName: string
   initial: Partial<Record<Attribute, number>>
+  draft?: RacialBonusDraft
+  onDraftChange: (draft: RacialBonusDraft) => void
   onChange: (value: Partial<Record<Attribute, number>>) => void
 }) {
   const inferred = inferBonusMode(raceName, initial)
-  const [mode, setMode] = useState<BonusMode>(inferred)
+  const [mode, setMode] = useState<BonusMode>(draft?.mode ?? inferred)
   const [fixed] = useState({ ...initial })
-  const [first, setFirst] = useState<Attribute>("str")
-  const [second, setSecond] = useState<Attribute>("dex")
-  const [third, setThird] = useState<Attribute>("con")
-  const [custom, setCustom] = useState<Partial<Record<Attribute, number>>>({ ...initial })
+  const [first, setFirst] = useState<Attribute>(draft?.first ?? "str")
+  const [second, setSecond] = useState<Attribute>(draft?.second ?? "dex")
+  const [third, setThird] = useState<Attribute>(draft?.third ?? "con")
+  const [custom, setCustom] = useState<Partial<Record<Attribute, number>>>(
+    draft?.custom ?? { ...initial },
+  )
 
   useEffect(() => {
+    onDraftChange({ mode, first, second, third, custom })
     if (mode === "fixed") onChange({ ...fixed })
     if (mode === "variant") onChange(distribute([[first, 1], [second, 1]]))
     if (mode === "flex21") onChange(distribute([[first, 2], [second, 1]]))
     if (mode === "flex111") onChange(distribute([[first, 1], [second, 1], [third, 1]]))
     if (mode === "custom") onChange({ ...custom })
-  }, [custom, first, fixed, mode, onChange, second, third])
+  }, [
+    custom,
+    first,
+    fixed,
+    mode,
+    onChange,
+    onDraftChange,
+    second,
+    third,
+  ])
 
   return (
     <section className="mt-4 grid gap-4 rounded-xl border border-border bg-bg p-4">
@@ -250,32 +337,43 @@ function RacialBonusRules({
 function AbilityScoreRules({
   values,
   racialBonuses,
+  draft,
+  onDraftChange,
   onChange,
 }: {
   values: Record<Attribute, number>
   racialBonuses: Partial<Record<Attribute, number>>
+  draft?: ScoreDraft
+  onDraftChange: (draft: ScoreDraft) => void
   onChange: (value: Record<Attribute, number>) => void
 }) {
-  const [mode, setMode] = useState<ScoreMode>("standard")
-  const [rolled, setRolled] = useState<number[]>(() => rollAbilityScores())
-  const [assignment, setAssignment] = useState<Record<Attribute, number>>({
-    str: 0,
-    dex: 1,
-    con: 2,
-    int: 3,
-    wis: 4,
-    cha: 5,
-  })
-  const [pointBuy, setPointBuy] = useState<Record<Attribute, number>>({
-    str: 8,
-    dex: 8,
-    con: 8,
-    int: 8,
-    wis: 8,
-    cha: 8,
-  })
+  const [mode, setMode] = useState<ScoreMode>(draft?.mode ?? "standard")
+  const [rolled, setRolled] = useState<number[]>(
+    draft?.rolled ?? rollAbilityScores(),
+  )
+  const [assignment, setAssignment] = useState<Record<Attribute, number>>(
+    draft?.assignment ?? {
+      str: 0,
+      dex: 1,
+      con: 2,
+      int: 3,
+      wis: 4,
+      cha: 5,
+    },
+  )
+  const [pointBuy, setPointBuy] = useState<Record<Attribute, number>>(
+    draft?.pointBuy ?? {
+      str: 8,
+      dex: 8,
+      con: 8,
+      int: 8,
+      wis: 8,
+      cha: 8,
+    },
+  )
 
   useEffect(() => {
+    onDraftChange({ mode, rolled, assignment, pointBuy })
     if (mode === "standard") {
       onChange(mapPool(STANDARD_ARRAY, assignment))
     } else if (mode === "roll") {
@@ -283,7 +381,7 @@ function AbilityScoreRules({
     } else {
       onChange(pointBuy)
     }
-  }, [assignment, mode, onChange, pointBuy, rolled])
+  }, [assignment, mode, onChange, onDraftChange, pointBuy, rolled])
 
   const spent = ATTRIBUTE_KEYS.reduce((sum, attribute) => sum + POINT_BUY_COST[pointBuy[attribute]], 0)
 
