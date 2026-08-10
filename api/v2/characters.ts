@@ -6,7 +6,6 @@ import {
   optionalString,
   parseJsonBody,
   readCampaignKey,
-  readId,
   requiredString,
   resolveCampaignId,
   sendJson,
@@ -23,9 +22,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (req.method === 'GET') {
       const campaignId = await resolveCampaignId(sql, key)
       if (!campaignId) return sendJson(res, 200, { characters: [] })
-      const id = readId(req)
+      const reference = readCharacterReference(req)
 
-      if (id) {
+      if (reference) {
         const rows = await sql`
           SELECT
             c.id::text,
@@ -41,7 +40,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
             c.updated_at AS "updatedAt"
           FROM characters c
           WHERE c.campaign_id = ${campaignId}::uuid
-            AND c.id = ${id}::uuid
+            AND (c.id::text = ${reference} OR c.legacy_id = ${reference})
+          LIMIT 1
         ` as unknown as Array<Record<string, unknown>>
         return rows[0]
           ? sendJson(res, 200, { character: rows[0] as never })
@@ -80,39 +80,72 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const notes = optionalString(body.notes, 50_000)
       const uniqueCharacter = boolean(body.unique, false)
 
-      const rows = await sql`
-        INSERT INTO characters (
-          campaign_id, legacy_id, name, owner_key, visibility,
-          unique_character, character_type, notes
-        ) VALUES (
-          ${campaignId}::uuid, ${legacyId ?? null}, ${name}, ${ownerKey ?? null}, ${visibility},
-          ${uniqueCharacter}, ${characterType}, ${notes ?? null}
-        )
-        RETURNING
-          id::text,
-          legacy_id AS "legacyId",
-          name,
-          owner_key AS "ownerKey",
-          visibility,
-          unique_character AS "unique",
-          character_type AS "characterType",
-          notes,
-          version,
-          created_at AS "createdAt",
-          updated_at AS "updatedAt"
-      ` as unknown as Array<Record<string, unknown>>
-      return sendJson(res, 201, { character: rows[0] as never })
+      const rows = legacyId
+        ? await sql`
+            INSERT INTO characters (
+              campaign_id, legacy_id, name, owner_key, visibility,
+              unique_character, character_type, notes
+            ) VALUES (
+              ${campaignId}::uuid, ${legacyId}, ${name}, ${ownerKey ?? null}, ${visibility},
+              ${uniqueCharacter}, ${characterType}, ${notes ?? null}
+            )
+            ON CONFLICT (campaign_id, legacy_id)
+            DO UPDATE SET legacy_id = EXCLUDED.legacy_id
+            RETURNING
+              id::text,
+              legacy_id AS "legacyId",
+              name,
+              owner_key AS "ownerKey",
+              visibility,
+              unique_character AS "unique",
+              character_type AS "characterType",
+              notes,
+              version,
+              created_at AS "createdAt",
+              updated_at AS "updatedAt"
+          `
+        : await sql`
+            INSERT INTO characters (
+              campaign_id, name, owner_key, visibility,
+              unique_character, character_type, notes
+            ) VALUES (
+              ${campaignId}::uuid, ${name}, ${ownerKey ?? null}, ${visibility},
+              ${uniqueCharacter}, ${characterType}, ${notes ?? null}
+            )
+            RETURNING
+              id::text,
+              legacy_id AS "legacyId",
+              name,
+              owner_key AS "ownerKey",
+              visibility,
+              unique_character AS "unique",
+              character_type AS "characterType",
+              notes,
+              version,
+              created_at AS "createdAt",
+              updated_at AS "updatedAt"
+          `
+
+      return sendJson(res, 201, {
+        character: (rows as unknown as Array<Record<string, unknown>>)[0] as never,
+      })
     }
 
     if (req.method === 'PATCH') {
-      const id = readId(req)
+      const reference = readCharacterReference(req)
       const body = parseJsonBody(req)
-      if (!id || !body) return sendJson(res, 400, { error: 'ID e JSON são obrigatórios.' })
+      if (!reference || !body) {
+        return sendJson(res, 400, {
+          error: 'characterId/legacyId e JSON são obrigatórios.',
+        })
+      }
       const campaignId = await resolveCampaignId(sql, key)
       if (!campaignId) return sendJson(res, 404, { error: 'Campanha não encontrada.' })
 
       const expectedVersion = integer(body.expectedVersion, -1)
-      if (expectedVersion < 1) return sendJson(res, 428, { error: 'expectedVersion é obrigatório.' })
+      if (expectedVersion < 1) {
+        return sendJson(res, 428, { error: 'expectedVersion é obrigatório.' })
+      }
 
       const rows = await sql`
         UPDATE characters
@@ -126,17 +159,39 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
           version = version + 1,
           updated_at = NOW()
         WHERE campaign_id = ${campaignId}::uuid
-          AND id = ${id}::uuid
+          AND (id::text = ${reference} OR legacy_id = ${reference})
           AND version = ${expectedVersion}
-        RETURNING id::text, name, version, updated_at AS "updatedAt"
+        RETURNING
+          id::text,
+          legacy_id AS "legacyId",
+          name,
+          owner_key AS "ownerKey",
+          visibility,
+          unique_character AS "unique",
+          character_type AS "characterType",
+          notes,
+          version,
+          updated_at AS "updatedAt"
       ` as unknown as Array<Record<string, unknown>>
 
       if (rows[0]) return sendJson(res, 200, { character: rows[0] as never })
 
       const current = await sql`
-        SELECT id::text, version, updated_at AS "updatedAt"
+        SELECT
+          id::text,
+          legacy_id AS "legacyId",
+          name,
+          owner_key AS "ownerKey",
+          visibility,
+          unique_character AS "unique",
+          character_type AS "characterType",
+          notes,
+          version,
+          updated_at AS "updatedAt"
         FROM characters
-        WHERE campaign_id = ${campaignId}::uuid AND id = ${id}::uuid
+        WHERE campaign_id = ${campaignId}::uuid
+          AND (id::text = ${reference} OR legacy_id = ${reference})
+        LIMIT 1
       ` as unknown as Array<Record<string, unknown>>
       return current[0]
         ? sendJson(res, 409, { error: 'Conflito de versão.', current: current[0] as never })
@@ -144,12 +199,15 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
 
     if (req.method === 'DELETE') {
-      const id = readId(req)
+      const reference = readCharacterReference(req)
       const campaignId = await resolveCampaignId(sql, key)
-      if (!id || !campaignId) return sendJson(res, 404, { error: 'Personagem não encontrado.' })
+      if (!reference || !campaignId) {
+        return sendJson(res, 404, { error: 'Personagem não encontrado.' })
+      }
       const rows = await sql`
         DELETE FROM characters
-        WHERE campaign_id = ${campaignId}::uuid AND id = ${id}::uuid
+        WHERE campaign_id = ${campaignId}::uuid
+          AND (id::text = ${reference} OR legacy_id = ${reference})
         RETURNING id::text
       ` as unknown as Array<{ id: string }>
       return rows[0]
@@ -162,6 +220,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     console.error('v2 characters API failed', error)
     return sendJson(res, 500, { error: errorMessage(error) })
   }
+}
+
+function readCharacterReference(req: ApiRequest): string {
+  const raw = req.query?.characterId ?? req.query?.legacyId ?? req.query?.id
+  const value = Array.isArray(raw) ? raw[0] : raw
+  return typeof value === 'string' ? value.trim().slice(0, 500) : ''
 }
 
 function normalizeVisibility(value: unknown): 'private' | 'party' | 'master' {
