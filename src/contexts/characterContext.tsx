@@ -12,6 +12,10 @@ import {
 import { newCharacterTemplate } from "../lib/newCharacterTemplate"
 import type { AppStateV1 } from "../lib/remoteState"
 import {
+  getChangedCharacterDomains,
+} from "../lib/characterDomains"
+import type { CharacterDomainName } from "../lib/relationalApi"
+import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from "../models/characters/CharacterTemplate"
@@ -52,8 +56,17 @@ export type CharacterContextValue = {
   groundInventory: Itemmable[]
   operationLog: GameOperationRecord[]
   dispatchGameOperation: (operation: GameOperation) => void
+  /**
+   * Compatibility mutation. Prefer updateCharacterDomain for new code so the
+   * subsystem that owns the write is explicit.
+   */
   updateCharacter: (
     characterId: string,
+    updater: (c: CharacterTemplate) => CharacterTemplate,
+  ) => void
+  updateCharacterDomain: (
+    characterId: string,
+    domain: CharacterDomainName,
     updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
   setCharacterCurrentHp: (characterId: string, value: number) => void
@@ -279,6 +292,22 @@ export function CharacterProvider({
     characterId: string,
     updater: (c: CharacterTemplate) => CharacterTemplate,
   ) {
+    replaceCharacter(characterId, updater)
+  }
+
+  function updateCharacterDomain(
+    characterId: string,
+    domain: CharacterDomainName,
+    updater: (c: CharacterTemplate) => CharacterTemplate,
+  ) {
+    replaceCharacter(characterId, updater, domain)
+  }
+
+  function replaceCharacter(
+    characterId: string,
+    updater: (c: CharacterTemplate) => CharacterTemplate,
+    declaredDomain?: CharacterDomainName,
+  ) {
     setAppState((previous) => {
       const rawCharacter = previous.characters.find(
         (entry) => entry.id === characterId,
@@ -287,6 +316,21 @@ export function CharacterProvider({
 
       const character = CharacterTemplate.fromJSON(rawCharacter)
       const nextCharacter = updater(character)
+
+      if (declaredDomain) {
+        const changedDomains = getChangedCharacterDomains(
+          character.toJSON(),
+          nextCharacter.toJSON(),
+        )
+        const unexpected = changedDomains.filter(
+          (changedDomain) => changedDomain !== declaredDomain,
+        )
+        if (unexpected.length) {
+          console.warn(
+            `Updater de ${declaredDomain} alterou domínios fora do ownership: ${unexpected.join(", ")}.`,
+          )
+        }
+      }
 
       return applyRecordedGameOperation(
         previous,
@@ -497,7 +541,7 @@ export function CharacterProvider({
     characterId: string,
     reference: HandOccupantReference,
   ) {
-    updateCharacter(characterId, (current) =>
+    updateCharacterDomain(characterId, "equipment", (current) =>
       stowCharacterHandOccupant(current, reference),
     )
   }
@@ -546,14 +590,13 @@ export function CharacterProvider({
     })
   }
 
-
   function moveEquippedItem(
     characterId: string,
     reference: EquippedItemReference,
     destination: EquippedItemDestination,
   ) {
     if (destination !== "ground") {
-      updateCharacter(characterId, (current) =>
+      updateCharacterDomain(characterId, "equipment", (current) =>
         moveEquippedItemToCharacterStorage(
           current,
           reference,
@@ -674,6 +717,7 @@ export function CharacterProvider({
         operationLog: appState.operations ?? [],
         dispatchGameOperation,
         updateCharacter,
+        updateCharacterDomain,
         setCharacterCurrentHp,
         setCharacterTemporaryHp,
         damageCharacter,
