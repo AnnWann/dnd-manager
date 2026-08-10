@@ -40,8 +40,21 @@ export async function GET(
         name: true,
         data: true,
         visibility: true,
+        revision: true,
         createdAt: true,
         updatedAt: true,
+        domains: {
+          select: {
+            domain: true,
+            data: true,
+            revision: true,
+            updatedById: true,
+            updatedAt: true,
+          },
+          orderBy: {
+            domain: "asc",
+          },
+        },
         campaignLinks: {
           select: {
             campaign: {
@@ -66,6 +79,13 @@ export async function GET(
     return jsonResponse({
       character: {
         ...character,
+        domains: character.domains.map((domain) => ({
+          domain: domain.domain.toLowerCase(),
+          payload: domain.data,
+          version: domain.revision,
+          updatedBy: domain.updatedById,
+          updatedAt: domain.updatedAt,
+        })),
         campaigns: character.campaignLinks.map((link) => link.campaign),
         campaignLinks: undefined,
       },
@@ -84,14 +104,6 @@ export async function PATCH(
     const { characterId } = await context.params
     const body = await readJsonObject(request)
 
-    if (!isJsonObject(body.data)) {
-      throw new ApiError(
-        400,
-        "INVALID_CHARACTER_DATA",
-        "Os dados do personagem precisam ser um objeto JSON.",
-      )
-    }
-
     const existing = await prisma.character.findFirst({
       where: {
         id: characterId,
@@ -99,6 +111,7 @@ export async function PATCH(
       },
       select: {
         id: true,
+        revision: true,
       },
     })
 
@@ -113,104 +126,150 @@ export async function PATCH(
     const requestedName =
       typeof body.name === "string" ? body.name.trim() : ""
     const requestedVisibility = parseVisibility(body.visibility)
-    const itemSafeData = sanitizeCharacterItemData(
-      body.data as Prisma.InputJsonObject,
-    )
-    const data = sanitizeCharacterAcquisitionData(itemSafeData, {
-      reason: "manual",
-      sourceType: "manual",
-      sourceName: "Edição da ficha",
-    })
-    const referencedSpellIndexes = extractReferencedSpellIndexes(data)
-    const accessibleHomebrewSpells = referencedSpellIndexes.length
-      ? await prisma.homebrewSpell.findMany({
-          where: {
-            index: {
-              in: referencedSpellIndexes,
-            },
-            status: HomebrewSpellStatus.ACTIVE,
-            OR: [
-              { ownerId: session.user.id },
-              {
-                campaignLinks: {
-                  some: {
-                    status: CampaignSpellApprovalStatus.APPROVED,
-                    campaign: {
-                      OR: [
-                        { ownerId: session.user.id },
-                        {
-                          members: {
-                            some: {
-                              userId: session.user.id,
-                              status: CampaignMemberStatus.ACTIVE,
-                            },
-                          },
-                        },
-                      ],
-                    },
-                  },
-                },
-              },
-            ],
-          },
-          select: {
-            id: true,
-          },
-        })
-      : []
+    const hasLegacyData = body.data !== undefined
 
-    const accessibleSpellIds = accessibleHomebrewSpells.map(
-      (spell) => spell.id,
-    )
+    if (!requestedName && !requestedVisibility && !hasLegacyData) {
+      throw new ApiError(
+        400,
+        "EMPTY_CHARACTER_UPDATE",
+        "Nenhuma alteração de identidade foi informada.",
+      )
+    }
+
+    if (hasLegacyData && !isJsonObject(body.data)) {
+      throw new ApiError(
+        400,
+        "INVALID_CHARACTER_DATA",
+        "Os dados do personagem precisam ser um objeto JSON.",
+      )
+    }
+
+    const expectedVersion = hasLegacyData
+      ? undefined
+      : parseExpectedRootVersion(body.expectedVersion)
+
+    let legacyData: Prisma.InputJsonObject | undefined
+    let accessibleSpellIds: string[] | undefined
+
+    if (hasLegacyData) {
+      const itemSafeData = sanitizeCharacterItemData(
+        body.data as Prisma.InputJsonObject,
+      )
+      legacyData = sanitizeCharacterAcquisitionData(itemSafeData, {
+        reason: "manual",
+        sourceType: "manual",
+        sourceName: "Edição legada da ficha",
+      })
+      accessibleSpellIds = await getAccessibleReferencedSpellIds(
+        legacyData,
+        session.user.id,
+      )
+    }
 
     const character = await prisma.$transaction(async (transaction) => {
-      const updated = await transaction.character.update({
-        where: {
-          id: existing.id,
-        },
-        data: {
-          data,
-          ...(requestedName ? { name: requestedName.slice(0, 120) } : {}),
-          ...(requestedVisibility ? { visibility: requestedVisibility } : {}),
-        },
+      if (expectedVersion !== undefined) {
+        const changed = await transaction.character.updateMany({
+          where: {
+            id: existing.id,
+            ownerId: session.user.id,
+            revision: expectedVersion,
+          },
+          data: {
+            ...(requestedName
+              ? { name: requestedName.slice(0, 120) }
+              : {}),
+            ...(requestedVisibility
+              ? { visibility: requestedVisibility }
+              : {}),
+            revision: { increment: 1 },
+          },
+        })
+
+        if (changed.count !== 1) {
+          const current = await transaction.character.findUnique({
+            where: { id: existing.id },
+            select: {
+              id: true,
+              name: true,
+              visibility: true,
+              revision: true,
+              updatedAt: true,
+            },
+          })
+          return { conflict: current, character: null }
+        }
+      } else {
+        await transaction.character.update({
+          where: { id: existing.id },
+          data: {
+            ...(legacyData ? { data: legacyData } : {}),
+            ...(requestedName
+              ? { name: requestedName.slice(0, 120) }
+              : {}),
+            ...(requestedVisibility
+              ? { visibility: requestedVisibility }
+              : {}),
+            revision: { increment: 1 },
+          },
+        })
+      }
+
+      if (legacyData && accessibleSpellIds) {
+        await transaction.characterHomebrewSpell.deleteMany({
+          where: {
+            characterId: existing.id,
+            ...(accessibleSpellIds.length
+              ? {
+                  spellId: {
+                    notIn: accessibleSpellIds,
+                  },
+                }
+              : {}),
+          },
+        })
+
+        if (accessibleSpellIds.length) {
+          await transaction.characterHomebrewSpell.createMany({
+            data: accessibleSpellIds.map((spellId) => ({
+              characterId: existing.id,
+              spellId,
+              grantedById: session.user.id,
+            })),
+            skipDuplicates: true,
+          })
+        }
+      }
+
+      const updated = await transaction.character.findUniqueOrThrow({
+        where: { id: existing.id },
         select: {
           id: true,
           name: true,
           data: true,
           visibility: true,
+          revision: true,
           createdAt: true,
           updatedAt: true,
         },
       })
 
-      await transaction.characterHomebrewSpell.deleteMany({
-        where: {
-          characterId: existing.id,
-          ...(accessibleSpellIds.length
-            ? {
-                spellId: {
-                  notIn: accessibleSpellIds,
-                },
-              }
-            : {}),
-        },
-      })
-
-      if (accessibleSpellIds.length) {
-        await transaction.characterHomebrewSpell.createMany({
-          data: accessibleSpellIds.map((spellId) => ({
-            characterId: existing.id,
-            spellId,
-            grantedById: session.user.id,
-          })),
-          skipDuplicates: true,
-        })
-      }
-
-      return updated
+      return { conflict: null, character: updated }
     })
 
-    return jsonResponse({ character })
+    if (character.conflict) {
+      return jsonResponse(
+        {
+          error: {
+            code: "CHARACTER_ROOT_VERSION_CONFLICT",
+            message: "A identidade do personagem foi alterada por outro cliente.",
+          },
+          current: character.conflict,
+        },
+        409,
+      )
+    }
+
+    return jsonResponse({ character: character.character })
   } catch (error) {
     return handleApiError(error)
   }
@@ -273,6 +332,63 @@ function parseVisibility(value: unknown): CharacterVisibility | undefined {
     "INVALID_CHARACTER_VISIBILITY",
     "A visibilidade informada é inválida.",
   )
+}
+
+function parseExpectedRootVersion(value: unknown): number {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new ApiError(
+      428,
+      "CHARACTER_ROOT_VERSION_REQUIRED",
+      "expectedVersion é obrigatório para alterar a identidade da ficha.",
+    )
+  }
+  return parsed
+}
+
+async function getAccessibleReferencedSpellIds(
+  data: Prisma.InputJsonObject,
+  userId: string,
+): Promise<string[]> {
+  const referencedSpellIndexes = extractReferencedSpellIndexes(data)
+  if (!referencedSpellIndexes.length) return []
+
+  const accessibleHomebrewSpells = await prisma.homebrewSpell.findMany({
+    where: {
+      index: {
+        in: referencedSpellIndexes,
+      },
+      status: HomebrewSpellStatus.ACTIVE,
+      OR: [
+        { ownerId: userId },
+        {
+          campaignLinks: {
+            some: {
+              status: CampaignSpellApprovalStatus.APPROVED,
+              campaign: {
+                OR: [
+                  { ownerId: userId },
+                  {
+                    members: {
+                      some: {
+                        userId,
+                        status: CampaignMemberStatus.ACTIVE,
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      ],
+    },
+    select: {
+      id: true,
+    },
+  })
+
+  return accessibleHomebrewSpells.map((spell) => spell.id)
 }
 
 function extractReferencedSpellIndexes(
