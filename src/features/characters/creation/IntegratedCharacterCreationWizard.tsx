@@ -72,6 +72,10 @@ import { getClassNamePt } from "../../../models/leveling/ClassLocalization"
 import { AbilityDialog } from "../abilities/abilityDialog"
 import { GrantedProficienciesEditor } from "../proficiencies/grantedProficienciesEditor"
 import { finalizeDynamicSubclassSpells } from "../progression/CharacterProgressionFlow"
+import {
+  readCharacterCreationDraftSection,
+  writeCharacterCreationDraftSection,
+} from "./characterCreationDraftCache"
 import { InlineStartingEquipmentEditor } from "./components/InlineStartingEquipmentEditor"
 
 const STEPS = [
@@ -127,8 +131,32 @@ type SpellSelections = Record<
   { selected: string[]; prepared: string[] }
 >
 
+type IntegratedCreationDraft = {
+  step: number
+  name: string
+  ownerName: string
+  visibility: Visibility
+  racePresetId: string
+  race: CharacterRace
+  backgroundPresetId: string
+  background: CharacterBackground
+  backgroundAbilities: Ability[]
+  backgroundItems: Itemmable[]
+  totalLevel: number
+  classPlans: ProgressionClassPlan[]
+  classSkillSelections: Partial<Record<ClassName, Skill[]>>
+  classToolChoices: Partial<Record<ClassName, string>>
+  customClassAbilities: ProgressionCustomAbility[]
+  spellSelections: SpellSelections
+  spellQueries: Partial<Record<ClassName, string>>
+  selectedMetamagics: MetamagicId[]
+  classEquipmentItems: Itemmable[]
+  attributes: Record<Attribute, number>
+}
+
 type Props = {
   open: boolean
+  draftId: string
   defaultOwner: Player
   owners: Player[]
   canAssignOwners: boolean
@@ -136,13 +164,14 @@ type Props = {
   onCreate: (
     character: CharacterTemplate,
     plan: CharacterCreationProgressionPlan,
-  ) => void
+  ) => void | Promise<void>
   createOwner: (ownerName: string) => Player
   mode?: "modal" | "page"
 }
 
 export function IntegratedCharacterCreationWizard({
   open,
+  draftId,
   defaultOwner,
   owners,
   canAssignOwners,
@@ -155,59 +184,90 @@ export function IntegratedCharacterCreationWizard({
   const firstRace = PHB_RACE_PRESETS[0]
   const firstBackground = PHB_BACKGROUND_PRESETS[0]
   const firstClass = PHB_CLASS_PRESETS[0]
+  const initialDraft = useMemo(
+    () =>
+      readCharacterCreationDraftSection<IntegratedCreationDraft>(
+        draftId,
+        "integrated",
+      ),
+    [draftId],
+  )
 
-  const [step, setStep] = useState(0)
-  const [name, setName] = useState("")
-  const [ownerName, setOwnerName] = useState(defaultOwner.name)
-  const [visibility, setVisibility] = useState<Visibility>("private")
+  const [step, setStep] = useState(() =>
+    Math.max(
+      0,
+      Math.min(
+        STEPS.length - 1,
+        Math.trunc(initialDraft?.step ?? 0),
+      ),
+    ),
+  )
+  const [name, setName] = useState(initialDraft?.name ?? "")
+  const [ownerName, setOwnerName] = useState(
+    initialDraft?.ownerName ?? defaultOwner.name,
+  )
+  const [visibility, setVisibility] = useState<Visibility>(
+    initialDraft?.visibility ?? "private",
+  )
 
-  const [racePresetId, setRacePresetId] = useState(firstRace.id)
+  const [racePresetId, setRacePresetId] = useState(
+    initialDraft?.racePresetId ?? firstRace.id,
+  )
   const [race, setRace] = useState<CharacterRace>(
-    racePresetToCharacterRace(firstRace),
+    initialDraft?.race ?? racePresetToCharacterRace(firstRace),
   )
 
   const [backgroundPresetId, setBackgroundPresetId] = useState(
-    firstBackground.id,
+    initialDraft?.backgroundPresetId ?? firstBackground.id,
   )
   const [background, setBackground] = useState<CharacterBackground>(
-    cloneBackground(firstBackground),
+    initialDraft?.background ?? cloneBackground(firstBackground),
   )
   const [backgroundAbilities, setBackgroundAbilities] = useState<Ability[]>(
-    backgroundPresetAbilities(firstBackground),
+    initialDraft?.backgroundAbilities ?? backgroundPresetAbilities(firstBackground),
   )
   const [backgroundItems, setBackgroundItems] = useState<Itemmable[]>(
-    hydrateBackgroundStartingItems(firstBackground.startingEquipment, {
-      type: "background",
-      sourceId: firstBackground.id,
-      sourceName: firstBackground.name,
-    }),
+    initialDraft?.backgroundItems ??
+      hydrateBackgroundStartingItems(firstBackground.startingEquipment, {
+        type: "background",
+        sourceId: firstBackground.id,
+        sourceName: firstBackground.name,
+      }),
   )
 
-  const [totalLevel, setTotalLevel] = useState(1)
-  const [classPlans, setClassPlans] = useState<ProgressionClassPlan[]>([
-    createPlan(firstClass.id, 1),
-  ])
+  const [totalLevel, setTotalLevel] = useState(
+    Math.max(1, Math.min(20, initialDraft?.totalLevel ?? 1)),
+  )
+  const [classPlans, setClassPlans] = useState<ProgressionClassPlan[]>(
+    initialDraft?.classPlans?.length
+      ? initialDraft.classPlans
+      : [createPlan(firstClass.id, 1)],
+  )
   const [classSkillSelections, setClassSkillSelections] = useState<
     Partial<Record<ClassName, Skill[]>>
-  >({})
+  >(initialDraft?.classSkillSelections ?? {})
   const [classToolChoices, setClassToolChoices] = useState<
     Partial<Record<ClassName, string>>
-  >({})
+  >(initialDraft?.classToolChoices ?? {})
   const [customClassAbilities, setCustomClassAbilities] = useState<
     ProgressionCustomAbility[]
-  >([])
-  const [spellSelections, setSpellSelections] = useState<SpellSelections>({})
+  >(initialDraft?.customClassAbilities ?? [])
+  const [spellSelections, setSpellSelections] = useState<SpellSelections>(
+    initialDraft?.spellSelections ?? {},
+  )
   const [spellQueries, setSpellQueries] = useState<
     Partial<Record<ClassName, string>>
-  >({})
-  const [selectedMetamagics, setSelectedMetamagics] = useState<MetamagicId[]>([])
+  >(initialDraft?.spellQueries ?? {})
+  const [selectedMetamagics, setSelectedMetamagics] = useState<MetamagicId[]>(
+    initialDraft?.selectedMetamagics ?? [],
+  )
 
   const [classEquipmentItems, setClassEquipmentItems] = useState<Itemmable[]>(
-    defaultClassEquipment(firstClass.id),
+    initialDraft?.classEquipmentItems ?? defaultClassEquipment(firstClass.id),
   )
-  const [attributes, setAttributes] = useState<Record<Attribute, number>>({
-    ...firstClass.recommendedAttributes,
-  })
+  const [attributes, setAttributes] = useState<Record<Attribute, number>>(
+    initialDraft?.attributes ?? { ...firstClass.recommendedAttributes },
+  )
 
   const [abilityEditor, setAbilityEditor] = useState<{
     source: FeatureEditorSource
@@ -219,38 +279,52 @@ export function IntegratedCharacterCreationWizard({
 
   useEffect(() => {
     if (!open) return
-    const initialRace = racePresetToCharacterRace(firstRace)
-    const initialBackground = cloneBackground(firstBackground)
-
-    setStep(0)
-    setName("")
-    setOwnerName(defaultOwner.name)
-    setVisibility("private")
-    setRacePresetId(firstRace.id)
-    setRace(initialRace)
-    setBackgroundPresetId(firstBackground.id)
-    setBackground(initialBackground)
-    setBackgroundAbilities(backgroundPresetAbilities(firstBackground))
-    setBackgroundItems(
-      hydrateBackgroundStartingItems(firstBackground.startingEquipment, {
-        type: "background",
-        sourceId: firstBackground.id,
-        sourceName: firstBackground.name,
-      }),
-    )
-    setTotalLevel(1)
-    setClassPlans([createPlan(firstClass.id, 1)])
-    setClassSkillSelections({})
-    setClassToolChoices({})
-    setCustomClassAbilities([])
-    setSpellSelections({})
-    setSpellQueries({})
-    setSelectedMetamagics([])
-    setClassEquipmentItems(defaultClassEquipment(firstClass.id))
-    setAttributes({ ...firstClass.recommendedAttributes })
-    setAbilityEditor(null)
-    setValidationMessage("")
-  }, [defaultOwner.id, open])
+    writeCharacterCreationDraftSection(draftId, "integrated", {
+      step,
+      name,
+      ownerName,
+      visibility,
+      racePresetId,
+      race,
+      backgroundPresetId,
+      background,
+      backgroundAbilities,
+      backgroundItems,
+      totalLevel,
+      classPlans,
+      classSkillSelections,
+      classToolChoices,
+      customClassAbilities,
+      spellSelections,
+      spellQueries,
+      selectedMetamagics,
+      classEquipmentItems,
+      attributes,
+    } satisfies IntegratedCreationDraft)
+  }, [
+    attributes,
+    background,
+    backgroundAbilities,
+    backgroundItems,
+    backgroundPresetId,
+    classEquipmentItems,
+    classPlans,
+    classSkillSelections,
+    classToolChoices,
+    customClassAbilities,
+    draftId,
+    name,
+    open,
+    ownerName,
+    race,
+    racePresetId,
+    selectedMetamagics,
+    spellQueries,
+    spellSelections,
+    step,
+    totalLevel,
+    visibility,
+  ])
 
   if (!open) return null
 
@@ -746,7 +820,7 @@ export function IntegratedCharacterCreationWizard({
     })
     character = finalizeDynamicSubclassSpells(character, spells, "creation")
 
-    onCreate(character, {
+    void onCreate(character, {
       className: primaryClass,
       targetLevel: totalLevel,
     })
