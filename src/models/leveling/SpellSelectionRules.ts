@@ -83,7 +83,14 @@ export function getClassSpellSelectionRule(
 ): ClassSpellSelectionRule {
   const level = clampLevel(classLevel)
   const classEntry = createClassEntry(className, level)
-  const mode = getBaseMode(className)
+  const baseMode = getBaseMode(className)
+  const maxSpellLevel = getMaximumSpellLevel(className, level)
+  const maxCantrips = getCantripsKnownAtLevel(className, level)
+  const maxLeveledSpells = getLeveledSpellLimit(character, classEntry, level)
+  const mode =
+    baseMode !== "none" && maxSpellLevel === 0 && maxCantrips === 0
+      ? "none"
+      : baseMode
 
   return {
     className,
@@ -95,9 +102,9 @@ export function getClassSpellSelectionRule(
       | "wis"
       | "cha"
       | undefined,
-    maxSpellLevel: getMaximumSpellLevel(className, level),
-    maxCantrips: getCantripsKnownAtLevel(className, level),
-    maxLeveledSpells: getLeveledSpellLimit(character, classEntry, level),
+    maxSpellLevel,
+    maxCantrips,
+    maxLeveledSpells,
     swap: { leveledKnown: 0, cantrips: 0 },
   }
 }
