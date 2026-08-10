@@ -2,10 +2,22 @@ import type { ComponentProps } from "react"
 
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { CharacterProgressionConfigurator } from "./CharacterProgressionConfigurator"
+import { LevelUpProgressionConfigurator } from "./LevelUpProgressionConfigurator"
 
 type Props = ComponentProps<typeof CharacterProgressionConfigurator>
 
 export function CharacterProgressionFlow(props: Props) {
+  if (props.mode === "level-up") {
+    return (
+      <LevelUpProgressionConfigurator
+        character={props.character}
+        primaryClassName={props.primaryClassName}
+        onCancel={props.onCancel}
+        onComplete={props.onComplete}
+      />
+    )
+  }
+
   return <CharacterProgressionConfigurator {...props} />
 }
 
