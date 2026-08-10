@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS character_domain_change_log (
   previous_version BIGINT NOT NULL DEFAULT 0,
   version BIGINT NOT NULL,
   operation TEXT NOT NULL DEFAULT 'replace',
+  mutation_id TEXT,
   actor_key TEXT,
   client_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -45,6 +46,10 @@ CREATE INDEX IF NOT EXISTS idx_character_domain_change_log_character
 
 CREATE INDEX IF NOT EXISTS idx_character_domain_change_log_campaign
   ON character_domain_change_log(campaign_id, created_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_character_domain_mutation
+  ON character_domain_change_log(character_id, domain, mutation_id)
+  WHERE mutation_id IS NOT NULL;
 
 -- Existing relational character rows remain useful for indexed/queryable data.
 -- The domain table is the ownership boundary for portions of CharacterTemplate
