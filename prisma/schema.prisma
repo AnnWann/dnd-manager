@@ -75,7 +75,7 @@ model Verification {
   value      String
   expiresAt  DateTime
   createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 
   @@index([identifier])
   @@map("verification")
@@ -140,7 +140,7 @@ model CharacterDomainState {
   @@unique([characterId, domain])
   @@index([characterId])
   @@index([updatedById])
-  @@map("character_domain_state")
+  @@map("user_character_domain_state")
 }
 
 model CharacterDomainMutation {
@@ -163,7 +163,7 @@ model CharacterDomainMutation {
   @@unique([characterId, domain, mutationId])
   @@index([characterId, createdAt])
   @@index([actorId])
-  @@map("character_domain_mutation")
+  @@map("user_character_domain_mutation")
 }
 
 enum CampaignRole {
