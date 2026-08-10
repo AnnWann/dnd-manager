@@ -4,12 +4,23 @@ import {
   setLocalCharacters,
   type LocalCharacter,
 } from "../auth/local-auth"
-import { apiClient } from "./api-client"
+import type { CharacterDomainName } from "../lib/relationalApi"
+import { apiClient, getApiStatus } from "./api-client"
 
 export type CharacterVisibility = "PRIVATE" | "PARTY" | "MASTER"
 
+export type UserCharacterDomain = {
+  domain: CharacterDomainName
+  payload: Record<string, unknown>
+  version: number
+  updatedBy?: string | null
+  updatedAt?: string | null
+}
+
 export type UserCharacterSummary = LocalCharacter & {
   visibility: CharacterVisibility
+  revision?: number
+  domains?: UserCharacterDomain[]
   campaigns?: Array<{
     id: string
     name: string
@@ -62,6 +73,17 @@ type CharacterAccessResponse = {
   access: UserCharacterAccess
 }
 
+type DomainResponse = {
+  domain: UserCharacterDomain | null
+  duplicate?: boolean
+}
+
+export class UserCharacterDomainConflictError extends Error {
+  constructor(readonly current: UserCharacterDomain | null) {
+    super("Conflito de versão no domínio do personagem.")
+  }
+}
+
 export async function getMyCharacters(): Promise<UserCharacterSummary[]> {
   if (LOCAL_AUTH_BYPASS) {
     return getLocalCharacters() as UserCharacterSummary[]
@@ -94,6 +116,59 @@ export async function getMyCharacter(
   )
 
   return response.data.character
+}
+
+export async function getMyCharacterDomain(
+  characterId: string,
+  domain: CharacterDomainName,
+): Promise<UserCharacterDomain | null> {
+  if (LOCAL_AUTH_BYPASS) return null
+
+  const response = await apiClient.get<DomainResponse>(
+    `/me/characters/${encodeURIComponent(characterId)}/domains/${domain}`,
+  )
+  return response.data.domain
+}
+
+export async function replaceMyCharacterDomain(
+  characterId: string,
+  domain: CharacterDomainName,
+  payload: Record<string, unknown>,
+  expectedVersion: number,
+  metadata: {
+    mutationId?: string
+    clientId?: string
+  } = {},
+): Promise<UserCharacterDomain> {
+  if (LOCAL_AUTH_BYPASS) {
+    throw new Error(
+      "Domínios remotos não são usados no modo local de desenvolvimento.",
+    )
+  }
+
+  try {
+    const response = await apiClient.put<DomainResponse>(
+      `/me/characters/${encodeURIComponent(characterId)}/domains/${domain}`,
+      {
+        payload,
+        expectedVersion,
+        ...metadata,
+      },
+    )
+
+    if (!response.data.domain) {
+      throw new Error("O servidor não retornou o domínio atualizado.")
+    }
+    return response.data.domain
+  } catch (error) {
+    if (getApiStatus(error) === 409) {
+      const current = isDomainConflictResponse(error)
+        ? error.response?.data.current ?? null
+        : null
+      throw new UserCharacterDomainConflictError(current)
+    }
+    throw error
+  }
 }
 
 export async function getMyCharacterAccess(
@@ -157,6 +232,10 @@ export async function createMyCharacter(input: {
   return response.data.character
 }
 
+/**
+ * Legacy whole-document update. New character editing code should use
+ * replaceMyCharacterDomain and updateMyCharacterRoot instead.
+ */
 export async function updateMyCharacter(
   characterId: string,
   data: Record<string, unknown>,
@@ -212,6 +291,41 @@ export async function updateMyCharacter(
   return response.data.character
 }
 
+export async function updateMyCharacterRoot(
+  characterId: string,
+  expectedVersion: number,
+  options: {
+    name?: string
+    visibility?: CharacterVisibility
+  },
+): Promise<UserCharacterSummary> {
+  if (LOCAL_AUTH_BYPASS) {
+    const current = await getMyCharacter(characterId)
+    return updateMyCharacter(
+      characterId,
+      current.data as Record<string, unknown>,
+      options,
+    )
+  }
+
+  try {
+    const response = await apiClient.patch<CharacterResponse>(
+      `/me/characters/${encodeURIComponent(characterId)}`,
+      {
+        expectedVersion,
+        name: options.name,
+        visibility: options.visibility,
+      },
+    )
+    return response.data.character
+  } catch (error) {
+    if (getApiStatus(error) === 409) {
+      throw new Error("A identidade do personagem foi alterada em outro cliente.")
+    }
+    throw error
+  }
+}
+
 export async function deleteMyCharacter(
   characterId: string,
 ): Promise<void> {
@@ -232,4 +346,16 @@ export async function deleteMyCharacter(
   await apiClient.delete(
     `/me/characters/${encodeURIComponent(characterId)}`,
   )
+}
+
+function isDomainConflictResponse(
+  error: unknown,
+): error is {
+  response?: {
+    data: {
+      current?: UserCharacterDomain | null
+    }
+  }
+} {
+  return Boolean(error) && typeof error === "object" && "response" in error
 }
