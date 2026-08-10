@@ -1,0 +1,935 @@
+name: Apply race creation fixes
+
+on:
+  push:
+    branches:
+      - feature/auth
+    paths:
+      - .github/workflows/apply-race-creation-fixes.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/auth
+          fetch-depth: 0
+
+      - name: Patch race creation flow
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              if old not in text:
+                  raise RuntimeError(f"Missing replacement target: {label}")
+              return text.replace(old, new, 1)
+
+          def replace_regex(text: str, pattern: str, replacement: str, label: str) -> str:
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise RuntimeError(f"Expected one regex match for {label}, found {count}")
+              return updated
+
+          # Integrated race editor/read-only preset view.
+          path = Path("src/features/characters/creation/IntegratedCharacterCreationWizard.tsx")
+          text = path.read_text()
+          text = replace_once(
+              text,
+              '''  function selectCustomRace() {\n    setRacePresetId("custom")\n    setRace((current) => ({\n      ...current,\n      race: "custom",\n      customName:\n        current.customName?.trim() || current.subrace?.trim() || "Raça personalizada",\n      naturalAbilities: (current.naturalAbilities ?? []).map(cloneAbility),\n      proficiencies: (current.proficiencies ?? []).map((entry) => ({ ...entry })),\n      attributeBonus: { ...current.attributeBonus },\n    }))\n  }''',
+              '''  function selectCustomRace() {\n    setRacePresetId("custom")\n    setRace((current) => ({\n      ...current,\n      race: "custom",\n      customName:\n        current.customName?.trim() ||\n        current.subrace?.trim() ||\n        "Raça personalizada",\n      subrace: current.subrace ?? "",\n      size: current.size ?? "medium",\n      mobility: current.mobility ?? 9,\n      naturalAbilities: (current.naturalAbilities ?? []).map(cloneAbility),\n      proficiencies: (current.proficiencies ?? []).map((entry) => ({ ...entry })),\n      attributeBonus: { ...current.attributeBonus },\n    }))\n  }''',
+              "selectCustomRace",
+          )
+
+          race_step = r'''function RaceStep({
+  selectedPresetId,
+  race,
+  onSelectPreset,
+  onSelectCustom,
+  onChange,
+  onAddAbility,
+  onEditAbility,
+}: {
+  selectedPresetId: string
+  race: CharacterRace
+  onSelectPreset: (preset: RacePreset) => void
+  onSelectCustom: () => void
+  onChange: (race: CharacterRace) => void
+  onAddAbility: () => void
+  onEditAbility: (ability: Ability) => void
+}) {
+  const custom = selectedPresetId === "custom"
+  const selectedPreset = PHB_RACE_PRESETS.find(
+    (preset) => preset.id === selectedPresetId,
+  )
+  const displayName = custom
+    ? race.customName?.trim() || race.subrace?.trim() || "Raça personalizada"
+    : selectedPreset?.name ??
+      race.customName?.trim() ??
+      race.subrace?.trim() ??
+      String(race.race)
+  const fixedBonuses = selectedPreset?.attributeBonus ?? race.attributeBonus
+
+  return (
+    <div className="grid gap-5">
+      <StepSection
+        title="Raça"
+        description="Escolha um preset racial para usar seus dados como definidos. Para alterar os dados-base da raça, selecione Personalizada."
+      >
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {PHB_RACE_PRESETS.map((preset) => (
+            <PresetCard
+              key={preset.id}
+              selected={selectedPresetId === preset.id}
+              title={preset.name}
+              description={preset.summary}
+              onClick={() => onSelectPreset(preset)}
+            />
+          ))}
+          <PresetCard
+            selected={custom}
+            title="Personalizada"
+            description="Use a raça atual como base e edite identidade, tamanho, mobilidade, bônus, características e proficiências."
+            onClick={onSelectCustom}
+          />
+        </div>
+      </StepSection>
+
+      <div
+        data-character-creation-race-details="true"
+        data-race-preset-id={selectedPresetId}
+        data-race-name={displayName}
+        data-race-fixed-bonuses={JSON.stringify(fixedBonuses)}
+      >
+        <StepSection
+          title={
+            custom
+              ? "Construir raça personalizada"
+              : `Visualização do preset racial: ${displayName}`
+          }
+          description={
+            custom
+              ? "Todos os dados raciais abaixo pertencem à raça personalizada e podem ser editados."
+              : "Os dados-base abaixo vêm do preset selecionado e são somente leitura. Selecione Personalizada para editá-los."
+          }
+        >
+          {custom ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Field label="Nome da raça">
+                <Input
+                  value={race.customName ?? ""}
+                  placeholder="Nome da raça"
+                  onChange={(event) =>
+                    onChange({
+                      ...race,
+                      customName: event.target.value,
+                    })
+                  }
+                />
+              </Field>
+              <Field label="Sub-raça">
+                <Input
+                  value={race.subrace ?? ""}
+                  placeholder="Opcional"
+                  onChange={(event) =>
+                    onChange({ ...race, subrace: event.target.value })
+                  }
+                />
+              </Field>
+              <Field label="Tamanho">
+                <Select
+                  value={race.size ?? "medium"}
+                  onChange={(event) =>
+                    onChange({
+                      ...race,
+                      size: event.target.value as CreatureSize,
+                    })
+                  }
+                >
+                  {Object.entries(SIZE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Mobilidade base (m)">
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={race.mobility ?? 9}
+                  onChange={(event) =>
+                    onChange({
+                      ...race,
+                      mobility: Math.max(0, Number(event.target.value) || 0),
+                      speedBonus: undefined,
+                    })
+                  }
+                />
+              </Field>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Summary label="Nome" value={displayName} />
+              <Summary label="Sub-raça" value={race.subrace?.trim() || "—"} />
+              <Summary
+                label="Tamanho"
+                value={SIZE_LABELS[race.size ?? "medium"]}
+              />
+              <Summary
+                label="Mobilidade base"
+                value={`${race.mobility ?? 9} m`}
+              />
+            </div>
+          )}
+
+          {!custom ? (
+            <div className="mt-4 rounded-xl border border-border bg-bg p-3">
+              <div className="text-xs font-semibold text-textH">
+                Bônus raciais atuais
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {ATTRIBUTE_KEYS.map((attribute) => {
+                  const value = race.attributeBonus[attribute] ?? 0
+                  return value ? (
+                    <Badge key={attribute}>
+                      {ATTRIBUTE_LABELS[attribute]} +{value}
+                    </Badge>
+                  ) : null
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="hidden" aria-hidden="true">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              {ATTRIBUTE_KEYS.map((attribute) => (
+                <Field
+                  key={attribute}
+                  label={`Bônus de ${ATTRIBUTE_LABELS[attribute]}`}
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    max={4}
+                    value={race.attributeBonus[attribute] ?? 0}
+                    onChange={(event) =>
+                      onChange({
+                        ...race,
+                        attributeBonus: {
+                          ...race.attributeBonus,
+                          [attribute]: Math.max(
+                            0,
+                            Math.min(4, Number(event.target.value) || 0),
+                          ),
+                        },
+                      })
+                    }
+                  />
+                </Field>
+              ))}
+            </div>
+          </div>
+
+          <FeatureList
+            title="Características raciais"
+            abilities={race.naturalAbilities ?? []}
+            onAdd={onAddAbility}
+            onEdit={onEditAbility}
+            onRemove={(abilityId) =>
+              onChange({
+                ...race,
+                naturalAbilities: (race.naturalAbilities ?? []).filter(
+                  (entry) => entry.id !== abilityId,
+                ),
+              })
+            }
+            readOnly={!custom}
+          />
+
+          <div className="mt-4">
+            {custom ? (
+              <GrantedProficienciesEditor
+                proficiencies={race.proficiencies ?? []}
+                onChange={(proficiencies: Proficiency[]) =>
+                  onChange({ ...race, proficiencies })
+                }
+                title="Proficiências raciais"
+                description="Edite idiomas, perícias, armas, armaduras e ferramentas concedidos pela raça."
+                emptyMessage="Nenhuma proficiência racial cadastrada."
+              />
+            ) : (
+              <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                <div className="text-xs font-semibold text-textH">
+                  Proficiências raciais
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {(race.proficiencies ?? []).length ? (
+                    race.proficiencies.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="rounded-lg border border-border bg-bg p-3"
+                      >
+                        <span className="block text-xs font-medium text-textH">
+                          {entry.name}
+                        </span>
+                        <span className="mt-1 block text-[10px] text-textMuted">
+                          {entry.category}
+                        </span>
+                        {entry.notes ? (
+                          <span className="mt-1 block text-[10px] text-textMuted">
+                            {entry.notes}
+                          </span>
+                        ) : null}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-xs text-textMuted">
+                      Nenhuma proficiência racial cadastrada.
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+          </div>
+        </StepSection>
+      </div>
+    </div>
+  )
+}
+'''
+          text = replace_regex(
+              text,
+              r'function RaceStep\(\{.*?\n\}\n\nfunction BackgroundStep\(\{',
+              race_step + '\nfunction BackgroundStep({',
+              "RaceStep",
+          )
+
+          feature_list = r'''function FeatureList({
+  title,
+  abilities,
+  onAdd,
+  onEdit,
+  onRemove,
+  readOnly = false,
+}: {
+  title: string
+  abilities: Ability[]
+  onAdd: () => void
+  onEdit: (ability: Ability) => void
+  onRemove: (abilityId: string) => void
+  readOnly?: boolean
+}) {
+  return (
+    <section className="mt-4 rounded-xl border border-border bg-bg-subtle p-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="text-xs font-semibold text-textH">{title}</div>
+        {!readOnly ? (
+          <Button size="sm" variant="secondary" onClick={onAdd}>
+            <Plus className="h-4 w-4" />
+            Característica
+          </Button>
+        ) : null}
+      </div>
+      <div className="mt-3 grid gap-2">
+        {abilities.length ? (
+          abilities.map((ability) => (
+            <article
+              key={ability.id}
+              className="rounded-lg border border-border bg-bg p-3"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <strong className="text-sm text-textH">{ability.name}</strong>
+                  <details className="mt-2 text-xs">
+                    <summary className="cursor-pointer font-medium text-textH">
+                      Ler detalhes da característica
+                    </summary>
+                    <p className="mt-2 whitespace-pre-wrap leading-5 text-textMuted">
+                      {ability.description || "Sem descrição cadastrada."}
+                    </p>
+                    {ability.grantedSpells?.length ? (
+                      <div className="mt-2">
+                        Magias concedidas: {ability.grantedSpells.map((grant) => grant.index).join(", ")}
+                      </div>
+                    ) : null}
+                  </details>
+                </div>
+                {!readOnly ? (
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => onEdit(ability)}>
+                      Editar
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => onRemove(ability.id)}>
+                      Remover
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </article>
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-border bg-bg p-4 text-center text-xs text-textMuted">
+            Nenhuma característica cadastrada.
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+'''
+          text = replace_regex(
+              text,
+              r'function FeatureList\(\{.*?\n\}\n\nfunction StepSection\(\{',
+              feature_list + '\nfunction StepSection({',
+              "FeatureList",
+          )
+          path.write_text(text)
+
+          # Racial bonus/application state. Fixed bonuses come from the selected preset,
+          # not from a stale first render of the hidden inputs.
+          path = Path("src/features/characters/creation/CharacterCreationAbilityScoreRules.tsx")
+          text = path.read_text()
+          text = replace_once(
+              text,
+              'import { Select } from "../../../components/ui/Select"\n',
+              'import { Select } from "../../../components/ui/Select"\nimport { PHB_RACE_PRESETS } from "../../../data/characterCreation/phbPresets"\n',
+              "ability score preset import",
+          )
+          text = replace_regex(
+              text,
+              r'type AbilityScoreDraft = \{.*?\n\}\n\ntype AbilityScoreOverride',
+              '''type AbilityScoreDraft = {
+  raceName: string
+  raceSelectionKey?: string
+  fixedRacialBonuses?: Partial<Record<Attribute, number>>
+  racialBonuses: Partial<Record<Attribute, number>>
+  attributes: Record<Attribute, number>
+  racialBonusDraft?: RacialBonusDraft
+  scoreDraft?: ScoreDraft
+}
+
+type IntegratedRaceDraft = {
+  racePresetId?: string
+  race?: {
+    race?: string
+    customName?: string
+    subrace?: string
+    attributeBonus?: Partial<Record<Attribute, number>>
+  }
+}
+
+type AbilityScoreOverride''',
+              "ability score draft types",
+          )
+
+          ability_root = r'''export function CharacterCreationAbilityScoreRules({
+  draftId,
+  onChange,
+}: Props) {
+  const initialDraft = useMemo(
+    () =>
+      readCharacterCreationDraftSection<AbilityScoreDraft>(
+        draftId,
+        "ability-scores",
+      ),
+    [draftId],
+  )
+  const integratedDraft = useMemo(
+    () =>
+      readCharacterCreationDraftSection<IntegratedRaceDraft>(
+        draftId,
+        "integrated",
+      ),
+    [draftId],
+  )
+  const initialPreset = PHB_RACE_PRESETS.find(
+    (preset) => preset.id === integratedDraft?.racePresetId,
+  )
+  const initialRaceName =
+    initialDraft?.raceName ??
+    initialPreset?.name ??
+    integratedDraft?.race?.customName?.trim() ??
+    integratedDraft?.race?.subrace?.trim() ??
+    integratedDraft?.race?.race ??
+    ""
+  const initialFixedRacialBonuses =
+    initialPreset?.attributeBonus ??
+    initialDraft?.fixedRacialBonuses ??
+    integratedDraft?.race?.attributeBonus ??
+    initialDraft?.racialBonuses ??
+    {}
+  const initialRacialBonuses =
+    initialDraft?.racialBonusDraft?.mode === "fixed" && initialPreset
+      ? { ...initialPreset.attributeBonus }
+      : initialDraft?.racialBonuses ??
+        integratedDraft?.race?.attributeBonus ??
+        initialFixedRacialBonuses
+  const initialSelectionKey =
+    initialDraft?.raceSelectionKey ??
+    `${integratedDraft?.racePresetId ?? ""}:${initialRaceName}`
+
+  const [raceAnchor, setRaceAnchor] = useState<HTMLElement | null>(null)
+  const [attributeAnchor, setAttributeAnchor] = useState<HTMLElement | null>(null)
+  const [raceInputs, setRaceInputs] = useState<Record<Attribute, HTMLInputElement> | null>(null)
+  const [attributeInputs, setAttributeInputs] = useState<Record<Attribute, HTMLInputElement> | null>(null)
+  const [raceName, setRaceName] = useState(initialRaceName)
+  const [raceSelectionKey, setRaceSelectionKey] = useState(initialSelectionKey)
+  const [fixedRacialBonuses, setFixedRacialBonuses] = useState<
+    Partial<Record<Attribute, number>>
+  >({ ...initialFixedRacialBonuses })
+  const [racialBonuses, setRacialBonuses] = useState<
+    Partial<Record<Attribute, number>>
+  >({ ...initialRacialBonuses })
+  const [attributes, setAttributes] = useState<Record<Attribute, number>>(
+    initialDraft?.attributes ?? {
+      str: 15,
+      dex: 14,
+      con: 13,
+      int: 12,
+      wis: 10,
+      cha: 8,
+    },
+  )
+  const [racialBonusDraft, setRacialBonusDraft] = useState<
+    RacialBonusDraft | undefined
+  >(initialDraft?.racialBonusDraft)
+  const [scoreDraft, setScoreDraft] = useState<ScoreDraft | undefined>(
+    initialDraft?.scoreDraft,
+  )
+
+  useEffect(() => {
+    writeCharacterCreationDraftSection(draftId, "ability-scores", {
+      raceName,
+      raceSelectionKey,
+      fixedRacialBonuses,
+      racialBonuses,
+      attributes,
+      racialBonusDraft,
+      scoreDraft,
+    } satisfies AbilityScoreDraft)
+  }, [
+    attributes,
+    draftId,
+    fixedRacialBonuses,
+    raceName,
+    raceSelectionKey,
+    racialBonusDraft,
+    racialBonuses,
+    scoreDraft,
+  ])
+
+  useEffect(() => {
+    let frame = 0
+    const scan = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const raceSection = document.querySelector<HTMLElement>(
+          '[data-character-creation-race-details="true"]',
+        )
+        if (raceSection) {
+          const inputs = findLabeledInputs(raceSection, "Bônus de")
+          if (inputs) {
+            const nextName = raceSection.dataset.raceName ?? ""
+            const nextPresetId = raceSection.dataset.racePresetId ?? ""
+            const nextSelectionKey = `${nextPresetId}:${nextName}`
+            const nextFixed =
+              readFixedRacialBonuses(raceSection) ?? readValues(inputs)
+
+            setFixedRacialBonuses((current) =>
+              sameAttributeBonuses(current, nextFixed) ? current : nextFixed,
+            )
+
+            if (nextSelectionKey && nextSelectionKey !== raceSelectionKey) {
+              setRaceSelectionKey(nextSelectionKey)
+              setRaceName(nextName)
+              setRacialBonusDraft(undefined)
+              setRacialBonuses({ ...nextFixed })
+            } else {
+              if (nextName && nextName !== raceName) setRaceName(nextName)
+              if (!raceSelectionKey && nextSelectionKey) {
+                setRaceSelectionKey(nextSelectionKey)
+              }
+            }
+
+            const grid = inputs.str.closest("div")?.parentElement
+            if (grid instanceof HTMLElement) grid.style.display = "none"
+            let anchor = raceSection.querySelector<HTMLElement>(
+              "[data-racial-bonus-rules-anchor]",
+            )
+            if (!anchor) {
+              anchor = document.createElement("div")
+              anchor.dataset.racialBonusRulesAnchor = "true"
+              grid?.parentElement?.insertBefore(anchor, grid.nextSibling)
+            }
+            setRaceInputs(inputs)
+            setRaceAnchor(anchor)
+          }
+        } else {
+          setRaceAnchor(null)
+        }
+
+        const attributeHeading = Array.from(
+          document.querySelectorAll<HTMLElement>("h2"),
+        ).find((entry) => entry.textContent?.trim() === "Atributos")
+        const attributeSection = attributeHeading?.closest<HTMLElement>("section")
+        if (attributeSection) {
+          const inputs = findAttributeInputs(attributeSection)
+          if (inputs) {
+            const cardGrid = inputs.str.closest("article")?.parentElement
+            if (cardGrid instanceof HTMLElement) cardGrid.style.display = "none"
+            const recommendedButton = Array.from(
+              attributeSection.querySelectorAll<HTMLButtonElement>("button"),
+            ).find((button) =>
+              button.textContent?.includes("atributos recomendados"),
+            )
+            if (recommendedButton) recommendedButton.style.display = "none"
+            let anchor = attributeSection.querySelector<HTMLElement>(
+              "[data-ability-score-rules-anchor]",
+            )
+            if (!anchor) {
+              anchor = document.createElement("div")
+              anchor.dataset.abilityScoreRulesAnchor = "true"
+              attributeHeading?.parentElement?.insertBefore(
+                anchor,
+                attributeHeading.nextSibling,
+              )
+            }
+            setAttributeInputs(inputs)
+            setAttributeAnchor(anchor)
+          }
+        } else {
+          setAttributeAnchor(null)
+        }
+      })
+    }
+
+    scan()
+    const observer = new MutationObserver(scan)
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+      document
+        .querySelectorAll<HTMLElement>(
+          "[data-racial-bonus-rules-anchor], [data-ability-score-rules-anchor]",
+        )
+        .forEach((entry) => entry.remove())
+    }
+  }, [raceName, raceSelectionKey])
+
+  useEffect(() => {
+    if (!raceInputs) return
+    writeValues(raceInputs, racialBonuses)
+  }, [raceInputs, racialBonuses])
+
+  useEffect(() => {
+    if (!attributeInputs) return
+    writeValues(attributeInputs, attributes)
+  }, [attributeInputs, attributes])
+
+  useEffect(() => {
+    onChange({ attributes, racialBonuses })
+    return () => onChange(null)
+  }, [attributes, onChange, racialBonuses])
+
+  return (
+    <>
+      {raceAnchor
+        ? createPortal(
+            <RacialBonusRules
+              key={raceSelectionKey || raceName}
+              raceName={raceName}
+              fixed={fixedRacialBonuses}
+              current={racialBonuses}
+              draft={racialBonusDraft}
+              onDraftChange={setRacialBonusDraft}
+              onChange={setRacialBonuses}
+            />,
+            raceAnchor,
+          )
+        : null}
+      {attributeAnchor
+        ? createPortal(
+            <AbilityScoreRules
+              values={attributes}
+              racialBonuses={racialBonuses}
+              draft={scoreDraft}
+              onDraftChange={setScoreDraft}
+              onChange={setAttributes}
+            />,
+            attributeAnchor,
+          )
+        : null}
+    </>
+  )
+}
+'''
+          text = replace_regex(
+              text,
+              r'export function CharacterCreationAbilityScoreRules\(\{.*?\n\}\n\nfunction RacialBonusRules\(\{',
+              ability_root + '\nfunction RacialBonusRules({',
+              "ability score root",
+          )
+
+          racial_rules = r'''function RacialBonusRules({
+  raceName,
+  fixed,
+  current,
+  draft,
+  onDraftChange,
+  onChange,
+}: {
+  raceName: string
+  fixed: Partial<Record<Attribute, number>>
+  current: Partial<Record<Attribute, number>>
+  draft?: RacialBonusDraft
+  onDraftChange: (draft: RacialBonusDraft) => void
+  onChange: (value: Partial<Record<Attribute, number>>) => void
+}) {
+  const inferred = inferBonusMode(raceName, current)
+  const [mode, setMode] = useState<BonusMode>(draft?.mode ?? inferred)
+  const [first, setFirst] = useState<Attribute>(draft?.first ?? "str")
+  const [second, setSecond] = useState<Attribute>(draft?.second ?? "dex")
+  const [third, setThird] = useState<Attribute>(draft?.third ?? "con")
+  const [custom, setCustom] = useState<Partial<Record<Attribute, number>>>(
+    draft?.custom ?? { ...current },
+  )
+
+  useEffect(() => {
+    onDraftChange({ mode, first, second, third, custom })
+    if (mode === "fixed") onChange({ ...fixed })
+    if (mode === "variant") onChange(distribute([[first, 1], [second, 1]]))
+    if (mode === "flex21") onChange(distribute([[first, 2], [second, 1]]))
+    if (mode === "flex111") {
+      onChange(distribute([[first, 1], [second, 1], [third, 1]]))
+    }
+    if (mode === "custom") onChange({ ...custom })
+  }, [
+    custom,
+    first,
+    fixed,
+    mode,
+    onChange,
+    onDraftChange,
+    second,
+    third,
+  ])
+
+  return (
+    <section className="mt-4 grid gap-4 rounded-xl border border-border bg-bg p-4">
+      <div>
+        <h3 className="text-sm font-semibold text-textH">Regra de bônus raciais</h3>
+        <p className="mt-1 text-xs leading-5 text-textMuted">
+          Escolha os bônus predefinidos da raça ou uma distribuição alternativa. Ao voltar para Predefinidos, os bônus originais do preset são restaurados.
+        </p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <ModeButton active={mode === "fixed"} label="Predefinidos" onClick={() => setMode("fixed")} />
+        <ModeButton active={mode === "variant"} label="+1 / +1" onClick={() => setMode("variant")} />
+        <ModeButton active={mode === "flex21"} label="Móveis +2 / +1" onClick={() => setMode("flex21")} />
+        <ModeButton active={mode === "flex111"} label="Móveis +1 / +1 / +1" onClick={() => setMode("flex111")} />
+        <ModeButton active={mode === "custom"} label="Personalizados" onClick={() => setMode("custom")} />
+      </div>
+
+      {mode === "fixed" ? (
+        <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-bg-subtle p-3">
+          {ATTRIBUTE_KEYS.map((attribute) => {
+            const value = fixed[attribute] ?? 0
+            return value ? (
+              <span
+                key={attribute}
+                className="rounded-full border border-accentBorder bg-accentBg px-2 py-1 text-xs text-textH"
+              >
+                {ATTRIBUTE_LABELS[attribute]} +{value}
+              </span>
+            ) : null
+          })}
+        </div>
+      ) : null}
+
+      {mode === "variant" || mode === "flex21" || mode === "flex111" ? (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <AttributeSelect label={mode === "flex21" ? "Bônus +2" : "Primeiro +1"} value={first} onChange={setFirst} />
+          <AttributeSelect label="Segundo +1" value={second} onChange={setSecond} blocked={[first]} />
+          {mode === "flex111" ? (
+            <AttributeSelect label="Terceiro +1" value={third} onChange={setThird} blocked={[first, second]} />
+          ) : null}
+        </div>
+      ) : null}
+
+      {mode === "custom" ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {ATTRIBUTE_KEYS.map((attribute) => (
+            <label key={attribute} className="grid gap-1 text-xs text-textMuted">
+              {ATTRIBUTE_LABELS[attribute]}
+              <Input
+                type="number"
+                min={0}
+                max={4}
+                value={custom[attribute] ?? 0}
+                onChange={(event) =>
+                  setCustom((currentValue) => ({
+                    ...currentValue,
+                    [attribute]: Math.max(
+                      0,
+                      Math.min(
+                        4,
+                        Math.trunc(Number(event.target.value) || 0),
+                      ),
+                    ),
+                  }))
+                }
+              />
+            </label>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+'''
+          text = replace_regex(
+              text,
+              r'function RacialBonusRules\(\{.*?\n\}\n\nfunction AbilityScoreRules\(\{',
+              racial_rules + '\nfunction AbilityScoreRules({',
+              "racial bonus rules",
+          )
+
+          helper_marker = 'function inferBonusMode(\n'
+          helper = '''function readFixedRacialBonuses(
+  root: HTMLElement,
+): Partial<Record<Attribute, number>> | undefined {
+  const raw = root.dataset.raceFixedBonuses
+  if (!raw) return undefined
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<Record<Attribute, unknown>>
+    return Object.fromEntries(
+      ATTRIBUTE_KEYS.map((attribute) => [
+        attribute,
+        Math.max(0, Math.trunc(Number(parsed[attribute]) || 0)),
+      ]),
+    ) as Partial<Record<Attribute, number>>
+  } catch {
+    return undefined
+  }
+}
+
+function sameAttributeBonuses(
+  left: Partial<Record<Attribute, number>>,
+  right: Partial<Record<Attribute, number>>,
+): boolean {
+  return ATTRIBUTE_KEYS.every(
+    (attribute) => (left[attribute] ?? 0) === (right[attribute] ?? 0),
+  )
+}
+
+'''
+          text = replace_once(
+              text,
+              helper_marker,
+              helper + helper_marker,
+              "racial fixed bonus helpers",
+          )
+          path.write_text(text)
+
+          # Required race choices now locate the dynamically titled race section via data attributes.
+          path = Path("src/features/characters/creation/CharacterCreationRacialChoices.tsx")
+          text = path.read_text()
+          text = replace_once(
+              text,
+              '''type RacialChoicesDraft = {\n  raceName: string\n''',
+              '''type RacialChoicesDraft = {\n  raceName: string\n  racePresetId?: string\n''',
+              "racial choice draft preset id",
+          )
+          text = replace_once(
+              text,
+              '''  const [anchor, setAnchor] = useState<HTMLElement | null>(null)\n  const [raceName, setRaceName] = useState(initialDraft?.raceName ?? "")\n''',
+              '''  const [anchor, setAnchor] = useState<HTMLElement | null>(null)\n  const [raceName, setRaceName] = useState(initialDraft?.raceName ?? "")\n  const [racePresetId, setRacePresetId] = useState(\n    initialDraft?.racePresetId ?? "",\n  )\n''',
+              "racial choice preset state",
+          )
+          text = replace_once(
+              text,
+              '''    writeCharacterCreationDraftSection(draftId, "racial-required-choices", {\n      raceName,\n      skillOne,\n''',
+              '''    writeCharacterCreationDraftSection(draftId, "racial-required-choices", {\n      raceName,\n      racePresetId,\n      skillOne,\n''',
+              "racial choice persist preset",
+          )
+          text = replace_once(
+              text,
+              '''    raceName,\n    skillOne,\n''',
+              '''    raceName,\n    racePresetId,\n    skillOne,\n''',
+              "racial choice persist deps",
+          )
+          text = replace_regex(
+              text,
+              r'''        const heading = Array\.from\(document\.querySelectorAll<HTMLElement>\("h2"\)\)\.find\(\n          \(entry\) => entry\.textContent\?\.trim\(\) === "Construir características raciais",\n        \)\n        const section = heading\?\.closest<HTMLElement>\("section"\)\n        if \(!section\) \{\n          setAnchor\(null\)\n          return\n        \}\n        const nameInput = Array\.from\(section\.querySelectorAll<HTMLInputElement>\("input"\)\)\.find\(\n          \(input\) => input\.closest\("label"\)\?\.textContent\?\.includes\("Nome da raça"\),\n        \)\n        if \(nameInput\?\.value && nameInput\.value !== raceName\) \{\n          setRaceName\(nameInput\.value\)\n          setFeatName\(""\)\n          setCustomFeatName\(""\)\n          setCustomFeatDescription\(""\)\n          setCantripIndex\(""\)\n          setAncestry\(""\)\n          setGenericChoices\(\{\}\)\n        \}''',
+              '''        const section = document.querySelector<HTMLElement>(
+          '[data-character-creation-race-details="true"]',
+        )
+        if (!section) {
+          setAnchor(null)
+          return
+        }
+        const nextRaceName = section.dataset.raceName ?? ""
+        const nextPresetId = section.dataset.racePresetId ?? ""
+        const presetChanged = Boolean(racePresetId) && nextPresetId !== racePresetId
+        if (nextRaceName !== raceName || presetChanged) {
+          setRaceName(nextRaceName)
+          setFeatName("")
+          setCustomFeatName("")
+          setCustomFeatDescription("")
+          setCantripIndex("")
+          setAncestry("")
+          setGenericChoices({})
+        }
+        if (nextPresetId !== racePresetId) setRacePresetId(nextPresetId)''',
+              "racial choice section scan",
+          )
+          text = replace_once(
+              text,
+              '''  }, [raceName])\n\n  const normalizedRace = normalize(raceName)\n  const variantHuman = normalizedRace.includes("humano variante")\n  const halfElf = normalizedRace.includes("meio elfo")\n  const highElf = normalizedRace.includes("alto elfo")\n  const dragonborn = normalizedRace.includes("draconato")\n''',
+              '''  }, [raceName, racePresetId])\n\n  const normalizedRace = normalize(raceName)\n  const usesPresetSpecificChoices = racePresetId !== "custom"\n  const variantHuman =\n    usesPresetSpecificChoices && normalizedRace.includes("humano variante")\n  const halfElf =\n    usesPresetSpecificChoices && normalizedRace.includes("meio elfo")\n  const highElf =\n    usesPresetSpecificChoices && normalizedRace.includes("alto elfo")\n  const dragonborn =\n    usesPresetSpecificChoices && normalizedRace.includes("draconato")\n''',
+              "racial choice preset-specific rules",
+          )
+          path.write_text(text)
+
+          # Generic racial choices use the race metadata instead of a hard-coded heading/name input.
+          path = Path("src/features/characters/creation/CharacterCreationGenericRacialChoices.tsx")
+          text = path.read_text()
+          text = replace_regex(
+              text,
+              r'''        const heading = Array\.from\(document\.querySelectorAll<HTMLElement>\("h2"\)\)\.find\(\n          \(entry\) => entry\.textContent\?\.trim\(\) === "Construir características raciais",\n        \)\n        const section = heading\?\.closest<HTMLElement>\("section"\)\n        if \(!section\) \{\n          setAnchor\(\(current\) => \(current === null \? current : null\)\)\n          setPrompts\(\(current\) => \(current\.length \? \[\] : current\)\)\n          return\n        \}\n        const nameInput = Array\.from\(section\.querySelectorAll<HTMLInputElement>\("input"\)\)\.find\(\n          \(input\) => input\.closest\("label"\)\?\.textContent\?\.includes\("Nome da raça"\),\n        \)\n        const nextRaceName = nameInput\?\.value \?\? ""''',
+              '''        const section = document.querySelector<HTMLElement>(
+          '[data-character-creation-race-details="true"]',
+        )
+        if (!section) {
+          setAnchor((current) => (current === null ? current : null))
+          setPrompts((current) => (current.length ? [] : current))
+          return
+        }
+        const nextRaceName = section.dataset.raceName ?? ""''',
+              "generic racial section scan",
+          )
+          path.write_text(text)
+
+          # Remove this one-shot workflow from the resulting commit.
+          Path(".github/workflows/apply-race-creation-fixes.yml").unlink()
+          PY
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          git config user.name "OpenAI"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/features/characters/creation .github/workflows/apply-race-creation-fixes.yml
+          git diff --cached --check
+          git commit -m "Fix racial presets and custom race editing"
+          git push origin HEAD:feature/auth
