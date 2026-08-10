@@ -35,6 +35,12 @@ import {
 import { CreationProgressionConfigurationBridge } from "./bridges/CreationProgressionConfigurationBridge"
 import { CreationRequiredFieldHighlighter } from "./bridges/CreationRequiredFieldHighlighter"
 import {
+  clearCharacterCreationDraft,
+  getCharacterCreationDraftId,
+  readCharacterCreationDraftSection,
+  writeCharacterCreationDraftSection,
+} from "./characterCreationDraftCache"
+import {
   applyCreationProgressionConfiguration,
   createEmptyCreationProgressionConfiguration,
   type CreationProgressionConfiguration,
@@ -59,8 +65,17 @@ export type { CharacterCreationProgressionPlan }
 
 type WizardProps = ComponentProps<typeof IntegratedCharacterCreationWizard>
 
+type WrapperDraft = {
+  identity: CharacterCreationIdentity
+  progressionConfiguration: CreationProgressionConfiguration
+  subclasses: Partial<Record<ClassName, ManualSubclassSelection>>
+}
+
 export function CharacterCreationWizard(props: WizardProps) {
   const { spells } = useMagicContext()
+  const draftId = getCharacterCreationDraftId(
+    props.defaultOwner.id || props.defaultOwner.name,
+  )
   const [equipment, setEquipment] = useState<EquipmentOverride | null>(null)
   const [abilityScores, setAbilityScores] =
     useState<AbilityScoreOverride | null>(null)
@@ -81,6 +96,7 @@ export function CharacterCreationWizard(props: WizardProps) {
     createEmptyCharacterCreationIdentity(),
   )
   const identityRef = useRef(identity)
+  const [draftHydrated, setDraftHydrated] = useState(false)
 
   const [identityError, setIdentityError] = useState("")
   const [raceError, setRaceError] = useState("")
@@ -108,9 +124,27 @@ export function CharacterCreationWizard(props: WizardProps) {
         createEmptyCreationProgressionConfiguration(),
       )
       setSubclasses({})
+      setDraftHydrated(false)
       clearErrors()
       return
     }
+
+    const cached = readCharacterCreationDraftSection<WrapperDraft>(
+      draftId,
+      "wrapper",
+    )
+    if (cached) {
+      const nextIdentity =
+        cached.identity ?? createEmptyCharacterCreationIdentity()
+      identityRef.current = nextIdentity
+      setIdentity(nextIdentity)
+      setProgressionConfiguration(
+        cached.progressionConfiguration ??
+          createEmptyCreationProgressionConfiguration(),
+      )
+      setSubclasses(cached.subclasses ?? {})
+    }
+    setDraftHydrated(true)
 
     const clearAfterEdit = (event: Event) => {
       if (event.target instanceof Element) clearErrors()
@@ -122,7 +156,23 @@ export function CharacterCreationWizard(props: WizardProps) {
       document.removeEventListener("input", clearAfterEdit, true)
       document.removeEventListener("change", clearAfterEdit, true)
     }
-  }, [clearErrors, props.open])
+  }, [clearErrors, draftId, props.open])
+
+  useEffect(() => {
+    if (!props.open || !draftHydrated) return
+    writeCharacterCreationDraftSection(draftId, "wrapper", {
+      identity,
+      progressionConfiguration,
+      subclasses,
+    } satisfies WrapperDraft)
+  }, [
+    draftHydrated,
+    draftId,
+    identity,
+    progressionConfiguration,
+    props.open,
+    subclasses,
+  ])
 
   const updateIdentity = useCallback((next: CharacterCreationIdentity) => {
     identityRef.current = next
@@ -139,7 +189,7 @@ export function CharacterCreationWizard(props: WizardProps) {
     [clearErrors],
   )
 
-  const handleCreate: WizardProps["onCreate"] = (character, plan) => {
+  const handleCreate: WizardProps["onCreate"] = async (character, plan) => {
     const overrides = {
       identity: identityRef.current,
       equipment,
@@ -183,12 +233,17 @@ export function CharacterCreationWizard(props: WizardProps) {
       progressionConfiguration,
       spells,
     )
-    props.onCreate(configured, plan)
+    await props.onCreate(configured, plan)
+    clearCharacterCreationDraft(draftId)
   }
 
   return (
     <>
-      <IntegratedCharacterCreationWizard {...props} onCreate={handleCreate} />
+      <IntegratedCharacterCreationWizard
+        {...props}
+        draftId={draftId}
+        onCreate={handleCreate}
+      />
 
       <CharacterCreationFlowBootstrap open={props.open} />
       <CharacterCreationIdentityStep
@@ -198,6 +253,7 @@ export function CharacterCreationWizard(props: WizardProps) {
         externalError={identityError}
       />
       <CharacterCreationEquipmentChoices
+        draftId={draftId}
         onChange={(next) => {
           if (!next) return
           setEquipment(next)
@@ -205,6 +261,7 @@ export function CharacterCreationWizard(props: WizardProps) {
         }}
       />
       <CharacterCreationAbilityScoreRules
+        draftId={draftId}
         onChange={(next) => {
           if (!next) return
           setAbilityScores(next)
@@ -212,6 +269,7 @@ export function CharacterCreationWizard(props: WizardProps) {
         }}
       />
       <CharacterCreationRacialChoices
+        draftId={draftId}
         onChange={(next) => {
           if (!next) return
           setRacialChoices(next)
@@ -220,6 +278,7 @@ export function CharacterCreationWizard(props: WizardProps) {
         externalError={raceError}
       />
       <CharacterCreationGenericRacialChoices
+        draftId={draftId}
         onChange={(next) => {
           if (!next) return
           setGenericRacialChoices(next)
@@ -228,6 +287,7 @@ export function CharacterCreationWizard(props: WizardProps) {
         externalError={raceError}
       />
       <CharacterCreationBackgroundChoices
+        draftId={draftId}
         onChange={(next) => {
           if (!next) return
           setBackgroundChoices(next)
