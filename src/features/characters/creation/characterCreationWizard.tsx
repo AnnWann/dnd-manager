@@ -161,7 +161,10 @@ export function CharacterCreationWizard(props: WizardProps) {
     )
     const withClassProficiencies = applyManualProficiencies(
       withManualClasses,
-      classProficiencies,
+      [
+        ...(withManualClasses.get("sheet").proficiencies ?? []),
+        ...classProficiencies,
+      ],
     )
     props.onCreate(withClassProficiencies, plan)
   }
