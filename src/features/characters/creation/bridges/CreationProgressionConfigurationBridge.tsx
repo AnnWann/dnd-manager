@@ -158,20 +158,29 @@ export function CreationProgressionConfigurationBridge({
             else section.firstElementChild?.insertAdjacentElement("afterend", mount)
           }
           nextClassMounts.push({ ...parsedClass, element: mount })
-          continue
         }
+      }
 
-        if (heading?.textContent?.trim() === "Construir características raciais") {
-          hideLegacyRaceConfiguration(section)
-          let mount = section.querySelector<HTMLElement>(
-            ':scope > [data-creation-progression-race="true"]',
-          )
-          if (!mount) {
-            mount = document.createElement("div")
-            mount.dataset.creationProgressionRace = "true"
-            section.appendChild(mount)
-          }
-          nextRaceMount = { name: resolveRaceName(section), element: mount }
+      const customRaceDetails = main.querySelector<HTMLElement>(
+        '[data-character-creation-race-details="true"][data-race-preset-id="custom"]',
+      )
+      const customRaceSection =
+        customRaceDetails?.querySelector<HTMLElement>(":scope > section")
+      if (customRaceDetails && customRaceSection) {
+        hideLegacyRaceConfiguration(customRaceSection)
+        let mount = customRaceSection.querySelector<HTMLElement>(
+          ':scope > [data-creation-progression-race="true"]',
+        )
+        if (!mount) {
+          mount = document.createElement("div")
+          mount.dataset.creationProgressionRace = "true"
+          customRaceSection.appendChild(mount)
+        }
+        nextRaceMount = {
+          name:
+            customRaceDetails.dataset.raceName?.trim() ||
+            resolveRaceName(customRaceSection),
+          element: mount,
         }
       }
 
@@ -198,7 +207,12 @@ export function CreationProgressionConfigurationBridge({
       const root = findCharacterCreationRoot()
       if (!root) return
       observer = new MutationObserver(scheduleSync)
-      observer.observe(root, { childList: true, subtree: true })
+      observer.observe(root, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["data-race-preset-id", "data-race-name"],
+      })
     })
 
     return () => {
