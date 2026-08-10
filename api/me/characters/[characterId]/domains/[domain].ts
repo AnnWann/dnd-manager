@@ -9,6 +9,7 @@ import {
   readJsonObject,
 } from "../../../../../server/api"
 import { sanitizeCharacterAcquisitionData } from "../../../../../server/character-acquisitions"
+import { syncCharacterHomebrewSpellLinks } from "../../../../../server/character-domain-spells"
 import { sanitizeCharacterItemData } from "../../../../../server/character-items"
 import { prisma } from "../../../../../server/prisma"
 import { requireSession } from "../../../../../server/session"
@@ -27,6 +28,15 @@ type DomainResult = {
   updatedBy: string | null
   updatedAt: Date
 }
+
+const SPELL_REFERENCE_DOMAINS = new Set<CharacterDataDomain>([
+  CharacterDataDomain.SHEET,
+  CharacterDataDomain.ABILITIES,
+  CharacterDataDomain.MAGIC,
+  CharacterDataDomain.INVENTORY,
+  CharacterDataDomain.EQUIPMENT,
+  CharacterDataDomain.PROGRESSION,
+])
 
 export async function GET(
   request: Request,
@@ -121,13 +131,7 @@ async function writeDomain(
             where: {
               characterId_domain: { characterId, domain },
             },
-            select: {
-              domain: true,
-              data: true,
-              revision: true,
-              updatedById: true,
-              updatedAt: true,
-            },
+            select: domainSelect(),
           })
           return { current, duplicate: true, conflict: false }
         }
@@ -138,13 +142,7 @@ async function writeDomain(
           where: {
             characterId_domain: { characterId, domain },
           },
-          select: {
-            domain: true,
-            data: true,
-            revision: true,
-            updatedById: true,
-            updatedAt: true,
-          },
+          select: domainSelect(),
         })
 
         if (existing) {
@@ -159,13 +157,7 @@ async function writeDomain(
             revision: 1,
             updatedById: session.user.id,
           },
-          select: {
-            domain: true,
-            data: true,
-            revision: true,
-            updatedById: true,
-            updatedAt: true,
-          },
+          select: domainSelect(),
         })
 
         await transaction.characterDomainMutation.create({
@@ -179,6 +171,14 @@ async function writeDomain(
             actorId: session.user.id,
           },
         })
+
+        if (SPELL_REFERENCE_DOMAINS.has(domain)) {
+          await syncCharacterHomebrewSpellLinks(
+            transaction,
+            characterId,
+            session.user.id,
+          )
+        }
 
         return { current: created, duplicate: false, conflict: false }
       }
@@ -201,13 +201,7 @@ async function writeDomain(
           where: {
             characterId_domain: { characterId, domain },
           },
-          select: {
-            domain: true,
-            data: true,
-            revision: true,
-            updatedById: true,
-            updatedAt: true,
-          },
+          select: domainSelect(),
         })
         return { current, duplicate: false, conflict: true }
       }
@@ -216,13 +210,7 @@ async function writeDomain(
         where: {
           characterId_domain: { characterId, domain },
         },
-        select: {
-          domain: true,
-          data: true,
-          revision: true,
-          updatedById: true,
-          updatedAt: true,
-        },
+        select: domainSelect(),
       })
 
       await transaction.characterDomainMutation.create({
@@ -236,6 +224,14 @@ async function writeDomain(
           actorId: session.user.id,
         },
       })
+
+      if (SPELL_REFERENCE_DOMAINS.has(domain)) {
+        await syncCharacterHomebrewSpellLinks(
+          transaction,
+          characterId,
+          session.user.id,
+        )
+      }
 
       return { current, duplicate: false, conflict: false }
     })
@@ -333,6 +329,16 @@ function optionalId(value: unknown): string | undefined {
   return typeof value === "string" && value.trim()
     ? value.trim().slice(0, 200)
     : undefined
+}
+
+function domainSelect() {
+  return {
+    domain: true,
+    data: true,
+    revision: true,
+    updatedById: true,
+    updatedAt: true,
+  } as const
 }
 
 function serializeDomain(value: {
