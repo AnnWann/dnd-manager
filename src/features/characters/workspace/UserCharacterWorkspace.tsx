@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -17,10 +18,15 @@ import {
   getLocalUser,
   LOCAL_AUTH_BYPASS,
 } from "../../../auth/local-auth"
+import { applyCharacterDomains } from "../../../lib/characterDomains"
+import { UserCharacterDomainPersistence } from "../../../lib/userCharacterDomainPersistence"
 import { moveEquippedItemToCharacterStorage } from "../../../models/characters/characterEquippedItemMovement"
 import { stowHandOccupant as stowCharacterHandOccupant } from "../../../models/characters/characterHands"
 import { takeLongRest } from "../../../models/characters/characterRest"
-import { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import {
+  CharacterTemplate,
+  type CharacterTemplateProps,
+} from "../../../models/characters/CharacterTemplate"
 import { ensureCharacterAcquisitionMetadata } from "../../../models/characters/characterAcquisitionMetadata"
 import type { Player } from "../../../models/player/Player"
 import { normalizeStandardItemsInValue } from "../../items/standardItemCompendium"
@@ -44,34 +50,66 @@ export function UserCharacterWorkspace({
     useState<CharacterTemplate | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [persistenceError, setPersistenceError] = useState("")
+  const persistenceRef = useRef<UserCharacterDomainPersistence | null>(null)
 
   useEffect(() => {
     let active = true
+    persistenceRef.current = null
 
     async function load() {
       setLoading(true)
       setNotFound(false)
+      setPersistenceError("")
 
       try {
         const result = await getMyCharacter(characterId)
 
         if (!active) return
 
-        const normalized = normalizeStandardItemsInValue({
+        const legacyBase = normalizeStandardItemsInValue({
           ...result.data,
           id: result.id,
           name: result.name,
           visibility: fromApiVisibility(result.visibility),
-        }) as Record<string, unknown>
-        const parsed = CharacterTemplate.fromJSON(normalized)
-
-        setCharacter(
-          ensureCharacterAcquisitionMetadata(parsed, {
-            reason: "import",
-            sourceType: "import",
-            sourceName: "Compatibilidade de ficha existente",
-          }),
+        }) as CharacterTemplateProps
+        const hydratedData = applyCharacterDomains(
+          legacyBase,
+          result.domains ?? [],
         )
+        const parsed = CharacterTemplate.fromJSON(hydratedData)
+        const normalizedCharacter = ensureCharacterAcquisitionMetadata(parsed, {
+          reason: "import",
+          sourceType: "import",
+          sourceName: "Compatibilidade de ficha existente",
+        })
+
+        if (!LOCAL_AUTH_BYPASS) {
+          const persistence = new UserCharacterDomainPersistence(
+            result.id,
+            result.revision ?? 1,
+            result.domains ?? [],
+            (conflict) => {
+              if (!active) return
+              setPersistenceError(
+                `Conflito de edição em ${formatDomainName(conflict.domain)}. Recarregue a ficha antes de continuar editando esse campo.`,
+              )
+            },
+            (error) => {
+              if (!active) return
+              setPersistenceError(
+                error instanceof Error
+                  ? error.message
+                  : "Não foi possível persistir uma alteração da ficha.",
+              )
+            },
+          )
+          persistenceRef.current = persistence
+          await persistence.bootstrapMissingDomains(normalizedCharacter.toJSON())
+        }
+
+        if (!active) return
+        setCharacter(normalizedCharacter)
       } catch {
         if (active) setNotFound(true)
       } finally {
@@ -83,27 +121,40 @@ export function UserCharacterWorkspace({
 
     return () => {
       active = false
+      persistenceRef.current = null
     }
   }, [characterId])
 
   const persistCharacter = useCallback(
-    (updated: CharacterTemplate) => {
+    (
+      previous: CharacterTemplate,
+      updated: CharacterTemplate,
+    ) => {
       const withMetadata = ensureCharacterAcquisitionMetadata(updated, {
         reason: "manual",
         sourceType: "manual",
         sourceName: "Edição da ficha",
       })
-      const data = normalizeStandardItemsInValue(
-        withMetadata.toJSON(),
-      ) as Record<string, unknown>
 
-      void updateMyCharacter(
-        withMetadata.get("id"),
-        data,
-        {
-          name: withMetadata.get("name"),
-          visibility: toApiVisibility(withMetadata.get("visibility")),
-        },
+      if (LOCAL_AUTH_BYPASS) {
+        const data = normalizeStandardItemsInValue(
+          withMetadata.toJSON(),
+        ) as Record<string, unknown>
+
+        void updateMyCharacter(
+          withMetadata.get("id"),
+          data,
+          {
+            name: withMetadata.get("name"),
+            visibility: toApiVisibility(withMetadata.get("visibility")),
+          },
+        )
+        return
+      }
+
+      persistenceRef.current?.persistChange(
+        previous.toJSON(),
+        withMetadata.toJSON(),
       )
     },
     [],
@@ -131,7 +182,8 @@ export function UserCharacterWorkspace({
           sourceName: "Edição da ficha",
         })
 
-        persistCharacter(withMetadata)
+        setPersistenceError("")
+        persistCharacter(current, withMetadata)
         return withMetadata
       })
     },
@@ -146,6 +198,7 @@ export function UserCharacterWorkspace({
         setNotFound(false)
       })
 
+      persistenceRef.current = null
       return null
     })
   }, [])
@@ -236,6 +289,11 @@ export function UserCharacterWorkspace({
 
   return (
     <CharacterWorkspaceProvider value={value}>
+      {persistenceError ? (
+        <div className="mb-3 rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger">
+          {persistenceError}
+        </div>
+      ) : null}
       {children}
     </CharacterWorkspaceProvider>
   )
@@ -251,4 +309,20 @@ function fromApiVisibility(
   visibility: CharacterVisibility,
 ): "private" | "party" | "master" {
   return visibility.toLowerCase() as "private" | "party" | "master"
+}
+
+function formatDomainName(domain: string): string {
+  const labels: Record<string, string> = {
+    root: "identidade",
+    sheet: "dados da ficha",
+    vitals: "vida e condições",
+    profile: "perfil",
+    abilities: "características",
+    magic: "magia",
+    inventory: "inventário",
+    equipment: "equipamento",
+    progression: "progressão",
+    notes: "notas",
+  }
+  return labels[domain] ?? domain
 }
