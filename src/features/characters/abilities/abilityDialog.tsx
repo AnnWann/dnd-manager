@@ -41,15 +41,17 @@ type Props = {
   ability: Ability | null
   onClose: () => void
   onSave: (ability: Ability) => void
+  title?: string
+  fixedCategory?: AbilityCategory
 }
 
-function createEmptyAbility(): Ability {
+function createEmptyAbility(category: AbilityCategory = "general"): Ability {
   return {
     id: crypto.randomUUID(),
     name: "",
     description: "",
     kind: "feature",
-    category: "general",
+    category,
     actionKind: "action",
     effectDuration: undefined,
     effectPersistence: "untilEnd",
@@ -61,14 +63,26 @@ function createEmptyAbility(): Ability {
   }
 }
 
-export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
-  const [draft, setDraft] = useState<Ability>(() =>
-    ability ?? createEmptyAbility(),
-  )
+export function AbilityDialog({
+  open,
+  ability,
+  onClose,
+  onSave,
+  title,
+  fixedCategory,
+}: Props) {
+  const [draft, setDraft] = useState<Ability>(() => ({
+    ...(ability ?? createEmptyAbility(fixedCategory)),
+    category: fixedCategory ?? ability?.category ?? "general",
+  }))
 
   useEffect(() => {
-    if (open) setDraft(ability ?? createEmptyAbility())
-  }, [open, ability])
+    if (!open) return
+    setDraft({
+      ...(ability ?? createEmptyAbility(fixedCategory)),
+      category: fixedCategory ?? ability?.category ?? "general",
+    })
+  }, [ability, fixedCategory, open])
 
   useEffect(() => {
     if (!open) return
@@ -94,17 +108,22 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
     ABILITY_TRIGGER_OPTIONS.find(
       (option) => option.value === (draft.trigger ?? "always"),
     )?.label ?? draft.trigger ?? ""
+  const dialogTitle =
+    title ?? (ability ? "Editar habilidade" : "Adicionar habilidade")
 
   function changeKind(kind: AbilityKind) {
     setDraft({
       ...draft,
       kind,
-      actionKind: kind === "active" ? draft.actionKind ?? "action" : draft.actionKind,
+      actionKind:
+        kind === "active" ? draft.actionKind ?? "action" : draft.actionKind,
       effectDuration:
         kind === "feature"
           ? undefined
-          : draft.effectDuration ?? (kind === "active" ? "instant" : "lasting"),
-      effectDurationText: kind === "feature" ? undefined : draft.effectDurationText,
+          : draft.effectDuration ??
+            (kind === "active" ? "instant" : "lasting"),
+      effectDurationText:
+        kind === "feature" ? undefined : draft.effectDurationText,
       effectPersistence: draft.effectPersistence ?? "untilEnd",
       benefitsActive: false,
     })
@@ -112,10 +131,8 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
 
   function updateUsageMaximum(rawValue: string) {
     if (!draft.usage) return
-
     const numeric = Number(rawValue)
     if (!rawValue.trim() || !Number.isFinite(numeric)) return
-
     const max = Math.max(1, Math.floor(numeric))
     setDraft({
       ...draft,
@@ -128,23 +145,26 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
     })
   }
 
+  function save() {
+    const normalized = normalizeAbilityActivation(
+      normalizeAbilityText({
+        ...draft,
+        category: fixedCategory ?? draft.category ?? "general",
+      }),
+    )
+    onSave(normalized)
+  }
+
   return createPortal(
     <div className="fixed inset-0 z-[12000] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/55 p-3 backdrop-blur-sm sm:p-4">
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={ability ? "Editar habilidade" : "Adicionar habilidade"}
+        aria-label={dialogTitle}
         className="max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-2xl border border-border bg-bg-elevated p-4 shadow-theme-lg sm:max-h-[calc(100dvh-2rem)]"
       >
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold text-textH">
-              {ability ? "Editar habilidade" : "Adicionar habilidade"}
-            </h2>
-            <p className="mt-1 text-xs text-textMuted">
-              Preencha o essencial. Fórmulas, bônus, proficiências e magias ficam em Opções avançadas.
-            </p>
-          </div>
+          <h2 className="text-base font-semibold text-textH">{dialogTitle}</h2>
           <Button size="sm" variant="ghost" onClick={onClose}>
             Fechar
           </Button>
@@ -174,29 +194,39 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
           </label>
 
           <div className="grid gap-3 md:grid-cols-3">
-            <label className="grid gap-1">
-              <span className="text-xs font-medium text-textH">Categoria</span>
-              <Select
-                value={draft.category ?? "general"}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    category: event.target.value as AbilityCategory,
-                  })
-                }
-              >
-                <option value="general">Habilidade</option>
-                <option value="invocation">Evocação</option>
-                <option value="feat">Talento</option>
-                <option value="channelDivinity">Canalizar Divindade</option>
-              </Select>
-            </label>
+            {fixedCategory ? (
+              <div className="grid gap-1">
+                <span className="text-xs font-medium text-textH">Categoria</span>
+                <div className="flex h-9 items-center rounded-xl border border-border bg-bg-subtle px-3 text-sm text-text">
+                  {formatCategory(fixedCategory)}
+                </div>
+              </div>
+            ) : (
+              <label className="grid gap-1">
+                <span className="text-xs font-medium text-textH">Categoria</span>
+                <Select
+                  value={draft.category ?? "general"}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      category: event.target.value as AbilityCategory,
+                    })
+                  }
+                >
+                  <option value="general">Habilidade</option>
+                  <option value="feat">Talento</option>
+                  <option value="channelDivinity">Canalizar Divindade</option>
+                </Select>
+              </label>
+            )}
 
             <label className="grid gap-1">
               <span className="text-xs font-medium text-textH">Tipo</span>
               <Select
                 value={draft.kind ?? "feature"}
-                onChange={(event) => changeKind(event.target.value as AbilityKind)}
+                onChange={(event) =>
+                  changeKind(event.target.value as AbilityKind)
+                }
               >
                 {ABILITY_KIND_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -224,11 +254,6 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                   </option>
                 ))}
               </Select>
-              {draft.kind !== "active" ? (
-                <span className="text-[10px] text-textMuted">
-                  A ação só é usada por habilidades ativas.
-                </span>
-              ) : null}
             </label>
           </div>
 
@@ -249,7 +274,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
               Possui limite de usos
             </label>
 
-            {hasUsage && draft.usage ? (
+            {draft.usage ? (
               <div className="mt-3 grid gap-2 md:grid-cols-2">
                 <label className="grid gap-1">
                   <span className="text-xs text-textMuted">Usos máximos</span>
@@ -260,7 +285,6 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                     onChange={(event) => updateUsageMaximum(event.target.value)}
                   />
                 </label>
-
                 <label className="grid gap-1">
                   <span className="text-xs text-textMuted">Recupera em</span>
                   <Select
@@ -290,9 +314,6 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
             <summary className="cursor-pointer text-sm font-semibold text-textH">
               Opções avançadas
             </summary>
-            <p className="mt-1 text-[11px] leading-4 text-textMuted">
-              Use somente quando a característica precisa alterar a ficha, conceder proficiências ou magias, usar fórmulas ou controlar efeitos persistentes.
-            </p>
 
             <div className="mt-4 grid gap-4">
               <label className="grid gap-1">
@@ -300,7 +321,6 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                 <Input
                   list="ability-trigger-suggestions"
                   value={triggerInputValue}
-                  placeholder="Ex.: Quando um aliado cair a 0 PV"
                   onChange={(event) => {
                     const preset = ABILITY_TRIGGER_OPTIONS.find(
                       (option) => option.label === event.target.value,
@@ -322,9 +342,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                 <section className="grid gap-3 rounded-xl border border-border bg-bg-subtle p-3">
                   <div className="grid gap-2 md:grid-cols-2">
                     <label className="grid gap-1">
-                      <span className="text-xs font-medium text-textH">
-                        Duração do efeito
-                      </span>
+                      <span className="text-xs text-textMuted">Duração</span>
                       <Select
                         value={duration}
                         onChange={(event) =>
@@ -339,11 +357,8 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                         <option value="lasting">Duradoura</option>
                       </Select>
                     </label>
-
                     <label className="grid gap-1">
-                      <span className="text-xs font-medium text-textH">
-                        Após o término
-                      </span>
+                      <span className="text-xs text-textMuted">Após o término</span>
                       <Select
                         value={persistence}
                         onChange={(event) =>
@@ -354,44 +369,33 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                           })
                         }
                       >
-                        <option value="untilEnd">Remover os benefícios</option>
-                        <option value="permanent">Manter os benefícios</option>
+                        <option value="untilEnd">Remover benefícios</option>
+                        <option value="permanent">Manter benefícios</option>
                       </Select>
                     </label>
                   </div>
-
                   {duration === "lasting" ? (
-                    <label className="grid gap-1">
-                      <span className="text-xs font-medium text-textH">
-                        Duração descrita
-                      </span>
-                      <Input
-                        value={draft.effectDurationText ?? ""}
-                        placeholder="Ex.: 1 minuto, enquanto concentrar"
-                        onChange={(event) =>
-                          setDraft({
-                            ...draft,
-                            effectDurationText: event.target.value,
-                          })
-                        }
-                      />
-                    </label>
+                    <Input
+                      value={draft.effectDurationText ?? ""}
+                      placeholder="Duração descrita"
+                      onChange={(event) =>
+                        setDraft({
+                          ...draft,
+                          effectDurationText: event.target.value,
+                        })
+                      }
+                    />
                   ) : null}
                 </section>
               ) : null}
 
-              {hasUsage && draft.usage ? (
+              {draft.usage ? (
                 <section className="grid gap-3 rounded-xl border border-border bg-bg-subtle p-3">
-                  <div className="text-xs font-semibold text-textH">
-                    Configuração avançada de usos
-                  </div>
                   <div className="grid gap-2 md:grid-cols-2">
                     <label className="grid gap-1">
                       <span className="text-xs text-textMuted">Fórmula do máximo</span>
                       <Input
-                        type="text"
                         value={draft.usage.maxFormula ?? ""}
-                        placeholder="Ex.: character.proficiencyBonus"
                         onChange={(event) =>
                           setDraft({
                             ...draft,
@@ -406,15 +410,10 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                         <span className="text-[10px] text-danger">
                           {maximumFormulaError}
                         </span>
-                      ) : maximumFormula ? (
-                        <span className="text-[10px] text-textMuted">
-                          A fórmula substitui o máximo fixo quando puder ser calculada.
-                        </span>
                       ) : null}
                     </label>
-
                     <label className="grid gap-1">
-                      <span className="text-xs text-textMuted">Usos já gastos</span>
+                      <span className="text-xs text-textMuted">Usos gastos</span>
                       <Input
                         type="number"
                         min={0}
@@ -430,78 +429,70 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                         }
                       />
                     </label>
-
-                    {draft.usage.reset === "cooldown" ? (
-                      <>
-                        <label className="grid gap-1">
-                          <span className="text-xs text-textMuted">Cooldown</span>
-                          <Input
-                            type="number"
-                            min={1}
-                            value={draft.usage.cooldownAmount ?? 1}
-                            onChange={(event) =>
-                              setDraft({
-                                ...draft,
-                                usage: {
-                                  ...draft.usage!,
-                                  cooldownAmount: Math.max(
-                                    1,
-                                    Number(event.target.value) || 1,
-                                  ),
-                                },
-                              })
-                            }
-                          />
-                        </label>
-                        <label className="grid gap-1">
-                          <span className="text-xs text-textMuted">Unidade</span>
-                          <Select
-                            value={draft.usage.cooldownUnit ?? "turns"}
-                            onChange={(event) =>
-                              setDraft({
-                                ...draft,
-                                usage: {
-                                  ...draft.usage!,
-                                  cooldownUnit: event.target.value as AbilityUsageCooldownUnit,
-                                },
-                              })
-                            }
-                          >
-                            {COOLDOWN_UNIT_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </Select>
-                        </label>
-                      </>
-                    ) : null}
                   </div>
+
+                  {draft.usage.reset === "cooldown" ? (
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <Input
+                        type="number"
+                        min={1}
+                        value={draft.usage.cooldownAmount ?? 1}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            usage: {
+                              ...draft.usage!,
+                              cooldownAmount: Math.max(
+                                1,
+                                Number(event.target.value) || 1,
+                              ),
+                            },
+                          })
+                        }
+                      />
+                      <Select
+                        value={draft.usage.cooldownUnit ?? "turns"}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            usage: {
+                              ...draft.usage!,
+                              cooldownUnit: event.target.value as AbilityUsageCooldownUnit,
+                            },
+                          })
+                        }
+                      >
+                        {COOLDOWN_UNIT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
 
               <div className="rounded-xl border border-border bg-bg-subtle p-3 text-xs leading-5 text-text">
                 {requiresActivation
                   ? persistence === "permanent"
-                    ? "Ao acionar, os modificadores permanecem ativos após o término do efeito."
+                    ? "Ao acionar, os modificadores permanecem ativos."
                     : duration === "lasting"
-                      ? "Ao acionar, a habilidade cria uma condição duradoura e remove os modificadores quando ela termina."
+                      ? "Ao acionar, a habilidade cria um efeito duradouro."
                       : "Ao acionar, o efeito é executado imediatamente."
-                  : "A característica concede seus benefícios sem precisar ser acionada."}
+                  : "A característica concede seus benefícios sem ativação."}
               </div>
 
               <BonusesFields
                 bonuses={draft.bonuses ?? {}}
                 onChange={(bonuses) => setDraft({ ...draft, bonuses })}
               />
-
               <GrantedProficienciesEditor
                 proficiencies={draft.grantedProficiencies ?? []}
                 onChange={(grantedProficiencies) =>
                   setDraft({ ...draft, grantedProficiencies })
                 }
               />
-
               <GrantedSpellsEditor
                 variant="ability"
                 grants={(draft.grantedSpells ?? []) as EditableSpellGrant[]}
@@ -521,11 +512,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
           <Button
             variant="primary"
             disabled={!draft.name.trim() || Boolean(maximumFormulaError)}
-            onClick={() =>
-              onSave(
-                normalizeAbilityActivation(normalizeAbilityText(draft)),
-              )
-            }
+            onClick={save}
           >
             Salvar
           </Button>
@@ -534,4 +521,17 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
     </div>,
     document.body,
   )
+}
+
+function formatCategory(category: AbilityCategory): string {
+  switch (category) {
+    case "invocation":
+      return "Evocação"
+    case "feat":
+      return "Talento"
+    case "channelDivinity":
+      return "Canalizar Divindade"
+    default:
+      return "Habilidade"
+  }
 }
