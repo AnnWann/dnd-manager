@@ -103,17 +103,18 @@ export function GrantedProficienciesEditor({
     useState<GrantedProficiencyType>("weapon")
   const [name, setName] = useState("")
   const [notes, setNotes] = useState("")
+  const [expertise, setExpertise] = useState(false)
   const presetOptions = getPresetOptions(category)
 
   function changeCategory(nextCategory: GrantedProficiencyType) {
     const nextOptions = getPresetOptions(nextCategory)
     setCategory(nextCategory)
     setName(nextOptions?.[0]?.value ?? "")
+    if (nextCategory !== "skill") setExpertise(false)
   }
 
   function addProficiency() {
-    const occupiedHands =
-      category === OCCUPIED_HANDS_SPELLCASTING_TYPE
+    const occupiedHands = category === OCCUPIED_HANDS_SPELLCASTING_TYPE
     const storedCategory: ProficiencyCategory = occupiedHands
       ? "other"
       : category
@@ -125,22 +126,32 @@ export function GrantedProficienciesEditor({
 
     if (!normalizedName) return
 
-    const duplicate = proficiencies.some((proficiency) => {
+    const duplicateIndex = proficiencies.findIndex((proficiency) => {
       if (
         occupiedHands &&
-        proficiency.id ===
-          OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID
+        proficiency.id === OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID
       ) {
         return true
       }
 
       return (
         proficiency.category === storedCategory &&
-        normalizeName(proficiency.name) ===
-          normalizeName(normalizedName)
+        normalizeName(proficiency.name) === normalizeName(normalizedName)
       )
     })
-    if (duplicate) return
+
+    if (duplicateIndex >= 0) {
+      if (storedCategory === "skill" && expertise) {
+        onChange(
+          proficiencies.map((proficiency, index) =>
+            index === duplicateIndex
+              ? { ...proficiency, expertise: true }
+              : proficiency,
+          ),
+        )
+      }
+      return
+    }
 
     onChange([
       ...proficiencies,
@@ -151,10 +162,22 @@ export function GrantedProficienciesEditor({
         category: storedCategory,
         name: normalizedName,
         notes: notes.trim() || undefined,
+        expertise: storedCategory === "skill" && expertise ? true : undefined,
       },
     ])
     setName(presetOptions?.[0]?.value ?? "")
     setNotes("")
+    setExpertise(false)
+  }
+
+  function toggleExistingExpertise(proficiencyId: string, checked: boolean) {
+    onChange(
+      proficiencies.map((proficiency) =>
+        proficiency.id === proficiencyId
+          ? { ...proficiency, expertise: checked || undefined }
+          : proficiency,
+      ),
+    )
   }
 
   return (
@@ -173,17 +196,33 @@ export function GrantedProficienciesEditor({
               key={proficiency.id}
               className="flex items-start justify-between gap-3 rounded-lg border border-border bg-bg px-3 py-2"
             >
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-textH">
                   {proficiency.name}
                 </div>
                 <div className="mt-0.5 text-[10px] text-textMuted">
                   {categoryLabel(proficiency)}
+                  {proficiency.expertise ? " · Expertise" : ""}
                 </div>
                 {proficiency.notes ? (
                   <div className="mt-1 text-xs leading-5 text-textMuted">
                     {proficiency.notes}
                   </div>
+                ) : null}
+                {proficiency.category === "skill" ? (
+                  <label className="mt-2 flex items-center gap-2 text-[11px] text-text">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(proficiency.expertise)}
+                      onChange={(event) =>
+                        toggleExistingExpertise(
+                          proficiency.id,
+                          event.target.checked,
+                        )
+                      }
+                    />
+                    Expertise
+                  </label>
                 ) : null}
               </div>
 
@@ -216,9 +255,7 @@ export function GrantedProficienciesEditor({
           <Select
             value={category}
             onChange={(event) =>
-              changeCategory(
-                event.target.value as GrantedProficiencyType,
-              )
+              changeCategory(event.target.value as GrantedProficiencyType)
             }
           >
             {CATEGORY_OPTIONS.map((option) => (
@@ -262,6 +299,17 @@ export function GrantedProficienciesEditor({
         </Button>
       </div>
 
+      {category === "skill" ? (
+        <label className="flex items-center gap-2 text-xs text-text">
+          <input
+            type="checkbox"
+            checked={expertise}
+            onChange={(event) => setExpertise(event.target.checked)}
+          />
+          Conceder como expertise
+        </label>
+      ) : null}
+
       <label className="grid gap-1">
         <span className="text-xs text-textMuted">Observação opcional</span>
         <Textarea
@@ -288,12 +336,9 @@ function getPresetOptions(
 
 function categoryLabel(proficiency: Proficiency): string {
   if (
-    proficiency.id ===
-      OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID ||
+    proficiency.id === OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_ID ||
     normalizeName(proficiency.name) ===
-      normalizeName(
-        OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME,
-      )
+      normalizeName(OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME)
   ) {
     return OCCUPIED_HANDS_SPELLCASTING_PROFICIENCY_NAME
   }
