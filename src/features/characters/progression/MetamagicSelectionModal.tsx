@@ -11,7 +11,9 @@ type Props = {
   open: boolean
   options: Metamagic[]
   selected: MetamagicId[]
+  originalSelected?: MetamagicId[]
   max: number
+  replacementLimit?: number
   onChange: (selected: MetamagicId[]) => void
   onClose: () => void
 }
@@ -20,7 +22,9 @@ export function MetamagicSelectionModal({
   open,
   options,
   selected,
+  originalSelected = [],
   max,
+  replacementLimit = 0,
   onChange,
   onClose,
 }: Props) {
@@ -35,8 +39,16 @@ export function MetamagicSelectionModal({
 
   if (!open) return null
 
+  const originalSet = new Set(originalSelected)
+  const removedOriginal = originalSelected.filter(
+    (id) => !selected.includes(id),
+  ).length
+
   function toggle(id: MetamagicId) {
     if (selected.includes(id)) {
+      if (originalSet.has(id)) {
+        if (replacementLimit <= 0 || removedOriginal >= replacementLimit) return
+      }
       onChange(selected.filter((entry) => entry !== id))
       return
     }
@@ -55,10 +67,13 @@ export function MetamagicSelectionModal({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold text-textH">
-              Escolher metamagias
+              Metamagias
             </h2>
             <p className="mt-1 text-xs text-textMuted">
               {selected.length}/{max} selecionadas
+              {replacementLimit > 0
+                ? ` · ${removedOriginal}/${replacementLimit} substituição`
+                : ""}
             </p>
           </div>
           <Button size="sm" variant="ghost" onClick={onClose}>
@@ -69,7 +84,14 @@ export function MetamagicSelectionModal({
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
           {options.map((metamagic) => {
             const isSelected = selected.includes(metamagic.id)
-            const disabled = !isSelected && selected.length >= max
+            const isOriginal = originalSet.has(metamagic.id)
+            const cannotRemoveOriginal =
+              isSelected &&
+              isOriginal &&
+              (replacementLimit <= 0 || removedOriginal >= replacementLimit)
+            const disabled =
+              cannotRemoveOriginal || (!isSelected && selected.length >= max)
+
             return (
               <button
                 key={metamagic.id}
@@ -78,11 +100,16 @@ export function MetamagicSelectionModal({
                 onClick={() => toggle(metamagic.id)}
                 className={
                   isSelected
-                    ? "rounded-xl border border-accentBorder bg-accentBg p-3 text-left text-sm font-medium text-textH"
+                    ? "rounded-xl border border-accentBorder bg-accentBg p-3 text-left text-sm font-medium text-textH disabled:opacity-60"
                     : "rounded-xl border border-border bg-bg p-3 text-left text-sm font-medium text-text disabled:opacity-45"
                 }
               >
-                {metamagic.name}
+                <span className="block">{metamagic.name}</span>
+                {isOriginal ? (
+                  <span className="mt-1 block text-[10px] font-normal text-textMuted">
+                    Já conhecida
+                  </span>
+                ) : null}
               </button>
             )
           })}
