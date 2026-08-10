@@ -105,8 +105,21 @@ export function getClassSpellSelectionRule(
     maxSpellLevel,
     maxCantrips,
     maxLeveledSpells,
-    swap: { leveledKnown: 0, cantrips: 0 },
+    swap: {
+      leveledKnown: getSpellReplacementLimit(className, level),
+      cantrips: 0,
+    },
   }
+}
+
+export function getSpellReplacementLimit(
+  className: ClassName,
+  classLevel: number,
+): number {
+  if (classLevel <= 1) return 0
+  return ["bard", "ranger", "sorcerer", "warlock"].includes(className)
+    ? 1
+    : 0
 }
 
 export function getSubclassSpellGrants(
@@ -147,8 +160,9 @@ export function getMetamagicLimit(sorcererLevel: number): number {
   return 2
 }
 
-export function canReplaceMetamagicAtLevel(_sorcererLevel: number): boolean {
-  return false
+/** Compatibility helper for the level-up UI. */
+export function canReplaceMetamagicAtLevel(sorcererLevel: number): boolean {
+  return [4, 8, 12, 16, 19].includes(clampLevel(sorcererLevel))
 }
 
 export function getSubclassOptions(_className: ClassName): [] {
