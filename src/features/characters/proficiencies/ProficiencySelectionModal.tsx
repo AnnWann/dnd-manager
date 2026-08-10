@@ -58,9 +58,9 @@ export function ProficiencySelectionModal({
           <GrantedProficienciesEditor
             proficiencies={proficiencies}
             onChange={onChange}
-            title="Proficiências deste nível"
+            title="Proficiências configuradas"
             description="Adicione perícias, salvaguardas, armas, armaduras, idiomas, ferramentas ou outras proficiências."
-            emptyMessage="Nenhuma proficiência adicionada nesta subida."
+            emptyMessage="Nenhuma proficiência adicionada."
           />
         </div>
 
