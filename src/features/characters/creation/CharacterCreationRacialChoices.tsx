@@ -3,7 +3,6 @@ import { createPortal } from "react-dom"
 
 import { Button } from "../../../components/ui/Button"
 import { Select } from "../../../components/ui/Select"
-import { useMagicContext } from "../../../contexts/magicContext"
 import { SKILL_LABELS } from "../../../data/characterCreation/phbPresets"
 import type { Ability } from "../../../models/abilities/Ability"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
@@ -33,10 +32,11 @@ type RacialChoicesDraft = {
   skillOne: Skill
   skillTwo: Skill
   featAbility?: Ability
+  /** Legacy draft fields kept only so older cached feats can still migrate. */
   featName?: string
   customFeatName?: string
   customFeatDescription?: string
-  cantripIndex: string
+  cantripIndex?: string
   ancestry: string
 }
 
@@ -61,7 +61,6 @@ export function CharacterCreationRacialChoices({
   onChange,
   externalError,
 }: Props) {
-  const { spells } = useMagicContext()
   const initialDraft = useMemo(
     () =>
       readCharacterCreationDraftSection<RacialChoicesDraft>(
@@ -89,9 +88,6 @@ export function CharacterCreationRacialChoices({
     initialFeatAbility,
   )
   const [featDialogOpen, setFeatDialogOpen] = useState(false)
-  const [cantripIndex, setCantripIndex] = useState(
-    initialDraft?.cantripIndex ?? "",
-  )
   const [ancestry, setAncestry] = useState(initialDraft?.ancestry ?? "")
 
   useEffect(() => {
@@ -101,12 +97,10 @@ export function CharacterCreationRacialChoices({
       skillOne,
       skillTwo,
       featAbility,
-      cantripIndex,
       ancestry,
     } satisfies RacialChoicesDraft)
   }, [
     ancestry,
-    cantripIndex,
     draftId,
     featAbility,
     raceName,
@@ -114,16 +108,6 @@ export function CharacterCreationRacialChoices({
     skillOne,
     skillTwo,
   ])
-
-  const wizardCantrips = useMemo(
-    () =>
-      spells
-        .filter((spell) => spell.slotLevel === 0 && spell.classes.includes("wizard"))
-        .toSorted((left, right) =>
-          spellLabel(left).localeCompare(spellLabel(right), "pt-BR"),
-        ),
-    [spells],
-  )
 
   useEffect(() => {
     let frame = 0
@@ -144,7 +128,6 @@ export function CharacterCreationRacialChoices({
           setRaceName(nextRaceName)
           setFeatAbility(undefined)
           setFeatDialogOpen(false)
-          setCantripIndex("")
           setAncestry("")
         }
         if (nextPresetId !== racePresetId) setRacePresetId(nextPresetId)
@@ -177,15 +160,12 @@ export function CharacterCreationRacialChoices({
     usesPresetSpecificChoices && normalizedRace.includes("humano variante")
   const halfElf =
     usesPresetSpecificChoices && normalizedRace.includes("meio elfo")
-  const highElf =
-    usesPresetSpecificChoices && normalizedRace.includes("alto elfo")
   const dragonborn =
     usesPresetSpecificChoices && normalizedRace.includes("draconato")
-  const needsChoice = variantHuman || halfElf || highElf || dragonborn
+  const needsChoice = variantHuman || halfElf || dragonborn
   const valid =
     (!variantHuman || Boolean(featAbility?.name.trim() && skillOne)) &&
     (!halfElf || Boolean(skillOne && skillTwo && skillOne !== skillTwo)) &&
-    (!highElf || Boolean(cantripIndex)) &&
     (!dragonborn || Boolean(ancestry))
 
   useEffect(() => {
@@ -217,30 +197,6 @@ export function CharacterCreationRacialChoices({
 
         if (halfElf) {
           skills.push(skillOne, skillTwo)
-        }
-
-        if (highElf) {
-          const cantrip = spells.find((spell) => spell.index === cantripIndex)
-          nextAbilities = nextAbilities.map((ability) =>
-            normalize(ability.name).includes("truque de alto elfo")
-              ? {
-                  ...ability,
-                  name: cantrip
-                    ? `Truque de Alto Elfo: ${spellLabel(cantrip)}`
-                    : ability.name,
-                  description: cantrip?.description || ability.description,
-                  grantedSpells: cantrip
-                    ? [
-                        {
-                          index: cantrip.index,
-                          castingMode: "known",
-                          attribute: "int",
-                        },
-                      ]
-                    : ability.grantedSpells,
-                }
-              : ability,
-          )
         }
 
         if (dragonborn) {
@@ -290,15 +246,12 @@ export function CharacterCreationRacialChoices({
     return () => onChange(null)
   }, [
     ancestry,
-    cantripIndex,
     featAbility,
     halfElf,
-    highElf,
     dragonborn,
     onChange,
     skillOne,
     skillTwo,
-    spells,
     valid,
     variantHuman,
   ])
@@ -372,23 +325,6 @@ export function CharacterCreationRacialChoices({
                 </div>
               )}
             </section>
-          ) : null}
-
-          {highElf ? (
-            <label className="grid gap-1 text-xs text-textMuted">
-              Truque de Mago
-              <Select
-                value={cantripIndex}
-                onChange={(event) => setCantripIndex(event.target.value)}
-              >
-                <option value="">Selecione um truque</option>
-                {wizardCantrips.map((spell) => (
-                  <option key={spell.index} value={spell.index}>
-                    {spellLabel(spell)}
-                  </option>
-                ))}
-              </Select>
-            </label>
           ) : null}
 
           {dragonborn ? (
@@ -508,10 +444,6 @@ function deduplicateProficiencies(entries: Proficiency[]): Proficiency[] {
     seen.add(key)
     return true
   })
-}
-
-function spellLabel(spell: { name: string; displayName?: string }): string {
-  return spell.displayName?.trim() || spell.name
 }
 
 function normalize(value: string): string {
