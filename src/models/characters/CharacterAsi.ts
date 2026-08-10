@@ -26,18 +26,26 @@ type CharacterTemplatePropsWithAsi = CharacterTemplateProps & {
 }
 
 /**
- * ASIs are persisted as a top-level `asi` field in character JSON. Keeping the
- * read/write logic here prevents the rest of the app from depending on legacy
- * ability storage for feats.
+ * ASIs are exposed as a top-level `asi` field. `magic.asi` is read only as a
+ * compatibility mirror so older CharacterTemplate hydration cannot discard it.
  */
 export function getCharacterAsis(character: CharacterTemplate): CharacterAsi[] {
   const props = character.toJSON() as CharacterTemplatePropsWithAsi
-  return Array.isArray(props.asi) ? props.asi : []
+  if (Array.isArray(props.asi)) return props.asi
+  const mirrored = character.get("magic")?.asi
+  return Array.isArray(mirrored) ? mirrored : []
 }
 
 export function withCharacterAsis(
   character: CharacterTemplate,
   asi: CharacterAsi[],
 ): CharacterTemplate {
-  return character.withPatch({ asi } as Partial<CharacterTemplateProps>)
+  const magic = character.getOrCreateMagic()
+  const mirrored = character.with("magic", {
+    ...magic,
+    asi,
+  })
+  return mirrored.withPatch(
+    { asi } as unknown as Partial<CharacterTemplateProps>,
+  )
 }
