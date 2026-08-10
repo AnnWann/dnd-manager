@@ -1,7 +1,6 @@
 // models/characters/characterAbilities.ts
 
 import type { Ability } from "../abilities/Ability"
-import { ATTRIBUTE_KEYS } from "../sheet/Attribute"
 import {
   abilityRequiresActivation,
   endAbilityEffect,
@@ -191,12 +190,14 @@ export function getCharacterAbilities(
   const characterAbilities = character.get("abilities") ?? []
   const invocations = getInvocations(character)
   const asiAbilities = getAsiAbilities(character)
+  const asiScoreBonuses = getAsiScoreBonusAbilities(character)
   const equipmentAbilities = getEquipmentAbilities(character)
 
   return [
     ...characterAbilities,
     ...invocations,
     ...asiAbilities,
+    ...asiScoreBonuses,
     ...equipmentAbilities,
   ]
 }
@@ -236,25 +237,42 @@ function getAsiAbilities(character: CharacterTemplate): Ability[] {
     }))
 }
 
+function getAsiScoreBonusAbilities(character: CharacterTemplate): Ability[] {
+  return getCharacterAsis(character)
+    .filter((entry) =>
+      Object.values(entry.increases).some((amount) => (amount ?? 0) > 0),
+    )
+    .map((entry) => ({
+      id: `asi-score:${entry.id}`,
+      name: `ASI — nível ${entry.classLevel}`,
+      kind: "passive" as const,
+      category: "general" as const,
+      source: "asi",
+      acquisition: entry.acquisition,
+      bonuses: {
+        attribute: Object.entries(entry.increases)
+          .filter(([, amount]) => (amount ?? 0) > 0)
+          .map(([attribute, amount]) => ({
+            attribute: attribute as keyof CharacterTemplate["get"] extends never
+              ? never
+              : "str" | "dex" | "con" | "int" | "wis" | "cha",
+            bonus: {
+              type: "add" as const,
+              value: amount ?? 0,
+              label: "ASI",
+            },
+          })),
+      },
+    }))
+}
+
 function removeAsiEntry(
   character: CharacterTemplate,
   asiId: string,
 ): CharacterTemplate {
-  const entries = getCharacterAsis(character)
-  const removed = entries.find((entry) => entry.id === asiId)
-  if (!removed) return character
-
-  const attributes = { ...character.get("sheet").attributes }
-  for (const attribute of ATTRIBUTE_KEYS) {
-    attributes[attribute] = Math.max(
-      1,
-      attributes[attribute] - (removed.increases[attribute] ?? 0),
-    )
-  }
-
   return withCharacterAsis(
-    character.withSheet("attributes", attributes),
-    entries.filter((entry) => entry.id !== asiId),
+    character,
+    getCharacterAsis(character).filter((entry) => entry.id !== asiId),
   )
 }
 
