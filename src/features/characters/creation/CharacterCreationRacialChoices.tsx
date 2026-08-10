@@ -38,7 +38,6 @@ type RacialChoicesDraft = {
   customFeatDescription?: string
   cantripIndex: string
   ancestry: string
-  genericChoices: Record<string, string>
 }
 
 type Override = {
@@ -94,9 +93,6 @@ export function CharacterCreationRacialChoices({
     initialDraft?.cantripIndex ?? "",
   )
   const [ancestry, setAncestry] = useState(initialDraft?.ancestry ?? "")
-  const [genericChoices, setGenericChoices] = useState<Record<string, string>>(
-    initialDraft?.genericChoices ?? {},
-  )
 
   useEffect(() => {
     writeCharacterCreationDraftSection(draftId, "racial-required-choices", {
@@ -107,14 +103,12 @@ export function CharacterCreationRacialChoices({
       featAbility,
       cantripIndex,
       ancestry,
-      genericChoices,
     } satisfies RacialChoicesDraft)
   }, [
     ancestry,
     cantripIndex,
     draftId,
     featAbility,
-    genericChoices,
     raceName,
     racePresetId,
     skillOne,
@@ -152,7 +146,6 @@ export function CharacterCreationRacialChoices({
           setFeatDialogOpen(false)
           setCantripIndex("")
           setAncestry("")
-          setGenericChoices({})
         }
         if (nextPresetId !== racePresetId) setRacePresetId(nextPresetId)
         let portalAnchor = section.querySelector<HTMLElement>(
@@ -193,8 +186,7 @@ export function CharacterCreationRacialChoices({
     (!variantHuman || Boolean(featAbility?.name.trim() && skillOne)) &&
     (!halfElf || Boolean(skillOne && skillTwo && skillOne !== skillTwo)) &&
     (!highElf || Boolean(cantripIndex)) &&
-    (!dragonborn || Boolean(ancestry)) &&
-    Object.values(genericChoices).every((value) => value.trim().length > 0)
+    (!dragonborn || Boolean(ancestry))
 
   useEffect(() => {
     const error = valid
@@ -205,7 +197,7 @@ export function CharacterCreationRacialChoices({
       error,
       apply: (abilities, proficiencies) => {
         let nextAbilities = abilities.map((ability) => ({ ...ability }))
-        let nextProficiencies = proficiencies.map((entry) => ({ ...entry }))
+        const nextProficiencies = proficiencies.map((entry) => ({ ...entry }))
         const skills: Skill[] = []
 
         if (variantHuman) {
@@ -279,22 +271,6 @@ export function CharacterCreationRacialChoices({
           })
         }
 
-        let genericIndex = 0
-        nextProficiencies = nextProficiencies.flatMap((entry) => {
-          if (!isChoiceProficiency(entry.name)) return [entry]
-          if (entry.category === "skill") return []
-          const choice = genericChoices[String(genericIndex++)]?.trim()
-          return choice
-            ? [
-                {
-                  ...entry,
-                  name: choice,
-                  notes: `Escolha racial que substitui: ${entry.name}.`,
-                },
-              ]
-            : []
-        })
-
         for (const skill of Array.from(new Set(skills))) {
           nextProficiencies.push({
             id: `racial-skill-${skill}`,
@@ -316,7 +292,6 @@ export function CharacterCreationRacialChoices({
     ancestry,
     cantripIndex,
     featAbility,
-    genericChoices,
     halfElf,
     highElf,
     dragonborn,
@@ -516,15 +491,6 @@ function migrateLegacyFeat(
     category: "feat",
     source: "race",
   }
-}
-
-function isChoiceProficiency(name: string): boolean {
-  const value = normalize(name)
-  return (
-    value.includes("a escolha") ||
-    value.startsWith("uma pericia") ||
-    value.startsWith("duas pericias")
-  )
 }
 
 function deduplicateAbilities(abilities: Ability[]): Ability[] {
