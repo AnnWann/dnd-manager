@@ -12,7 +12,6 @@ import {
   deleteMyCharacter,
   getMyCharacter,
   getMyCharacters,
-  updateMyCharacter,
   type UserCharacterSummary,
 } from "../../api/user-characters"
 import { getApiStatus } from "../../api/api-client"
@@ -204,26 +203,15 @@ export function UserCharactersTab() {
         data: characterData,
       })
 
-      // O POST cria a ficha; o PATCH executa a sincronização relacional das
-      // magias homebrew agora que os novos índices já existem no banco.
-      const synchronized = await updateMyCharacter(
-        created.id,
-        characterData,
-        {
-          name,
-          visibility: "PRIVATE",
-        },
-      )
-
       if (indexMap.size) await reloadHomebrewSpells()
 
       setCharacters((current) => [
-        synchronized,
-        ...current.filter((entry) => entry.id !== synchronized.id),
+        created,
+        ...current.filter((entry) => entry.id !== created.id),
       ])
-      setSelectedCharacterId(synchronized.id)
+      setSelectedCharacterId(created.id)
       navigate(
-        `/user/characters/${encodeURIComponent(synchronized.id)}/profile`,
+        `/user/characters/${encodeURIComponent(created.id)}/profile`,
       )
     } catch (error) {
       setErrorMessage(
