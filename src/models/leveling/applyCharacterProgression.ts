@@ -5,6 +5,10 @@ import {
 } from "../characters/CharacterAcquisition"
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import { ensureCharacterAcquisitionMetadata } from "../characters/characterAcquisitionMetadata"
+import {
+  getDerivedSorceryPointMaximum,
+  getSorceryPointPool,
+} from "../characters/characterSorceryPoints"
 import type { MetamagicId } from "../magic/metamagic/Metamagic"
 import type { Spell } from "../magic/spells/Spell"
 import type { ClassName } from "../sheet/Class"
@@ -40,7 +44,7 @@ export type CharacterProgressionApplication = {
   mode: "creation" | "level-up"
   classPlans: ProgressionClassPlan[]
   spellSelections: ProgressionSpellSelection[]
-  /** Kept for API compatibility; progression no longer infers metamagic. */
+  /** User-selected metamagics. The application never infers which options to take. */
   metamagics?: MetamagicId[]
   customAbilities: ProgressionCustomAbility[]
   spells: Spell[]
@@ -177,6 +181,14 @@ export function applyCharacterProgression(
   }
   updated = updated.syncMagicWithClasses()
 
+  if (application.metamagics !== undefined) {
+    updated = applyManualMetamagics(
+      character,
+      updated,
+      application.metamagics,
+    )
+  }
+
   return ensureCharacterAcquisitionMetadata(updated, {
     eventId,
     addedAt,
@@ -311,6 +323,31 @@ function applyManualSpellSelections(
   })
 }
 
+function applyManualMetamagics(
+  previousCharacter: CharacterTemplate,
+  character: CharacterTemplate,
+  metamagics: MetamagicId[],
+): CharacterTemplate {
+  const previousPool = getSorceryPointPool(previousCharacter)
+  const spentPoints = Math.max(0, previousPool.max - previousPool.current)
+  const ensured = character.ensureMagic()
+  const magic = ensured.get("magic")
+  if (!magic) return ensured
+
+  const max = getDerivedSorceryPointMaximum(ensured)
+  return ensured.with("magic", {
+    ...magic,
+    metamagic: {
+      ...magic.metamagic,
+      metamagics: Array.from(new Set(metamagics)),
+      sorceryPoints: {
+        max,
+        current: Math.max(0, max - spentPoints),
+      },
+    },
+  })
+}
+
 function recalculateCreationHp(
   character: CharacterTemplate,
   plans: ProgressionClassPlan[],
@@ -402,9 +439,12 @@ function resolveSpellSourceClass(
   return raw.split(":")[0] as ClassName
 }
 
-function uniqueKnownSpells<T extends { spells: { id: string }; source: { type: string; sourceId?: string } }>(
-  entries: T[],
-): T[] {
+function uniqueKnownSpells<
+  T extends {
+    spells: { id: string }
+    source: { type: string; sourceId?: string }
+  },
+>(entries: T[]): T[] {
   const byKey = new Map<string, T>()
   for (const entry of entries) {
     const key = `${entry.source.type}:${entry.source.sourceId ?? ""}:${entry.spells.id}`
