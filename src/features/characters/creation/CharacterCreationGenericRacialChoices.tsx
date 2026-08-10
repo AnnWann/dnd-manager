@@ -4,6 +4,7 @@ import { createPortal } from "react-dom"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { SKILL_LABELS } from "../../../data/characterCreation/phbPresets"
+import { STANDARD_LANGUAGES } from "../../../models/characters/BackgroundProficiencyChoice"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
 import type { Skill } from "../../../models/sheet/Skills"
 import {
@@ -64,12 +65,12 @@ export function CharacterCreationGenericRacialChoices({
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
         const section = document.querySelector<HTMLElement>(
-'[data-character-creation-race-details="true"]',
+          '[data-character-creation-race-details="true"]',
         )
         if (!section) {
-setAnchor((current) => (current === null ? current : null))
-setPrompts((current) => (current.length ? [] : current))
-return
+          setAnchor((current) => (current === null ? current : null))
+          setPrompts((current) => (current.length ? [] : current))
+          return
         }
         const nextRaceName = section.dataset.raceName ?? ""
         if (nextRaceName !== raceName) {
@@ -77,7 +78,9 @@ return
           setValues({})
         }
 
-        const detected = Array.from(section.querySelectorAll<HTMLElement>("div,span,strong"))
+        const detected = Array.from(
+          section.querySelectorAll<HTMLElement>("div,span,strong"),
+        )
           .map((entry) =>
             entry.childElementCount === 0
               ? entry.textContent?.trim() ?? ""
@@ -177,28 +180,58 @@ return
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        {prompts.map((prompt) =>
-          normalize(prompt).includes("pericia") ? (
-            <label key={prompt} className="grid gap-1 text-xs text-textMuted">
-              {prompt}
-              <Select
-                value={values[prompt] ?? ""}
-                onChange={(event) =>
-                  setValues((current) => ({
-                    ...current,
-                    [prompt]: event.target.value,
-                  }))
-                }
-              >
-                <option value="">Selecione uma perícia</option>
-                {Object.entries(SKILL_LABELS).map(([skill, label]) => (
-                  <option key={skill} value={skill}>
-                    {label}
-                  </option>
-                ))}
-              </Select>
-            </label>
-          ) : (
+        {prompts.map((prompt) => {
+          const normalizedPrompt = normalize(prompt)
+          if (normalizedPrompt.includes("pericia")) {
+            return (
+              <label key={prompt} className="grid gap-1 text-xs text-textMuted">
+                {prompt}
+                <Select
+                  value={values[prompt] ?? ""}
+                  onChange={(event) =>
+                    setValues((current) => ({
+                      ...current,
+                      [prompt]: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">Selecione uma perícia</option>
+                  {Object.entries(SKILL_LABELS).map(([skill, label]) => (
+                    <option key={skill} value={skill}>
+                      {label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            )
+          }
+
+          if (normalizedPrompt.includes("idioma")) {
+            const listId = `racial-language-${normalizedPrompt.replace(/\s+/g, "-")}`
+            return (
+              <label key={prompt} className="grid gap-1 text-xs text-textMuted">
+                {prompt}
+                <datalist id={listId}>
+                  {STANDARD_LANGUAGES.map((language) => (
+                    <option key={language} value={language} />
+                  ))}
+                </datalist>
+                <Input
+                  list={listId}
+                  value={values[prompt] ?? ""}
+                  placeholder="Escolha um idioma ou digite outro"
+                  onChange={(event) =>
+                    setValues((current) => ({
+                      ...current,
+                      [prompt]: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            )
+          }
+
+          return (
             <label key={prompt} className="grid gap-1 text-xs text-textMuted">
               {prompt}
               <Input
@@ -212,8 +245,8 @@ return
                 }
               />
             </label>
-          ),
-        )}
+          )
+        })}
       </div>
       {externalError ? (
         <div className="rounded-lg border border-danger bg-dangerBg p-3 text-xs text-danger">
