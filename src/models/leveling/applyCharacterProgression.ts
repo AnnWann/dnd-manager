@@ -241,25 +241,33 @@ function applyManualSpellSelections(
   reason: CharacterAcquisitionReason,
   classLabels: Map<ClassName, string>,
 ): CharacterTemplate {
-  const learningSelections = application.spellSelections.filter((selection) => {
+  const byIndex = new Map(
+    application.spells.map((spell) => [spell.index, spell]),
+  )
+  const selections = application.spellSelections.flatMap((selection) => {
     const plan = application.classPlans.find(
       (entry) => entry.className === selection.className,
     )
-    if (!plan) return false
+    if (!plan) return []
 
     const knownMode = createClassEntry(
       selection.className,
       plan.level,
     ).knownSpells?.mode
 
-    return knownMode === "limited" || knownMode === "spellbook"
+    if (
+      knownMode !== "limited" &&
+      knownMode !== "spellbook" &&
+      knownMode !== "prepared-only"
+    ) {
+      return []
+    }
+
+    return [{ selection, plan, knownMode }]
   })
 
-  if (!learningSelections.length) return character
+  if (!selections.length) return character
 
-  const affectedClasses = new Set(
-    learningSelections.map((selection) => selection.className),
-  )
   const currentMagic = character.get("magic") ?? {
     spells: {
       knownSpells: [],
@@ -267,21 +275,30 @@ function applyManualSpellSelections(
       pactSlots: { level: 0, max: 0, current: 0 },
     },
   }
-  const retained = currentMagic.spells.knownSpells.filter(
-    (entry) =>
-      entry.source.type !== "class" ||
-      !affectedClasses.has(
-        resolveSpellSourceClass(entry.source.sourceId, entry.source.name),
-      ),
+  const selectionByClass = new Map(
+    selections.map((entry) => [entry.selection.className, entry]),
   )
-  const byIndex = new Map(application.spells.map((spell) => [spell.index, spell]))
+  const retained = currentMagic.spells.knownSpells.filter((entry) => {
+    if (entry.source.type !== "class") return true
+
+    const className = resolveSpellSourceClass(
+      entry.source.sourceId,
+      entry.source.name,
+    )
+    const selectedClass = selectionByClass.get(className)
+    if (!selectedClass) return true
+
+    if (selectedClass.knownMode !== "prepared-only") {
+      return false
+    }
+
+    // Prepared casters only replace their learned cantrips here. Their leveled
+    // class list/preparation state is managed separately and must survive.
+    return byIndex.get(entry.spells.id)?.slotLevel !== 0
+  })
   const additions = [] as typeof currentMagic.spells.knownSpells
 
-  for (const selection of learningSelections) {
-    const plan = application.classPlans.find(
-      (entry) => entry.className === selection.className,
-    )
-    if (!plan) continue
+  for (const { selection, plan, knownMode } of selections) {
     const existingForClass = new Map(
       currentMagic.spells.knownSpells
         .filter(
@@ -292,6 +309,7 @@ function applyManualSpellSelections(
         )
         .map((entry) => [entry.spells.id, entry]),
     )
+    const classEntry = createClassEntry(selection.className, plan.level)
     const classAcquisition = createCharacterAcquisition({
       eventId,
       addedAt,
@@ -308,7 +326,10 @@ function applyManualSpellSelections(
     })
 
     for (const spellIndex of selection.spellIndexes) {
-      if (!byIndex.has(spellIndex)) continue
+      const spell = byIndex.get(spellIndex)
+      if (!spell) continue
+      if (knownMode === "prepared-only" && spell.slotLevel !== 0) continue
+
       const existing = existingForClass.get(spellIndex)
       additions.push({
         source: {
@@ -316,14 +337,16 @@ function applyManualSpellSelections(
           type: "class",
           name: selection.className,
           sourceId: selection.className,
-          attribute:
-            createClassEntry(selection.className, plan.level).castingAttribute ??
-            "int",
+          attribute: classEntry.castingAttribute ?? "int",
           extendedList: existing?.source.extendedList ?? false,
         },
         spells: {
           id: spellIndex,
-          prepared: existing?.spells.prepared ?? false,
+          prepared:
+            knownMode === "prepared-only" && spell.slotLevel === 0
+              ? true
+              : existing?.spells.prepared ??
+                selection.preparedSpellIndexes.includes(spellIndex),
         },
         acquisition: existing?.acquisition ?? classAcquisition,
       })
