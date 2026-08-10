@@ -6,14 +6,13 @@ import {
   type ComponentProps,
 } from "react"
 
+import { useMagicContext } from "../../../contexts/magicContext"
 import {
   createEmptyCharacterCreationIdentity,
   type CharacterCreationIdentity,
   type CharacterCreationProgressionPlan,
 } from "../../../models/characters/creation/CharacterCreation"
-import { applyManualProficiencies } from "../../../models/characters/applyManualProficiencies"
 import type { ClassName } from "../../../models/sheet/Class"
-import type { Proficiency } from "../../../models/sheet/Proficiency"
 import {
   finalizeCreatedCharacter,
   validateCharacterCreationOverrides,
@@ -28,12 +27,17 @@ import {
   type BackgroundChoiceOverride,
 } from "./CharacterCreationBackgroundChoices"
 import { CharacterCreationFlowBootstrap } from "./bridges/CharacterCreationFlowBootstrap"
-import { CreationManualClassProficiencies } from "./bridges/CreationManualClassProficiencies"
 import {
   CreationManualSubclassEditor,
   type ManualSubclassSelection,
 } from "./bridges/CreationManualSubclassEditor"
+import { CreationProgressionConfigurationBridge } from "./bridges/CreationProgressionConfigurationBridge"
 import { CreationRequiredFieldHighlighter } from "./bridges/CreationRequiredFieldHighlighter"
+import {
+  applyCreationProgressionConfiguration,
+  createEmptyCreationProgressionConfiguration,
+  type CreationProgressionConfiguration,
+} from "./creationProgressionConfiguration"
 import {
   CharacterCreationEquipmentChoices,
   type EquipmentOverride,
@@ -55,6 +59,7 @@ export type { CharacterCreationProgressionPlan }
 type WizardProps = ComponentProps<typeof IntegratedCharacterCreationWizard>
 
 export function CharacterCreationWizard(props: WizardProps) {
+  const { spells } = useMagicContext()
   const [equipment, setEquipment] = useState<EquipmentOverride | null>(null)
   const [abilityScores, setAbilityScores] =
     useState<AbilityScoreOverride | null>(null)
@@ -64,7 +69,10 @@ export function CharacterCreationWizard(props: WizardProps) {
     useState<GenericRacialChoiceOverride | null>(null)
   const [backgroundChoices, setBackgroundChoices] =
     useState<BackgroundChoiceOverride | null>(null)
-  const [classProficiencies, setClassProficiencies] = useState<Proficiency[]>([])
+  const [progressionConfiguration, setProgressionConfiguration] =
+    useState<CreationProgressionConfiguration>(() =>
+      createEmptyCreationProgressionConfiguration(),
+    )
   const [subclasses, setSubclasses] = useState<
     Partial<Record<ClassName, ManualSubclassSelection>>
   >({})
@@ -95,7 +103,9 @@ export function CharacterCreationWizard(props: WizardProps) {
       setRacialChoices(null)
       setGenericRacialChoices(null)
       setBackgroundChoices(null)
-      setClassProficiencies([])
+      setProgressionConfiguration(
+        createEmptyCreationProgressionConfiguration(),
+      )
       setSubclasses({})
       clearErrors()
       return
@@ -159,14 +169,12 @@ export function CharacterCreationWizard(props: WizardProps) {
         }
       }),
     )
-    const withClassProficiencies = applyManualProficiencies(
+    const configured = applyCreationProgressionConfiguration(
       withManualClasses,
-      [
-        ...(withManualClasses.get("sheet").proficiencies ?? []),
-        ...classProficiencies,
-      ],
+      progressionConfiguration,
+      spells,
     )
-    props.onCreate(withClassProficiencies, plan)
+    props.onCreate(configured, plan)
   }
 
   return (
@@ -218,11 +226,6 @@ export function CharacterCreationWizard(props: WizardProps) {
         }}
         externalError={backgroundError}
       />
-      <CreationManualClassProficiencies
-        open={props.open}
-        proficiencies={classProficiencies}
-        onChange={setClassProficiencies}
-      />
       <CreationManualSubclassEditor
         open={props.open}
         selections={subclasses}
@@ -232,6 +235,11 @@ export function CharacterCreationWizard(props: WizardProps) {
             [className]: selection,
           }))
         }
+      />
+      <CreationProgressionConfigurationBridge
+        open={props.open}
+        value={progressionConfiguration}
+        onChange={setProgressionConfiguration}
       />
 
       <CreationRequiredFieldHighlighter />
