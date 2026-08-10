@@ -8,6 +8,10 @@ import {
   useAbilityEffect,
 } from "../abilities/abilityActivation"
 import { createCharacterAcquisition } from "./CharacterAcquisition"
+import {
+  getCharacterAsis,
+  withCharacterAsis,
+} from "./CharacterAsi"
 import { getEquipmentAbilities } from "./characterEquipment"
 import type { CharacterTemplate } from "./CharacterTemplate"
 
@@ -33,6 +37,29 @@ export function updateAbility(
   character: CharacterTemplate,
   ability: Ability,
 ): CharacterTemplate {
+  const asiEntry = getCharacterAsis(character).find(
+    (entry) => entry.ability?.id === ability.id,
+  )
+  if (asiEntry) {
+    return withCharacterAsis(
+      character,
+      getCharacterAsis(character).map((entry) =>
+        entry.id === asiEntry.id
+          ? {
+              ...entry,
+              ability: {
+                ...ability,
+                category: "feat",
+                source: "asi",
+                acquisition:
+                  ability.acquisition ?? entry.ability?.acquisition,
+              },
+            }
+          : entry,
+      ),
+    )
+  }
+
   const invocationExists = getInvocations(character).some(
     (current) => current.id === ability.id,
   )
@@ -85,12 +112,21 @@ export function removeAbility(
   character: CharacterTemplate,
   abilityId: string,
 ): CharacterTemplate {
-  return withInvocations(
-    character.with(
-      "abilities",
-      (character.get("abilities") ?? []).filter((ability) => ability.id !== abilityId),
+  const withoutAsi = withCharacterAsis(
+    character,
+    getCharacterAsis(character).filter(
+      (entry) => entry.ability?.id !== abilityId,
     ),
-    getInvocations(character).filter((ability) => ability.id !== abilityId),
+  )
+
+  return withInvocations(
+    withoutAsi.with(
+      "abilities",
+      (withoutAsi.get("abilities") ?? []).filter(
+        (ability) => ability.id !== abilityId,
+      ),
+    ),
+    getInvocations(withoutAsi).filter((ability) => ability.id !== abilityId),
   )
 }
 
@@ -101,6 +137,7 @@ export function saveAbility(
   const exists = [
     ...(character.get("abilities") ?? []),
     ...getInvocations(character),
+    ...getAsiAbilities(character),
   ].some((current) => current.id === ability.id)
 
   return exists
@@ -152,9 +189,15 @@ export function getCharacterAbilities(
 ): Ability[] {
   const characterAbilities = character.get("abilities") ?? []
   const invocations = getInvocations(character)
+  const asiAbilities = getAsiAbilities(character)
   const equipmentAbilities = getEquipmentAbilities(character)
 
-  return [...characterAbilities, ...invocations, ...equipmentAbilities]
+  return [
+    ...characterAbilities,
+    ...invocations,
+    ...asiAbilities,
+    ...equipmentAbilities,
+  ]
 }
 
 export function restoreAbility(
@@ -172,12 +215,24 @@ function findCharacterAbility(
 ): Ability | undefined {
   return (
     (character.get("abilities") ?? []).find((ability) => ability.id === abilityId) ??
-    getInvocations(character).find((ability) => ability.id === abilityId)
+    getInvocations(character).find((ability) => ability.id === abilityId) ??
+    getAsiAbilities(character).find((ability) => ability.id === abilityId)
   )
 }
 
 function getInvocations(character: CharacterTemplate): Ability[] {
   return character.get("magic")?.invocations ?? []
+}
+
+function getAsiAbilities(character: CharacterTemplate): Ability[] {
+  return getCharacterAsis(character)
+    .map((entry) => entry.ability)
+    .filter((ability): ability is Ability => Boolean(ability))
+    .map((ability) => ({
+      ...ability,
+      category: "feat",
+      source: "asi",
+    }))
 }
 
 function withInvocations(
