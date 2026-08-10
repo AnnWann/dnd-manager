@@ -7,9 +7,9 @@ import { Select } from "../../../components/ui/Select"
 import type { Ability } from "../../../models/abilities/Ability"
 import {
   endAbilityEffect,
-  useAbilityEffect,
   getAbilityUsageMax,
   restoreAbilityUse,
+  useAbilityEffect,
 } from "../../../models/abilities/abilityActivation"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { AbilityCard } from "./abilityCard"
@@ -42,7 +42,6 @@ type AbilitySourceFilter =
   | "race"
   | "weapon"
   | "equipment"
-  | "invocation"
   | "feat"
   | "channelDivinity"
 
@@ -76,7 +75,9 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   }))
 
   const abilities = [
-    ...(character.getCharacterAbilities() ?? []),
+    ...(character.getCharacterAbilities() ?? []).filter(
+      (ability) => ability.category !== "invocation",
+    ),
     ...raceAbilities,
   ]
 
@@ -104,8 +105,6 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               return isWeaponAbility
             case "equipment":
               return equipmentAbility
-            case "invocation":
-              return ability.category === "invocation"
             case "feat":
               return ability.category === "feat"
             case "channelDivinity":
@@ -228,7 +227,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               </div>
               <div className="mt-1 text-xs text-text">
                 Filtre habilidades próprias, raciais, de armas, equipamentos,
-                evocações, talentos e Canalizar Divindade.
+                talentos e Canalizar Divindade.
               </div>
             </div>
 
@@ -272,7 +271,6 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               <option value="race">Habilidades raciais</option>
               <option value="weapon">Habilidades de armas</option>
               <option value="equipment">Todos os equipamentos</option>
-              <option value="invocation">Evocações</option>
               <option value="feat">Talentos</option>
               <option value="channelDivinity">Canalizar Divindade</option>
             </Select>
@@ -302,10 +300,10 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
                 const equipmentAbility = isEquipmentAbility(ability)
                 const raceAbility = isRaceAbility(ability)
                 const grantedAbility = equipmentAbility || raceAbility
-                 const usageMax = ability.usage
-                   ? getAbilityUsageMax(character, ability.usage)
-                   : undefined
-                 const sourceLabel = getAbilitySourceLabel(
+                const usageMax = ability.usage
+                  ? getAbilityUsageMax(character, ability.usage)
+                  : undefined
+                const sourceLabel = getAbilitySourceLabel(
                   ability,
                   equipmentAbility,
                   raceAbility,
@@ -381,7 +379,6 @@ function getAbilitySourceLabel(
 }
 
 function getCategoryLabel(ability: Ability): string | undefined {
-  if (ability.category === "invocation") return "Evocação"
   if (ability.category === "feat") return "Talento"
   if (ability.category === "channelDivinity") return "Canalizar Divindade"
   return undefined
