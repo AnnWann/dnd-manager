@@ -20,6 +20,10 @@ import type { ClassName } from "../../../../models/sheet/Class"
 import { ItemCreationDialog } from "../../../items/ItemCreationDialog"
 import { normalizeStandardItem } from "../../../items/standardItemCompendium"
 import {
+  readCharacterCreationDraftSection,
+  writeCharacterCreationDraftSection,
+} from "../characterCreationDraftCache"
+import {
   CharacterCreationWeaponPicker,
   type StartingWeaponCategory,
 } from "./CharacterCreationWeaponPicker"
@@ -32,6 +36,13 @@ type EquipmentTarget = {
   className: ClassName
 }
 
+type EquipmentDraft = {
+  mode: EquipmentMode
+  selections: Record<string, string>
+  genericWeapons: Record<string, Itemmable>
+  gold: number
+}
+
 export type EquipmentOverride = {
   className: ClassName
   mode: EquipmentMode
@@ -42,6 +53,7 @@ export type EquipmentOverride = {
 }
 
 type Props = {
+  draftId: string
   onChange: (override: EquipmentOverride | null) => void
 }
 
@@ -65,7 +77,10 @@ const CLASS_BY_LABEL = new Map(
   CLASS_NAMES.map((className) => [getClassNamePt(className), className]),
 )
 
-export function CharacterCreationEquipmentChoices({ onChange }: Props) {
+export function CharacterCreationEquipmentChoices({
+  draftId,
+  onChange,
+}: Props) {
   const [target, setTarget] = useState<EquipmentTarget | null>(null)
   const targetRef = useRef<EquipmentTarget | null>(null)
 
@@ -156,6 +171,7 @@ export function CharacterCreationEquipmentChoices({ onChange }: Props) {
     <ClassEquipmentConfigurator
       key={target.className}
       className={target.className}
+      draftId={draftId}
       onChange={onChange}
     />,
     target.anchor,
@@ -164,27 +180,47 @@ export function CharacterCreationEquipmentChoices({ onChange }: Props) {
 
 function ClassEquipmentConfigurator({
   className,
+  draftId,
   onChange,
 }: {
   className: ClassName
+  draftId: string
   onChange: Props["onChange"]
 }) {
   const preset = getPhbClassEquipmentPreset(className)
-  const [mode, setMode] = useState<EquipmentMode>("equipment")
-  const [selections, setSelections] = useState<Record<string, string>>(() =>
-    getDefaultClassEquipmentSelections(className),
+  const sectionKey = `equipment:${className}`
+  const initialDraft = useMemo(
+    () =>
+      readCharacterCreationDraftSection<EquipmentDraft>(draftId, sectionKey),
+    [draftId, sectionKey],
   )
+  const [mode, setMode] = useState<EquipmentMode>(
+    initialDraft?.mode ?? "equipment",
+  )
+  const [selections, setSelections] = useState<Record<string, string>>(() => ({
+    ...getDefaultClassEquipmentSelections(className),
+    ...(initialDraft?.selections ?? {}),
+  }))
   const [genericWeapons, setGenericWeapons] = useState<
     Record<string, Itemmable>
-  >({})
-  const [gold, setGold] = useState(() =>
-    averageStartingGold(preset.startingGold),
+  >(initialDraft?.genericWeapons ?? {})
+  const [gold, setGold] = useState(
+    initialDraft?.gold ?? averageStartingGold(preset.startingGold),
   )
   const [weaponPicker, setWeaponPicker] = useState<{
     key: string
     category: StartingWeaponCategory
   } | null>(null)
   const [customOpen, setCustomOpen] = useState(false)
+
+  useEffect(() => {
+    writeCharacterCreationDraftSection(draftId, sectionKey, {
+      mode,
+      selections,
+      genericWeapons,
+      gold,
+    } satisfies EquipmentDraft)
+  }, [draftId, genericWeapons, gold, mode, sectionKey, selections])
 
   const selectedSpecs = useMemo(
     () => getSelectedClassEquipment(className, selections),
