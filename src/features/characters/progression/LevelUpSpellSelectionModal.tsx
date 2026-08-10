@@ -85,8 +85,10 @@ export function LevelUpSpellSelectionModal({
     Math.max(1, previousLevel),
     subclassId,
   )
-  const canLearnSpells =
-    rule.mode === "limited-known" || rule.mode === "spellbook"
+  const canUseModal =
+    kind === "cantrip"
+      ? rule.mode !== "none" && rule.maxCantrips > 0
+      : rule.mode === "limited-known" || rule.mode === "spellbook"
   const previousMaximum =
     previousLevel <= 0
       ? 0
@@ -178,7 +180,7 @@ export function LevelUpSpellSelectionModal({
     ],
   )
 
-  if (!open || !canLearnSpells) return null
+  if (!open || !canUseModal) return null
 
   function toggleSpell(spell: Spell) {
     const selected = selection.selected.includes(spell.index)
