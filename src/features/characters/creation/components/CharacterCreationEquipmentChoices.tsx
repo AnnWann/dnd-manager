@@ -190,6 +190,10 @@ function ClassEquipmentConfigurator({
     () => getSelectedClassEquipment(className, selections),
     [className, selections],
   )
+  const fixedGenericWeapons = useMemo(
+    () => preset.fixedItems.filter(isGenericWeapon),
+    [preset.fixedItems],
+  )
   const unresolvedWeapons = useMemo(
     () =>
       selectedSpecs
@@ -231,7 +235,7 @@ function ClassEquipmentConfigurator({
       valid,
       error: valid
         ? undefined
-        : "Escolha uma arma concreta para cada entrada de arma simples ou marcial.",
+        : "Escolha uma arma concreta para cada entrada de arma simples ou marcial do equipamento selecionado.",
     }),
     [className, gold, items, mode, valid],
   )
@@ -309,6 +313,37 @@ function ClassEquipmentConfigurator({
         </section>
       ) : (
         <div className="grid gap-4">
+          {fixedGenericWeapons.length ? (
+            <section className="rounded-xl border border-border bg-bg p-4">
+              <div className="text-sm font-semibold text-textH">
+                Armas adicionais da classe
+              </div>
+              <p className="mt-1 text-xs text-textMuted">
+                Estas armas fazem parte do equipamento inicial fixo e são adicionais às escolhas abaixo.
+              </p>
+              {fixedGenericWeapons.map((spec) => (
+                <GenericWeaponChoice
+                  key={spec.id}
+                  spec={spec}
+                  selected={genericWeapons[spec.id]}
+                  onChoose={() =>
+                    setWeaponPicker({
+                      key: spec.id,
+                      category: getWeaponCategory(spec),
+                    })
+                  }
+                  onCreate={() => {
+                    setWeaponPicker({
+                      key: spec.id,
+                      category: getWeaponCategory(spec),
+                    })
+                    setCustomOpen(true)
+                  }}
+                />
+              ))}
+            </section>
+          ) : null}
+
           {preset.choiceGroups.map((group) => {
             const selected =
               group.options.find(
