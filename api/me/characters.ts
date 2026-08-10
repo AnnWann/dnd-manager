@@ -1,4 +1,5 @@
 import {
+  CharacterDataDomain,
   CharacterVisibility,
   Prisma,
 } from "../../generated/prisma/client"
@@ -9,9 +10,12 @@ import {
   readJsonObject,
 } from "../../server/api"
 import { sanitizeCharacterAcquisitionData } from "../../server/character-acquisitions"
+import { syncCharacterHomebrewSpellLinks } from "../../server/character-domain-spells"
 import { sanitizeCharacterItemData } from "../../server/character-items"
 import { prisma } from "../../server/prisma"
 import { requireSession } from "../../server/session"
+import { splitCharacterIntoDomains } from "../../src/lib/characterDomains"
+import type { CharacterTemplateProps } from "../../src/models/characters/CharacterTemplate"
 
 type CreateCharacterBody = {
   name: string
@@ -76,23 +80,59 @@ export async function POST(request: Request): Promise<Response> {
       sourceType: "characterCreation",
       sourceName: "Criação de personagem",
     })
+    const domainPayloads = splitCharacterIntoDomains(
+      data as unknown as CharacterTemplateProps,
+    )
 
-    const character = await prisma.character.create({
-      data: {
-        name: body.name,
-        data,
-        visibility: body.visibility,
-        ownerId: session.user.id,
-      },
-      select: {
-        id: true,
-        name: true,
-        data: true,
-        visibility: true,
-        revision: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const character = await prisma.$transaction(async (transaction) => {
+      const created = await transaction.character.create({
+        data: {
+          name: body.name,
+          data,
+          visibility: body.visibility,
+          ownerId: session.user.id,
+        },
+        select: {
+          id: true,
+          name: true,
+          data: true,
+          visibility: true,
+          revision: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      })
+
+      const domainEntries = Object.entries(domainPayloads).map(
+        ([domain, payload]) => ({
+          characterId: created.id,
+          domain: toPrismaDomain(domain),
+          data: payload as Prisma.InputJsonObject,
+          revision: 1,
+          updatedById: session.user.id,
+        }),
+      )
+
+      await transaction.characterDomainState.createMany({
+        data: domainEntries,
+      })
+      await transaction.characterDomainMutation.createMany({
+        data: domainEntries.map((entry) => ({
+          characterId: created.id,
+          domain: entry.domain,
+          previousRevision: 0,
+          revision: 1,
+          actorId: session.user.id,
+          operation: "bootstrap",
+        })),
+      })
+      await syncCharacterHomebrewSpellLinks(
+        transaction,
+        created.id,
+        session.user.id,
+      )
+
+      return created
     })
 
     return jsonResponse(
@@ -165,4 +205,16 @@ function parseVisibility(
   }
 
   return CharacterVisibility.PRIVATE
+}
+
+function toPrismaDomain(value: string): CharacterDataDomain {
+  const normalized = value.toUpperCase()
+  if (
+    Object.values(CharacterDataDomain).includes(
+      normalized as CharacterDataDomain,
+    )
+  ) {
+    return normalized as CharacterDataDomain
+  }
+  throw new Error(`Domínio de personagem desconhecido: ${value}`)
 }
