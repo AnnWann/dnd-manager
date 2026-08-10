@@ -22,7 +22,6 @@ jobs:
         run: |
           python <<'PY'
           from pathlib import Path
-          from textwrap import dedent
 
           workflow = Path('.github/workflows/apply-race-creation-fixes.yml').read_text()
           start_marker = "          python <<'PY'\n"
@@ -30,7 +29,11 @@ jobs:
           if start_marker not in workflow:
               raise RuntimeError('Embedded patch start marker not found')
           embedded = workflow.split(start_marker, 1)[1].split(end_marker, 1)[0]
-          exec(dedent(embedded), {'__name__': '__main__'})
+          embedded = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in embedded.splitlines()
+          )
+          exec(embedded, {'__name__': '__main__'})
           PY
 
           rm -f .github/workflows/run-race-creation-fix-pr.yml
