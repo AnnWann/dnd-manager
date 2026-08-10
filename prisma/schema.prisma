@@ -19,6 +19,8 @@ model User {
   accounts      Account[]
 
   characters Character[]
+  characterDomainUpdates CharacterDomainState[] @relation("CharacterDomainUpdatedBy")
+  characterDomainMutations CharacterDomainMutation[] @relation("CharacterDomainMutationActor")
   homebrewSpells HomebrewSpell[] @relation("HomebrewSpellOwner")
   submittedCampaignSpells CampaignHomebrewSpell[] @relation("CampaignSpellSubmitter")
   reviewedCampaignSpells CampaignHomebrewSpell[] @relation("CampaignSpellReviewer")
@@ -85,15 +87,31 @@ enum CharacterVisibility {
   MASTER
 }
 
+enum CharacterDataDomain {
+  SHEET
+  VITALS
+  PROFILE
+  ABILITIES
+  MAGIC
+  INVENTORY
+  EQUIPMENT
+  PROGRESSION
+  NOTES
+}
+
 model Character {
   id         String              @id @default(uuid())
   name       String
+  /// Legacy compatibility snapshot. New writes should target CharacterDomainState.
   data       Json
   visibility CharacterVisibility @default(PRIVATE)
+  revision   Int                 @default(1)
 
   ownerId String
   owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
+  domains CharacterDomainState[]
+  domainMutations CharacterDomainMutation[]
   campaignLinks CampaignCharacter[]
   homebrewSpells CharacterHomebrewSpell[]
 
@@ -102,6 +120,50 @@ model Character {
 
   @@index([ownerId])
   @@map("character")
+}
+
+model CharacterDomainState {
+  id       String              @id @default(uuid())
+  domain   CharacterDataDomain
+  data     Json
+  revision Int                 @default(1)
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  updatedById String?
+  updatedBy   User? @relation("CharacterDomainUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([characterId, domain])
+  @@index([characterId])
+  @@index([updatedById])
+  @@map("character_domain_state")
+}
+
+model CharacterDomainMutation {
+  id               String              @id @default(uuid())
+  domain           CharacterDataDomain
+  previousRevision Int
+  revision         Int
+  operation        String              @default("replace")
+  mutationId       String?
+  clientId         String?
+
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  actorId String?
+  actor   User? @relation("CharacterDomainMutationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@unique([characterId, domain, mutationId])
+  @@index([characterId, createdAt])
+  @@index([actorId])
+  @@map("character_domain_mutation")
 }
 
 enum CampaignRole {
