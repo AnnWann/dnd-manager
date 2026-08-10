@@ -4,7 +4,9 @@ import {
   setLocalCharacters,
   type LocalCharacter,
 } from "../auth/local-auth"
+import { applyCharacterDomains } from "../lib/characterDomains"
 import type { CharacterDomainName } from "../lib/relationalApi"
+import type { CharacterTemplateProps } from "../models/characters/CharacterTemplate"
 import { apiClient, getApiStatus } from "./api-client"
 
 export type CharacterVisibility = "PRIVATE" | "PARTY" | "MASTER"
@@ -93,7 +95,7 @@ export async function getMyCharacters(): Promise<UserCharacterSummary[]> {
     "/me/characters",
   )
 
-  return response.data.characters ?? []
+  return (response.data.characters ?? []).map(hydrateCharacterSummary)
 }
 
 export async function getMyCharacter(
@@ -115,7 +117,7 @@ export async function getMyCharacter(
     `/me/characters/${encodeURIComponent(characterId)}`,
   )
 
-  return response.data.character
+  return hydrateCharacterSummary(response.data.character)
 }
 
 export async function getMyCharacterDomain(
@@ -346,6 +348,27 @@ export async function deleteMyCharacter(
   await apiClient.delete(
     `/me/characters/${encodeURIComponent(characterId)}`,
   )
+}
+
+function hydrateCharacterSummary(
+  character: UserCharacterSummary,
+): UserCharacterSummary {
+  if (!character.domains?.length) return character
+
+  const base = {
+    ...(character.data as Record<string, unknown>),
+    id: character.id,
+    name: character.name,
+    visibility: character.visibility.toLowerCase(),
+  } as unknown as CharacterTemplateProps
+
+  return {
+    ...character,
+    data: applyCharacterDomains(base, character.domains) as unknown as Record<
+      string,
+      unknown
+    >,
+  }
 }
 
 function isDomainConflictResponse(
