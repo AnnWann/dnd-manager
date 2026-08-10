@@ -6,6 +6,10 @@ import { Select } from "../../../components/ui/Select"
 import { SKILL_LABELS } from "../../../data/characterCreation/phbPresets"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
 import type { Skill } from "../../../models/sheet/Skills"
+import {
+  readCharacterCreationDraftSection,
+  writeCharacterCreationDraftSection,
+} from "./characterCreationDraftCache"
 
 type GenericRacialChoiceOverride = {
   valid: boolean
@@ -16,19 +20,43 @@ type GenericRacialChoiceOverride = {
   }
 }
 
+type GenericRacialChoiceDraft = {
+  raceName: string
+  values: Record<string, string>
+}
+
 type Props = {
+  draftId: string
   onChange: (override: GenericRacialChoiceOverride | null) => void
   externalError?: string
 }
 
 export function CharacterCreationGenericRacialChoices({
+  draftId,
   onChange,
   externalError,
 }: Props) {
+  const initialDraft = useMemo(
+    () =>
+      readCharacterCreationDraftSection<GenericRacialChoiceDraft>(
+        draftId,
+        "racial-generic-choices",
+      ),
+    [draftId],
+  )
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   const [prompts, setPrompts] = useState<string[]>([])
-  const [values, setValues] = useState<Record<string, string>>({})
-  const [raceName, setRaceName] = useState("")
+  const [values, setValues] = useState<Record<string, string>>(
+    initialDraft?.values ?? {},
+  )
+  const [raceName, setRaceName] = useState(initialDraft?.raceName ?? "")
+
+  useEffect(() => {
+    writeCharacterCreationDraftSection(draftId, "racial-generic-choices", {
+      raceName,
+      values,
+    } satisfies GenericRacialChoiceDraft)
+  }, [draftId, raceName, values])
 
   useEffect(() => {
     let frame = 0
