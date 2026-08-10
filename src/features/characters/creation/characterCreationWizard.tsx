@@ -27,6 +27,7 @@ import {
   type BackgroundChoiceOverride,
 } from "./CharacterCreationBackgroundChoices"
 import { CharacterCreationFlowBootstrap } from "./bridges/CharacterCreationFlowBootstrap"
+import { CreationLegacyProgressionStateSync } from "./bridges/CreationLegacyProgressionStateSync"
 import {
   CreationManualSubclassEditor,
   type ManualSubclassSelection,
@@ -240,6 +241,10 @@ export function CharacterCreationWizard(props: WizardProps) {
         open={props.open}
         value={progressionConfiguration}
         onChange={setProgressionConfiguration}
+      />
+      <CreationLegacyProgressionStateSync
+        open={props.open}
+        value={progressionConfiguration}
       />
 
       <CreationRequiredFieldHighlighter />
