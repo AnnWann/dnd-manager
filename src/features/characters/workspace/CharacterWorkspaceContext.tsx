@@ -5,6 +5,7 @@ import {
 } from "react"
 
 import type { TransferItemRequest } from "../../../contexts/characterContext"
+import type { CharacterDomainName } from "../../../lib/relationalApi"
 import type {
   EquippedItemDestination,
   EquippedItemReference,
@@ -25,8 +26,14 @@ export type CharacterWorkspaceValue = {
   selectedCharacterId?: string
 
   setSelectedCharacterId: (characterId: string) => void
+  /** Compatibility/cross-domain mutation. Prefer updateCharacterDomain. */
   updateCharacter: (
     characterId: string,
+    updater: (character: CharacterTemplate) => CharacterTemplate,
+  ) => void
+  updateCharacterDomain: (
+    characterId: string,
+    domain: CharacterDomainName,
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) => void
   deleteCharacter: (characterId: string) => void
