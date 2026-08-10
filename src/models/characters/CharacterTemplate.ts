@@ -397,7 +397,7 @@ export class CharacterTemplate {
   useRing(ring: Equipment): CharacterTemplate {return useRing(this, ring)}
   updateRing(index: number, ring: Equipment): CharacterTemplate {return updateRing(this, index, ring)}
   removeRing(index: number): CharacterTemplate {return removeRing(this, index)}
-  unequipRing(index: number): CharacterTemplate {return unequipRing(this)}
+  unequipRing(index: number): CharacterTemplate {return unequipRing(this, index)}
   addToPocketItem(item: Itemmable): CharacterTemplate {return addToPocketItem(this, item)}
   pocketInventoryItem(itemId: string): CharacterTemplate {return pocketInventoryItem(this, itemId)}
   usePocketItem(index: number): CharacterTemplate {return usePocketItem(this, index)}
@@ -480,7 +480,7 @@ export class CharacterTemplate {
   getEffectivePassivePerception(): number {return getEffectivePassivePerception(this)}
   getEffectiveMobility(): number {return getEffectiveMobility(this)}
   applyBonus(baseValue: number, bonus: Bonus): number {return applyBonus(baseValue, bonus)}
-  applyBonuses(baseValue: number, bonuses: Bonus[]): number {return applyBonuses(this, bonuses)}
+  applyBonuses(baseValue: number, bonuses: Bonus[]): number {return applyBonuses(baseValue, bonuses)}
   isSavingThrowProficient(attribute: Attribute): boolean {return isSavingThrowProficient(this, attribute)}
   getSavingThrowBonus(attribute: Attribute): number {return getSavingThrowBonus(this, attribute)}
   setSavingThrowProficiency(attribute: Attribute,proficient: boolean): CharacterTemplate {return setSavingThrowProficiency(this,attribute,proficient)}
