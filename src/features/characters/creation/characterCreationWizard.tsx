@@ -131,6 +131,14 @@ export function CharacterCreationWizard(props: WizardProps) {
     setBlockingError("")
   }, [])
 
+  const updateProgressionConfiguration = useCallback(
+    (next: CreationProgressionConfiguration) => {
+      setProgressionConfiguration(next)
+      clearErrors()
+    },
+    [clearErrors],
+  )
+
   const handleCreate: WizardProps["onCreate"] = (character, plan) => {
     const overrides = {
       identity: identityRef.current,
@@ -240,14 +248,16 @@ export function CharacterCreationWizard(props: WizardProps) {
       <CreationProgressionConfigurationBridge
         open={props.open}
         value={progressionConfiguration}
-        onChange={setProgressionConfiguration}
+        onChange={updateProgressionConfiguration}
       />
       <CreationLegacyProgressionStateSync
         open={props.open}
         value={progressionConfiguration}
       />
 
-      <CreationRequiredFieldHighlighter />
+      <CreationRequiredFieldHighlighter
+        resetSignal={progressionConfiguration}
+      />
 
       {blockingError ? (
         <div className="pointer-events-none fixed left-1/2 top-4 z-[260] w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger shadow-theme-lg">
