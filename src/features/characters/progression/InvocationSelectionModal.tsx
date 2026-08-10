@@ -50,7 +50,7 @@ export function InvocationSelectionModal({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[12400] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/55 p-3 backdrop-blur-sm sm:p-4">
+    <div className="fixed inset-0 z-[11000] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/55 p-3 backdrop-blur-sm sm:p-4">
       <section className="w-full max-w-3xl rounded-2xl border border-border bg-bg-elevated p-4 shadow-theme-lg">
         <header className="flex items-start justify-between gap-3 border-b border-border pb-4">
           <div>
