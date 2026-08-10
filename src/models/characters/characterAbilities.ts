@@ -1,6 +1,7 @@
 // models/characters/characterAbilities.ts
 
 import type { Ability } from "../abilities/Ability"
+import { ATTRIBUTE_KEYS } from "../sheet/Attribute"
 import {
   abilityRequiresActivation,
   endAbilityEffect,
@@ -112,12 +113,12 @@ export function removeAbility(
   character: CharacterTemplate,
   abilityId: string,
 ): CharacterTemplate {
-  const withoutAsi = withCharacterAsis(
-    character,
-    getCharacterAsis(character).filter(
-      (entry) => entry.ability?.id !== abilityId,
-    ),
+  const asiEntry = getCharacterAsis(character).find(
+    (entry) => entry.ability?.id === abilityId,
   )
+  const withoutAsi = asiEntry
+    ? removeAsiEntry(character, asiEntry.id)
+    : character
 
   return withInvocations(
     withoutAsi.with(
@@ -233,6 +234,28 @@ function getAsiAbilities(character: CharacterTemplate): Ability[] {
       category: "feat",
       source: "asi",
     }))
+}
+
+function removeAsiEntry(
+  character: CharacterTemplate,
+  asiId: string,
+): CharacterTemplate {
+  const entries = getCharacterAsis(character)
+  const removed = entries.find((entry) => entry.id === asiId)
+  if (!removed) return character
+
+  const attributes = { ...character.get("sheet").attributes }
+  for (const attribute of ATTRIBUTE_KEYS) {
+    attributes[attribute] = Math.max(
+      1,
+      attributes[attribute] - (removed.increases[attribute] ?? 0),
+    )
+  }
+
+  return withCharacterAsis(
+    character.withSheet("attributes", attributes),
+    entries.filter((entry) => entry.id !== asiId),
+  )
 }
 
 function withInvocations(
