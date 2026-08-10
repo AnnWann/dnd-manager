@@ -10,8 +10,16 @@ import {
 } from "../../../data/classProgression"
 import { formatRaceName } from "../../../lib/raceNames"
 import type { Ability } from "../../../models/abilities/Ability"
+import {
+  getCharacterAsis,
+  withCharacterAsis,
+  type CharacterAsi,
+} from "../../../models/characters/CharacterAsi"
 import { createCharacterAcquisition } from "../../../models/characters/CharacterAcquisition"
-import { applyManualProficiencies } from "../../../models/characters/applyManualProficiencies"
+import {
+  applyManualProficiencies,
+  mergeProficiencies,
+} from "../../../models/characters/applyManualProficiencies"
 import {
   getDerivedSorceryPointMaximum,
   getSorceryPointPool,
@@ -19,6 +27,8 @@ import {
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { MetamagicId } from "../../../models/magic/metamagic/Metamagic"
 import type { Spell } from "../../../models/magic/spells/Spell"
+import type { Attribute } from "../../../models/sheet/Attribute"
+import { ATTRIBUTE_KEYS } from "../../../models/sheet/Attribute"
 import type { ClassName } from "../../../models/sheet/Class"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
 import {
@@ -31,9 +41,12 @@ import {
   createClassEntry,
   getClassSpellSelectionRule,
 } from "../../../models/leveling/SpellSelectionRules"
+import { isAsiLevel } from "../../../rules/AsiRules"
 import { getInvocationLimit } from "../../../rules/InvocationRules"
+import { getMetamagicLimit } from "../../../rules/MetamagicsRules"
 import { AbilityDialog } from "../abilities/abilityDialog"
 import { ProficiencySelectionModal } from "../proficiencies/ProficiencySelectionModal"
+import { AsiSelectionModal } from "./AsiSelectionModal"
 import { InvocationSelectionModal } from "./InvocationSelectionModal"
 import {
   LevelUpSpellSelectionModal,
@@ -41,6 +54,10 @@ import {
   type LevelUpSpellSelectionKind,
 } from "./LevelUpSpellSelectionModal"
 import { MetamagicSelectionModal } from "./MetamagicSelectionModal"
+import {
+  RacialSpellSelectionModal,
+  type RacialSpellSelectionKind,
+} from "./RacialSpellSelectionModal"
 
 type Props = {
   character: CharacterTemplate
@@ -52,6 +69,7 @@ type Props = {
 type Step = "class" | "configuration" | "review"
 type HpMode = "average" | "manual" | "rolled"
 type AbilitySource = "class" | "race"
+type ProficiencySource = "class" | "race"
 
 export function LevelUpProgressionConfigurator({
   character,
@@ -61,10 +79,7 @@ export function LevelUpProgressionConfigurator({
 }: Props) {
   const { spells, metamagics } = useMagicContext()
   const existingClasses = character.get("sheet").classes ?? []
-  const existingTotal = existingClasses.reduce(
-    (sum, entry) => sum + entry.level,
-    0,
-  )
+  const existingTotal = existingClasses.reduce((sum, entry) => sum + entry.level, 0)
   const initialClass =
     primaryClassName ?? existingClasses[0]?.className ?? "fighter"
 
@@ -74,12 +89,13 @@ export function LevelUpProgressionConfigurator({
   const [classPlans, setClassPlans] = useState<ProgressionClassPlan[]>(() =>
     createLevelUpPlans(character, initialClass),
   )
-  const [customAbilities, setCustomAbilities] = useState<
-    ProgressionCustomAbility[]
-  >([])
+  const [customAbilities, setCustomAbilities] = useState<ProgressionCustomAbility[]>([])
   const [abilitySource, setAbilitySource] = useState<AbilitySource | null>(null)
   const [editingAbility, setEditingAbility] = useState<Ability | null>(null)
-  const [proficiencies, setProficiencies] = useState<Proficiency[]>([])
+  const [classProficiencies, setClassProficiencies] = useState<Proficiency[]>([])
+  const [racialProficiencies, setRacialProficiencies] = useState<Proficiency[]>([])
+  const [proficiencySource, setProficiencySource] =
+    useState<ProficiencySource | null>(null)
   const [selectedMetamagics, setSelectedMetamagics] = useState<MetamagicId[]>(
     () => character.get("magic")?.metamagic?.metamagics ?? [],
   )
@@ -91,9 +107,18 @@ export function LevelUpProgressionConfigurator({
   >(() => createInitialSpellSelections(character))
   const [spellModalKind, setSpellModalKind] =
     useState<LevelUpSpellSelectionKind | null>(null)
-  const [proficiencyModalOpen, setProficiencyModalOpen] = useState(false)
+  const [racialSpellModalKind, setRacialSpellModalKind] =
+    useState<RacialSpellSelectionKind | null>(null)
+  const [racialCantrips, setRacialCantrips] = useState<string[]>([])
+  const [racialSpells, setRacialSpells] = useState<string[]>([])
+  const [racialCastingAttribute, setRacialCastingAttribute] =
+    useState<Attribute>("cha")
   const [metamagicModalOpen, setMetamagicModalOpen] = useState(false)
   const [invocationModalOpen, setInvocationModalOpen] = useState(false)
+  const [asiModalOpen, setAsiModalOpen] = useState(false)
+  const [asiChoice, setAsiChoice] = useState<CharacterAsi | null>(() =>
+    findAsiForLevel(character, initialClass, getTargetClassLevel(character, initialClass)),
+  )
   const [hpMode, setHpMode] = useState<HpMode>("average")
   const [manualHp, setManualHp] = useState("")
   const [rolledDie, setRolledDie] = useState<number | null>(null)
@@ -144,6 +169,7 @@ export function LevelUpProgressionConfigurator({
     advancedClassName === "sorcerer"
       ? getMetamagicLimit(targetClassLevel)
       : 0
+  const asiEligible = isAsiLevel(advancedClassName, targetClassLevel)
   const selection = spellSelections[advancedClassName] ?? {
     selected: [],
     prepared: [],
@@ -155,7 +181,12 @@ export function LevelUpProgressionConfigurator({
   const selectedLeveled = selectedSpellObjects.filter(
     (spell) => spell.slotLevel > 0,
   ).length
-  const expertiseCount = proficiencies.filter((entry) => entry.expertise).length
+  const classExpertiseCount = classProficiencies.filter(
+    (entry) => entry.expertise,
+  ).length
+  const racialExpertiseCount = racialProficiencies.filter(
+    (entry) => entry.expertise,
+  ).length
 
   const conModifier = configuredCharacter.getAttributeModifier("con")
   const hitDieSides = Number(progression.hitDie.slice(1)) || 6
@@ -177,19 +208,27 @@ export function LevelUpProgressionConfigurator({
   )
 
   function changeAdvancedClass(className: ClassName) {
+    const plans = createLevelUpPlans(character, className)
+    const nextLevel = plans.find((plan) => plan.className === className)?.level ?? 1
     setAdvancedClassName(className)
-    setClassPlans(createLevelUpPlans(character, className))
+    setClassPlans(plans)
     setCustomAbilities([])
-    setProficiencies([])
+    setClassProficiencies([])
+    setRacialProficiencies([])
     setSelectedMetamagics(
       character.get("magic")?.metamagic?.metamagics ?? [],
     )
     setInvocations(collectExistingInvocations(character))
     setSpellSelections(createInitialSpellSelections(character))
+    setRacialCantrips([])
+    setRacialSpells([])
+    setAsiChoice(findAsiForLevel(character, className, nextLevel))
     setSpellModalKind(null)
+    setRacialSpellModalKind(null)
     setMetamagicModalOpen(false)
     setInvocationModalOpen(false)
-    setProficiencyModalOpen(false)
+    setProficiencySource(null)
+    setAsiModalOpen(false)
   }
 
   function updateAdvancedPlan(
@@ -209,11 +248,11 @@ export function LevelUpProgressionConfigurator({
 
   function saveAbility(ability: Ability) {
     if (!abilitySource) return
-    const normalized: ProgressionCustomAbility = {
+    const entry: ProgressionCustomAbility = {
       ability: {
         ...ability,
-        category:
-          ability.category === "invocation" ? "general" : ability.category,
+        category: ability.category === "feat" ? "general" : ability.category,
+        source: abilitySource,
       },
       source: abilitySource,
       className: abilitySource === "class" ? advancedClassName : undefined,
@@ -221,13 +260,13 @@ export function LevelUpProgressionConfigurator({
     }
     setCustomAbilities((current) => {
       const exists = current.some(
-        (entry) => entry.ability.id === normalized.ability.id,
+        (candidate) => candidate.ability.id === entry.ability.id,
       )
       return exists
-        ? current.map((entry) =>
-            entry.ability.id === normalized.ability.id ? normalized : entry,
+        ? current.map((candidate) =>
+            candidate.ability.id === entry.ability.id ? entry : candidate,
           )
-        : [...current, normalized]
+        : [...current, entry]
     })
     setAbilitySource(null)
     setEditingAbility(null)
@@ -253,7 +292,9 @@ export function LevelUpProgressionConfigurator({
       eventId,
       addedAt,
     })
-    updated = applyManualProficiencies(updated, proficiencies)
+
+    updated = applyManualProficiencies(updated, classProficiencies)
+    updated = applyRacialProficiencies(updated, racialProficiencies)
 
     if (currentRule.mode === "prepared" && currentRule.maxCantrips > 0) {
       updated = applyPreparedCasterCantrips(
@@ -268,7 +309,7 @@ export function LevelUpProgressionConfigurator({
       )
     }
 
-    if (advancedClassName === "sorcerer" && metamagicLimit > 0) {
+    if (advancedClassName === "sorcerer") {
       updated = applyMetamagics(
         character,
         updated,
@@ -277,7 +318,7 @@ export function LevelUpProgressionConfigurator({
       )
     }
 
-    if (advancedClassName === "warlock" && invocationLimit > 0) {
+    if (advancedClassName === "warlock") {
       updated = applyInvocations(
         updated,
         invocations,
@@ -288,6 +329,27 @@ export function LevelUpProgressionConfigurator({
         targetClassLevel,
       )
     }
+
+    if (asiEligible && asiChoice) {
+      updated = applyAsi(
+        updated,
+        asiChoice,
+        eventId,
+        addedAt,
+        existingTotal + 1,
+      )
+    }
+
+    updated = applyRacialSpells(
+      updated,
+      [...racialCantrips, ...racialSpells],
+      racialCastingAttribute,
+      spells,
+      eventId,
+      addedAt,
+      existingTotal + 1,
+      raceName,
+    )
 
     onComplete(updated)
   }
@@ -303,9 +365,7 @@ export function LevelUpProgressionConfigurator({
       <header className="border-b border-border pb-4">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-lg font-semibold text-textH">Subir de nível</h1>
-          <Button variant="secondary" onClick={onCancel}>
-            Cancelar
-          </Button>
+          <Button variant="secondary" onClick={onCancel}>Cancelar</Button>
         </div>
         <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
           {steps.map((entry, index) => (
@@ -331,9 +391,7 @@ export function LevelUpProgressionConfigurator({
             Classe que recebe o nível
             <Select
               value={advancedClassName}
-              onChange={(event) =>
-                changeAdvancedClass(event.target.value as ClassName)
-              }
+              onChange={(event) => changeAdvancedClass(event.target.value as ClassName)}
             >
               {ALL_CLASS_NAMES.map((className) => {
                 const current = existingClasses.find(
@@ -436,10 +494,19 @@ export function LevelUpProgressionConfigurator({
 
             <ActionCard
               title="Proficiências"
-              value={`${proficiencies.length} adicionada(s)${expertiseCount ? ` · ${expertiseCount} expertise` : ""}`}
+              value={`${classProficiencies.length} adicionada(s)${classExpertiseCount ? ` · ${classExpertiseCount} expertise` : ""}`}
               action="Adicionar proficiência"
-              onClick={() => setProficiencyModalOpen(true)}
+              onClick={() => setProficiencySource("class")}
             />
+
+            {asiEligible ? (
+              <ActionCard
+                title="ASI"
+                value={formatAsi(asiChoice)}
+                action="Configurar ASI"
+                onClick={() => setAsiModalOpen(true)}
+              />
+            ) : null}
 
             {cantripGain > 0 ? (
               <ActionCard
@@ -463,20 +530,22 @@ export function LevelUpProgressionConfigurator({
               />
             ) : null}
 
-            {advancedClassName === "sorcerer" && metamagicLimit > 0 ? (
+            {advancedClassName === "sorcerer" ? (
               <ActionCard
                 title="Metamagias"
                 value={`${selectedMetamagics.length}/${metamagicLimit}`}
                 action="Escolher metamagias"
+                disabled={metamagicLimit <= 0}
                 onClick={() => setMetamagicModalOpen(true)}
               />
             ) : null}
 
-            {advancedClassName === "warlock" && invocationLimit > 0 ? (
+            {advancedClassName === "warlock" ? (
               <ActionCard
                 title="Evocações"
                 value={`${invocations.length}/${invocationLimit}`}
                 action="Configurar evocações"
+                disabled={invocationLimit <= 0}
                 onClick={() => setInvocationModalOpen(true)}
               />
             ) : null}
@@ -499,6 +568,27 @@ export function LevelUpProgressionConfigurator({
               action="Adicionar característica"
               onClick={() => openAbility("race")}
             />
+
+            <ActionCard
+              title="Proficiências"
+              value={`${racialProficiencies.length} adicionada(s)${racialExpertiseCount ? ` · ${racialExpertiseCount} expertise` : ""}`}
+              action="Adicionar proficiência"
+              onClick={() => setProficiencySource("race")}
+            />
+
+            <ActionCard
+              title="Truques"
+              value={`${racialCantrips.length} adicionado(s)`}
+              action="Adicionar truques"
+              onClick={() => setRacialSpellModalKind("cantrip")}
+            />
+
+            <ActionCard
+              title="Magias"
+              value={`${racialSpells.length} adicionada(s)`}
+              action="Adicionar magias"
+              onClick={() => setRacialSpellModalKind("leveled")}
+            />
           </ConfigurationGroup>
 
           <AbilityEntries
@@ -519,40 +609,48 @@ export function LevelUpProgressionConfigurator({
           <Summary label="PV" value={`+${hpGain}`} />
           <Summary label="Características de classe" value={String(classAbilities.length)} />
           <Summary label={`Características de ${raceName}`} value={String(racialAbilities.length)} />
-          <Summary label="Proficiências" value={`${proficiencies.length}${expertiseCount ? ` (${expertiseCount} expertise)` : ""}`} />
+          <Summary
+            label="Proficiências de classe"
+            value={`${classProficiencies.length}${classExpertiseCount ? ` (${classExpertiseCount} expertise)` : ""}`}
+          />
+          <Summary
+            label={`Proficiências de ${raceName}`}
+            value={`${racialProficiencies.length}${racialExpertiseCount ? ` (${racialExpertiseCount} expertise)` : ""}`}
+          />
+          {asiEligible ? <Summary label="ASI" value={formatAsi(asiChoice)} /> : null}
           {cantripGain > 0 ? (
             <Summary label="Truques conhecidos" value={`${selectedCantrips}/${currentRule.maxCantrips}`} />
           ) : null}
           {leveledSpellGain > 0 ? (
             <Summary label="Magias aprendidas" value={`${selectedLeveled}/${currentRule.maxLeveledSpells}`} />
           ) : null}
-          {advancedClassName === "sorcerer" && metamagicLimit > 0 ? (
+          {racialCantrips.length ? (
+            <Summary label="Truques raciais adicionados" value={String(racialCantrips.length)} />
+          ) : null}
+          {racialSpells.length ? (
+            <Summary label="Magias raciais adicionadas" value={String(racialSpells.length)} />
+          ) : null}
+          {advancedClassName === "sorcerer" ? (
             <Summary label="Metamagias" value={`${selectedMetamagics.length}/${metamagicLimit}`} />
           ) : null}
-          {advancedClassName === "warlock" && invocationLimit > 0 ? (
+          {advancedClassName === "warlock" ? (
             <Summary label="Evocações" value={`${invocations.length}/${invocationLimit}`} />
           ) : null}
         </section>
       ) : null}
 
       <footer className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-between">
-        <Button variant="secondary" onClick={onCancel}>
-          Cancelar
-        </Button>
+        <Button variant="secondary" onClick={onCancel}>Cancelar</Button>
         {step === "class" ? (
           <Button onClick={() => setStep("configuration")}>Continuar</Button>
         ) : step === "configuration" ? (
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setStep("class")}>
-              Voltar
-            </Button>
+            <Button variant="secondary" onClick={() => setStep("class")}>Voltar</Button>
             <Button onClick={() => setStep("review")}>Continuar</Button>
           </div>
         ) : (
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setStep("configuration")}>
-              Voltar
-            </Button>
+            <Button variant="secondary" onClick={() => setStep("configuration")}>Voltar</Button>
             <Button onClick={confirm}>Confirmar subida</Button>
           </div>
         )}
@@ -569,11 +667,20 @@ export function LevelUpProgressionConfigurator({
       />
 
       <ProficiencySelectionModal
-        open={proficiencyModalOpen}
-        proficiencies={proficiencies}
-        onChange={setProficiencies}
-        onClose={() => setProficiencyModalOpen(false)}
-        title={`Proficiências — ${progression.label}`}
+        open={proficiencySource !== null}
+        proficiencies={
+          proficiencySource === "race" ? racialProficiencies : classProficiencies
+        }
+        onChange={(next) => {
+          if (proficiencySource === "race") setRacialProficiencies(next)
+          else setClassProficiencies(next)
+        }}
+        onClose={() => setProficiencySource(null)}
+        title={
+          proficiencySource === "race"
+            ? `Proficiências — ${raceName}`
+            : `Proficiências — ${progression.label}`
+        }
       />
 
       <LevelUpSpellSelectionModal
@@ -595,6 +702,23 @@ export function LevelUpProgressionConfigurator({
         onClose={() => setSpellModalKind(null)}
       />
 
+      <RacialSpellSelectionModal
+        open={racialSpellModalKind !== null}
+        kind={racialSpellModalKind ?? "leveled"}
+        raceName={raceName}
+        spells={spells}
+        selected={
+          racialSpellModalKind === "cantrip" ? racialCantrips : racialSpells
+        }
+        attribute={racialCastingAttribute}
+        onAttributeChange={setRacialCastingAttribute}
+        onChange={(next) => {
+          if (racialSpellModalKind === "cantrip") setRacialCantrips(next)
+          else setRacialSpells(next)
+        }}
+        onClose={() => setRacialSpellModalKind(null)}
+      />
+
       <MetamagicSelectionModal
         open={metamagicModalOpen}
         options={metamagics}
@@ -610,6 +734,15 @@ export function LevelUpProgressionConfigurator({
         max={invocationLimit}
         onChange={setInvocations}
         onClose={() => setInvocationModalOpen(false)}
+      />
+
+      <AsiSelectionModal
+        open={asiModalOpen}
+        value={asiChoice}
+        className={advancedClassName}
+        classLevel={targetClassLevel}
+        onChange={setAsiChoice}
+        onClose={() => setAsiModalOpen(false)}
       />
     </section>
   )
@@ -636,11 +769,13 @@ function ActionCard({
   title,
   value,
   action,
+  disabled = false,
   onClick,
 }: {
   title: string
   value: string
   action: string
+  disabled?: boolean
   onClick: () => void
 }) {
   return (
@@ -649,7 +784,7 @@ function ActionCard({
         <div className="text-sm font-semibold text-textH">{title}</div>
         <div className="mt-1 text-xs text-textMuted">{value}</div>
       </div>
-      <Button size="sm" variant="secondary" onClick={onClick}>
+      <Button size="sm" variant="secondary" disabled={disabled} onClick={onClick}>
         {action}
       </Button>
     </article>
@@ -663,7 +798,7 @@ function AbilityEntries({
 }: {
   entries: ProgressionCustomAbility[]
   onEdit: (entry: ProgressionCustomAbility) => void
-  onRemove: (abilityId: string) => void
+  onRemove: (id: string) => void
 }) {
   if (!entries.length) return null
   return (
@@ -673,24 +808,29 @@ function AbilityEntries({
           key={entry.ability.id}
           className="flex items-start justify-between gap-3 rounded-xl border border-border bg-bg p-3"
         >
-          <div>
+          <div className="min-w-0">
             <div className="font-medium text-textH">{entry.ability.name}</div>
             {entry.ability.description?.trim() ? (
-              <div className="mt-1 line-clamp-2 text-xs text-textMuted">
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-textMuted">
                 {entry.ability.description}
-              </div>
+              </p>
             ) : null}
           </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="ghost" onClick={() => onEdit(entry)}>
-              Editar
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => onRemove(entry.ability.id)}>
-              Remover
-            </Button>
+          <div className="flex shrink-0 gap-2">
+            <Button size="sm" variant="ghost" onClick={() => onEdit(entry)}>Editar</Button>
+            <Button size="sm" variant="ghost" onClick={() => onRemove(entry.ability.id)}>Remover</Button>
           </div>
         </article>
       ))}
+    </div>
+  )
+}
+
+function Summary({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-border py-2 text-sm last:border-b-0">
+      <span className="text-textMuted">{label}</span>
+      <strong className="text-right text-textH">{value}</strong>
     </div>
   )
 }
@@ -700,27 +840,27 @@ function createLevelUpPlans(
   advancedClassName: ClassName,
 ): ProgressionClassPlan[] {
   const existing = character.get("sheet").classes ?? []
+  const hasClass = existing.some((entry) => entry.className === advancedClassName)
   const plans = existing.map((entry) => ({
     className: entry.className,
-    level: entry.level + (entry.className === advancedClassName ? 1 : 0),
     previousLevel: entry.level,
+    level: entry.level + (entry.className === advancedClassName ? 1 : 0),
     subclassId: entry.subclass?.id,
     subclassName: entry.subclass?.name,
     subclassSource: entry.subclass?.source,
-    levelChoices: { ...(entry.levelChoices ?? {}) },
+    levelChoices: entry.levelChoices ?? {},
     enabledOptionalFeatureIds: [],
   }))
 
-  if (!plans.some((entry) => entry.className === advancedClassName)) {
+  if (!hasClass) {
     plans.push({
       className: advancedClassName,
-      level: 1,
       previousLevel: 0,
+      level: 1,
       levelChoices: {},
       enabledOptionalFeatureIds: [],
     })
   }
-
   return plans
 }
 
@@ -730,61 +870,53 @@ function characterWithPlans(
 ): CharacterTemplate {
   return character.withSheet(
     "classes",
-    plans.map((plan) => {
-      const existing = character
-        .get("sheet")
-        .classes?.find((entry) => entry.className === plan.className)
-      const subclassName = plan.subclassName?.trim() || existing?.subclass?.name
-      return {
-        ...createClassEntry(plan.className, plan.level),
-        ...existing,
-        level: plan.level as never,
-        subclass: subclassName
-          ? {
-              id: plan.subclassId || existing?.subclass?.id || slug(subclassName),
-              name: subclassName,
-              source:
-                plan.subclassSource?.trim() ||
-                existing?.subclass?.source ||
-                "Manual",
-            }
-          : undefined,
-      }
-    }),
+    plans.map((plan) => ({
+      ...createClassEntry(plan.className, plan.level),
+      subclass: plan.subclassName?.trim()
+        ? {
+            id: plan.subclassId ?? slug(plan.subclassName),
+            name: plan.subclassName,
+            source: plan.subclassSource?.trim() || "Manual",
+          }
+        : undefined,
+      levelChoices: plan.levelChoices,
+    })),
   )
 }
 
 function createInitialSpellSelections(
   character: CharacterTemplate,
 ): Record<string, LevelUpSpellSelection> {
-  const result: Record<string, LevelUpSpellSelection> = {}
-  const entries = character.get("magic")?.spells.knownSpells ?? []
-  for (const classData of character.get("sheet").classes ?? []) {
-    const classEntries = entries.filter(
-      (entry) =>
-        entry.source.type === "class" &&
-        String(entry.source.sourceId ?? entry.source.name).split(":")[0] ===
-          classData.className,
-    )
-    result[classData.className] = {
-      selected: classEntries.map((entry) => entry.spells.id),
-      prepared: classEntries
-        .filter((entry) => entry.spells.prepared)
-        .map((entry) => entry.spells.id),
-    }
+  const selections: Record<string, LevelUpSpellSelection> = {}
+  for (const classEntry of character.get("sheet").classes ?? []) {
+    selections[classEntry.className] = { selected: [], prepared: [] }
   }
-  return result
+
+  for (const entry of character.get("magic")?.spells.knownSpells ?? []) {
+    if (entry.source.type !== "class") continue
+    const className = resolveSourceClass(entry.source.sourceId, entry.source.name)
+    if (!ALL_CLASS_NAMES.includes(className)) continue
+    const selection = selections[className] ?? { selected: [], prepared: [] }
+    if (!selection.selected.includes(entry.spells.id)) {
+      selection.selected.push(entry.spells.id)
+    }
+    if (entry.spells.prepared && !selection.prepared.includes(entry.spells.id)) {
+      selection.prepared.push(entry.spells.id)
+    }
+    selections[className] = selection
+  }
+  return selections
 }
 
-function collectExistingInvocations(character: CharacterTemplate): Ability[] {
-  const byId = new Map<string, Ability>()
-  for (const invocation of character.get("magic")?.invocations ?? []) {
-    byId.set(invocation.id, { ...invocation, category: "invocation" })
-  }
-  for (const ability of character.get("abilities") ?? []) {
-    if (ability.category === "invocation") byId.set(ability.id, ability)
-  }
-  return Array.from(byId.values())
+function resolveSourceClass(sourceId: string | undefined, sourceName: string): ClassName {
+  return String(sourceId ?? sourceName).split(":")[0] as ClassName
+}
+
+function resolveSelectedSpells(indexes: string[], spells: Spell[]): Spell[] {
+  const byIndex = new Map(spells.map((spell) => [spell.index, spell]))
+  return indexes
+    .map((index) => byIndex.get(index))
+    .filter((spell): spell is Spell => Boolean(spell))
 }
 
 function applyPreparedCasterCantrips(
@@ -798,50 +930,145 @@ function applyPreparedCasterCantrips(
   characterLevel: number,
 ): CharacterTemplate {
   const magic = character.getOrCreateMagic()
-  const spellById = new Map(spells.map((spell) => [spell.index, spell]))
-  const selectedCantripIds = selection.selected.filter(
-    (id) => spellById.get(id)?.slotLevel === 0,
+  const byIndex = new Map(spells.map((spell) => [spell.index, spell]))
+  const selectedCantrips = selection.selected.filter(
+    (index) => byIndex.get(index)?.slotLevel === 0,
   )
   const retained = magic.spells.knownSpells.filter((entry) => {
-    const sourceClass = String(
-      entry.source.sourceId ?? entry.source.name,
-    ).split(":")[0]
-    if (entry.source.type !== "class" || sourceClass !== className) return true
-    return spellById.get(entry.spells.id)?.slotLevel !== 0
+    if (entry.source.type !== "class") return true
+    if (resolveSourceClass(entry.source.sourceId, entry.source.name) !== className) {
+      return true
+    }
+    return byIndex.get(entry.spells.id)?.slotLevel !== 0
   })
   const classEntry = createClassEntry(className, classLevel)
-  const additions = selectedCantripIds.map((id) => ({
+  const acquisition = createCharacterAcquisition({
+    eventId,
+    addedAt,
+    reason: "level-up",
+    characterLevel,
+    className,
+    classLevel,
+    sourceType: "class",
+    sourceId: className,
+    sourceName: getClassProgression(className).label,
+  })
+  const additions = selectedCantrips.map((index) => ({
     source: {
       type: "class" as const,
       name: className,
       sourceId: className,
       attribute: classEntry.castingAttribute ?? "int",
-      extendedList: false,
     },
-    spells: {
-      id,
-      prepared: true,
-    },
-    acquisition: createCharacterAcquisition({
-      eventId,
-      addedAt,
-      reason: "level-up",
-      characterLevel,
-      className,
-      classLevel,
-      sourceType: "class",
-      sourceId: className,
-      sourceName: getClassProgression(className).label,
-    }),
+    spells: { id: index, prepared: true },
+    acquisition,
   }))
 
   return character.with("magic", {
     ...magic,
     spells: {
       ...magic.spells,
-      knownSpells: [...retained, ...additions],
+      knownSpells: uniqueKnownSpells([...retained, ...additions]),
     },
   })
+}
+
+function applyRacialProficiencies(
+  character: CharacterTemplate,
+  additions: Proficiency[],
+): CharacterTemplate {
+  if (!additions.length) return character
+  const applied = applyManualProficiencies(character, additions)
+  const race = applied.get("sheet").race
+  return applied.withSheet("race", {
+    ...race,
+    proficiencies: mergeProficiencies(race.proficiencies ?? [], additions),
+  })
+}
+
+function applyRacialSpells(
+  character: CharacterTemplate,
+  indexes: string[],
+  attribute: Attribute,
+  spells: Spell[],
+  eventId: string,
+  addedAt: string,
+  characterLevel: number,
+  raceName: string,
+): CharacterTemplate {
+  if (!indexes.length) return character
+  const knownIndexes = new Set(spells.map((spell) => spell.index))
+  const magic = character.getOrCreateMagic()
+  const race = character.get("sheet").race
+  const sourceId = `race:${String(race.race)}`
+  const acquisition = createCharacterAcquisition({
+    eventId,
+    addedAt,
+    reason: "level-up",
+    characterLevel,
+    sourceType: "race",
+    sourceId,
+    sourceName: raceName,
+  })
+  const additions = indexes
+    .filter((index) => knownIndexes.has(index))
+    .map((index) => ({
+      source: {
+        type: "race" as const,
+        name: raceName,
+        sourceId,
+        attribute,
+      },
+      spells: { id: index, prepared: true },
+      acquisition,
+    }))
+
+  return character.with("magic", {
+    ...magic,
+    spells: {
+      ...magic.spells,
+      knownSpells: uniqueKnownSpells([
+        ...magic.spells.knownSpells,
+        ...additions,
+      ]),
+    },
+  })
+}
+
+function applyMetamagics(
+  previousCharacter: CharacterTemplate,
+  character: CharacterTemplate,
+  selected: MetamagicId[],
+  maxMetamagics: number,
+): CharacterTemplate {
+  const previousPool = getSorceryPointPool(previousCharacter)
+  const spent = Math.max(0, previousPool.max - previousPool.current)
+  const magic = character.getOrCreateMagic()
+  const maximumPoints = getDerivedSorceryPointMaximum(character)
+  return character.with("magic", {
+    ...magic,
+    metamagic: {
+      ...magic.metamagic,
+      metamagics: Array.from(new Set(selected)).slice(0, maxMetamagics),
+      sorceryPoints: {
+        max: maximumPoints,
+        current: Math.max(0, maximumPoints - spent),
+      },
+    },
+  })
+}
+
+function collectExistingInvocations(character: CharacterTemplate): Ability[] {
+  const byId = new Map<string, Ability>()
+  for (const ability of character.get("magic")?.invocations ?? []) {
+    byId.set(ability.id, { ...ability, category: "invocation" })
+  }
+  for (const ability of character.get("abilities") ?? []) {
+    if (ability.category === "invocation") {
+      byId.set(ability.id, { ...ability, category: "invocation" })
+    }
+  }
+  return Array.from(byId.values())
 }
 
 function applyInvocations(
@@ -855,13 +1082,12 @@ function applyInvocations(
 ): CharacterTemplate {
   const magic = character.getOrCreateMagic()
   const existingById = new Map(
-    (character.get("magic")?.invocations ?? []).map((entry) => [entry.id, entry]),
+    collectExistingInvocations(character).map((ability) => [ability.id, ability]),
   )
-  const normalized = invocations.slice(0, maximum).map((invocation) => {
-    const existing = existingById.get(invocation.id)
+  const next = invocations.slice(0, maximum).map((ability) => {
+    const previous = existingById.get(ability.id)
     const acquisition =
-      invocation.acquisition ??
-      existing?.acquisition ??
+      previous?.acquisition ??
       createCharacterAcquisition({
         eventId,
         addedAt,
@@ -870,23 +1096,23 @@ function applyInvocations(
         className: "warlock",
         classLevel,
         sourceType: "class",
-        sourceId: "warlock",
-        sourceName: getClassProgression("warlock").label,
+        sourceId: "warlock:invocation",
+        sourceName: "Evocação",
       })
     return {
-      ...invocation,
+      ...ability,
       category: "invocation" as const,
       source: "class",
       acquisition,
-      grantedSpells: invocation.grantedSpells?.map((grant) => ({
+      grantedSpells: ability.grantedSpells?.map((grant) => ({
         ...grant,
         acquisition:
           grant.acquisition ??
           createCharacterAcquisition({
             ...acquisition,
             sourceType: "ability",
-            sourceId: invocation.id,
-            sourceName: invocation.name,
+            sourceId: ability.id,
+            sourceName: ability.name,
           }),
       })),
     }
@@ -901,49 +1127,136 @@ function applyInvocations(
     )
     .with("magic", {
       ...magic,
-      invocations: normalized,
+      invocations: next,
     })
 }
 
-function applyMetamagics(
-  previousCharacter: CharacterTemplate,
+function applyAsi(
   character: CharacterTemplate,
-  selected: MetamagicId[],
-  maximum: number,
+  choice: CharacterAsi,
+  eventId: string,
+  addedAt: string,
+  characterLevel: number,
 ): CharacterTemplate {
-  const previousPool = getSorceryPointPool(previousCharacter)
-  const spent = Math.max(0, previousPool.max - previousPool.current)
-  const ensured = character.ensureMagic()
-  const magic = ensured.get("magic")
-  if (!magic) return ensured
+  const existingAsis = getCharacterAsis(character)
+  const previous = existingAsis.find(
+    (entry) =>
+      entry.className === choice.className &&
+      entry.classLevel === choice.classLevel,
+  )
+  const attributes = { ...character.get("sheet").attributes }
 
-  const nextMaximum = getDerivedSorceryPointMaximum(ensured)
-  return ensured.with("magic", {
-    ...magic,
-    metamagic: {
-      ...magic.metamagic,
-      metamagics: selected.slice(0, maximum),
-      sorceryPoints: {
-        max: nextMaximum,
-        current: Math.max(0, nextMaximum - spent),
-      },
-    },
-  })
+  for (const attribute of ATTRIBUTE_KEYS) {
+    const previousIncrease = previous?.increases[attribute] ?? 0
+    const nextIncrease = choice.increases[attribute] ?? 0
+    const baseWithoutPrevious = attributes[attribute] - previousIncrease
+    attributes[attribute] = Math.min(
+      20,
+      Math.max(1, baseWithoutPrevious + nextIncrease),
+    )
+  }
+
+  const acquisition =
+    previous?.acquisition ??
+    createCharacterAcquisition({
+      eventId,
+      addedAt,
+      reason: "level-up",
+      characterLevel,
+      className: choice.className,
+      classLevel: choice.classLevel,
+      sourceType: "class",
+      sourceId: `${choice.className}:asi:${choice.classLevel}`,
+      sourceName: `${getClassProgression(choice.className).label} — ASI`,
+    })
+  const featAcquisition = choice.ability
+    ? choice.ability.acquisition ??
+      createCharacterAcquisition({
+        ...acquisition,
+        sourceType: "feat",
+        sourceId: choice.id,
+        sourceName: choice.ability.name,
+      })
+    : undefined
+  const normalizedChoice: CharacterAsi = {
+    ...choice,
+    acquisition,
+    ability: choice.ability
+      ? {
+          ...choice.ability,
+          category: "feat",
+          source: "asi",
+          acquisition: featAcquisition,
+          grantedSpells: choice.ability.grantedSpells?.map((grant) => ({
+            ...grant,
+            acquisition:
+              grant.acquisition ??
+              (featAcquisition
+                ? createCharacterAcquisition({
+                    ...featAcquisition,
+                    sourceType: "ability",
+                    sourceId: choice.ability!.id,
+                    sourceName: choice.ability!.name,
+                  })
+                : undefined),
+          })),
+        }
+      : undefined,
+  }
+  const nextAsis = [
+    ...existingAsis.filter(
+      (entry) =>
+        !(
+          entry.className === choice.className &&
+          entry.classLevel === choice.classLevel
+        ),
+    ),
+    normalizedChoice,
+  ]
+
+  return withCharacterAsis(
+    character.withSheet("attributes", attributes),
+    nextAsis,
+  )
 }
 
-function getMetamagicLimit(level: number): number {
-  if (level < 3) return 0
-  if (level < 10) return 2
-  if (level < 17) return 3
-  return 4
+function findAsiForLevel(
+  character: CharacterTemplate,
+  className: ClassName,
+  classLevel: number,
+): CharacterAsi | null {
+  return (
+    getCharacterAsis(character).find(
+      (entry) =>
+        entry.className === className && entry.classLevel === classLevel,
+    ) ?? null
+  )
 }
 
-function resolveSelectedSpells(indexes: string[], spells: Spell[]): Spell[] {
-  const byId = new Map(spells.map((spell) => [spell.index, spell]))
-  return indexes.flatMap((index) => {
-    const spell = byId.get(index)
-    return spell ? [spell] : []
-  })
+function formatAsi(asi: CharacterAsi | null): string {
+  if (!asi) return "Não configurado"
+  if (asi.kind === "feat") return asi.ability?.name ?? "Talento"
+  if (asi.kind === "half-feat") {
+    return `${asi.ability?.name ?? "Meio talento"} · ${formatIncreases(asi.increases)}`
+  }
+  return formatIncreases(asi.increases)
+}
+
+function formatIncreases(
+  increases: Partial<Record<Attribute, number>>,
+): string {
+  const labels: Record<Attribute, string> = {
+    str: "FOR",
+    dex: "DES",
+    con: "CON",
+    int: "INT",
+    wis: "SAB",
+    cha: "CAR",
+  }
+  const parts = ATTRIBUTE_KEYS
+    .filter((attribute) => (increases[attribute] ?? 0) > 0)
+    .map((attribute) => `+${increases[attribute]} ${labels[attribute]}`)
+  return parts.join(" / ") || "Talento"
 }
 
 function getRaceName(character: CharacterTemplate): string {
@@ -955,6 +1268,30 @@ function getRaceName(character: CharacterTemplate): string {
   )
 }
 
+function getTargetClassLevel(
+  character: CharacterTemplate,
+  className: ClassName,
+): number {
+  return (
+    character.get("sheet").classes?.find((entry) => entry.className === className)
+      ?.level ?? 0
+  ) + 1
+}
+
+function uniqueKnownSpells<
+  T extends {
+    spells: { id: string }
+    source: { type: string; sourceId?: string }
+  },
+>(entries: T[]): T[] {
+  const byKey = new Map<string, T>()
+  for (const entry of entries) {
+    const key = `${entry.source.type}:${entry.source.sourceId ?? ""}:${entry.spells.id}`
+    byKey.set(key, entry)
+  }
+  return Array.from(byKey.values())
+}
+
 function slug(value: string): string {
   return value
     .normalize("NFD")
@@ -962,13 +1299,4 @@ function slug(value: string): string {
     .toLocaleLowerCase("en-US")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
-}
-
-function Summary({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-bg p-3 text-xs">
-      <span className="text-textMuted">{label}</span>
-      <strong className="text-right text-textH">{value}</strong>
-    </div>
-  )
 }
