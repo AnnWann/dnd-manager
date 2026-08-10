@@ -11,6 +11,7 @@ import {
   type CharacterCreationIdentity,
   type CharacterCreationProgressionPlan,
 } from "../../../models/characters/creation/CharacterCreation"
+import { applyManualProficiencies } from "../../../models/characters/applyManualProficiencies"
 import type { ClassName } from "../../../models/sheet/Class"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
 import {
@@ -158,12 +159,9 @@ export function CharacterCreationWizard(props: WizardProps) {
         }
       }),
     )
-    const withClassProficiencies = withManualClasses.withSheet(
-      "proficiencies",
-      mergeProficiencies(
-        withManualClasses.get("sheet").proficiencies ?? [],
-        classProficiencies,
-      ),
+    const withClassProficiencies = applyManualProficiencies(
+      withManualClasses,
+      classProficiencies,
     )
     props.onCreate(withClassProficiencies, plan)
   }
@@ -242,35 +240,6 @@ export function CharacterCreationWizard(props: WizardProps) {
       ) : null}
     </>
   )
-}
-
-function mergeProficiencies(
-  current: Proficiency[],
-  additions: Proficiency[],
-): Proficiency[] {
-  const merged = [...current]
-  const keys = new Set(
-    current.map(
-      (entry) => `${entry.category}:${normalizeProficiencyName(entry.name)}`,
-    ),
-  )
-
-  for (const proficiency of additions) {
-    const key = `${proficiency.category}:${normalizeProficiencyName(proficiency.name)}`
-    if (keys.has(key)) continue
-    keys.add(key)
-    merged.push(proficiency)
-  }
-
-  return merged
-}
-
-function normalizeProficiencyName(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLocaleLowerCase("pt-BR")
 }
 
 function slug(value: string): string {
