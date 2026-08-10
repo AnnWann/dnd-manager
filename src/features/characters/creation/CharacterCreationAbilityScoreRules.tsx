@@ -117,12 +117,11 @@ export function CharacterCreationAbilityScoreRules({
     integratedDraft?.race?.attributeBonus ??
     initialDraft?.racialBonuses ??
     {}
-  const initialRacialBonuses =
-    initialDraft?.racialBonusDraft?.mode === "fixed" && initialPreset
-      ? { ...initialPreset.attributeBonus }
-      : initialDraft?.racialBonuses ??
-        integratedDraft?.race?.attributeBonus ??
-        initialFixedRacialBonuses
+  const initialRacialBonuses = initialPreset
+    ? { ...initialPreset.attributeBonus }
+    : initialDraft?.racialBonuses ??
+      integratedDraft?.race?.attributeBonus ??
+      initialFixedRacialBonuses
   const initialSelectionKey =
     initialDraft?.raceSelectionKey ??
     `${integratedDraft?.racePresetId ?? ""}:${initialRaceName}`
@@ -151,10 +150,11 @@ export function CharacterCreationAbilityScoreRules({
   )
   const [racialBonusDraft, setRacialBonusDraft] = useState<
     RacialBonusDraft | undefined
-  >(initialDraft?.racialBonusDraft)
+  >(initialPreset ? undefined : initialDraft?.racialBonusDraft)
   const [scoreDraft, setScoreDraft] = useState<ScoreDraft | undefined>(
     initialDraft?.scoreDraft,
   )
+  const racialBonusEditable = raceSelectionKey.startsWith("custom:")
 
   useEffect(() => {
     writeCharacterCreationDraftSection(draftId, "ability-scores", {
@@ -183,81 +183,81 @@ export function CharacterCreationAbilityScoreRules({
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
         const raceSection = document.querySelector<HTMLElement>(
-'[data-character-creation-race-details="true"]',
+          '[data-character-creation-race-details="true"]',
         )
         if (raceSection) {
-const inputs = findLabeledInputs(raceSection, "Bônus de")
-if (inputs) {
-  const nextName = raceSection.dataset.raceName ?? ""
-  const nextPresetId = raceSection.dataset.racePresetId ?? ""
-  const nextSelectionKey = `${nextPresetId}:${nextName}`
-  const nextFixed =
-    readFixedRacialBonuses(raceSection) ?? readValues(inputs)
+          const inputs = findLabeledInputs(raceSection, "Bônus de")
+          if (inputs) {
+            const nextName = raceSection.dataset.raceName ?? ""
+            const nextPresetId = raceSection.dataset.racePresetId ?? ""
+            const nextSelectionKey = `${nextPresetId}:${nextName}`
+            const nextFixed =
+              readFixedRacialBonuses(raceSection) ?? readValues(inputs)
 
-  setFixedRacialBonuses((current) =>
-    sameAttributeBonuses(current, nextFixed) ? current : nextFixed,
-  )
+            setFixedRacialBonuses((current) =>
+              sameAttributeBonuses(current, nextFixed) ? current : nextFixed,
+            )
 
-  if (nextSelectionKey && nextSelectionKey !== raceSelectionKey) {
-    setRaceSelectionKey(nextSelectionKey)
-    setRaceName(nextName)
-    setRacialBonusDraft(undefined)
-    setRacialBonuses({ ...nextFixed })
-  } else {
-    if (nextName && nextName !== raceName) setRaceName(nextName)
-    if (!raceSelectionKey && nextSelectionKey) {
-      setRaceSelectionKey(nextSelectionKey)
-    }
-  }
+            if (nextSelectionKey && nextSelectionKey !== raceSelectionKey) {
+              setRaceSelectionKey(nextSelectionKey)
+              setRaceName(nextName)
+              setRacialBonusDraft(undefined)
+              setRacialBonuses({ ...nextFixed })
+            } else {
+              if (nextName && nextName !== raceName) setRaceName(nextName)
+              if (!raceSelectionKey && nextSelectionKey) {
+                setRaceSelectionKey(nextSelectionKey)
+              }
+            }
 
-  const grid = inputs.str.closest("div")?.parentElement
-  if (grid instanceof HTMLElement) grid.style.display = "none"
-  let anchor = raceSection.querySelector<HTMLElement>(
-    "[data-racial-bonus-rules-anchor]",
-  )
-  if (!anchor) {
-    anchor = document.createElement("div")
-    anchor.dataset.racialBonusRulesAnchor = "true"
-    grid?.parentElement?.insertBefore(anchor, grid.nextSibling)
-  }
-  setRaceInputs(inputs)
-  setRaceAnchor(anchor)
-}
+            const grid = inputs.str.closest("div")?.parentElement
+            if (grid instanceof HTMLElement) grid.style.display = "none"
+            let anchor = raceSection.querySelector<HTMLElement>(
+              "[data-racial-bonus-rules-anchor]",
+            )
+            if (!anchor) {
+              anchor = document.createElement("div")
+              anchor.dataset.racialBonusRulesAnchor = "true"
+              grid?.parentElement?.insertBefore(anchor, grid.nextSibling)
+            }
+            setRaceInputs(inputs)
+            setRaceAnchor(anchor)
+          }
         } else {
-setRaceAnchor(null)
+          setRaceAnchor(null)
         }
 
         const attributeHeading = Array.from(
-document.querySelectorAll<HTMLElement>("h2"),
+          document.querySelectorAll<HTMLElement>("h2"),
         ).find((entry) => entry.textContent?.trim() === "Atributos")
         const attributeSection = attributeHeading?.closest<HTMLElement>("section")
         if (attributeSection) {
-const inputs = findAttributeInputs(attributeSection)
-if (inputs) {
-  const cardGrid = inputs.str.closest("article")?.parentElement
-  if (cardGrid instanceof HTMLElement) cardGrid.style.display = "none"
-  const recommendedButton = Array.from(
-    attributeSection.querySelectorAll<HTMLButtonElement>("button"),
-  ).find((button) =>
-    button.textContent?.includes("atributos recomendados"),
-  )
-  if (recommendedButton) recommendedButton.style.display = "none"
-  let anchor = attributeSection.querySelector<HTMLElement>(
-    "[data-ability-score-rules-anchor]",
-  )
-  if (!anchor) {
-    anchor = document.createElement("div")
-    anchor.dataset.abilityScoreRulesAnchor = "true"
-    attributeHeading?.parentElement?.insertBefore(
-      anchor,
-      attributeHeading.nextSibling,
-    )
-  }
-  setAttributeInputs(inputs)
-  setAttributeAnchor(anchor)
-}
+          const inputs = findAttributeInputs(attributeSection)
+          if (inputs) {
+            const cardGrid = inputs.str.closest("article")?.parentElement
+            if (cardGrid instanceof HTMLElement) cardGrid.style.display = "none"
+            const recommendedButton = Array.from(
+              attributeSection.querySelectorAll<HTMLButtonElement>("button"),
+            ).find((button) =>
+              button.textContent?.includes("atributos recomendados"),
+            )
+            if (recommendedButton) recommendedButton.style.display = "none"
+            let anchor = attributeSection.querySelector<HTMLElement>(
+              "[data-ability-score-rules-anchor]",
+            )
+            if (!anchor) {
+              anchor = document.createElement("div")
+              anchor.dataset.abilityScoreRulesAnchor = "true"
+              attributeHeading?.parentElement?.insertBefore(
+                anchor,
+                attributeHeading.nextSibling,
+              )
+            }
+            setAttributeInputs(inputs)
+            setAttributeAnchor(anchor)
+          }
         } else {
-setAttributeAnchor(null)
+          setAttributeAnchor(null)
         }
       })
     }
@@ -270,7 +270,7 @@ setAttributeAnchor(null)
       observer.disconnect()
       document
         .querySelectorAll<HTMLElement>(
-"[data-racial-bonus-rules-anchor], [data-ability-score-rules-anchor]",
+          "[data-racial-bonus-rules-anchor], [data-ability-score-rules-anchor]",
         )
         .forEach((entry) => entry.remove())
     }
@@ -295,29 +295,30 @@ setAttributeAnchor(null)
     <>
       {raceAnchor
         ? createPortal(
-  <RacialBonusRules
-    key={raceSelectionKey || raceName}
-    raceName={raceName}
-    fixed={fixedRacialBonuses}
-    current={racialBonuses}
-    draft={racialBonusDraft}
-    onDraftChange={setRacialBonusDraft}
-    onChange={setRacialBonuses}
-  />,
-  raceAnchor,
-)
+            <RacialBonusRules
+              key={raceSelectionKey || raceName}
+              raceName={raceName}
+              fixed={fixedRacialBonuses}
+              current={racialBonuses}
+              draft={racialBonusDraft}
+              editable={racialBonusEditable}
+              onDraftChange={setRacialBonusDraft}
+              onChange={setRacialBonuses}
+            />,
+            raceAnchor,
+          )
         : null}
       {attributeAnchor
         ? createPortal(
-  <AbilityScoreRules
-    values={attributes}
-    racialBonuses={racialBonuses}
-    draft={scoreDraft}
-    onDraftChange={setScoreDraft}
-    onChange={setAttributes}
-  />,
-  attributeAnchor,
-)
+            <AbilityScoreRules
+              values={attributes}
+              racialBonuses={racialBonuses}
+              draft={scoreDraft}
+              onDraftChange={setScoreDraft}
+              onChange={setAttributes}
+            />,
+            attributeAnchor,
+          )
         : null}
     </>
   )
@@ -328,6 +329,7 @@ function RacialBonusRules({
   fixed,
   current,
   draft,
+  editable,
   onDraftChange,
   onChange,
 }: {
@@ -335,11 +337,14 @@ function RacialBonusRules({
   fixed: Partial<Record<Attribute, number>>
   current: Partial<Record<Attribute, number>>
   draft?: RacialBonusDraft
+  editable: boolean
   onDraftChange: (draft: RacialBonusDraft) => void
   onChange: (value: Partial<Record<Attribute, number>>) => void
 }) {
   const inferred = inferBonusMode(raceName, current)
-  const [mode, setMode] = useState<BonusMode>(draft?.mode ?? inferred)
+  const [mode, setMode] = useState<BonusMode>(
+    editable ? draft?.mode ?? inferred : "fixed",
+  )
   const [first, setFirst] = useState<Attribute>(draft?.first ?? "str")
   const [second, setSecond] = useState<Attribute>(draft?.second ?? "dex")
   const [third, setThird] = useState<Attribute>(draft?.third ?? "con")
@@ -348,6 +353,12 @@ function RacialBonusRules({
   )
 
   useEffect(() => {
+    if (!editable) {
+      onDraftChange({ mode: "fixed", first, second, third, custom })
+      onChange({ ...fixed })
+      return
+    }
+
     onDraftChange({ mode, first, second, third, custom })
     if (mode === "fixed") onChange({ ...fixed })
     if (mode === "variant") onChange(distribute([[first, 1], [second, 1]]))
@@ -358,6 +369,7 @@ function RacialBonusRules({
     if (mode === "custom") onChange({ ...custom })
   }, [
     custom,
+    editable,
     first,
     fixed,
     mode,
@@ -372,68 +384,108 @@ function RacialBonusRules({
       <div>
         <h3 className="text-sm font-semibold text-textH">Regra de bônus raciais</h3>
         <p className="mt-1 text-xs leading-5 text-textMuted">
-Escolha os bônus predefinidos da raça ou uma distribuição alternativa. Ao voltar para Predefinidos, os bônus originais do preset são restaurados.
+          {editable
+            ? "Configure os bônus da raça personalizada."
+            : "Este preset usa os bônus raciais definidos pelo próprio preset."}
         </p>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        <ModeButton active={mode === "fixed"} label="Predefinidos" onClick={() => setMode("fixed")} />
-        <ModeButton active={mode === "variant"} label="+1 / +1" onClick={() => setMode("variant")} />
-        <ModeButton active={mode === "flex21"} label="Móveis +2 / +1" onClick={() => setMode("flex21")} />
-        <ModeButton active={mode === "flex111"} label="Móveis +1 / +1 / +1" onClick={() => setMode("flex111")} />
-        <ModeButton active={mode === "custom"} label="Personalizados" onClick={() => setMode("custom")} />
-      </div>
 
-      {mode === "fixed" ? (
+      {editable ? (
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <ModeButton
+            active={mode === "fixed"}
+            label="Predefinidos"
+            onClick={() => setMode("fixed")}
+          />
+          <ModeButton
+            active={mode === "variant"}
+            label="+1 / +1"
+            onClick={() => setMode("variant")}
+          />
+          <ModeButton
+            active={mode === "flex21"}
+            label="Móveis +2 / +1"
+            onClick={() => setMode("flex21")}
+          />
+          <ModeButton
+            active={mode === "flex111"}
+            label="Móveis +1 / +1 / +1"
+            onClick={() => setMode("flex111")}
+          />
+          <ModeButton
+            active={mode === "custom"}
+            label="Personalizados"
+            onClick={() => setMode("custom")}
+          />
+        </div>
+      ) : null}
+
+      {!editable || mode === "fixed" ? (
         <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-bg-subtle p-3">
-{ATTRIBUTE_KEYS.map((attribute) => {
-  const value = fixed[attribute] ?? 0
-  return value ? (
-    <span
-      key={attribute}
-      className="rounded-full border border-accentBorder bg-accentBg px-2 py-1 text-xs text-textH"
-    >
-      {ATTRIBUTE_LABELS[attribute]} +{value}
-    </span>
-  ) : null
-})}
+          {ATTRIBUTE_KEYS.map((attribute) => {
+            const value = fixed[attribute] ?? 0
+            return value ? (
+              <span
+                key={attribute}
+                className="rounded-full border border-accentBorder bg-accentBg px-2 py-1 text-xs text-textH"
+              >
+                {ATTRIBUTE_LABELS[attribute]} +{value}
+              </span>
+            ) : null
+          })}
         </div>
       ) : null}
 
-      {mode === "variant" || mode === "flex21" || mode === "flex111" ? (
+      {editable &&
+      (mode === "variant" || mode === "flex21" || mode === "flex111") ? (
         <div className="grid gap-3 sm:grid-cols-3">
-<AttributeSelect label={mode === "flex21" ? "Bônus +2" : "Primeiro +1"} value={first} onChange={setFirst} />
-<AttributeSelect label="Segundo +1" value={second} onChange={setSecond} blocked={[first]} />
-{mode === "flex111" ? (
-  <AttributeSelect label="Terceiro +1" value={third} onChange={setThird} blocked={[first, second]} />
-) : null}
+          <AttributeSelect
+            label={mode === "flex21" ? "Bônus +2" : "Primeiro +1"}
+            value={first}
+            onChange={setFirst}
+          />
+          <AttributeSelect
+            label="Segundo +1"
+            value={second}
+            onChange={setSecond}
+            blocked={[first]}
+          />
+          {mode === "flex111" ? (
+            <AttributeSelect
+              label="Terceiro +1"
+              value={third}
+              onChange={setThird}
+              blocked={[first, second]}
+            />
+          ) : null}
         </div>
       ) : null}
 
-      {mode === "custom" ? (
+      {editable && mode === "custom" ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-{ATTRIBUTE_KEYS.map((attribute) => (
-  <label key={attribute} className="grid gap-1 text-xs text-textMuted">
-    {ATTRIBUTE_LABELS[attribute]}
-    <Input
-      type="number"
-      min={0}
-      max={4}
-      value={custom[attribute] ?? 0}
-      onChange={(event) =>
-        setCustom((currentValue) => ({
-          ...currentValue,
-          [attribute]: Math.max(
-            0,
-            Math.min(
-              4,
-              Math.trunc(Number(event.target.value) || 0),
-            ),
-          ),
-        }))
-      }
-    />
-  </label>
-))}
+          {ATTRIBUTE_KEYS.map((attribute) => (
+            <label key={attribute} className="grid gap-1 text-xs text-textMuted">
+              {ATTRIBUTE_LABELS[attribute]}
+              <Input
+                type="number"
+                min={0}
+                max={4}
+                value={custom[attribute] ?? 0}
+                onChange={(event) =>
+                  setCustom((currentValue) => ({
+                    ...currentValue,
+                    [attribute]: Math.max(
+                      0,
+                      Math.min(
+                        4,
+                        Math.trunc(Number(event.target.value) || 0),
+                      ),
+                    ),
+                  }))
+                }
+              />
+            </label>
+          ))}
         </div>
       ) : null}
     </section>
@@ -489,44 +541,79 @@ function AbilityScoreRules({
     }
   }, [assignment, mode, onChange, onDraftChange, pointBuy, rolled])
 
-  const spent = ATTRIBUTE_KEYS.reduce((sum, attribute) => sum + POINT_BUY_COST[pointBuy[attribute]], 0)
+  const spent = ATTRIBUTE_KEYS.reduce(
+    (sum, attribute) => sum + POINT_BUY_COST[pointBuy[attribute]],
+    0,
+  )
 
   return (
     <section className="mt-4 grid gap-4 rounded-xl border border-border bg-bg p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-textH">Método de atributos</h3>
-          <p className="mt-1 text-xs text-textMuted">Escolha matriz padrão, rolagem 4d6 descartando o menor ou compra por 27 pontos.</p>
+          <p className="mt-1 text-xs text-textMuted">
+            Escolha matriz padrão, rolagem 4d6 descartando o menor ou compra por 27 pontos.
+          </p>
         </div>
         {mode === "roll" ? (
-          <Button variant="secondary" onClick={() => setRolled(rollAbilityScores())}>Rolar novamente</Button>
+          <Button variant="secondary" onClick={() => setRolled(rollAbilityScores())}>
+            Rolar novamente
+          </Button>
         ) : null}
       </div>
       <div className="grid gap-2 sm:grid-cols-3">
-        <ModeButton active={mode === "standard"} label="Matriz padrão" onClick={() => setMode("standard")} />
-        <ModeButton active={mode === "roll"} label="Rolagem" onClick={() => setMode("roll")} />
-        <ModeButton active={mode === "point-buy"} label="Compra por pontos" onClick={() => setMode("point-buy")} />
+        <ModeButton
+          active={mode === "standard"}
+          label="Matriz padrão"
+          onClick={() => setMode("standard")}
+        />
+        <ModeButton
+          active={mode === "roll"}
+          label="Rolagem"
+          onClick={() => setMode("roll")}
+        />
+        <ModeButton
+          active={mode === "point-buy"}
+          label="Compra por pontos"
+          onClick={() => setMode("point-buy")}
+        />
       </div>
 
       {mode === "point-buy" ? (
         <div>
-          <div className={spent > 27 ? "mb-3 rounded-lg border border-danger bg-dangerBg p-3 text-xs text-danger" : "mb-3 rounded-lg border border-accentBorder bg-accentBg p-3 text-xs text-textH"}>
+          <div
+            className={
+              spent > 27
+                ? "mb-3 rounded-lg border border-danger bg-dangerBg p-3 text-xs text-danger"
+                : "mb-3 rounded-lg border border-accentBorder bg-accentBg p-3 text-xs text-textH"
+            }
+          >
             Pontos gastos: {spent}/27 · restantes: {27 - spent}
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {ATTRIBUTE_KEYS.map((attribute) => (
-              <ScoreCard key={attribute} attribute={attribute} base={pointBuy[attribute]} bonus={racialBonuses[attribute] ?? 0}>
+              <ScoreCard
+                key={attribute}
+                attribute={attribute}
+                base={pointBuy[attribute]}
+                bonus={racialBonuses[attribute] ?? 0}
+              >
                 <Select
                   value={pointBuy[attribute]}
                   onChange={(event) => {
                     const next = Number(event.target.value)
-                    const nextSpent = spent - POINT_BUY_COST[pointBuy[attribute]] + POINT_BUY_COST[next]
+                    const nextSpent =
+                      spent -
+                      POINT_BUY_COST[pointBuy[attribute]] +
+                      POINT_BUY_COST[next]
                     if (nextSpent > 27) return
                     setPointBuy((current) => ({ ...current, [attribute]: next }))
                   }}
                 >
                   {Object.keys(POINT_BUY_COST).map((entry) => (
-                    <option key={entry} value={entry}>{entry} ({POINT_BUY_COST[Number(entry)]} pts)</option>
+                    <option key={entry} value={entry}>
+                      {entry} ({POINT_BUY_COST[Number(entry)]} pts)
+                    </option>
                   ))}
                 </Select>
               </ScoreCard>
@@ -538,16 +625,25 @@ function AbilityScoreRules({
           {ATTRIBUTE_KEYS.map((attribute) => {
             const pool = mode === "standard" ? STANDARD_ARRAY : rolled
             return (
-              <ScoreCard key={attribute} attribute={attribute} base={pool[assignment[attribute]]} bonus={racialBonuses[attribute] ?? 0}>
+              <ScoreCard
+                key={attribute}
+                attribute={attribute}
+                base={pool[assignment[attribute]]}
+                bonus={racialBonuses[attribute] ?? 0}
+              >
                 <Select
                   value={assignment[attribute]}
                   onChange={(event) => {
                     const nextIndex = Number(event.target.value)
-                    setAssignment((current) => swapAssignment(current, attribute, nextIndex))
+                    setAssignment((current) =>
+                      swapAssignment(current, attribute, nextIndex),
+                    )
                   }}
                 >
                   {pool.map((score, index) => (
-                    <option key={`${score}:${index}`} value={index}>{score}</option>
+                    <option key={`${score}:${index}`} value={index}>
+                      {score}
+                    </option>
                   ))}
                 </Select>
               </ScoreCard>
@@ -573,7 +669,9 @@ function ScoreCard({
   return (
     <article className="rounded-xl border border-border bg-bg-subtle p-4">
       <div className="font-semibold text-textH">{ATTRIBUTE_LABELS[attribute]}</div>
-      <div className="mt-1 text-xs text-textMuted">Base {base} + raça {bonus} = {base + bonus}</div>
+      <div className="mt-1 text-xs text-textMuted">
+        Base {base} + raça {bonus} = {base + bonus}
+      </div>
       <div className="mt-3">{children}</div>
     </article>
   )
@@ -593,9 +691,16 @@ function AttributeSelect({
   return (
     <label className="grid gap-1 text-xs text-textMuted">
       {label}
-      <Select value={value} onChange={(event) => onChange(event.target.value as Attribute)}>
+      <Select
+        value={value}
+        onChange={(event) => onChange(event.target.value as Attribute)}
+      >
         {ATTRIBUTE_KEYS.map((attribute) => (
-          <option key={attribute} value={attribute} disabled={blocked.includes(attribute)}>
+          <option
+            key={attribute}
+            value={attribute}
+            disabled={blocked.includes(attribute)}
+          >
             {ATTRIBUTE_LABELS[attribute]}
           </option>
         ))}
@@ -617,20 +722,25 @@ function ModeButton({
     <button
       type="button"
       onClick={onClick}
-      className={active
-        ? "rounded-xl border border-accentBorder bg-accentBg p-3 text-left text-sm font-semibold text-textH"
-        : "rounded-xl border border-border bg-bg-subtle p-3 text-left text-sm text-textMuted hover:border-accentBorder"}
+      className={
+        active
+          ? "rounded-xl border border-accentBorder bg-accentBg p-3 text-left text-sm font-semibold text-textH"
+          : "rounded-xl border border-border bg-bg-subtle p-3 text-left text-sm text-textMuted hover:border-accentBorder"
+      }
     >
       {label}
     </button>
   )
 }
 
-function findLabeledInputs(root: HTMLElement, prefix: string): Record<Attribute, HTMLInputElement> | null {
+function findLabeledInputs(
+  root: HTMLElement,
+  prefix: string,
+): Record<Attribute, HTMLInputElement> | null {
   const result = {} as Record<Attribute, HTMLInputElement>
   for (const attribute of ATTRIBUTE_KEYS) {
-    const label = Array.from(root.querySelectorAll<HTMLLabelElement>("label")).find((entry) =>
-      entry.textContent?.includes(`${prefix} ${ATTRIBUTE_LABELS[attribute]}`),
+    const label = Array.from(root.querySelectorAll<HTMLLabelElement>("label")).find(
+      (entry) => entry.textContent?.includes(`${prefix} ${ATTRIBUTE_LABELS[attribute]}`),
     )
     const input = label?.querySelector<HTMLInputElement>("input")
     if (!input) return null
@@ -639,11 +749,15 @@ function findLabeledInputs(root: HTMLElement, prefix: string): Record<Attribute,
   return result
 }
 
-function findAttributeInputs(root: HTMLElement): Record<Attribute, HTMLInputElement> | null {
+function findAttributeInputs(
+  root: HTMLElement,
+): Record<Attribute, HTMLInputElement> | null {
   const result = {} as Record<Attribute, HTMLInputElement>
   for (const attribute of ATTRIBUTE_KEYS) {
-    const article = Array.from(root.querySelectorAll<HTMLElement>("article")).find((entry) =>
-      entry.querySelector("strong")?.textContent?.trim() === ATTRIBUTE_LABELS[attribute],
+    const article = Array.from(root.querySelectorAll<HTMLElement>("article")).find(
+      (entry) =>
+        entry.querySelector("strong")?.textContent?.trim() ===
+        ATTRIBUTE_LABELS[attribute],
     )
     const input = article?.querySelector<HTMLInputElement>('input[type="number"]')
     if (!input) return null
@@ -652,8 +766,15 @@ function findAttributeInputs(root: HTMLElement): Record<Attribute, HTMLInputElem
   return result
 }
 
-function readValues(inputs: Record<Attribute, HTMLInputElement>): Partial<Record<Attribute, number>> {
-  return Object.fromEntries(ATTRIBUTE_KEYS.map((attribute) => [attribute, Number(inputs[attribute].value) || 0]))
+function readValues(
+  inputs: Record<Attribute, HTMLInputElement>,
+): Partial<Record<Attribute, number>> {
+  return Object.fromEntries(
+    ATTRIBUTE_KEYS.map((attribute) => [
+      attribute,
+      Number(inputs[attribute].value) || 0,
+    ]),
+  )
 }
 
 function writeValues(
@@ -667,7 +788,10 @@ function writeValues(
 
 function setNativeInputValue(input: HTMLInputElement, value: string) {
   if (input.value === value) return
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
+  const setter = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )?.set
   setter?.call(input, value)
   input.dispatchEvent(new Event("input", { bubbles: true }))
   input.dispatchEvent(new Event("change", { bubbles: true }))
@@ -705,7 +829,11 @@ function inferBonusMode(
   raceName: string,
   bonuses: Partial<Record<Attribute, number>>,
 ): BonusMode {
-  const values = ATTRIBUTE_KEYS.map((attribute) => bonuses[attribute] ?? 0).filter(Boolean).sort((a, b) => b - a)
+  const values = ATTRIBUTE_KEYS.map(
+    (attribute) => bonuses[attribute] ?? 0,
+  )
+    .filter(Boolean)
+    .sort((a, b) => b - a)
   const normalized = raceName.toLocaleLowerCase("pt-BR")
   if (normalized.includes("variante")) return "variant"
   if (values.join(",") === "2,1") return "fixed"
@@ -713,7 +841,9 @@ function inferBonusMode(
   return "fixed"
 }
 
-function distribute(entries: Array<[Attribute, number]>): Partial<Record<Attribute, number>> {
+function distribute(
+  entries: Array<[Attribute, number]>,
+): Partial<Record<Attribute, number>> {
   const result: Partial<Record<Attribute, number>> = {}
   for (const [attribute, value] of entries) {
     if (result[attribute]) continue
@@ -724,13 +854,21 @@ function distribute(entries: Array<[Attribute, number]>): Partial<Record<Attribu
 
 function rollAbilityScores(): number[] {
   return Array.from({ length: 6 }, () => {
-    const dice = Array.from({ length: 4 }, () => Math.floor(Math.random() * 6) + 1).sort((a, b) => a - b)
+    const dice = Array.from(
+      { length: 4 },
+      () => Math.floor(Math.random() * 6) + 1,
+    ).sort((a, b) => a - b)
     return dice.slice(1).reduce((sum, value) => sum + value, 0)
   }).sort((a, b) => b - a)
 }
 
-function mapPool(pool: number[], assignment: Record<Attribute, number>): Record<Attribute, number> {
-  return Object.fromEntries(ATTRIBUTE_KEYS.map((attribute) => [attribute, pool[assignment[attribute]]])) as Record<Attribute, number>
+function mapPool(
+  pool: number[],
+  assignment: Record<Attribute, number>,
+): Record<Attribute, number> {
+  return Object.fromEntries(
+    ATTRIBUTE_KEYS.map((attribute) => [attribute, pool[assignment[attribute]]]),
+  ) as Record<Attribute, number>
 }
 
 function swapAssignment(
