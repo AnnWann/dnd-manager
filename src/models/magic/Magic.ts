@@ -1,4 +1,5 @@
 import type { Ability } from "../abilities/Ability"
+import type { CharacterAsi } from "../characters/CharacterAsi"
 import type { CharacterMetamagics } from "./metamagic/CharacterMetamagics"
 import type { CharacterSpells } from "./spells/CharacterSpells"
 
@@ -11,5 +12,7 @@ export interface Magic {
   metamagic?: CharacterMetamagics
   /** Eldritch invocations are ability-shaped, but belong to magical class configuration. */
   invocations?: Ability[]
+  /** Compatibility mirror for top-level character ASI persistence. */
+  asi?: CharacterAsi[]
   channelDivinity?: ChannelDivinityResource
 }
