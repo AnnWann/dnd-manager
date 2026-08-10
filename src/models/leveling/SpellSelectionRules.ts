@@ -71,12 +71,12 @@ const LIMITED_KNOWN: Partial<Record<ClassName, Record<number, number>>> = {
 }
 
 /**
- * Only structural caster progression is encoded here: selection counts,
- * preparation counts and maximum spell level. Spell names, subclass grants and
- * legal class spell lists are deliberately not bundled.
+ * Structural rules for spells a class actually learns or records in a
+ * spellbook. Prepared-only casting is deliberately not represented as spell
+ * learning here.
  */
 export function getClassSpellSelectionRule(
-  character: CharacterTemplate,
+  _character: CharacterTemplate,
   className: ClassName,
   classLevel: number,
   subclassId?: string,
@@ -86,7 +86,7 @@ export function getClassSpellSelectionRule(
   const baseMode = getBaseMode(className)
   const maxSpellLevel = getMaximumSpellLevel(className, level)
   const maxCantrips = getCantripsKnownAtLevel(className, level)
-  const maxLeveledSpells = getLeveledSpellLimit(character, classEntry, level)
+  const maxLeveledSpells = getLeveledSpellLimit(classEntry, level)
   const mode =
     baseMode !== "none" && maxSpellLevel === 0 && maxCantrips === 0
       ? "none"
@@ -118,16 +118,16 @@ export function getSubclassSpellGrants(
 }
 
 /**
- * The creator exposes the loaded compendium and limits only by spell level and
- * the class's cantrip capacity. The user checks the legal spell list in their
- * own reference.
+ * Learned-spell selection is limited to the spell list of the class being
+ * advanced, the maximum spell circle available and the class's cantrip rules.
  */
 export function isSpellAllowedForClassSelection(
   spell: Spell,
   rule: ClassSpellSelectionRule,
   _subclassSpellNames: string[],
 ): boolean {
-  if (rule.mode === "none") return false
+  if (rule.mode === "none" || rule.mode === "prepared") return false
+  if (!spell.classes.includes(rule.className)) return false
   if (spell.slotLevel > rule.maxSpellLevel) return false
   if (spell.slotLevel === 0 && rule.maxCantrips <= 0) return false
   return true
@@ -193,14 +193,13 @@ function getBaseMode(className: ClassName): SpellSelectionMode {
     return "limited-known"
   }
   if (className === "wizard") return "spellbook"
-  if (["artificer", "cleric", "druid", "paladin"].includes(className)) {
-    return "prepared"
-  }
+
+  // Artificer, cleric, druid and paladin prepare from their class lists rather
+  // than learning a limited set here. Preparation is a separate concern.
   return "none"
 }
 
 function getLeveledSpellLimit(
-  character: CharacterTemplate,
   classEntry: CharacterClassInterface,
   level: number,
 ): number {
@@ -210,42 +209,7 @@ function getLeveledSpellLimit(
   if (classEntry.knownSpells?.mode === "spellbook") {
     return 6 + Math.max(0, level - 1) * 2
   }
-  if (classEntry.knownSpells?.mode === "prepared-only") {
-    return getPreparedSpellLimit(character, classEntry.className, level)
-  }
   return 0
-}
-
-function getPreparedSpellLimit(
-  character: CharacterTemplate,
-  className: ClassName,
-  level: number,
-): number {
-  switch (className) {
-    case "artificer":
-      return Math.max(
-        1,
-        Math.floor(level / 2) + character.getAttributeModifier("int"),
-      )
-    case "cleric":
-    case "druid":
-      return Math.max(
-        1,
-        level + character.getAttributeModifier("wis"),
-      )
-    case "paladin":
-      return Math.max(
-        1,
-        Math.floor(level / 2) + character.getAttributeModifier("cha"),
-      )
-    case "wizard":
-      return Math.max(
-        1,
-        level + character.getAttributeModifier("int"),
-      )
-    default:
-      return 0
-  }
 }
 
 function getMaximumSpellLevel(
