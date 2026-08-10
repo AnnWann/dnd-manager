@@ -27,6 +27,7 @@ import { MagicProvider } from "../contexts/magicContext"
 import { MissionProvider } from "../contexts/missionContext"
 import { PartyInventorySettingsProvider } from "../contexts/partyInventorySettingsContext"
 import { SyncProvider } from "../contexts/syncContext"
+import { CharacterRelationalPersistenceBridge } from "../features/sync/CharacterRelationalPersistenceBridge"
 import { RelationalMigrationBridge } from "../features/sync/RelationalMigrationBridge"
 import { normalizeAppStateInventory } from "../lib/normalizeAppStateInventory"
 import { type AppStateV1 } from "../lib/remoteState"
@@ -146,7 +147,6 @@ export function CampaignLayout() {
 
   const NoSideBar = ["/auth", "/not-found"].includes(location.pathname)
 
-
   if (NoSideBar) {
     return (
       <div className="min-h-dvh bg-[color:var(--surface-app)] text-text">
@@ -171,6 +171,11 @@ export function CampaignLayout() {
     >
       <CustomSystemsProvider>
         <RelationalMigrationBridge state={appState} />
+        <CharacterRelationalPersistenceBridge
+          state={appState}
+          syncKey={syncKey}
+          actorKey={userKey.trim() || userRole}
+        />
         <PartyInventorySettingsProvider
           carryCapacity={appState.partyCarryCapacity ?? 0}
           canEditCarryCapacity={userRole === "master"}
@@ -214,5 +219,3 @@ export function CampaignLayout() {
     </SyncProvider>
   )
 }
-
-
