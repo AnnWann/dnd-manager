@@ -4,8 +4,8 @@ import type { Ability } from "../abilities/Ability"
 import {
   abilityRequiresActivation,
   endAbilityEffect,
-  useAbilityEffect,
   restoreAbilityUse,
+  useAbilityEffect,
 } from "../abilities/abilityActivation"
 import { createCharacterAcquisition } from "./CharacterAcquisition"
 import { getEquipmentAbilities } from "./characterEquipment"
@@ -15,9 +15,17 @@ export function addAbility(
   character: CharacterTemplate,
   ability: Ability,
 ): CharacterTemplate {
+  const normalized = withManualAbilityMetadata(character, ability)
+  if (normalized.category === "invocation") {
+    return withInvocations(character, [
+      ...getInvocations(character),
+      normalized,
+    ])
+  }
+
   return character.with("abilities", [
     ...(character.get("abilities") ?? []),
-    withManualAbilityMetadata(character, ability),
+    normalized,
   ])
 }
 
@@ -25,6 +33,38 @@ export function updateAbility(
   character: CharacterTemplate,
   ability: Ability,
 ): CharacterTemplate {
+  const invocationExists = getInvocations(character).some(
+    (current) => current.id === ability.id,
+  )
+
+  if (invocationExists || ability.category === "invocation") {
+    const normalized = withManualAbilityMetadata(character, {
+      ...ability,
+      category: "invocation",
+    })
+    const nextInvocations = invocationExists
+      ? getInvocations(character).map((current) =>
+          current.id === normalized.id
+            ? {
+                ...normalized,
+                acquisition:
+                  normalized.acquisition ?? current.acquisition,
+              }
+            : current,
+        )
+      : [...getInvocations(character), normalized]
+
+    return withInvocations(
+      character.with(
+        "abilities",
+        (character.get("abilities") ?? []).filter(
+          (current) => current.id !== ability.id,
+        ),
+      ),
+      nextInvocations,
+    )
+  }
+
   return character.with(
     "abilities",
     (character.get("abilities") ?? []).map((current) =>
@@ -45,9 +85,12 @@ export function removeAbility(
   character: CharacterTemplate,
   abilityId: string,
 ): CharacterTemplate {
-  return character.with(
-    "abilities",
-    (character.get("abilities") ?? []).filter((a) => a.id !== abilityId),
+  return withInvocations(
+    character.with(
+      "abilities",
+      (character.get("abilities") ?? []).filter((ability) => ability.id !== abilityId),
+    ),
+    getInvocations(character).filter((ability) => ability.id !== abilityId),
   )
 }
 
@@ -55,9 +98,10 @@ export function saveAbility(
   character: CharacterTemplate,
   ability: Ability,
 ): CharacterTemplate {
-  const exists = (character.get("abilities") ?? []).some(
-    (a) => a.id === ability.id,
-  )
+  const exists = [
+    ...(character.get("abilities") ?? []),
+    ...getInvocations(character),
+  ].some((current) => current.id === ability.id)
 
   return exists
     ? updateAbility(character, ability)
@@ -68,9 +112,7 @@ export function useAbility(
   character: CharacterTemplate,
   abilityId: string,
 ): CharacterTemplate {
-  const ability = (character.get("abilities") ?? []).find(
-    (current) => current.id === abilityId,
-  )
+  const ability = findCharacterAbility(character, abilityId)
   return ability
     ? useAbilityEffect(character, ability, { type: "character" })
     : character
@@ -80,9 +122,7 @@ export function deactivateAbility(
   character: CharacterTemplate,
   abilityId: string,
 ): CharacterTemplate {
-  const ability = (character.get("abilities") ?? []).find(
-    (current) => current.id === abilityId,
-  )
+  const ability = findCharacterAbility(character, abilityId)
   return ability
     ? endAbilityEffect(character, ability, { type: "character" })
     : character
@@ -92,44 +132,63 @@ export function resetAbility(
   character: CharacterTemplate,
   abilityId: string,
 ): CharacterTemplate {
-  return character.with(
-    "abilities",
-    (character.get("abilities") ?? []).map((a) => {
-      if (a.id !== abilityId || !a.usage) return a
+  const current = findCharacterAbility(character, abilityId)
+  if (!current?.usage) return character
 
-      return {
-        ...a,
-        benefitsActive: abilityRequiresActivation(a) ? false : undefined,
-        modifiersActive: undefined,
-        usage: {
-          ...a.usage,
-          used: 0,
-          cooldownRemaining: undefined,
-        },
-      }
-    }),
-  )
+  return updateAbility(character, {
+    ...current,
+    benefitsActive: abilityRequiresActivation(current) ? false : undefined,
+    modifiersActive: undefined,
+    usage: {
+      ...current.usage,
+      used: 0,
+      cooldownRemaining: undefined,
+    },
+  })
 }
 
 export function getCharacterAbilities(
   character: CharacterTemplate,
 ): Ability[] {
   const characterAbilities = character.get("abilities") ?? []
+  const invocations = getInvocations(character)
   const equipmentAbilities = getEquipmentAbilities(character)
 
-  return [...characterAbilities, ...equipmentAbilities]
+  return [...characterAbilities, ...invocations, ...equipmentAbilities]
 }
 
 export function restoreAbility(
   character: CharacterTemplate,
   abilityId: string,
 ): CharacterTemplate {
-  return character.with(
-    "abilities",
-    (character.get("abilities") ?? []).map((ability) =>
-      ability.id === abilityId ? restoreAbilityUse(ability) : ability,
-    ),
+  const current = findCharacterAbility(character, abilityId)
+  if (!current) return character
+  return updateAbility(character, restoreAbilityUse(current))
+}
+
+function findCharacterAbility(
+  character: CharacterTemplate,
+  abilityId: string,
+): Ability | undefined {
+  return (
+    (character.get("abilities") ?? []).find((ability) => ability.id === abilityId) ??
+    getInvocations(character).find((ability) => ability.id === abilityId)
   )
+}
+
+function getInvocations(character: CharacterTemplate): Ability[] {
+  return character.get("magic")?.invocations ?? []
+}
+
+function withInvocations(
+  character: CharacterTemplate,
+  invocations: Ability[],
+): CharacterTemplate {
+  const magic = character.getOrCreateMagic()
+  return character.with("magic", {
+    ...magic,
+    invocations,
+  })
 }
 
 function withManualAbilityMetadata(
@@ -154,7 +213,10 @@ function withManualAbilityMetadata(
     characterLevel,
     sourceType,
     sourceId: ability.sourceItemId,
-    sourceName: ability.sourceItemName || "Adição manual à ficha",
+    sourceName:
+      ability.category === "invocation"
+        ? "Evocação"
+        : ability.sourceItemName || "Adição manual à ficha",
     reason: "manual",
   })
 
