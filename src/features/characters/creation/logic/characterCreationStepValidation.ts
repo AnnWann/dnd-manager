@@ -1,10 +1,3 @@
-const PREPARED_FULL_LIST_CLASSES = new Set([
-  "Artífice",
-  "Clérigo",
-  "Druida",
-  "Paladino",
-])
-
 export type CreationStepValidationResult = {
   message: string
   elements: HTMLElement[]
@@ -27,13 +20,13 @@ export function validateVisibleCreationStep(
     }
   }
 
-  const classesHeading = Array.from(main.querySelectorAll<HTMLElement>("h2")).find(
-    (heading) =>
-      /classe inicial e distribuição de níveis/i.test(
-        heading.textContent?.trim() ?? "",
-      ),
+  const hasProgressionConfiguration = Boolean(
+    main.querySelector('[data-creation-progression-class]'),
   )
-  return classesHeading ? validateClassesStep(main) : null
+
+  return hasProgressionConfiguration
+    ? validateProgressionConfiguration(main)
+    : null
 }
 
 export function findCharacterCreationRoot(
@@ -113,104 +106,28 @@ export function clearCreationAttemptHighlights() {
     })
 }
 
-function validateClassesStep(
+function validateProgressionConfiguration(
   main: HTMLElement,
 ): CreationStepValidationResult | null {
-  const emptySubclass = Array.from(
-    main.querySelectorAll<HTMLSelectElement>("select"),
-  ).find(
-    (select) =>
-      Array.from(select.options).some((option) =>
-        option.textContent?.includes("Selecione uma subclasse"),
-      ) && !select.value,
+  const mounts = Array.from(
+    main.querySelectorAll<HTMLElement>('[data-creation-progression-class]'),
   )
-  if (emptySubclass) {
-    return {
-      message: "Selecione todas as subclasses obrigatórias antes de continuar.",
-      elements: [emptySubclass],
-    }
-  }
 
-  const proficiencyCounters = Array.from(
-    main.querySelectorAll<HTMLElement>("div,strong,span"),
-  )
-    .filter((element) => element.childElementCount === 0)
-    .map((element) => ({
-      element,
-      match: element.textContent?.match(
-        /Escolha\s+\d+\s+perícias?\s*\((\d+)\/(\d+)\)/i,
-      ),
-    }))
-    .filter(
-      (entry): entry is { element: HTMLElement; match: RegExpMatchArray } =>
-        Boolean(entry.match),
-    )
-  const incompleteProficiency = proficiencyCounters.find(
-    ({ match }) => Number(match[1]) < Number(match[2]),
-  )
-  if (incompleteProficiency) {
-    return {
-      message: "Escolha todas as perícias obrigatórias de cada classe.",
-      elements: [
-        incompleteProficiency.element.closest<HTMLElement>("details") ||
-          incompleteProficiency.element,
-      ],
-    }
-  }
+  for (const mount of mounts) {
+    const classLabel = resolveClassLabel(mount)
+    const cards = Array.from(mount.querySelectorAll<HTMLElement>("article"))
 
-  const emptyClassChoice = Array.from(
-    main.querySelectorAll<HTMLInputElement>("input"),
-  ).find((input) => {
-    const label = input.closest("label")?.textContent ?? ""
-    return (
-      /ferramenta|instrumento/i.test(label) &&
-      !input.value.trim() &&
-      !/buscar magia/i.test(input.placeholder)
-    )
-  })
-  if (emptyClassChoice) {
-    return {
-      message: "Complete todas as escolhas obrigatórias de proficiência da classe.",
-      elements: [emptyClassChoice],
-    }
-  }
+    for (const card of cards) {
+      const parsed = readRequiredActionCard(card)
+      if (!parsed || parsed.selected >= parsed.required) continue
 
-  return (
-    findIncompleteFeatureChoice(main) ??
-    validateSpellSelections(main) ??
-    validateMetamagicSelections(main)
-  )
-}
-
-function findIncompleteFeatureChoice(
-  main: HTMLElement,
-): CreationStepValidationResult | null {
-  const labels = Array.from(main.querySelectorAll<HTMLElement>("div"))
-    .filter((element) => element.childElementCount === 0)
-    .map((element) => ({
-      element,
-      match: element.textContent?.match(/·\s*escolha\s+(\d+)\s*$/i),
-    }))
-    .filter(
-      (entry): entry is { element: HTMLElement; match: RegExpMatchArray } =>
-        Boolean(entry.match),
-    )
-
-  for (const { element, match } of labels) {
-    const container = element.parentElement
-    if (!container) continue
-
-    const required = Number(match[1])
-    const selectedButtons = container.querySelectorAll("button.bg-accentBg").length
-    const customValue = Array.from(
-      container.querySelectorAll<HTMLInputElement>("input"),
-    ).some((input) => input.value.trim())
-    if (selectedButtons + (customValue ? 1 : 0) < required) {
       return {
-        message: `Complete a escolha obrigatória “${
-          element.textContent?.split("·")[0]?.trim() || "da característica"
-        }”.`,
-        elements: [container],
+        message: progressionRequirementMessage(
+          parsed.title,
+          parsed.required,
+          classLabel,
+        ),
+        elements: [card],
       }
     }
   }
@@ -218,66 +135,61 @@ function findIncompleteFeatureChoice(
   return null
 }
 
-function validateSpellSelections(
-  main: HTMLElement,
-): CreationStepValidationResult | null {
-  const summaries = Array.from(main.querySelectorAll<HTMLElement>("summary")).filter(
-    (summary) => summary.textContent?.includes("Selecionar e ler magias de"),
-  )
+function readRequiredActionCard(
+  card: HTMLElement,
+): { title: string; selected: number; required: number } | null {
+  const button = card.querySelector<HTMLButtonElement>(":scope > button")
+  if (!button) return null
 
-  for (const summary of summaries) {
-    const text = summary.textContent ?? ""
-    const className = text.match(/magias de\s+(.+?)\s+·/i)?.[1]?.trim() ?? ""
-    const cantrips = text.match(/truques\s+(\d+)\/(\d+)/i)
-    const leveled = text.match(/magias\s+(\d+)\/(\d+)/i)
-    const selectedCantrips = Number(cantrips?.[1] ?? 0)
-    const requiredCantrips = Number(cantrips?.[2] ?? 0)
-    const selectedLeveled = Number(leveled?.[1] ?? 0)
-    const requiredLeveled = Number(leveled?.[2] ?? 0)
-
-    if (selectedCantrips < requiredCantrips) {
-      return {
-        message: `Escolha ${requiredCantrips} truques de ${className} antes de continuar.`,
-        elements: [summary.closest<HTMLElement>("details") || summary],
-      }
-    }
-
-    if (
-      !PREPARED_FULL_LIST_CLASSES.has(className) &&
-      selectedLeveled < requiredLeveled
-    ) {
-      const label =
-        className === "Mago" ? "magias para o grimório" : "magias conhecidas"
-      return {
-        message: `Escolha ${requiredLeveled} ${label} de ${className} antes de continuar.`,
-        elements: [summary.closest<HTMLElement>("details") || summary],
-      }
-    }
+  const summary = card.querySelector<HTMLElement>(":scope > div")
+  const title = summary?.children[0]?.textContent?.trim() ?? ""
+  if (
+    title !== "Truques" &&
+    title !== "Magias" &&
+    title !== "Grimório" &&
+    title !== "Metamagias" &&
+    title !== "Evocações"
+  ) {
+    return null
   }
 
-  return null
+  const value = summary?.children[1]?.textContent?.trim() ?? ""
+  const count = value.match(/^(\d+)\s*\/\s*(\d+)$/)
+  if (!count) return null
+
+  return {
+    title,
+    selected: Number(count[1]),
+    required: Number(count[2]),
+  }
 }
 
-function validateMetamagicSelections(
-  main: HTMLElement,
-): CreationStepValidationResult | null {
-  const heading = Array.from(main.querySelectorAll<HTMLElement>("h2")).find(
-    (entry) => entry.textContent?.trim() === "Metamagia",
-  )
-  if (!heading) return null
-
-  const section = heading.closest<HTMLElement>("section")
-  const description = section?.querySelector("p")?.textContent ?? ""
-  const required = Number(description.match(/Escolha\s+(\d+)/i)?.[1] ?? 0)
-  const selected = section?.querySelectorAll("button.bg-accentBg").length ?? 0
-  if (required > 0 && selected < required) {
-    return {
-      message: `Escolha exatamente ${required} opções de Metamagia.`,
-      elements: section ? [section] : [],
-    }
+function progressionRequirementMessage(
+  title: string,
+  required: number,
+  classLabel: string,
+): string {
+  switch (title) {
+    case "Truques":
+      return `Escolha ${required} truques de ${classLabel} antes de continuar.`
+    case "Grimório":
+      return `Adicione ${required} magias ao grimório de ${classLabel} antes de continuar.`
+    case "Magias":
+      return `Escolha ${required} magias de ${classLabel} antes de continuar.`
+    case "Metamagias":
+      return `Escolha ${required} opções de Metamagia antes de continuar.`
+    case "Evocações":
+      return `Configure ${required} evocações de ${classLabel} antes de continuar.`
+    default:
+      return "Complete todas as escolhas obrigatórias antes de continuar."
   }
+}
 
-  return null
+function resolveClassLabel(mount: HTMLElement): string {
+  const section = mount.closest<HTMLElement>("section")
+  const heading = section?.querySelector<HTMLElement>(":scope > div h2, :scope > h2")
+  const raw = heading?.textContent?.trim() ?? "classe"
+  return raw.replace(/\s+\d+.*$/, "").trim() || "classe"
 }
 
 function getStepButtons(root: HTMLElement): HTMLButtonElement[] {
