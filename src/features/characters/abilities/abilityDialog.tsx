@@ -205,7 +205,7 @@ export function AbilityDialog({
               <label className="grid gap-1">
                 <span className="text-xs font-medium text-textH">Categoria</span>
                 <Select
-                  value={draft.category ?? "general"}
+                  value={draft.category === "feat" ? "general" : draft.category ?? "general"}
                   onChange={(event) =>
                     setDraft({
                       ...draft,
@@ -214,7 +214,6 @@ export function AbilityDialog({
                   }
                 >
                   <option value="general">Habilidade</option>
-                  <option value="feat">Talento</option>
                   <option value="channelDivinity">Canalizar Divindade</option>
                 </Select>
               </label>
