@@ -7,6 +7,7 @@ import {
   CLASS_NAMES,
   MAGIC_SCHOOLS_MAP,
 } from "../../../contexts/consts"
+import spellData from "../../../data/spells.v1.json"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Spell } from "../../../models/magic/spells/Spell"
 import type { ClassName } from "../../../models/sheet/Class"
@@ -34,6 +35,10 @@ type Props = {
   onChange: (selection: LevelUpSpellSelection) => void
   onClose: () => void
 }
+
+const LOCALIZED_SPELLS = new Map(
+  (spellData.spells as unknown as Spell[]).map((spell) => [spell.index, spell]),
+)
 
 export function LevelUpSpellSelectionModal({
   open,
@@ -82,9 +87,13 @@ export function LevelUpSpellSelectionModal({
   const previousCantrips = previousLevel > 0 ? previousRule.maxCantrips : 0
   const previousLeveled = previousLevel > 0 ? previousRule.maxLeveledSpells : 0
 
+  const localizedSpells = useMemo(
+    () => spells.map(localizeOfficialSpell),
+    [spells],
+  )
   const selectedSpells = useMemo(
-    () => resolveSpells(selection.selected, spells),
-    [selection.selected, spells],
+    () => resolveSpells(selection.selected, localizedSpells),
+    [selection.selected, localizedSpells],
   )
   const selectedCantrips = selectedSpells.filter(
     (spell) => spell.slotLevel === 0,
@@ -95,12 +104,10 @@ export function LevelUpSpellSelectionModal({
 
   const classSpells = useMemo(
     () =>
-      spells.filter(
-        (spell) =>
-          spell.classes.includes(className) &&
-          isSpellAllowedForClassSelection(spell, rule, []),
+      localizedSpells.filter((spell) =>
+        isSpellAllowedForClassSelection(spell, rule, []),
       ),
-    [className, rule, spells],
+    [localizedSpells, rule],
   )
   const availableSchools = useMemo(
     () =>
@@ -356,6 +363,22 @@ export function LevelUpSpellSelectionModal({
     </div>,
     document.body,
   )
+}
+
+function localizeOfficialSpell(spell: Spell): Spell {
+  if (spell.homebrew) return spell
+  const localized = LOCALIZED_SPELLS.get(spell.index)
+  if (!localized) return spell
+
+  return {
+    ...spell,
+    name: localized.name,
+    displayName: localized.displayName ?? localized.name,
+    description: localized.description,
+    higherLevelText: localized.higherLevelText,
+    school: localized.school,
+    classes: localized.classes,
+  }
 }
 
 function Counter({
