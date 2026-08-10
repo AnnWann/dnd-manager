@@ -126,8 +126,13 @@ export function isSpellAllowedForClassSelection(
   return true
 }
 
-export function getMetamagicLimit(_sorcererLevel: number): number {
-  return 0
+/** Public structural progression only; metamagic option content remains separate. */
+export function getMetamagicLimit(sorcererLevel: number): number {
+  const level = clampLevel(sorcererLevel)
+  if (level < 3) return 0
+  if (level >= 17) return 4
+  if (level >= 10) return 3
+  return 2
 }
 
 export function canReplaceMetamagicAtLevel(_sorcererLevel: number): boolean {
