@@ -45,7 +45,7 @@ export function CreationManualSubclassEditor({
       const root = findCharacterCreationRoot()
       const main = root?.querySelector<HTMLElement>("main")
       if (!main) {
-        setMounts([])
+        setMounts((current) => (current.length ? [] : current))
         return
       }
 
@@ -70,19 +70,28 @@ export function CreationManualSubclassEditor({
         next.push({ className, element: mount })
       }
 
-      setMounts(next)
+      setMounts((current) => (sameMounts(current, next) ? current : next))
+    }
+
+    const scheduleSync = () => {
+      if (frame) window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => {
+        frame = 0
+        syncMounts()
+      })
     }
 
     frame = window.requestAnimationFrame(() => {
+      frame = 0
       syncMounts()
       const root = findCharacterCreationRoot()
       if (!root) return
-      observer = new MutationObserver(syncMounts)
+      observer = new MutationObserver(scheduleSync)
       observer.observe(root, { childList: true, subtree: true })
     })
 
     return () => {
-      window.cancelAnimationFrame(frame)
+      if (frame) window.cancelAnimationFrame(frame)
       observer?.disconnect()
       findCharacterCreationRoot()
         ?.querySelectorAll('[data-manual-subclass-for]')
@@ -129,6 +138,19 @@ export function CreationManualSubclassEditor({
         )
       })}
     </>
+  )
+}
+
+function sameMounts(current: Mount[], next: Mount[]): boolean {
+  return (
+    current.length === next.length &&
+    current.every((entry, index) => {
+      const candidate = next[index]
+      return (
+        candidate?.className === entry.className &&
+        candidate.element === entry.element
+      )
+    })
   )
 }
 
