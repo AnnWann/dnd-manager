@@ -131,13 +131,14 @@ export function CreationProgressionConfigurationBridge({
       const root = findCharacterCreationRoot()
       const main = root?.querySelector<HTMLElement>("main")
       if (!main) {
-        setClassMounts([])
-        setRaceMount(null)
+        setClassMounts((current) => (current.length ? [] : current))
+        setRaceMount((current) => (current ? null : current))
         return
       }
 
       annotateRacePresetBenefits(main)
       const nextClassMounts: ClassMount[] = []
+      let nextRaceMount: RaceMount | null = null
 
       for (const section of Array.from(main.querySelectorAll<HTMLElement>("section"))) {
         const heading = section.querySelector<HTMLElement>(":scope > div h2, :scope > h2")
@@ -170,24 +171,38 @@ export function CreationProgressionConfigurationBridge({
             mount.dataset.creationProgressionRace = "true"
             section.appendChild(mount)
           }
-          setRaceMount({ name: resolveRaceName(section), element: mount })
+          nextRaceMount = { name: resolveRaceName(section), element: mount }
         }
       }
 
       hideLegacyMetamagicSection(main)
-      setClassMounts(nextClassMounts)
+      setClassMounts((current) =>
+        sameClassMounts(current, nextClassMounts) ? current : nextClassMounts,
+      )
+      setRaceMount((current) =>
+        sameRaceMount(current, nextRaceMount) ? current : nextRaceMount,
+      )
+    }
+
+    const scheduleSync = () => {
+      if (frame) window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => {
+        frame = 0
+        sync()
+      })
     }
 
     frame = window.requestAnimationFrame(() => {
+      frame = 0
       sync()
       const root = findCharacterCreationRoot()
       if (!root) return
-      observer = new MutationObserver(sync)
+      observer = new MutationObserver(scheduleSync)
       observer.observe(root, { childList: true, subtree: true })
     })
 
     return () => {
-      window.cancelAnimationFrame(frame)
+      if (frame) window.cancelAnimationFrame(frame)
       observer?.disconnect()
       const root = findCharacterCreationRoot()
       root
@@ -823,8 +838,28 @@ function annotateRacePresetBenefits(main: HTMLElement) {
         "mt-3 block border-t border-border pt-2 text-[10px] leading-4 text-text"
       button.appendChild(explanation)
     }
-    explanation.textContent = `Você recebe: ${describeRacePreset(preset)}`
+    const nextText = `Você recebe: ${describeRacePreset(preset)}`
+    if (explanation.textContent !== nextText) explanation.textContent = nextText
   }
+}
+
+function sameClassMounts(current: ClassMount[], next: ClassMount[]): boolean {
+  return (
+    current.length === next.length &&
+    current.every((entry, index) => {
+      const candidate = next[index]
+      return (
+        candidate?.className === entry.className &&
+        candidate.level === entry.level &&
+        candidate.element === entry.element
+      )
+    })
+  )
+}
+
+function sameRaceMount(current: RaceMount | null, next: RaceMount | null): boolean {
+  if (!current || !next) return current === next
+  return current.name === next.name && current.element === next.element
 }
 
 function describeRacePreset(preset: (typeof PHB_RACE_PRESETS)[number]): string {
