@@ -7,6 +7,8 @@ import {
   getCreationNavigationIntent,
   highlightCreationAttempt,
   isAllowedBootstrapNavigation,
+  isInternalCreationNavigation,
+  navigateRelativeCreationStep,
   validateVisibleCreationStep,
 } from "../logic/characterCreationStepValidation"
 
@@ -45,8 +47,17 @@ export function CreationRequiredFieldHighlighter() {
       }
 
       if (!event.isTrusted) {
+        if (isInternalCreationNavigation(button)) return
         if (isAllowedBootstrapNavigation(wizardRoot, button)) return
         stopNavigation(event)
+        return
+      }
+
+      const text = button.textContent?.trim() ?? ""
+      if (text === "Voltar") {
+        clearFeedback()
+        stopNavigation(event)
+        navigateRelativeCreationStep(wizardRoot, -1)
         return
       }
 
@@ -64,6 +75,10 @@ export function CreationRequiredFieldHighlighter() {
       const error = validateVisibleCreationStep(main)
       if (!error) {
         clearFeedback()
+        if (text === "Continuar") {
+          stopNavigation(event)
+          navigateRelativeCreationStep(wizardRoot, 1)
+        }
         return
       }
 
