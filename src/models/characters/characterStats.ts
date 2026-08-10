@@ -79,11 +79,8 @@ export function getActiveAbilities(
   character: CharacterTemplate,
 ): Ability[] {
   return [
-    ...(character.get("abilities") ?? []),
+    ...character.getCharacterAbilities(),
     ...(character.get("sheet").race.naturalAbilities ?? []),
-    ...getEquippedItems(character).flatMap(
-      (item) => item.abilities ?? [],
-    ),
   ].filter(isAbilityBenefitsActive)
 }
 
