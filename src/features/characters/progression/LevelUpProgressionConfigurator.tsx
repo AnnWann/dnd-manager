@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
@@ -8,6 +8,7 @@ import {
   ALL_CLASS_NAMES,
   getClassProgression,
 } from "../../../data/classProgression"
+import { formatRaceName } from "../../../lib/raceNames"
 import type { Ability } from "../../../models/abilities/Ability"
 import { createCharacterAcquisition } from "../../../models/characters/CharacterAcquisition"
 import { applyManualProficiencies } from "../../../models/characters/applyManualProficiencies"
@@ -17,6 +18,7 @@ import {
 } from "../../../models/characters/characterSorceryPoints"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { MetamagicId } from "../../../models/magic/metamagic/Metamagic"
+import type { Spell } from "../../../models/magic/spells/Spell"
 import type { ClassName } from "../../../models/sheet/Class"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
 import {
@@ -120,12 +122,16 @@ export function LevelUpProgressionConfigurator({
         advancedPlan.subclassId,
       )
     : undefined
-  const learnsSpells =
+  const learnsLeveledSpells =
     currentRule.mode === "limited-known" || currentRule.mode === "spellbook"
-  const cantripGain = learnsSpells
-    ? Math.max(0, currentRule.maxCantrips - (previousRule?.maxCantrips ?? 0))
-    : 0
-  const leveledSpellGain = learnsSpells
+  const cantripGain =
+    currentRule.mode === "none"
+      ? 0
+      : Math.max(
+          0,
+          currentRule.maxCantrips - (previousRule?.maxCantrips ?? 0),
+        )
+  const leveledSpellGain = learnsLeveledSpells
     ? Math.max(
         0,
         currentRule.maxLeveledSpells -
@@ -239,7 +245,7 @@ export function LevelUpProgressionConfigurator({
     let updated = applyCharacterProgression(character, {
       mode: "level-up",
       classPlans,
-      spellSelections: learnsSpells ? [spellSelection] : [],
+      spellSelections: learnsLeveledSpells ? [spellSelection] : [],
       customAbilities,
       spells,
       advancedClassName,
@@ -248,6 +254,19 @@ export function LevelUpProgressionConfigurator({
       addedAt,
     })
     updated = applyManualProficiencies(updated, proficiencies)
+
+    if (currentRule.mode === "prepared" && currentRule.maxCantrips > 0) {
+      updated = applyPreparedCasterCantrips(
+        updated,
+        advancedClassName,
+        targetClassLevel,
+        selection,
+        spells,
+        eventId,
+        addedAt,
+        existingTotal + 1,
+      )
+    }
 
     if (advancedClassName === "sorcerer" && metamagicLimit > 0) {
       updated = applyMetamagics(
@@ -601,7 +620,7 @@ function ConfigurationGroup({
   children,
 }: {
   title: string
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <section className="rounded-xl border border-border bg-bg-subtle p-4">
@@ -768,6 +787,63 @@ function collectExistingInvocations(character: CharacterTemplate): Ability[] {
   return Array.from(byId.values())
 }
 
+function applyPreparedCasterCantrips(
+  character: CharacterTemplate,
+  className: ClassName,
+  classLevel: number,
+  selection: LevelUpSpellSelection,
+  spells: Spell[],
+  eventId: string,
+  addedAt: string,
+  characterLevel: number,
+): CharacterTemplate {
+  const magic = character.getOrCreateMagic()
+  const spellById = new Map(spells.map((spell) => [spell.index, spell]))
+  const selectedCantripIds = selection.selected.filter(
+    (id) => spellById.get(id)?.slotLevel === 0,
+  )
+  const retained = magic.spells.knownSpells.filter((entry) => {
+    const sourceClass = String(
+      entry.source.sourceId ?? entry.source.name,
+    ).split(":")[0]
+    if (entry.source.type !== "class" || sourceClass !== className) return true
+    return spellById.get(entry.spells.id)?.slotLevel !== 0
+  })
+  const classEntry = createClassEntry(className, classLevel)
+  const additions = selectedCantripIds.map((id) => ({
+    source: {
+      type: "class" as const,
+      name: className,
+      sourceId: className,
+      attribute: classEntry.castingAttribute ?? "int",
+      extendedList: false,
+    },
+    spells: {
+      id,
+      prepared: true,
+    },
+    acquisition: createCharacterAcquisition({
+      eventId,
+      addedAt,
+      reason: "level-up",
+      characterLevel,
+      className,
+      classLevel,
+      sourceType: "class",
+      sourceId: className,
+      sourceName: getClassProgression(className).label,
+    }),
+  }))
+
+  return character.with("magic", {
+    ...magic,
+    spells: {
+      ...magic.spells,
+      knownSpells: [...retained, ...additions],
+    },
+  })
+}
+
 function applyInvocations(
   character: CharacterTemplate,
   invocations: Ability[],
@@ -862,7 +938,7 @@ function getMetamagicLimit(level: number): number {
   return 4
 }
 
-function resolveSelectedSpells(indexes: string[], spells: Array<{ index: string; slotLevel: number }>) {
+function resolveSelectedSpells(indexes: string[], spells: Spell[]): Spell[] {
   const byId = new Map(spells.map((spell) => [spell.index, spell]))
   return indexes.flatMap((index) => {
     const spell = byId.get(index)
@@ -875,10 +951,7 @@ function getRaceName(character: CharacterTemplate): string {
   return (
     race.customName?.trim() ||
     race.subrace?.trim() ||
-    String(race.race)
-      .split("-")
-      .map((part) => part.charAt(0).toLocaleUpperCase("pt-BR") + part.slice(1))
-      .join(" ")
+    formatRaceName(race.race)
   )
 }
 
