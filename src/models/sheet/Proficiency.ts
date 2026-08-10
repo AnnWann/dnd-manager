@@ -3,6 +3,8 @@ export type Proficiency = {
   name: string
   category: ProficiencyCategory
   notes?: string
+  /** Doubles the proficiency bonus when this is a skill proficiency. */
+  expertise?: boolean
 }
 
 export type ProficiencyCategory =
