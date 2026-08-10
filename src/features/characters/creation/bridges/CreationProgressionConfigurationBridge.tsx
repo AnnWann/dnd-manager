@@ -8,6 +8,10 @@ import {
   getClassProgression,
 } from "../../../../data/classProgression"
 import { PHB_RACE_PRESETS } from "../../../../data/characterCreation/phbPresets"
+import {
+  RACIAL_SPELLCASTING_PRESETS,
+  type RacialSpellcastingPreset,
+} from "../../../../data/characterCreation/racialSpellcastingPresets"
 import { newCharacterTemplate } from "../../../../lib/newCharacterTemplate"
 import type { Ability } from "../../../../models/abilities/Ability"
 import type { CharacterAsi } from "../../../../models/characters/CharacterAsi"
@@ -54,6 +58,9 @@ type ClassMount = {
 
 type RaceMount = {
   name: string
+  presetId: string
+  editable: boolean
+  spellcasting?: RacialSpellcastingPreset
   element: HTMLElement
 }
 
@@ -161,25 +168,31 @@ export function CreationProgressionConfigurationBridge({
         }
       }
 
-      const customRaceDetails = main.querySelector<HTMLElement>(
-        '[data-character-creation-race-details="true"][data-race-preset-id="custom"]',
+      const raceDetails = main.querySelector<HTMLElement>(
+        '[data-character-creation-race-details="true"]',
       )
-      const customRaceSection =
-        customRaceDetails?.querySelector<HTMLElement>(":scope > section")
-      if (customRaceDetails && customRaceSection) {
-        hideLegacyRaceConfiguration(customRaceSection)
-        let mount = customRaceSection.querySelector<HTMLElement>(
+      const raceSection = raceDetails?.querySelector<HTMLElement>(":scope > section")
+      const presetId = raceDetails?.dataset.racePresetId ?? ""
+      const editable = presetId === "custom"
+      const spellcasting = RACIAL_SPELLCASTING_PRESETS[presetId]
+
+      if (raceDetails && raceSection && (editable || spellcasting)) {
+        if (editable) hideLegacyRaceConfiguration(raceSection)
+        let mount = raceSection.querySelector<HTMLElement>(
           ':scope > [data-creation-progression-race="true"]',
         )
         if (!mount) {
           mount = document.createElement("div")
           mount.dataset.creationProgressionRace = "true"
-          customRaceSection.appendChild(mount)
+          raceSection.appendChild(mount)
         }
         nextRaceMount = {
           name:
-            customRaceDetails.dataset.raceName?.trim() ||
-            resolveRaceName(customRaceSection),
+            raceDetails.dataset.raceName?.trim() ||
+            resolveRaceName(raceSection),
+          presetId,
+          editable,
+          spellcasting,
           element: mount,
         }
       }
@@ -348,6 +361,8 @@ export function CreationProgressionConfigurationBridge({
         ? createPortal(
             <RaceConfigurationPanel
               raceName={raceMount.name}
+              editable={raceMount.editable}
+              guidance={raceMount.spellcasting?.guidance}
               configuration={value.race}
               onAddFeature={() =>
                 setAbilityTarget({ source: "race", ability: null })
@@ -652,6 +667,8 @@ function ClassConfigurationPanel({
 
 function RaceConfigurationPanel({
   raceName,
+  editable,
+  guidance,
   configuration,
   onAddFeature,
   onEditFeature,
@@ -661,6 +678,8 @@ function RaceConfigurationPanel({
   onOpenSpells,
 }: {
   raceName: string
+  editable: boolean
+  guidance?: string
   configuration: CreationProgressionConfiguration["race"]
   onAddFeature: () => void
   onEditFeature: (ability: Ability) => void
@@ -671,20 +690,31 @@ function RaceConfigurationPanel({
 }) {
   return (
     <div className="mt-4 grid gap-3 border-t border-border pt-4">
-      <h3 className="font-semibold text-textH">{raceName || "Raça"}</h3>
+      <h3 className="font-semibold text-textH">
+        {editable ? raceName || "Raça" : `Magia racial — ${raceName}`}
+      </h3>
+      {guidance ? (
+        <div className="rounded-lg border border-accentBorder bg-accentBg p-3 text-xs leading-5 text-text">
+          {guidance}
+        </div>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <ActionCard
-          title="Características"
-          value={`${configuration.abilities.length} adicionada(s)`}
-          action="Adicionar característica"
-          onClick={onAddFeature}
-        />
-        <ActionCard
-          title="Proficiências"
-          value={`${configuration.proficiencies.length} adicionada(s)${configuration.proficiencies.some((entry) => entry.expertise) ? " · expertise" : ""}`}
-          action="Adicionar proficiência"
-          onClick={onOpenProficiencies}
-        />
+        {editable ? (
+          <>
+            <ActionCard
+              title="Características"
+              value={`${configuration.abilities.length} adicionada(s)`}
+              action="Adicionar característica"
+              onClick={onAddFeature}
+            />
+            <ActionCard
+              title="Proficiências"
+              value={`${configuration.proficiencies.length} adicionada(s)${configuration.proficiencies.some((entry) => entry.expertise) ? " · expertise" : ""}`}
+              action="Adicionar proficiência"
+              onClick={onOpenProficiencies}
+            />
+          </>
+        ) : null}
         <ActionCard
           title="Truques"
           value={`${configuration.cantrips.length} selecionado(s)`}
@@ -699,11 +729,13 @@ function RaceConfigurationPanel({
         />
       </div>
 
-      <ConfiguredFeatures
-        abilities={configuration.abilities}
-        onEdit={onEditFeature}
-        onRemove={onRemoveFeature}
-      />
+      {editable ? (
+        <ConfiguredFeatures
+          abilities={configuration.abilities}
+          onEdit={onEditFeature}
+          onRemove={onRemoveFeature}
+        />
+      ) : null}
     </div>
   )
 }
@@ -873,7 +905,12 @@ function sameClassMounts(current: ClassMount[], next: ClassMount[]): boolean {
 
 function sameRaceMount(current: RaceMount | null, next: RaceMount | null): boolean {
   if (!current || !next) return current === next
-  return current.name === next.name && current.element === next.element
+  return (
+    current.name === next.name &&
+    current.presetId === next.presetId &&
+    current.editable === next.editable &&
+    current.element === next.element
+  )
 }
 
 function describeRacePreset(preset: (typeof PHB_RACE_PRESETS)[number]): string {
@@ -885,6 +922,7 @@ function describeRacePreset(preset: (typeof PHB_RACE_PRESETS)[number]): string {
     )
   const abilities = preset.abilities.map((ability) => ability.name)
   const proficiencies = preset.proficiencies.map((entry) => entry.name)
+  const spellcasting = RACIAL_SPELLCASTING_PRESETS[preset.id]
   return [
     attributes.length ? `atributos ${attributes.join(", ")}` : "sem bônus de atributo",
     abilities.length
@@ -893,6 +931,9 @@ function describeRacePreset(preset: (typeof PHB_RACE_PRESETS)[number]): string {
     proficiencies.length
       ? `proficiências ${proficiencies.join(", ")}`
       : "nenhuma proficiência automática",
+    spellcasting
+      ? "magia racial configurada manualmente conforme a referência e o nível"
+      : "sem configuração estrutural de magia racial",
   ].join("; ")
 }
 
