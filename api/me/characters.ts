@@ -39,6 +39,18 @@ export async function GET(request: Request): Promise<Response> {
         createdAt: true,
         updatedAt: true,
         data: true,
+        domains: {
+          select: {
+            domain: true,
+            data: true,
+            revision: true,
+            updatedById: true,
+            updatedAt: true,
+          },
+          orderBy: {
+            domain: "asc",
+          },
+        },
         campaignLinks: {
           select: {
             campaign: {
@@ -58,6 +70,13 @@ export async function GET(request: Request): Promise<Response> {
     return jsonResponse({
       characters: characters.map((character) => ({
         ...character,
+        domains: character.domains.map((domain) => ({
+          domain: domain.domain.toLowerCase(),
+          payload: domain.data,
+          version: domain.revision,
+          updatedBy: domain.updatedById,
+          updatedAt: domain.updatedAt,
+        })),
         campaigns: character.campaignLinks.map(
           (link) => link.campaign,
         ),
