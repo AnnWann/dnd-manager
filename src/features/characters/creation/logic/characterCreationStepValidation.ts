@@ -47,12 +47,40 @@ export function getCreationNavigationIntent(
   const text = button.textContent?.trim() ?? ""
   if (text === "Continuar") return { forward: true }
 
-  const steps = getStepButtons(root)
+  const steps = getVisibleStepButtons(root)
   const clicked = steps.indexOf(button)
   const current = steps.findIndex((entry) =>
     entry.classList.contains("bg-accentBg"),
   )
   return { forward: clicked > current }
+}
+
+export function navigateRelativeCreationStep(
+  root: HTMLElement,
+  delta: -1 | 1,
+): boolean {
+  const steps = getVisibleStepButtons(root)
+  const current = steps.findIndex((entry) =>
+    entry.classList.contains("bg-accentBg"),
+  )
+  if (current < 0) return false
+
+  const target = steps[current + delta]
+  if (!target) return false
+
+  target.dataset.creationInternalNavigation = "true"
+  try {
+    target.click()
+  } finally {
+    delete target.dataset.creationInternalNavigation
+  }
+  return true
+}
+
+export function isInternalCreationNavigation(
+  button: HTMLButtonElement,
+): boolean {
+  return button.dataset.creationInternalNavigation === "true"
 }
 
 export function isAllowedBootstrapNavigation(
@@ -70,8 +98,10 @@ export function isAllowedBootstrapNavigation(
       ) &&
       !main.querySelector('[data-character-creation-identity-step="true"]'),
   )
-  const targetsRace = /raça/i.test(button.textContent?.trim() ?? "")
-  return initialIdentityVisible && targetsRace
+  const targetsInitialVisibleStep =
+    button.dataset.creationVisibleOrder === "0" ||
+    /nível do personagem/i.test(button.textContent?.trim() ?? "")
+  return initialIdentityVisible && targetsInitialVisibleStep
 }
 
 export function highlightCreationAttempt(elements: HTMLElement[]) {
@@ -196,6 +226,19 @@ function getStepButtons(root: HTMLElement): HTMLButtonElement[] {
   return Array.from(root.querySelectorAll<HTMLButtonElement>("header button")).filter(
     (button) => /^\d+\./.test(button.textContent?.trim() ?? ""),
   )
+}
+
+function getVisibleStepButtons(root: HTMLElement): HTMLButtonElement[] {
+  return getStepButtons(root)
+    .filter((button) => !button.hidden)
+    .toSorted((left, right) => {
+      const leftOrder = Number(left.dataset.creationVisibleOrder)
+      const rightOrder = Number(right.dataset.creationVisibleOrder)
+      if (Number.isFinite(leftOrder) && Number.isFinite(rightOrder)) {
+        return leftOrder - rightOrder
+      }
+      return 0
+    })
 }
 
 function collectMissingFields(root: HTMLElement): HTMLElement[] {
