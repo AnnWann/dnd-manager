@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 
-import { Input } from "../../../components/ui/Input"
+import { Button } from "../../../components/ui/Button"
 import { Select } from "../../../components/ui/Select"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { SKILL_LABELS } from "../../../data/characterCreation/phbPresets"
 import type { Ability } from "../../../models/abilities/Ability"
 import type { Proficiency } from "../../../models/sheet/Proficiency"
 import type { Skill } from "../../../models/sheet/Skills"
+import { AbilityDialog } from "../abilities/abilityDialog"
 import {
   readCharacterCreationDraftSection,
   writeCharacterCreationDraftSection,
@@ -26,29 +27,15 @@ const DRACONIC_ANCESTRIES = [
   ["Branco", "frio"],
 ] as const
 
-const DEFAULT_FEATS = [
-  ["Alerta", "Recebe treinamento excepcional para reagir rapidamente e evitar ser surpreendido."],
-  ["Atirador de Elite", "Aprimora ataques com armas à distância e permite assumir penalidade para causar dano adicional."],
-  ["Conjurador de Guerra", "Aprimora concentração, componentes somáticos e conjuração em ataques de oportunidade."],
-  ["Durável", "Aumenta Constituição e melhora a recuperação com Dados de Vida."],
-  ["Especialista em Perícia", "Concede uma perícia, especialização e aumento de atributo conforme a regra do talento."],
-  ["Grande Mestre de Armas", "Aprimora ataques com armas pesadas e concede ataque adicional em determinadas situações."],
-  ["Iniciado em Magia", "Concede truques e uma magia de 1º nível de uma lista escolhida."],
-  ["Líder Inspirador", "Permite conceder pontos de vida temporários após um discurso inspirador."],
-  ["Móvel", "Aumenta deslocamento e facilita reposicionamento após ataques corpo a corpo."],
-  ["Resiliente", "Aumenta um atributo e concede proficiência na salvaguarda correspondente."],
-  ["Sentinela", "Aprimora ataques de oportunidade e controle de inimigos próximos."],
-  ["Sortudo", "Concede pontos de sorte para repetir jogadas importantes."],
-] as const
-
 type RacialChoicesDraft = {
   raceName: string
   racePresetId?: string
   skillOne: Skill
   skillTwo: Skill
-  featName: string
-  customFeatName: string
-  customFeatDescription: string
+  featAbility?: Ability
+  featName?: string
+  customFeatName?: string
+  customFeatDescription?: string
   cantripIndex: string
   ancestry: string
   genericChoices: Record<string, string>
@@ -84,6 +71,10 @@ export function CharacterCreationRacialChoices({
       ),
     [draftId],
   )
+  const initialFeatAbility = useMemo(
+    () => initialDraft?.featAbility ?? migrateLegacyFeat(initialDraft),
+    [initialDraft],
+  )
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   const [raceName, setRaceName] = useState(initialDraft?.raceName ?? "")
   const [racePresetId, setRacePresetId] = useState(
@@ -95,13 +86,10 @@ export function CharacterCreationRacialChoices({
   const [skillTwo, setSkillTwo] = useState<Skill>(
     initialDraft?.skillTwo ?? "stealth",
   )
-  const [featName, setFeatName] = useState(initialDraft?.featName ?? "")
-  const [customFeatName, setCustomFeatName] = useState(
-    initialDraft?.customFeatName ?? "",
+  const [featAbility, setFeatAbility] = useState<Ability | undefined>(
+    initialFeatAbility,
   )
-  const [customFeatDescription, setCustomFeatDescription] = useState(
-    initialDraft?.customFeatDescription ?? "",
-  )
+  const [featDialogOpen, setFeatDialogOpen] = useState(false)
   const [cantripIndex, setCantripIndex] = useState(
     initialDraft?.cantripIndex ?? "",
   )
@@ -116,9 +104,7 @@ export function CharacterCreationRacialChoices({
       racePresetId,
       skillOne,
       skillTwo,
-      featName,
-      customFeatName,
-      customFeatDescription,
+      featAbility,
       cantripIndex,
       ancestry,
       genericChoices,
@@ -126,10 +112,8 @@ export function CharacterCreationRacialChoices({
   }, [
     ancestry,
     cantripIndex,
-    customFeatDescription,
-    customFeatName,
     draftId,
-    featName,
+    featAbility,
     genericChoices,
     raceName,
     racePresetId,
@@ -141,7 +125,9 @@ export function CharacterCreationRacialChoices({
     () =>
       spells
         .filter((spell) => spell.slotLevel === 0 && spell.classes.includes("wizard"))
-        .toSorted((left, right) => spellLabel(left).localeCompare(spellLabel(right), "pt-BR")),
+        .toSorted((left, right) =>
+          spellLabel(left).localeCompare(spellLabel(right), "pt-BR"),
+        ),
     [spells],
   )
 
@@ -151,26 +137,27 @@ export function CharacterCreationRacialChoices({
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
         const section = document.querySelector<HTMLElement>(
-'[data-character-creation-race-details="true"]',
+          '[data-character-creation-race-details="true"]',
         )
         if (!section) {
-setAnchor(null)
-return
+          setAnchor(null)
+          return
         }
         const nextRaceName = section.dataset.raceName ?? ""
         const nextPresetId = section.dataset.racePresetId ?? ""
         const presetChanged = Boolean(racePresetId) && nextPresetId !== racePresetId
         if (nextRaceName !== raceName || presetChanged) {
-setRaceName(nextRaceName)
-setFeatName("")
-setCustomFeatName("")
-setCustomFeatDescription("")
-setCantripIndex("")
-setAncestry("")
-setGenericChoices({})
+          setRaceName(nextRaceName)
+          setFeatAbility(undefined)
+          setFeatDialogOpen(false)
+          setCantripIndex("")
+          setAncestry("")
+          setGenericChoices({})
         }
         if (nextPresetId !== racePresetId) setRacePresetId(nextPresetId)
-        let portalAnchor = section.querySelector<HTMLElement>("[data-racial-choice-anchor]")
+        let portalAnchor = section.querySelector<HTMLElement>(
+          "[data-racial-choice-anchor]",
+        )
         if (!portalAnchor) {
           portalAnchor = document.createElement("div")
           portalAnchor.dataset.racialChoiceAnchor = "true"
@@ -185,7 +172,9 @@ setGenericChoices({})
     return () => {
       cancelAnimationFrame(frame)
       observer.disconnect()
-      document.querySelectorAll("[data-racial-choice-anchor]").forEach((entry) => entry.remove())
+      document
+        .querySelectorAll("[data-racial-choice-anchor]")
+        .forEach((entry) => entry.remove())
     }
   }, [raceName, racePresetId])
 
@@ -199,10 +188,9 @@ setGenericChoices({})
     usesPresetSpecificChoices && normalizedRace.includes("alto elfo")
   const dragonborn =
     usesPresetSpecificChoices && normalizedRace.includes("draconato")
-  const feat = featName === "custom" ? customFeatName.trim() : featName
   const needsChoice = variantHuman || halfElf || highElf || dragonborn
   const valid =
-    (!variantHuman || Boolean(feat && skillOne)) &&
+    (!variantHuman || Boolean(featAbility?.name.trim() && skillOne)) &&
     (!halfElf || Boolean(skillOne && skillTwo && skillOne !== skillTwo)) &&
     (!highElf || Boolean(cantripIndex)) &&
     (!dragonborn || Boolean(ancestry)) &&
@@ -224,17 +212,14 @@ setGenericChoices({})
           nextAbilities = nextAbilities.filter(
             (ability) => !normalize(ability.name).includes("talento inicial"),
           )
-          nextAbilities.push({
-            id: `racial-feat-${slug(feat)}`,
-            name: feat,
-            description:
-              featName === "custom"
-                ? customFeatDescription.trim() || "Talento racial personalizado."
-                : DEFAULT_FEATS.find(([name]) => name === feat)?.[1] ?? "Talento inicial do Humano Variante.",
-            kind: "feature",
-            category: "feat",
-            source: "race",
-          })
+          if (featAbility) {
+            nextAbilities.push({
+              ...featAbility,
+              kind: "feature",
+              category: "feat",
+              source: "race",
+            })
+          }
           skills.push(skillOne)
         }
 
@@ -248,10 +233,18 @@ setGenericChoices({})
             normalize(ability.name).includes("truque de alto elfo")
               ? {
                   ...ability,
-                  name: cantrip ? `Truque de Alto Elfo: ${spellLabel(cantrip)}` : ability.name,
+                  name: cantrip
+                    ? `Truque de Alto Elfo: ${spellLabel(cantrip)}`
+                    : ability.name,
                   description: cantrip?.description || ability.description,
                   grantedSpells: cantrip
-                    ? [{ index: cantrip.index, castingMode: "known", attribute: "int" }]
+                    ? [
+                        {
+                          index: cantrip.index,
+                          castingMode: "known",
+                          attribute: "int",
+                        },
+                      ]
                     : ability.grantedSpells,
                 }
               : ability,
@@ -291,7 +284,15 @@ setGenericChoices({})
           if (!isChoiceProficiency(entry.name)) return [entry]
           if (entry.category === "skill") return []
           const choice = genericChoices[String(genericIndex++)]?.trim()
-          return choice ? [{ ...entry, name: choice, notes: `Escolha racial que substitui: ${entry.name}.` }] : []
+          return choice
+            ? [
+                {
+                  ...entry,
+                  name: choice,
+                  notes: `Escolha racial que substitui: ${entry.name}.`,
+                },
+              ]
+            : []
         })
 
         for (const skill of Array.from(new Set(skills))) {
@@ -311,78 +312,157 @@ setGenericChoices({})
       },
     })
     return () => onChange(null)
-  }, [ancestry, cantripIndex, customFeatDescription, feat, featName, genericChoices, halfElf, highElf, dragonborn, onChange, skillOne, skillTwo, spells, valid, variantHuman])
+  }, [
+    ancestry,
+    cantripIndex,
+    featAbility,
+    genericChoices,
+    halfElf,
+    highElf,
+    dragonborn,
+    onChange,
+    skillOne,
+    skillTwo,
+    spells,
+    valid,
+    variantHuman,
+  ])
 
   if (!anchor || !needsChoice) return null
 
-  return createPortal(
-    <section className="mt-4 grid gap-4 rounded-xl border border-warning bg-warningBg p-4">
-      <div>
-        <h3 className="text-sm font-semibold text-textH">Escolhas raciais obrigatórias</h3>
-        <p className="mt-1 text-xs leading-5 text-textMuted">
-          Estas escolhas substituem os marcadores genéricos e serão gravadas como características e proficiências concretas.
-        </p>
-      </div>
+  return (
+    <>
+      {createPortal(
+        <section className="mt-4 grid gap-4 rounded-xl border border-warning bg-warningBg p-4">
+          <div>
+            <h3 className="text-sm font-semibold text-textH">
+              Escolhas raciais obrigatórias
+            </h3>
+            <p className="mt-1 text-xs leading-5 text-textMuted">
+              Estas escolhas substituem os marcadores genéricos e serão gravadas como características e proficiências concretas.
+            </p>
+          </div>
 
-      {variantHuman || halfElf ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <SkillSelect label={halfElf ? "Primeira perícia" : "Perícia adicional"} value={skillOne} onChange={setSkillOne} />
-          {halfElf ? <SkillSelect label="Segunda perícia" value={skillTwo} onChange={setSkillTwo} blocked={[skillOne]} /> : null}
-        </div>
-      ) : null}
-
-      {variantHuman ? (
-        <div className="grid gap-3">
-          <label className="grid gap-1 text-xs text-textMuted">
-            Talento inicial
-            <Select value={featName} onChange={(event) => setFeatName(event.target.value)}>
-              <option value="">Selecione um talento</option>
-              {DEFAULT_FEATS.map(([name]) => <option key={name} value={name}>{name}</option>)}
-              <option value="custom">Talento personalizado</option>
-            </Select>
-          </label>
-          {featName === "custom" ? (
+          {variantHuman || halfElf ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1 text-xs text-textMuted">
-                Nome do talento
-                <Input value={customFeatName} onChange={(event) => setCustomFeatName(event.target.value)} />
-              </label>
-              <label className="grid gap-1 text-xs text-textMuted">
-                Descrição
-                <Input value={customFeatDescription} onChange={(event) => setCustomFeatDescription(event.target.value)} />
-              </label>
+              <SkillSelect
+                label={halfElf ? "Primeira perícia" : "Perícia adicional"}
+                value={skillOne}
+                onChange={setSkillOne}
+              />
+              {halfElf ? (
+                <SkillSelect
+                  label="Segunda perícia"
+                  value={skillTwo}
+                  onChange={setSkillTwo}
+                  blocked={[skillOne]}
+                />
+              ) : null}
             </div>
           ) : null}
-        </div>
-      ) : null}
 
-      {highElf ? (
-        <label className="grid gap-1 text-xs text-textMuted">
-          Truque de Mago
-          <Select value={cantripIndex} onChange={(event) => setCantripIndex(event.target.value)}>
-            <option value="">Selecione um truque</option>
-            {wizardCantrips.map((spell) => <option key={spell.index} value={spell.index}>{spellLabel(spell)}</option>)}
-          </Select>
-        </label>
-      ) : null}
+          {variantHuman ? (
+            <section className="grid gap-3 rounded-xl border border-border bg-bg p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold text-textH">
+                    Talento inicial
+                  </div>
+                  <div className="mt-1 text-[11px] text-textMuted">
+                    Configure o talento como uma Ability completa.
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setFeatDialogOpen(true)}
+                >
+                  {featAbility ? "Editar talento" : "Adicionar talento"}
+                </Button>
+              </div>
+              {featAbility ? (
+                <div className="rounded-lg border border-border bg-bg-subtle p-3">
+                  <div className="text-sm font-medium text-textH">
+                    {featAbility.name}
+                  </div>
+                  {featAbility.description?.trim() ? (
+                    <p className="mt-1 line-clamp-3 break-words text-xs leading-5 text-textMuted [overflow-wrap:anywhere]">
+                      {featAbility.description}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="text-xs text-danger">
+                  Adicione o talento concedido por esta raça.
+                </div>
+              )}
+            </section>
+          ) : null}
 
-      {dragonborn ? (
-        <label className="grid gap-1 text-xs text-textMuted">
-          Ancestral dracônico
-          <Select value={ancestry} onChange={(event) => setAncestry(event.target.value)}>
-            <option value="">Selecione uma linhagem</option>
-            {DRACONIC_ANCESTRIES.map(([name, damage]) => <option key={name} value={name}>{name} · {damage}</option>)}
-          </Select>
-        </label>
-      ) : null}
+          {highElf ? (
+            <label className="grid gap-1 text-xs text-textMuted">
+              Truque de Mago
+              <Select
+                value={cantripIndex}
+                onChange={(event) => setCantripIndex(event.target.value)}
+              >
+                <option value="">Selecione um truque</option>
+                {wizardCantrips.map((spell) => (
+                  <option key={spell.index} value={spell.index}>
+                    {spellLabel(spell)}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          ) : null}
 
-      {externalError ? (
-        <div className="rounded-lg border border-danger bg-dangerBg p-3 text-xs text-danger">{externalError}</div>
-      ) : !valid ? (
-        <div className="text-xs font-medium text-danger">Complete todas as escolhas obrigatórias.</div>
-      ) : null}
-    </section>,
-    anchor,
+          {dragonborn ? (
+            <label className="grid gap-1 text-xs text-textMuted">
+              Ancestral dracônico
+              <Select
+                value={ancestry}
+                onChange={(event) => setAncestry(event.target.value)}
+              >
+                <option value="">Selecione uma linhagem</option>
+                {DRACONIC_ANCESTRIES.map(([name, damage]) => (
+                  <option key={name} value={name}>
+                    {name} · {damage}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          ) : null}
+
+          {externalError ? (
+            <div className="rounded-lg border border-danger bg-dangerBg p-3 text-xs text-danger">
+              {externalError}
+            </div>
+          ) : !valid ? (
+            <div className="text-xs font-medium text-danger">
+              Complete todas as escolhas obrigatórias.
+            </div>
+          ) : null}
+        </section>,
+        anchor,
+      )}
+
+      <AbilityDialog
+        open={featDialogOpen}
+        ability={featAbility ?? null}
+        title={featAbility ? "Editar talento racial" : "Adicionar talento racial"}
+        fixedCategory="feat"
+        onClose={() => setFeatDialogOpen(false)}
+        onSave={(ability) => {
+          setFeatAbility({
+            ...ability,
+            kind: "feature",
+            category: "feat",
+            source: "race",
+          })
+          setFeatDialogOpen(false)
+        }}
+      />
+    </>
   )
 }
 
@@ -400,23 +480,58 @@ function SkillSelect({
   return (
     <label className="grid gap-1 text-xs text-textMuted">
       {label}
-      <Select value={value} onChange={(event) => onChange(event.target.value as Skill)}>
+      <Select
+        value={value}
+        onChange={(event) => onChange(event.target.value as Skill)}
+      >
         {Object.entries(SKILL_LABELS).map(([skill, name]) => (
-          <option key={skill} value={skill} disabled={blocked.includes(skill as Skill)}>{name}</option>
+          <option
+            key={skill}
+            value={skill}
+            disabled={blocked.includes(skill as Skill)}
+          >
+            {name}
+          </option>
         ))}
       </Select>
     </label>
   )
 }
 
+function migrateLegacyFeat(
+  draft: RacialChoicesDraft | undefined,
+): Ability | undefined {
+  const name =
+    draft?.featName === "custom"
+      ? draft.customFeatName?.trim()
+      : draft?.featName?.trim()
+  if (!name) return undefined
+  return {
+    id: `racial-feat-${slug(name)}`,
+    name,
+    description:
+      draft?.customFeatDescription?.trim() ||
+      "Talento racial configurado durante a criação do personagem.",
+    kind: "feature",
+    category: "feat",
+    source: "race",
+  }
+}
+
 function isChoiceProficiency(name: string): boolean {
   const value = normalize(name)
-  return value.includes("a escolha") || value.startsWith("uma pericia") || value.startsWith("duas pericias")
+  return (
+    value.includes("a escolha") ||
+    value.startsWith("uma pericia") ||
+    value.startsWith("duas pericias")
+  )
 }
 
 function deduplicateAbilities(abilities: Ability[]): Ability[] {
   const seen = new Set<string>()
-  return abilities.filter((entry) => !seen.has(entry.id) && Boolean(seen.add(entry.id)))
+  return abilities.filter(
+    (entry) => !seen.has(entry.id) && Boolean(seen.add(entry.id)),
+  )
 }
 
 function deduplicateProficiencies(entries: Proficiency[]): Proficiency[] {
