@@ -11,6 +11,7 @@ import {
   RelationalConflictError,
   type CharacterDomainName,
   type CharacterDomainRow,
+  type CharacterDomainWriteMetadata,
   type CharacterRow,
 } from "./relationalApi"
 
@@ -73,7 +74,7 @@ export class CharacterRelationalPersistence {
           character.id,
           localDomains[domain],
           0,
-          this.metadata(),
+          this.createMutationMetadata(),
         )
         this.domainVersions.set(domainKey(character.id, domain), created.version)
       }
@@ -145,7 +146,10 @@ export class CharacterRelationalPersistence {
           ...characterRootPayload(next),
           expectedVersion,
         })
-        this.rootVersions.set(next.id, Number(changed.version) || expectedVersion + 1)
+        this.rootVersions.set(
+          next.id,
+          Number(changed.version) || expectedVersion + 1,
+        )
       } catch (error) {
         if (error instanceof RelationalConflictError) {
           this.reportConflict(next.id, "root", error.current)
@@ -162,6 +166,8 @@ export class CharacterRelationalPersistence {
     previousPayload: Record<string, unknown>,
     nextPayload: Record<string, unknown>,
   ) {
+    const metadata = this.createMutationMetadata()
+
     void this.enqueue(domainKey(characterId, domain), async () => {
       try {
         let expectedVersion = this.domainVersions.get(
@@ -181,7 +187,7 @@ export class CharacterRelationalPersistence {
           characterId,
           nextPayload,
           expectedVersion,
-          this.metadata(),
+          metadata,
         )
         this.domainVersions.set(
           domainKey(characterId, domain),
@@ -196,7 +202,7 @@ export class CharacterRelationalPersistence {
                 characterId,
                 nextPayload,
                 current.version,
-                this.metadata(),
+                metadata,
               )
               this.domainVersions.set(
                 domainKey(characterId, domain),
@@ -226,7 +232,7 @@ export class CharacterRelationalPersistence {
     return this.repositories.characterDomains[domain]
   }
 
-  private metadata() {
+  private createMutationMetadata(): CharacterDomainWriteMetadata {
     return {
       actorKey: this.actorKey || undefined,
       clientId: this.clientId,
