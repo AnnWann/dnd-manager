@@ -9,3 +9,9 @@ export function getInvocationLimit(warlockLevel: number): number {
   if (level < 18) return 7
   return 8
 }
+
+/** A Warlock that already has invocations may exchange one on each later Warlock level. */
+export function getInvocationReplacementLimit(warlockLevel: number): number {
+  const level = Math.max(0, Math.min(20, Math.trunc(warlockLevel || 0)))
+  return level >= 3 ? 1 : 0
+}
