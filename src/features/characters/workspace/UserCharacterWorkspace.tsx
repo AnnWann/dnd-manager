@@ -51,10 +51,12 @@ export function UserCharacterWorkspace({
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [persistenceError, setPersistenceError] = useState("")
+  const characterRef = useRef<CharacterTemplate | null>(null)
   const persistenceRef = useRef<UserCharacterDomainPersistence | null>(null)
 
   useEffect(() => {
     let active = true
+    characterRef.current = null
     persistenceRef.current = null
 
     async function load() {
@@ -109,6 +111,7 @@ export function UserCharacterWorkspace({
         }
 
         if (!active) return
+        characterRef.current = normalizedCharacter
         setCharacter(normalizedCharacter)
       } catch {
         if (active) setNotFound(true)
@@ -121,6 +124,7 @@ export function UserCharacterWorkspace({
 
     return () => {
       active = false
+      characterRef.current = null
       persistenceRef.current = null
     }
   }, [characterId])
@@ -130,23 +134,17 @@ export function UserCharacterWorkspace({
       previous: CharacterTemplate,
       updated: CharacterTemplate,
     ) => {
-      const withMetadata = ensureCharacterAcquisitionMetadata(updated, {
-        reason: "manual",
-        sourceType: "manual",
-        sourceName: "Edição da ficha",
-      })
-
       if (LOCAL_AUTH_BYPASS) {
         const data = normalizeStandardItemsInValue(
-          withMetadata.toJSON(),
+          updated.toJSON(),
         ) as Record<string, unknown>
 
         void updateMyCharacter(
-          withMetadata.get("id"),
+          updated.get("id"),
           data,
           {
-            name: withMetadata.get("name"),
-            visibility: toApiVisibility(withMetadata.get("visibility")),
+            name: updated.get("name"),
+            visibility: toApiVisibility(updated.get("visibility")),
           },
         )
         return
@@ -154,7 +152,7 @@ export function UserCharacterWorkspace({
 
       persistenceRef.current?.persistChange(
         previous.toJSON(),
-        withMetadata.toJSON(),
+        updated.toJSON(),
       )
     },
     [],
@@ -165,41 +163,39 @@ export function UserCharacterWorkspace({
       targetId: string,
       updater: (current: CharacterTemplate) => CharacterTemplate,
     ) => {
-      setCharacter((current) => {
-        if (!current || current.get("id") !== targetId) {
-          return current
-        }
+      const current = characterRef.current
+      if (!current || current.get("id") !== targetId) return
 
-        const requested = updater(current)
-        const normalized = CharacterTemplate.fromJSON(
-          normalizeStandardItemsInValue(
-            requested.toJSON(),
-          ) as Record<string, unknown>,
-        )
-        const withMetadata = ensureCharacterAcquisitionMetadata(normalized, {
-          reason: "manual",
-          sourceType: "manual",
-          sourceName: "Edição da ficha",
-        })
-
-        setPersistenceError("")
-        persistCharacter(current, withMetadata)
-        return withMetadata
+      const requested = updater(current)
+      const normalized = CharacterTemplate.fromJSON(
+        normalizeStandardItemsInValue(
+          requested.toJSON(),
+        ) as Record<string, unknown>,
+      )
+      const withMetadata = ensureCharacterAcquisitionMetadata(normalized, {
+        reason: "manual",
+        sourceType: "manual",
+        sourceName: "Edição da ficha",
       })
+
+      setPersistenceError("")
+      characterRef.current = withMetadata
+      setCharacter(withMetadata)
+      persistCharacter(current, withMetadata)
     },
     [persistCharacter],
   )
 
   const deleteCharacter = useCallback((targetId: string) => {
-    setCharacter((current) => {
-      if (!current || current.get("id") !== targetId) return current
+    const current = characterRef.current
+    if (!current || current.get("id") !== targetId) return
 
-      void deleteMyCharacter(targetId).catch(() => {
-        setNotFound(false)
-      })
+    characterRef.current = null
+    persistenceRef.current = null
+    setCharacter(null)
 
-      persistenceRef.current = null
-      return null
+    void deleteMyCharacter(targetId).catch(() => {
+      setNotFound(false)
     })
   }, [])
 
