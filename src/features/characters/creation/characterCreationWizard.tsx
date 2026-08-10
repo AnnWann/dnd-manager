@@ -63,7 +63,10 @@ import { readSelectedRacialBonusRule } from "./logic/readSelectedRacialBonusRule
 
 export type { CharacterCreationProgressionPlan }
 
-type WizardProps = ComponentProps<typeof IntegratedCharacterCreationWizard>
+type WizardProps = Omit<
+  ComponentProps<typeof IntegratedCharacterCreationWizard>,
+  "draftId"
+>
 
 type WrapperDraft = {
   identity: CharacterCreationIdentity
