@@ -173,7 +173,25 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
             />
           </label>
 
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="grid gap-1">
+              <span className="text-xs font-medium text-textH">Categoria</span>
+              <Select
+                value={draft.category ?? "general"}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    category: event.target.value as AbilityCategory,
+                  })
+                }
+              >
+                <option value="general">Habilidade</option>
+                <option value="invocation">Evocação</option>
+                <option value="feat">Talento</option>
+                <option value="channelDivinity">Canalizar Divindade</option>
+              </Select>
+            </label>
+
             <label className="grid gap-1">
               <span className="text-xs font-medium text-textH">Tipo</span>
               <Select
@@ -277,24 +295,6 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
             </p>
 
             <div className="mt-4 grid gap-4">
-              <label className="grid gap-1">
-                <span className="text-xs font-medium text-textH">Categoria</span>
-                <Select
-                  value={draft.category ?? "general"}
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      category: event.target.value as AbilityCategory,
-                    })
-                  }
-                >
-                  <option value="general">Habilidade</option>
-                  <option value="invocation">Evocação</option>
-                  <option value="feat">Talento</option>
-                  <option value="channelDivinity">Canalizar Divindade</option>
-                </Select>
-              </label>
-
               <label className="grid gap-1">
                 <span className="text-xs font-medium text-textH">Gatilho</span>
                 <Input
