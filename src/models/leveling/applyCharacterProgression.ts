@@ -241,8 +241,24 @@ function applyManualSpellSelections(
   reason: CharacterAcquisitionReason,
   classLabels: Map<ClassName, string>,
 ): CharacterTemplate {
+  const learningSelections = application.spellSelections.filter((selection) => {
+    const plan = application.classPlans.find(
+      (entry) => entry.className === selection.className,
+    )
+    if (!plan) return false
+
+    const knownMode = createClassEntry(
+      selection.className,
+      plan.level,
+    ).knownSpells?.mode
+
+    return knownMode === "limited" || knownMode === "spellbook"
+  })
+
+  if (!learningSelections.length) return character
+
   const affectedClasses = new Set(
-    application.spellSelections.map((selection) => selection.className),
+    learningSelections.map((selection) => selection.className),
   )
   const currentMagic = character.get("magic") ?? {
     spells: {
@@ -261,7 +277,7 @@ function applyManualSpellSelections(
   const byIndex = new Map(application.spells.map((spell) => [spell.index, spell]))
   const additions = [] as typeof currentMagic.spells.knownSpells
 
-  for (const selection of application.spellSelections) {
+  for (const selection of learningSelections) {
     const plan = application.classPlans.find(
       (entry) => entry.className === selection.className,
     )
@@ -303,11 +319,11 @@ function applyManualSpellSelections(
           attribute:
             createClassEntry(selection.className, plan.level).castingAttribute ??
             "int",
-          extendedList: false,
+          extendedList: existing?.source.extendedList ?? false,
         },
         spells: {
           id: spellIndex,
-          prepared: selection.preparedSpellIndexes.includes(spellIndex),
+          prepared: existing?.spells.prepared ?? false,
         },
         acquisition: existing?.acquisition ?? classAcquisition,
       })
