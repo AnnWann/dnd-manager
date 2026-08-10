@@ -94,3 +94,8 @@ export function getMetamagicLimit(sorcererLevel: number): number {
   if (sorcererLevel < 17) return 3
   return 4
 }
+
+/** One metamagic may be exchanged on Sorcerer ASI levels. */
+export function getMetamagicReplacementLimit(sorcererLevel: number): number {
+  return [4, 8, 12, 16, 19].includes(Math.trunc(sorcererLevel || 0)) ? 1 : 0
+}
