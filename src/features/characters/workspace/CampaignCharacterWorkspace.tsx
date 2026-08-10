@@ -31,6 +31,7 @@ export function CampaignCharacterWorkspace({
     selectedCharacterId: characterContext.activeCharacter?.get("id"),
     setSelectedCharacterId: characterContext.setSelectedCharacterId,
     updateCharacter: characterContext.updateCharacter,
+    updateCharacterDomain: characterContext.updateCharacterDomain,
     deleteCharacter: characterContext.deleteCharacter,
     importCharacter: characterContext.importCharacter,
     completeLongRest: characterContext.completeLongRest,
