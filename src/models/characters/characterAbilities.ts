@@ -1,6 +1,7 @@
 // models/characters/characterAbilities.ts
 
 import type { Ability } from "../abilities/Ability"
+import type { Attribute } from "../sheet/Attribute"
 import {
   abilityRequiresActivation,
   endAbilityEffect,
@@ -253,9 +254,7 @@ function getAsiScoreBonusAbilities(character: CharacterTemplate): Ability[] {
         attribute: Object.entries(entry.increases)
           .filter(([, amount]) => (amount ?? 0) > 0)
           .map(([attribute, amount]) => ({
-            attribute: attribute as keyof CharacterTemplate["get"] extends never
-              ? never
-              : "str" | "dex" | "con" | "int" | "wis" | "cha",
+            attribute: attribute as Attribute,
             bonus: {
               type: "add" as const,
               value: amount ?? 0,
