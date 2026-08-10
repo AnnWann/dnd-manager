@@ -56,13 +56,14 @@ export function InvocationModule({ character, updateCharacter }: Props) {
     <Card>
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <div className="text-sm font-semibold text-textH">Evocações</div>
             <div className="mt-1 text-xs text-text">
               {invocations.length}/{maximum} configuradas
             </div>
           </div>
           <Button
+            className="shrink-0"
             size="sm"
             disabled={maximum <= 0 || invocations.length >= maximum}
             onClick={() => {
@@ -77,21 +78,23 @@ export function InvocationModule({ character, updateCharacter }: Props) {
 
       <CardContent>
         {invocations.length ? (
-          <div className="grid gap-2">
+          <div className="grid min-w-0 gap-2">
             {invocations.map((invocation) => (
               <article
                 key={invocation.id}
-                className="flex items-start justify-between gap-3 rounded-xl border border-border bg-bg p-3"
+                className="flex min-w-0 items-start justify-between gap-3 overflow-hidden rounded-xl border border-border bg-bg p-3"
               >
-                <div className="min-w-0">
-                  <div className="font-medium text-textH">{invocation.name}</div>
+                <div className="min-w-0 flex-1 overflow-hidden">
+                  <div className="break-words font-medium text-textH [overflow-wrap:anywhere]">
+                    {invocation.name}
+                  </div>
                   {invocation.description?.trim() ? (
-                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-textMuted">
+                    <p className="mt-1 line-clamp-3 max-w-full overflow-hidden break-words text-xs leading-5 text-textMuted [overflow-wrap:anywhere]">
                       {invocation.description}
                     </p>
                   ) : null}
                 </div>
-                <div className="flex shrink-0 gap-2">
+                <div className="flex shrink-0 flex-wrap justify-end gap-2">
                   <Button
                     size="sm"
                     variant="ghost"
