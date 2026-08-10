@@ -42,11 +42,18 @@ import {
   getClassSpellSelectionRule,
 } from "../../../models/leveling/SpellSelectionRules"
 import { isAsiLevel } from "../../../rules/AsiRules"
-import { getInvocationLimit } from "../../../rules/InvocationRules"
-import { getMetamagicLimit } from "../../../rules/MetamagicsRules"
+import {
+  getInvocationLimit,
+  getInvocationReplacementLimit,
+} from "../../../rules/InvocationRules"
+import {
+  getMetamagicLimit,
+  getMetamagicReplacementLimit,
+} from "../../../rules/MetamagicsRules"
 import { AbilityDialog } from "../abilities/abilityDialog"
 import { ProficiencySelectionModal } from "../proficiencies/ProficiencySelectionModal"
 import { AsiSelectionModal } from "./AsiSelectionModal"
+import { FeatureReplacementModal } from "./FeatureReplacementModal"
 import { InvocationSelectionModal } from "./InvocationSelectionModal"
 import {
   LevelUpSpellSelectionModal,
@@ -70,6 +77,7 @@ type Step = "class" | "configuration" | "review"
 type HpMode = "average" | "manual" | "rolled"
 type AbilitySource = "class" | "race"
 type ProficiencySource = "class" | "race"
+type FeatureReplacementSource = "class" | "race"
 
 export function LevelUpProgressionConfigurator({
   character,
@@ -82,6 +90,8 @@ export function LevelUpProgressionConfigurator({
   const existingTotal = existingClasses.reduce((sum, entry) => sum + entry.level, 0)
   const initialClass =
     primaryClassName ?? existingClasses[0]?.className ?? "fighter"
+  const originalMetamagics = character.get("magic")?.metamagic?.metamagics ?? []
+  const originalInvocations = collectExistingInvocations(character)
 
   const [step, setStep] = useState<Step>("class")
   const [advancedClassName, setAdvancedClassName] =
@@ -97,10 +107,10 @@ export function LevelUpProgressionConfigurator({
   const [proficiencySource, setProficiencySource] =
     useState<ProficiencySource | null>(null)
   const [selectedMetamagics, setSelectedMetamagics] = useState<MetamagicId[]>(
-    () => character.get("magic")?.metamagic?.metamagics ?? [],
+    () => originalMetamagics,
   )
   const [invocations, setInvocations] = useState<Ability[]>(() =>
-    collectExistingInvocations(character),
+    originalInvocations,
   )
   const [spellSelections, setSpellSelections] = useState<
     Record<string, LevelUpSpellSelection>
@@ -119,6 +129,14 @@ export function LevelUpProgressionConfigurator({
   const [asiChoice, setAsiChoice] = useState<CharacterAsi | null>(() =>
     findAsiForLevel(character, initialClass, getTargetClassLevel(character, initialClass)),
   )
+  const [featureReplacementSource, setFeatureReplacementSource] =
+    useState<FeatureReplacementSource | null>(null)
+  const [classFeatureReplacements, setClassFeatureReplacements] = useState<
+    Record<string, Ability>
+  >({})
+  const [racialFeatureReplacements, setRacialFeatureReplacements] = useState<
+    Record<string, Ability>
+  >({})
   const [hpMode, setHpMode] = useState<HpMode>("average")
   const [manualHp, setManualHp] = useState("")
   const [rolledDie, setRolledDie] = useState<number | null>(null)
@@ -163,11 +181,28 @@ export function LevelUpProgressionConfigurator({
           (previousRule?.maxLeveledSpells ?? 0),
       )
     : 0
+  const spellReplacementLimit = currentRule.swap.leveledKnown
   const invocationLimit =
     advancedClassName === "warlock" ? getInvocationLimit(targetClassLevel) : 0
+  const previousInvocationLimit =
+    advancedClassName === "warlock" ? getInvocationLimit(previousClassLevel) : 0
+  const invocationGain = Math.max(0, invocationLimit - previousInvocationLimit)
+  const invocationReplacementLimit =
+    advancedClassName === "warlock"
+      ? getInvocationReplacementLimit(targetClassLevel)
+      : 0
   const metamagicLimit =
     advancedClassName === "sorcerer"
       ? getMetamagicLimit(targetClassLevel)
+      : 0
+  const previousMetamagicLimit =
+    advancedClassName === "sorcerer"
+      ? getMetamagicLimit(previousClassLevel)
+      : 0
+  const metamagicGain = Math.max(0, metamagicLimit - previousMetamagicLimit)
+  const metamagicReplacementLimit =
+    advancedClassName === "sorcerer"
+      ? getMetamagicReplacementLimit(targetClassLevel)
       : 0
   const asiEligible = isAsiLevel(advancedClassName, targetClassLevel)
   const selection = spellSelections[advancedClassName] ?? {
@@ -206,6 +241,18 @@ export function LevelUpProgressionConfigurator({
   const racialAbilities = customAbilities.filter(
     (entry) => entry.source === "race",
   )
+  const replaceableClassFeatures = getReplaceableClassFeatures(
+    character,
+    advancedClassName,
+  )
+  const replaceableRacialFeatures = getReplaceableRacialFeatures(character)
+  const canManageLeveledSpells =
+    leveledSpellGain > 0 ||
+    (spellReplacementLimit > 0 && selectedLeveled > 0)
+  const canManageMetamagics =
+    metamagicGain > 0 || metamagicReplacementLimit > 0
+  const canManageInvocations =
+    invocationGain > 0 || invocationReplacementLimit > 0
 
   function changeAdvancedClass(className: ClassName) {
     const plans = createLevelUpPlans(character, className)
@@ -223,6 +270,9 @@ export function LevelUpProgressionConfigurator({
     setRacialCantrips([])
     setRacialSpells([])
     setAsiChoice(findAsiForLevel(character, className, nextLevel))
+    setClassFeatureReplacements({})
+    setRacialFeatureReplacements({})
+    setFeatureReplacementSource(null)
     setSpellModalKind(null)
     setRacialSpellModalKind(null)
     setMetamagicModalOpen(false)
@@ -272,6 +322,23 @@ export function LevelUpProgressionConfigurator({
     setEditingAbility(null)
   }
 
+  function setFeatureReplacement(
+    source: FeatureReplacementSource,
+    originalId: string,
+    replacement: Ability | null,
+  ) {
+    const setter =
+      source === "class"
+        ? setClassFeatureReplacements
+        : setRacialFeatureReplacements
+    setter((current) => {
+      const next = { ...current }
+      if (replacement) next[originalId] = replacement
+      else delete next[originalId]
+      return next
+    })
+  }
+
   function confirm() {
     const eventId = crypto.randomUUID()
     const addedAt = new Date().toISOString()
@@ -292,6 +359,29 @@ export function LevelUpProgressionConfigurator({
       eventId,
       addedAt,
     })
+
+    updated = applyFeatureReplacements(
+      updated,
+      classFeatureReplacements,
+      "class",
+      eventId,
+      addedAt,
+      existingTotal + 1,
+      advancedClassName,
+      targetClassLevel,
+      progression.label,
+    )
+    updated = applyFeatureReplacements(
+      updated,
+      racialFeatureReplacements,
+      "race",
+      eventId,
+      addedAt,
+      existingTotal + 1,
+      undefined,
+      undefined,
+      raceName,
+    )
 
     updated = applyManualProficiencies(updated, classProficiencies)
     updated = applyRacialProficiencies(updated, racialProficiencies)
@@ -492,6 +582,15 @@ export function LevelUpProgressionConfigurator({
               onClick={() => openAbility("class")}
             />
 
+            {replaceableClassFeatures.length ? (
+              <ActionCard
+                title="Substituir característica"
+                value={`${Object.keys(classFeatureReplacements).length} substituição(ões)`}
+                action="Escolher característica"
+                onClick={() => setFeatureReplacementSource("class")}
+              />
+            ) : null}
+
             <ActionCard
               title="Proficiências"
               value={`${classProficiencies.length} adicionada(s)${classExpertiseCount ? ` · ${classExpertiseCount} expertise` : ""}`}
@@ -517,35 +616,66 @@ export function LevelUpProgressionConfigurator({
               />
             ) : null}
 
-            {leveledSpellGain > 0 ? (
+            {canManageLeveledSpells ? (
               <ActionCard
                 title={currentRule.mode === "spellbook" ? "Grimório" : "Magias"}
-                value={`${selectedLeveled}/${currentRule.maxLeveledSpells} · +${leveledSpellGain} neste nível`}
-                action={
-                  currentRule.mode === "spellbook"
-                    ? "Adicionar ao grimório"
-                    : "Aprender magias"
-                }
+                value={formatSpellChangeSummary(
+                  selectedLeveled,
+                  currentRule.maxLeveledSpells,
+                  leveledSpellGain,
+                  spellReplacementLimit,
+                )}
+                action={getSpellActionLabel(
+                  currentRule.mode,
+                  leveledSpellGain,
+                  spellReplacementLimit,
+                )}
                 onClick={() => setSpellModalKind("leveled")}
               />
             ) : null}
 
-            {advancedClassName === "sorcerer" ? (
+            {advancedClassName === "sorcerer" && metamagicLimit > 0 ? (
               <ActionCard
                 title="Metamagias"
-                value={`${selectedMetamagics.length}/${metamagicLimit}`}
-                action="Escolher metamagias"
-                disabled={metamagicLimit <= 0}
+                value={formatReplacementSummary(
+                  selectedMetamagics.length,
+                  metamagicLimit,
+                  metamagicGain,
+                  metamagicReplacementLimit,
+                )}
+                action={
+                  metamagicGain > 0
+                    ? metamagicReplacementLimit > 0
+                      ? "Adicionar / substituir metamagia"
+                      : "Escolher metamagias"
+                    : metamagicReplacementLimit > 0
+                      ? "Substituir metamagia"
+                      : "Sem alteração neste nível"
+                }
+                disabled={!canManageMetamagics}
                 onClick={() => setMetamagicModalOpen(true)}
               />
             ) : null}
 
-            {advancedClassName === "warlock" ? (
+            {advancedClassName === "warlock" && invocationLimit > 0 ? (
               <ActionCard
                 title="Evocações"
-                value={`${invocations.length}/${invocationLimit}`}
-                action="Configurar evocações"
-                disabled={invocationLimit <= 0}
+                value={formatReplacementSummary(
+                  invocations.length,
+                  invocationLimit,
+                  invocationGain,
+                  invocationReplacementLimit,
+                )}
+                action={
+                  invocationGain > 0
+                    ? invocationReplacementLimit > 0
+                      ? "Adicionar / substituir evocação"
+                      : "Adicionar evocações"
+                    : invocationReplacementLimit > 0
+                      ? "Substituir evocação"
+                      : "Sem alteração neste nível"
+                }
+                disabled={!canManageInvocations}
                 onClick={() => setInvocationModalOpen(true)}
               />
             ) : null}
@@ -568,6 +698,15 @@ export function LevelUpProgressionConfigurator({
               action="Adicionar característica"
               onClick={() => openAbility("race")}
             />
+
+            {replaceableRacialFeatures.length ? (
+              <ActionCard
+                title="Substituir característica"
+                value={`${Object.keys(racialFeatureReplacements).length} substituição(ões)`}
+                action="Escolher característica"
+                onClick={() => setFeatureReplacementSource("race")}
+              />
+            ) : null}
 
             <ActionCard
               title="Proficiências"
@@ -608,7 +747,19 @@ export function LevelUpProgressionConfigurator({
           <Summary label="Classe" value={`${progression.label} ${targetClassLevel}`} />
           <Summary label="PV" value={`+${hpGain}`} />
           <Summary label="Características de classe" value={String(classAbilities.length)} />
+          {Object.keys(classFeatureReplacements).length ? (
+            <Summary
+              label="Características de classe substituídas"
+              value={String(Object.keys(classFeatureReplacements).length)}
+            />
+          ) : null}
           <Summary label={`Características de ${raceName}`} value={String(racialAbilities.length)} />
+          {Object.keys(racialFeatureReplacements).length ? (
+            <Summary
+              label={`Características de ${raceName} substituídas`}
+              value={String(Object.keys(racialFeatureReplacements).length)}
+            />
+          ) : null}
           <Summary
             label="Proficiências de classe"
             value={`${classProficiencies.length}${classExpertiseCount ? ` (${classExpertiseCount} expertise)` : ""}`}
@@ -621,8 +772,11 @@ export function LevelUpProgressionConfigurator({
           {cantripGain > 0 ? (
             <Summary label="Truques conhecidos" value={`${selectedCantrips}/${currentRule.maxCantrips}`} />
           ) : null}
-          {leveledSpellGain > 0 ? (
-            <Summary label="Magias aprendidas" value={`${selectedLeveled}/${currentRule.maxLeveledSpells}`} />
+          {canManageLeveledSpells ? (
+            <Summary
+              label={currentRule.mode === "spellbook" ? "Magias no grimório" : "Magias conhecidas"}
+              value={`${selectedLeveled}/${currentRule.maxLeveledSpells}`}
+            />
           ) : null}
           {racialCantrips.length ? (
             <Summary label="Truques raciais adicionados" value={String(racialCantrips.length)} />
@@ -630,10 +784,10 @@ export function LevelUpProgressionConfigurator({
           {racialSpells.length ? (
             <Summary label="Magias raciais adicionadas" value={String(racialSpells.length)} />
           ) : null}
-          {advancedClassName === "sorcerer" ? (
+          {advancedClassName === "sorcerer" && metamagicLimit > 0 ? (
             <Summary label="Metamagias" value={`${selectedMetamagics.length}/${metamagicLimit}`} />
           ) : null}
-          {advancedClassName === "warlock" ? (
+          {advancedClassName === "warlock" && invocationLimit > 0 ? (
             <Summary label="Evocações" value={`${invocations.length}/${invocationLimit}`} />
           ) : null}
         </section>
@@ -664,6 +818,33 @@ export function LevelUpProgressionConfigurator({
           setEditingAbility(null)
         }}
         onSave={saveAbility}
+      />
+
+      <FeatureReplacementModal
+        open={featureReplacementSource !== null}
+        title={
+          featureReplacementSource === "race"
+            ? `Substituir característica — ${raceName}`
+            : `Substituir característica — ${progression.label}`
+        }
+        features={
+          featureReplacementSource === "race"
+            ? replaceableRacialFeatures
+            : replaceableClassFeatures
+        }
+        replacements={
+          featureReplacementSource === "race"
+            ? racialFeatureReplacements
+            : classFeatureReplacements
+        }
+        onReplace={(originalId, replacement) =>
+          setFeatureReplacement(
+            featureReplacementSource ?? "class",
+            originalId,
+            replacement,
+          )
+        }
+        onClose={() => setFeatureReplacementSource(null)}
       />
 
       <ProficiencySelectionModal
@@ -723,7 +904,9 @@ export function LevelUpProgressionConfigurator({
         open={metamagicModalOpen}
         options={metamagics}
         selected={selectedMetamagics}
+        originalSelected={originalMetamagics}
         max={metamagicLimit}
+        replacementLimit={metamagicReplacementLimit}
         onChange={setSelectedMetamagics}
         onClose={() => setMetamagicModalOpen(false)}
       />
@@ -731,7 +914,9 @@ export function LevelUpProgressionConfigurator({
       <InvocationSelectionModal
         open={invocationModalOpen}
         invocations={invocations}
+        originalInvocations={originalInvocations}
         max={invocationLimit}
+        replacementLimit={invocationReplacementLimit}
         onChange={setInvocations}
         onClose={() => setInvocationModalOpen(false)}
       />
@@ -1144,17 +1329,6 @@ function applyAsi(
       entry.className === choice.className &&
       entry.classLevel === choice.classLevel,
   )
-  const attributes = { ...character.get("sheet").attributes }
-
-  for (const attribute of ATTRIBUTE_KEYS) {
-    const previousIncrease = previous?.increases[attribute] ?? 0
-    const nextIncrease = choice.increases[attribute] ?? 0
-    const baseWithoutPrevious = attributes[attribute] - previousIncrease
-    attributes[attribute] = Math.min(
-      20,
-      Math.max(1, baseWithoutPrevious + nextIncrease),
-    )
-  }
 
   const acquisition =
     previous?.acquisition ??
@@ -1214,9 +1388,98 @@ function applyAsi(
     normalizedChoice,
   ]
 
-  return withCharacterAsis(
-    character.withSheet("attributes", attributes),
-    nextAsis,
+  return withCharacterAsis(character, nextAsis)
+}
+
+function applyFeatureReplacements(
+  character: CharacterTemplate,
+  replacements: Record<string, Ability>,
+  source: FeatureReplacementSource,
+  eventId: string,
+  addedAt: string,
+  characterLevel: number,
+  className: ClassName | undefined,
+  classLevel: number | undefined,
+  sourceName: string,
+): CharacterTemplate {
+  if (!Object.keys(replacements).length) return character
+
+  const stampReplacement = (originalId: string, replacement: Ability): Ability => {
+    const acquisition = createCharacterAcquisition({
+      eventId,
+      addedAt,
+      reason: "level-up",
+      characterLevel,
+      className,
+      classLevel,
+      sourceType: source,
+      sourceId: source === "class" ? className : String(character.get("sheet").race.race),
+      sourceName,
+      notes: `Substitui a característica ${originalId}`,
+    })
+
+    return {
+      ...replacement,
+      source,
+      category:
+        replacement.category === "feat" || replacement.category === "invocation"
+          ? "general"
+          : replacement.category,
+      originalAbilityId: originalId,
+      acquisition,
+      grantedSpells: replacement.grantedSpells?.map((grant) => ({
+        ...grant,
+        acquisition:
+          grant.acquisition ??
+          createCharacterAcquisition({
+            ...acquisition,
+            sourceType: "ability",
+            sourceId: replacement.id,
+            sourceName: replacement.name,
+          }),
+      })),
+    }
+  }
+
+  if (source === "race") {
+    const race = character.get("sheet").race
+    return character.withSheet("race", {
+      ...race,
+      naturalAbilities: (race.naturalAbilities ?? []).map((ability) => {
+        const replacement = replacements[ability.id]
+        return replacement ? stampReplacement(ability.id, replacement) : ability
+      }),
+    })
+  }
+
+  return character.with(
+    "abilities",
+    (character.get("abilities") ?? []).map((ability) => {
+      const replacement = replacements[ability.id]
+      return replacement ? stampReplacement(ability.id, replacement) : ability
+    }),
+  )
+}
+
+function getReplaceableClassFeatures(
+  character: CharacterTemplate,
+  className: ClassName,
+): Ability[] {
+  return (character.get("abilities") ?? []).filter((ability) => {
+    if (ability.category === "feat" || ability.category === "invocation") return false
+    if (ability.source === "equipment" || ability.source === "race") return false
+
+    if (ability.acquisition?.sourceType === "class") {
+      return !ability.acquisition.className || ability.acquisition.className === className
+    }
+
+    return ability.source === "class"
+  })
+}
+
+function getReplaceableRacialFeatures(character: CharacterTemplate): Ability[] {
+  return (character.get("sheet").race.naturalAbilities ?? []).filter(
+    (ability) => ability.category !== "feat" && ability.category !== "invocation",
   )
 }
 
@@ -1257,6 +1520,41 @@ function formatIncreases(
     .filter((attribute) => (increases[attribute] ?? 0) > 0)
     .map((attribute) => `+${increases[attribute]} ${labels[attribute]}`)
   return parts.join(" / ") || "Talento"
+}
+
+function formatSpellChangeSummary(
+  current: number,
+  maximum: number,
+  gained: number,
+  replacementLimit: number,
+): string {
+  const parts = [`${current}/${maximum}`]
+  if (gained > 0) parts.push(`+${gained} neste nível`)
+  if (replacementLimit > 0) parts.push(`até ${replacementLimit} substituição`)
+  return parts.join(" · ")
+}
+
+function formatReplacementSummary(
+  current: number,
+  maximum: number,
+  gained: number,
+  replacementLimit: number,
+): string {
+  const parts = [`${current}/${maximum}`]
+  if (gained > 0) parts.push(`+${gained} de capacidade`)
+  if (replacementLimit > 0) parts.push(`${replacementLimit} substituição disponível`)
+  return parts.join(" · ")
+}
+
+function getSpellActionLabel(
+  mode: ReturnType<typeof getClassSpellSelectionRule>["mode"],
+  gained: number,
+  replacementLimit: number,
+): string {
+  if (mode === "spellbook") return "Adicionar ao grimório"
+  if (gained > 0 && replacementLimit > 0) return "Aprender / substituir magias"
+  if (gained > 0) return "Aprender magias"
+  return "Substituir magia"
 }
 
 function getRaceName(character: CharacterTemplate): string {
