@@ -18,7 +18,11 @@ import {
   getLocalUser,
   LOCAL_AUTH_BYPASS,
 } from "../../../auth/local-auth"
-import { applyCharacterDomains } from "../../../lib/characterDomains"
+import {
+  applyCharacterDomains,
+  getChangedCharacterDomains,
+} from "../../../lib/characterDomains"
+import type { CharacterDomainName } from "../../../lib/relationalApi"
 import { UserCharacterDomainPersistence } from "../../../lib/userCharacterDomainPersistence"
 import { moveEquippedItemToCharacterStorage } from "../../../models/characters/characterEquippedItemMovement"
 import { stowHandOccupant as stowCharacterHandOccupant } from "../../../models/characters/characterHands"
@@ -158,10 +162,11 @@ export function UserCharacterWorkspace({
     [],
   )
 
-  const updateCharacter = useCallback(
+  const applyCharacterUpdate = useCallback(
     (
       targetId: string,
       updater: (current: CharacterTemplate) => CharacterTemplate,
+      declaredDomain?: CharacterDomainName,
     ) => {
       const current = characterRef.current
       if (!current || current.get("id") !== targetId) return
@@ -178,12 +183,44 @@ export function UserCharacterWorkspace({
         sourceName: "Edição da ficha",
       })
 
+      if (declaredDomain) {
+        const changedDomains = getChangedCharacterDomains(
+          current.toJSON(),
+          withMetadata.toJSON(),
+        )
+        const unexpected = changedDomains.filter(
+          (domain) => domain !== declaredDomain,
+        )
+        if (unexpected.length) {
+          console.warn(
+            `Updater de ${declaredDomain} alterou domínios fora do ownership: ${unexpected.join(", ")}.`,
+          )
+        }
+      }
+
       setPersistenceError("")
       characterRef.current = withMetadata
       setCharacter(withMetadata)
       persistCharacter(current, withMetadata)
     },
     [persistCharacter],
+  )
+
+  const updateCharacter = useCallback(
+    (
+      targetId: string,
+      updater: (current: CharacterTemplate) => CharacterTemplate,
+    ) => applyCharacterUpdate(targetId, updater),
+    [applyCharacterUpdate],
+  )
+
+  const updateCharacterDomain = useCallback(
+    (
+      targetId: string,
+      domain: CharacterDomainName,
+      updater: (current: CharacterTemplate) => CharacterTemplate,
+    ) => applyCharacterUpdate(targetId, updater, domain),
+    [applyCharacterUpdate],
   )
 
   const deleteCharacter = useCallback((targetId: string) => {
@@ -254,6 +291,7 @@ export function UserCharacterWorkspace({
     selectedCharacterId: character.get("id"),
     setSelectedCharacterId: () => {},
     updateCharacter,
+    updateCharacterDomain,
     deleteCharacter,
     completeLongRest: (targetId) => {
       updateCharacter(targetId, takeLongRest)
