@@ -1,8 +1,12 @@
 import { useRef } from "react"
 
 import { Button } from "../../../components/ui/Button"
+import { useMagicContext } from "../../../contexts/magicContext"
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Spell } from "../../../models/magic/spells/Spell"
 import type { SpellSource } from "../../../models/magic/spells/SpellSource"
+import type { CharacterClassInterface } from "../../../models/sheet/Class"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { SpellCard } from "./spellCard"
 
 type Props = {
@@ -13,8 +17,6 @@ type Props = {
   availableAsRitual: boolean
   accessLabel?: string
   castingDescriptions?: string[]
-  preparationDisabled?: boolean
-  onTogglePrepared?: (prepared: boolean) => void
 }
 
 export function CompactSpellCard({
@@ -25,17 +27,30 @@ export function CompactSpellCard({
   availableAsRitual,
   accessLabel,
   castingDescriptions = [],
-  preparationDisabled = false,
-  onTogglePrepared,
 }: Props) {
   const hiddenCardRef = useRef<HTMLDivElement | null>(null)
+  const { activeCharacter, updateCharacter } = useCharacterWorkspace()
+  const { getSpellByIndex } = useMagicContext()
   const spellName = spell.displayName || spell.name
-  const canTogglePrepared = !alwaysPrepared && Boolean(onTogglePrepared)
+  const canTogglePrepared = !alwaysPrepared && Boolean(activeCharacter)
+  const preparationDisabled =
+    canTogglePrepared &&
+    !prepared &&
+    activeCharacter !== undefined &&
+    !canPrepareSpell(activeCharacter, source, getSpellByIndex)
 
   function openDetails() {
     hiddenCardRef.current
       ?.querySelector<HTMLButtonElement>("article button")
       ?.click()
+  }
+
+  function togglePrepared(nextPrepared: boolean) {
+    if (!activeCharacter || !canTogglePrepared || preparationDisabled) return
+
+    updateCharacter(activeCharacter.get("id"), (current) =>
+      current.setSpellPrepared(spell.index, nextPrepared),
+    )
   }
 
   return (
@@ -55,7 +70,7 @@ export function CompactSpellCard({
                   ? "Despreparar magia"
                   : "Preparar magia"
             }
-            onChange={(event) => onTogglePrepared?.(event.target.checked)}
+            onChange={(event) => togglePrepared(event.target.checked)}
           />
         ) : null}
 
@@ -110,6 +125,66 @@ export function CompactSpellCard({
       </div>
     </>
   )
+}
+
+function canPrepareSpell(
+  character: CharacterTemplate,
+  source: SpellSource,
+  getSpellByIndex: (spellIndex: string) => Spell | undefined,
+): boolean {
+  if (source.type !== "class") return true
+
+  const classData = (character.get("sheet").classes ?? []).find(
+    (entry) => entry.className === source.name,
+  )
+  if (!classData?.knownSpells?.canPrepare) return true
+
+  const limit = getPreparedSpellLimit(character, classData)
+  if (limit === undefined) return true
+
+  const preparedCount = (
+    character.get("magic")?.spells.knownSpells ?? []
+  ).filter((entry) => {
+    if (
+      !entry.spells.prepared ||
+      entry.source.type !== "class" ||
+      entry.source.name !== source.name
+    ) {
+      return false
+    }
+
+    const knownSpell = getSpellByIndex(entry.spells.id)
+    return Boolean(knownSpell && knownSpell.slotLevel > 0)
+  }).length
+
+  return preparedCount < limit
+}
+
+function getPreparedSpellLimit(
+  character: CharacterTemplate,
+  classData: CharacterClassInterface,
+): number | undefined {
+  if (!classData.knownSpells) return undefined
+
+  const mode = classData.knownSpells.mode
+  if (mode !== "prepared-only" && mode !== "spellbook") return undefined
+
+  const modifier = classData.castingAttribute
+    ? character.getEffectiveAttributeModifier(classData.castingAttribute)
+    : 0
+
+  switch (classData.className) {
+    case "artificer":
+      return Math.max(1, Math.floor(classData.level / 2) + modifier)
+    case "cleric":
+    case "druid":
+    case "wizard":
+      return Math.max(1, classData.level + modifier)
+    case "paladin":
+      return Math.max(1, Math.floor(classData.level / 2) + modifier)
+    default:
+      return undefined
+  }
 }
 
 function formatSpellLevel(spell: Spell): string {
