@@ -15,6 +15,7 @@ import type {
   CustomSystemConditionChangeDefinition,
   CustomSystemDefinition,
 } from "../../models/customSystems/CustomSystemDefinition"
+import { ResourceAmountFormulaField } from "./CustomAbilityEffectEditors"
 import { FormulaVariablePicker } from "./FormulaVariablePicker"
 
 const STATS: Array<[CustomNativeStatTarget, string]> = [
@@ -337,67 +338,53 @@ function ResourceRow({ definition, value, onChange, onRemove }: {
   onRemove: () => void
 }) {
   const custom = value.target.source === "customSystem"
-  const formulaError = value.formula?.trim()
-    ? validateCustomFormula(value.formula, definition)
-    : undefined
 
   return (
     <div className="rounded-lg border border-border p-3">
-      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-5">
-        <Select
-          label="Operação"
-          value={value.operation}
-          options={[["spend", "Gastar"], ["gain", "Gerar"], ["set", "Definir"]]}
-          onChange={(operation) => onChange({ ...value, operation: operation as "spend" | "gain" | "set" })}
-        />
-        <Select
-          label="Origem"
-          value={value.target.source}
-          options={[["native", "Ficha normal"], ["customSystem", "Este sistema"]]}
-          onChange={(source) =>
-            onChange({
-              ...value,
-              target: source === "native"
-                ? { source: "native", resource: "hitPoints" }
-                : { source: "customSystem", systemId: definition.id, resourceId: definition.resources[0]?.id ?? "" },
-            })
-          }
-        />
-        <Select
-          label="Recurso"
-          value={custom ? value.target.resourceId : value.target.resource}
-          options={custom
-            ? definition.resources.map((resource) => [resource.id, resource.name] as const)
-            : NATIVE_RESOURCES}
-          onChange={(resource) =>
-            onChange({
-              ...value,
-              target: custom
-                ? { source: "customSystem", systemId: definition.id, resourceId: resource }
-                : { source: "native", resource: resource as "hitPoints" | "temporaryHitPoints" | "inspiration" | "exhaustion" },
-            })
-          }
-        />
-        <TextInput
-          label="Quantidade"
-          type="number"
-          value={String(value.amount ?? 1)}
-          onChange={(amount) => onChange({ ...value, amount: Number(amount) || 0 })}
-        />
+      <div className="flex flex-wrap items-end gap-3">
+        <FieldCell>
+          <Select
+            label="Operação"
+            value={value.operation}
+            options={[["spend", "Gastar"], ["gain", "Gerar"], ["set", "Definir"]]}
+            onChange={(operation) => onChange({ ...value, operation: operation as "spend" | "gain" | "set" })}
+          />
+        </FieldCell>
+        <FieldCell>
+          <Select
+            label="Origem"
+            value={value.target.source}
+            options={[["native", "Ficha normal"], ["customSystem", "Este sistema"]]}
+            onChange={(source) =>
+              onChange({
+                ...value,
+                target: source === "native"
+                  ? { source: "native", resource: "hitPoints" }
+                  : { source: "customSystem", systemId: definition.id, resourceId: definition.resources[0]?.id ?? "" },
+              })
+            }
+          />
+        </FieldCell>
+        <FieldCell>
+          <Select
+            label="Recurso"
+            value={custom ? value.target.resourceId : value.target.resource}
+            options={custom
+              ? definition.resources.map((resource) => [resource.id, resource.name] as const)
+              : NATIVE_RESOURCES}
+            onChange={(resource) =>
+              onChange({
+                ...value,
+                target: custom
+                  ? { source: "customSystem", systemId: definition.id, resourceId: resource }
+                  : { source: "native", resource: resource as "hitPoints" | "temporaryHitPoints" | "inspiration" | "exhaustion" },
+              })
+            }
+          />
+        </FieldCell>
+        <ResourceAmountFormulaField definition={definition} change={value} onChange={onChange} />
         <div className="flex items-end"><RemoveButton onClick={onRemove} /></div>
       </div>
-      <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-        <TextInput
-          label="Fórmula opcional da quantidade"
-          value={value.formula ?? ""}
-          onChange={(formula) => onChange({ ...value, formula: formula || undefined })}
-        />
-        <FormulaVariablePicker
-          variables={listCustomFormulaVariables(definition)}
-          onSelect={(path) => onChange({ ...value, formula: `${value.formula ?? ""}${value.formula?.trim() ? " " : ""}${path}` })}
-        />
-      </div>
-      {formulaError ? <div className="mt-1 text-xs text-red-300">{formulaError}</div> : null}
     </div>
   )
 }
@@ -468,6 +455,10 @@ function MiniSection({ title, onAdd, children }: { title: string; onAdd: () => v
       <div className="mt-3 grid gap-2">{children}</div>
     </section>
   )
+}
+
+function FieldCell({ children }: { children: ReactNode }) {
+  return <div className="min-w-[11rem] flex-[1_1_11rem]">{children}</div>
 }
 
 function TextInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
