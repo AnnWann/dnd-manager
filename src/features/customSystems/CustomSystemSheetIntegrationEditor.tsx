@@ -474,8 +474,8 @@ function TextInput({ label, value, onChange, type = "text" }: { label: string; v
   return <label className="mt-2 grid gap-1 text-xs text-text">{label}<input className="input-base" type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label>
 }
 
-function Select({ label, value, options, onChange }: { label: string; value: string; options: ReadonlyArray<readonly [string, string]>; onChange: (value: string) => void }) {
-  return <label className="mt-2 grid gap-1 text-xs text-text">{label}<select className="input-base" value={value} onChange={(event) => onChange(event.target.value)}>{options.map(([id, name]) => <option key={id || "none"} value={id}>{name}</option>)}</select></label>
+function Select({ label, value, options, onChange }: { label: string; value: string | undefined; options: ReadonlyArray<readonly [string, string]>; onChange: (value: string) => void }) {
+  return <label className="mt-2 grid gap-1 text-xs text-text">{label}<select className="input-base" value={value ?? ""} onChange={(event) => onChange(event.target.value)}>{options.map(([id, name]) => <option key={id || "none"} value={id}>{name}</option>)}</select></label>
 }
 
 function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
