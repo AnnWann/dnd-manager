@@ -12,6 +12,10 @@ import type {
 } from '../../models/customSystems/CustomAbilityDefinition'
 import type { CustomFieldDefinition } from '../../models/customSystems/CustomFieldDefinition'
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
+import {
+  AbilityConditionChangesEditor,
+  ResourceAmountFormulaField,
+} from './CustomAbilityEffectEditors'
 import { FormulaVariablePicker } from './FormulaVariablePicker'
 
 const NATIVE_RESOURCES = [
@@ -84,6 +88,8 @@ export function CustomAbilityConfigurationEditor({
         kind: 'active',
         actionKind: 'action',
         usage: { mode: 'unlimited', reset: 'manual' },
+        resourceChanges: [],
+        conditionChanges: [],
       },
       predefinedAbilities: [],
     }
@@ -188,6 +194,7 @@ function TypeEditor({
   const usage = activation.usage ?? { mode: 'unlimited' as const, reset: 'manual' as const }
   const usageMode = usage.mode ?? (usage.maximum !== undefined || usage.maximumFormula ? 'limited' : 'unlimited')
   const changes = activation.resourceChanges ?? []
+  const conditions = activation.conditionChanges ?? []
 
   const patchActivation = (patch: Partial<typeof activation>) =>
     onChange({ ...type, activation: { ...activation, ...patch } })
@@ -350,27 +357,36 @@ function TypeEditor({
         ) : null}
       </Section>
 
-      <Section title="7. Alterações de recurso" description="Efeitos padrão executados quando a habilidade é usada.">
-        <div className="grid gap-3">
-          {changes.map((change, index) => (
-            <ResourceChangeRow
-              key={change.id}
-              change={change}
-              definitions={definitions}
-              currentSystem={currentSystem}
-              onChange={(next) => setChanges(changes.map((entry, current) => current === index ? next : entry))}
-              onRemove={() => setChanges(changes.filter((_, current) => current !== index))}
-            />
-          ))}
-          {!changes.length ? <Empty>Nenhuma alteração de recurso padrão.</Empty> : null}
-        </div>
-        <button
-          type="button"
-          onClick={() => setChanges([...changes, newResourceChange(currentSystem)])}
-          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-textH hover:bg-accentBg"
-        >
-          <Plus className="h-4 w-4" /> Adicionar alteração de recurso
-        </button>
+      <Section title="7. Efeitos ao usar" description="Defina recursos e condições alterados quando a habilidade é executada.">
+        <EffectSubsection title="Alterações de recurso" description="Gaste, gere ou defina recursos. Quantidade aceita número fixo ou fórmula no mesmo campo.">
+          <div className="grid gap-3">
+            {changes.map((change, index) => (
+              <ResourceChangeRow
+                key={change.id}
+                change={change}
+                definitions={definitions}
+                currentSystem={currentSystem}
+                onChange={(next) => setChanges(changes.map((entry, current) => current === index ? next : entry))}
+                onRemove={() => setChanges(changes.filter((_, current) => current !== index))}
+              />
+            ))}
+            {!changes.length ? <Empty>Nenhuma alteração de recurso padrão.</Empty> : null}
+          </div>
+          <button
+            type="button"
+            onClick={() => setChanges([...changes, newResourceChange(currentSystem)])}
+            className="mt-3 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-textH hover:bg-accentBg"
+          >
+            <Plus className="h-4 w-4" /> Adicionar alteração de recurso
+          </button>
+        </EffectSubsection>
+
+        <EffectSubsection title="Condições / estados" description="Aplique, renove ou remova condições quando a habilidade for usada.">
+          <AbilityConditionChangesEditor
+            value={conditions}
+            onChange={(conditionChanges) => patchActivation({ conditionChanges })}
+          />
+        </EffectSubsection>
       </Section>
     </div>
   )
@@ -444,16 +460,19 @@ function ResourceChangeRow({
           }} /></FieldCell>
           <FieldCell><SelectField label="Recurso" value={customTarget?.resourceId ?? ''} options={(selectedSystem?.resources ?? []).map((entry) => [entry.id, entry.name])} onChange={(resourceId) => onChange({ ...change, target: { source: 'customSystem', systemId: selectedSystemId, resourceId } })} /></FieldCell>
         </>}
-        <div className="min-w-[8rem] flex-[0.65_1_8rem]"><NumberField label="Quantidade" value={change.amount} placeholder="1" onChange={(amount) => onChange({ ...change, amount })} /></div>
+        <ResourceAmountFormulaField definition={currentSystem} change={change} onChange={onChange} />
         <button type="button" onClick={onRemove} className="shrink-0 rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10">Remover</button>
       </div>
-      <FormulaField definition={currentSystem} label="Fórmula opcional da quantidade" value={change.formula ?? ''} placeholder="Substitui a quantidade fixa" onChange={(formula) => onChange({ ...change, formula: formula || undefined })} />
     </article>
   )
 }
 
 function Section({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return <section className="rounded-xl border border-border bg-bg p-4"><h3 className="font-semibold text-textH">{title}</h3>{description ? <p className="mt-1 text-xs leading-5 text-text">{description}</p> : null}<div className="mt-4">{children}</div></section>
+}
+
+function EffectSubsection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+  return <section className="mt-3 rounded-lg border border-border bg-bg-subtle p-3 first:mt-0"><h4 className="text-sm font-semibold text-textH">{title}</h4>{description ? <p className="mt-1 text-xs leading-5 text-textMuted">{description}</p> : null}<div className="mt-3">{children}</div></section>
 }
 
 function FieldCell({ children }: { children: ReactNode }) {
