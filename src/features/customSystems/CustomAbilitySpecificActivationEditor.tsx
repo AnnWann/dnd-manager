@@ -37,12 +37,15 @@ const RESET_KINDS: Array<[CustomUsageResetKind, string]> = [
 
 type Props = {
   definition: CustomSystemDefinition
-  abilityType: CustomAbilityTypeDefinition
+  abilityType?: CustomAbilityTypeDefinition
   ability: CustomPredefinedAbilityDefinition
   onChange: (ability: CustomPredefinedAbilityDefinition) => void
 }
 
 export function CustomAbilitySpecificActivationEditor({ definition, abilityType, ability, onChange }: Props) {
+  const resolvedAbilityType = abilityType
+    ?? definition.abilityTypes.find((type) => type.predefinedAbilities?.includes(ability))
+    ?? definition.abilityTypes.find((type) => type.predefinedAbilities?.some((entry) => entry.id === ability.id))
   const activation = ability.activation
   const usageMode = !activation?.usage ? 'inherit' : (activation.usage.mode ?? 'limited')
   const resourceMode = activation?.resourceChanges === undefined ? 'inherit' : 'specific'
@@ -160,7 +163,7 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
             {usageMode === 'limited' ? (
               <FormulaField
                 definition={definition}
-                abilityType={abilityType}
+                abilityType={resolvedAbilityType}
                 label="Fórmula do máximo"
                 value={activation.usage?.maximumFormula ?? ''}
                 placeholder="Ex.: ability.nivel + character.proficiencyBonus"
@@ -182,7 +185,7 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
                   <ResourceChangeRow
                     key={change.id}
                     definition={definition}
-                    abilityType={abilityType}
+                    abilityType={resolvedAbilityType}
                     change={change}
                     onChange={(next) => setResourceChanges(
                       (activation.resourceChanges ?? []).map((entry, current) => current === index ? next : entry),
@@ -233,7 +236,7 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
 
 function ResourceChangeRow({ definition, abilityType, change, onChange, onRemove }: {
   definition: CustomSystemDefinition
-  abilityType: CustomAbilityTypeDefinition
+  abilityType?: CustomAbilityTypeDefinition
   change: CustomAbilityResourceChangeDefinition
   onChange: (change: CustomAbilityResourceChangeDefinition) => void
   onRemove: () => void
@@ -283,7 +286,7 @@ function ResourceChangeRow({ definition, abilityType, change, onChange, onRemove
 
 function FormulaField({ definition, abilityType, label, value, onChange, placeholder }: {
   definition: CustomSystemDefinition
-  abilityType: CustomAbilityTypeDefinition
+  abilityType?: CustomAbilityTypeDefinition
   label: string
   value: string
   onChange: (value: string) => void
