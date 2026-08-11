@@ -323,6 +323,8 @@ function createEmptyDefinition(): CustomSystemDefinition {
     abilityTypes: [],
     panels: [],
     automations: [],
+    nativeStatOverrides: [],
+    actions: [],
     tags: [],
   }
 }
@@ -346,8 +348,12 @@ function normalizeDefinitions(value: unknown): CustomSystemDefinition[] {
       abilityTypes: Array.isArray(raw.abilityTypes) ? raw.abilityTypes : [],
       panels: Array.isArray(raw.panels) ? raw.panels : [],
       automations: Array.isArray(raw.automations) ? raw.automations : [],
+      nativeStatOverrides: Array.isArray(raw.nativeStatOverrides) ? raw.nativeStatOverrides : [],
+      actions: Array.isArray(raw.actions) ? raw.actions : [],
       tags: Array.isArray(raw.tags) ? raw.tags.filter((tag): tag is string => typeof tag === 'string') : [],
       automaticInstallation: raw.automaticInstallation,
+      characterPlacement: raw.characterPlacement,
+      presentation: raw.presentation,
     })
   }
   return Array.from(result.values()).sort((left, right) => left.name.localeCompare(right.name))
