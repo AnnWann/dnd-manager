@@ -79,15 +79,15 @@ export function CustomAbilitySpecificActivationEditor({ definition, ability, onC
     patchActivation({ resourceChanges })
 
   return (
-    <section className="rounded-lg border border-border p-3">
+    <section className="min-w-0 rounded-lg border border-border p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h4 className="text-sm font-medium text-textH">Ativação e usos desta habilidade</h4>
           <p className="mt-1 text-xs leading-5 text-text">
             O tipo define o padrão. Ative uma configuração específica apenas para exceções desta entrada do compêndio.
           </p>
         </div>
-        <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-textH">
+        <label className="flex shrink-0 items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-textH">
           <input
             type="checkbox"
             checked={activation !== undefined}
@@ -102,8 +102,8 @@ export function CustomAbilitySpecificActivationEditor({ definition, ability, onC
           Herdando ativação, categoria de ação, usos e efeitos de recurso do tipo.
         </div>
       ) : (
-        <div className="mt-4 grid gap-4">
-          <div className="grid gap-3 md:grid-cols-2">
+        <div className="mt-4 grid min-w-0 gap-4">
+          <div className="grid min-w-0 gap-3 md:grid-cols-2">
             <SelectField
               label="Tipo geral"
               value={activation.kind ?? ''}
@@ -118,8 +118,8 @@ export function CustomAbilitySpecificActivationEditor({ definition, ability, onC
             />
           </div>
 
-          <div className="rounded-lg border border-border bg-bg-subtle p-3">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="min-w-0 rounded-lg border border-border bg-bg-subtle p-3">
+            <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
               <SelectField
                 label="Usos"
                 value={usageMode}
@@ -152,7 +152,7 @@ export function CustomAbilitySpecificActivationEditor({ definition, ability, onC
             ) : null}
           </div>
 
-          <div className="rounded-lg border border-border bg-bg-subtle p-3">
+          <div className="min-w-0 rounded-lg border border-border bg-bg-subtle p-3">
             <SelectField
               label="Alterações de recurso"
               value={resourceMode}
@@ -160,7 +160,7 @@ export function CustomAbilitySpecificActivationEditor({ definition, ability, onC
               onChange={(mode) => setResourceMode(mode as 'inherit' | 'specific')}
             />
             {resourceMode === 'specific' ? (
-              <div className="mt-3 grid gap-3">
+              <div className="mt-3 grid min-w-0 gap-3">
                 {(activation.resourceChanges ?? []).map((change, index) => (
                   <ResourceChangeRow
                     key={change.id}
@@ -211,38 +211,44 @@ function ResourceChangeRow({ definition, change, onChange, onRemove }: {
       : NATIVE_RESOURCES
 
   return (
-    <article className="rounded-lg border border-border p-3">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <SelectField label="Operação" value={change.operation}
-          options={[['spend', 'Gastar'], ['gain', 'Gerar'], ['set', 'Definir']]}
-          onChange={(operation) => onChange({ ...change, operation: operation as CustomAbilityResourceChangeDefinition['operation'] })}
-        />
-        <SelectField label="Origem" value={change.target.source}
-          options={[['native', 'Ficha normal'], ['customSystem', 'Este sistema']]}
-          onChange={(source) => onChange({
-            ...change,
-            target: source === 'native'
-              ? { source: 'native', resource: 'hitPoints' }
-              : { source: 'customSystem', systemId: definition.id, resourceId: definition.resources[0]?.id ?? '' },
-          })}
-        />
-        <SelectField label="Recurso" value={targetValue} options={resourceOptions}
-          onChange={(resource) => onChange({
-            ...change,
-            target: custom
-              ? { source: 'customSystem', systemId: definition.id, resourceId: resource }
-              : { source: 'native', resource: resource as 'hitPoints' | 'temporaryHitPoints' | 'inspiration' | 'exhaustion' },
-          })}
-        />
-        <NumberField label="Quantidade" value={change.amount} placeholder="1"
-          onChange={(amount) => onChange({ ...change, amount })}
-        />
-        <div className="flex items-end">
-          <button type="button" onClick={onRemove}
-            className="rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10">
-            Remover
-          </button>
+    <article className="min-w-0 rounded-lg border border-border p-3">
+      <div className="flex min-w-0 flex-wrap items-end gap-3">
+        <FieldCell>
+          <SelectField label="Operação" value={change.operation}
+            options={[['spend', 'Gastar'], ['gain', 'Gerar'], ['set', 'Definir']]}
+            onChange={(operation) => onChange({ ...change, operation: operation as CustomAbilityResourceChangeDefinition['operation'] })}
+          />
+        </FieldCell>
+        <FieldCell>
+          <SelectField label="Origem" value={change.target.source}
+            options={[['native', 'Ficha normal'], ['customSystem', 'Este sistema']]}
+            onChange={(source) => onChange({
+              ...change,
+              target: source === 'native'
+                ? { source: 'native', resource: 'hitPoints' }
+                : { source: 'customSystem', systemId: definition.id, resourceId: definition.resources[0]?.id ?? '' },
+            })}
+          />
+        </FieldCell>
+        <FieldCell>
+          <SelectField label="Recurso" value={targetValue} options={resourceOptions}
+            onChange={(resource) => onChange({
+              ...change,
+              target: custom
+                ? { source: 'customSystem', systemId: definition.id, resourceId: resource }
+                : { source: 'native', resource: resource as 'hitPoints' | 'temporaryHitPoints' | 'inspiration' | 'exhaustion' },
+            })}
+          />
+        </FieldCell>
+        <div className="min-w-[8rem] flex-[0.65_1_8rem]">
+          <NumberField label="Quantidade" value={change.amount} placeholder="1"
+            onChange={(amount) => onChange({ ...change, amount })}
+          />
         </div>
+        <button type="button" onClick={onRemove}
+          className="shrink-0 rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10">
+          Remover
+        </button>
       </div>
       <FormulaField
         definition={definition}
@@ -255,6 +261,10 @@ function ResourceChangeRow({ definition, change, onChange, onRemove }: {
   )
 }
 
+function FieldCell({ children }: { children: React.ReactNode }) {
+  return <div className="min-w-[11rem] flex-[1_1_11rem]">{children}</div>
+}
+
 function FormulaField({ definition, label, value, onChange, placeholder }: {
   definition: CustomSystemDefinition
   label: string
@@ -264,9 +274,9 @@ function FormulaField({ definition, label, value, onChange, placeholder }: {
 }) {
   const error = value.trim() ? validateCustomFormula(value, definition) : undefined
   return (
-    <div className="mt-3 rounded-lg border border-accentBorder bg-accentBg/30 p-3">
-      <label className="grid gap-1"><span className="label">{label}</span>
-        <input className="input-base font-mono" value={value} placeholder={placeholder}
+    <div className="mt-3 min-w-0 rounded-lg border border-accentBorder bg-accentBg/30 p-3">
+      <label className="grid min-w-0 gap-1"><span className="label">{label}</span>
+        <input className="input-base min-w-0 w-full font-mono" value={value} placeholder={placeholder}
           onChange={(event) => onChange(event.target.value)} />
       </label>
       <div className="mt-2">
@@ -286,8 +296,8 @@ function SelectField({ label, value, options, onChange }: {
   options: ReadonlyArray<readonly [string, string]>
   onChange: (value: string) => void
 }) {
-  return <label className="grid gap-1"><span className="label">{label}</span>
-    <select className="input-base" value={value} onChange={(event) => onChange(event.target.value)}>
+  return <label className="grid min-w-0 gap-1"><span className="label">{label}</span>
+    <select className="input-base min-w-0 w-full" value={value} onChange={(event) => onChange(event.target.value)}>
       {options.map(([id, name]) => <option key={id || 'inherit'} value={id}>{name}</option>)}
     </select>
   </label>
@@ -299,8 +309,8 @@ function NumberField({ label, value, onChange, placeholder }: {
   onChange: (value: number | undefined) => void
   placeholder?: string
 }) {
-  return <label className="grid gap-1"><span className="label">{label}</span>
-    <input type="number" min={0} className="input-base" value={value ?? ''} placeholder={placeholder}
+  return <label className="grid min-w-0 gap-1"><span className="label">{label}</span>
+    <input type="number" min={0} className="input-base min-w-0 w-full" value={value ?? ''} placeholder={placeholder}
       onChange={(event) => {
         const raw = event.target.value.trim()
         onChange(raw ? Math.max(0, Number(raw) || 0) : undefined)
