@@ -1,7 +1,10 @@
+import type { ReactNode } from 'react'
+
 import type { AbilityActionKind, AbilityKind } from '../../models/abilities/Ability'
 import type {
   CustomAbilityActivationDefinition,
   CustomAbilityResourceChangeDefinition,
+  CustomAbilityTypeDefinition,
   CustomPredefinedAbilityDefinition,
   CustomUsageResetKind,
 } from '../../models/customSystems/CustomAbilityDefinition'
@@ -34,11 +37,12 @@ const RESET_KINDS: Array<[CustomUsageResetKind, string]> = [
 
 type Props = {
   definition: CustomSystemDefinition
+  abilityType: CustomAbilityTypeDefinition
   ability: CustomPredefinedAbilityDefinition
   onChange: (ability: CustomPredefinedAbilityDefinition) => void
 }
 
-export function CustomAbilitySpecificActivationEditor({ definition, ability, onChange }: Props) {
+export function CustomAbilitySpecificActivationEditor({ definition, abilityType, ability, onChange }: Props) {
   const activation = ability.activation
   const usageMode = !activation?.usage ? 'inherit' : (activation.usage.mode ?? 'limited')
   const resourceMode = activation?.resourceChanges === undefined ? 'inherit' : 'specific'
@@ -156,9 +160,10 @@ export function CustomAbilitySpecificActivationEditor({ definition, ability, onC
             {usageMode === 'limited' ? (
               <FormulaField
                 definition={definition}
+                abilityType={abilityType}
                 label="Fórmula do máximo"
                 value={activation.usage?.maximumFormula ?? ''}
-                placeholder="Ex.: character.proficiencyBonus + 1"
+                placeholder="Ex.: ability.nivel + character.proficiencyBonus"
                 onChange={(maximumFormula) => patchUsage({ maximumFormula: maximumFormula || undefined })}
               />
             ) : null}
@@ -177,6 +182,7 @@ export function CustomAbilitySpecificActivationEditor({ definition, ability, onC
                   <ResourceChangeRow
                     key={change.id}
                     definition={definition}
+                    abilityType={abilityType}
                     change={change}
                     onChange={(next) => setResourceChanges(
                       (activation.resourceChanges ?? []).map((entry, current) => current === index ? next : entry),
@@ -225,8 +231,9 @@ export function CustomAbilitySpecificActivationEditor({ definition, ability, onC
   )
 }
 
-function ResourceChangeRow({ definition, change, onChange, onRemove }: {
+function ResourceChangeRow({ definition, abilityType, change, onChange, onRemove }: {
   definition: CustomSystemDefinition
+  abilityType: CustomAbilityTypeDefinition
   change: CustomAbilityResourceChangeDefinition
   onChange: (change: CustomAbilityResourceChangeDefinition) => void
   onRemove: () => void
@@ -264,7 +271,7 @@ function ResourceChangeRow({ definition, change, onChange, onRemove }: {
               : { source: 'native', resource: resource as 'hitPoints' | 'temporaryHitPoints' | 'inspiration' | 'exhaustion' },
           })}
         /></FieldCell>
-        <ResourceAmountFormulaField definition={definition} change={change} onChange={onChange} />
+        <ResourceAmountFormulaField definition={definition} abilityType={abilityType} change={change} onChange={onChange} />
         <button type="button" onClick={onRemove}
           className="shrink-0 rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10">
           Remover
@@ -274,14 +281,15 @@ function ResourceChangeRow({ definition, change, onChange, onRemove }: {
   )
 }
 
-function FormulaField({ definition, label, value, onChange, placeholder }: {
+function FormulaField({ definition, abilityType, label, value, onChange, placeholder }: {
   definition: CustomSystemDefinition
+  abilityType: CustomAbilityTypeDefinition
   label: string
   value: string
   onChange: (value: string) => void
   placeholder?: string
 }) {
-  const error = value.trim() ? validateCustomFormula(value, definition) : undefined
+  const error = value.trim() ? validateCustomFormula(value, definition, abilityType) : undefined
   return (
     <div className="mt-3 rounded-lg border border-accentBorder bg-accentBg/30 p-3">
       <label className="grid min-w-0 gap-1"><span className="label">{label}</span>
@@ -289,7 +297,7 @@ function FormulaField({ definition, label, value, onChange, placeholder }: {
           onChange={(event) => onChange(event.target.value)} />
       </label>
       <div className="mt-2">
-        <FormulaVariablePicker variables={listCustomFormulaVariables(definition)}
+        <FormulaVariablePicker variables={listCustomFormulaVariables(definition, abilityType)}
           onSelect={(path) => onChange(`${value}${value.trim() ? ' ' : ''}${path}`)} />
       </div>
       {value.trim() ? <div className={`mt-2 text-xs ${error ? 'text-red-300' : 'text-emerald-300'}`}>
@@ -299,7 +307,7 @@ function FormulaField({ definition, label, value, onChange, placeholder }: {
   )
 }
 
-function FieldCell({ children }: { children: React.ReactNode }) {
+function FieldCell({ children }: { children: ReactNode }) {
   return <div className="min-w-[11rem] flex-[1_1_11rem]">{children}</div>
 }
 
