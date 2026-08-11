@@ -63,11 +63,16 @@ export type CustomAbilityResourceReference =
   | {
       source: 'native'
       resource: 'hitPoints' | 'temporaryHitPoints' | 'inspiration' | 'exhaustion'
+      /** Preserva o discriminante e permite acesso seguro em UIs que alternam pelo source. */
+      resourceId?: never
+      systemId?: never
     }
   | {
       source: 'customSystem'
       systemId: string
       resourceId: string
+      /** Preserva o discriminante e permite acesso seguro em UIs que alternam pelo source. */
+      resource?: never
     }
 
 export interface CustomAbilityResourceChangeDefinition {
