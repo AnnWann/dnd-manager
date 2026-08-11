@@ -3,6 +3,7 @@ import { Play } from "lucide-react"
 
 import type { AbilityActionKind } from "../../../../../../models/abilities/Ability"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
+import type { CustomAbilityTypeDefinition } from "../../../../../../models/customSystems/CustomAbilityDefinition"
 import type {
   CharacterCustomSystemState,
   CustomAbilityInstance,
@@ -233,6 +234,7 @@ function abilityEntry(
   const availability = getCustomAbilityAvailability(effectiveType, ability)
   const usage = resolveUsageDisplay(
     activation.usage,
+    type,
     ability,
     definition,
     state,
@@ -264,6 +266,7 @@ function abilityEntry(
 
 function resolveUsageDisplay(
   usage: ReturnType<typeof getEffectiveCustomAbilityActivation>["usage"],
+  type: CustomAbilityTypeDefinition,
   ability: CustomAbilityInstance,
   definition: CustomSystemDefinition,
   state: CharacterCustomSystemState,
@@ -284,6 +287,7 @@ function resolveUsageDisplay(
       definition,
       state,
       character,
+      { type, values: ability.values },
     )
     if (
       result.ok &&
