@@ -25,6 +25,11 @@ export type CustomAbilityFormulaContext = {
   values?: Record<string, JsonValue>
 }
 
+type SystemGroupedFormulaVariable = CustomFormulaVariable & {
+  customSystemId?: string
+  customSystemName?: string
+}
+
 export function listCustomFormulaVariables(
   definition: CustomSystemDefinition,
   abilityType?: CustomAbilityTypeDefinition,
@@ -45,11 +50,23 @@ export function listCustomFormulaVariables(
       valueType: formulaValueType(field),
     }))
 
-  const variables = [
+  const variables: SystemGroupedFormulaVariable[] = [
     ...listCharacterFormulaVariables(),
-    ...listBaseFormulaVariables(definition),
-    ...calculatedFieldVariables,
-    ...abilityVariables,
+    ...listBaseFormulaVariables(definition).map((variable) => ({
+      ...variable,
+      customSystemId: definition.id,
+      customSystemName: definition.name,
+    })),
+    ...calculatedFieldVariables.map((variable) => ({
+      ...variable,
+      customSystemId: definition.id,
+      customSystemName: definition.name,
+    })),
+    ...abilityVariables.map((variable) => ({
+      ...variable,
+      customSystemId: definition.id,
+      customSystemName: definition.name,
+    })),
   ]
 
   return Array.from(
