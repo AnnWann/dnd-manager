@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react"
 
+import { useCustomSystemDefinitions } from "../../../lib/customSystems/CustomSystemRegistry"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 
 import { AttributeCalculators } from "./attributeCalculators"
 import { Attributes } from "./attributes"
 import { CharacterConditions } from "./characterConditions"
 import { CharacterIdentity } from "./character_info/characterIdentity"
+import {
+  CustomSystemActionsPanel,
+  hasCustomSystemSheetActions,
+} from "./character_info/components/actions/CustomSystemActionsPanel"
 import { GroupActions } from "./character_info/components/actions/GroupActions"
 import { GroupHP } from "./character_info/components/hp/GroupHP"
 import { GroupStats } from "./character_info/components/stats/GroupStats"
@@ -34,7 +39,13 @@ export function CharacterSheetTab({
   showConditions = true,
 }: Props) {
   const [viewMode, setViewMode] = useState<SheetViewMode>(loadSheetViewMode)
+  const customSystemDefinitions = useCustomSystemDefinitions()
   const showActionEconomy = canAssignOwners
+  const showCustomActions = hasCustomSystemSheetActions(
+    character,
+    customSystemDefinitions,
+  )
+  const showActionsColumn = showActionEconomy || showCustomActions
 
   useEffect(() => {
     saveSheetViewMode(viewMode)
@@ -84,6 +95,12 @@ export function CharacterSheetTab({
             character={character}
             updateCharacter={updateCharacter}
           />
+          {showCustomActions ? (
+            <CustomSystemActionsPanel
+              character={character}
+              updateCharacter={updateCharacter}
+            />
+          ) : null}
           {showConditions ? (
             <CharacterConditions
               character={character}
@@ -109,7 +126,7 @@ export function CharacterSheetTab({
 
           <div
             className={
-              showActionEconomy
+              showActionsColumn
                 ? "grid items-start gap-4 xl:grid-cols-[280px_minmax(360px,1fr)_minmax(320px,0.9fr)]"
                 : "grid items-start gap-4 xl:grid-cols-[280px_minmax(360px,1fr)]"
             }
@@ -124,11 +141,21 @@ export function CharacterSheetTab({
 
             <Skills character={character} updateCharacter={updateCharacter} />
 
-            {showActionEconomy ? (
-              <GroupActions
-                character={character}
-                updateCharacter={updateCharacter}
-              />
+            {showActionsColumn ? (
+              <div className="grid gap-4">
+                {showCustomActions ? (
+                  <CustomSystemActionsPanel
+                    character={character}
+                    updateCharacter={updateCharacter}
+                  />
+                ) : null}
+                {showActionEconomy ? (
+                  <GroupActions
+                    character={character}
+                    updateCharacter={updateCharacter}
+                  />
+                ) : null}
+              </div>
             ) : null}
           </div>
 
