@@ -1,12 +1,22 @@
-import type { CustomAbilityTypeDefinition } from "./CustomAbilityDefinition"
-import type { CustomAutomationDefinition } from "./CustomAutomationDefinition"
-import type { CustomFieldDefinition } from "./CustomFieldDefinition"
-import type { CustomSystemId, CustomSystemVersion, JsonValue } from "./CustomGenerals"
-import type { CustomPanelDefinition } from "./CustomPanelDefinition"
-import type { CustomResourceDefinition } from "./CustomResourceDefinition"
+import type { AbilityActionKind } from "../abilities/Ability"
+import type { ConditionDurationType } from "../characters/CharacterCondition"
 import type { Attribute } from "../sheet/Attribute"
 import type { ClassName } from "../sheet/Class"
 import type { ProficiencyCategory } from "../sheet/Proficiency"
+import type {
+  CustomAbilityResourceChangeDefinition,
+  CustomAbilityTypeDefinition,
+} from "./CustomAbilityDefinition"
+import type { CustomAutomationDefinition } from "./CustomAutomationDefinition"
+import type { CustomFieldDefinition } from "./CustomFieldDefinition"
+import type {
+  CustomSystemId,
+  CustomSystemVersion,
+  FormulaExpression,
+  JsonValue,
+} from "./CustomGenerals"
+import type { CustomPanelDefinition } from "./CustomPanelDefinition"
+import type { CustomResourceDefinition } from "./CustomResourceDefinition"
 
 export interface CustomSystemDefinition {
   id: CustomSystemId
@@ -19,10 +29,54 @@ export interface CustomSystemDefinition {
   abilityTypes: CustomAbilityTypeDefinition[]
   panels: CustomPanelDefinition[]
   automations: CustomAutomationDefinition[]
+  /** Fórmulas que substituem cálculos derivados já existentes na ficha. */
+  nativeStatOverrides?: CustomNativeStatOverrideDefinition[]
+  /** Botões de ação independentes de uma habilidade adquirida. */
+  actions?: CustomSystemActionDefinition[]
   automaticInstallation?: CustomSystemAutomaticInstallation
   characterPlacement?: CustomSystemCharacterPlacement
   presentation?: CustomSystemPresentationDefinition
   tags?: string[]
+}
+
+export type CustomNativeStatTarget =
+  | "armorClass"
+  | "initiative"
+  | "mobility"
+  | "passivePerception"
+
+export interface CustomNativeStatOverrideDefinition {
+  id: string
+  target: CustomNativeStatTarget
+  formula: FormulaExpression
+  /** Maior prioridade vence quando mais de um sistema substitui o mesmo cálculo. */
+  priority?: number
+  enabled?: boolean
+}
+
+export interface CustomSystemActionDefinition {
+  id: string
+  name: string
+  description?: string
+  actionKind: AbilityActionKind
+  enabled?: boolean
+  resourceChanges?: CustomAbilityResourceChangeDefinition[]
+  conditionChanges?: CustomSystemConditionChangeDefinition[]
+}
+
+export interface CustomSystemConditionChangeDefinition {
+  id: string
+  operation: "add" | "remove"
+  name: string
+  description?: string
+  behavior?: string
+  tags?: string[]
+  duration?: {
+    type: ConditionDurationType
+    amount?: number
+    customLabel?: string
+    autoRemoveAtZero?: boolean
+  }
 }
 
 export interface CustomSystemPresentationDefinition {
@@ -35,45 +89,45 @@ export interface CustomSystemPresentationItem {
   hiddenForMaster?: boolean
 }
 
-export type CustomSystemPresentationItemKind = 'field' | 'resource' | 'ability'
+export type CustomSystemPresentationItemKind = "field" | "resource" | "ability"
 
 export type CustomSystemExistingCharacterTab =
-  | 'sheet'
-  | 'abilities'
-  | 'spellsList'
-  | 'equipment'
-  | 'inventory'
-  | 'race'
-  | 'profile'
-  | 'proficiencies'
+  | "sheet"
+  | "abilities"
+  | "spellsList"
+  | "equipment"
+  | "inventory"
+  | "race"
+  | "profile"
+  | "proficiencies"
 
 export type CustomSystemPlacementReference =
-  | { type: 'standardTab'; tab: CustomSystemExistingCharacterTab }
-  | { type: 'system'; systemId: string }
+  | { type: "standardTab"; tab: CustomSystemExistingCharacterTab }
+  | { type: "system"; systemId: string }
 
 export type CustomSystemEmbeddedReference =
-  | { type: 'content' }
-  | { type: 'system'; systemId: string }
+  | { type: "content" }
+  | { type: "system"; systemId: string }
 
 export type CustomSystemCharacterPlacement =
   | {
-      mode: 'newTab'
+      mode: "newTab"
       tabLabel?: string
       reference?: CustomSystemPlacementReference
-      position?: 'before' | 'after'
+      position?: "before" | "after"
       /** @deprecated Compatibility with definitions created before system anchors. */
       relativeToTab?: CustomSystemExistingCharacterTab
     }
   | {
-      mode: 'existingTab'
+      mode: "existingTab"
       targetTab: CustomSystemExistingCharacterTab
-      position: 'before' | 'after'
+      position: "before" | "after"
       reference?: CustomSystemEmbeddedReference
     }
 
 export interface CustomSystemAutomaticInstallation {
   enabled: boolean
-  match: 'all' | 'any'
+  match: "all" | "any"
   requirements: CustomSystemInstallationRequirement[]
   characterPlacement?: CustomSystemCharacterPlacement
 }
@@ -81,40 +135,40 @@ export interface CustomSystemAutomaticInstallation {
 export type CustomSystemInstallationRequirement =
   | {
       id: string
-      type: 'class'
+      type: "class"
       className: ClassName
       minimumLevel?: number
       subclassName?: string
     }
   | {
       id: string
-      type: 'totalLevel'
+      type: "totalLevel"
       minimumLevel: number
     }
   | {
       id: string
-      type: 'proficiency'
+      type: "proficiency"
       proficiencyId?: string
       name?: string
       category?: ProficiencyCategory
     }
   | {
       id: string
-      type: 'ability'
+      type: "ability"
       abilityId?: string
       name?: string
-      source?: 'character' | 'custom' | 'any'
+      source?: "character" | "custom" | "any"
     }
   | {
       id: string
-      type: 'attribute'
+      type: "attribute"
       attribute: Attribute
       minimumValue: number
       useModifier?: boolean
     }
   | {
       id: string
-      type: 'formula'
+      type: "formula"
       formula: string
     }
 
@@ -125,7 +179,7 @@ export interface CharacterCustomSystemState {
   fields: Record<string, JsonValue>
   resources: Record<string, CustomResourceState>
   abilities: CustomAbilityInstance[]
-  installationSource?: 'master' | 'automatic'
+  installationSource?: "master" | "automatic"
 }
 
 export interface CustomResourceState {
@@ -156,11 +210,11 @@ export interface CustomSystemAssignment {
 }
 
 export type CustomSystemAssignmentTarget =
-  | { type: 'campaign' }
-  | { type: 'character'; characterId: string }
-  | { type: 'template'; templateId: string }
-  | { type: 'class'; classId: string }
-  | { type: 'tag'; tag: string }
+  | { type: "campaign" }
+  | { type: "character"; characterId: string }
+  | { type: "template"; templateId: string }
+  | { type: "class"; classId: string }
+  | { type: "tag"; tag: string }
 
 export interface InstalledCustomSystem {
   systemId: CustomSystemId
@@ -170,4 +224,4 @@ export interface InstalledCustomSystem {
   configuration?: Record<string, JsonValue>
 }
 
-export type CustomSystemUpdateMode = 'automatic' | 'askMaster' | 'lockedVersion'
+export type CustomSystemUpdateMode = "automatic" | "askMaster" | "lockedVersion"
