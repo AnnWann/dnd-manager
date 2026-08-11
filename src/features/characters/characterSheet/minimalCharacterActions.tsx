@@ -4,6 +4,12 @@ import { useNavigate } from "react-router-dom"
 import { Button } from "../../../components/ui/Button"
 import { Modal } from "../../../components/ui/Modal"
 import { cn } from "../../../lib/cn"
+import {
+  activateCustomAbility,
+  getCustomAbilityAvailability,
+} from "../../../lib/customSystems"
+import { getEffectiveCustomAbilityActivation } from "../../../lib/customSystems/CustomSystemActions"
+import { useCustomSystemDefinitions } from "../../../lib/customSystems/CustomSystemRegistry"
 import type {
   Ability,
   AbilityActionKind,
@@ -11,12 +17,16 @@ import type {
 import {
   abilityRequiresActivation,
   endAbilityEffect,
-  getAbilityEffectDuration,
   getAbilityUsageMax,
   isAbilityBenefitsActive,
   useAbilityEffect,
 } from "../../../models/abilities/abilityActivation"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import type {
+  CharacterCustomSystemState,
+  CustomAbilityInstance,
+  CustomSystemDefinition,
+} from "../../../models/customSystems/CustomSystemDefinition"
 
 type ActionFilter = "action" | "bonusAction" | "reaction" | "free" | "passive"
 
@@ -24,6 +34,12 @@ type AbilitySource =
   | { type: "character"; abilityId: string }
   | { type: "race"; abilityId: string }
   | { type: "equipment"; itemId: string; abilityId: string }
+
+type CustomAbilitySource = {
+  systemId: string
+  abilityId: string
+  canUse: boolean
+}
 
 type ActionEntry = {
   id: string
@@ -34,6 +50,7 @@ type ActionEntry = {
   source?: string
   ability?: Ability
   abilitySource?: AbilitySource
+  customAbilitySource?: CustomAbilitySource
 }
 
 const FILTER_OPTIONS: Array<{ value: ActionFilter; label: string }> = [
@@ -77,12 +94,14 @@ export function MinimalCharacterActions({
   ) => void
 }) {
   const navigate = useNavigate()
+  const definitions = useCustomSystemDefinitions()
   const [filter, setFilter] = useState<ActionFilter>("action")
   const [selected, setSelected] = useState<ActionEntry | null>(null)
+  const [error, setError] = useState("")
   const standardActions = STANDARD_ACTIONS.filter((entry) => entry.filter === filter)
   const abilityActions = useMemo(
-    () => getAbilityActions(character, filter),
-    [character, filter],
+    () => getAbilityActions(character, filter, definitions),
+    [character, filter, definitions],
   )
   const passiveAbilities = useMemo(
     () => getPassiveAbilities(character),
@@ -94,6 +113,7 @@ export function MinimalCharacterActions({
       navigate(`/character/${encodeURIComponent(character.get("id"))}/spellsList`)
       return
     }
+    setError("")
     setSelected(entry)
   }
 
@@ -106,20 +126,43 @@ export function MinimalCharacterActions({
           ? current.useEquipmentAbility(source.itemId, source.abilityId)
           : current.deactivateEquipmentAbility(source.itemId, source.abilityId)
       }
-       if (source.type === "race") {
-         const ability = (current.get("sheet").race.naturalAbilities ?? []).find(
-           (entry) => entry.id === source.abilityId,
-         )
-         if (!ability) return current
-         return action === "use"
-           ? useAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
-           : endAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
-       }
+      if (source.type === "race") {
+        const ability = (current.get("sheet").race.naturalAbilities ?? []).find(
+          (item) => item.id === source.abilityId,
+        )
+        if (!ability) return current
+        return action === "use"
+          ? useAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
+          : endAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
+      }
       return action === "use"
         ? current.useAbility(source.abilityId)
         : current.deactivateAbility(source.abilityId)
     })
     setSelected(null)
+  }
+
+  function useCustomAbility(entry: ActionEntry) {
+    const source = entry.customAbilitySource
+    if (!source) return
+    try {
+      setError("")
+      updateCharacter(character.get("id"), (current) =>
+        activateCustomAbility(
+          current,
+          definitions,
+          source.systemId,
+          source.abilityId,
+        ),
+      )
+      setSelected(null)
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Não foi possível usar esta habilidade.",
+      )
+    }
   }
 
   return (
@@ -181,9 +224,29 @@ export function MinimalCharacterActions({
                   {getAbilityUsageMax(character, selected.ability.usage)} usos
                 </span>
               ) : null}
+              {selected.customAbilitySource ? (
+                <span>
+                  • {selected.customAbilitySource.canUse ? "Disponível" : "Indisponível"}
+                </span>
+              ) : null}
             </div>
             <p className="whitespace-pre-wrap text-sm leading-6 text-text">{selected.description}</p>
-            {selected.ability && abilityRequiresActivation(selected.ability) ? (
+            {error ? (
+              <div className="rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">
+                {error}
+              </div>
+            ) : null}
+            {selected.customAbilitySource ? (
+              <div className="flex justify-end border-t border-border pt-3">
+                <Button
+                  variant="primary"
+                  disabled={!selected.customAbilitySource.canUse}
+                  onClick={() => useCustomAbility(selected)}
+                >
+                  Usar
+                </Button>
+              </div>
+            ) : selected.ability && abilityRequiresActivation(selected.ability) ? (
               <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
                 {isAbilityBenefitsActive(selected.ability) ? (
                   <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>
@@ -240,7 +303,11 @@ function ActionGroup({
   )
 }
 
-function getAbilityActions(character: CharacterTemplate, filter: ActionFilter): ActionEntry[] {
+function getAbilityActions(
+  character: CharacterTemplate,
+  filter: ActionFilter,
+  definitions: CustomSystemDefinition[],
+): ActionEntry[] {
   const raceAbilities = (character.get("sheet").race.naturalAbilities ?? []).map((ability) => ({
     ability,
     sourceLabel: "Raça",
@@ -265,7 +332,7 @@ function getAbilityActions(character: CharacterTemplate, filter: ActionFilter): 
     }
   })
 
-  return [...characterAbilities, ...raceAbilities]
+  const nativeEntries: ActionEntry[] = [...characterAbilities, ...raceAbilities]
     .filter(({ ability }) =>
       (ability.kind ?? "active") === "active" &&
       normalizeActionKind(ability.actionKind) === filter,
@@ -279,7 +346,73 @@ function getAbilityActions(character: CharacterTemplate, filter: ActionFilter): 
       ability,
       abilitySource: source,
     }))
+
+  return [...nativeEntries, ...getCustomAbilityActions(character, filter, definitions)]
     .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
+}
+
+function getCustomAbilityActions(
+  character: CharacterTemplate,
+  filter: ActionFilter,
+  definitions: CustomSystemDefinition[],
+): ActionEntry[] {
+  const states = (character.get("sheet").customSystems ?? []) as CharacterCustomSystemState[]
+  const entries: ActionEntry[] = []
+
+  for (const state of states) {
+    if (state.enabled === false) continue
+    const definition = definitions.find((item) => item.id === state.systemId)
+    if (!definition) continue
+
+    for (const ability of state.abilities ?? []) {
+      const entry = customAbilityEntry(definition, state, ability, filter)
+      if (entry) entries.push(entry)
+    }
+  }
+
+  return entries
+}
+
+function customAbilityEntry(
+  definition: CustomSystemDefinition,
+  _state: CharacterCustomSystemState,
+  ability: CustomAbilityInstance,
+  filter: ActionFilter,
+): ActionEntry | undefined {
+  if (ability.enabled === false) return undefined
+  const type = definition.abilityTypes.find((item) => item.id === ability.abilityTypeId)
+  if (!type) return undefined
+
+  const activation = getEffectiveCustomAbilityActivation(type, ability)
+  if (normalizeActionKind(activation.actionKind) !== filter) return undefined
+
+  const preset = type.predefinedAbilities?.find(
+    (item) => item.id === ability.predefinedAbilityId,
+  )
+  const effectiveType = preset?.acquisition
+    ? {
+        ...type,
+        acquisition: { ...type.acquisition, ...preset.acquisition },
+      }
+    : type
+  const availability = getCustomAbilityAvailability(effectiveType, ability)
+  const title = displayValue(ability.values[type.display.titleFieldId]) || type.name
+  const description = type.display.descriptionFieldId
+    ? displayValue(ability.values[type.display.descriptionFieldId])
+    : preset?.description ?? type.description
+
+  return {
+    id: `custom-ability:${definition.id}:${ability.id}`,
+    name: title,
+    description: description?.trim() || "Esta habilidade não possui uma descrição cadastrada.",
+    filter,
+    source: `${definition.name} · ${type.name}`,
+    customAbilitySource: {
+      systemId: definition.id,
+      abilityId: ability.id,
+      canUse: availability.canUse,
+    },
+  }
 }
 
 function getPassiveAbilities(character: CharacterTemplate): ActionEntry[] {
@@ -332,4 +465,10 @@ function normalizeActionKind(actionKind: AbilityActionKind | undefined): ActionF
 function filterLabel(filter: ActionFilter): string {
   if (filter === "passive") return "Passiva"
   return FILTER_OPTIONS.find((option) => option.value === filter)?.label ?? filter
+}
+
+function displayValue(value: unknown): string {
+  if (typeof value === "string") return value.trim()
+  if (typeof value === "number" || typeof value === "boolean") return String(value)
+  return ""
 }
