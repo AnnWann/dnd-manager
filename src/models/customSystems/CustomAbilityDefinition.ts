@@ -1,4 +1,5 @@
 import type { AbilityActionKind, AbilityKind, Trigger } from "../abilities/Ability"
+import type { ConditionDurationType } from "../characters/CharacterCondition"
 import type { CustomCondition } from "./CustomAutomationDefinition"
 import type { CustomFieldDefinition } from "./CustomFieldDefinition"
 import type { FormulaExpression, JsonValue } from "./CustomGenerals"
@@ -56,6 +57,8 @@ export interface CustomAbilityActivationDefinition {
   /** @deprecated Use resourceChanges com operation='spend'. */
   resourceCosts?: CustomResourceCostDefinition[]
   resourceChanges?: CustomAbilityResourceChangeDefinition[]
+  /** Estados aplicados/removidos quando a habilidade é usada. */
+  conditionChanges?: CustomAbilityConditionChangeDefinition[]
   usage?: CustomUsageDefinition
 }
 
@@ -79,8 +82,24 @@ export interface CustomAbilityResourceChangeDefinition {
   id: string
   target: CustomAbilityResourceReference
   operation: 'spend' | 'gain' | 'set'
+  /** Mantido para compatibilidade e valores numéricos simples. Fórmula tem precedência. */
   amount?: number
   formula?: FormulaExpression
+}
+
+export interface CustomAbilityConditionChangeDefinition {
+  id: string
+  operation: 'add' | 'remove'
+  name: string
+  description?: string
+  behavior?: string
+  tags?: string[]
+  duration?: {
+    type: ConditionDurationType
+    amount?: number
+    customLabel?: string
+    autoRemoveAtZero?: boolean
+  }
 }
 
 export interface CustomResourceCostDefinition {
