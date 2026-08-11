@@ -10,6 +10,7 @@ import type {
 } from "../../../../../../models/customSystems/CustomSystemDefinition"
 import {
   activateCustomAbility,
+  evaluateCustomFormula,
   getCustomAbilityAvailability,
 } from "../../../../../../lib/customSystems"
 import {
@@ -230,10 +231,13 @@ function abilityEntry(
       }
     : type
   const availability = getCustomAbilityAvailability(effectiveType, ability)
-  const maximum = ability.usage?.maximum ?? activation.usage?.maximum
-  const used = ability.usage?.used ?? 0
-  const remaining =
-    maximum === undefined ? undefined : Math.max(0, maximum - used)
+  const usage = resolveUsageDisplay(
+    activation.usage,
+    ability,
+    definition,
+    state,
+    character,
+  )
   const title = displayValue(ability.values[type.display.titleFieldId]) || type.name
   const description = type.display.descriptionFieldId
     ? displayValue(ability.values[type.display.descriptionFieldId])
@@ -245,15 +249,59 @@ function abilityEntry(
     description,
     source: `${definition.name} · ${type.name}`,
     actionKind: activation.actionKind,
-    disabled: !availability.canUse || remaining === 0,
-    status:
-      remaining === undefined
-        ? availability.canUse
+    disabled: !availability.canUse || usage.remaining === 0,
+    status: !availability.canUse
+      ? "indisponível"
+      : usage.mode === "unlimited"
+        ? "usos ilimitados"
+        : usage.maximum === undefined
           ? undefined
-          : "indisponível"
-        : `${remaining}/${maximum} usos`,
+          : `${usage.remaining}/${usage.maximum} usos`,
     activate: (current) =>
       activateCustomAbility(current, definitions, definition.id, ability.id),
+  }
+}
+
+function resolveUsageDisplay(
+  usage: ReturnType<typeof getEffectiveCustomAbilityActivation>["usage"],
+  ability: CustomAbilityInstance,
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  character: CharacterTemplate,
+): {
+  mode: "unlimited" | "limited"
+  maximum?: number
+  remaining?: number
+} {
+  if (!usage || (usage.mode ?? "limited") === "unlimited") {
+    return { mode: "unlimited" }
+  }
+
+  let maximum = usage.maximum
+  if (usage.maximumFormula?.trim()) {
+    const result = evaluateCustomFormula(
+      usage.maximumFormula,
+      definition,
+      state,
+      character,
+    )
+    if (
+      result.ok &&
+      typeof result.value === "number" &&
+      Number.isFinite(result.value)
+    ) {
+      maximum = Math.max(0, Math.floor(result.value))
+    }
+  } else if (ability.usage?.maximum !== undefined) {
+    maximum = ability.usage.maximum
+  }
+
+  const used = ability.usage?.used ?? 0
+  return {
+    mode: "limited",
+    maximum,
+    remaining:
+      maximum === undefined ? undefined : Math.max(0, maximum - used),
   }
 }
 
