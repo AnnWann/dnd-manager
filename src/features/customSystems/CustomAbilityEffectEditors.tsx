@@ -1,29 +1,18 @@
 import { Plus, Trash2 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useState } from 'react'
 
 import { listCustomFormulaVariables, validateCustomFormula } from '../../lib/customSystems'
-import type { ConditionDurationType } from '../../models/characters/CharacterCondition'
 import type {
   CustomAbilityConditionChangeDefinition,
   CustomAbilityResourceChangeDefinition,
   CustomAbilityTypeDefinition,
 } from '../../models/customSystems/CustomAbilityDefinition'
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
+import {
+  createConditionChange,
+  CustomConditionEffectDialog,
+} from './CustomConditionEffectDialog'
 import { FormulaVariablePicker } from './FormulaVariablePicker'
-
-const DURATIONS: Array<[ConditionDurationType, string]> = [
-  ['permanent', 'Permanente'],
-  ['rounds', 'Rodadas'],
-  ['turns', 'Turnos'],
-  ['minutes', 'Minutos'],
-  ['hours', 'Horas'],
-  ['days', 'Dias'],
-  ['until-start-of-turn', 'Até o início do turno'],
-  ['until-end-of-turn', 'Até o fim do turno'],
-  ['until-save', 'Até passar em um teste'],
-  ['concentration', 'Concentração'],
-  ['custom', 'Personalizada'],
-]
 
 export function ResourceAmountFormulaField({
   definition,
@@ -93,144 +82,145 @@ export function AbilityConditionChangesEditor({
   onChange: (value: CustomAbilityConditionChangeDefinition[]) => void
   emptyLabel?: string
 }) {
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [creating, setCreating] = useState<CustomAbilityConditionChangeDefinition | null>(null)
+
+  function saveCreating(change: CustomAbilityConditionChangeDefinition) {
+    onChange([...value, change])
+    setCreating(null)
+  }
+
+  function saveEditing(change: CustomAbilityConditionChangeDefinition) {
+    if (editingIndex === null) return
+    onChange(value.map((entry, index) => index === editingIndex ? change : entry))
+    setEditingIndex(null)
+  }
+
   return (
     <div className="grid gap-3">
       {value.map((change, index) => (
-        <ConditionRow
-          key={change.id}
-          value={change}
-          onChange={(next) => onChange(value.map((entry, current) => current === index ? next : entry))}
-          onRemove={() => onChange(value.filter((_, current) => current !== index))}
-        />
+        <article key={change.id} className="rounded-lg border border-border bg-bg p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold text-textH">
+                  {change.name || 'Condição sem nome'}
+                </span>
+                <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-textMuted">
+                  {change.operation === 'add' ? 'Aplicar / renovar' : 'Remover'}
+                </span>
+              </div>
+              {change.operation === 'add' ? (
+                <div className="mt-1 text-xs text-textMuted">
+                  {formatDuration(change)}
+                  {change.source?.trim() ? ` · Fonte: ${change.source.trim()}` : ''}
+                </div>
+              ) : (
+                <div className="mt-1 text-xs text-textMuted">Remove a condição pelo nome.</div>
+              )}
+            </div>
+
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <select
+                className="input-base min-w-[9rem] text-xs"
+                value={change.operation}
+                onChange={(event) => onChange(value.map((entry, current) =>
+                  current === index
+                    ? { ...entry, operation: event.target.value as 'add' | 'remove' }
+                    : entry,
+                ))}
+              >
+                <option value="add">Aplicar / renovar</option>
+                <option value="remove">Remover</option>
+              </select>
+              {change.operation === 'add' ? (
+                <button
+                  type="button"
+                  onClick={() => setEditingIndex(index)}
+                  className="rounded-lg border border-border px-3 py-2 text-xs text-textH hover:bg-accentBg"
+                >
+                  Editar condição
+                </button>
+              ) : (
+                <input
+                  className="input-base min-w-[12rem] text-xs"
+                  value={change.name}
+                  placeholder="Nome da condição"
+                  onChange={(event) => onChange(value.map((entry, current) =>
+                    current === index ? { ...entry, name: event.target.value } : entry,
+                  ))}
+                />
+              )}
+              <button
+                type="button"
+                title="Remover alteração"
+                onClick={() => onChange(value.filter((_, current) => current !== index))}
+                className="rounded-lg border border-red-500/40 p-2 text-red-300 hover:bg-red-500/10"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </article>
       ))}
+
       {!value.length ? <Empty>{emptyLabel}</Empty> : null}
+
       <button
         type="button"
-        onClick={() => onChange([...value, newAbilityConditionChange()])}
+        onClick={() => setCreating(createConditionChange())}
         className="justify-self-start inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-textH hover:bg-accentBg"
       >
         <Plus className="h-3.5 w-3.5" /> Adicionar condição
       </button>
+
+      <CustomConditionEffectDialog
+        open={creating !== null}
+        change={creating}
+        isNew
+        onClose={() => setCreating(null)}
+        onSave={saveCreating}
+      />
+      <CustomConditionEffectDialog
+        open={editingIndex !== null}
+        change={editingIndex === null ? null : value[editingIndex] ?? null}
+        onClose={() => setEditingIndex(null)}
+        onSave={saveEditing}
+      />
     </div>
   )
 }
 
-function ConditionRow({ value, onChange, onRemove }: {
-  value: CustomAbilityConditionChangeDefinition
-  onChange: (value: CustomAbilityConditionChangeDefinition) => void
-  onRemove: () => void
-}) {
-  const duration = value.duration ?? { type: 'permanent' as const }
-  const numeric = isNumericDuration(duration.type)
-
-  return (
-    <article className="rounded-lg border border-border p-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <Cell>
-          <SelectField
-            label="Operação"
-            value={value.operation}
-            options={[["add", "Aplicar / renovar"], ["remove", "Remover"]]}
-            onChange={(operation) => onChange({ ...value, operation: operation as 'add' | 'remove' })}
-          />
-        </Cell>
-        <Cell>
-          <TextField label="Condição / estado" value={value.name} onChange={(name) => onChange({ ...value, name })} />
-        </Cell>
-        {value.operation === 'add' ? <>
-          <Cell>
-            <SelectField
-              label="Duração"
-              value={duration.type}
-              options={DURATIONS}
-              onChange={(type) => onChange({ ...value, duration: { ...duration, type: type as ConditionDurationType } })}
-            />
-          </Cell>
-          {numeric ? (
-            <div className="min-w-[8rem] flex-[0.6_1_8rem]">
-              <TextField
-                label="Quantidade"
-                type="number"
-                value={String(duration.amount ?? 1)}
-                onChange={(amount) => onChange({ ...value, duration: { ...duration, amount: Math.max(0, Number(amount) || 0) } })}
-              />
-            </div>
-          ) : duration.type === 'custom' ? (
-            <Cell>
-              <TextField
-                label="Duração personalizada"
-                value={duration.customLabel ?? ''}
-                onChange={(customLabel) => onChange({ ...value, duration: { ...duration, customLabel: customLabel || undefined } })}
-              />
-            </Cell>
-          ) : null}
-        </> : null}
-        <button
-          type="button"
-          title="Remover alteração"
-          onClick={onRemove}
-          className="shrink-0 rounded-lg border border-red-500/40 p-2 text-red-300 hover:bg-red-500/10"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </div>
-      {value.operation === 'add' ? (
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <TextField
-            label="Descrição opcional"
-            value={value.description ?? ''}
-            onChange={(description) => onChange({ ...value, description: description || undefined })}
-          />
-          <TextField
-            label="Comportamento / observação opcional"
-            value={value.behavior ?? ''}
-            onChange={(behavior) => onChange({ ...value, behavior: behavior || undefined })}
-          />
-        </div>
-      ) : null}
-    </article>
-  )
-}
-
-export function newAbilityConditionChange(): CustomAbilityConditionChangeDefinition {
-  return {
-    id: crypto.randomUUID(),
-    operation: 'add',
-    name: 'Novo estado',
-    duration: { type: 'permanent' },
+function formatDuration(change: CustomAbilityConditionChangeDefinition): string {
+  const duration = change.duration
+  if (!duration) return 'Duração não definida'
+  const numeric = ['rounds', 'turns', 'minutes', 'hours', 'days'].includes(duration.type)
+  if (numeric) {
+    const amount = duration.total ?? duration.amount ?? 1
+    const units: Record<string, string> = {
+      rounds: amount === 1 ? 'rodada' : 'rodadas',
+      turns: amount === 1 ? 'turno' : 'turnos',
+      minutes: amount === 1 ? 'minuto' : 'minutos',
+      hours: amount === 1 ? 'hora' : 'horas',
+      days: amount === 1 ? 'dia' : 'dias',
+    }
+    return `${amount} ${units[duration.type]}`
   }
+  const labels: Record<string, string> = {
+    'until-start-of-turn': 'Até o início do turno',
+    'until-end-of-turn': 'Até o fim do turno',
+    'until-save': 'Até passar em um teste',
+    concentration: 'Enquanto houver concentração',
+    permanent: 'Permanente',
+    custom: duration.customLabel?.trim() || 'Duração personalizada',
+  }
+  return labels[duration.type] ?? duration.type
 }
 
 function isPlainNumber(value: string): boolean {
   return /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(value) && Number.isFinite(Number(value))
 }
 
-function isNumericDuration(type: ConditionDurationType): boolean {
-  return ['rounds', 'turns', 'minutes', 'hours', 'days'].includes(type)
-}
-
-function Cell({ children }: { children: ReactNode }) {
-  return <div className="min-w-[11rem] flex-[1_1_11rem]">{children}</div>
-}
-
-function TextField({ label, value, onChange, type = 'text' }: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  type?: string
-}) {
-  return <label className="grid min-w-0 gap-1"><span className="label">{label}</span><input className="input-base min-w-0 w-full" type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label>
-}
-
-function SelectField({ label, value, options, onChange }: {
-  label: string
-  value: string
-  options: ReadonlyArray<readonly [string, string]>
-  onChange: (value: string) => void
-}) {
-  return <label className="grid min-w-0 gap-1"><span className="label">{label}</span><select className="input-base min-w-0 w-full" value={value} onChange={(event) => onChange(event.target.value)}>{options.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
-}
-
-function Empty({ children }: { children: ReactNode }) {
+function Empty({ children }: { children: React.ReactNode }) {
   return <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-textMuted">{children}</div>
 }
