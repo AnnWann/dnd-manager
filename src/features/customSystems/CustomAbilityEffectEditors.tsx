@@ -6,6 +6,7 @@ import type { ConditionDurationType } from '../../models/characters/CharacterCon
 import type {
   CustomAbilityConditionChangeDefinition,
   CustomAbilityResourceChangeDefinition,
+  CustomAbilityTypeDefinition,
 } from '../../models/customSystems/CustomAbilityDefinition'
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
 import { FormulaVariablePicker } from './FormulaVariablePicker'
@@ -26,16 +27,18 @@ const DURATIONS: Array<[ConditionDurationType, string]> = [
 
 export function ResourceAmountFormulaField({
   definition,
+  abilityType,
   change,
   onChange,
 }: {
   definition: CustomSystemDefinition
+  abilityType?: CustomAbilityTypeDefinition
   change: CustomAbilityResourceChangeDefinition
   onChange: (change: CustomAbilityResourceChangeDefinition) => void
 }) {
   const value = change.formula ?? (change.amount === undefined ? '' : String(change.amount))
   const formulaError = change.formula?.trim()
-    ? validateCustomFormula(change.formula, definition)
+    ? validateCustomFormula(change.formula, definition, abilityType)
     : undefined
 
   function setValue(raw: string) {
@@ -60,13 +63,13 @@ export function ResourceAmountFormulaField({
         <input
           className="input-base min-w-0 w-full font-mono"
           value={value}
-          placeholder="1 ou character.proficiencyBonus"
+          placeholder="1 ou ability.custo"
           onChange={(event) => setValue(event.target.value)}
         />
       </label>
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
         <FormulaVariablePicker
-          variables={listCustomFormulaVariables(definition)}
+          variables={listCustomFormulaVariables(definition, abilityType)}
           onSelect={(path) => setValue(`${value}${value.trim() ? ' ' : ''}${path}`)}
         />
         {change.formula?.trim() ? (
