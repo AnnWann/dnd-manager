@@ -15,6 +15,7 @@ type VariableTree = {
 
 const SEGMENT_LABELS: Record<string, string> = {
   character: 'Personagem',
+  ability: 'Habilidade',
   field: 'Campos',
   resource: 'Recursos',
   hp: 'Pontos de vida',
