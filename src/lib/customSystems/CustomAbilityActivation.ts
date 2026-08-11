@@ -1,7 +1,16 @@
 // @ts-nocheck
+import type {
+  CharacterCondition,
+  ConditionDurationType,
+} from '../../models/characters/CharacterCondition'
+import {
+  getCharacterConditions,
+  withCharacterConditions,
+} from '../../models/characters/characterConditionStorage'
 import type { CharacterTemplate } from '../../models/characters/CharacterTemplate'
 import type {
   CustomAbilityActivationDefinition,
+  CustomAbilityConditionChangeDefinition,
   CustomAbilityResourceChangeDefinition,
   CustomPredefinedAbilityDefinition,
 } from '../../models/customSystems/CustomAbilityDefinition'
@@ -55,6 +64,16 @@ export function activateCustomAbility(
     nextCharacter = applyResourceChange(nextCharacter, definitions, states, resolved.change, resolved.amount)
   }
 
+  const abilityName = resolveAbilityName(type, ability, preset)
+  for (const conditionChange of activation.conditionChanges ?? []) {
+    nextCharacter = applyConditionChange(
+      nextCharacter,
+      sourceDefinition.name,
+      abilityName,
+      conditionChange,
+    )
+  }
+
   const nextSourceState = requireState(states, sourceSystemId)
   nextSourceState.abilities = nextSourceState.abilities.map((entry) =>
     entry.id === abilityId
@@ -80,6 +99,7 @@ function mergeActivation(
     ...preset.activation,
     usage: preset.activation.usage ?? base?.usage,
     resourceChanges: preset.activation.resourceChanges ?? base?.resourceChanges,
+    conditionChanges: preset.activation.conditionChanges ?? base?.conditionChanges,
   }
 }
 
@@ -177,6 +197,73 @@ function applyResourceChange(
   return character
 }
 
+function applyConditionChange(
+  character: CharacterTemplate,
+  source: string,
+  abilityName: string,
+  change: CustomAbilityConditionChangeDefinition,
+): CharacterTemplate {
+  const name = change.name.trim()
+  if (!name) return character
+
+  const normalizedName = normalize(name)
+  const conditions = getCharacterConditions(character)
+
+  if (change.operation === 'remove') {
+    return withCharacterConditions(
+      character,
+      conditions.filter((condition) => normalize(condition.name) !== normalizedName),
+    )
+  }
+
+  const condition: CharacterCondition = {
+    id: crypto.randomUUID(),
+    name,
+    description: change.description?.trim() ?? '',
+    behavior: change.behavior?.trim() ?? '',
+    source,
+    notes: `Aplicada pela habilidade ${abilityName}.`,
+    tags: change.tags?.filter(Boolean) ?? [],
+    duration: buildDuration(change.duration),
+    createdAt: new Date().toISOString(),
+  }
+
+  return withCharacterConditions(character, [
+    ...conditions.filter(
+      (existing) => !(
+        normalize(existing.name) === normalizedName &&
+        normalize(existing.source) === normalize(source)
+      ),
+    ),
+    condition,
+  ])
+}
+
+function resolveAbilityName(type: any, ability: CustomAbilityInstance, preset?: CustomPredefinedAbilityDefinition): string {
+  const title = ability.values[type.display.titleFieldId]
+  if (typeof title === 'string' && title.trim()) return title.trim()
+  return preset?.id || type.name
+}
+
+function buildDuration(
+  duration: CustomAbilityConditionChangeDefinition['duration'],
+): CharacterCondition['duration'] {
+  const type: ConditionDurationType = duration?.type ?? 'permanent'
+  const numeric = isNumericDuration(type)
+  const amount = numeric ? Math.max(0, duration?.amount ?? 1) : undefined
+  return {
+    type,
+    total: amount,
+    remaining: amount,
+    customLabel: type === 'custom' ? duration?.customLabel : undefined,
+    autoRemoveAtZero: duration?.autoRemoveAtZero ?? true,
+  }
+}
+
+function isNumericDuration(type: ConditionDurationType) {
+  return type === 'rounds' || type === 'turns' || type === 'minutes' || type === 'hours' || type === 'days'
+}
+
 function applyNativeChange(
   character: CharacterTemplate,
   resource: 'hitPoints' | 'temporaryHitPoints' | 'inspiration' | 'exhaustion',
@@ -256,4 +343,12 @@ function cloneState(state: CharacterCustomSystemState): CharacterCustomSystemSta
       usage: ability.usage ? { ...ability.usage } : undefined,
     })),
   }
+}
+
+function normalize(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLocaleLowerCase('pt-BR')
 }
