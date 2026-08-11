@@ -1,9 +1,9 @@
 import type { AbilityActionKind } from "../abilities/Ability"
-import type { ConditionDurationType } from "../characters/CharacterCondition"
 import type { Attribute } from "../sheet/Attribute"
 import type { ClassName } from "../sheet/Class"
 import type { ProficiencyCategory } from "../sheet/Proficiency"
 import type {
+  CustomAbilityConditionChangeDefinition,
   CustomAbilityResourceChangeDefinition,
   CustomAbilityTypeDefinition,
 } from "./CustomAbilityDefinition"
@@ -64,20 +64,7 @@ export interface CustomSystemActionDefinition {
   conditionChanges?: CustomSystemConditionChangeDefinition[]
 }
 
-export interface CustomSystemConditionChangeDefinition {
-  id: string
-  operation: "add" | "remove"
-  name: string
-  description?: string
-  behavior?: string
-  tags?: string[]
-  duration?: {
-    type: ConditionDurationType
-    amount?: number
-    customLabel?: string
-    autoRemoveAtZero?: boolean
-  }
-}
+export type CustomSystemConditionChangeDefinition = CustomAbilityConditionChangeDefinition
 
 export interface CustomSystemPresentationDefinition {
   items: CustomSystemPresentationItem[]
