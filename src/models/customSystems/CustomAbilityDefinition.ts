@@ -1,5 +1,6 @@
 import type { AbilityActionKind, AbilityKind, Trigger } from "../abilities/Ability"
-import type { ConditionDurationType } from "../characters/CharacterCondition"
+import type { BonusCollection } from "../bonuses/Bonus"
+import type { CharacterConditionDuration } from "../characters/CharacterCondition"
 import type { CustomCondition } from "./CustomAutomationDefinition"
 import type { CustomFieldDefinition } from "./CustomFieldDefinition"
 import type { FormulaExpression, JsonValue } from "./CustomGenerals"
@@ -87,19 +88,23 @@ export interface CustomAbilityResourceChangeDefinition {
   formula?: FormulaExpression
 }
 
+/**
+ * Usa o mesmo conjunto de dados das condições da ficha. `amount` dentro de
+ * duration é mantido apenas para compatibilidade com definições antigas.
+ */
 export interface CustomAbilityConditionChangeDefinition {
   id: string
   operation: 'add' | 'remove'
   name: string
   description?: string
   behavior?: string
+  source?: string
+  notes?: string
   tags?: string[]
-  duration?: {
-    type: ConditionDurationType
-    amount?: number
-    customLabel?: string
-    autoRemoveAtZero?: boolean
-  }
+  bonuses?: BonusCollection
+  duration?: CharacterConditionDuration & { amount?: number }
+  sourceCharacterId?: string
+  linkedCombatantId?: string
 }
 
 export interface CustomResourceCostDefinition {
