@@ -12,6 +12,7 @@ import type {
   CustomAbilityActivationDefinition,
   CustomAbilityConditionChangeDefinition,
   CustomAbilityResourceChangeDefinition,
+  CustomAbilityTypeDefinition,
   CustomPredefinedAbilityDefinition,
 } from '../../models/customSystems/CustomAbilityDefinition'
 import type {
@@ -47,14 +48,14 @@ export function activateCustomAbility(
   }
 
   const activation = mergeActivation(type.activation, preset)
-  const usage = resolveUsage(activation, sourceDefinition, sourceState, ability, character)
+  const usage = resolveUsage(activation, sourceDefinition, sourceState, type, ability, character)
   if (usage.maximum !== undefined && usage.used >= usage.maximum) {
     throw new Error('A habilidade não possui usos restantes.')
   }
 
   const resolvedChanges = (activation.resourceChanges ?? []).map((change) => ({
     change,
-    amount: resolveAmount(change, sourceDefinition, sourceState, character),
+    amount: resolveAmount(change, sourceDefinition, sourceState, type, ability, character),
   }))
 
   validateResourceChanges(character, definitions, states, resolvedChanges)
@@ -107,6 +108,7 @@ function resolveUsage(
   activation: CustomAbilityActivationDefinition,
   definition: CustomSystemDefinition,
   state: CharacterCustomSystemState,
+  type: CustomAbilityTypeDefinition,
   ability: CustomAbilityInstance,
   character: CharacterTemplate,
 ) {
@@ -116,7 +118,13 @@ function resolveUsage(
 
   let maximum = ability.usage?.maximum ?? usage?.maximum
   if (usage?.maximumFormula?.trim()) {
-    const result = evaluateCustomFormula(usage.maximumFormula, definition, state, character)
+    const result = evaluateCustomFormula(
+      usage.maximumFormula,
+      definition,
+      state,
+      character,
+      { type, values: ability.values },
+    )
     if (result.ok && typeof result.value === 'number' && Number.isFinite(result.value)) {
       maximum = Math.max(0, Math.floor(result.value))
     }
@@ -133,10 +141,18 @@ function resolveAmount(
   change: CustomAbilityResourceChangeDefinition,
   definition: CustomSystemDefinition,
   state: CharacterCustomSystemState,
+  type: CustomAbilityTypeDefinition,
+  ability: CustomAbilityInstance,
   character: CharacterTemplate,
 ): number {
   if (change.formula?.trim()) {
-    const result = evaluateCustomFormula(change.formula, definition, state, character)
+    const result = evaluateCustomFormula(
+      change.formula,
+      definition,
+      state,
+      character,
+      { type, values: ability.values },
+    )
     if (!result.ok || typeof result.value !== 'number' || !Number.isFinite(result.value)) {
       throw new Error(`A fórmula do efeito de recurso “${change.id}” não retornou um número válido.`)
     }
@@ -239,7 +255,7 @@ function applyConditionChange(
   ])
 }
 
-function resolveAbilityName(type: any, ability: CustomAbilityInstance, preset?: CustomPredefinedAbilityDefinition): string {
+function resolveAbilityName(type: CustomAbilityTypeDefinition, ability: CustomAbilityInstance, preset?: CustomPredefinedAbilityDefinition): string {
   const title = ability.values[type.display.titleFieldId]
   if (typeof title === 'string' && title.trim()) return title.trim()
   return preset?.id || type.name
