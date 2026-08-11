@@ -8,6 +8,11 @@ type Props = {
   buttonLabel?: string
 }
 
+type GroupedCustomFormulaVariable = CustomFormulaVariable & {
+  customSystemId?: string
+  customSystemName?: string
+}
+
 type VariableTree = {
   children: Map<string, VariableTree>
   variables: CustomFormulaVariable[]
@@ -84,21 +89,26 @@ export function FormulaVariablePicker({
   }), [variables])
 
   const activeVariables = categorized[root]
-  const tree = useMemo(() => buildTree(activeVariables), [activeVariables])
+  const tree = useMemo(
+    () => buildTree(activeVariables, root === 'custom'),
+    [activeVariables, root],
+  )
   const node = getNode(tree, segments)
   const searchResults = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('pt-BR')
     if (!term) return []
-    return activeVariables.filter((entry) =>
-      entry.path.toLocaleLowerCase('pt-BR').includes(term) ||
-      entry.label.toLocaleLowerCase('pt-BR').includes(term) ||
-      entry.path
-        .split('.')
-        .map(translateSegment)
-        .join(' ')
-        .toLocaleLowerCase('pt-BR')
-        .includes(term),
-    )
+    return activeVariables.filter((entry) => {
+      const grouped = entry as GroupedCustomFormulaVariable
+      return entry.path.toLocaleLowerCase('pt-BR').includes(term) ||
+        entry.label.toLocaleLowerCase('pt-BR').includes(term) ||
+        (grouped.customSystemName ?? '').toLocaleLowerCase('pt-BR').includes(term) ||
+        entry.path
+          .split('.')
+          .map(translateSegment)
+          .join(' ')
+          .toLocaleLowerCase('pt-BR')
+          .includes(term)
+    })
   }, [activeVariables, search])
 
   function close() {
@@ -306,11 +316,18 @@ function VariableList({
   )
 }
 
-function buildTree(variables: CustomFormulaVariable[]): VariableTree {
+function buildTree(
+  variables: CustomFormulaVariable[],
+  groupCustomSystems = false,
+): VariableTree {
   const root: VariableTree = { children: new Map(), variables: [] }
 
   for (const variable of variables) {
-    const parts = variable.path.split('.')
+    const grouped = variable as GroupedCustomFormulaVariable
+    const systemSegment = groupCustomSystems && grouped.customSystemName
+      ? [grouped.customSystemName]
+      : []
+    const parts = [...systemSegment, ...variable.path.split('.')]
     let node = root
 
     for (const part of parts.slice(0, -1)) {
