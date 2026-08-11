@@ -349,9 +349,10 @@ function TypeEditor({
         {usageMode === 'limited' ? (
           <FormulaField
             definition={currentSystem}
+            abilityType={type}
             label="Fórmula do máximo"
             value={usage.maximumFormula ?? ''}
-            placeholder="Ex.: character.proficiencyBonus + 1"
+            placeholder="Ex.: ability.nivel + character.proficiencyBonus"
             onChange={(maximumFormula) => patchUsage({ maximumFormula: maximumFormula || undefined })}
           />
         ) : null}
@@ -363,6 +364,7 @@ function TypeEditor({
             {changes.map((change, index) => (
               <ResourceChangeRow
                 key={change.id}
+                abilityType={type}
                 change={change}
                 definitions={definitions}
                 currentSystem={currentSystem}
@@ -429,12 +431,14 @@ function AbilityFields({ fields, onChange }: {
 }
 
 function ResourceChangeRow({
+  abilityType,
   change,
   definitions,
   currentSystem,
   onChange,
   onRemove,
 }: {
+  abilityType: CustomAbilityTypeDefinition
   change: CustomAbilityResourceChangeDefinition
   definitions: CustomSystemDefinition[]
   currentSystem: CustomSystemDefinition
@@ -460,7 +464,7 @@ function ResourceChangeRow({
           }} /></FieldCell>
           <FieldCell><SelectField label="Recurso" value={customTarget?.resourceId ?? ''} options={(selectedSystem?.resources ?? []).map((entry) => [entry.id, entry.name])} onChange={(resourceId) => onChange({ ...change, target: { source: 'customSystem', systemId: selectedSystemId, resourceId } })} /></FieldCell>
         </>}
-        <ResourceAmountFormulaField definition={currentSystem} change={change} onChange={onChange} />
+        <ResourceAmountFormulaField definition={currentSystem} abilityType={abilityType} change={change} onChange={onChange} />
         <button type="button" onClick={onRemove} className="shrink-0 rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10">Remover</button>
       </div>
     </article>
@@ -479,15 +483,16 @@ function FieldCell({ children }: { children: ReactNode }) {
   return <div className="min-w-[11rem] flex-[1_1_11rem]">{children}</div>
 }
 
-function FormulaField({ definition, label, value, onChange, placeholder }: {
+function FormulaField({ definition, abilityType, label, value, onChange, placeholder }: {
   definition: CustomSystemDefinition
+  abilityType?: CustomAbilityTypeDefinition
   label: string
   value: string
   onChange: (value: string) => void
   placeholder?: string
 }) {
-  const error = value.trim() ? validateCustomFormula(value, definition) : undefined
-  return <div className="mt-3 rounded-lg border border-accentBorder bg-accentBg/30 p-3"><label className="grid min-w-0 gap-1"><span className="label">{label}</span><input className="input-base min-w-0 w-full font-mono" value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /></label><div className="mt-2"><FormulaVariablePicker variables={listCustomFormulaVariables(definition)} onSelect={(path) => onChange(`${value}${value.trim() ? ' ' : ''}${path}`)} /></div>{value.trim() ? <div className={`mt-2 text-xs ${error ? 'text-red-300' : 'text-emerald-300'}`}>{error ?? 'Fórmula válida.'}</div> : null}</div>
+  const error = value.trim() ? validateCustomFormula(value, definition, abilityType) : undefined
+  return <div className="mt-3 rounded-lg border border-accentBorder bg-accentBg/30 p-3"><label className="grid min-w-0 gap-1"><span className="label">{label}</span><input className="input-base min-w-0 w-full font-mono" value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /></label><div className="mt-2"><FormulaVariablePicker variables={listCustomFormulaVariables(definition, abilityType)} onSelect={(path) => onChange(`${value}${value.trim() ? ' ' : ''}${path}`)} /></div>{value.trim() ? <div className={`mt-2 text-xs ${error ? 'text-red-300' : 'text-emerald-300'}`}>{error ?? 'Fórmula válida.'}</div> : null}</div>
 }
 
 function SelectField({ label, value, options, onChange }: { label: string; value: string; options: ReadonlyArray<readonly [string, string]>; onChange: (value: string) => void }) {
