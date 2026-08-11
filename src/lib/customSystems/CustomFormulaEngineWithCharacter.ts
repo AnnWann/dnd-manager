@@ -1,5 +1,7 @@
 import type { CharacterTemplate } from '../../models/characters/CharacterTemplate'
+import type { CustomAbilityTypeDefinition } from '../../models/customSystems/CustomAbilityDefinition'
 import type { CustomFieldDefinition } from '../../models/customSystems/CustomFieldDefinition'
+import type { JsonValue } from '../../models/customSystems/CustomGenerals'
 import type {
   CharacterCustomSystemState,
   CustomSystemDefinition,
@@ -18,8 +20,14 @@ import {
 
 export type { CustomFormulaResult, CustomFormulaVariable }
 
+export type CustomAbilityFormulaContext = {
+  type: CustomAbilityTypeDefinition
+  values?: Record<string, JsonValue>
+}
+
 export function listCustomFormulaVariables(
   definition: CustomSystemDefinition,
+  abilityType?: CustomAbilityTypeDefinition,
 ): CustomFormulaVariable[] {
   const calculatedFieldVariables: CustomFormulaVariable[] = definition.fields
     .filter((field) => field.type === 'formula')
@@ -29,10 +37,19 @@ export function listCustomFormulaVariables(
       valueType: field.resultType,
     }))
 
+  const abilityVariables: CustomFormulaVariable[] = (abilityType?.fields ?? [])
+    .filter(isFormulaCompatibleAbilityField)
+    .map((field) => ({
+      path: `ability.${field.id}`,
+      label: `${field.name} — habilidade`,
+      valueType: formulaValueType(field),
+    }))
+
   const variables = [
     ...listCharacterFormulaVariables(),
     ...listBaseFormulaVariables(definition),
     ...calculatedFieldVariables,
+    ...abilityVariables,
   ]
 
   return Array.from(
@@ -45,12 +62,14 @@ export function evaluateCustomFormula(
   definition: CustomSystemDefinition,
   state: CharacterCustomSystemState,
   character?: CharacterTemplate,
+  ability?: CustomAbilityFormulaContext,
 ): CustomFormulaResult {
   const transformed = transformFormulaContext(
     formula,
     definition,
     state,
     getCharacterFormulaValues(character),
+    ability,
   )
 
   return evaluateBaseFormula(
@@ -63,12 +82,14 @@ export function evaluateCustomFormula(
 export function validateCustomFormula(
   formula: string,
   definition: CustomSystemDefinition,
+  abilityType?: CustomAbilityTypeDefinition,
 ): string | undefined {
   const transformed = transformFormulaContext(
     formula,
     definition,
     createMockState(definition),
     getCharacterFormulaValues(),
+    abilityType ? { type: abilityType } : undefined,
   )
 
   return validateBaseFormula(transformed.formula, transformed.definition)
@@ -79,14 +100,26 @@ function transformFormulaContext(
   definition: CustomSystemDefinition,
   state: CharacterCustomSystemState,
   characterValues: Record<string, number | boolean | string>,
+  ability?: CustomAbilityFormulaContext,
 ): {
   formula: string
   definition: CustomSystemDefinition
   state: CharacterCustomSystemState
 } {
-  const replacements = Object.keys(characterValues)
-    .sort((left, right) => right.length - left.length)
-    .map((path) => ({ path, fieldId: toVirtualFieldId(path) }))
+  const characterReplacements = Object.keys(characterValues).map((path) => ({
+    path,
+    fieldId: toVirtualFieldId('__character', path),
+  }))
+
+  const abilityFields = (ability?.type.fields ?? []).filter(isFormulaCompatibleAbilityField)
+  const abilityReplacements = abilityFields.map((field) => ({
+    path: `ability.${field.id}`,
+    fieldId: toVirtualFieldId('__ability', field.id),
+    field,
+  }))
+
+  const replacements = [...characterReplacements, ...abilityReplacements]
+    .sort((left, right) => right.path.length - left.path.length)
 
   const translate = (expression: string | undefined): string | undefined => {
     if (!expression) return expression
@@ -100,13 +133,46 @@ function transformFormulaContext(
     )
   }
 
-  const virtualFields: CustomFieldDefinition[] = replacements.map(({ path, fieldId }) => ({
+  const characterVirtualFields: CustomFieldDefinition[] = characterReplacements.map(({ path, fieldId }) => ({
     id: fieldId,
     name: path,
     type: typeof characterValues[path] === 'boolean' ? 'boolean' :
       typeof characterValues[path] === 'number' ? 'number' : 'text',
     editPermission: 'automaticOnly',
   }))
+
+  const abilityVirtualFields: CustomFieldDefinition[] = abilityReplacements.map(({ path, fieldId, field }) => {
+    if (field.type === 'formula') {
+      return {
+        id: fieldId,
+        name: path,
+        type: 'formula',
+        formula: translate(field.formula) ?? '',
+        resultType: field.resultType,
+        editPermission: 'automaticOnly',
+      }
+    }
+
+    const valueType = formulaValueType(field)
+    return {
+      id: fieldId,
+      name: path,
+      type: valueType === 'number' ? 'number' : valueType === 'boolean' ? 'boolean' : 'text',
+      editPermission: 'automaticOnly',
+    }
+  })
+
+  const abilityStateValues = Object.fromEntries(
+    abilityReplacements
+      .filter(({ field }) => field.type !== 'formula')
+      .map(({ fieldId, field }) => [
+        fieldId,
+        normalizeAbilityFormulaValue(
+          ability?.values?.[field.id] ?? field.defaultValue,
+          formulaValueType(field),
+        ),
+      ]),
+  )
 
   return {
     formula: translate(formula) ?? '',
@@ -118,7 +184,8 @@ function transformFormulaContext(
             ? { ...field, formula: translate(field.formula) ?? '' }
             : field,
         ),
-        ...virtualFields,
+        ...characterVirtualFields,
+        ...abilityVirtualFields,
       ],
       resources: definition.resources.map((resource) => ({
         ...resource,
@@ -130,8 +197,9 @@ function transformFormulaContext(
       fields: {
         ...state.fields,
         ...Object.fromEntries(
-          replacements.map(({ path, fieldId }) => [fieldId, characterValues[path]]),
+          characterReplacements.map(({ path, fieldId }) => [fieldId, characterValues[path]]),
         ),
+        ...abilityStateValues,
       },
     },
   }
@@ -166,6 +234,28 @@ function createMockState(
   }
 }
 
+function isFormulaCompatibleAbilityField(field: CustomFieldDefinition): boolean {
+  return field.type !== 'multiSelect' && field.type !== 'reference'
+}
+
+function formulaValueType(field: CustomFieldDefinition): 'number' | 'text' | 'boolean' {
+  if (field.type === 'formula') return field.resultType
+  if (field.type === 'number') return 'number'
+  if (field.type === 'boolean') return 'boolean'
+  return 'text'
+}
+
+function normalizeAbilityFormulaValue(
+  value: JsonValue | undefined,
+  valueType: 'number' | 'text' | 'boolean',
+): number | string | boolean {
+  if (valueType === 'number') return typeof value === 'number' && Number.isFinite(value) ? value : 0
+  if (valueType === 'boolean') return typeof value === 'boolean' ? value : false
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return ''
+}
+
 function replaceIdentifier(
   expression: string,
   identifier: string,
@@ -179,6 +269,6 @@ function replaceIdentifier(
   return expression.replace(pattern, (_, prefix: string) => `${prefix}${replacement}`)
 }
 
-function toVirtualFieldId(path: string): string {
-  return `__character_${path.replace(/[^A-Za-z0-9_-]/g, '_')}`
+function toVirtualFieldId(prefix: string, path: string): string {
+  return `${prefix}_${path.replace(/[^A-Za-z0-9_-]/g, '_')}`
 }
