@@ -5,12 +5,14 @@ import type { CustomResourceDefinition } from '../../models/customSystems/Custom
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
 import './CharacterTemplateCustomSystemsPatch'
 import { configureCustomFormulaRuntime } from './CustomFormulaRuntimePatch'
+import { configureCustomNativeStatOverrides } from './CustomNativeStatOverrides'
 
 const definitions = new Map<string, CustomSystemDefinition>()
 const listeners = new Set<() => void>()
 let snapshot: CustomSystemDefinition[] = []
 
 configureCustomFormulaRuntime((systemId) => definitions.get(systemId))
+configureCustomNativeStatOverrides((systemId) => definitions.get(systemId))
 
 function emitChange(): void {
   snapshot = Array.from(definitions.values()).sort((left, right) =>
