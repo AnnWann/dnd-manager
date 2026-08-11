@@ -19,10 +19,11 @@ import {
 import { CustomSystemPlacementEditor } from '../features/customSystems/CustomSystemPlacementEditor'
 import { CustomSystemPreviewEditor } from '../features/customSystems/CustomSystemPreviewEditor'
 import { CustomSystemRequirementsEditor } from '../features/customSystems/CustomSystemRequirementsEditor'
+import { CustomSystemSheetIntegrationEditor } from '../features/customSystems/CustomSystemSheetIntegrationEditor'
 import { readLocalStorageJson, removeLocalStorage, writeLocalStorageJson } from '../lib/storage'
 import type { CustomSystemDefinition } from '../models/customSystems/CustomSystemDefinition'
 
-export type CustomSystemEditorTab = 'general' | 'fields' | 'resources' | 'abilities' | 'requirements' | 'library' | 'preview' | 'advanced'
+export type CustomSystemEditorTab = 'general' | 'fields' | 'resources' | 'abilities' | 'sheet' | 'requirements' | 'library' | 'preview' | 'advanced'
 
 type LocalCustomSystemDraft = {
   schema: 'dndmm.custom-system-draft'
@@ -38,6 +39,7 @@ const TABS: Array<{ id: CustomSystemEditorTab; label: string }> = [
   { id: 'fields', label: 'Campos' },
   { id: 'resources', label: 'Recursos' },
   { id: 'abilities', label: 'Habilidades' },
+  { id: 'sheet', label: 'Ficha e ações' },
   { id: 'requirements', label: 'Requisitos' },
   { id: 'library', label: 'Biblioteca de habilidades' },
   { id: 'preview', label: 'Pré-visualização' },
@@ -195,6 +197,7 @@ export function CustomSystemEditorView() {
           <CustomResourceBehaviorEditor draft={draft} setDraft={setDraft} />
         </div> : null}
         {activeTab === 'abilities' ? <CustomAbilityConfigurationEditor draft={draft} setDraft={setDraft} definitions={systems.definitions} /> : null}
+        {activeTab === 'sheet' ? <CustomSystemSheetIntegrationEditor draft={draft} setDraft={setDraft} definitions={systems.definitions} /> : null}
         {activeTab === 'requirements' ? <CustomSystemRequirementsEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'library' ? <CustomAbilityLibraryEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'preview' ? <CustomSystemPreviewEditor draft={draft} setDraft={setDraft} /> : null}
