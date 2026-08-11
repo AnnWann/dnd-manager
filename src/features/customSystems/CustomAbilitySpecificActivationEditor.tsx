@@ -7,6 +7,10 @@ import type {
 } from '../../models/customSystems/CustomAbilityDefinition'
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
 import { listCustomFormulaVariables, validateCustomFormula } from '../../lib/customSystems'
+import {
+  AbilityConditionChangesEditor,
+  ResourceAmountFormulaField,
+} from './CustomAbilityEffectEditors'
 import { FormulaVariablePicker } from './FormulaVariablePicker'
 
 const NATIVE_RESOURCES = [
@@ -38,6 +42,7 @@ export function CustomAbilitySpecificActivationEditor({ definition, ability, onC
   const activation = ability.activation
   const usageMode = !activation?.usage ? 'inherit' : (activation.usage.mode ?? 'limited')
   const resourceMode = activation?.resourceChanges === undefined ? 'inherit' : 'specific'
+  const conditionMode = activation?.conditionChanges === undefined ? 'inherit' : 'specific'
 
   const setActivation = (next: CustomAbilityActivationDefinition | undefined) =>
     onChange({ ...ability, activation: next })
@@ -75,19 +80,26 @@ export function CustomAbilitySpecificActivationEditor({ definition, ability, onC
     setActivation(next)
   }
 
+  function setConditionMode(mode: 'inherit' | 'specific') {
+    const next = { ...(activation ?? {}) }
+    if (mode === 'inherit') delete next.conditionChanges
+    else next.conditionChanges = activation?.conditionChanges ?? []
+    setActivation(next)
+  }
+
   const setResourceChanges = (resourceChanges: CustomAbilityResourceChangeDefinition[]) =>
     patchActivation({ resourceChanges })
 
   return (
-    <section className="min-w-0 rounded-lg border border-border p-3">
+    <section className="rounded-lg border border-border p-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h4 className="text-sm font-medium text-textH">Ativação e usos desta habilidade</h4>
+        <div>
+          <h4 className="text-sm font-medium text-textH">Ativação, usos e efeitos desta habilidade</h4>
           <p className="mt-1 text-xs leading-5 text-text">
             O tipo define o padrão. Ative uma configuração específica apenas para exceções desta entrada do compêndio.
           </p>
         </div>
-        <label className="flex shrink-0 items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-textH">
+        <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-textH">
           <input
             type="checkbox"
             checked={activation !== undefined}
@@ -99,11 +111,11 @@ export function CustomAbilitySpecificActivationEditor({ definition, ability, onC
 
       {!activation ? (
         <div className="mt-3 rounded-lg border border-dashed border-border p-3 text-xs text-text">
-          Herdando ativação, categoria de ação, usos e efeitos de recurso do tipo.
+          Herdando ativação, categoria de ação, usos, recursos e condições do tipo.
         </div>
       ) : (
-        <div className="mt-4 grid min-w-0 gap-4">
-          <div className="grid min-w-0 gap-3 md:grid-cols-2">
+        <div className="mt-4 grid gap-4">
+          <div className="grid gap-3 md:grid-cols-2">
             <SelectField
               label="Tipo geral"
               value={activation.kind ?? ''}
@@ -118,8 +130,8 @@ export function CustomAbilitySpecificActivationEditor({ definition, ability, onC
             />
           </div>
 
-          <div className="min-w-0 rounded-lg border border-border bg-bg-subtle p-3">
-            <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="rounded-lg border border-border bg-bg-subtle p-3">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <SelectField
                 label="Usos"
                 value={usageMode}
@@ -152,7 +164,7 @@ export function CustomAbilitySpecificActivationEditor({ definition, ability, onC
             ) : null}
           </div>
 
-          <div className="min-w-0 rounded-lg border border-border bg-bg-subtle p-3">
+          <div className="rounded-lg border border-border bg-bg-subtle p-3">
             <SelectField
               label="Alterações de recurso"
               value={resourceMode}
@@ -160,7 +172,7 @@ export function CustomAbilitySpecificActivationEditor({ definition, ability, onC
               onChange={(mode) => setResourceMode(mode as 'inherit' | 'specific')}
             />
             {resourceMode === 'specific' ? (
-              <div className="mt-3 grid min-w-0 gap-3">
+              <div className="mt-3 grid gap-3">
                 {(activation.resourceChanges ?? []).map((change, index) => (
                   <ResourceChangeRow
                     key={change.id}
@@ -189,6 +201,24 @@ export function CustomAbilitySpecificActivationEditor({ definition, ability, onC
               </div>
             ) : null}
           </div>
+
+          <div className="rounded-lg border border-border bg-bg-subtle p-3">
+            <SelectField
+              label="Condições / estados"
+              value={conditionMode}
+              options={[['inherit', 'Herdar do tipo'], ['specific', 'Configurar para esta habilidade']]}
+              onChange={(mode) => setConditionMode(mode as 'inherit' | 'specific')}
+            />
+            {conditionMode === 'specific' ? (
+              <div className="mt-3">
+                <AbilityConditionChangesEditor
+                  value={activation.conditionChanges ?? []}
+                  onChange={(conditionChanges) => patchActivation({ conditionChanges })}
+                  emptyLabel="Lista vazia: esta habilidade não altera condições, mesmo que o tipo altere."
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
     </section>
@@ -211,58 +241,37 @@ function ResourceChangeRow({ definition, change, onChange, onRemove }: {
       : NATIVE_RESOURCES
 
   return (
-    <article className="min-w-0 rounded-lg border border-border p-3">
-      <div className="flex min-w-0 flex-wrap items-end gap-3">
-        <FieldCell>
-          <SelectField label="Operação" value={change.operation}
-            options={[['spend', 'Gastar'], ['gain', 'Gerar'], ['set', 'Definir']]}
-            onChange={(operation) => onChange({ ...change, operation: operation as CustomAbilityResourceChangeDefinition['operation'] })}
-          />
-        </FieldCell>
-        <FieldCell>
-          <SelectField label="Origem" value={change.target.source}
-            options={[['native', 'Ficha normal'], ['customSystem', 'Este sistema']]}
-            onChange={(source) => onChange({
-              ...change,
-              target: source === 'native'
-                ? { source: 'native', resource: 'hitPoints' }
-                : { source: 'customSystem', systemId: definition.id, resourceId: definition.resources[0]?.id ?? '' },
-            })}
-          />
-        </FieldCell>
-        <FieldCell>
-          <SelectField label="Recurso" value={targetValue} options={resourceOptions}
-            onChange={(resource) => onChange({
-              ...change,
-              target: custom
-                ? { source: 'customSystem', systemId: definition.id, resourceId: resource }
-                : { source: 'native', resource: resource as 'hitPoints' | 'temporaryHitPoints' | 'inspiration' | 'exhaustion' },
-            })}
-          />
-        </FieldCell>
-        <div className="min-w-[8rem] flex-[0.65_1_8rem]">
-          <NumberField label="Quantidade" value={change.amount} placeholder="1"
-            onChange={(amount) => onChange({ ...change, amount })}
-          />
-        </div>
+    <article className="rounded-lg border border-border p-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <FieldCell><SelectField label="Operação" value={change.operation}
+          options={[['spend', 'Gastar'], ['gain', 'Gerar'], ['set', 'Definir']]}
+          onChange={(operation) => onChange({ ...change, operation: operation as CustomAbilityResourceChangeDefinition['operation'] })}
+        /></FieldCell>
+        <FieldCell><SelectField label="Origem" value={change.target.source}
+          options={[['native', 'Ficha normal'], ['customSystem', 'Este sistema']]}
+          onChange={(source) => onChange({
+            ...change,
+            target: source === 'native'
+              ? { source: 'native', resource: 'hitPoints' }
+              : { source: 'customSystem', systemId: definition.id, resourceId: definition.resources[0]?.id ?? '' },
+          })}
+        /></FieldCell>
+        <FieldCell><SelectField label="Recurso" value={targetValue} options={resourceOptions}
+          onChange={(resource) => onChange({
+            ...change,
+            target: custom
+              ? { source: 'customSystem', systemId: definition.id, resourceId: resource }
+              : { source: 'native', resource: resource as 'hitPoints' | 'temporaryHitPoints' | 'inspiration' | 'exhaustion' },
+          })}
+        /></FieldCell>
+        <ResourceAmountFormulaField definition={definition} change={change} onChange={onChange} />
         <button type="button" onClick={onRemove}
           className="shrink-0 rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10">
           Remover
         </button>
       </div>
-      <FormulaField
-        definition={definition}
-        label="Fórmula opcional da quantidade"
-        value={change.formula ?? ''}
-        placeholder="Substitui a quantidade fixa"
-        onChange={(formula) => onChange({ ...change, formula: formula || undefined })}
-      />
     </article>
   )
-}
-
-function FieldCell({ children }: { children: React.ReactNode }) {
-  return <div className="min-w-[11rem] flex-[1_1_11rem]">{children}</div>
 }
 
 function FormulaField({ definition, label, value, onChange, placeholder }: {
@@ -274,7 +283,7 @@ function FormulaField({ definition, label, value, onChange, placeholder }: {
 }) {
   const error = value.trim() ? validateCustomFormula(value, definition) : undefined
   return (
-    <div className="mt-3 min-w-0 rounded-lg border border-accentBorder bg-accentBg/30 p-3">
+    <div className="mt-3 rounded-lg border border-accentBorder bg-accentBg/30 p-3">
       <label className="grid min-w-0 gap-1"><span className="label">{label}</span>
         <input className="input-base min-w-0 w-full font-mono" value={value} placeholder={placeholder}
           onChange={(event) => onChange(event.target.value)} />
@@ -288,6 +297,10 @@ function FormulaField({ definition, label, value, onChange, placeholder }: {
       </div> : null}
     </div>
   )
+}
+
+function FieldCell({ children }: { children: React.ReactNode }) {
+  return <div className="min-w-[11rem] flex-[1_1_11rem]">{children}</div>
 }
 
 function SelectField({ label, value, options, onChange }: {
