@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronUp, Plus, Save, Trash2 } from 'lucide-react'
-import type { CustomAbilityTypeDefinition } from '../../models/customSystems/CustomAbilityDefinition'
 import type {
   CustomAutomationDefinition,
   CustomComparisonOperator,
@@ -10,7 +9,6 @@ import type {
   CustomOperand,
   CustomSystemEventType,
 } from '../../models/customSystems/CustomAutomationDefinition'
-import type { CustomFieldDefinition } from '../../models/customSystems/CustomFieldDefinition'
 import type {
   CustomPanelBlock,
   CustomPanelDefinition,
@@ -25,12 +23,14 @@ export function AdvancedSystemEditors({
   draft: CustomSystemDefinition
   setDraft: (definition: CustomSystemDefinition) => void
 }) {
-  const [tab, setTab] = useState<'abilities' | 'panels' | 'automations' | 'json'>('abilities')
+  const [tab, setTab] = useState<'panels' | 'automations' | 'json'>('panels')
 
   return <div>
+    <div className="mb-4 rounded-lg border border-border bg-bg-subtle p-3 text-xs leading-5 text-text">
+      Tipos, campos, aquisição, ativação, ações e usos de habilidades agora são configurados integralmente na aba <strong>Habilidades</strong>. O compêndio contém apenas as exceções específicas de cada habilidade.
+    </div>
     <nav className="mb-4 flex flex-wrap gap-2 rounded-lg border border-border p-2">
       {([
-        ['abilities', 'Tipos de habilidade'],
         ['panels', 'Painéis'],
         ['automations', 'Automações'],
         ['json', 'JSON'],
@@ -41,73 +41,10 @@ export function AdvancedSystemEditors({
       ))}
     </nav>
 
-    {tab === 'abilities' ? <AbilityTypesEditor draft={draft} setDraft={setDraft} /> : null}
     {tab === 'panels' ? <PanelsEditor draft={draft} setDraft={setDraft} /> : null}
     {tab === 'automations' ? <AutomationsEditor draft={draft} setDraft={setDraft} /> : null}
     {tab === 'json' ? <JsonEditor draft={draft} setDraft={setDraft} /> : null}
   </div>
-}
-
-function AbilityTypesEditor({ draft, setDraft }: EditorProps) {
-  const [selected, setSelected] = useState(0)
-  const current = draft.abilityTypes[selected]
-
-  function replace(next: CustomAbilityTypeDefinition) {
-    setDraft({ ...draft, abilityTypes: draft.abilityTypes.map((entry, index) => index === selected ? next : entry) })
-  }
-
-  function add() {
-    const next: CustomAbilityTypeDefinition = {
-      id: uniqueId('ability-type', draft.abilityTypes.map((entry) => entry.id)),
-      name: 'Novo tipo de habilidade',
-      fields: [],
-      display: { titleFieldId: '' },
-    }
-    setDraft({ ...draft, abilityTypes: [...draft.abilityTypes, next] })
-    setSelected(draft.abilityTypes.length)
-  }
-
-  function remove() {
-    setDraft({ ...draft, abilityTypes: draft.abilityTypes.filter((_, index) => index !== selected) })
-    setSelected(Math.max(0, selected - 1))
-  }
-
-  return <MasterDetail title="Tipos de habilidade" description="Defina modelos reutilizáveis para técnicas, poderes, talentos e outras habilidades." items={draft.abilityTypes} selected={selected} onSelect={setSelected} onAdd={add} empty="Nenhum tipo de habilidade criado.">
-    {current ? <div className="grid gap-4">
-      <Section title="Informações gerais">
-        <div className="grid gap-3 md:grid-cols-2">
-          <Input label="Nome" value={current.name} onChange={(name) => replace({ ...current, name })} />
-          <Input label="ID" value={current.id} onChange={(id) => replace({ ...current, id: slugify(id) })} />
-          <Input label="Ícone" value={current.icon ?? ''} onChange={(icon) => replace({ ...current, icon: icon || undefined })} />
-          <TextArea label="Descrição" value={current.description ?? ''} onChange={(description) => replace({ ...current, description: description || undefined })} />
-        </div>
-      </Section>
-
-      <Section title="Exibição" description="Escolha quais campos formam o título, subtítulo, descrição e badges da habilidade.">
-        <div className="grid gap-3 md:grid-cols-2">
-          <ReferenceSelect label="Campo do título" value={current.display.titleFieldId} options={current.fields} onChange={(titleFieldId) => replace({ ...current, display: { ...current.display, titleFieldId } })} />
-          <ReferenceSelect label="Campo da descrição" value={current.display.descriptionFieldId ?? ''} options={current.fields} allowEmpty onChange={(descriptionFieldId) => replace({ ...current, display: { ...current.display, descriptionFieldId: descriptionFieldId || undefined } })} />
-          <IdListEditor label="Campos do subtítulo" values={current.display.subtitleFieldIds ?? []} options={current.fields} onChange={(subtitleFieldIds) => replace({ ...current, display: { ...current.display, subtitleFieldIds } })} />
-          <IdListEditor label="Campos em destaque" values={current.display.badgeFieldIds ?? []} options={current.fields} onChange={(badgeFieldIds) => replace({ ...current, display: { ...current.display, badgeFieldIds } })} />
-        </div>
-      </Section>
-
-      <Section title="Campos da habilidade" description="Estes campos aparecem em cada habilidade criada a partir deste tipo.">
-        <NestedFields fields={current.fields} onChange={(fields) => replace({ ...current, fields })} />
-      </Section>
-
-      <Section title="Ativação e usos">
-        <div className="grid gap-3 md:grid-cols-2">
-          <Select label="Tipo geral" value={current.activation?.kind ?? ''} options={['', 'active', 'passive', 'reaction', 'triggered']} labels={['Não definido', 'Ativa', 'Passiva', 'Reação', 'Disparada']} onChange={(kind) => replace({ ...current, activation: { ...current.activation, kind: (kind || undefined) as CustomAbilityTypeDefinition['activation'] extends infer A ? any : never } })} />
-          <Select label="Ação" value={current.activation?.actionKind ?? ''} options={['', 'action', 'bonusAction', 'reaction', 'freeAction', 'movement', 'special']} labels={['Não definida', 'Ação', 'Ação bônus', 'Reação', 'Ação livre', 'Movimento', 'Especial']} onChange={(actionKind) => replace({ ...current, activation: { ...current.activation, actionKind: actionKind as any || undefined } })} />
-          <Input label="Máximo de usos" type="number" value={String(current.activation?.usage?.maximum ?? '')} onChange={(value) => replace({ ...current, activation: { ...current.activation, usage: { reset: current.activation?.usage?.reset ?? 'manual', ...current.activation?.usage, maximum: optionalNumber(value) } } })} />
-          <Select label="Recuperação dos usos" value={current.activation?.usage?.reset ?? 'manual'} options={['turn','combat','shortRest','longRest','manual','never']} labels={['Turno','Combate','Descanso curto','Descanso longo','Manual','Nunca']} onChange={(reset) => replace({ ...current, activation: { ...current.activation, usage: { ...current.activation?.usage, reset: reset as any } } })} />
-        </div>
-      </Section>
-
-      <DangerButton onClick={remove}>Remover tipo de habilidade</DangerButton>
-    </div> : null}
-  </MasterDetail>
 }
 
 function PanelsEditor({ draft, setDraft }: EditorProps) {
@@ -309,11 +246,6 @@ function EffectsEditor({ effects, draft, onChange }: { effects: CustomEffectDefi
   </div>
 }
 
-function NestedFields({ fields, onChange }: { fields: CustomFieldDefinition[]; onChange: (fields: CustomFieldDefinition[]) => void }) {
-  function add() { onChange([...fields, { id: uniqueId('field', fields.map((entry) => entry.id)), name: 'Novo campo', type: 'text', editPermission: 'ownerAndMaster' }]) }
-  return <div className="grid gap-3"><div><SmallButton onClick={add}><Plus className="h-3.5 w-3.5" /> Adicionar campo</SmallButton></div>{fields.map((field, index) => <div key={`nested-field-${index}`} className="grid gap-3 rounded-lg border border-border p-3 md:grid-cols-[1fr_1fr_180px_auto]"><Input label="Nome" value={field.name} onChange={(name) => onChange(fields.map((entry, current) => current === index ? { ...entry, name } : entry))} /><Input label="ID" value={field.id} onChange={(id) => onChange(fields.map((entry, current) => current === index ? { ...entry, id: slugify(id) } : entry))} /><Select label="Tipo" value={field.type} options={['text','richText','number','boolean','select','multiSelect','dice','reference','formula']} onChange={(type) => onChange(fields.map((entry, current) => current === index ? makeFieldOfType(entry, type as CustomFieldDefinition['type']) : entry))} /><div className="flex items-end"><IconButton title="Remover campo" onClick={() => onChange(fields.filter((_, current) => current !== index))}><Trash2 className="h-4 w-4" /></IconButton></div></div>)}{!fields.length ? <Empty>Nenhum campo adicionado.</Empty> : null}</div>
-}
-
 function JsonEditor({ draft, setDraft }: EditorProps) {
   const [text, setText] = useState('')
   const [error, setError] = useState('')
@@ -337,11 +269,10 @@ function MasterDetail({ title, description, items, selected, onSelect, onAdd, em
 }
 
 function Section({ title, description, children }: { title: string; description?: string; children: ReactNode }) { return <section className="rounded-lg border border-border p-4"><h3 className="font-medium text-textH">{title}</h3>{description ? <p className="mt-1 text-xs text-text">{description}</p> : null}<div className="mt-4">{children}</div></section> }
-function Input({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (value: string) => void; type?: string }) { return <label className="grid gap-1"><span className="label">{label}</span><input className="input-base" type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label> }
-function TextArea({ label, value, onChange, mono, rows = 4 }: { label: string; value: string; onChange: (value: string) => void; mono?: boolean; rows?: number }) { return <label className="grid gap-1"><span className="label">{label}</span><textarea rows={rows} className={`input-base resize-y ${mono ? 'font-mono text-xs' : ''}`} value={value} onChange={(event) => onChange(event.target.value)} /></label> }
-function Select({ label, value, options, labels, onChange }: { label: string; value: string; options: readonly string[]; labels?: readonly string[]; onChange: (value: string) => void }) { return <label className="grid gap-1"><span className="label">{label}</span><select className="input-base" value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option, index) => <option key={option} value={option}>{labels?.[index] ?? option}</option>)}</select></label> }
+function Input({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (value: string) => void; type?: string }) { return <label className="grid min-w-0 gap-1"><span className="label">{label}</span><input className="input-base min-w-0 w-full" type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label> }
+function TextArea({ label, value, onChange, mono, rows = 4 }: { label: string; value: string; onChange: (value: string) => void; mono?: boolean; rows?: number }) { return <label className="grid min-w-0 gap-1"><span className="label">{label}</span><textarea rows={rows} className={`input-base min-w-0 w-full resize-y ${mono ? 'font-mono text-xs' : ''}`} value={value} onChange={(event) => onChange(event.target.value)} /></label> }
+function Select({ label, value, options, labels, onChange }: { label: string; value: string; options: readonly string[]; labels?: readonly string[]; onChange: (value: string) => void }) { return <label className="grid min-w-0 gap-1"><span className="label">{label}</span><select className="input-base min-w-0 w-full" value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option, index) => <option key={option} value={option}>{labels?.[index] ?? option}</option>)}</select></label> }
 function ReferenceSelect({ label, value, options, onChange, allowEmpty }: { label: string; value: string; options: Named[]; onChange: (value: string) => void; allowEmpty?: boolean }) { return <Select label={label} value={value} options={[...(allowEmpty ? [''] : []), ...options.map((entry) => entry.id)]} labels={[...(allowEmpty ? ['Nenhum'] : []), ...options.map((entry) => entry.name)]} onChange={onChange} /> }
-function IdListEditor({ label, values, options, onChange }: { label: string; values: string[]; options: Named[]; onChange: (values: string[]) => void }) { return <div><div className="label mb-1">{label}</div><div className="grid gap-2">{values.map((value, index) => <div key={`${value}-${index}`} className="flex gap-2"><select className="input-base flex-1" value={value} onChange={(event) => onChange(values.map((entry, current) => current === index ? event.target.value : entry))}>{options.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select><IconButton title="Remover" onClick={() => onChange(values.filter((_, current) => current !== index))}><Trash2 className="h-4 w-4" /></IconButton></div>)}<SmallButton onClick={() => options[0] && onChange([...values, options[0].id])}><Plus className="h-3.5 w-3.5" /> Adicionar</SmallButton></div></div> }
 function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) { return <label className="flex items-center gap-2 self-end rounded-lg border border-border px-3 py-2"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span className="text-sm text-textH">{label}</span></label> }
 function Empty({ children }: { children: ReactNode }) { return <div className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-text">{children}</div> }
 function PrimaryButton({ children, onClick }: { children: ReactNode; onClick: () => void }) { return <button type="button" onClick={onClick} className="inline-flex items-center gap-2 rounded-lg border border-accent bg-accent px-3 py-2 text-sm text-accentText">{children}</button> }
@@ -363,4 +294,3 @@ function optionalNumber(value: string): number | undefined { if (!value.trim()) 
 function parseLiteral(value: string): string | number | boolean { if (value === 'true') return true; if (value === 'false') return false; const numeric = Number(value); return value.trim() && Number.isFinite(numeric) ? numeric : value }
 function slugify(value: string): string { return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') }
 function uniqueId(base: string, used: string[]): string { let index = 1; let candidate = base; while (used.includes(candidate)) candidate = `${base}-${index++}`; return candidate }
-function makeFieldOfType(field: CustomFieldDefinition, type: CustomFieldDefinition['type']): CustomFieldDefinition { const base = { id: field.id, name: field.name, description: field.description, required: field.required, editPermission: field.editPermission }; if (type === 'number') return { ...base, type }; if (type === 'boolean') return { ...base, type }; if (type === 'select' || type === 'multiSelect') return { ...base, type, options: [] }; if (type === 'dice') return { ...base, type }; if (type === 'reference') return { ...base, type, target: 'character' }; if (type === 'formula') return { ...base, type, formula: '', resultType: 'number', editPermission: 'automaticOnly' }; return { ...base, type } }
