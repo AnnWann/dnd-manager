@@ -1048,14 +1048,14 @@ function isLibraryAbility(ability: CustomAbilityInstance): boolean {
   )
 }
 
-function usesLearned(type: CustomAbilityTypeDefinition): boolean {
+function usesLearned(type: { acquisition?: { mode?: string } }): boolean {
   return (
     type.acquisition?.mode === 'learned' ||
     type.acquisition?.mode === 'learnedAndPrepared'
   )
 }
 
-function usesPrepared(type: CustomAbilityTypeDefinition): boolean {
+function usesPrepared(type: { acquisition?: { mode?: string } }): boolean {
   return (
     type.acquisition?.mode === 'prepared' ||
     type.acquisition?.mode === 'learnedAndPrepared'
