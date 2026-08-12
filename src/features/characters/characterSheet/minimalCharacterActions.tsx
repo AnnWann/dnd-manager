@@ -24,6 +24,7 @@ import {
   isAbilityBenefitsActive,
   useAbilityEffect,
 } from "../../../models/abilities/abilityActivation"
+import { getChannelDivinityPool } from "../../../models/characters/characterChannelDivinity"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type {
   CharacterCustomSystemState,
@@ -120,6 +121,12 @@ export function MinimalCharacterActions({
   const abilityActions = useMemo(
     () => getAbilityActions(character, filter, definitions),
     [character, filter, definitions],
+  )
+  const channelDivinityActions = abilityActions.filter(
+    (entry) => entry.ability?.category === "channelDivinity",
+  )
+  const regularAbilityActions = abilityActions.filter(
+    (entry) => entry.ability?.category !== "channelDivinity",
   )
   const passiveAbilities = useMemo(
     () => getPassiveAbilities(character),
@@ -237,9 +244,16 @@ export function MinimalCharacterActions({
           onSelect={open}
         />
       ) : null}
+      {channelDivinityActions.length ? (
+        <ActionGroup
+          title="Canalizar Divindade"
+          entries={channelDivinityActions}
+          onSelect={open}
+        />
+      ) : null}
       <ActionGroup
         title="Habilidades do personagem"
-        entries={abilityActions}
+        entries={regularAbilityActions}
         onSelect={open}
         emptyMessage={`Nenhuma habilidade configurada como ${filterLabel(filter).toLocaleLowerCase("pt-BR")}.`}
       />
@@ -265,10 +279,9 @@ export function MinimalCharacterActions({
                     : "Sempre ativa"}
                 </span>
               ) : null}
-              {selected.ability?.usage ? (
+              {selected.usageMaximum !== undefined ? (
                 <span>
-                  • {Math.max(0, getAbilityUsageMax(character, selected.ability.usage) - selected.ability.usage.used)}/
-                  {getAbilityUsageMax(character, selected.ability.usage)} usos
+                  • {selected.usageRemaining ?? 0}/{selected.usageMaximum} usos
                 </span>
               ) : null}
               {selected.customAbilitySource || selected.customSystemActionSource ? (
@@ -425,6 +438,7 @@ function getAbilityActions(
   filter: ActionFilter,
   definitions: CustomSystemDefinition[],
 ): ActionEntry[] {
+  const channelDivinity = getChannelDivinityPool(character)
   const raceAbilities = (character.get("sheet").race.naturalAbilities ?? []).map((ability) => ({
     ability,
     sourceLabel: "Raça",
@@ -444,7 +458,12 @@ function getAbilityActions(
     }
     return {
       ability,
-      sourceLabel: ability.category === "feat" ? "Talento" : "Habilidade",
+      sourceLabel:
+        ability.category === "channelDivinity"
+          ? "Canalizar Divindade"
+          : ability.category === "feat"
+            ? "Talento"
+            : "Habilidade",
       source: { type: "character", abilityId: ability.id } as AbilitySource,
     }
   })
@@ -454,19 +473,29 @@ function getAbilityActions(
       (ability.kind ?? "active") === "active" &&
       normalizeActionKind(ability.actionKind) === filter,
     )
-    .map(({ ability, sourceLabel, source }) => ({
-      id: `ability:${source.type}:${ability.id}`,
-      name: ability.name || "Habilidade sem nome",
-      description: ability.description?.trim() || "Esta habilidade não possui uma descrição cadastrada.",
-      filter,
-      source: sourceLabel,
-      ability,
-      abilitySource: source,
-      usageMaximum: ability.usage ? getAbilityUsageMax(character, ability.usage) : undefined,
-      usageRemaining: ability.usage
-        ? Math.max(0, getAbilityUsageMax(character, ability.usage) - ability.usage.used)
-        : undefined,
-    }))
+    .map(({ ability, sourceLabel, source }) => {
+      const usesChannelDivinity =
+        source.type === "character" && ability.category === "channelDivinity"
+      return {
+        id: `ability:${source.type}:${ability.id}`,
+        name: ability.name || "Habilidade sem nome",
+        description: ability.description?.trim() || "Esta habilidade não possui uma descrição cadastrada.",
+        filter,
+        source: sourceLabel,
+        ability,
+        abilitySource: source,
+        usageMaximum: usesChannelDivinity
+          ? channelDivinity?.max
+          : ability.usage
+            ? getAbilityUsageMax(character, ability.usage)
+            : undefined,
+        usageRemaining: usesChannelDivinity
+          ? channelDivinity?.current
+          : ability.usage
+            ? Math.max(0, getAbilityUsageMax(character, ability.usage) - ability.usage.used)
+            : undefined,
+      }
+    })
 
   return [...nativeEntries, ...getCustomAbilityActions(character, filter, definitions)]
     .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
