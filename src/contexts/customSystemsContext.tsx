@@ -325,6 +325,8 @@ function createEmptyDefinition(): CustomSystemDefinition {
     automations: [],
     nativeStatOverrides: [],
     actions: [],
+    standardActionOverrides: [],
+    hiddenFromSheet: false,
     tags: [],
   }
 }
@@ -350,6 +352,8 @@ function normalizeDefinitions(value: unknown): CustomSystemDefinition[] {
       automations: Array.isArray(raw.automations) ? raw.automations : [],
       nativeStatOverrides: Array.isArray(raw.nativeStatOverrides) ? raw.nativeStatOverrides : [],
       actions: Array.isArray(raw.actions) ? raw.actions : [],
+      standardActionOverrides: Array.isArray(raw.standardActionOverrides) ? raw.standardActionOverrides : [],
+      hiddenFromSheet: raw.hiddenFromSheet === true,
       tags: Array.isArray(raw.tags) ? raw.tags.filter((tag): tag is string => typeof tag === 'string') : [],
       automaticInstallation: raw.automaticInstallation,
       characterPlacement: raw.characterPlacement,
