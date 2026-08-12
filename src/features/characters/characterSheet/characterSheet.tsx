@@ -93,12 +93,6 @@ export function CharacterSheetTab({
             character={character}
             updateCharacter={updateCharacter}
           />
-          {showCustomActions ? (
-            <CustomSystemActionsPanel
-              character={character}
-              updateCharacter={updateCharacter}
-            />
-          ) : null}
           <CharacterConditions
             character={character}
             updateCharacter={updateCharacter}

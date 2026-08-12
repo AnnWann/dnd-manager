@@ -8,7 +8,10 @@ import {
   activateCustomAbility,
   getCustomAbilityAvailability,
 } from "../../../lib/customSystems"
-import { getEffectiveCustomAbilityActivation } from "../../../lib/customSystems/CustomSystemActions"
+import {
+  activateCustomSystemAction,
+  getEffectiveCustomAbilityActivation,
+} from "../../../lib/customSystems/CustomSystemActions"
 import { useCustomSystemDefinitions } from "../../../lib/customSystems/CustomSystemRegistry"
 import type {
   Ability,
@@ -41,6 +44,11 @@ type CustomAbilitySource = {
   canUse: boolean
 }
 
+type CustomSystemActionSource = {
+  systemId: string
+  actionId: string
+}
+
 type ActionEntry = {
   id: string
   name: string
@@ -51,6 +59,7 @@ type ActionEntry = {
   ability?: Ability
   abilitySource?: AbilitySource
   customAbilitySource?: CustomAbilitySource
+  customSystemActionSource?: CustomSystemActionSource
 }
 
 const FILTER_OPTIONS: Array<{ value: ActionFilter; label: string }> = [
@@ -102,6 +111,10 @@ export function MinimalCharacterActions({
     () => getStandardActions(character, filter, definitions),
     [character, filter, definitions],
   )
+  const systemActions = useMemo(
+    () => getCustomSystemActions(character, filter, definitions),
+    [character, filter, definitions],
+  )
   const abilityActions = useMemo(
     () => getAbilityActions(character, filter, definitions),
     [character, filter, definitions],
@@ -143,6 +156,29 @@ export function MinimalCharacterActions({
         : current.deactivateAbility(source.abilityId)
     })
     setSelected(null)
+  }
+
+  function useCustomSystemAction(entry: ActionEntry) {
+    const source = entry.customSystemActionSource
+    if (!source) return
+    try {
+      setError("")
+      updateCharacter(character.get("id"), (current) =>
+        activateCustomSystemAction(
+          current,
+          definitions,
+          source.systemId,
+          source.actionId,
+        ),
+      )
+      setSelected(null)
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Não foi possível executar esta ação.",
+      )
+    }
   }
 
   function useCustomAbility(entry: ActionEntry) {
@@ -192,6 +228,13 @@ export function MinimalCharacterActions({
       </div>
 
       <ActionGroup title="Ações padrão" entries={standardActions} onSelect={open} />
+      {systemActions.length ? (
+        <ActionGroup
+          title="Ações de sistemas"
+          entries={systemActions}
+          onSelect={open}
+        />
+      ) : null}
       <ActionGroup
         title="Habilidades do personagem"
         entries={abilityActions}
@@ -226,8 +269,8 @@ export function MinimalCharacterActions({
                   {getAbilityUsageMax(character, selected.ability.usage)} usos
                 </span>
               ) : null}
-              {selected.customAbilitySource ? (
-                <span>• Disponível</span>
+              {selected.customAbilitySource || selected.customSystemActionSource ? (
+                <span>• Sistema personalizado</span>
               ) : null}
             </div>
             <p className="whitespace-pre-wrap text-sm leading-6 text-text">{selected.description}</p>
@@ -236,7 +279,13 @@ export function MinimalCharacterActions({
                 {error}
               </div>
             ) : null}
-            {selected.customAbilitySource ? (
+            {selected.customSystemActionSource ? (
+              <div className="flex justify-end border-t border-border pt-3">
+                <Button variant="primary" onClick={() => useCustomSystemAction(selected)}>
+                  Usar
+                </Button>
+              </div>
+            ) : selected.customAbilitySource ? (
               <div className="flex justify-end border-t border-border pt-3">
                 <Button
                   variant="primary"
@@ -324,6 +373,44 @@ function getStandardActions(
       description: override.description?.trim() || current.description,
     }), entry)
   }).filter((entry) => entry.filter === filter)
+}
+
+function getCustomSystemActions(
+  character: CharacterTemplate,
+  filter: ActionFilter,
+  definitions: CustomSystemDefinition[],
+): ActionEntry[] {
+  const states = (character.get("sheet").customSystems ?? []) as CharacterCustomSystemState[]
+  const entries: ActionEntry[] = []
+
+  for (const state of states) {
+    if (state.enabled === false) continue
+    const definition = definitions.find((item) => item.id === state.systemId)
+    if (!definition || definition.hiddenFromSheet) continue
+
+    for (const action of definition.actions ?? []) {
+      if (action.enabled === false) continue
+      if (normalizeActionKind(action.actionKind) !== filter) continue
+
+      entries.push({
+        id: `custom-system-action:${definition.id}:${action.id}`,
+        name: action.name || "Ação sem nome",
+        description:
+          action.description?.trim() ||
+          "Esta ação não possui uma descrição cadastrada.",
+        filter,
+        source: definition.name,
+        customSystemActionSource: {
+          systemId: definition.id,
+          actionId: action.id,
+        },
+      })
+    }
+  }
+
+  return entries.sort((left, right) =>
+    left.name.localeCompare(right.name, "pt-BR"),
+  )
 }
 
 function getAbilityActions(
