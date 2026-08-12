@@ -6,15 +6,14 @@ import {
   validateCustomFormula,
 } from "../../lib/customSystems"
 import type { AbilityActionKind } from "../../models/abilities/Ability"
-import type { ConditionDurationType } from "../../models/characters/CharacterCondition"
 import type { CustomAbilityResourceChangeDefinition } from "../../models/customSystems/CustomAbilityDefinition"
 import type {
   CustomNativeStatOverrideDefinition,
   CustomNativeStatTarget,
   CustomSystemActionDefinition,
-  CustomSystemConditionChangeDefinition,
   CustomSystemDefinition,
 } from "../../models/customSystems/CustomSystemDefinition"
+import { AbilityConditionChangesEditor } from "./CustomAbilityEffectEditors"
 import { FormulaVariablePicker } from "./FormulaVariablePicker"
 
 const STATS: Array<[CustomNativeStatTarget, string]> = [
@@ -33,20 +32,6 @@ const ACTIONS: Array<[AbilityActionKind | "", string]> = [
   ["legendaryAction", "Ação lendária"],
   ["legendaryReaction", "Reação lendária"],
   ["legendaryResistance", "Resistência lendária"],
-]
-
-const DURATIONS: Array<[ConditionDurationType, string]> = [
-  ["permanent", "Permanente"],
-  ["rounds", "Rodadas"],
-  ["turns", "Turnos"],
-  ["minutes", "Minutos"],
-  ["hours", "Horas"],
-  ["days", "Dias"],
-  ["until-start-of-turn", "Até o início do turno"],
-  ["until-end-of-turn", "Até o fim do turno"],
-  ["until-save", "Até passar em um teste"],
-  ["concentration", "Concentração"],
-  ["custom", "Personalizada"],
 ]
 
 const NATIVE_RESOURCES = [
@@ -71,7 +56,7 @@ export function CustomSystemSheetIntegrationEditor({
     <div className="grid gap-5">
       <Section
         title="Fórmulas da ficha nativa"
-        description="Substitua cálculos existentes enquanto o sistema estiver ativo. Ex.: Iniciativa = SAB + DEX pode usar character.attributeModifier.wis + character.attributeModifier.dex."
+        description="Substitua cálculos existentes enquanto o sistema estiver ativo. A fórmula define o cálculo-base; bônus de equipamentos, habilidades e condições são aplicados depois. Ex.: Iniciativa = SAB + DEX pode usar character.attributeModifier.wis + character.attributeModifier.dex."
         action={
           <AddButton
             label="Fórmula"
@@ -150,7 +135,7 @@ export function CustomSystemSheetIntegrationEditor({
 
       <Section
         title="Habilidades na seção de ações"
-        description="Escolha uma categoria para transformar cada habilidade adquirida desse tipo em um botão. Os usos e efeitos de recurso continuam vindo da configuração da habilidade."
+        description="Escolha uma categoria para transformar cada habilidade disponível desse tipo em um botão. Habilidades que exigem preparo só aparecem quando estiverem preparadas."
       >
         <div className="grid gap-3 md:grid-cols-2">
           {draft.abilityTypes.map((type, index) => (
@@ -305,27 +290,16 @@ function ActionRow({ definition, value, onChange, onRemove }: {
         {!resources.length ? <Empty>Nenhum recurso alterado.</Empty> : null}
       </MiniSection>
 
-      <MiniSection
-        title="Condições / estados"
-        onAdd={() => onChange({ ...value, conditionChanges: [...conditions, newCondition()] })}
-      >
-        {conditions.map((change, index) => (
-          <ConditionRow
-            key={change.id}
-            value={change}
-            onChange={(next) =>
-              onChange({
-                ...value,
-                conditionChanges: conditions.map((entry, current) => current === index ? next : entry),
-              })
-            }
-            onRemove={() =>
-              onChange({ ...value, conditionChanges: conditions.filter((_, current) => current !== index) })
-            }
+      <section className="mt-4 rounded-xl border border-border bg-bg p-3">
+        <h3 className="text-sm font-semibold text-textH">Condições / estados</h3>
+        <div className="mt-3">
+          <AbilityConditionChangesEditor
+            value={conditions}
+            onChange={(conditionChanges) => onChange({ ...value, conditionChanges })}
+            emptyLabel="Nenhuma condição alterada."
           />
-        ))}
-        {!conditions.length ? <Empty>Nenhum estado alterado.</Empty> : null}
-      </MiniSection>
+        </div>
+      </section>
     </div>
   )
 }
@@ -402,48 +376,6 @@ function ResourceRow({ definition, value, onChange, onRemove }: {
   )
 }
 
-function ConditionRow({ value, onChange, onRemove }: {
-  value: CustomSystemConditionChangeDefinition
-  onChange: (value: CustomSystemConditionChangeDefinition) => void
-  onRemove: () => void
-}) {
-  const duration = value.duration ?? { type: "permanent" as const }
-  const numeric = ["rounds", "turns", "minutes", "hours", "days"].includes(duration.type)
-
-  return (
-    <div className="grid gap-2 rounded-lg border border-border p-3 md:grid-cols-2 lg:grid-cols-5">
-      <Select
-        label="Operação"
-        value={value.operation}
-        options={[["add", "Aplicar / renovar"], ["remove", "Remover"]]}
-        onChange={(operation) => onChange({ ...value, operation: operation as "add" | "remove" })}
-      />
-      <TextInput label="Estado" value={value.name} onChange={(name) => onChange({ ...value, name })} />
-      {value.operation === "add" ? (
-        <>
-          <Select
-            label="Duração"
-            value={duration.type}
-            options={DURATIONS}
-            onChange={(type) => onChange({ ...value, duration: { ...duration, type: type as ConditionDurationType } })}
-          />
-          <TextInput
-            label={numeric ? "Quantidade" : "Comportamento"}
-            type={numeric ? "number" : "text"}
-            value={numeric ? String(duration.amount ?? 1) : value.behavior ?? ""}
-            onChange={(next) =>
-              numeric
-                ? onChange({ ...value, duration: { ...duration, amount: Math.max(0, Number(next) || 0) } })
-                : onChange({ ...value, behavior: next || undefined })
-            }
-          />
-        </>
-      ) : <><div /><div /></>}
-      <div className="flex items-end"><RemoveButton onClick={onRemove} /></div>
-    </div>
-  )
-}
-
 function Section({ title, description, action, children }: {
   title: string
   description: string
@@ -504,10 +436,6 @@ function newResourceChange(definition: CustomSystemDefinition): CustomAbilityRes
   return definition.resources.length
     ? { id: crypto.randomUUID(), target: { source: "customSystem", systemId: definition.id, resourceId: definition.resources[0].id }, operation: "spend", amount: 1 }
     : { id: crypto.randomUUID(), target: { source: "native", resource: "hitPoints" }, operation: "spend", amount: 1 }
-}
-
-function newCondition(): CustomSystemConditionChangeDefinition {
-  return { id: crypto.randomUUID(), operation: "add", name: "Novo estado", duration: { type: "permanent" } }
 }
 
 function normalizeActionKind(value: unknown): AbilityActionKind | undefined {
