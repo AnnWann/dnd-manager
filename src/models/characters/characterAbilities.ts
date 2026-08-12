@@ -7,10 +7,14 @@ import {
   useAbilityEffect,
   restoreAbilityUse,
 } from "../abilities/abilityActivation"
+import {
+  getChannelDivinityPool,
+  recoverChannelDivinity,
+  restoreChannelDivinity,
+  spendChannelDivinity,
+} from "./characterChannelDivinity"
 import { getEquipmentAbilities } from "./characterEquipment"
 import type { CharacterTemplate } from "./CharacterTemplate"
-
-const CHANNEL_DIVINITY_DEFAULT_MAX = 1
 
 export function addAbility(
   character: CharacterTemplate,
@@ -57,47 +61,19 @@ export function saveAbility(
     : addAbility(character, ability)
 }
 
+/**
+ * Compatibilidade para consumidores que ainda precisam da representação
+ * max/used/remaining. A fonte real é magic.channelDivinity.
+ */
 export function getChannelDivinityUsage(character: CharacterTemplate): {
   max: number
   used: number
   remaining: number
 } {
-  const abilities = (character.get("abilities") ?? []).filter(
-    (ability) => ability.category === "channelDivinity",
-  )
-  const explicit = abilities.find((ability) => ability.usage)?.usage
-  const max = Math.max(1, explicit?.max ?? CHANNEL_DIVINITY_DEFAULT_MAX)
-  const used = Math.min(
-    max,
-    Math.max(0, ...abilities.map((ability) => ability.usage?.used ?? 0)),
-  )
-  return { max, used, remaining: Math.max(0, max - used) }
-}
-
-function withSharedChannelDivinityUsage(
-  character: CharacterTemplate,
-  used: number,
-): CharacterTemplate {
-  const current = getChannelDivinityUsage(character)
-  const nextUsed = Math.max(0, Math.min(current.max, used))
-  return character.with(
-    "abilities",
-    (character.get("abilities") ?? []).map((ability) =>
-      ability.category === "channelDivinity"
-        ? {
-            ...ability,
-            usage: {
-              ...(ability.usage ?? {
-                max: current.max,
-                reset: "shortRest" as const,
-              }),
-              max: ability.usage?.max ?? current.max,
-              used: nextUsed,
-            },
-          }
-        : ability,
-    ),
-  )
+  const pool = getChannelDivinityPool(character)
+  return pool
+    ? { max: pool.max, used: pool.used, remaining: pool.current }
+    : { max: 0, used: 0, remaining: 0 }
 }
 
 export function useAbility(
@@ -110,18 +86,18 @@ export function useAbility(
   if (!ability) return character
 
   if (ability.category === "channelDivinity") {
-    const usage = getChannelDivinityUsage(character)
-    if (usage.remaining <= 0) return character
-    const normalizedAbility: Ability = {
-      ...ability,
-      usage: {
-        ...(ability.usage ?? { max: usage.max, reset: "shortRest" }),
-        max: ability.usage?.max ?? usage.max,
-        used: usage.used,
-      },
-    }
-    const activated = useAbilityEffect(character, normalizedAbility, { type: "character" })
-    return withSharedChannelDivinityUsage(activated, usage.used + 1)
+    const pool = getChannelDivinityPool(character)
+    if (!pool || pool.current <= 0) return character
+
+    // Canalizar Divindade usa o pool calculado pela classe como fonte única.
+    // Não persistimos usage individual na opção para evitar dois estados
+    // independentes (habilidade vs. módulo de Canalizar Divindade).
+    const activated = useAbilityEffect(
+      character,
+      { ...ability, usage: undefined },
+      { type: "character" },
+    )
+    return spendChannelDivinity(activated)
   }
 
   return useAbilityEffect(character, ability, { type: "character" })
@@ -145,7 +121,7 @@ export function resetAbility(
 ): CharacterTemplate {
   const target = (character.get("abilities") ?? []).find((ability) => ability.id === abilityId)
   if (target?.category === "channelDivinity") {
-    return withSharedChannelDivinityUsage(character, 0)
+    return recoverChannelDivinity(character)
   }
 
   return character.with(
@@ -170,18 +146,17 @@ export function resetAbility(
 export function getCharacterAbilities(
   character: CharacterTemplate,
 ): Ability[] {
-  const channelDivinity = getChannelDivinityUsage(character)
+  const channelDivinity = getChannelDivinityPool(character)
   const characterAbilities = (character.get("abilities") ?? []).map((ability) =>
-    ability.category === "channelDivinity"
+    ability.category === "channelDivinity" && channelDivinity
       ? {
           ...ability,
+          // usage aqui é apenas uma projeção para UI/cálculos. O estado salvo
+          // continua exclusivamente em magic.channelDivinity.
           usage: {
-            ...(ability.usage ?? {
-              max: channelDivinity.max,
-              reset: "shortRest" as const,
-            }),
-            max: ability.usage?.max ?? channelDivinity.max,
+            max: channelDivinity.max,
             used: channelDivinity.used,
+            reset: "shortRest" as const,
           },
         }
       : ability,
@@ -197,8 +172,7 @@ export function restoreAbility(
 ): CharacterTemplate {
   const target = (character.get("abilities") ?? []).find((ability) => ability.id === abilityId)
   if (target?.category === "channelDivinity") {
-    const usage = getChannelDivinityUsage(character)
-    return withSharedChannelDivinityUsage(character, usage.used - 1)
+    return restoreChannelDivinity(character)
   }
 
   return character.with(
