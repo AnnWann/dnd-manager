@@ -2,6 +2,11 @@ import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from '../../models/characters/CharacterTemplate'
+import {
+  applyBonuses,
+  getCharacterBonuses,
+  getStatAdjustment,
+} from '../../models/characters/characterStats'
 import { getCustomNativeStatOverride } from './CustomNativeStatOverrides'
 import { recalculateCustomSystemState } from './CustomFormulaRuntimePatch'
 
@@ -59,38 +64,62 @@ function installNativeStatOverrides() {
   CharacterTemplate.prototype.getEffectiveArmorClass = function (
     this: CharacterTemplate,
   ): number {
-    return (
-      getCustomNativeStatOverride(this, 'armorClass') ??
-      originalArmorClass.call(this)
-    )
+    const base = getCustomNativeStatOverride(this, 'armorClass')
+    if (base === undefined) return originalArmorClass.call(this)
+    return applyNativeBonuses(this, base, 'armorClass', 'armorClassAdjustment')
   }
 
   CharacterTemplate.prototype.getEffectiveInitiative = function (
     this: CharacterTemplate,
   ): number {
-    return (
-      getCustomNativeStatOverride(this, 'initiative') ??
-      originalInitiative.call(this)
-    )
+    const base = getCustomNativeStatOverride(this, 'initiative')
+    if (base === undefined) return originalInitiative.call(this)
+    return applyNativeBonuses(this, base, 'initiative', 'initiativeAdjustment')
   }
 
   CharacterTemplate.prototype.getEffectiveMobility = function (
     this: CharacterTemplate,
   ): number {
-    const value =
-      getCustomNativeStatOverride(this, 'mobility') ??
-      originalMobility.call(this)
-    return Math.max(0, value)
+    const base = getCustomNativeStatOverride(this, 'mobility')
+    if (base === undefined) return originalMobility.call(this)
+    return Math.max(
+      0,
+      applyNativeBonuses(this, base, 'speed', 'mobilityAdjustment'),
+    )
   }
 
   CharacterTemplate.prototype.getEffectivePassivePerception = function (
     this: CharacterTemplate,
   ): number {
-    return (
-      getCustomNativeStatOverride(this, 'passivePerception') ??
-      originalPassivePerception.call(this)
+    const base = getCustomNativeStatOverride(this, 'passivePerception')
+    if (base === undefined) return originalPassivePerception.call(this)
+    return applyNativeBonuses(
+      this,
+      base,
+      'passivePerception',
+      'passivePerceptionAdjustment',
     )
   }
+}
+
+function applyNativeBonuses(
+  character: CharacterTemplate,
+  base: number,
+  bonusKey: 'armorClass' | 'initiative' | 'speed' | 'passivePerception',
+  adjustmentKey:
+    | 'armorClassAdjustment'
+    | 'initiativeAdjustment'
+    | 'mobilityAdjustment'
+    | 'passivePerceptionAdjustment',
+): number {
+  // A fórmula customizada substitui apenas o cálculo-base. Bônus aditivos de
+  // equipamentos, habilidades e condições continuam sendo aplicados depois.
+  // Bônus flat representam outro cálculo-base e, portanto, não sobrepõem a
+  // fórmula customizada.
+  const bonuses = getCharacterBonuses(character, bonusKey).filter(
+    (bonus) => bonus.type !== 'flat',
+  )
+  return applyBonuses(base, bonuses) + getStatAdjustment(character, adjustmentKey)
 }
 
 installCharacterCustomSystemsSerializationPatch()
