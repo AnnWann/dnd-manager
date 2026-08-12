@@ -6,6 +6,7 @@ import type { CharacterTemplate } from "../../../models/characters/CharacterTemp
 import { AttributeCalculators } from "./attributeCalculators"
 import { Attributes } from "./attributes"
 import { CharacterConditions } from "./characterConditions"
+import { ConcentrationDamageGuard } from "./concentrationDamageGuard"
 import { CharacterIdentity } from "./character_info/characterIdentity"
 import {
   CustomSystemActionsPanel,
@@ -52,6 +53,11 @@ export function CharacterSheetTab({
 
   return (
     <div className="grid gap-4">
+      <ConcentrationDamageGuard
+        character={character}
+        updateCharacter={updateCharacter}
+      />
+
       <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-bg p-2 shadow-theme-sm">
         <div className="min-w-0 px-1">
           <div className="text-xs font-semibold text-textH">Visualização da ficha</div>
