@@ -6,6 +6,7 @@ import { CLASS_NAMES } from "../../../contexts/consts"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
 import { getCharacterGrantedSpells, spendGrantedSpellAbilityUse, type CharacterGrantedSpellUsageSource } from "../../../models/characters/characterGrantedSpells"
+import { beginSpellConcentration, getConcentrationCondition } from "../../../models/characters/characterConcentration"
 import { getSorceryPoints, restorePactSlot, restoreSorceryPoint, restoreSpellSlot, spendPactSlot, spendSorceryPoint, spendSpellSlot } from "../../../models/characters/characterMagic"
 import { getAbilityUsageMax } from "../../../models/abilities/abilityActivation"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
@@ -54,6 +55,7 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
   const [selected, setSelected] = useState<MinimalSpellEntry | null>(null)
   const [castLevel, setCastLevel] = useState<number | null>(null)
   const [castingResource, setCastingResource] = useState<"slot" | "ability">("slot")
+  const [confirmConcentrationReplacement, setConfirmConcentrationReplacement] = useState(false)
   const [error, setError] = useState("")
 
   const allSpells = useMemo(
@@ -98,6 +100,7 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
   if (!allSpells.length && !hasMagicResources) return null
 
   const slotChoices = selected ? getSlotChoices(character, selected.spell) : []
+  const currentConcentration = getConcentrationCondition(character)
   const asksCastLevel = Boolean(
     selected &&
       selected.spell.slotLevel > 0 &&
@@ -108,6 +111,7 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
   function openSpell(entry: MinimalSpellEntry) {
     setSelected(entry)
     setError("")
+    setConfirmConcentrationReplacement(false)
     const choices = getSlotChoices(character, entry.spell)
     setCastLevel(choices[0]?.level ?? null)
     setCastingResource(
@@ -118,6 +122,15 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
   }
 
   function castSelected() {
+    if (!selected) return
+    if (selected.spell.concentration && currentConcentration) {
+      setConfirmConcentrationReplacement(true)
+      return
+    }
+    executeSelectedCast()
+  }
+
+  function executeSelectedCast() {
     if (!selected) return
     const spell = selected.spell
 
@@ -131,16 +144,26 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
     if (useAbilityCharge) {
       if (!selected.sourceUsageSource || (selected.sourceUsageRemaining ?? 0) <= 0) {
         setError("Não há cargas disponíveis nesta habilidade.")
+        setConfirmConcentrationReplacement(false)
         return
       }
-      updateCharacter(character.get("id"), (current) =>
-        spendGrantedSpellAbilityUse(current, selected.sourceUsageSource!),
-      )
+      updateCharacter(character.get("id"), (current) => {
+        let next = spendGrantedSpellAbilityUse(current, selected.sourceUsageSource!)
+        if (spell.concentration) next = beginSpellConcentration(next, spell)
+        return next
+      })
+      setConfirmConcentrationReplacement(false)
       setSelected(null)
       return
     }
 
     if (spell.slotLevel === 0) {
+      if (spell.concentration) {
+        updateCharacter(character.get("id"), (current) =>
+          beginSpellConcentration(current, spell),
+        )
+      }
+      setConfirmConcentrationReplacement(false)
       setSelected(null)
       return
     }
@@ -148,6 +171,7 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
     const choices = getSlotChoices(character, spell)
     if (!choices.length) {
       setError("Nenhum espaço de magia compatível está disponível.")
+      setConfirmConcentrationReplacement(false)
       return
     }
 
@@ -155,11 +179,14 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
     const sameLevel = choices.filter((choice) => choice.level === level)
     const choice = sameLevel.find((entry) => entry.pool === "normal") ?? sameLevel[0] ?? choices[0]
 
-    updateCharacter(character.get("id"), (current) =>
-      choice.pool === "pact"
+    updateCharacter(character.get("id"), (current) => {
+      let next = choice.pool === "pact"
         ? current.spendPactSlot()
-        : current.spendSpellSlot(choice.level),
-    )
+        : current.spendSpellSlot(choice.level)
+      if (spell.concentration) next = beginSpellConcentration(next, spell)
+      return next
+    })
+    setConfirmConcentrationReplacement(false)
     setSelected(null)
   }
 
@@ -387,6 +414,36 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
                 onClick={castSelected}
               >
                 Usar
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {selected && confirmConcentrationReplacement ? (
+        <Modal
+          title="Substituir concentração?"
+          onClose={() => setConfirmConcentrationReplacement(false)}
+          className="max-w-md"
+        >
+          <div className="grid gap-3">
+            <p className="text-sm leading-6 text-text">
+              O personagem já está concentrando
+              {currentConcentration?.source ? ` em ${currentConcentration.source}` : " em outra magia"}.
+              Conjurar <strong>{spellName(selected.spell)}</strong> encerrará a concentração anterior.
+            </p>
+            <p className="text-xs leading-5 text-textMuted">
+              O recurso da nova magia só será gasto depois da confirmação.
+            </p>
+            <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
+              <Button
+                variant="secondary"
+                onClick={() => setConfirmConcentrationReplacement(false)}
+              >
+                Cancelar
+              </Button>
+              <Button variant="primary" onClick={executeSelectedCast}>
+                Conjurar e substituir
               </Button>
             </div>
           </div>
