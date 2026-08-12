@@ -212,11 +212,20 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
                   onClick={() => openSpell(entry)}
                   className="min-h-14 rounded-lg border border-border bg-bg-subtle px-3 py-2 text-left transition-colors hover:border-accentBorder hover:bg-accentBg"
                 >
-                  <div className="truncate text-xs font-semibold text-textH">{spellName(entry.spell)}</div>
-                  <div className="mt-1 flex min-w-0 gap-1.5 text-[10px] text-textMuted">
-                    <span className="shrink-0">{entry.spell.slotLevel === 0 ? "Truque" : `N${entry.spell.slotLevel}`}</span>
-                    <span>•</span>
-                    <span className="truncate">{sourceLabel(entry.source)}</span>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-semibold text-textH">{spellName(entry.spell)}</div>
+                      <div className="mt-1 flex min-w-0 gap-1.5 text-[10px] text-textMuted">
+                        <span className="shrink-0">{entry.spell.slotLevel === 0 ? "Truque" : `N${entry.spell.slotLevel}`}</span>
+                        <span>•</span>
+                        <span className="truncate">{sourceLabel(entry.source)}</span>
+                      </div>
+                    </div>
+                    {entry.sourceUsageMaximum !== undefined ? (
+                      <span className="shrink-0 rounded-md border border-accentBorder bg-accentBg px-2 py-1 text-[10px] font-semibold text-textH">
+                        {entry.sourceUsageRemaining ?? 0}/{entry.sourceUsageMaximum} usos
+                      </span>
+                    ) : null}
                   </div>
                 </button>
               ))}
