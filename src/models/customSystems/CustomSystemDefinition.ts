@@ -110,6 +110,10 @@ export type CustomSystemEmbeddedReference =
 
 export type CustomSystemCharacterPlacement =
   | {
+      /** Mantém o sistema ativo, mas não renderiza seu conteúdo em nenhuma aba. */
+      mode: "none"
+    }
+  | {
       mode: "newTab"
       tabLabel?: string
       reference?: CustomSystemPlacementReference
