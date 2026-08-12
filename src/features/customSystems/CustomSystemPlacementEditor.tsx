@@ -1,4 +1,4 @@
-import { LayoutPanelTop, PanelTop, Rows3 } from 'lucide-react'
+import { EyeOff, LayoutPanelTop, PanelTop, Rows3 } from 'lucide-react'
 import { Select } from '../../components/ui/Select'
 import type {
   CustomSystemCharacterPlacement,
@@ -35,6 +35,10 @@ export function getCustomSystemPlacement(
   const placement =
     definition.characterPlacement ??
     definition.automaticInstallation?.characterPlacement
+
+  if (placement?.mode === 'none') {
+    return { mode: 'none' }
+  }
 
   if (placement?.mode === 'newTab') {
     const legacyTab = placement.relativeToTab
@@ -141,7 +145,23 @@ export function CustomSystemPlacementEditor({
         </span>
       </label>
 
-      <div className={`mt-4 grid gap-3 md:grid-cols-2 ${draft.hiddenFromSheet ? 'pointer-events-none opacity-45' : ''}`}>
+      <div className={`mt-4 grid gap-3 md:grid-cols-3 ${draft.hiddenFromSheet ? 'pointer-events-none opacity-45' : ''}`}>
+        <button
+          type="button"
+          onClick={() => setPlacement({ mode: 'none' })}
+          className={`rounded-xl border p-4 text-left transition-colors ${
+            placement.mode === 'none'
+              ? 'border-accent bg-accentBg'
+              : 'border-border hover:bg-bg'
+          }`}
+        >
+          <EyeOff className="h-5 w-5 text-accent" />
+          <div className="mt-2 font-medium text-textH">Nenhum</div>
+          <p className="mt-1 text-xs text-text">
+            Não cria aba nem seção própria. Regras, recursos, fórmulas e ações continuam funcionando normalmente.
+          </p>
+        </button>
+
         <button
           type="button"
           onClick={() =>
@@ -189,7 +209,11 @@ export function CustomSystemPlacementEditor({
         </button>
       </div>
 
-      {placement.mode === 'newTab' ? (
+      {placement.mode === 'none' ? (
+        <div className="mt-4 rounded-xl border border-border bg-bg p-4 text-sm text-textMuted">
+          O conteúdo próprio do sistema não será renderizado em nenhuma aba. Ações configuradas em <strong className="text-textH">Ficha e ações</strong> continuam disponíveis na seção de ações do personagem.
+        </div>
+      ) : placement.mode === 'newTab' ? (
         <div className="mt-4 grid gap-4 md:grid-cols-3">
           <label className="grid gap-1">
             <span className="label">Nome exibido</span>
