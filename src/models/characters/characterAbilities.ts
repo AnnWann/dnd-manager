@@ -170,7 +170,22 @@ export function resetAbility(
 export function getCharacterAbilities(
   character: CharacterTemplate,
 ): Ability[] {
-  const characterAbilities = character.get("abilities") ?? []
+  const channelDivinity = getChannelDivinityUsage(character)
+  const characterAbilities = (character.get("abilities") ?? []).map((ability) =>
+    ability.category === "channelDivinity"
+      ? {
+          ...ability,
+          usage: {
+            ...(ability.usage ?? {
+              max: channelDivinity.max,
+              reset: "shortRest" as const,
+            }),
+            max: ability.usage?.max ?? channelDivinity.max,
+            used: channelDivinity.used,
+          },
+        }
+      : ability,
+  )
   const equipmentAbilities = getEquipmentAbilities(character)
 
   return [...characterAbilities, ...equipmentAbilities]
