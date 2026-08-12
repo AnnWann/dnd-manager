@@ -147,14 +147,13 @@ export function MinimalCharacterActions({
     if (!source) return
     try {
       setError("")
-      updateCharacter(character.get("id"), (current) =>
-        activateCustomAbility(
-          current,
-          definitions,
-          source.systemId,
-          source.abilityId,
-        ),
+      const next = activateCustomAbility(
+        character,
+        definitions,
+        source.systemId,
+        source.abilityId,
       )
+      updateCharacter(character.get("id"), () => next)
       setSelected(null)
     } catch (caught) {
       setError(
@@ -225,9 +224,7 @@ export function MinimalCharacterActions({
                 </span>
               ) : null}
               {selected.customAbilitySource ? (
-                <span>
-                  • {selected.customAbilitySource.canUse ? "Disponível" : "Indisponível"}
-                </span>
+                <span>• Disponível</span>
               ) : null}
             </div>
             <p className="whitespace-pre-wrap text-sm leading-6 text-text">{selected.description}</p>
@@ -240,7 +237,6 @@ export function MinimalCharacterActions({
               <div className="flex justify-end border-t border-border pt-3">
                 <Button
                   variant="primary"
-                  disabled={!selected.customAbilitySource.canUse}
                   onClick={() => useCustomAbility(selected)}
                 >
                   Usar
@@ -396,6 +392,8 @@ function customAbilityEntry(
       }
     : type
   const availability = getCustomAbilityAvailability(effectiveType, ability)
+  if (!availability.canUse) return undefined
+
   const title = displayValue(ability.values[type.display.titleFieldId]) || type.name
   const description = type.display.descriptionFieldId
     ? displayValue(ability.values[type.display.descriptionFieldId])
@@ -410,7 +408,7 @@ function customAbilityEntry(
     customAbilitySource: {
       systemId: definition.id,
       abilityId: ability.id,
-      canUse: availability.canUse,
+      canUse: true,
     },
   }
 }
