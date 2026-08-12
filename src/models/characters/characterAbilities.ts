@@ -89,9 +89,8 @@ export function useAbility(
     const pool = getChannelDivinityPool(character)
     if (!pool || pool.current <= 0) return character
 
-    // Canalizar Divindade usa o pool calculado pela classe como fonte única.
-    // Não persistimos usage individual na opção para evitar dois estados
-    // independentes (habilidade vs. módulo de Canalizar Divindade).
+    // Canalizar Divindade usa exclusivamente o pool calculado pela classe.
+    // A opção individual não precisa nem recebe um contador de usos próprio.
     const activated = useAbilityEffect(
       character,
       { ...ability, usage: undefined },
@@ -146,21 +145,7 @@ export function resetAbility(
 export function getCharacterAbilities(
   character: CharacterTemplate,
 ): Ability[] {
-  const channelDivinity = getChannelDivinityPool(character)
-  const characterAbilities = (character.get("abilities") ?? []).map((ability) =>
-    ability.category === "channelDivinity" && channelDivinity
-      ? {
-          ...ability,
-          // usage aqui é apenas uma projeção para UI/cálculos. O estado salvo
-          // continua exclusivamente em magic.channelDivinity.
-          usage: {
-            max: channelDivinity.max,
-            used: channelDivinity.used,
-            reset: "shortRest" as const,
-          },
-        }
-      : ability,
-  )
+  const characterAbilities = character.get("abilities") ?? []
   const equipmentAbilities = getEquipmentAbilities(character)
 
   return [...characterAbilities, ...equipmentAbilities]
