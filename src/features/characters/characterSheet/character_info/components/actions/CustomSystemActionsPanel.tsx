@@ -232,6 +232,8 @@ function abilityEntry(
       }
     : type
   const availability = getCustomAbilityAvailability(effectiveType, ability)
+  if (!availability.canUse) return undefined
+
   const usage = resolveUsageDisplay(
     activation.usage,
     type,
@@ -251,14 +253,12 @@ function abilityEntry(
     description,
     source: `${definition.name} · ${type.name}`,
     actionKind: activation.actionKind,
-    disabled: !availability.canUse || usage.remaining === 0,
-    status: !availability.canUse
-      ? "indisponível"
-      : usage.mode === "unlimited"
-        ? "usos ilimitados"
-        : usage.maximum === undefined
-          ? undefined
-          : `${usage.remaining}/${usage.maximum} usos`,
+    disabled: usage.remaining === 0,
+    status: usage.mode === "unlimited"
+      ? "usos ilimitados"
+      : usage.maximum === undefined
+        ? undefined
+        : `${usage.remaining}/${usage.maximum} usos`,
     activate: (current) =>
       activateCustomAbility(current, definitions, definition.id, ability.id),
   }
