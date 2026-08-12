@@ -2,10 +2,12 @@ import { useMemo, useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { Modal } from "../../../components/ui/Modal"
+import { CLASS_NAMES } from "../../../contexts/consts"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
-import { getCharacterGrantedSpells } from "../../../models/characters/characterGrantedSpells"
+import { getCharacterGrantedSpells, spendGrantedSpellAbilityUse, type CharacterGrantedSpellUsageSource } from "../../../models/characters/characterGrantedSpells"
 import { getSorceryPoints } from "../../../models/characters/characterMagic"
+import { getAbilityUsageMax } from "../../../models/abilities/abilityActivation"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Spell } from "../../../models/magic/spells/Spell"
 import type { SpellSource } from "../../../models/magic/spells/SpellSource"
@@ -29,6 +31,8 @@ type MinimalSpellEntry = {
   sourceCastingMode: "slots" | "source"
   sourceUsageRemaining?: number
   sourceUsageMaximum?: number
+  sourceUsageLabel?: string
+  sourceUsageSource?: CharacterGrantedSpellUsageSource
 }
 
 type SlotChoice = {
@@ -73,7 +77,22 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
   const hasSlots = Object.values(slots).some((slot) => Boolean(slot && slot.max > 0))
   const hasPactSlots = Boolean(pactSlots && pactSlots.max > 0)
   const hasSorceryPoints = sorceryPoints.max > 0
-  const hasMagicResources = hasSlots || hasPactSlots || hasSorceryPoints
+  const abilityChargeResources = useMemo(() => {
+    const resources = new Map<string, { label: string; current: number; max: number }>()
+    for (const entry of allSpells) {
+      if (!entry.sourceUsageSource || entry.sourceUsageMaximum === undefined) continue
+      const key = JSON.stringify(entry.sourceUsageSource)
+      if (resources.has(key)) continue
+      resources.set(key, {
+        label: entry.sourceUsageLabel || sourceLabel(entry.source),
+        current: entry.sourceUsageRemaining ?? 0,
+        max: entry.sourceUsageMaximum,
+      })
+    }
+    return Array.from(resources.values())
+  }, [allSpells])
+  const hasAbilityCharges = abilityChargeResources.length > 0
+  const hasMagicResources = hasSlots || hasPactSlots || hasSorceryPoints || hasAbilityCharges
 
   if (!allSpells.length && !hasMagicResources) return null
 
@@ -95,7 +114,21 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
     if (!selected) return
     const spell = selected.spell
 
-    if (spell.slotLevel === 0 || selected.sourceCastingMode === "source") {
+    if (selected.sourceCastingMode === "source") {
+      if (selected.sourceUsageSource) {
+        if ((selected.sourceUsageRemaining ?? 0) <= 0) {
+          setError("Não há cargas disponíveis nesta habilidade.")
+          return
+        }
+        updateCharacter(character.get("id"), (current) =>
+          spendGrantedSpellAbilityUse(current, selected.sourceUsageSource!),
+        )
+      }
+      setSelected(null)
+      return
+    }
+
+    if (spell.slotLevel === 0) {
       setSelected(null)
       return
     }
@@ -211,6 +244,15 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
             {sorceryPoints.max > 0 ? (
               <ResourcePill label="Pontos de magia" current={sorceryPoints.current} max={sorceryPoints.max} />
             ) : null}
+            {abilityChargeResources.map((resource) => (
+              <ResourcePill
+                key={`ability-charge:${resource.label}`}
+                label={resource.label}
+                current={resource.current}
+                max={resource.max}
+                accent
+              />
+            ))}
           </div>
         </div>
       ) : null}
@@ -307,14 +349,19 @@ function buildAvailableSpells(
   for (const grant of getCharacterGrantedSpells(character)) {
     const spell = getSpellByIndex(grant.index)
     if (!spell) continue
-    const remaining = grant.usage ? Math.max(0, grant.usage.max - grant.usage.used) : undefined
+    const maximum = grant.usage ? getAbilityUsageMax(character, grant.usage) : undefined
+    const remaining = grant.usage && maximum !== undefined
+      ? Math.max(0, maximum - grant.usage.used)
+      : undefined
     entries.push({
       key: grant.key,
       spell,
       source: grant.source,
       sourceCastingMode: grant.castingMode === "known" ? "slots" : "source",
       sourceUsageRemaining: remaining,
-      sourceUsageMaximum: grant.usage?.max,
+      sourceUsageMaximum: maximum,
+      sourceUsageLabel: grant.usageSource ? grant.source.name || "Carga de habilidade" : undefined,
+      sourceUsageSource: grant.usageSource,
     })
   }
 
@@ -371,6 +418,9 @@ function spellName(spell: Spell): string {
 }
 
 function sourceLabel(source: SpellSource): string {
+  if (source.type === "class") {
+    return CLASS_NAMES[source.name as keyof typeof CLASS_NAMES] ?? source.name ?? "Classe"
+  }
   return source.name || (source.type === "equipment" ? "Equipamento" : source.type === "race" ? "Raça" : source.type === "feat" ? "Talento" : "Habilidade")
 }
 
