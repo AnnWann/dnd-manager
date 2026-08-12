@@ -6,7 +6,7 @@ import { CLASS_NAMES } from "../../../contexts/consts"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
 import { getCharacterGrantedSpells, spendGrantedSpellAbilityUse, type CharacterGrantedSpellUsageSource } from "../../../models/characters/characterGrantedSpells"
-import { getSorceryPoints } from "../../../models/characters/characterMagic"
+import { getSorceryPoints, restorePactSlot, restoreSorceryPoint, restoreSpellSlot, spendPactSlot, spendSorceryPoint, spendSpellSlot } from "../../../models/characters/characterMagic"
 import { getAbilityUsageMax } from "../../../models/abilities/abilityActivation"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Spell } from "../../../models/magic/spells/Spell"
@@ -256,14 +256,38 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
           <div className="mt-2 flex flex-wrap gap-2">
             {Object.entries(slots).map(([level, slot]) =>
               slot && slot.max > 0 ? (
-                <ResourcePill key={level} label={`N${level}`} current={slot.current} max={slot.max} />
+                <ResourcePill
+                  key={level}
+                  label={`N${level}`}
+                  current={slot.current}
+                  max={slot.max}
+                  onDecrease={() => updateCharacter(character.get("id"), (current) =>
+                    spendSpellSlot(current, Number(level) as MagicCircleLevel),
+                  )}
+                  onIncrease={() => updateCharacter(character.get("id"), (current) =>
+                    restoreSpellSlot(current, Number(level) as MagicCircleLevel),
+                  )}
+                />
               ) : null,
             )}
             {pactSlots && pactSlots.max > 0 ? (
-              <ResourcePill label={`Pacto N${pactSlots.level}`} current={pactSlots.current} max={pactSlots.max} accent />
+              <ResourcePill
+                label={`Pacto N${pactSlots.level}`}
+                current={pactSlots.current}
+                max={pactSlots.max}
+                accent
+                onDecrease={() => updateCharacter(character.get("id"), spendPactSlot)}
+                onIncrease={() => updateCharacter(character.get("id"), restorePactSlot)}
+              />
             ) : null}
             {sorceryPoints.max > 0 ? (
-              <ResourcePill label="Pontos de magia" current={sorceryPoints.current} max={sorceryPoints.max} />
+              <ResourcePill
+                label="Pontos de magia"
+                current={sorceryPoints.current}
+                max={sorceryPoints.max}
+                onDecrease={() => updateCharacter(character.get("id"), spendSorceryPoint)}
+                onIncrease={() => updateCharacter(character.get("id"), restoreSorceryPoint)}
+              />
             ) : null}
             {abilityChargeResources.map((resource) => (
               <ResourcePill
@@ -450,11 +474,56 @@ function getSlotChoices(character: CharacterTemplate, spell: Spell): SlotChoice[
   return choices.sort((left, right) => left.level - right.level || (left.pool === "normal" ? -1 : 1))
 }
 
-function ResourcePill({ label, current, max, accent = false }: { label: string; current: number; max: number; accent?: boolean }) {
+function ResourcePill({
+  label,
+  current,
+  max,
+  accent = false,
+  onDecrease,
+  onIncrease,
+}: {
+  label: string
+  current: number
+  max: number
+  accent?: boolean
+  onDecrease?: () => void
+  onIncrease?: () => void
+}) {
+  const editable = Boolean(onDecrease || onIncrease)
+
   return (
-    <div className={cn("rounded-lg border px-2.5 py-2 text-xs", accent ? "border-accentBorder bg-accentBg" : "border-border bg-bg-subtle")}>
-      <span className="font-semibold text-textH">{label}</span>{" "}
-      <span className="text-textMuted">{current}/{max}</span>
+    <div className={cn(
+      "flex items-center gap-2 rounded-lg border px-2.5 py-2 text-xs",
+      accent ? "border-accentBorder bg-accentBg" : "border-border bg-bg-subtle",
+    )}>
+      <div className="min-w-0">
+        <span className="font-semibold text-textH">{label}</span>{" "}
+        <span className="text-textMuted">{current}/{max}</span>
+      </div>
+      {editable ? (
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            aria-label={`Consumir ${label}`}
+            title={`Consumir ${label}`}
+            disabled={!onDecrease || current <= 0}
+            onClick={onDecrease}
+            className="grid h-6 w-6 place-items-center rounded-md border border-border bg-bg text-sm font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            −
+          </button>
+          <button
+            type="button"
+            aria-label={`Recuperar ${label}`}
+            title={`Recuperar ${label}`}
+            disabled={!onIncrease || current >= max}
+            onClick={onIncrease}
+            className="grid h-6 w-6 place-items-center rounded-md border border-border bg-bg text-sm font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            +
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }
