@@ -53,6 +53,7 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
   const [levelFilter, setLevelFilter] = useState<number | "all">("all")
   const [selected, setSelected] = useState<MinimalSpellEntry | null>(null)
   const [castLevel, setCastLevel] = useState<number | null>(null)
+  const [castingResource, setCastingResource] = useState<"slot" | "ability">("slot")
   const [error, setError] = useState("")
 
   const allSpells = useMemo(
@@ -107,23 +108,34 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
   function openSpell(entry: MinimalSpellEntry) {
     setSelected(entry)
     setError("")
-    setCastLevel(getSlotChoices(character, entry.spell)[0]?.level ?? null)
+    const choices = getSlotChoices(character, entry.spell)
+    setCastLevel(choices[0]?.level ?? null)
+    setCastingResource(
+      entry.sourceUsageSource && (entry.sourceUsageRemaining ?? 0) > 0
+        ? "ability"
+        : "slot",
+    )
   }
 
   function castSelected() {
     if (!selected) return
     const spell = selected.spell
 
-    if (selected.sourceCastingMode === "source") {
-      if (selected.sourceUsageSource) {
-        if ((selected.sourceUsageRemaining ?? 0) <= 0) {
-          setError("Não há cargas disponíveis nesta habilidade.")
-          return
-        }
-        updateCharacter(character.get("id"), (current) =>
-          spendGrantedSpellAbilityUse(current, selected.sourceUsageSource!),
-        )
+    const canUseAbilityCharge = Boolean(
+      selected.sourceUsageSource && selected.sourceUsageMaximum !== undefined,
+    )
+    const useAbilityCharge =
+      selected.sourceCastingMode === "source" ||
+      (canUseAbilityCharge && castingResource === "ability")
+
+    if (useAbilityCharge) {
+      if (!selected.sourceUsageSource || (selected.sourceUsageRemaining ?? 0) <= 0) {
+        setError("Não há cargas disponíveis nesta habilidade.")
+        return
       }
+      updateCharacter(character.get("id"), (current) =>
+        spendGrantedSpellAbilityUse(current, selected.sourceUsageSource!),
+      )
       setSelected(null)
       return
     }
@@ -296,7 +308,30 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
               </div>
             ) : null}
 
-            {asksCastLevel ? (
+            {selected.sourceUsageSource && selected.sourceCastingMode === "slots" ? (
+              <label className="grid gap-1 text-xs text-textMuted">
+                Recurso para conjurar
+                <select
+                  className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
+                  value={castingResource}
+                  onChange={(event) =>
+                    setCastingResource(event.target.value as "slot" | "ability")
+                  }
+                >
+                  <option
+                    value="ability"
+                    disabled={(selected.sourceUsageRemaining ?? 0) <= 0}
+                  >
+                    {selected.sourceUsageLabel || sourceLabel(selected.source)} — {selected.sourceUsageRemaining ?? 0}/{selected.sourceUsageMaximum ?? 0} usos
+                  </option>
+                  <option value="slot" disabled={selected.spell.slotLevel > 0 && slotChoices.length === 0}>
+                    Espaço de magia
+                  </option>
+                </select>
+              </label>
+            ) : null}
+
+            {asksCastLevel && castingResource === "slot" ? (
               <label className="grid gap-1 text-xs text-textMuted">
                 Nível de conjuração
                 <select
@@ -321,7 +356,9 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
                 disabled={
                   selected.sourceCastingMode === "source"
                     ? selected.sourceUsageRemaining === 0
-                    : selected.spell.slotLevel > 0 && slotChoices.length === 0
+                    : castingResource === "ability"
+                      ? selected.sourceUsageRemaining === 0
+                      : selected.spell.slotLevel > 0 && slotChoices.length === 0
                 }
                 onClick={castSelected}
               >

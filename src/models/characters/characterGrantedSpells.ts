@@ -90,8 +90,10 @@ export function getCharacterGrantedSpells(
             sourceId: `${equipment.id}:${ability.id}`,
             attribute: grant.attribute ?? "cha",
           },
-          usage: castingMode === "source" ? ability.usage : undefined,
-          usageSource: castingMode === "source" && ability.usage
+          // A habilidade pode conceder a magia como conhecida e, ao mesmo tempo,
+          // fornecer conjurações gratuitas por suas próprias cargas.
+          usage: ability.usage,
+          usageSource: ability.usage
             ? { type: "equipment", itemId: equipment.id, abilityId: ability.id }
             : undefined,
         })
@@ -121,8 +123,10 @@ function addAbilitySpellGrants(
         ...source,
         attribute: grant.attribute ?? "cha",
       },
-      usage: castingMode === "source" ? ability.usage : undefined,
-      usageSource: castingMode === "source" && ability.usage ? usageSource : undefined,
+      // `known` define que a magia também pode usar slots; não elimina os
+      // usos gratuitos compartilhados da habilidade que a concedeu.
+      usage: ability.usage,
+      usageSource: ability.usage ? usageSource : undefined,
     })
   }
 }
