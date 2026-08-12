@@ -25,7 +25,6 @@ type Props = {
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) => void
   canAssignOwners: boolean
-  showConditions?: boolean
 }
 
 type SheetViewMode = "full" | "minimal"
@@ -36,7 +35,6 @@ export function CharacterSheetTab({
   character,
   updateCharacter,
   canAssignOwners,
-  showConditions = true,
 }: Props) {
   const [viewMode, setViewMode] = useState<SheetViewMode>(loadSheetViewMode)
   const customSystemDefinitions = useCustomSystemDefinitions()
@@ -95,18 +93,10 @@ export function CharacterSheetTab({
             character={character}
             updateCharacter={updateCharacter}
           />
-          {showCustomActions ? (
-            <CustomSystemActionsPanel
-              character={character}
-              updateCharacter={updateCharacter}
-            />
-          ) : null}
-          {showConditions ? (
-            <CharacterConditions
-              character={character}
-              updateCharacter={updateCharacter}
-            />
-          ) : null}
+          <CharacterConditions
+            character={character}
+            updateCharacter={updateCharacter}
+          />
         </>
       ) : (
         <>
@@ -116,12 +106,10 @@ export function CharacterSheetTab({
           />
 
           <GroupHP character={character} updateCharacter={updateCharacter} />
-          {showConditions ? (
-            <CharacterConditions
-              character={character}
-              updateCharacter={updateCharacter}
-            />
-          ) : null}
+          <CharacterConditions
+            character={character}
+            updateCharacter={updateCharacter}
+          />
           <GroupStats character={character} updateCharacter={updateCharacter} />
 
           <div
