@@ -114,6 +114,8 @@ function mergeActivation(
     usage: preset.activation.usage ?? base?.usage,
     resourceChanges:
       preset.activation.resourceChanges ?? base?.resourceChanges,
+    conditionChanges:
+      preset.activation.conditionChanges ?? base?.conditionChanges,
   }
 }
 
@@ -294,17 +296,20 @@ function applyConditionChange(
     )
   }
 
-  const source = definition.name
+  const source = change.source?.trim() || definition.name
   const condition: CharacterCondition = {
     id: crypto.randomUUID(),
     name,
     description: change.description?.trim() ?? "",
     behavior: change.behavior?.trim() ?? "",
     source,
-    notes: `Aplicada pela ação ${action.name}.`,
+    notes: change.notes?.trim() || `Aplicada pela ação ${action.name}.`,
     tags: change.tags?.filter(Boolean) ?? [],
+    bonuses: change.bonuses,
     duration: buildDuration(change.duration),
     createdAt: new Date().toISOString(),
+    sourceCharacterId: change.sourceCharacterId,
+    linkedCombatantId: change.linkedCombatantId,
   }
 
   return withCharacterConditions(character, [
@@ -324,14 +329,19 @@ function buildDuration(
 ): CharacterCondition["duration"] {
   const type: ConditionDurationType = duration?.type ?? "permanent"
   const numeric = isNumericDuration(type)
-  const amount = numeric ? Math.max(0, duration?.amount ?? 1) : undefined
+  const legacyAmount = duration?.amount
+  const total = numeric ? Math.max(0, duration?.total ?? legacyAmount ?? 1) : undefined
+  const remaining = numeric ? Math.max(0, duration?.remaining ?? total ?? 1) : undefined
 
   return {
     type,
-    total: amount,
-    remaining: amount,
+    total,
+    remaining,
+    tickOn: duration?.tickOn,
+    tickOwner: duration?.tickOwner,
     customLabel: type === "custom" ? duration?.customLabel : undefined,
     autoRemoveAtZero: duration?.autoRemoveAtZero ?? true,
+    expiresAt: duration?.expiresAt,
   }
 }
 
