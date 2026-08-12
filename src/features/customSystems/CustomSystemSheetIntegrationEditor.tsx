@@ -10,6 +10,7 @@ import type { CustomAbilityResourceChangeDefinition } from "../../models/customS
 import type {
   CustomNativeStatOverrideDefinition,
   CustomNativeStatTarget,
+  CustomStandardActionOverrideDefinition,
   CustomSystemActionDefinition,
   CustomSystemDefinition,
 } from "../../models/customSystems/CustomSystemDefinition"
@@ -34,6 +35,33 @@ const ACTIONS: Array<[AbilityActionKind | "", string]> = [
   ["legendaryResistance", "Resistência lendária"],
 ]
 
+const STANDARD_ACTIONS: Array<[string, string]> = [
+  ["attack", "Atacar"],
+  ["grapple-shove", "Agarrar ou empurrar"],
+  ["cast-action", "Conjurar magia"],
+  ["dash", "Correr"],
+  ["disengage", "Desengajar"],
+  ["dodge", "Esquivar"],
+  ["help", "Ajudar"],
+  ["hide", "Esconder-se"],
+  ["ready", "Preparar"],
+  ["search", "Procurar"],
+  ["use-object", "Usar objeto"],
+  ["light-weapon", "Ataque com arma leve"],
+  ["cast-bonus", "Conjurar magia de ação bônus"],
+  ["opportunity-attack", "Ataque de oportunidade"],
+  ["readied-reaction", "Executar ação preparada"],
+  ["cast-reaction", "Conjurar magia de reação"],
+  ["interact-object", "Interagir com objeto"],
+  ["speak", "Falar brevemente"],
+  ["drop-item", "Soltar item"],
+  ["end-concentration", "Encerrar concentração"],
+]
+
+const STANDARD_ACTION_KINDS: Array<[AbilityActionKind, string]> = ACTIONS.filter(
+  ([kind]) => kind === "action" || kind === "bonusAction" || kind === "reaction" || kind === "free",
+) as Array<[AbilityActionKind, string]>
+
 const NATIVE_RESOURCES = [
   ["hitPoints", "Pontos de vida"],
   ["temporaryHitPoints", "Pontos de vida temporários"],
@@ -51,6 +79,7 @@ export function CustomSystemSheetIntegrationEditor({
 }) {
   const overrides = draft.nativeStatOverrides ?? []
   const actions = draft.actions ?? []
+  const standardActionOverrides = draft.standardActionOverrides ?? []
 
   return (
     <div className="grid gap-5">
@@ -130,6 +159,49 @@ export function CustomSystemSheetIntegrationEditor({
             />
           ))}
           {!actions.length ? <Empty>Nenhum botão criado.</Empty> : null}
+        </div>
+      </Section>
+
+      <Section
+        title="Ações padrão da ficha"
+        description="Altere a categoria e/ou a descrição de uma ação padrão enquanto este sistema estiver ativo."
+        action={
+          <AddButton
+            label="Sobrescrita"
+            onClick={() =>
+              setDraft({
+                ...draft,
+                standardActionOverrides: [
+                  ...standardActionOverrides,
+                  newStandardActionOverride(standardActionOverrides),
+                ],
+              })
+            }
+          />
+        }
+      >
+        <div className="grid gap-3">
+          {standardActionOverrides.map((override, index) => (
+            <StandardActionOverrideRow
+              key={override.id}
+              value={override}
+              onChange={(next) =>
+                setDraft({
+                  ...draft,
+                  standardActionOverrides: standardActionOverrides.map((entry, current) =>
+                    current === index ? next : entry,
+                  ),
+                })
+              }
+              onRemove={() =>
+                setDraft({
+                  ...draft,
+                  standardActionOverrides: standardActionOverrides.filter((_, current) => current !== index),
+                })
+              }
+            />
+          ))}
+          {!standardActionOverrides.length ? <Empty>Nenhuma ação padrão alterada.</Empty> : null}
         </div>
       </Section>
 
@@ -225,6 +297,37 @@ function OverrideRow({ definition, value, onChange, onRemove }: {
           {error ?? "Fórmula válida."}
         </span>
       </div>
+    </div>
+  )
+}
+
+function StandardActionOverrideRow({ value, onChange, onRemove }: {
+  value: CustomStandardActionOverrideDefinition
+  onChange: (value: CustomStandardActionOverrideDefinition) => void
+  onRemove: () => void
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-bg-subtle p-3">
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_auto]">
+        <Select
+          label="Ação padrão"
+          value={value.actionId}
+          options={STANDARD_ACTIONS}
+          onChange={(actionId) => onChange({ ...value, actionId })}
+        />
+        <Select
+          label="Nova categoria"
+          value={value.actionKind ?? "action"}
+          options={STANDARD_ACTION_KINDS}
+          onChange={(actionKind) => onChange({ ...value, actionKind: actionKind as AbilityActionKind })}
+        />
+        <div className="flex items-end"><RemoveButton onClick={onRemove} /></div>
+      </div>
+      <TextInput
+        label="Nova descrição"
+        value={value.description ?? ""}
+        onChange={(description) => onChange({ ...value, description: description || undefined })}
+      />
     </div>
   )
 }
@@ -426,6 +529,20 @@ function newOverride(existing: CustomNativeStatOverrideDefinition[]): CustomNati
   const used = new Set(existing.map((entry) => entry.target))
   const target = STATS.find(([candidate]) => !used.has(candidate))?.[0] ?? "initiative"
   return { id: `stat-${crypto.randomUUID()}`, target, formula: target === "initiative" ? "character.attributeModifier.dex" : "0", priority: 0, enabled: true }
+}
+
+function newStandardActionOverride(
+  existing: CustomStandardActionOverrideDefinition[],
+): CustomStandardActionOverrideDefinition {
+  const used = new Set(existing.map((entry) => entry.actionId))
+  const actionId = STANDARD_ACTIONS.find(([id]) => !used.has(id))?.[0] ?? STANDARD_ACTIONS[0][0]
+  return {
+    id: `acao-padrao-${crypto.randomUUID().slice(0, 8)}`,
+    actionId,
+    actionKind: "action",
+    description: undefined,
+    enabled: true,
+  }
 }
 
 function newAction(existing: CustomSystemActionDefinition[]): CustomSystemActionDefinition {

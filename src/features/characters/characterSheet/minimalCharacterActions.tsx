@@ -98,7 +98,10 @@ export function MinimalCharacterActions({
   const [filter, setFilter] = useState<ActionFilter>("action")
   const [selected, setSelected] = useState<ActionEntry | null>(null)
   const [error, setError] = useState("")
-  const standardActions = STANDARD_ACTIONS.filter((entry) => entry.filter === filter)
+  const standardActions = useMemo(
+    () => getStandardActions(character, filter, definitions),
+    [character, filter, definitions],
+  )
   const abilityActions = useMemo(
     () => getAbilityActions(character, filter, definitions),
     [character, filter, definitions],
@@ -299,6 +302,30 @@ function ActionGroup({
   )
 }
 
+function getStandardActions(
+  character: CharacterTemplate,
+  filter: ActionFilter,
+  definitions: CustomSystemDefinition[],
+): ActionEntry[] {
+  const states = (character.get("sheet").customSystems ?? []) as CharacterCustomSystemState[]
+  const overrides = states
+    .filter((state) => state.enabled !== false)
+    .flatMap((state) => {
+      const definition = definitions.find((entry) => entry.id === state.systemId)
+      return definition?.standardActionOverrides ?? []
+    })
+    .filter((override) => override.enabled !== false)
+
+  return STANDARD_ACTIONS.map((entry) => {
+    const applicable = overrides.filter((override) => override.actionId === entry.id)
+    return applicable.reduce<ActionEntry>((current, override) => ({
+      ...current,
+      filter: normalizeActionKind(override.actionKind) ?? current.filter,
+      description: override.description?.trim() || current.description,
+    }), entry)
+  }).filter((entry) => entry.filter === filter)
+}
+
 function getAbilityActions(
   character: CharacterTemplate,
   filter: ActionFilter,
@@ -358,7 +385,7 @@ function getCustomAbilityActions(
   for (const state of states) {
     if (state.enabled === false) continue
     const definition = definitions.find((item) => item.id === state.systemId)
-    if (!definition) continue
+    if (!definition || definition.hiddenFromSheet) continue
 
     for (const ability of state.abilities ?? []) {
       const entry = customAbilityEntry(definition, state, ability, filter)

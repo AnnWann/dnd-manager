@@ -24,7 +24,7 @@ export function evaluateCharacterSheetFormula(
 
   evaluatingCharacterFormula = true
   try {
-    const referencedPaths = listCharacterFormulaVariables()
+    const referencedPaths = listCharacterFormulaVariables(character)
       .map((variable) => variable.path)
       .filter((path) => containsIdentifier(formula, path))
     const result = evaluateWithValues(
@@ -39,11 +39,12 @@ export function evaluateCharacterSheetFormula(
 
 export function validateCharacterSheetFormula(
   formula: string,
+  character?: CharacterTemplate,
 ): string | undefined {
   if (!formula.trim()) return 'Informe uma fórmula.'
 
   const emptyValues: CharacterFormulaValues = Object.fromEntries(
-    listCharacterFormulaVariables().map((variable) => [
+    listCharacterFormulaVariables(character).map((variable) => [
       variable.path,
       variable.valueType === 'boolean' ? false : variable.valueType === 'text' ? '' : 0,
     ]),

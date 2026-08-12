@@ -33,6 +33,10 @@ export interface CustomSystemDefinition {
   nativeStatOverrides?: CustomNativeStatOverrideDefinition[]
   /** Botões de ação independentes de uma habilidade adquirida. */
   actions?: CustomSystemActionDefinition[]
+  /** Sobrescritas das ações padrão da ficha enquanto o sistema estiver ativo. */
+  standardActionOverrides?: CustomStandardActionOverrideDefinition[]
+  /** Mantém regras, recursos e automações ativos, mas não renderiza o sistema na ficha. */
+  hiddenFromSheet?: boolean
   automaticInstallation?: CustomSystemAutomaticInstallation
   characterPlacement?: CustomSystemCharacterPlacement
   presentation?: CustomSystemPresentationDefinition
@@ -62,6 +66,14 @@ export interface CustomSystemActionDefinition {
   enabled?: boolean
   resourceChanges?: CustomAbilityResourceChangeDefinition[]
   conditionChanges?: CustomSystemConditionChangeDefinition[]
+}
+
+export interface CustomStandardActionOverrideDefinition {
+  id: string
+  actionId: string
+  actionKind?: AbilityActionKind
+  description?: string
+  enabled?: boolean
 }
 
 export type CustomSystemConditionChangeDefinition = CustomAbilityConditionChangeDefinition
