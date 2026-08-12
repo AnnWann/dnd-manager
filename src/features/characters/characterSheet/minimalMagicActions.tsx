@@ -53,6 +53,7 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
   const [levelFilter, setLevelFilter] = useState<number | "all">("all")
   const [selected, setSelected] = useState<MinimalSpellEntry | null>(null)
   const [castLevel, setCastLevel] = useState<number | null>(null)
+  const [castingResource, setCastingResource] = useState<"slot" | "ability">("slot")
   const [error, setError] = useState("")
 
   const allSpells = useMemo(
@@ -107,23 +108,34 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
   function openSpell(entry: MinimalSpellEntry) {
     setSelected(entry)
     setError("")
-    setCastLevel(getSlotChoices(character, entry.spell)[0]?.level ?? null)
+    const choices = getSlotChoices(character, entry.spell)
+    setCastLevel(choices[0]?.level ?? null)
+    setCastingResource(
+      entry.sourceUsageSource && (entry.sourceUsageRemaining ?? 0) > 0
+        ? "ability"
+        : "slot",
+    )
   }
 
   function castSelected() {
     if (!selected) return
     const spell = selected.spell
 
-    if (selected.sourceCastingMode === "source") {
-      if (selected.sourceUsageSource) {
-        if ((selected.sourceUsageRemaining ?? 0) <= 0) {
-          setError("Não há cargas disponíveis nesta habilidade.")
-          return
-        }
-        updateCharacter(character.get("id"), (current) =>
-          spendGrantedSpellAbilityUse(current, selected.sourceUsageSource!),
-        )
+    const canUseAbilityCharge = Boolean(
+      selected.sourceUsageSource && selected.sourceUsageMaximum !== undefined,
+    )
+    const useAbilityCharge =
+      selected.sourceCastingMode === "source" ||
+      (canUseAbilityCharge && castingResource === "ability")
+
+    if (useAbilityCharge) {
+      if (!selected.sourceUsageSource || (selected.sourceUsageRemaining ?? 0) <= 0) {
+        setError("Não há cargas disponíveis nesta habilidade.")
+        return
       }
+      updateCharacter(character.get("id"), (current) =>
+        spendGrantedSpellAbilityUse(current, selected.sourceUsageSource!),
+      )
       setSelected(null)
       return
     }
@@ -212,11 +224,20 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
                   onClick={() => openSpell(entry)}
                   className="min-h-14 rounded-lg border border-border bg-bg-subtle px-3 py-2 text-left transition-colors hover:border-accentBorder hover:bg-accentBg"
                 >
-                  <div className="truncate text-xs font-semibold text-textH">{spellName(entry.spell)}</div>
-                  <div className="mt-1 flex min-w-0 gap-1.5 text-[10px] text-textMuted">
-                    <span className="shrink-0">{entry.spell.slotLevel === 0 ? "Truque" : `N${entry.spell.slotLevel}`}</span>
-                    <span>•</span>
-                    <span className="truncate">{sourceLabel(entry.source)}</span>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-semibold text-textH">{spellName(entry.spell)}</div>
+                      <div className="mt-1 flex min-w-0 gap-1.5 text-[10px] text-textMuted">
+                        <span className="shrink-0">{entry.spell.slotLevel === 0 ? "Truque" : `N${entry.spell.slotLevel}`}</span>
+                        <span>•</span>
+                        <span className="truncate">{sourceLabel(entry.source)}</span>
+                      </div>
+                    </div>
+                    {entry.sourceUsageMaximum !== undefined ? (
+                      <span className="shrink-0 rounded-md border border-accentBorder bg-accentBg px-2 py-1 text-[10px] font-semibold text-textH">
+                        {entry.sourceUsageRemaining ?? 0}/{entry.sourceUsageMaximum} usos
+                      </span>
+                    ) : null}
                   </div>
                 </button>
               ))}
@@ -287,7 +308,30 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
               </div>
             ) : null}
 
-            {asksCastLevel ? (
+            {selected.sourceUsageSource && selected.sourceCastingMode === "slots" ? (
+              <label className="grid gap-1 text-xs text-textMuted">
+                Recurso para conjurar
+                <select
+                  className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
+                  value={castingResource}
+                  onChange={(event) =>
+                    setCastingResource(event.target.value as "slot" | "ability")
+                  }
+                >
+                  <option
+                    value="ability"
+                    disabled={(selected.sourceUsageRemaining ?? 0) <= 0}
+                  >
+                    {selected.sourceUsageLabel || sourceLabel(selected.source)} — {selected.sourceUsageRemaining ?? 0}/{selected.sourceUsageMaximum ?? 0} usos
+                  </option>
+                  <option value="slot" disabled={selected.spell.slotLevel > 0 && slotChoices.length === 0}>
+                    Espaço de magia
+                  </option>
+                </select>
+              </label>
+            ) : null}
+
+            {asksCastLevel && castingResource === "slot" ? (
               <label className="grid gap-1 text-xs text-textMuted">
                 Nível de conjuração
                 <select
@@ -312,7 +356,9 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
                 disabled={
                   selected.sourceCastingMode === "source"
                     ? selected.sourceUsageRemaining === 0
-                    : selected.spell.slotLevel > 0 && slotChoices.length === 0
+                    : castingResource === "ability"
+                      ? selected.sourceUsageRemaining === 0
+                      : selected.spell.slotLevel > 0 && slotChoices.length === 0
                 }
                 onClick={castSelected}
               >
