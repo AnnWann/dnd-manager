@@ -15,6 +15,7 @@ import { GroupActions } from "./character_info/components/actions/GroupActions"
 import { GroupHP } from "./character_info/components/hp/GroupHP"
 import { GroupStats } from "./character_info/components/stats/GroupStats"
 import { MinimalCharacterSheet } from "./minimalCharacterSheet"
+import { MinimalMagicActions } from "./minimalMagicActions"
 import { SavingThrows } from "./savingThrows"
 import { Skills } from "./skills/skills"
 
@@ -90,6 +91,10 @@ export function CharacterSheetTab({
       {viewMode === "minimal" ? (
         <>
           <MinimalCharacterSheet
+            character={character}
+            updateCharacter={updateCharacter}
+          />
+          <MinimalMagicActions
             character={character}
             updateCharacter={updateCharacter}
           />
