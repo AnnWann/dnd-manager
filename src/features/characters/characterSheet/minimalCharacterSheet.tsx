@@ -32,6 +32,7 @@ import {
   ATTRIBUTE_KEYS,
   type Attribute,
 } from "../../../models/sheet/Attribute"
+import { CharacterHpControls } from "./characterHpControls"
 import { SpellcastingHandsWarning } from "./spellcastingHandsWarning"
 import {
   HandItemActionsDialog,
@@ -95,12 +96,9 @@ export function MinimalCharacterSheet({
       )
     : []
 
-  function updateHp(
-    key: "current" | "max" | "temporary",
-    value: number,
-  ) {
+  function updateMaxHp(value: number) {
     updateCharacter(character.get("id"), (current) =>
-      current.withHp(key, Math.max(0, Math.trunc(value) || 0)),
+      current.setMaxHp(Math.max(1, Math.trunc(value) || 1)),
     )
   }
 
@@ -151,20 +149,20 @@ export function MinimalCharacterSheet({
     <div className="grid gap-3">
       <CompactSection title="HP">
         <div className="grid grid-cols-3 gap-2">
-          <CompactNumberField
-            label="Atual"
-            value={sheet.HP.current}
-            onChange={(value) => updateHp("current", value)}
-          />
+          <ReadOnlyStat label="Atual" value={String(sheet.HP.current)} />
           <CompactNumberField
             label="Máxima"
             value={sheet.HP.max}
-            onChange={(value) => updateHp("max", value)}
+            min={1}
+            onChange={updateMaxHp}
           />
-          <CompactNumberField
-            label="Temporária"
-            value={sheet.HP.temporary}
-            onChange={(value) => updateHp("temporary", value)}
+          <ReadOnlyStat label="Temporária" value={String(sheet.HP.temporary)} />
+        </div>
+        <div className="mt-2">
+          <CharacterHpControls
+            character={character}
+            updateCharacter={updateCharacter}
+            compact
           />
         </div>
       </CompactSection>
