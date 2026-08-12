@@ -60,6 +60,8 @@ type ActionEntry = {
   abilitySource?: AbilitySource
   customAbilitySource?: CustomAbilitySource
   customSystemActionSource?: CustomSystemActionSource
+  usageRemaining?: number
+  usageMaximum?: number
 }
 
 const FILTER_OPTIONS: Array<{ value: ActionFilter; label: string }> = [
@@ -338,7 +340,12 @@ function ActionGroup({
               onClick={() => onSelect(entry)}
               className="min-h-14 rounded-lg border border-border bg-bg-subtle px-3 py-2 text-left text-xs font-semibold leading-4 text-textH transition-colors hover:border-accentBorder hover:bg-accentBg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-              {entry.name}
+              <span className="block">{entry.name}</span>
+              {entry.usageMaximum !== undefined ? (
+                <span className="mt-1 block text-[10px] font-medium text-textMuted">
+                  {entry.usageRemaining ?? 0}/{entry.usageMaximum} usos
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -455,6 +462,10 @@ function getAbilityActions(
       source: sourceLabel,
       ability,
       abilitySource: source,
+      usageMaximum: ability.usage ? getAbilityUsageMax(character, ability.usage) : undefined,
+      usageRemaining: ability.usage
+        ? Math.max(0, getAbilityUsageMax(character, ability.usage) - ability.usage.used)
+        : undefined,
     }))
 
   return [...nativeEntries, ...getCustomAbilityActions(character, filter, definitions)]

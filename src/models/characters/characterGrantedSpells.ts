@@ -1,9 +1,14 @@
 import type { Ability, Usage } from "../abilities/Ability"
+import { getAbilityUsageMax } from "../abilities/abilityActivation"
 import type { Equipment } from "../items/equipment/EquipmentSlot"
 import type { SpellSource } from "../magic/spells/SpellSource"
 import type { SpellGrantCastingMode } from "../magic/spells/SpellGrant"
-import { getCharacterAsis } from "./CharacterAsi"
 import type { CharacterTemplate } from "./CharacterTemplate"
+
+export type CharacterGrantedSpellUsageSource =
+  | { type: "character"; abilityId: string }
+  | { type: "race"; abilityId: string }
+  | { type: "equipment"; itemId: string; abilityId: string }
 
 export type CharacterGrantedSpell = {
   key: string
@@ -11,6 +16,7 @@ export type CharacterGrantedSpell = {
   castingMode: SpellGrantCastingMode
   source: SpellSource
   usage?: Usage
+  usageSource?: CharacterGrantedSpellUsageSource
 }
 
 export function getCharacterGrantedSpells(
@@ -21,28 +27,9 @@ export function getCharacterGrantedSpells(
   for (const ability of character.get("abilities") ?? []) {
     addAbilitySpellGrants(results, ability, {
       type: ability.category === "feat" ? "feat" : "ability",
-      name:
-        ability.name ||
-        (ability.category === "feat" ? "Talento" : "Habilidade"),
+      name: ability.name || (ability.category === "feat" ? "Talento" : "Habilidade"),
       sourceId: ability.id,
-    })
-  }
-
-  for (const invocation of character.get("magic")?.invocations ?? []) {
-    addAbilitySpellGrants(results, invocation, {
-      type: "ability",
-      name: invocation.name || "Evocação",
-      sourceId: invocation.id,
-    })
-  }
-
-  for (const asi of getCharacterAsis(character)) {
-    if (!asi.ability) continue
-    addAbilitySpellGrants(results, asi.ability, {
-      type: "feat",
-      name: asi.ability.name || "Talento",
-      sourceId: asi.ability.id,
-    })
+    }, { type: "character", abilityId: ability.id })
   }
 
   const race = character.get("sheet").race
@@ -51,7 +38,7 @@ export function getCharacterGrantedSpells(
       type: "race",
       name: ability.name || race.subrace || race.race,
       sourceId: ability.id,
-    })
+    }, { type: "race", abilityId: ability.id })
   }
 
   const shield = character.get("equipment").shield
@@ -104,6 +91,9 @@ export function getCharacterGrantedSpells(
             attribute: grant.attribute ?? "cha",
           },
           usage: castingMode === "source" ? ability.usage : undefined,
+          usageSource: castingMode === "source" && ability.usage
+            ? { type: "equipment", itemId: equipment.id, abilityId: ability.id }
+            : undefined,
         })
       }
     }
@@ -116,6 +106,7 @@ function addAbilitySpellGrants(
   results: CharacterGrantedSpell[],
   ability: Ability,
   source: Pick<SpellSource, "type" | "name" | "sourceId">,
+  usageSource: CharacterGrantedSpellUsageSource,
 ): void {
   for (const grant of ability.grantedSpells ?? []) {
     if (!grant.index) continue
@@ -131,6 +122,49 @@ function addAbilitySpellGrants(
         attribute: grant.attribute ?? "cha",
       },
       usage: castingMode === "source" ? ability.usage : undefined,
+      usageSource: castingMode === "source" && ability.usage ? usageSource : undefined,
     })
   }
+}
+
+export function spendGrantedSpellAbilityUse(
+  character: CharacterTemplate,
+  source: CharacterGrantedSpellUsageSource,
+): CharacterTemplate {
+  const spend = (ability: Ability): Ability => {
+    if (!ability.usage || ability.usage.reset === "spellSlot") return ability
+    const maximum = getAbilityUsageMax(character, ability.usage)
+    if (ability.usage.used >= maximum) return ability
+    return {
+      ...ability,
+      usage: {
+        ...ability.usage,
+        used: Math.min(maximum, ability.usage.used + 1),
+      },
+    }
+  }
+
+  if (source.type === "race") {
+    const race = character.get("sheet").race
+    return character.withSheet("race", {
+      ...race,
+      naturalAbilities: (race.naturalAbilities ?? []).map((ability) =>
+        ability.id === source.abilityId ? spend(ability) : ability,
+      ),
+    })
+  }
+
+  if (source.type === "equipment") {
+    const ability = character.getCharacterAbilities().find((entry) =>
+      "source" in entry &&
+      entry.source === "equipment" &&
+      entry.sourceItemId === source.itemId &&
+      entry.originalAbilityId === source.abilityId
+    )
+    if (!ability) return character
+    return character.updateEquipmentAbility(source.itemId, spend({ ...ability, id: source.abilityId }))
+  }
+
+  const ability = (character.get("abilities") ?? []).find((entry) => entry.id === source.abilityId)
+  return ability ? character.updateAbility(spend(ability)) : character
 }
