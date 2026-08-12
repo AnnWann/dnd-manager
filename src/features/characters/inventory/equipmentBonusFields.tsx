@@ -10,6 +10,7 @@ import type {
   BonusTarget,
   ScopedBonusKey,
 } from "../../../models/bonuses/Bonus"
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
 import type { Itemmable } from "../../../models/items/item"
 import type { Attribute } from "../../../models/sheet/Attribute"
@@ -36,6 +37,8 @@ const TARGET_OPTIONS: Array<{ value: BonusTarget; label: string }> = [
   { value: "attackBonus", label: "Ataques — global" },
   { value: "weaponAttackBonus", label: "Ataques com arma" },
   { value: "spellAttackBonus", label: "Ataques mágicos" },
+  { value: "savingThrowBonus", label: "Testes de resistência — global" },
+  { value: "savingThrowAttributeBonus", label: "Testes de resistência — atributo" },
   { value: "saveDcBonus", label: "CD — global" },
   { value: "spellSaveDcBonus", label: "CD de magias" },
   { value: "abilitySaveDcBonus", label: "CD de habilidades" },
@@ -50,6 +53,7 @@ const TARGET_OPTIONS: Array<{ value: BonusTarget; label: string }> = [
 const SCOPED_TARGETS = new Set<BonusTarget>([
   "weaponAttackBonus",
   "spellAttackBonus",
+  "savingThrowAttributeBonus",
   "weaponDamageBonus",
   "spellDamageBonus",
   "spellSaveDcBonus",
@@ -87,10 +91,12 @@ export function BonusesFields({
   bonuses,
   onChange,
   description = "Bônus aplicados enquanto esta habilidade estiver disponível.",
+  character,
 }: {
   bonuses: BonusCollection
   onChange: (bonuses: BonusCollection) => void
   description?: string
+  character?: CharacterTemplate
 }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const entries = flattenBonuses(bonuses)
@@ -138,6 +144,7 @@ export function BonusesFields({
 
       <AddBonusDialog
         open={dialogOpen}
+        character={character}
         onClose={() => setDialogOpen(false)}
         onAdd={({ target, attribute, scopeAttribute, bonus }) => {
           if (target === "attribute" || target === "attributeModifier") {
@@ -245,10 +252,12 @@ function formatBonus(bonus: Bonus): string {
 
 function AddBonusDialog({
   open,
+  character,
   onClose,
   onAdd,
 }: {
   open: boolean
+  character?: CharacterTemplate
   onClose: () => void
   onAdd: (entry: {
     target: BonusTarget
@@ -270,7 +279,7 @@ function AddBonusDialog({
   const needsAttribute =
     target === "attribute" || target === "attributeModifier"
   const supportsAttributeScope = isScopedTarget(target)
-  const formulaError = useFormula ? validateCharacterSheetFormula(formula) : undefined
+  const formulaError = useFormula ? validateCharacterSheetFormula(formula, character) : undefined
 
   function close() {
     setTarget("armorClass")
@@ -387,7 +396,7 @@ function AddBonusDialog({
               </label>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <FormulaVariablePicker
-                  variables={listCharacterFormulaVariables()}
+                  variables={listCharacterFormulaVariables(character)}
                   onSelect={(path) => setFormula((current) => current ? current + " " + path : path)}
                 />
                 {formulaError ? (

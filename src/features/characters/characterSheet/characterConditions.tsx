@@ -265,6 +265,7 @@ export function CharacterConditions({
 
       <ConditionDialog
         open={creating || editing !== null}
+        character={character}
         condition={editing}
         onClose={() => {
           setCreating(false)
@@ -278,11 +279,13 @@ export function CharacterConditions({
 
 function ConditionDialog({
   open,
+  character,
   condition,
   onClose,
   onSave,
 }: {
   open: boolean
+  character: CharacterTemplate
   condition: CharacterCondition | null
   onClose: () => void
   onSave: (condition: CharacterCondition) => void
@@ -535,6 +538,7 @@ function ConditionDialog({
               <div className="sm:col-span-2">
                 <BonusesFields
                   bonuses={draft.bonuses ?? {}}
+                  character={character}
                   description="Modificadores aplicados enquanto esta condição estiver ativa e não expirada."
                   onChange={(bonuses) => patch({ bonuses })}
                 />

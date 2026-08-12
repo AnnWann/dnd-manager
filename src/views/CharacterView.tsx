@@ -126,7 +126,7 @@ export function CharacterView() {
       states.filter(isActiveSystemState).map((state) => state.systemId),
     )
     return customSystemDefinitions.filter((definition) =>
-      activeIds.has(definition.id),
+      activeIds.has(definition.id) && !definition.hiddenFromSheet,
     )
   }, [customSystemDefinitions, routeCharacter])
 

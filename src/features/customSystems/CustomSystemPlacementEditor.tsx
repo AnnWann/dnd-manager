@@ -124,7 +124,24 @@ export function CustomSystemPlacementEditor({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <label className="mt-4 flex items-start gap-3 rounded-xl border border-border bg-bg p-4 text-sm text-text">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={draft.hiddenFromSheet === true}
+          onChange={(event) =>
+            setDraft({ ...draft, hiddenFromSheet: event.target.checked || undefined })
+          }
+        />
+        <span>
+          <span className="block font-medium text-textH">Sistema oculto na ficha</span>
+          <span className="mt-1 block text-xs leading-5 text-textMuted">
+            Campos, recursos, automações, fórmulas e regras continuam ativos, mas o sistema não cria aba, seção nem ações próprias na ficha.
+          </span>
+        </span>
+      </label>
+
+      <div className={`mt-4 grid gap-3 md:grid-cols-2 ${draft.hiddenFromSheet ? 'pointer-events-none opacity-45' : ''}`}>
         <button
           type="button"
           onClick={() =>

@@ -584,11 +584,18 @@ export function getSavingThrowBonus(
   const attributeModifier =
     getEffectiveAttributeModifier(character, attribute)
 
-  if (!isSavingThrowProficient(character, attribute)) {
-    return attributeModifier
-  }
+  const baseValue = isSavingThrowProficient(character, attribute)
+    ? attributeModifier + getProficiencyBonus(character)
+    : attributeModifier
 
-  return attributeModifier + getProficiencyBonus(character)
+  return applyBonuses(baseValue, [
+    ...getCharacterBonuses(character, "savingThrowBonus"),
+    ...getScopedCharacterBonuses(
+      character,
+      "savingThrowAttributeBonus",
+      attribute,
+    ),
+  ])
 }
 
 export function setSavingThrowProficiency(

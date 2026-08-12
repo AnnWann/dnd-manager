@@ -172,7 +172,7 @@ function buildEntries(
   for (const state of states) {
     if (state.enabled === false) continue
     const definition = definitions.find((entry) => entry.id === state.systemId)
-    if (!definition) continue
+    if (!definition || definition.hiddenFromSheet) continue
 
     for (const action of definition.actions ?? []) {
       if (action.enabled === false) continue

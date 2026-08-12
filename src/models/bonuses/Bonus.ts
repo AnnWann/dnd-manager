@@ -27,6 +27,10 @@ export type BonusCollection = {
   weaponAttackBonus?: AttributeScopedBonus[]
   /** Bônus aplicado apenas a ataques mágicos. */
   spellAttackBonus?: AttributeScopedBonus[]
+  /** Bônus global aplicado a qualquer teste de resistência. */
+  savingThrowBonus?: Bonus[]
+  /** Bônus aplicado a testes de resistência de um atributo específico (ou todos, quando sem atributo). */
+  savingThrowAttributeBonus?: AttributeScopedBonus[]
   /** Bônus global aplicado a qualquer CD calculada. */
   saveDcBonus?: Bonus[]
   /** Bônus aplicado apenas a CDs de magia. */
@@ -67,6 +71,7 @@ export type NormalBonusKey =
   | "temporaryHp"
   | "passivePerception"
   | "attackBonus"
+  | "savingThrowBonus"
   | "saveDcBonus"
   | "damageBonus"
   | "speed"
@@ -74,6 +79,7 @@ export type NormalBonusKey =
 export type ScopedBonusKey =
   | "weaponAttackBonus"
   | "spellAttackBonus"
+  | "savingThrowAttributeBonus"
   | "weaponDamageBonus"
   | "spellDamageBonus"
   | "spellSaveDcBonus"

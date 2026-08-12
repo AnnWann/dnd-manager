@@ -58,7 +58,7 @@ const SKILLS: SkillDefinition[] = [
   { id: 'survival', label: 'Sobrevivência', attribute: 'wis' },
 ]
 
-export function listCharacterFormulaVariables(): CustomFormulaVariable[] {
+export function listCharacterFormulaVariables(character?: CharacterTemplate): CustomFormulaVariable[] {
   const attributes = ATTRIBUTES.flatMap(({ id, label }) => [
     variable(`character.attribute.${id}`, `${label} — valor`),
     variable(`character.attributeModifier.${id}`, `${label} — modificador`),
@@ -77,6 +77,33 @@ export function listCharacterFormulaVariables(): CustomFormulaVariable[] {
   const skills = SKILLS.map(({ id, label }) =>
     variable(`character.skill.${id}`, `${label} — bônus`),
   )
+
+  const customSystemVariables = character
+    ? (character.get('sheet').customSystems ?? []).flatMap((state) => {
+        const fields = Object.entries(state.fields ?? {}).flatMap(([fieldId, value]) => {
+          const valueType = typeof value === 'number'
+            ? 'number' as const
+            : typeof value === 'boolean'
+              ? 'boolean' as const
+              : typeof value === 'string'
+                ? 'text' as const
+                : undefined
+          return valueType
+            ? [{
+                path: `character.customSystem.${state.systemId}.field.${fieldId}`,
+                label: `${state.systemId} — campo ${fieldId}`,
+                valueType,
+              }]
+            : []
+        })
+        const resources = Object.entries(state.resources ?? {}).flatMap(([resourceId, resource]) => [
+          variable(`character.customSystem.${state.systemId}.resource.${resourceId}.current`, `${state.systemId} — ${resourceId} atual`),
+          variable(`character.customSystem.${state.systemId}.resource.${resourceId}.maximum`, `${state.systemId} — ${resourceId} máximo`),
+          variable(`character.customSystem.${state.systemId}.resource.${resourceId}.temporary`, `${state.systemId} — ${resourceId} temporário`),
+        ])
+        return [...fields, ...resources]
+      })
+    : []
 
   return [
     variable('character.level', 'Nível total'),
@@ -97,6 +124,7 @@ export function listCharacterFormulaVariables(): CustomFormulaVariable[] {
     ...attributes,
     ...classes,
     ...skills,
+    ...customSystemVariables,
   ]
 }
 
@@ -106,7 +134,7 @@ export function getCharacterFormulaValues(
 ): CharacterFormulaValues {
   const paths = requestedPaths
     ? Array.from(new Set(requestedPaths))
-    : listCharacterFormulaVariables().map((entry) => entry.path)
+    : listCharacterFormulaVariables(character).map((entry) => entry.path)
 
   if (!character) return createEmptyValues(paths)
 
@@ -159,6 +187,27 @@ export function getCharacterFormulaValues(
     }
     if (path === 'character.inspiration') {
       values[path] = Boolean(sheet.stats.inspiration)
+      continue
+    }
+
+    const customMatch = path.match(/^character\.customSystem\.([^.]+)\.(field|resource)\.([^.]+)(?:\.(current|maximum|temporary))?$/)
+    if (customMatch) {
+      const [, systemId, kind, id, property] = customMatch
+      const state = (sheet.customSystems ?? []).find((entry) => entry.systemId === systemId)
+      if (kind === 'field') {
+        const value = state?.fields?.[id]
+        values[path] = typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string'
+          ? value
+          : 0
+      } else {
+        const resource = state?.resources?.[id]
+        const value = property === 'maximum'
+          ? resource?.maximum
+          : property === 'temporary'
+            ? resource?.temporary
+            : resource?.current
+        values[path] = Number(value) || 0
+      }
       continue
     }
 
