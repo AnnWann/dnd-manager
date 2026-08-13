@@ -7,6 +7,7 @@ import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
 import { getCharacterGrantedSpells, spendGrantedSpellAbilityUse, type CharacterGrantedSpellUsageSource } from "../../../models/characters/characterGrantedSpells"
 import { beginSpellConcentration, getConcentrationCondition } from "../../../models/characters/characterConcentration"
+import { getKiPool, restoreKi, spendKi } from "../../../models/characters/characterKi"
 import { getSorceryPoints, restorePactSlot, restoreSorceryPoint, restoreSpellSlot, spendPactSlot, spendSorceryPoint, spendSpellSlot } from "../../../models/characters/characterMagic"
 import { getAbilityUsageMax } from "../../../models/abilities/abilityActivation"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
@@ -77,9 +78,11 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
   const slots = character.getSpellSlots()
   const pactSlots = character.getPactSlots()
   const sorceryPoints = getSorceryPoints(character)
+  const ki = getKiPool(character)
   const hasSlots = Object.values(slots).some((slot) => Boolean(slot && slot.max > 0))
   const hasPactSlots = Boolean(pactSlots && pactSlots.max > 0)
   const hasSorceryPoints = sorceryPoints.max > 0
+  const hasKi = Boolean(ki && ki.max > 0)
   const abilityChargeResources = useMemo(() => {
     const resources = new Map<string, { label: string; current: number; max: number }>()
     for (const entry of allSpells) {
@@ -95,7 +98,7 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
     return Array.from(resources.values())
   }, [allSpells])
   const hasAbilityCharges = abilityChargeResources.length > 0
-  const hasMagicResources = hasSlots || hasPactSlots || hasSorceryPoints || hasAbilityCharges
+  const hasMagicResources = hasSlots || hasPactSlots || hasSorceryPoints || hasKi || hasAbilityCharges
 
   if (!allSpells.length && !hasMagicResources) return null
 
@@ -314,6 +317,16 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
                 max={sorceryPoints.max}
                 onDecrease={() => updateCharacter(character.get("id"), spendSorceryPoint)}
                 onIncrease={() => updateCharacter(character.get("id"), restoreSorceryPoint)}
+              />
+            ) : null}
+            {ki ? (
+              <ResourcePill
+                label="Ki"
+                current={ki.current}
+                max={ki.max}
+                accent
+                onDecrease={() => updateCharacter(character.get("id"), spendKi)}
+                onIncrease={() => updateCharacter(character.get("id"), restoreKi)}
               />
             ) : null}
             {abilityChargeResources.map((resource) => (
