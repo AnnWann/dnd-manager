@@ -15,6 +15,10 @@ export type CharacterSpells = {
     }
   }[]
   castingDescriptions?: Record<string, string[]>
+  resourceCostOverrides?: Record<string, {
+    resource: "ki" | "sorceryPoints" | "channelDivinity"
+    amount: number
+  } | null>
   slots: Partial<Record<MagicCircleLevel, LeveledSlots>>
   pactSlots: LeveledSlots
 }
