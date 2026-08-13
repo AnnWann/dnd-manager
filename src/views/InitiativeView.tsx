@@ -70,6 +70,8 @@ export function InitiativeView() {
   const [selectedCharacterSide, setSelectedCharacterSide] =
     useState<InitiativeSide>("ally")
   const [selectedCreatureId, setSelectedCreatureId] = useState("")
+  const [selectedCreatureSide, setSelectedCreatureSide] =
+    useState<InitiativeSide>("enemy")
   const [creatureQuantity, setCreatureQuantity] = useState(1)
   const [sharedCreatureInitiative, setSharedCreatureInitiative] =
     useState(false)
@@ -126,6 +128,11 @@ export function InitiativeView() {
       defaultSideForCharacter(selectedCharacter.get("sheet").type),
     )
   }, [selectedCharacter])
+
+  useEffect(() => {
+    if (!selectedCreature) return
+    setSelectedCreatureSide(selectedCreature.defaultSide)
+  }, [selectedCreature])
 
   function patchEntry(entryId: string, patch: Partial<InitiativeEntry>) {
     updateSession((current) =>
@@ -206,7 +213,7 @@ export function InitiativeView() {
         sharedRoll ?? rollInitiative(selectedCreature.initiativeBonus),
       initiativeBonus: selectedCreature.initiativeBonus,
       dexterity: selectedCreature.abilityScores.dex,
-      side: selectedCreature.defaultSide,
+      side: selectedCreatureSide,
       armorClass: selectedCreature.armorClass,
       currentHp: selectedCreature.maxHp,
       maxHp: selectedCreature.maxHp,
@@ -369,7 +376,7 @@ export function InitiativeView() {
             <BookOpen className="h-4 w-4 text-accent" />
             Adicionar do Compêndio de Criaturas
           </div>
-          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_5rem_auto_auto]">
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_8rem_5rem_auto_auto]">
             <select
               className={selectClassName}
               value={selectedCreatureId}
@@ -395,6 +402,19 @@ export function InitiativeView() {
                   </option>
                 )
               })}
+            </select>
+            <select
+              className={selectClassName}
+              value={selectedCreatureSide}
+              onChange={(event) =>
+                setSelectedCreatureSide(event.target.value as InitiativeSide)
+              }
+              disabled={session.started}
+              title="Lado da criatura"
+            >
+              <option value="ally">Aliado</option>
+              <option value="enemy">Inimigo</option>
+              <option value="neutral">Neutro</option>
             </select>
             <Input
               type="number"
