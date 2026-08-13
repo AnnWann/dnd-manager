@@ -43,17 +43,25 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
   const slotChoices = selected ? getSlotChoices(character, selected.spell) : []
   const currentConcentration = getConcentrationCondition(character)
   const options = selected ? getEffectiveSpellResourceOptions(character, selected.spell) : { useSlots: true, resources: [] }
-  const selectedCost = options.resources.find((cost) => cost.resource === castingResource)
-  const asksCastLevel = Boolean(selected && castingResource === "slot" && selected.spell.slotLevel > 0 && selected.sourceCastingMode === "slots" && selected.spell.higherLevelText?.trim())
+  const selectedBaseCost = options.resources.find((cost) => cost.resource === castingResource)
+  const selectedCost = selected && selectedBaseCost ? getUpcastResourceCost(selected.spell, selectedBaseCost, castLevel) : undefined
+  const asksCastLevel = Boolean(selected && selected.spell.slotLevel > 0 && selected.sourceCastingMode === "slots" && selected.spell.higherLevelText?.trim() && (castingResource === "slot" || selectedBaseCost))
 
   function openSpell(entry: MinimalSpellEntry) {
     setSelected(entry); setError(""); setConfirmConcentrationReplacement(false)
-    const choices = getSlotChoices(character, entry.spell); setCastLevel(choices[0]?.level ?? null)
-    if (entry.sourceCastingMode === "source" || (entry.sourceUsageSource && (entry.sourceUsageRemaining ?? 0) > 0)) return setCastingResource("ability")
+    const choices = getSlotChoices(character, entry.spell)
+    if (entry.sourceCastingMode === "source" || (entry.sourceUsageSource && (entry.sourceUsageRemaining ?? 0) > 0)) { setCastLevel(entry.spell.slotLevel); return setCastingResource("ability") }
     const payment = getEffectiveSpellResourceOptions(character, entry.spell)
-    if (payment.useSlots && (entry.spell.slotLevel === 0 || choices.length > 0)) return setCastingResource("slot")
+    if (payment.useSlots && (entry.spell.slotLevel === 0 || choices.length > 0)) { setCastLevel(choices[0]?.level ?? entry.spell.slotLevel); return setCastingResource("slot") }
     const cost = payment.resources.find((candidate) => canPaySpellResourceCost(character, candidate)) ?? payment.resources[0]
+    setCastLevel(entry.spell.slotLevel)
     setCastingResource(cost?.resource ?? "slot")
+  }
+  function changeCastingResource(value: CastingResource) {
+    setCastingResource(value)
+    if (!selected) return
+    if (value === "slot") setCastLevel(getSlotChoices(character, selected.spell)[0]?.level ?? selected.spell.slotLevel)
+    else setCastLevel(selected.spell.slotLevel)
   }
   function castSelected() { if (!selected) return; if (selected.spell.concentration && currentConcentration) return setConfirmConcentrationReplacement(true); executeSelectedCast() }
   function finishCast() { setConfirmConcentrationReplacement(false); setSelected(null) }
@@ -66,8 +74,9 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
       updateCharacter(character.get("id"), (current) => { let next = spendGrantedSpellAbilityUse(current, selected.sourceUsageSource!); if (spell.concentration) next = beginSpellConcentration(next, spell); return next }); finishCast(); return
     }
     if (castingResource !== "slot") {
-      const cost = options.resources.find((candidate) => candidate.resource === castingResource)
-      if (!cost || !canPaySpellResourceCost(character, cost)) { setError(`Não há ${cost ? spellResourceLabel(cost.resource) : "recurso"} suficiente para conjurar esta magia.`); setConfirmConcentrationReplacement(false); return }
+      const baseCost = options.resources.find((candidate) => candidate.resource === castingResource)
+      const cost = baseCost ? getUpcastResourceCost(spell, baseCost, castLevel) : undefined
+      if (!cost || !canPaySpellResourceCost(character, cost)) { setError(`Não há ${cost ? spellResourceLabel(cost.resource) : "recurso"} suficiente para conjurar esta magia neste nível.`); setConfirmConcentrationReplacement(false); return }
       updateCharacter(character.get("id"), (current) => { let next = spendSpellResourceCost(current, cost); if (spell.concentration) next = beginSpellConcentration(next, spell); return next }); finishCast(); return
     }
     if (!options.useSlots) { setError("Esta magia não está configurada para usar espaços de magia."); return }
@@ -100,22 +109,28 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
     </div></div> : null}
 
     {selected ? <Modal title={spellName(selected.spell)} onClose={() => setSelected(null)} className="max-w-xl"><div className="grid gap-3"><div className="flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-wide text-textMuted"><span>{selected.spell.slotLevel === 0 ? "Truque" : `Nível ${selected.spell.slotLevel}`}</span><span>• {actionFilterLabel(normalizeCastingTime(selected.spell))}</span><span>• {sourceLabel(selected.source)}</span>{selected.spell.concentration ? <span>• Concentração</span> : null}</div><p className="max-h-56 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-text">{selected.spell.description?.trim() || "Sem descrição."}</p>{selected.spell.higherLevelText?.trim() ? <div className="rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs leading-5 text-text"><div className="font-semibold text-textH">Em níveis superiores</div><div className="mt-1 whitespace-pre-wrap">{selected.spell.higherLevelText}</div></div> : null}
-      {resourceChoices.length > 1 ? <label className="grid gap-1 text-xs text-textMuted">Recurso para conjurar<select className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH" value={castingResource} onChange={(e) => setCastingResource(e.target.value as CastingResource)}>{resourceChoices.map((choice) => <option key={choice.value} value={choice.value} disabled={choice.disabled}>{choice.label}</option>)}</select></label> : resourceChoices[0] ? <div className="rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs text-textMuted">Recurso: <strong className="text-textH">{resourceChoices[0].label}</strong></div> : null}
-      {castingResource !== "slot" && castingResource !== "ability" && selectedCost ? <div className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs text-text">Consome <strong>{selectedCost.amount} {spellResourceLabel(selectedCost.resource)}</strong>. Disponível: {getSpellResourceCurrent(character, selectedCost.resource)}.</div> : null}
+      {resourceChoices.length > 1 ? <label className="grid gap-1 text-xs text-textMuted">Recurso para conjurar<select className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH" value={castingResource} onChange={(e) => changeCastingResource(e.target.value as CastingResource)}>{resourceChoices.map((choice) => <option key={choice.value} value={choice.value} disabled={choice.disabled}>{choice.label}</option>)}</select></label> : resourceChoices[0] ? <div className="rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs text-textMuted">Recurso: <strong className="text-textH">{resourceChoices[0].label}</strong></div> : null}
+      {asksCastLevel ? <label className="grid gap-1 text-xs text-textMuted">Nível de conjuração<select className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH" value={castLevel ?? selected.spell.slotLevel} onChange={(e) => setCastLevel(Number(e.target.value))}>{castingResource === "slot" ? Array.from(new Set(slotChoices.map((choice) => choice.level))).map((level) => <option key={level} value={level}>Nível {level}</option>) : getResourceUpcastLevels(selected.spell).map((level) => <option key={level} value={level}>Nível {level}</option>)}</select></label> : null}
+      {castingResource !== "slot" && castingResource !== "ability" && selectedCost ? <div className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs text-text">Consome <strong>{selectedCost.amount} {spellResourceLabel(selectedCost.resource)}</strong>{castLevel && castLevel > selected.spell.slotLevel ? ` para conjurar no nível ${castLevel}` : ""}. Disponível: {getSpellResourceCurrent(character, selectedCost.resource)}.</div> : null}
       {selected.sourceCastingMode === "source" ? <div className="rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs text-textMuted">Esta magia é conjurada pela própria origem e não consome espaço de magia.{selected.sourceUsageMaximum !== undefined ? ` ${selected.sourceUsageRemaining}/${selected.sourceUsageMaximum} usos disponíveis na origem.` : ""}</div> : null}
-      {asksCastLevel ? <label className="grid gap-1 text-xs text-textMuted">Nível de conjuração<select className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH" value={castLevel ?? ""} onChange={(e) => setCastLevel(Number(e.target.value))}>{Array.from(new Set(slotChoices.map((choice) => choice.level))).map((level) => <option key={level} value={level}>Nível {level}</option>)}</select></label> : null}{error ? <div className="rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">{error}</div> : null}<div className="flex justify-end border-t border-border pt-3"><Button variant="primary" disabled={useDisabled} onClick={castSelected}>Usar</Button></div></div></Modal> : null}
+      {error ? <div className="rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">{error}</div> : null}<div className="flex justify-end border-t border-border pt-3"><Button variant="primary" disabled={useDisabled} onClick={castSelected}>Usar</Button></div></div></Modal> : null}
 
     {selected && confirmConcentrationReplacement ? <Modal title="Substituir concentração?" onClose={() => setConfirmConcentrationReplacement(false)} className="max-w-md"><div className="grid gap-3"><p className="text-sm leading-6 text-text">O personagem já está concentrando{currentConcentration?.source ? ` em ${currentConcentration.source}` : " em outra magia"}. Conjurar <strong>{spellName(selected.spell)}</strong> encerrará a concentração anterior.</p><p className="text-xs leading-5 text-textMuted">O recurso da nova magia só será gasto depois da confirmação.</p><div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3"><Button variant="secondary" onClick={() => setConfirmConcentrationReplacement(false)}>Cancelar</Button><Button variant="primary" onClick={executeSelectedCast}>Conjurar e substituir</Button></div></div></Modal> : null}
   </section>
 }
 
+function getUpcastResourceCost(spell: Spell, baseCost: SpellResourceCost, castLevel: number | null): SpellResourceCost {
+  const level = Math.max(spell.slotLevel, Math.min(9, Math.trunc(castLevel ?? spell.slotLevel)))
+  return { ...baseCost, amount: baseCost.amount + Math.max(0, level - spell.slotLevel) }
+}
+function getResourceUpcastLevels(spell: Spell): number[] { return Array.from({ length: Math.max(1, 10 - spell.slotLevel) }, (_, index) => spell.slotLevel + index).filter((level) => level >= 1 && level <= 9) }
 function getResourceChoices(character: CharacterTemplate, entry: MinimalSpellEntry, slotChoices: SlotChoice[]) {
   if (entry.sourceCastingMode === "source") return [{ value: "ability" as CastingResource, label: `${entry.sourceUsageLabel || sourceLabel(entry.source)} — ${entry.sourceUsageRemaining ?? 0}/${entry.sourceUsageMaximum ?? 0} usos`, disabled: (entry.sourceUsageRemaining ?? 0) <= 0 }]
   const list: Array<{ value: CastingResource; label: string; disabled: boolean }> = []
   if (entry.sourceUsageSource) list.push({ value: "ability", label: `${entry.sourceUsageLabel || sourceLabel(entry.source)} — ${entry.sourceUsageRemaining ?? 0}/${entry.sourceUsageMaximum ?? 0} usos`, disabled: (entry.sourceUsageRemaining ?? 0) <= 0 })
-  const options = getEffectiveSpellResourceOptions(character, entry.spell)
-  if (options.useSlots) list.push({ value: "slot", label: entry.spell.slotLevel === 0 ? "Sem custo (truque)" : "Espaço de magia", disabled: entry.spell.slotLevel > 0 && slotChoices.length === 0 })
-  for (const cost of options.resources) list.push({ value: cost.resource, label: `${cost.amount} ${spellResourceLabel(cost.resource)}`, disabled: !canPaySpellResourceCost(character, cost) })
+  const payment = getEffectiveSpellResourceOptions(character, entry.spell)
+  if (payment.useSlots) list.push({ value: "slot", label: entry.spell.slotLevel === 0 ? "Sem custo (truque)" : "Espaço de magia", disabled: entry.spell.slotLevel > 0 && slotChoices.length === 0 })
+  for (const cost of payment.resources) list.push({ value: cost.resource, label: `${cost.amount} ${spellResourceLabel(cost.resource)}`, disabled: !canPaySpellResourceCost(character, cost) })
   return list
 }
 function formatPayment(useSlots: boolean, resources: SpellResourceCost[]) { const labels = [...(useSlots ? ["Espaço"] : []), ...resources.map((cost) => `${cost.amount} ${spellResourceLabel(cost.resource)}`)]; return labels.length > 1 ? labels.join(" / ") : resources.length ? labels[0] : "" }
