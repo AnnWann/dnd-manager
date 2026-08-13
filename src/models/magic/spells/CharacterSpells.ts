@@ -8,6 +8,10 @@ export type CharacterSpells = {
     spells: {
       id: string,
       prepared: boolean
+      resourceCostOverride?: {
+        resource: "ki" | "sorceryPoints" | "channelDivinity"
+        amount: number
+      } | null
     }
   }[]
   castingDescriptions?: Record<string, string[]>
