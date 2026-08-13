@@ -25,6 +25,7 @@ import {
   useAbilityEffect,
 } from "../../../models/abilities/abilityActivation"
 import { getChannelDivinityPool } from "../../../models/characters/characterChannelDivinity"
+import { getKiPool } from "../../../models/characters/characterKi"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type {
   CharacterCustomSystemState,
@@ -125,8 +126,13 @@ export function MinimalCharacterActions({
   const channelDivinityActions = abilityActions.filter(
     (entry) => entry.ability?.category === "channelDivinity",
   )
+  const martialArtsActions = abilityActions.filter(
+    (entry) => entry.ability?.category === "martialArts",
+  )
   const regularAbilityActions = abilityActions.filter(
-    (entry) => entry.ability?.category !== "channelDivinity",
+    (entry) =>
+      entry.ability?.category !== "channelDivinity" &&
+      entry.ability?.category !== "martialArts",
   )
   const passiveAbilities = useMemo(
     () => getPassiveAbilities(character),
@@ -248,6 +254,13 @@ export function MinimalCharacterActions({
         <ActionGroup
           title="Canalizar Divindade"
           entries={channelDivinityActions}
+          onSelect={open}
+        />
+      ) : null}
+      {martialArtsActions.length ? (
+        <ActionGroup
+          title="Artes marciais"
+          entries={martialArtsActions}
           onSelect={open}
         />
       ) : null}
@@ -439,6 +452,7 @@ function getAbilityActions(
   definitions: CustomSystemDefinition[],
 ): ActionEntry[] {
   const channelDivinity = getChannelDivinityPool(character)
+  const ki = getKiPool(character)
   const raceAbilities = (character.get("sheet").race.naturalAbilities ?? []).map((ability) => ({
     ability,
     sourceLabel: "Raça",
@@ -461,9 +475,11 @@ function getAbilityActions(
       sourceLabel:
         ability.category === "channelDivinity"
           ? "Canalizar Divindade"
-          : ability.category === "feat"
-            ? "Talento"
-            : "Habilidade",
+          : ability.category === "martialArts"
+            ? "Artes marciais"
+            : ability.category === "feat"
+              ? "Talento"
+              : "Habilidade",
       source: { type: "character", abilityId: ability.id } as AbilitySource,
     }
   })
@@ -476,6 +492,8 @@ function getAbilityActions(
     .map(({ ability, sourceLabel, source }) => {
       const usesChannelDivinity =
         source.type === "character" && ability.category === "channelDivinity"
+      const usesKi =
+        source.type === "character" && ability.category === "martialArts"
       return {
         id: `ability:${source.type}:${ability.id}`,
         name: ability.name || "Habilidade sem nome",
@@ -486,14 +504,18 @@ function getAbilityActions(
         abilitySource: source,
         usageMaximum: usesChannelDivinity
           ? channelDivinity?.max
-          : ability.usage
-            ? getAbilityUsageMax(character, ability.usage)
-            : undefined,
+          : usesKi
+            ? ki?.max
+            : ability.usage
+              ? getAbilityUsageMax(character, ability.usage)
+              : undefined,
         usageRemaining: usesChannelDivinity
           ? channelDivinity?.current
-          : ability.usage
-            ? Math.max(0, getAbilityUsageMax(character, ability.usage) - ability.usage.used)
-            : undefined,
+          : usesKi
+            ? ki?.current
+            : ability.usage
+              ? Math.max(0, getAbilityUsageMax(character, ability.usage) - ability.usage.used)
+              : undefined,
       }
     })
 
@@ -587,7 +609,12 @@ function getPassiveAbilities(character: CharacterTemplate): ActionEntry[] {
     }
     return {
       ability,
-      sourceLabel: ability.category === "feat" ? "Talento" : "Habilidade",
+      sourceLabel:
+        ability.category === "martialArts"
+          ? "Artes marciais"
+          : ability.category === "feat"
+            ? "Talento"
+            : "Habilidade",
       source: { type: "character", abilityId: ability.id } as AbilitySource,
     }
   })
