@@ -16,6 +16,7 @@ import type {
   ClassName,
 } from "../../../models/sheet/Class"
 import { ChannelDivinityModule } from "./channelDivinityModule"
+import { KiModule } from "./kiModule"
 import { KnownSpellsList } from "./knownSpellsList"
 import { MetamagicModule } from "./metamagicModule"
 import { SpellSlotsEditor } from "./slots"
@@ -122,6 +123,11 @@ export function CharacterMagicTab({
         </CardHeader>
 
         <ChannelDivinityModule
+          character={character}
+          updateCharacter={updateCharacter}
+        />
+
+        <KiModule
           character={character}
           updateCharacter={updateCharacter}
         />
