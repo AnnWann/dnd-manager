@@ -231,7 +231,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               </div>
               <div className="mt-1 text-xs text-text">
                 Filtre habilidades próprias, raciais, de armas, equipamentos,
-                evocações, talentos, Canalizar Divindade e técnicas marciais.
+                evocações, talentos, Canalizar Divindade e habilidades marciais.
               </div>
             </div>
 
@@ -278,7 +278,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               <option value="invocation">Evocações</option>
               <option value="feat">Talentos</option>
               <option value="channelDivinity">Canalizar Divindade</option>
-              <option value="martialArts">Técnicas marciais</option>
+              <option value="martialArts">Habilidades marciais</option>
             </Select>
 
             <Select
@@ -388,7 +388,7 @@ function getCategoryLabel(ability: Ability): string | undefined {
   if (ability.category === "invocation") return "Evocação"
   if (ability.category === "feat") return "Talento"
   if (ability.category === "channelDivinity") return "Canalizar Divindade"
-  if (ability.category === "martialArts") return "Técnica marcial"
+  if (ability.category === "martialArts") return "Habilidade marcial"
   return undefined
 }
 
