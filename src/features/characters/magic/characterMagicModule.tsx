@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { Card, CardHeader } from "../../../components/ui/Card"
+import { Input } from "../../../components/ui/Input"
 import { useCharacterContext } from "../../../contexts/characterContext"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { getCharacterGrantedSpells } from "../../../models/characters/characterGrantedSpells"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getSorcererLevel } from "../../../models/characters/characterSorceryPoints"
 import type { CharacterSpells } from "../../../models/magic/spells/CharacterSpells"
-import type { Spell } from "../../../models/magic/spells/Spell"
+import type { Spell, SpellResourceType } from "../../../models/magic/spells/Spell"
 import type {
   CharacterClassInterface,
   ClassName,
@@ -30,6 +31,7 @@ type Props = {
 }
 
 type KnownSpellEntry = CharacterSpells["knownSpells"][number]
+type ResourceMode = "inherit" | "slots" | SpellResourceType
 
 const DIVINE_PREPARED_CLASSES: readonly ClassName[] = [
   "cleric",
@@ -144,6 +146,12 @@ export function CharacterMagicTab({
           updateCharacter={updateCharacter}
         />
 
+        <SpellResourceOverrides
+          character={character}
+          updateCharacter={updateCharacter}
+          getSpellByIndex={getSpellByIndex}
+        />
+
         <KnownSpellsList
           key={character.get("id")}
           character={character}
@@ -152,6 +160,176 @@ export function CharacterMagicTab({
       </Card>
     </div>
   )
+}
+
+function SpellResourceOverrides({
+  character,
+  updateCharacter,
+  getSpellByIndex,
+}: Props & { getSpellByIndex: (spellIndex: string) => Spell | undefined }) {
+  const availableSpells = useMemo(() => {
+    const byId = new Map<string, Spell>()
+
+    for (const entry of character.get("magic")?.spells.knownSpells ?? []) {
+      const spell = getSpellByIndex(entry.spells.id)
+      if (spell) byId.set(spell.index, spell)
+    }
+
+    for (const grant of getCharacterGrantedSpells(character)) {
+      const spell = getSpellByIndex(grant.index)
+      if (spell) byId.set(spell.index, spell)
+    }
+
+    return Array.from(byId.values()).toSorted((left, right) =>
+      left.slotLevel - right.slotLevel ||
+      (left.displayName || left.name).localeCompare(
+        right.displayName || right.name,
+        "pt-BR",
+      ),
+    )
+  }, [character, getSpellByIndex])
+
+  if (!availableSpells.length) return null
+
+  const overrides = character.get("magic")?.spells.resourceCostOverrides ?? {}
+
+  function setResourceMode(spell: Spell, mode: ResourceMode) {
+    updateCharacter(character.get("id"), (current) => {
+      const magic = current.getOrCreateMagic()
+      const nextOverrides = { ...(magic.spells.resourceCostOverrides ?? {}) }
+
+      if (mode === "inherit") {
+        delete nextOverrides[spell.index]
+      } else if (mode === "slots") {
+        nextOverrides[spell.index] = null
+      } else {
+        const previous = nextOverrides[spell.index]
+        nextOverrides[spell.index] = {
+          resource: mode,
+          amount:
+            previous && previous.resource === mode
+              ? previous.amount
+              : 1,
+        }
+      }
+
+      return current.with("magic", {
+        ...magic,
+        spells: {
+          ...magic.spells,
+          resourceCostOverrides: nextOverrides,
+        },
+      })
+    })
+  }
+
+  function setResourceAmount(spell: Spell, amount: number) {
+    updateCharacter(character.get("id"), (current) => {
+      const magic = current.getOrCreateMagic()
+      const nextOverrides = { ...(magic.spells.resourceCostOverrides ?? {}) }
+      const currentOverride = nextOverrides[spell.index]
+      if (!currentOverride) return current
+
+      nextOverrides[spell.index] = {
+        ...currentOverride,
+        amount: Math.max(1, Math.trunc(amount) || 1),
+      }
+
+      return current.with("magic", {
+        ...magic,
+        spells: {
+          ...magic.spells,
+          resourceCostOverrides: nextOverrides,
+        },
+      })
+    })
+  }
+
+  return (
+    <section className="border-t border-border px-4 py-4">
+      <div className="text-sm font-semibold text-textH">
+        Recurso de conjuração por magia
+      </div>
+      <div className="mt-1 text-xs text-text">
+        Configuração exclusiva deste personagem. Ela sobrescreve o padrão da magia; sem sobrescrita, a magia usa sua configuração global ou espaços normalmente.
+      </div>
+
+      <div className="mt-3 grid gap-2">
+        {availableSpells.map((spell) => {
+          const hasOverride = Object.prototype.hasOwnProperty.call(
+            overrides,
+            spell.index,
+          )
+          const override = overrides[spell.index]
+          const mode: ResourceMode = !hasOverride
+            ? "inherit"
+            : override === null
+              ? "slots"
+              : override.resource
+
+          return (
+            <div
+              key={spell.index}
+              className="grid gap-2 rounded-xl border border-border bg-bg-subtle p-3 md:grid-cols-[minmax(0,1fr)_220px_100px] md:items-end"
+            >
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-textH">
+                  {spell.displayName || spell.name}
+                </div>
+                <div className="mt-1 text-[11px] text-textMuted">
+                  {spell.slotLevel === 0 ? "Truque" : `Nível ${spell.slotLevel}`}
+                  {" • padrão: "}
+                  {spell.resourceCost
+                    ? `${resourceLabel(spell.resourceCost.resource)} ${spell.resourceCost.amount}`
+                    : "espaço de magia"}
+                </div>
+              </div>
+
+              <label className="grid gap-1 text-[11px] text-textMuted">
+                Recurso
+                <select
+                  className="h-10 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-textH outline-none"
+                  value={mode}
+                  onChange={(event) =>
+                    setResourceMode(spell, event.target.value as ResourceMode)
+                  }
+                >
+                  <option value="inherit">Padrão da magia</option>
+                  <option value="slots">Espaço de magia</option>
+                  <option value="ki">Ki</option>
+                  <option value="sorceryPoints">Pontos de magia</option>
+                  <option value="channelDivinity">Canalizar Divindade</option>
+                </select>
+              </label>
+
+              {override ? (
+                <label className="grid gap-1 text-[11px] text-textMuted">
+                  Custo
+                  <Input
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    value={override.amount}
+                    onChange={(event) =>
+                      setResourceAmount(spell, Number(event.target.value))
+                    }
+                  />
+                </label>
+              ) : (
+                <div />
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function resourceLabel(resource: SpellResourceType): string {
+  if (resource === "ki") return "Ki"
+  if (resource === "sorceryPoints") return "Pontos de magia"
+  return "Canalizar Divindade"
 }
 
 function getMissingDivineClassSpells(
