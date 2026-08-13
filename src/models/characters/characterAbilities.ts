@@ -13,6 +13,12 @@ import {
   restoreChannelDivinity,
   spendChannelDivinity,
 } from "./characterChannelDivinity"
+import {
+  getKiPool,
+  recoverKi,
+  restoreKi,
+  spendKi,
+} from "./characterKi"
 import { getEquipmentAbilities } from "./characterEquipment"
 import type { CharacterTemplate } from "./CharacterTemplate"
 
@@ -89,14 +95,24 @@ export function useAbility(
     const pool = getChannelDivinityPool(character)
     if (!pool || pool.current <= 0) return character
 
-    // Canalizar Divindade usa exclusivamente o pool calculado pela classe.
-    // A opção individual não precisa nem recebe um contador de usos próprio.
     const activated = useAbilityEffect(
       character,
       { ...ability, usage: undefined },
       { type: "character" },
     )
     return spendChannelDivinity(activated)
+  }
+
+  if (ability.category === "martialArts") {
+    const pool = getKiPool(character)
+    if (!pool || pool.current <= 0) return character
+
+    const activated = useAbilityEffect(
+      character,
+      { ...ability, usage: undefined },
+      { type: "character" },
+    )
+    return spendKi(activated)
   }
 
   return useAbilityEffect(character, ability, { type: "character" })
@@ -121,6 +137,9 @@ export function resetAbility(
   const target = (character.get("abilities") ?? []).find((ability) => ability.id === abilityId)
   if (target?.category === "channelDivinity") {
     return recoverChannelDivinity(character)
+  }
+  if (target?.category === "martialArts") {
+    return recoverKi(character)
   }
 
   return character.with(
@@ -158,6 +177,9 @@ export function restoreAbility(
   const target = (character.get("abilities") ?? []).find((ability) => ability.id === abilityId)
   if (target?.category === "channelDivinity") {
     return restoreChannelDivinity(character)
+  }
+  if (target?.category === "martialArts") {
+    return restoreKi(character)
   }
 
   return character.with(
