@@ -49,6 +49,8 @@ function App() {
     setState: setRawAppState,
     status: syncStatus,
     pullFromServer,
+    exportState,
+    importState,
   } = useConcurrentRemoteAppState()
 
   const appState = useMemo(
@@ -77,71 +79,20 @@ function App() {
   }, [appState, rawAppState, setRawAppState])
 
   const sidebarItems = [
-    {
-      label: "Sync",
-      icon: <IconSync />,
-      active: location.pathname === "/sync",
-      onClick: () => navigate("/sync"),
-    },
-    {
-      label: "Ficha",
-      icon: <IconCharacter />,
-      active: location.pathname.startsWith("/character"),
-      onClick: () =>
-        navigate("/character", { state: { autoOpenLast: true } }),
-    },
-    {
-      label: "Inventário do grupo",
-      icon: <IconBackpack />,
-      active: location.pathname === "/party-inventory",
-      onClick: () => navigate("/party-inventory"),
-    },
-    {
-      label: "Chão",
-      icon: <IconGround />,
-      active: location.pathname === "/ground-inventory",
-      onClick: () => navigate("/ground-inventory"),
-    },
-    {
-      label: "Missões",
-      icon: <IconNotes />,
-      active: location.pathname === "/missions",
-      onClick: () => navigate("/missions"),
-    },
+    { label: "Sync", icon: <IconSync />, active: location.pathname === "/sync", onClick: () => navigate("/sync") },
+    { label: "Ficha", icon: <IconCharacter />, active: location.pathname.startsWith("/character"), onClick: () => navigate("/character", { state: { autoOpenLast: true } }) },
+    { label: "Inventário do grupo", icon: <IconBackpack />, active: location.pathname === "/party-inventory", onClick: () => navigate("/party-inventory") },
+    { label: "Chão", icon: <IconGround />, active: location.pathname === "/ground-inventory", onClick: () => navigate("/ground-inventory") },
+    { label: "Missões", icon: <IconNotes />, active: location.pathname === "/missions", onClick: () => navigate("/missions") },
     ...(userRole === "master"
       ? [
-          {
-            label: "Compêndio de Itens",
-            icon: <IconEquipment />,
-            active: location.pathname === "/items-compendium",
-            onClick: () => navigate("/items-compendium"),
-          },
-          {
-            label: "Compêndio de Criaturas",
-            icon: <IconCompendium />,
-            active: location.pathname === "/creatures-compendium",
-            onClick: () => navigate("/creatures-compendium"),
-          },
-          {
-            label: "Sistemas personalizados",
-            icon: <IconCompendium />,
-            active: location.pathname.startsWith("/custom-systems"),
-            onClick: () => navigate("/custom-systems"),
-          },
-          {
-            label: "Iniciativa",
-            icon: <IconInitiative />,
-            active: location.pathname === "/initiative",
-            onClick: () => navigate("/initiative"),
-          },
+          { label: "Compêndio de Itens", icon: <IconEquipment />, active: location.pathname === "/items-compendium", onClick: () => navigate("/items-compendium") },
+          { label: "Compêndio de Criaturas", icon: <IconCompendium />, active: location.pathname === "/creatures-compendium", onClick: () => navigate("/creatures-compendium") },
+          { label: "Sistemas personalizados", icon: <IconCompendium />, active: location.pathname.startsWith("/custom-systems"), onClick: () => navigate("/custom-systems") },
+          { label: "Iniciativa", icon: <IconInitiative />, active: location.pathname === "/initiative", onClick: () => navigate("/initiative") },
         ]
       : []),
-    {
-      label: "Magia",
-      icon: <IconMagic />,
-      active: location.pathname === "/magic",
-      onClick: () => navigate("/magic"),
-    },
+    { label: "Magia", icon: <IconMagic />, active: location.pathname === "/magic", onClick: () => navigate("/magic") },
   ]
 
   return (
@@ -156,6 +107,8 @@ function App() {
         canSync,
         pullFromServer,
         syncStatus,
+        exportState,
+        importState,
       }}
     >
       <CustomSystemsProvider>
@@ -178,13 +131,9 @@ function App() {
                 userRole={userRole}
                 userKey={userKey}
               >
-                <MagicProvider
-                  spells={appState.spells ?? []}
-                  setAppState={setAppState}
-                >
+                <MagicProvider spells={appState.spells ?? []} setAppState={setAppState}>
                   <div className="fixed inset-0 flex w-full max-w-full flex-col overflow-hidden bg-[color:var(--surface-app)] text-text">
                     <AppHeader />
-
                     <div className="flex min-h-0 min-w-0 max-w-full flex-1 overflow-hidden">
                       <AppSidebar items={sidebarItems} />
                       <main className="min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto has-[[aria-modal=true]]:overflow-y-hidden">
