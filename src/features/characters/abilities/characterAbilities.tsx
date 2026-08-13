@@ -45,6 +45,7 @@ type AbilitySourceFilter =
   | "invocation"
   | "feat"
   | "channelDivinity"
+  | "martialArts"
 
 type AbilityKindFilter = "all" | "active" | "passive" | "feature"
 type AbilityListViewMode = "detailed" | "compact"
@@ -110,6 +111,8 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               return ability.category === "feat"
             case "channelDivinity":
               return ability.category === "channelDivinity"
+            case "martialArts":
+              return ability.category === "martialArts"
             default:
               return true
           }
@@ -228,7 +231,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               </div>
               <div className="mt-1 text-xs text-text">
                 Filtre habilidades próprias, raciais, de armas, equipamentos,
-                evocações, talentos e Canalizar Divindade.
+                evocações, talentos, Canalizar Divindade e técnicas marciais.
               </div>
             </div>
 
@@ -275,6 +278,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               <option value="invocation">Evocações</option>
               <option value="feat">Talentos</option>
               <option value="channelDivinity">Canalizar Divindade</option>
+              <option value="martialArts">Técnicas marciais</option>
             </Select>
 
             <Select
@@ -302,10 +306,10 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
                 const equipmentAbility = isEquipmentAbility(ability)
                 const raceAbility = isRaceAbility(ability)
                 const grantedAbility = equipmentAbility || raceAbility
-                 const usageMax = ability.usage
-                   ? getAbilityUsageMax(character, ability.usage)
-                   : undefined
-                 const sourceLabel = getAbilitySourceLabel(
+                const usageMax = ability.usage
+                  ? getAbilityUsageMax(character, ability.usage)
+                  : undefined
+                const sourceLabel = getAbilitySourceLabel(
                   ability,
                   equipmentAbility,
                   raceAbility,
@@ -384,6 +388,7 @@ function getCategoryLabel(ability: Ability): string | undefined {
   if (ability.category === "invocation") return "Evocação"
   if (ability.category === "feat") return "Talento"
   if (ability.category === "channelDivinity") return "Canalizar Divindade"
+  if (ability.category === "martialArts") return "Técnica marcial"
   return undefined
 }
 
