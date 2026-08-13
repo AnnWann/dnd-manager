@@ -1,7 +1,7 @@
 // src/contexts/SyncContext.tsx
 
 import { createContext, useContext } from "react"
-import type { SyncStatus } from "../lib/remoteState"
+import type { AppStateV1, SyncStatus } from "../lib/remoteState"
 
 export type SyncContextValue = {
   syncKey: string
@@ -16,6 +16,8 @@ export type SyncContextValue = {
   canSync: boolean
   pullFromServer: () => void | Promise<void>
   syncStatus: SyncStatus
+  exportState: () => AppStateV1
+  importState: (value: unknown) => void
 }
 
 const SyncContext = createContext<SyncContextValue | null>(null)
