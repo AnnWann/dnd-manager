@@ -7,22 +7,21 @@ import type { Die } from "../../dice/Die"
 import type { MagicCircleLevel, MagicSchool } from "./spellDefinitions"
 import type { Attribute } from "../../sheet/Attribute"
 
-
+export type SpellResourceType = 'ki' | 'sorceryPoints' | 'channelDivinity'
+export type SpellResourceCost = { resource: SpellResourceType; amount: number }
 
 export type Spell = {
   index: string
   name: string
   description: string
   higherLevelText: string
-  
   displayName?: string
   headcanon?: string
   homebrew: boolean
-
   slotLevel: MagicCircleLevel
   school: MagicSchool | string
   classes: ClassName[]
-
+  resourceCost?: SpellResourceCost
   rollMode: RollType[]
   castingTime: {
     value: number
@@ -30,7 +29,6 @@ export type Spell = {
     reactionWhen?: string
     special?: string
   }
-
   range: {
     origin: 'self' | 'touch' | 'point' | 'target' | 'ally' | 'enemy'
     distance: number
@@ -43,14 +41,11 @@ export type Spell = {
     value: number 
     unit: DurationUnit
   }
-  
-
   damageDice?: Die
   concentration: boolean
   ritual: boolean
   components: ('V' | 'S' | 'M')[]
   material?: string
-
   targeting: SpellTargeting 
   effects: Effect[]
 }
@@ -58,14 +53,11 @@ export type Spell = {
 export type SpellTargeting = {
   kind: 'self' | 'single-creature' | 'multiple-creatures' | 'area' | 'object' | 'special'
   targetsSelf: boolean
-
   targetCount?: number
   canTargetMoreAtHigherLevels?: boolean
-
   hasAttackRoll: boolean
   hasSavingThrow: boolean
   savingThrowAttribute?: Attribute
-
   affectsArea: boolean
   areaShape?: 'square' | 'circle' | 'cone' | 'line'
   areaSize?: number
