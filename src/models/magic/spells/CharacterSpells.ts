@@ -1,6 +1,12 @@
 import type { Slot as LeveledSlots } from "./LeveledSlots"
 import type { MagicCircleLevel } from "./spellDefinitions"
 import type { SpellSource } from "./SpellSource"
+import type { SpellResourceCost } from "./Spell"
+
+export type CharacterSpellResourceConfig = {
+  useSlots: boolean
+  resources: SpellResourceCost[]
+}
 
 export type CharacterSpells = {
   knownSpells: {
@@ -8,17 +14,11 @@ export type CharacterSpells = {
     spells: {
       id: string,
       prepared: boolean
-      resourceCostOverride?: {
-        resource: "ki" | "sorceryPoints" | "channelDivinity"
-        amount: number
-      } | null
+      resourceCostOverride?: SpellResourceCost | SpellResourceCost[] | CharacterSpellResourceConfig | null
     }
   }[]
   castingDescriptions?: Record<string, string[]>
-  resourceCostOverrides?: Record<string, {
-    resource: "ki" | "sorceryPoints" | "channelDivinity"
-    amount: number
-  } | null>
+  resourceCostOverrides?: Record<string, SpellResourceCost | SpellResourceCost[] | CharacterSpellResourceConfig | null>
   slots: Partial<Record<MagicCircleLevel, LeveledSlots>>
   pactSlots: LeveledSlots
 }
