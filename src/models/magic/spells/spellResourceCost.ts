@@ -2,7 +2,7 @@ import type { CharacterTemplate } from "../../characters/CharacterTemplate"
 import { getChannelDivinityPool, spendChannelDivinity } from "../../characters/characterChannelDivinity"
 import { getKiPool, spendKi } from "../../characters/characterKi"
 import { getSorceryPoints, setSorceryPoints } from "../../characters/characterMagic"
-import type { SpellResourceCost, SpellResourceType } from "./Spell"
+import type { Spell, SpellResourceCost, SpellResourceType } from "./Spell"
 
 export const SPELL_RESOURCE_OPTIONS: Array<{ value: SpellResourceType; label: string }> = [
   { value: "ki", label: "Ki" },
@@ -12,6 +12,17 @@ export const SPELL_RESOURCE_OPTIONS: Array<{ value: SpellResourceType; label: st
 
 export function spellResourceLabel(resource: SpellResourceType): string {
   return SPELL_RESOURCE_OPTIONS.find((option) => option.value === resource)?.label ?? resource
+}
+
+export function getEffectiveSpellResourceCost(
+  character: CharacterTemplate,
+  spell: Spell,
+): SpellResourceCost | undefined {
+  const overrides = character.get("magic")?.spells.resourceCostOverrides
+  if (overrides && Object.prototype.hasOwnProperty.call(overrides, spell.index)) {
+    return overrides[spell.index] ?? undefined
+  }
+  return spell.resourceCost
 }
 
 export function getSpellResourceCurrent(
