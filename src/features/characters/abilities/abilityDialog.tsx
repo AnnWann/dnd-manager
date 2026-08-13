@@ -61,6 +61,10 @@ function createEmptyAbility(): Ability {
   }
 }
 
+function usesSharedClassResource(category: AbilityCategory | undefined): boolean {
+  return category === "channelDivinity" || category === "martialArts"
+}
+
 export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
   const [draft, setDraft] = useState<Ability>(() =>
     ability ?? createEmptyAbility(),
@@ -81,7 +85,8 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
 
   if (!open) return null
 
-  const hasUsage = draft.usage !== undefined
+  const sharedClassResource = usesSharedClassResource(draft.category)
+  const hasUsage = !sharedClassResource && draft.usage !== undefined
   const maximumFormula = draft.usage?.maxFormula?.trim() ?? ""
   const maximumFormulaError = maximumFormula
     ? validateCharacterSheetFormula(maximumFormula)
@@ -173,17 +178,20 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
               <span className="text-xs font-medium text-textH">Categoria</span>
               <Select
                 value={draft.category ?? "general"}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const category = event.target.value as AbilityCategory
                   setDraft({
                     ...draft,
-                    category: event.target.value as AbilityCategory,
+                    category,
+                    usage: usesSharedClassResource(category) ? undefined : draft.usage,
                   })
-                }
+                }}
               >
                 <option value="general">Habilidade</option>
                 <option value="invocation">Evocação</option>
                 <option value="feat">Talento</option>
                 <option value="channelDivinity">Canalizar Divindade</option>
+                <option value="martialArts">Artes marciais</option>
               </Select>
             </label>
 
@@ -333,139 +341,149 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
           </label>
 
           <section className="rounded-xl border border-border bg-bg-subtle p-3">
-            <label className="flex items-center gap-2 text-xs font-medium text-textH">
-              <input
-                type="checkbox"
-                checked={hasUsage}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    usage: event.target.checked
-                      ? { max: 1, used: 0, reset: "shortRest" }
-                      : undefined,
-                  })
-                }
-              />
-              Tem contador de usos
-            </label>
-
-            {hasUsage && draft.usage ? (
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <label className="grid gap-1">
-                  <span className="text-xs text-textMuted">
-                    Máximo ou fórmula
-                  </span>
-                  <Input
-                    type="text"
-                    value={draft.usage.maxFormula ?? String(draft.usage.max)}
-                    placeholder="Ex.: character.proficiencyBonus"
-                    onChange={(event) => updateUsageMaximum(event.target.value)}
-                  />
-                  {maximumFormulaError ? (
-                    <span className="text-[10px] text-danger">
-                      {maximumFormulaError}
-                    </span>
-                  ) : maximumFormula ? (
-                    <span className="text-[10px] text-textMuted">
-                      A fórmula é recalculada com os valores atuais da ficha.
-                    </span>
-                  ) : null}
-                </label>
-
-                <label className="grid gap-1">
-                  <span className="text-xs text-textMuted">Usado</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={draft.usage.used}
+            {sharedClassResource ? (
+              <div className="text-xs leading-5 text-text">
+                {draft.category === "martialArts"
+                  ? "Esta habilidade usa o recurso compartilhado de Ki do personagem. O máximo é calculado automaticamente pelo nível de Monge e não precisa de um contador próprio."
+                  : "Esta habilidade usa o recurso compartilhado de Canalizar Divindade e não precisa de um contador próprio."}
+              </div>
+            ) : (
+              <>
+                <label className="flex items-center gap-2 text-xs font-medium text-textH">
+                  <input
+                    type="checkbox"
+                    checked={hasUsage}
                     onChange={(event) =>
                       setDraft({
                         ...draft,
-                        usage: {
-                          ...draft.usage!,
-                          used: Math.max(
-                            0,
-                            Math.min(
-                              draft.usage!.max,
-                              Number(event.target.value) || 0,
-                            ),
-                          ),
-                        },
+                        usage: event.target.checked
+                          ? { max: 1, used: 0, reset: "shortRest" }
+                          : undefined,
                       })
                     }
                   />
+                  Tem contador de usos
                 </label>
 
-                <label className="grid gap-1">
-                  <span className="text-xs text-textMuted">Reset</span>
-                  <Select
-                    value={draft.usage.reset}
-                    onChange={(event) =>
-                      setDraft({
-                        ...draft,
-                        usage: {
-                          ...draft.usage!,
-                          reset: event.target.value as AbilityUsageResetKind,
-                        },
-                      })
-                    }
-                  >
-                    {USAGE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-
-                {draft.usage.reset === "cooldown" ? (
-                  <>
+                {hasUsage && draft.usage ? (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
                     <label className="grid gap-1">
-                      <span className="text-xs text-textMuted">Cooldown</span>
+                      <span className="text-xs text-textMuted">
+                        Máximo ou fórmula
+                      </span>
+                      <Input
+                        type="text"
+                        value={draft.usage.maxFormula ?? String(draft.usage.max)}
+                        placeholder="Ex.: character.proficiencyBonus"
+                        onChange={(event) => updateUsageMaximum(event.target.value)}
+                      />
+                      {maximumFormulaError ? (
+                        <span className="text-[10px] text-danger">
+                          {maximumFormulaError}
+                        </span>
+                      ) : maximumFormula ? (
+                        <span className="text-[10px] text-textMuted">
+                          A fórmula é recalculada com os valores atuais da ficha.
+                        </span>
+                      ) : null}
+                    </label>
+
+                    <label className="grid gap-1">
+                      <span className="text-xs text-textMuted">Usado</span>
                       <Input
                         type="number"
-                        min={1}
-                        value={draft.usage.cooldownAmount ?? 1}
+                        min={0}
+                        value={draft.usage.used}
                         onChange={(event) =>
                           setDraft({
                             ...draft,
                             usage: {
                               ...draft.usage!,
-                              cooldownAmount: Math.max(
-                                1,
-                                Number(event.target.value) || 1,
+                              used: Math.max(
+                                0,
+                                Math.min(
+                                  draft.usage!.max,
+                                  Number(event.target.value) || 0,
+                                ),
                               ),
                             },
                           })
                         }
                       />
                     </label>
+
                     <label className="grid gap-1">
-                      <span className="text-xs text-textMuted">Unidade</span>
+                      <span className="text-xs text-textMuted">Reset</span>
                       <Select
-                        value={draft.usage.cooldownUnit ?? "turns"}
+                        value={draft.usage.reset}
                         onChange={(event) =>
                           setDraft({
                             ...draft,
                             usage: {
                               ...draft.usage!,
-                              cooldownUnit: event.target
-                                .value as AbilityUsageCooldownUnit,
+                              reset: event.target.value as AbilityUsageResetKind,
                             },
                           })
                         }
                       >
-                        {COOLDOWN_UNIT_OPTIONS.map((option) => (
+                        {USAGE_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
                           </option>
                         ))}
                       </Select>
                     </label>
-                  </>
+
+                    {draft.usage.reset === "cooldown" ? (
+                      <>
+                        <label className="grid gap-1">
+                          <span className="text-xs text-textMuted">Cooldown</span>
+                          <Input
+                            type="number"
+                            min={1}
+                            value={draft.usage.cooldownAmount ?? 1}
+                            onChange={(event) =>
+                              setDraft({
+                                ...draft,
+                                usage: {
+                                  ...draft.usage!,
+                                  cooldownAmount: Math.max(
+                                    1,
+                                    Number(event.target.value) || 1,
+                                  ),
+                                },
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-xs text-textMuted">Unidade</span>
+                          <Select
+                            value={draft.usage.cooldownUnit ?? "turns"}
+                            onChange={(event) =>
+                              setDraft({
+                                ...draft,
+                                usage: {
+                                  ...draft.usage!,
+                                  cooldownUnit: event.target
+                                    .value as AbilityUsageCooldownUnit,
+                                },
+                              })
+                            }
+                          >
+                            {COOLDOWN_UNIT_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </Select>
+                        </label>
+                      </>
+                    ) : null}
+                  </div>
                 ) : null}
-              </div>
-            ) : null}
+              </>
+            )}
           </section>
 
           <div className="rounded-xl border border-border bg-bg-subtle p-3 text-xs leading-5 text-text">
