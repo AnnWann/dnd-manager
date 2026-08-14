@@ -21,7 +21,18 @@ import {
   spendKi,
 } from "./characterKi"
 import { getEquipmentAbilities } from "./characterEquipment"
+import {
+  getCharacterConditions,
+  withCharacterConditions,
+} from "./characterConditionStorage"
 import type { CharacterTemplate } from "./CharacterTemplate"
+
+type ConditionAbilityProjection = Ability & {
+  source: "condition"
+  sourceConditionId: string
+  sourceConditionName: string
+  originalAbilityId: string
+}
 
 export function addAbility(
   character: CharacterTemplate,
@@ -84,10 +95,20 @@ export function useAbility(
   abilityId: string,
   activationOptionId?: string,
 ): CharacterTemplate {
-  const ability = (character.get("abilities") ?? []).find(
+  const directAbility = (character.get("abilities") ?? []).find(
     (current) => current.id === abilityId,
   )
+  const projected = directAbility ? undefined : findConditionAbility(character, abilityId)
+  const ability = directAbility ?? projected?.ability
   if (!ability) return character
+
+  const source = projected
+    ? {
+        type: "condition" as const,
+        conditionId: projected.conditionId,
+        sourceLabel: projected.conditionName,
+      }
+    : { type: "character" as const }
 
   if (ability.category === "channelDivinity") {
     const pool = getChannelDivinityPool(character)
@@ -96,7 +117,7 @@ export function useAbility(
     const activated = useAbilityEffect(
       character,
       { ...ability, usage: undefined },
-      { type: "character" },
+      source,
       activationOptionId,
     )
     return spendChannelDivinity(activated)
@@ -109,21 +130,21 @@ export function useAbility(
     const activated = useAbilityEffect(
       character,
       { ...ability, usage: undefined },
-      { type: "character" },
+      source,
       activationOptionId,
     )
     return spendKi(activated)
   }
 
   const sharedResourceId = ability.usage?.sharedResourceId?.trim()
-  if (sharedResourceId && ability.usage) {
+  if (!projected && sharedResourceId && ability.usage) {
     if (ability.usage.used >= getAbilityUsageMax(character, ability.usage)) {
       return character
     }
     const activated = useAbilityEffect(
       character,
       { ...ability, usage: undefined },
-      { type: "character" },
+      source,
       activationOptionId,
     )
     return updateSharedResourceUsage(activated, sharedResourceId, 1)
@@ -132,7 +153,7 @@ export function useAbility(
   return useAbilityEffect(
     character,
     ability,
-    { type: "character" },
+    source,
     activationOptionId,
   )
 }
@@ -141,11 +162,20 @@ export function deactivateAbility(
   character: CharacterTemplate,
   abilityId: string,
 ): CharacterTemplate {
-  const ability = (character.get("abilities") ?? []).find(
+  const directAbility = (character.get("abilities") ?? []).find(
     (current) => current.id === abilityId,
   )
-  return ability
-    ? endAbilityEffect(character, ability, { type: "character" })
+  if (directAbility) {
+    return endAbilityEffect(character, directAbility, { type: "character" })
+  }
+
+  const projected = findConditionAbility(character, abilityId)
+  return projected
+    ? endAbilityEffect(character, projected.ability, {
+        type: "condition",
+        conditionId: projected.conditionId,
+        sourceLabel: projected.conditionName,
+      })
     : character
 }
 
@@ -162,6 +192,28 @@ export function resetAbility(
   }
   const sharedResourceId = target?.usage?.sharedResourceId?.trim()
   if (sharedResourceId) return setSharedResourceUsage(character, sharedResourceId, 0)
+
+  if (!target) {
+    const projected = findConditionAbility(character, abilityId)
+    if (!projected) return character
+    return updateConditionAbility(
+      character,
+      projected.conditionId,
+      projected.ability.id,
+      (ability) => ({
+        ...ability,
+        benefitsActive: abilityRequiresActivation(ability) ? false : undefined,
+        modifiersActive: undefined,
+        usage: ability.usage
+          ? {
+              ...ability.usage,
+              used: 0,
+              cooldownRemaining: undefined,
+            }
+          : ability.usage,
+      }),
+    )
+  }
 
   return character.with(
     "abilities",
@@ -187,8 +239,19 @@ export function getCharacterAbilities(
 ): Ability[] {
   const characterAbilities = character.get("abilities") ?? []
   const equipmentAbilities = getEquipmentAbilities(character)
+  const conditionAbilities: ConditionAbilityProjection[] = getCharacterConditions(character)
+    .flatMap((condition) =>
+      (condition.grantedAbilities ?? []).map((ability) => ({
+        ...ability,
+        id: conditionAbilityProjectionId(condition.id, ability.id),
+        source: "condition" as const,
+        sourceConditionId: condition.id,
+        sourceConditionName: condition.name,
+        originalAbilityId: ability.id,
+      })),
+    )
 
-  return [...characterAbilities, ...equipmentAbilities]
+  return [...characterAbilities, ...equipmentAbilities, ...conditionAbilities]
 }
 
 export function restoreAbility(
@@ -205,12 +268,70 @@ export function restoreAbility(
   const sharedResourceId = target?.usage?.sharedResourceId?.trim()
   if (sharedResourceId) return updateSharedResourceUsage(character, sharedResourceId, -1)
 
+  if (!target) {
+    const projected = findConditionAbility(character, abilityId)
+    if (!projected) return character
+    return updateConditionAbility(
+      character,
+      projected.conditionId,
+      projected.ability.id,
+      restoreAbilityUse,
+    )
+  }
+
   return character.with(
     "abilities",
     (character.get("abilities") ?? []).map((ability) =>
       ability.id === abilityId ? restoreAbilityUse(ability) : ability,
     ),
   )
+}
+
+function findConditionAbility(
+  character: CharacterTemplate,
+  projectedId: string,
+): {
+  conditionId: string
+  conditionName: string
+  ability: Ability
+} | undefined {
+  for (const condition of getCharacterConditions(character)) {
+    for (const ability of condition.grantedAbilities ?? []) {
+      if (conditionAbilityProjectionId(condition.id, ability.id) === projectedId) {
+        return {
+          conditionId: condition.id,
+          conditionName: condition.name,
+          ability,
+        }
+      }
+    }
+  }
+  return undefined
+}
+
+function updateConditionAbility(
+  character: CharacterTemplate,
+  conditionId: string,
+  abilityId: string,
+  updater: (ability: Ability) => Ability,
+): CharacterTemplate {
+  return withCharacterConditions(
+    character,
+    getCharacterConditions(character).map((condition) =>
+      condition.id === conditionId
+        ? {
+            ...condition,
+            grantedAbilities: (condition.grantedAbilities ?? []).map((ability) =>
+              ability.id === abilityId ? updater(ability) : ability,
+            ),
+          }
+        : condition,
+    ),
+  )
+}
+
+function conditionAbilityProjectionId(conditionId: string, abilityId: string): string {
+  return `condition:${conditionId}:${abilityId}`
 }
 
 function updateSharedResourceUsage(
