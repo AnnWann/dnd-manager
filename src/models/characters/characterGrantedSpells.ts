@@ -4,12 +4,16 @@ import type { Equipment } from "../items/equipment/EquipmentSlot"
 import type { SpellSource } from "../magic/spells/SpellSource"
 import type { SpellGrantCastingMode } from "../magic/spells/SpellGrant"
 import type { CharacterTemplate } from "./CharacterTemplate"
-import { getCharacterConditions } from "./characterConditionStorage"
+import {
+  getCharacterConditions,
+  withCharacterConditions,
+} from "./characterConditionStorage"
 
 export type CharacterGrantedSpellUsageSource =
   | { type: "character"; abilityId: string }
   | { type: "race"; abilityId: string }
   | { type: "equipment"; itemId: string; abilityId: string }
+  | { type: "condition"; conditionId: string; abilityId: string }
 
 export type CharacterGrantedSpell = {
   key: string
@@ -76,27 +80,11 @@ export function getCharacterGrantedSpells(
     }
 
     for (const ability of equipment.abilities ?? []) {
-      for (const grant of ability.grantedSpells ?? []) {
-        if (!grant.index) continue
-
-        const castingMode = grant.castingMode ?? "source"
-
-        results.push({
-          key: `equipment-ability:${equipment.id}:${ability.id}:${grant.index}`,
-          index: grant.index,
-          castingMode,
-          source: {
-            type: "equipment",
-            name: `${equipment.name || "Equipamento"} — ${ability.name || "Habilidade"}`,
-            sourceId: `${equipment.id}:${ability.id}`,
-            attribute: grant.attribute ?? "cha",
-          },
-          usage: ability.usage,
-          usageSource: ability.usage
-            ? { type: "equipment", itemId: equipment.id, abilityId: ability.id }
-            : undefined,
-        })
-      }
+      addAbilitySpellGrants(results, ability, {
+        type: "equipment",
+        name: `${equipment.name || "Equipamento"} — ${ability.name || "Habilidade"}`,
+        sourceId: `${equipment.id}:${ability.id}`,
+      }, { type: "equipment", itemId: equipment.id, abilityId: ability.id })
     }
   }
 
@@ -106,8 +94,9 @@ export function getCharacterGrantedSpells(
       results.push({
         key: `condition:${condition.id}:${grant.index}`,
         index: grant.index,
-        // Condições concedem acesso enquanto existirem. Sem um contador próprio,
-        // "source" não seria utilizável, portanto o fallback é usar espaços.
+        // Condições simples não possuem um contador próprio. Se um grant antigo
+        // estiver como "source", ele passa a usar slots até ser convertido em
+        // uma mini-habilidade com contador.
         castingMode: grant.castingMode === "source" ? "known" : (grant.castingMode ?? "known"),
         source: {
           type: "ability",
@@ -115,6 +104,18 @@ export function getCharacterGrantedSpells(
           sourceId: `condition:${condition.id}`,
           attribute: grant.attribute ?? "cha",
         },
+      })
+    }
+
+    for (const ability of condition.grantedAbilities ?? []) {
+      addAbilitySpellGrants(results, ability, {
+        type: ability.category === "feat" ? "feat" : "ability",
+        name: ability.name || condition.name || "Habilidade",
+        sourceId: `condition:${condition.id}:${ability.id}`,
+      }, {
+        type: "condition",
+        conditionId: condition.id,
+        abilityId: ability.id,
       })
     }
   }
@@ -183,6 +184,22 @@ export function spendGrantedSpellAbilityUse(
     )
     if (!ability) return character
     return character.updateEquipmentAbility(source.itemId, spend({ ...ability, id: source.abilityId }))
+  }
+
+  if (source.type === "condition") {
+    return withCharacterConditions(
+      character,
+      getCharacterConditions(character).map((condition) =>
+        condition.id === source.conditionId
+          ? {
+              ...condition,
+              grantedAbilities: (condition.grantedAbilities ?? []).map((ability) =>
+                ability.id === source.abilityId ? spend(ability) : ability,
+              ),
+            }
+          : condition,
+      ),
+    )
   }
 
   const ability = (character.get("abilities") ?? []).find((entry) => entry.id === source.abilityId)
