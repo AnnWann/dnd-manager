@@ -1,3 +1,4 @@
+import type { Ability } from "../abilities/Ability"
 import type { BonusCollection } from "../bonuses/Bonus"
 import type { SpellGrant } from "../magic/spells/SpellGrant"
 import type { Proficiency } from "../sheet/Proficiency"
@@ -48,6 +49,8 @@ export type CharacterConditionGrant = {
   bonuses?: BonusCollection
   grantedSpells?: SpellGrant[]
   grantedProficiencies?: Proficiency[]
+  /** Habilidades completas que existem somente enquanto a condição existir. */
+  grantedAbilities?: Ability[]
   duration?: CharacterConditionDuration
 }
 
@@ -63,6 +66,7 @@ export type CharacterCondition = {
   /** Benefícios dinâmicos que existem somente enquanto a condição existir. */
   grantedSpells?: SpellGrant[]
   grantedProficiencies?: Proficiency[]
+  grantedAbilities?: Ability[]
   duration: CharacterConditionDuration
   createdAt: string
 
