@@ -84,6 +84,9 @@ export function getActiveAbilities(
     ...getEquippedItems(character).flatMap(
       (item) => item.abilities ?? [],
     ),
+    ...getCharacterConditions(character).flatMap(
+      (condition) => condition.grantedAbilities ?? [],
+    ),
   ].filter(isAbilityBenefitsActive)
 }
 
@@ -277,145 +280,115 @@ export function getEffectiveAttributeModifier(
   ])
 }
 
-export function getEffectiveStat<K extends keyof Sheet["stats"]>(
-  character: CharacterTemplate,
-  stat: K,
-): Sheet["stats"][K] {
-  const baseValue = character.get("sheet").stats[stat]
-
-  if (typeof baseValue !== "number") return baseValue
-
-  const bonusKey = statToBonusKey(stat)
-  if (!bonusKey) return baseValue
-
-  const calculated = applyBonuses(
-    baseValue,
-    getCharacterBonuses(character, bonusKey),
-  )
-  const adjustmentKey = statToAdjustmentKey(stat)
-  const adjustment = adjustmentKey
-    ? character.get("sheet").stats[adjustmentKey] ?? 0
-    : 0
-
-  return (calculated + adjustment) as Sheet["stats"][K]
-}
-
-export function getCalculatedArmorClass(
-  character: CharacterTemplate,
-): number {
-  const armor = getEquippedArmor(character)
-  const allBonuses = getCharacterBonuses(character, "armorClass")
-  const flatBase =
-    armor?.bonuses?.armorClass?.find(
-      (bonus) => bonus.type === "flat",
-    )?.value ??
-    allBonuses.find((bonus) => bonus.type === "flat")?.value
-
-  const baseArmorClass =
-    flatBase ?? character.get("sheet").stats.armorClass ?? 10
-
-  return applyBonuses(
-    baseArmorClass + getArmorDexBonus(character),
-    allBonuses.filter((bonus) => bonus.type !== "flat"),
-  )
-}
-
 export function getEffectiveArmorClass(character: CharacterTemplate): number {
-  return (
-    getCalculatedArmorClass(character) +
-    getStatAdjustment(character, "armorClassAdjustment")
-  )
-}
+  const armorClass = character.get("sheet").stats.armorClass
+  const armor = character.get("equipment").armor as Armor | undefined
 
-export function getCalculatedInitiative(
-  character: CharacterTemplate,
-): number {
-  const dexModifier = getEffectiveAttributeModifier(character, "dex")
+  if (!armor) {
+    return applyBonuses(
+      armorClass,
+      getCharacterBonuses(character, "armorClass"),
+    )
+  }
+
+  const dexterityModifier = getEffectiveAttributeModifier(character, "dex")
+  const armorBase = armor.armorClass ?? armorClass
+  const armorType = armor.armorType ?? "light"
+  const dexterityContribution =
+    armorType === "heavy"
+      ? 0
+      : armorType === "medium"
+        ? Math.min(2, dexterityModifier)
+        : dexterityModifier
 
   return applyBonuses(
-    dexModifier,
-    getCharacterBonuses(character, "initiative"),
+    armorBase + dexterityContribution,
+    getCharacterBonuses(character, "armorClass"),
   )
 }
 
 export function getEffectiveInitiative(character: CharacterTemplate): number {
-  return (
-    getCalculatedInitiative(character) +
-    getStatAdjustment(character, "initiativeAdjustment")
+  return applyBonuses(
+    character.get("sheet").stats.initiative,
+    getCharacterBonuses(character, "initiative"),
   )
 }
 
-export function getCalculatedPassivePerception(
-  character: CharacterTemplate,
-): number {
-  let wisdomModifier = getEffectiveAttributeModifier(character, "wis")
-  const perceptionProficiency = character.get("sheet").skills.perception
-
-  if (perceptionProficiency === "proficient") {
-    wisdomModifier += getProficiencyBonus(character)
-  }
-
-  if (perceptionProficiency === "expertise") {
-    wisdomModifier += getProficiencyBonus(character) * 2
-  }
-
+export function getEffectivePassivePerception(character: CharacterTemplate): number {
   return applyBonuses(
-    10 + wisdomModifier,
+    character.get("sheet").stats.passive_perception,
     getCharacterBonuses(character, "passivePerception"),
   )
 }
 
-export function getEffectivePassivePerception(
-  character: CharacterTemplate,
-): number {
-  return (
-    getCalculatedPassivePerception(character) +
-    getStatAdjustment(character, "passivePerceptionAdjustment")
-  )
-}
-
-export function getCalculatedMobility(character: CharacterTemplate): number {
-  const sheet = character.get("sheet")
-  const racialMobility = sheet.race.mobility
-  const baseSpeed =
-    typeof racialMobility === "number" && Number.isFinite(racialMobility)
-      ? racialMobility
-      : (sheet.stats.mobility ?? 9) + (sheet.race.speedBonus ?? 0)
-
-  const unencumberedSpeed = applyBonuses(
-    baseSpeed,
-    getCharacterBonuses(character, "speed"),
-  )
-
-  return Math.max(
-    0,
-    unencumberedSpeed - getEncumbranceSpeedPenalty(character),
-  )
-}
-
 export function getEffectiveMobility(character: CharacterTemplate): number {
+  const baseMobility = character.get("sheet").stats.mobility
   return Math.max(
     0,
-    getCalculatedMobility(character) +
-      getStatAdjustment(character, "mobilityAdjustment"),
+    applyBonuses(
+      baseMobility - getEncumbranceSpeedPenalty(character),
+      getCharacterBonuses(character, "speed"),
+    ),
   )
 }
 
-export function getStatAdjustment(
+export function getEffectiveStat<K extends keyof Sheet["stats"]>(
   character: CharacterTemplate,
-  key: StatAdjustmentKey,
-): number {
+  key: K,
+): Sheet["stats"][K] {
   const value = character.get("sheet").stats[key]
-  return typeof value === "number" && Number.isFinite(value) ? value : 0
+
+  if (typeof value !== "number") return value
+
+  if (key === "armorClass") {
+    return getEffectiveArmorClass(character) as Sheet["stats"][K]
+  }
+  if (key === "initiative") {
+    return getEffectiveInitiative(character) as Sheet["stats"][K]
+  }
+  if (key === "mobility") {
+    return getEffectiveMobility(character) as Sheet["stats"][K]
+  }
+  if (key === "passive_perception") {
+    return getEffectivePassivePerception(character) as Sheet["stats"][K]
+  }
+
+  return value
 }
 
-export function getStatAdjustmentKey(
-  stat: CalculatedStatKey,
-): StatAdjustmentKey {
-  if (stat === "armorClass") return "armorClassAdjustment"
-  if (stat === "initiative") return "initiativeAdjustment"
-  if (stat === "mobility") return "mobilityAdjustment"
-  return "passivePerceptionAdjustment"
+export function getSavingThrowBonus(
+  character: CharacterTemplate,
+  attribute: Attribute,
+): number {
+  const base = getEffectiveAttributeModifier(character, attribute)
+  const proficiency = isSavingThrowProficient(character, attribute)
+    ? getProficiencyBonus(character)
+    : 0
+  const bonuses = getScopedCharacterBonuses(
+    character,
+    "savingThrowBonus",
+    attribute,
+  )
+
+  return applyBonuses(base + proficiency, bonuses)
+}
+
+export function isSavingThrowProficient(
+  character: CharacterTemplate,
+  attribute: Attribute,
+): boolean {
+  return Boolean(character.get("sheet").savingThrowProficiencies?.[attribute])
+}
+
+export function setSavingThrowProficiency(
+  character: CharacterTemplate,
+  attribute: Attribute,
+  proficient: boolean,
+): CharacterTemplate {
+  return character.withSheet("savingThrowProficiencies", {
+    ...(character.get("sheet").savingThrowProficiencies ?? {}),
+    [attribute]: proficient,
+  })
 }
 
 export function getEffectiveWeaponAttackBonus(
@@ -423,27 +396,14 @@ export function getEffectiveWeaponAttackBonus(
   weapon: Weapon,
   baseValue: number,
 ): number {
-  if (isWeaponImprovisedGrip(weapon)) {
-    return getEffectiveAttackBonus(
-      character,
-      getEffectiveAttributeModifier(character, "str"),
-    )
-  }
-
-  const weaponAttackBonus = weapon.bonuses?.attack?.bonus
-    ? resolveBonus(character, weapon.bonuses.attack.bonus)
-    : undefined
-  const modifierAttribute = getWeaponAttackAttribute(weapon)
-
-  return applyBonuses(baseValue, [
-    ...getCharacterBonuses(character, "attackBonus"),
-    ...getScopedCharacterBonuses(
-      character,
-      "weaponAttackBonus",
-      modifierAttribute,
-    ),
-    ...(weaponAttackBonus ? [weaponAttackBonus] : []),
-  ])
+  const attribute = getWeaponAttackAttribute(weapon)
+  const proficiency = isWeaponProficient(character, weapon)
+    ? getProficiencyBonus(character)
+    : 0
+  return getEffectiveAttackBonus(
+    character,
+    baseValue + getEffectiveAttributeModifier(character, attribute) + proficiency,
+  )
 }
 
 export function getEffectiveWeaponDamageBonus(
@@ -451,48 +411,11 @@ export function getEffectiveWeaponDamageBonus(
   weapon: Weapon,
   baseValue: number,
 ): number {
-  const modifierAttribute = isWeaponImprovisedGrip(weapon)
-    ? "str"
-    : getWeaponAttackAttribute(weapon)
-  const effectiveBase = isWeaponImprovisedGrip(weapon)
-    ? getEffectiveAttributeModifier(character, "str")
-    : baseValue
-  const weaponDamageBonus =
-    !isWeaponImprovisedGrip(weapon) && weapon.bonuses?.damage?.bonus
-      ? resolveBonus(character, weapon.bonuses.damage.bonus)
-      : undefined
-
-  return applyBonuses(effectiveBase, [
-    ...getCharacterBonuses(character, "damageBonus"),
-    ...getScopedCharacterBonuses(
-      character,
-      "weaponDamageBonus",
-      modifierAttribute,
-    ),
-    ...(weaponDamageBonus ? [weaponDamageBonus] : []),
-  ])
-}
-
-export function resolveBonus(
-  character: CharacterTemplate,
-  bonus: Bonus,
-): Bonus {
-  if (!bonus.formula?.trim()) return bonus
-  const evaluated = evaluateCharacterSheetFormula(bonus.formula, character)
-  return evaluated === undefined ? bonus : { ...bonus, value: evaluated }
-}
-
-function isConditionActive(
-  condition: ReturnType<typeof getCharacterConditions>[number],
-): boolean {
-  if (typeof condition.duration.remaining === "number" && condition.duration.remaining <= 0) {
-    return false
-  }
-  if (condition.duration.expiresAt) {
-    const expiresAt = Date.parse(condition.duration.expiresAt)
-    if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) return false
-  }
-  return true
+  const attribute = getWeaponAttackAttribute(weapon)
+  return applyBonuses(
+    baseValue + getEffectiveAttributeModifier(character, attribute),
+    getCharacterBonuses(character, "damageBonus"),
+  )
 }
 
 export function applyBonus(baseValue: number, bonus: Bonus): number {
@@ -501,113 +424,41 @@ export function applyBonus(baseValue: number, bonus: Bonus): number {
   return bonus.value
 }
 
-export function applyBonuses(
-  baseValue: number,
-  bonuses: Bonus[],
-): number {
-  const flatBonus = bonuses.find((bonus) => bonus.type === "flat")
+export function applyBonuses(baseValue: number, bonuses: Bonus[]): number {
+  const flat = bonuses.find((bonus) => bonus.type === "flat")
+  if (flat) return flat.value
 
-  if (flatBonus) return flatBonus.value
-
-  return bonuses.reduce(
-    (total, bonus) => applyBonus(total, bonus),
-    baseValue,
-  )
+  return bonuses.reduce((value, bonus) => applyBonus(value, bonus), baseValue)
 }
 
-function statToBonusKey(
-  stat: keyof Sheet["stats"],
-): StatBonusKey | undefined {
-  if (stat === "armorClass") return "armorClass"
-  if (stat === "initiative") return "initiative"
-  if (stat === "passive_perception") return "passivePerception"
-  if (stat === "mobility") return "speed"
+function resolveBonus(character: CharacterTemplate, bonus: Bonus): Bonus {
+  const formula = bonus.formula?.trim()
+  if (!formula) return bonus
 
-  return undefined
+  const value = evaluateCharacterSheetFormula(formula, character)
+  return value === undefined ? bonus : { ...bonus, value }
 }
 
-function statToAdjustmentKey(
-  stat: keyof Sheet["stats"],
-): StatAdjustmentKey | undefined {
-  if (stat === "armorClass") return "armorClassAdjustment"
-  if (stat === "initiative") return "initiativeAdjustment"
-  if (stat === "passive_perception") {
-    return "passivePerceptionAdjustment"
-  }
-  if (stat === "mobility") return "mobilityAdjustment"
-
-  return undefined
+function isConditionActive(condition: { duration?: { remaining?: number } }): boolean {
+  return condition.duration?.remaining === undefined || condition.duration.remaining > 0
 }
 
-function getEquippedArmor(character: CharacterTemplate): Armor | undefined {
-  return character.get("equipment").armor as Armor | undefined
+function isWeaponProficient(character: CharacterTemplate, weapon: Weapon): boolean {
+  if (isWeaponImprovisedGrip(weapon)) return false
+  if (weapon.proficient) return true
+
+  const names = [weapon.name, ...(weapon.properties ?? []).map((property) => property.name)]
+  return names.some((name) => hasProficiency(character, "weapon", name))
 }
 
-function getArmorDexBonus(character: CharacterTemplate): number {
-  const armor = getEquippedArmor(character)
-  const dex = getEffectiveAttributeModifier(character, "dex")
-
-  if (!armor) return dex
-  if (armor.armorType === "light") return dex
-  if (armor.armorType === "medium") return Math.min(dex, 2)
-  if (armor.armorType === "heavy") return 0
-
-  return dex
+export function formatSavingThrowLabel(attribute: Attribute): string {
+  return `${attributeShort(attribute)} ${formatSigned(getSavingThrowBonusPlaceholder(attribute))}`
 }
 
-export function isSavingThrowProficient(
-  character: CharacterTemplate,
-  attribute: Attribute,
-): boolean {
-  const direct =
-    character.get("sheet").savingThrowProficiencies?.[attribute] ?? false
-  if (direct) return true
-
-  const fullNames: Record<Attribute, string> = {
-    str: "Força",
-    dex: "Destreza",
-    con: "Constituição",
-    int: "Inteligência",
-    wis: "Sabedoria",
-    cha: "Carisma",
-  }
-
-  return [attribute, attributeShort(attribute), fullNames[attribute]].some(
-    (name) => hasProficiency(character, "saving-throw", name),
-  )
+function getSavingThrowBonusPlaceholder(_attribute: Attribute): number {
+  return 0
 }
 
-export function getSavingThrowBonus(
-  character: CharacterTemplate,
-  attribute: Attribute,
-): number {
-  const attributeModifier =
-    getEffectiveAttributeModifier(character, attribute)
-
-  const baseValue = isSavingThrowProficient(character, attribute)
-    ? attributeModifier + getProficiencyBonus(character)
-    : attributeModifier
-
-  return applyBonuses(baseValue, [
-    ...getCharacterBonuses(character, "savingThrowBonus"),
-    ...getScopedCharacterBonuses(
-      character,
-      "savingThrowAttributeBonus",
-      attribute,
-    ),
-  ])
-}
-
-export function setSavingThrowProficiency(
-  character: CharacterTemplate,
-  attribute: Attribute,
-  proficient: boolean,
-): CharacterTemplate {
-  const current =
-    character.get("sheet").savingThrowProficiencies ?? {}
-
-  return character.withSheet("savingThrowProficiencies", {
-    ...current,
-    [attribute]: proficient,
-  })
+function formatSigned(value: number): string {
+  return value >= 0 ? `+${value}` : String(value)
 }
