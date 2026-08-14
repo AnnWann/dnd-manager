@@ -14,6 +14,7 @@ import {
   endConcentration,
   getConcentrationCondition,
 } from "../../../models/characters/characterConcentration"
+import { GroupHitDice } from "./character_info/components/hitdice/groupHitDice"
 
 type Props = {
   character: CharacterTemplate
@@ -153,6 +154,18 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
             Dano
           </button>
         </div>
+
+        {compact ? (
+          <div className="mt-2 border-t border-border pt-3">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+              Dados de vida
+            </div>
+            <GroupHitDice
+              character={character}
+              updateCharacter={updateCharacter}
+            />
+          </div>
+        ) : null}
       </div>
 
       {modal === "heal" ? (
