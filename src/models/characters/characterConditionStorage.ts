@@ -1,4 +1,7 @@
+import type { Ability } from "../abilities/Ability"
 import type { BonusCollection } from "../bonuses/Bonus"
+import type { SpellGrant } from "../magic/spells/SpellGrant"
+import type { Proficiency } from "../sheet/Proficiency"
 import type { CharacterTemplate } from "./CharacterTemplate"
 import type {
   CharacterCondition,
@@ -150,11 +153,15 @@ function normalizeCondition(value: unknown): CharacterCondition {
       ? raw.tags.map(readString).filter(Boolean)
       : [],
     bonuses: normalizeBonuses(raw.bonuses),
+    grantedSpells: normalizeGrantedSpells(raw.grantedSpells),
+    grantedProficiencies: normalizeGrantedProficiencies(raw.grantedProficiencies),
+    grantedAbilities: normalizeGrantedAbilities(raw.grantedAbilities),
     duration: normalizeDuration(raw.duration),
     createdAt: readString(raw.createdAt) || new Date().toISOString(),
     sourceAbilityId: optionalString(raw.sourceAbilityId),
     sourceAbilityLocation: normalizeAbilityLocation(raw.sourceAbilityLocation),
     sourceItemId: optionalString(raw.sourceItemId),
+    sourceAbilityOptionId: optionalString(raw.sourceAbilityOptionId),
     sourceCharacterId: optionalString(raw.sourceCharacterId),
     linkedCombatantId: optionalString(raw.linkedCombatantId),
     initiativeEffectId: optionalString(raw.initiativeEffectId),
@@ -240,6 +247,18 @@ function normalizeBonuses(value: unknown): BonusCollection | undefined {
   return isRecord(value) ? (value as BonusCollection) : undefined
 }
 
+function normalizeGrantedSpells(value: unknown): SpellGrant[] | undefined {
+  return Array.isArray(value) ? (value as SpellGrant[]) : undefined
+}
+
+function normalizeGrantedProficiencies(value: unknown): Proficiency[] | undefined {
+  return Array.isArray(value) ? (value as Proficiency[]) : undefined
+}
+
+function normalizeGrantedAbilities(value: unknown): Ability[] | undefined {
+  return Array.isArray(value) ? (value as Ability[]) : undefined
+}
+
 function readOptionalNumber(value: unknown): number | undefined {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? Math.max(0, parsed) : undefined
@@ -248,7 +267,10 @@ function readOptionalNumber(value: unknown): number | undefined {
 function normalizeAbilityLocation(
   value: unknown,
 ): CharacterCondition["sourceAbilityLocation"] {
-  return value === "character" || value === "race" || value === "equipment"
+  return value === "character" ||
+    value === "race" ||
+    value === "equipment" ||
+    value === "condition"
     ? value
     : undefined
 }
@@ -286,6 +308,24 @@ function deactivateLinkedAbility(
           : ability,
       ),
     })
+  }
+
+  if (condition.sourceAbilityLocation === "condition") {
+    next = withCharacterConditions(
+      next,
+      getCharacterConditions(next).map((sourceCondition) =>
+        sourceCondition.id === condition.source
+          ? {
+              ...sourceCondition,
+              grantedAbilities: (sourceCondition.grantedAbilities ?? []).map((ability) =>
+                ability.id === abilityId
+                  ? { ...ability, benefitsActive: false, modifiersActive: undefined }
+                  : ability,
+              ),
+            }
+          : sourceCondition,
+      ),
+    )
   }
 
   const linkedItemId = condition.sourceItemId
