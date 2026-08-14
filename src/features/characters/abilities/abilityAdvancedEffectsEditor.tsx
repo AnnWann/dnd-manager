@@ -143,7 +143,7 @@ export function AbilityAdvancedEffectsEditor({
           <div>
             <div className="text-xs font-semibold text-textH">Opções de ativação</div>
             <p className="mt-1 text-[10px] leading-4 text-textMuted">
-              Cada opção é uma mini-habilidade completa. Ela pode ter tipo, ação, gatilho, duração, contador próprio, bônus, proficiências, magias e uma condição adicional.
+              Cada escolha concede uma mini-habilidade completa durante a duração da opção. A mini-habilidade mantém sua própria ação, gatilho, contador, efeitos, bônus, proficiências e magias.
             </p>
           </div>
           <Button
@@ -158,6 +158,7 @@ export function AbilityAdvancedEffectsEditor({
                   {
                     id: crypto.randomUUID(),
                     name,
+                    duration: createOptionDuration(ability.effectDurationText),
                     ability: createEmbeddedAbility(name),
                   },
                 ],
@@ -172,6 +173,8 @@ export function AbilityAdvancedEffectsEditor({
           <div className="mt-3 grid gap-3">
             {options.map((option) => {
               const embedded = getActivationOptionAbility(option) ?? createEmbeddedAbility(option.name)
+              const optionDuration =
+                option.duration ?? option.condition?.duration ?? createOptionDuration(ability.effectDurationText)
               return (
                 <details
                   key={option.id}
@@ -184,7 +187,7 @@ export function AbilityAdvancedEffectsEditor({
                         {embedded.name || option.name || "Mini-habilidade"}
                       </div>
                       <div className="mt-1 text-[10px] text-textMuted">
-                        {formatEmbeddedSummary(embedded)}
+                        Disponível: {formatOptionDuration(optionDuration)} • {formatEmbeddedSummary(embedded)}
                       </div>
                     </div>
                     <Button
@@ -202,7 +205,34 @@ export function AbilityAdvancedEffectsEditor({
                     </Button>
                   </summary>
 
-                  <div className="border-t border-border p-3">
+                  <div className="grid gap-4 border-t border-border p-3">
+                    <section className="rounded-xl border border-accentBorder bg-accentBg p-3">
+                      <div className="text-xs font-semibold text-textH">
+                        Duração da opção
+                      </div>
+                      <p className="mt-1 text-[10px] leading-4 text-textMuted">
+                        Define por quanto tempo esta mini-habilidade existe depois de ser escolhida. Isto é separado da duração dos efeitos produzidos pela própria mini-habilidade.
+                      </p>
+                      <label className="mt-3 grid gap-1 text-xs text-textMuted">
+                        Duração
+                        <Input
+                          value={optionDuration.customLabel ?? ""}
+                          placeholder="Ex.: até o próximo descanso longo"
+                          onChange={(event) =>
+                            updateOption(option.id, {
+                              duration: {
+                                type: "custom",
+                                customLabel: event.target.value,
+                                tickOn: "manual",
+                                tickOwner: "affected",
+                                autoRemoveAtZero: false,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                    </section>
+
                     <MiniAbilityEditor
                       ability={embedded}
                       onChange={(next) => updateOptionAbility(option, next)}
@@ -236,40 +266,43 @@ function MiniAbilityEditor({
 
   return (
     <div className="grid gap-4">
-      <div className="grid gap-2 md:grid-cols-2">
-        <label className="grid gap-1 text-xs text-textMuted">
-          Nome
-          <Input
-            value={ability.name}
-            onChange={(event) => onChange({ ...ability, name: event.target.value })}
+      <div className="rounded-xl border border-border bg-bg-subtle p-3">
+        <div className="mb-3 text-xs font-semibold text-textH">Mini-habilidade</div>
+        <div className="grid gap-2 md:grid-cols-2">
+          <label className="grid gap-1 text-xs text-textMuted">
+            Nome
+            <Input
+              value={ability.name}
+              onChange={(event) => onChange({ ...ability, name: event.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-xs text-textMuted">
+            Categoria
+            <Select
+              value={ability.category ?? "general"}
+              onChange={(event) => onChange({
+                ...ability,
+                category: event.target.value as AbilityCategory,
+              })}
+            >
+              <option value="general">Habilidade</option>
+              <option value="invocation">Evocação</option>
+              <option value="feat">Talento</option>
+              <option value="channelDivinity">Canalizar Divindade</option>
+              <option value="martialArts">Artes marciais</option>
+            </Select>
+          </label>
+        </div>
+
+        <label className="mt-3 grid gap-1 text-xs text-textMuted">
+          Descrição
+          <Textarea
+            className="min-h-20"
+            value={ability.description ?? ""}
+            onChange={(event) => onChange({ ...ability, description: event.target.value })}
           />
         </label>
-        <label className="grid gap-1 text-xs text-textMuted">
-          Categoria
-          <Select
-            value={ability.category ?? "general"}
-            onChange={(event) => onChange({
-              ...ability,
-              category: event.target.value as AbilityCategory,
-            })}
-          >
-            <option value="general">Habilidade</option>
-            <option value="invocation">Evocação</option>
-            <option value="feat">Talento</option>
-            <option value="channelDivinity">Canalizar Divindade</option>
-            <option value="martialArts">Artes marciais</option>
-          </Select>
-        </label>
       </div>
-
-      <label className="grid gap-1 text-xs text-textMuted">
-        Descrição
-        <Textarea
-          className="min-h-20"
-          value={ability.description ?? ""}
-          onChange={(event) => onChange({ ...ability, description: event.target.value })}
-        />
-      </label>
 
       <div className="grid gap-2 md:grid-cols-3">
         <label className="grid gap-1 text-xs text-textMuted">
@@ -325,7 +358,7 @@ function MiniAbilityEditor({
 
       <div className="grid gap-2 md:grid-cols-2">
         <label className="grid gap-1 text-xs text-textMuted">
-          Duração do efeito
+          Duração do efeito ao usar esta mini-habilidade
           <Select
             value={duration}
             onChange={(event) => onChange({
@@ -338,7 +371,7 @@ function MiniAbilityEditor({
           </Select>
         </label>
         <label className="grid gap-1 text-xs text-textMuted">
-          Após o término
+          Após o término do efeito
           <Select
             value={persistence}
             onChange={(event) => onChange({
@@ -354,10 +387,10 @@ function MiniAbilityEditor({
 
       {duration === "lasting" ? (
         <label className="grid gap-1 text-xs text-textMuted">
-          Duração descrita
+          Duração descrita do efeito
           <Input
             value={ability.effectDurationText ?? ""}
-            placeholder="Ex.: até o próximo descanso longo"
+            placeholder="Ex.: 1 minuto"
             onChange={(event) => onChange({ ...ability, effectDurationText: event.target.value })}
           />
         </label>
@@ -375,7 +408,7 @@ function MiniAbilityEditor({
                 : undefined,
             })}
           />
-          Esta opção possui contador próprio
+          Esta mini-habilidade possui contador próprio
         </label>
         {ability.usage ? (
           <div className="mt-3 grid gap-2 md:grid-cols-3">
@@ -450,9 +483,9 @@ function MiniAbilityEditor({
       <section className="rounded-xl border border-border bg-bg-subtle p-3">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <div className="text-xs font-semibold text-textH">Condição adicional</div>
+            <div className="text-xs font-semibold text-textH">Condição ao usar a mini-habilidade</div>
             <div className="mt-1 text-[10px] text-textMuted">
-              Além dos benefícios da própria mini-habilidade, aplique uma condição configurada separadamente.
+              É aplicada quando esta mini-habilidade for usada, não quando a opção principal for escolhida.
             </div>
           </div>
           <Button
@@ -546,17 +579,13 @@ function createEmbeddedAbility(name: string): Ability {
     id: crypto.randomUUID(),
     name: name || "Mini-habilidade",
     description: "",
-    kind: "active",
+    kind: "feature",
     category: "general",
-    actionKind: "free",
     trigger: "always",
-    effectDuration: "lasting",
-    effectDurationText: "Até ser removida",
     effectPersistence: "untilEnd",
     bonuses: {},
     grantedSpells: [],
     grantedProficiencies: [],
-    benefitsActive: false,
   }
 }
 
@@ -578,12 +607,26 @@ function createConditionGrant(name: string): CharacterConditionGrant {
   }
 }
 
+function createOptionDuration(label?: string) {
+  return {
+    type: "custom" as const,
+    customLabel: label?.trim() || "Até ser removida",
+    tickOn: "manual" as const,
+    tickOwner: "affected" as const,
+    autoRemoveAtZero: false,
+  }
+}
+
+function formatOptionDuration(duration: { type: string; customLabel?: string }): string {
+  if (duration.type === "permanent") return "Permanente"
+  return duration.customLabel?.trim() || duration.type
+}
+
 function formatEmbeddedSummary(ability: Ability): string {
   const kind = ABILITY_KIND_OPTIONS.find((entry) => entry.value === (ability.kind ?? "active"))?.label ?? "Ativa"
-  const action = ABILITY_ACTION_OPTIONS.find((entry) => entry.value === (ability.actionKind ?? "free"))?.label ?? "Livre"
-  const duration = (ability.effectDuration ?? (ability.kind === "active" ? "instant" : "lasting")) === "lasting"
-    ? ability.effectDurationText?.trim() || "Duradoura"
-    : "Instantânea"
+  const action = (ability.kind ?? "active") === "active"
+    ? ABILITY_ACTION_OPTIONS.find((entry) => entry.value === (ability.actionKind ?? "free"))?.label ?? "Livre"
+    : "benefício"
   const uses = ability.usage ? ` • ${Math.max(0, ability.usage.max - ability.usage.used)}/${ability.usage.max} usos` : ""
-  return `${kind} • ${action} • ${duration}${uses}`
+  return `${kind} • ${action}${uses}`
 }
