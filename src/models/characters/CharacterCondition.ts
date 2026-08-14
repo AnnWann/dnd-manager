@@ -72,7 +72,7 @@ export type CharacterCondition = {
 
   /** Vínculo criado automaticamente por habilidades duradouras. */
   sourceAbilityId?: string
-  sourceAbilityLocation?: "character" | "race" | "equipment"
+  sourceAbilityLocation?: "character" | "race" | "equipment" | "condition"
   sourceItemId?: string
   sourceAbilityOptionId?: string
 
