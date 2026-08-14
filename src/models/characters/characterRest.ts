@@ -7,6 +7,10 @@ import type { Itemmable } from "../items/item"
 import type { HP } from "../sheet/HP"
 import { applyCustomSystemRestRecovery } from "../../lib/customSystems"
 import { recoverChannelDivinity } from "./characterChannelDivinity"
+import {
+  getCharacterConditions,
+  withCharacterConditions,
+} from "./characterConditionStorage"
 import type { CharacterTemplate } from "./CharacterTemplate"
 
 type HitDiceConsumption = Partial<Record<DieSides, number>>
@@ -151,6 +155,20 @@ function resetRestResources(
           resetItemResources(item, restKind, recoveryFraction),
         ),
       )
+
+  nextCharacter = withCharacterConditions(
+    nextCharacter,
+    getCharacterConditions(nextCharacter).map((condition) => ({
+      ...condition,
+      grantedAbilities: condition.grantedAbilities
+        ? resetAbilities(
+            condition.grantedAbilities,
+            restKind,
+            recoveryFraction,
+          )
+        : condition.grantedAbilities,
+    })),
+  )
 
   nextCharacter = recoverChannelDivinity(nextCharacter, recoveryFraction)
 
