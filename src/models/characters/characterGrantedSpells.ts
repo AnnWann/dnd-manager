@@ -1,6 +1,7 @@
 import type { Ability, Usage } from "../abilities/Ability"
 import { getAbilityUsageMax } from "../abilities/abilityActivation"
 import type { Equipment } from "../items/equipment/EquipmentSlot"
+import type { SpellResourceCost } from "../magic/spells/Spell"
 import type { SpellSource } from "../magic/spells/SpellSource"
 import type { SpellGrantCastingMode } from "../magic/spells/SpellGrant"
 import type { CharacterTemplate } from "./CharacterTemplate"
@@ -22,6 +23,7 @@ export type CharacterGrantedSpell = {
   source: SpellSource
   usage?: Usage
   usageSource?: CharacterGrantedSpellUsageSource
+  resourceCost?: SpellResourceCost
 }
 
 export function getCharacterGrantedSpells(
@@ -94,16 +96,18 @@ export function getCharacterGrantedSpells(
       results.push({
         key: `condition:${condition.id}:${grant.index}`,
         index: grant.index,
-        // Condições simples não possuem um contador próprio. Se um grant antigo
-        // estiver como "source", ele passa a usar slots até ser convertido em
-        // uma mini-habilidade com contador.
-        castingMode: grant.castingMode === "source" ? "known" : (grant.castingMode ?? "known"),
+        castingMode: grant.resourceCost
+          ? "source"
+          : grant.castingMode === "source"
+            ? "known"
+            : (grant.castingMode ?? "known"),
         source: {
           type: "ability",
           name: condition.name || "Condição",
           sourceId: `condition:${condition.id}`,
           attribute: grant.attribute ?? "cha",
         },
+        resourceCost: grant.resourceCost,
       })
     }
 
@@ -133,6 +137,7 @@ function addAbilitySpellGrants(
     if (!grant.index) continue
 
     const castingMode = grant.castingMode ?? "source"
+    const usesAlternateResource = Boolean(grant.resourceCost)
 
     results.push({
       key: `${source.type}:${source.sourceId}:${grant.index}`,
@@ -142,8 +147,12 @@ function addAbilitySpellGrants(
         ...source,
         attribute: grant.attribute ?? "cha",
       },
-      usage: ability.usage,
-      usageSource: ability.usage ? usageSource : undefined,
+      resourceCost: grant.resourceCost,
+      usage: !usesAlternateResource && castingMode === "source" ? ability.usage : undefined,
+      usageSource:
+        !usesAlternateResource && castingMode === "source" && ability.usage
+          ? usageSource
+          : undefined,
     })
   }
 }
