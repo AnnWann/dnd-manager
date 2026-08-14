@@ -12,13 +12,15 @@ export type AbilityActivationOption = {
   name: string
   /** Texto curto exibido antes da escolha. */
   description?: string
-  /** Por quanto tempo a mini-habilidade escolhida permanece disponível. */
+  /** Por quanto tempo as mini-habilidades escolhidas permanecem disponíveis. */
   duration?: CharacterConditionDuration
   /**
-   * Mini-habilidade completa concedida quando esta opção é escolhida.
-   * Ela mantém seu próprio tipo, ação, gatilho, duração de efeito, contador,
-   * bônus, proficiências, magias e condição ao usar.
+   * Mini-habilidades completas concedidas quando esta opção é escolhida.
+   * Cada uma mantém seu próprio tipo, ação, gatilho, duração de efeito,
+   * contador, bônus, proficiências, magias e condição ao usar.
    */
+  abilities?: Ability[]
+  /** Formato de uma única mini-habilidade; mantido para compatibilidade. */
   ability?: Ability
   /** Formato legado das primeiras opções; mantido para migração transparente. */
   condition?: CharacterConditionGrant
