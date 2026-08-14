@@ -117,7 +117,7 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
 
   return (
     <>
-      <div className={compact ? "grid grid-cols-3 gap-2" : "grid grid-cols-2 gap-3 md:grid-cols-3"}>
+      <div className={compact ? "relative z-10 -mt-[4.5rem] grid grid-cols-3 gap-2" : "grid grid-cols-2 gap-3 md:grid-cols-3"}>
         <HpTile
           label="Vida atual"
           value={hp.current}
