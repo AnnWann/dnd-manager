@@ -23,20 +23,14 @@ export type AbilityEffectSource =
   | { type: "equipment"; itemId: string; sourceLabel?: string }
   | { type: "condition"; conditionId: string; sourceLabel?: string }
 
-export function getAbilityEffectDuration(
-  ability: Ability,
-): AbilityEffectDuration {
+export function getAbilityEffectDuration(ability: Ability): AbilityEffectDuration {
   if (ability.effectDuration) return ability.effectDuration
   return (ability.kind ?? "active") === "active" ? "instant" : "lasting"
 }
 
 export function abilityRequiresActivation(ability: Ability): boolean {
   if ((ability.kind ?? "active") === "active") return true
-
-  const trigger = (ability.trigger ?? "always")
-    .trim()
-    .toLocaleLowerCase("pt-BR")
-
+  const trigger = (ability.trigger ?? "always").trim().toLocaleLowerCase("pt-BR")
   return trigger !== "" && trigger !== "always" && trigger !== "sempre"
 }
 
@@ -45,111 +39,69 @@ export function isAbilityBenefitsActive(ability: Ability): boolean {
   return ability.benefitsActive === true
 }
 
-export function getAbilityUsageMax(
-  character: CharacterTemplate,
-  usage: Usage,
-): number {
+export function getAbilityUsageMax(character: CharacterTemplate, usage: Usage): number {
   const formula = usage.maxFormula?.trim()
-  const resolved = formula
-    ? evaluateCharacterSheetFormula(formula, character)
-    : undefined
+  const resolved = formula ? evaluateCharacterSheetFormula(formula, character) : undefined
   const fallback = Number.isFinite(usage.max) ? usage.max : 0
   const value = resolved ?? fallback
-
   return Math.max(0, Math.floor(Number.isFinite(value) ? value : 0))
 }
 
-export function getAbilityRemainingUses(
-  character: CharacterTemplate,
-  usage: Usage,
-): number {
+export function getAbilityRemainingUses(character: CharacterTemplate, usage: Usage): number {
   return Math.max(0, getAbilityUsageMax(character, usage) - usage.used)
 }
 
-export function canActivateAbility(
-  character: CharacterTemplate,
-  ability: Ability,
-): boolean {
-  if (abilityRequiresActivation(ability) && isAbilityBenefitsActive(ability)) {
-    return false
-  }
-
+export function canActivateAbility(character: CharacterTemplate, ability: Ability): boolean {
+  if (abilityRequiresActivation(ability) && isAbilityBenefitsActive(ability)) return false
   const usage = ability.usage
   if (!usage || usage.reset === "spellSlot") return true
   return usage.used < getAbilityUsageMax(character, usage)
 }
 
-/**
- * Resolve o novo formato de mini-habilidade. Opções antigas que continham
- * somente uma condição continuam funcionando e são migradas ao salvar.
- */
-export function getActivationOptionAbility(
-  option: AbilityActivationOption,
-): Ability | undefined {
-  if (option.ability) return option.ability
-  if (!option.condition) return undefined
-  return legacyConditionToEmbeddedAbility(option)
+/** Retorna todas as mini-habilidades de uma opção, migrando formatos antigos. */
+export function getActivationOptionAbilities(option: AbilityActivationOption): Ability[] {
+  if (option.abilities?.length) return option.abilities
+  if (option.ability) return [option.ability]
+  if (option.condition) return [legacyConditionToEmbeddedAbility(option)]
+  return []
 }
 
-/**
- * Atualiza somente o registro da habilidade. Efeitos instantâneos terminam no
- * mesmo clique; efeitos duradouros permanecem ativos até serem encerrados.
- */
-export function activateAbilityBenefits(
-  character: CharacterTemplate,
-  ability: Ability,
-): Ability {
-  if (!abilityRequiresActivation(ability)) return ability
-  if (!canActivateAbility(character, ability)) return ability
+/** Compatibilidade com consumidores que ainda esperam apenas uma. */
+export function getActivationOptionAbility(option: AbilityActivationOption): Ability | undefined {
+  return getActivationOptionAbilities(option)[0]
+}
 
+export function activateAbilityBenefits(character: CharacterTemplate, ability: Ability): Ability {
+  if (!abilityRequiresActivation(ability) || !canActivateAbility(character, ability)) return ability
   const duration = getAbilityEffectDuration(ability)
   const persists = ability.effectPersistence === "permanent"
   const usage = ability.usage
-
   return {
     ...ability,
     effectDuration: duration,
     effectPersistence: ability.effectPersistence ?? "untilEnd",
     benefitsActive: duration === "lasting" || persists,
     modifiersActive: undefined,
-    usage:
-      usage && usage.reset !== "spellSlot"
-        ? {
-            ...usage,
-            used: Math.min(
-              getAbilityUsageMax(character, usage),
-              usage.used + 1,
-            ),
-          }
-        : usage,
+    usage: usage && usage.reset !== "spellSlot"
+      ? { ...usage, used: Math.min(getAbilityUsageMax(character, usage), usage.used + 1) }
+      : usage,
   }
 }
 
 export function deactivateAbilityBenefits(ability: Ability): Ability {
-  if (!abilityRequiresActivation(ability)) return ability
-  if (ability.effectPersistence === "permanent") return ability
-
-  return {
-    ...ability,
-    benefitsActive: false,
-    modifiersActive: undefined,
-  }
+  if (!abilityRequiresActivation(ability) || ability.effectPersistence === "permanent") return ability
+  return { ...ability, benefitsActive: false, modifiersActive: undefined }
 }
 
-/** Executa uso, efeitos de PV, condições e a mini-habilidade escolhida. */
 export function useAbilityEffect(
   character: CharacterTemplate,
   ability: Ability,
   source: AbilityEffectSource,
   activationOptionId?: string,
 ): CharacterTemplate {
-  if (!abilityRequiresActivation(ability)) return character
-  if (!canActivateAbility(character, ability)) return character
+  if (!abilityRequiresActivation(ability) || !canActivateAbility(character, ability)) return character
 
-  const selectedOption = ability.activationOptions?.find(
-    (entry) => entry.id === activationOptionId,
-  )
-
+  const selectedOption = ability.activationOptions?.find((entry) => entry.id === activationOptionId)
   const duration = getAbilityEffectDuration(ability)
   const persists = ability.effectPersistence === "permanent"
   const previousEffectiveMaxHp = character.getEffectiveMaxHp()
@@ -172,110 +124,76 @@ export function useAbilityEffect(
     }
   }
 
-  const temporaryHpBonuses = resolveBonuses(
-    character,
-    ability.bonuses?.temporaryHp ?? [],
-  )
+  const temporaryHpBonuses = resolveBonuses(character, ability.bonuses?.temporaryHp ?? [])
   if (temporaryHpBonuses.length > 0) {
     const currentTemporaryHp = next.get("sheet").HP.temporary
-    const nextTemporaryHp = Math.max(
-      0,
-      applyBonuses(currentTemporaryHp, temporaryHpBonuses),
-    )
-    next = next.setTemporaryHp(nextTemporaryHp)
+    next = next.setTemporaryHp(Math.max(0, applyBonuses(currentTemporaryHp, temporaryHpBonuses)))
   }
 
-  if (duration === "lasting") {
-    next = upsertAbilityCondition(next, ability, source)
-  }
+  if (duration === "lasting") next = upsertAbilityCondition(next, ability, source)
 
   if (ability.conditionOnUse) {
-    next = upsertGrantedCondition(
-      next,
-      ability,
-      source,
-      ability.conditionOnUse,
-      "base",
-    )
+    next = upsertGrantedCondition(next, ability, source, ability.conditionOnUse, "base")
   }
 
-  if (selectedOption?.ability) {
-    next = upsertGrantedCondition(
-      next,
-      ability,
-      source,
-      optionAbilityGrant(selectedOption, ability),
-      `${selectedOption.id}:ability`,
-      selectedOption.name,
-    )
-  } else if (selectedOption?.condition) {
-    // Compatibilidade com o primeiro formato das opções.
-    next = upsertGrantedCondition(
-      next,
-      ability,
-      source,
-      selectedOption.condition,
-      selectedOption.id,
-      selectedOption.name,
-    )
-  }
-
-  return next
-}
-
-/** Encerra o modificador e remove todas as condições vinculadas ao uso. */
-export function endAbilityEffect(
-  character: CharacterTemplate,
-  ability: Ability,
-  source: AbilityEffectSource,
-): CharacterTemplate {
-  let next = replaceAbilityAtSource(
-    character,
-    deactivateAbilityBenefits(ability),
-    source,
-  )
-
-  const conditionPrefix = getAbilityConditionId(ability.id, source)
-  next = withCharacterConditions(
-    next,
-    getCharacterConditions(next).filter(
-      (condition) =>
-        condition.id !== conditionPrefix &&
-        !condition.id.startsWith(`${conditionPrefix}:grant:`),
-    ),
-  )
-
-  if (ability.effectPersistence !== "permanent") {
-    const effectiveMaxHp = next.getEffectiveMaxHp()
-    if (next.get("sheet").HP.current > effectiveMaxHp) {
-      next = next.setCurrentHp(effectiveMaxHp)
+  if (selectedOption) {
+    const optionAbilities = getActivationOptionAbilities(selectedOption)
+    if (optionAbilities.length > 0) {
+      next = upsertGrantedCondition(
+        next,
+        ability,
+        source,
+        optionAbilitiesGrant(selectedOption, ability, optionAbilities),
+        `${selectedOption.id}:abilities`,
+        selectedOption.name,
+      )
+    } else if (selectedOption.condition) {
+      next = upsertGrantedCondition(
+        next,
+        ability,
+        source,
+        selectedOption.condition,
+        selectedOption.id,
+        selectedOption.name,
+      )
     }
   }
 
   return next
 }
 
+export function endAbilityEffect(
+  character: CharacterTemplate,
+  ability: Ability,
+  source: AbilityEffectSource,
+): CharacterTemplate {
+  let next = replaceAbilityAtSource(character, deactivateAbilityBenefits(ability), source)
+  const conditionPrefix = getAbilityConditionId(ability.id, source)
+  next = withCharacterConditions(
+    next,
+    getCharacterConditions(next).filter(
+      (condition) => condition.id !== conditionPrefix && !condition.id.startsWith(`${conditionPrefix}:grant:`),
+    ),
+  )
+  if (ability.effectPersistence !== "permanent") {
+    const effectiveMaxHp = next.getEffectiveMaxHp()
+    if (next.get("sheet").HP.current > effectiveMaxHp) next = next.setCurrentHp(effectiveMaxHp)
+  }
+  return next
+}
+
 export function restoreAbilityUse(ability: Ability): Ability {
   if (!ability.usage || ability.usage.reset === "spellSlot") return ability
-
-  return {
-    ...ability,
-    usage: {
-      ...ability.usage,
-      used: Math.max(0, ability.usage.used - 1),
-    },
-  }
+  return { ...ability, usage: { ...ability.usage, used: Math.max(0, ability.usage.used - 1) } }
 }
 
 export function normalizeAbilityActivation(ability: Ability): Ability {
   const duration = getAbilityEffectDuration(ability)
   const persistence = ability.effectPersistence ?? "untilEnd"
-  const normalized = {
+  const normalized: Ability = {
     ...ability,
-    effectDuration:
-      (ability.kind ?? "active") === "feature" ? ability.effectDuration : duration,
-    effectDurationText:
-      duration === "lasting" ? ability.effectDurationText?.trim() || undefined : undefined,
+    effectDuration: (ability.kind ?? "active") === "feature" ? ability.effectDuration : duration,
+    effectDurationText: duration === "lasting" ? ability.effectDurationText?.trim() || undefined : undefined,
     effectPersistence: persistence,
     modifiersActive: undefined,
     usage: ability.usage
@@ -288,85 +206,64 @@ export function normalizeAbilityActivation(ability: Ability): Ability {
     activationOptions: ability.activationOptions
       ?.filter((option) => option.name.trim())
       .map((option) => {
-        const embedded = getActivationOptionAbility(option)
+        const embeddedAbilities = getActivationOptionAbilities(option)
+        const normalizedAbilities = embeddedAbilities.map((embedded, index) =>
+          normalizeAbilityActivation({
+            ...embedded,
+            id: embedded.id || `activation-option:${option.id}:${index}`,
+            name: embedded.name.trim() || option.name.trim(),
+            activationOptions: undefined,
+          }),
+        )
         return {
           ...option,
           name: option.name.trim(),
-          description:
-            embedded?.description?.trim() || option.description?.trim() || undefined,
-          duration:
-            option.duration ??
-            option.condition?.duration ??
-            defaultOptionDuration(ability),
-          ability: embedded
-            ? normalizeAbilityActivation({
-                ...embedded,
-                id: embedded.id || `activation-option:${option.id}`,
-                name: embedded.name.trim() || option.name.trim(),
-                activationOptions: undefined,
-              })
-            : undefined,
-          // Novos saves usam a mini-habilidade; o campo antigo só é lido para
-          // migrar personagens já existentes.
+          description: option.description?.trim() || normalizedAbilities[0]?.description?.trim() || undefined,
+          duration: option.duration ?? option.condition?.duration ?? defaultOptionDuration(ability),
+          abilities: normalizedAbilities,
+          ability: undefined,
           condition: undefined,
         }
       }),
   }
 
-  if (!abilityRequiresActivation(normalized)) {
-    return {
-      ...normalized,
-      benefitsActive: undefined,
-    }
-  }
-
+  if (!abilityRequiresActivation(normalized)) return { ...normalized, benefitsActive: undefined }
   return {
     ...normalized,
     benefitsActive:
-      (duration === "lasting" || persistence === "permanent") &&
-      normalized.benefitsActive === true,
+      (duration === "lasting" || persistence === "permanent") && normalized.benefitsActive === true,
   }
 }
 
-function optionAbilityGrant(
+function optionAbilitiesGrant(
   option: AbilityActivationOption,
   parent: Ability,
+  embedded: Ability[],
 ): CharacterConditionGrant {
-  const embedded = option.ability!
   return {
-    name: option.name || embedded.name || "Opção de habilidade",
-    description: option.description || embedded.description,
-    behavior:
-      "Esta mini-habilidade existe enquanto a opção selecionada permanecer ativa.",
+    name: option.name || embedded[0]?.name || "Opção de habilidade",
+    description: option.description || embedded[0]?.description,
+    behavior: "As habilidades desta opção existem enquanto a opção selecionada permanecer ativa.",
     tags: ["Habilidade", "Opção de habilidade"],
-    grantedAbilities: [embedded],
+    grantedAbilities: embedded,
     duration: option.duration ?? defaultOptionDuration(parent),
   }
 }
 
 function defaultOptionDuration(ability: Ability): CharacterConditionDuration {
   if (ability.effectPersistence === "permanent") {
-    return {
-      type: "permanent",
-      tickOn: "manual",
-      tickOwner: "affected",
-      autoRemoveAtZero: false,
-    }
+    return { type: "permanent", tickOn: "manual", tickOwner: "affected", autoRemoveAtZero: false }
   }
-
   return {
     type: "custom",
-    customLabel:
-      ability.effectDurationText?.trim() || "Até o efeito ser encerrado",
+    customLabel: ability.effectDurationText?.trim() || "Até o efeito ser encerrado",
     tickOn: "manual",
     tickOwner: "affected",
     autoRemoveAtZero: false,
   }
 }
 
-function legacyConditionToEmbeddedAbility(
-  option: AbilityActivationOption,
-): Ability {
+function legacyConditionToEmbeddedAbility(option: AbilityActivationOption): Ability {
   const condition = option.condition!
   return {
     id: `activation-option:${option.id}`,
@@ -391,16 +288,10 @@ function replaceAbilityAtSource(
     const race = character.get("sheet").race
     return character.withSheet("race", {
       ...race,
-      naturalAbilities: (race.naturalAbilities ?? []).map((current) =>
-        current.id === ability.id ? ability : current,
-      ),
+      naturalAbilities: (race.naturalAbilities ?? []).map((current) => current.id === ability.id ? ability : current),
     })
   }
-
-  if (source.type === "equipment") {
-    return character.updateEquipmentAbility(source.itemId, ability)
-  }
-
+  if (source.type === "equipment") return character.updateEquipmentAbility(source.itemId, ability)
   if (source.type === "condition") {
     return withCharacterConditions(
       character,
@@ -408,15 +299,12 @@ function replaceAbilityAtSource(
         condition.id === source.conditionId
           ? {
               ...condition,
-              grantedAbilities: (condition.grantedAbilities ?? []).map((current) =>
-                current.id === ability.id ? ability : current,
-              ),
+              grantedAbilities: (condition.grantedAbilities ?? []).map((current) => current.id === ability.id ? ability : current),
             }
           : condition,
       ),
     )
   }
-
   return character.updateAbility(ability)
 }
 
@@ -427,9 +315,7 @@ function upsertAbilityCondition(
 ): CharacterTemplate {
   const condition = createAbilityCondition(ability, source)
   return withCharacterConditions(character, [
-    ...getCharacterConditions(character).filter(
-      (current) => current.id !== condition.id,
-    ),
+    ...getCharacterConditions(character).filter((current) => current.id !== condition.id),
     condition,
   ])
 }
@@ -442,27 +328,15 @@ function upsertGrantedCondition(
   suffix: string,
   optionName?: string,
 ): CharacterTemplate {
-  const condition = createGrantedCondition(
-    ability,
-    source,
-    grant,
-    suffix,
-    optionName,
-  )
+  const condition = createGrantedCondition(ability, source, grant, suffix, optionName)
   return withCharacterConditions(character, [
-    ...getCharacterConditions(character).filter(
-      (current) => current.id !== condition.id,
-    ),
+    ...getCharacterConditions(character).filter((current) => current.id !== condition.id),
     condition,
   ])
 }
 
-function createAbilityCondition(
-  ability: Ability,
-  source: AbilityEffectSource,
-): CharacterCondition {
+function createAbilityCondition(ability: Ability, source: AbilityEffectSource): CharacterCondition {
   const persists = ability.effectPersistence === "permanent"
-
   return {
     id: getAbilityConditionId(ability.id, source),
     name: ability.name || "Efeito de habilidade",
@@ -475,8 +349,7 @@ function createAbilityCondition(
     tags: ["Habilidade", "Efeito duradouro"],
     duration: {
       type: "custom",
-      customLabel:
-        ability.effectDurationText?.trim() || "Até o efeito ser encerrado",
+      customLabel: ability.effectDurationText?.trim() || "Até o efeito ser encerrado",
       tickOn: "manual",
       tickOwner: "affected",
       autoRemoveAtZero: false,
@@ -502,14 +375,11 @@ function createGrantedCondition(
     tickOwner: "affected" as const,
     autoRemoveAtZero: false,
   }
-
   return {
     id: `${getAbilityConditionId(ability.id, source)}:grant:${suffix}`,
     name: grant.name.trim() || optionName || ability.name || "Efeito de habilidade",
     description: grant.description?.trim() ?? "",
-    behavior:
-      grant.behavior?.trim() ||
-      "Os benefícios concedidos por esta condição permanecem enquanto ela existir.",
+    behavior: grant.behavior?.trim() || "Os benefícios concedidos por esta condição permanecem enquanto ela existir.",
     source: source.sourceLabel?.trim() || ability.name || "Habilidade",
     notes: grant.notes?.trim() ?? "",
     tags: Array.from(new Set(["Habilidade", ...(grant.tags ?? [])])),
@@ -526,23 +396,16 @@ function createGrantedCondition(
   }
 }
 
-function getAbilityConditionId(
-  abilityId: string,
-  source: AbilityEffectSource,
-): string {
-  const origin =
-    source.type === "equipment"
-      ? `equipment:${source.itemId}`
-      : source.type === "condition"
-        ? `condition:${source.conditionId}`
-        : source.type
+function getAbilityConditionId(abilityId: string, source: AbilityEffectSource): string {
+  const origin = source.type === "equipment"
+    ? `equipment:${source.itemId}`
+    : source.type === "condition"
+      ? `condition:${source.conditionId}`
+      : source.type
   return `ability-effect:${origin}:${abilityId}`
 }
 
-function resolveBonuses(
-  character: CharacterTemplate,
-  bonuses: Bonus[],
-): Bonus[] {
+function resolveBonuses(character: CharacterTemplate, bonuses: Bonus[]): Bonus[] {
   return bonuses.map((bonus) => {
     const formula = bonus.formula?.trim()
     if (!formula) return bonus
@@ -554,7 +417,6 @@ function resolveBonuses(
 function applyBonuses(baseValue: number, bonuses: Bonus[]): number {
   const flat = bonuses.find((bonus) => bonus.type === "flat")
   if (flat) return flat.value
-
   return bonuses.reduce((value, bonus) => {
     if (bonus.type === "add") return value + bonus.value
     if (bonus.type === "sub") return value - bonus.value
