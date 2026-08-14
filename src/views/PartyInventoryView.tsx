@@ -37,6 +37,9 @@ export function PartyInventoryView() {
     carryCapacity,
     canEditCarryCapacity,
     setCarryCapacity,
+    additionalSupplyConsumption,
+    canEditAdditionalSupplyConsumption,
+    setAdditionalSupplyConsumption,
   } = usePartyInventorySettings()
   const [transferringItem, setTransferringItem] =
     useState<Itemmable | null>(null)
@@ -48,6 +51,16 @@ export function PartyInventoryView() {
   const supplyItemCount = partyInventory.filter(
     (item) => item.kind === "supply",
   ).length
+  const effectiveSupplyPerLongRest =
+    supplyCalculation.supplyPerLongRest + additionalSupplyConsumption
+  const effectiveSupplyLongRests = effectiveSupplyPerLongRest > 0
+    ? supplyCalculation.supplyPortions / effectiveSupplyPerLongRest
+    : Number.POSITIVE_INFINITY
+  const effectiveSupportedLongRests = Number.isFinite(effectiveSupplyLongRests)
+    ? Math.max(0, Math.floor(effectiveSupplyLongRests))
+    : Number.POSITIVE_INFINITY
+  const hasSupplyConsumers =
+    supplyCalculation.consumers.length > 0 || additionalSupplyConsumption > 0
 
   const totalWeight = partyInventory.reduce(
     (total, item) => total + getItemStackWeightKg(item),
@@ -109,13 +122,10 @@ export function PartyInventoryView() {
             <SummaryCard
               label="Descansos completos"
               value={formatSupportedLongRests(
-                supplyCalculation.supportedLongRests,
-                supplyCalculation.consumers.length,
+                effectiveSupportedLongRests,
+                hasSupplyConsumers,
               )}
-              danger={
-                supplyCalculation.consumers.length > 0 &&
-                supplyCalculation.supportedLongRests < 1
-              }
+              danger={hasSupplyConsumers && effectiveSupportedLongRests < 1}
             />
           </div>
         </CardContent>
@@ -221,6 +231,41 @@ export function PartyInventoryView() {
         </CardHeader>
 
         <CardContent className="grid gap-4">
+          {canEditAdditionalSupplyConsumption ? (
+            <div className="rounded-xl border border-border bg-bg-subtle p-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-textH">
+                    Consumo adicional
+                  </div>
+                  <p className="mt-1 max-w-2xl text-[11px] leading-4 text-textMuted">
+                    Acrescente o consumo de NPCs, acompanhantes, tripulação ou outras criaturas que viajam com o grupo sem possuir uma ficha própria.
+                  </p>
+                </div>
+                <label className="grid min-w-40 gap-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+                    Porções por descanso
+                  </span>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={additionalSupplyConsumption}
+                    onChange={(event) =>
+                      setAdditionalSupplyConsumption(
+                        Math.max(0, Number(event.target.value) || 0),
+                      )
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+          ) : additionalSupplyConsumption > 0 ? (
+            <div className="rounded-xl border border-border bg-bg-subtle px-3 py-2 text-xs text-textMuted">
+              O mestre adicionou {formatNumber(additionalSupplyConsumption)} porções de consumo extra por descanso.
+            </div>
+          ) : null}
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <SupplyMetric
               label="Suprimento total"
@@ -229,14 +274,16 @@ export function PartyInventoryView() {
             />
             <SupplyMetric
               label="Consumo do grupo"
-              value={formatNumber(supplyCalculation.supplyPerLongRest)}
-              detail="porções por rodada de descansos"
+              value={formatNumber(effectiveSupplyPerLongRest)}
+              detail={additionalSupplyConsumption > 0
+                ? `${formatNumber(supplyCalculation.supplyPerLongRest)} do grupo + ${formatNumber(additionalSupplyConsumption)} adicional`
+                : "porções por rodada de descansos"}
             />
             <SupplyMetric
               label="Descansos equivalentes"
               value={formatLongRestEstimate(
-                supplyCalculation.supplyLongRests,
-                supplyCalculation.consumers.length,
+                effectiveSupplyLongRests,
+                hasSupplyConsumers,
               )}
               detail="antes do arredondamento"
             />
@@ -253,8 +300,8 @@ export function PartyInventoryView() {
             </div>
             <div className="mt-1 text-2xl font-bold text-textH">
               {formatSupportedLongRests(
-                supplyCalculation.supportedLongRests,
-                supplyCalculation.consumers.length,
+                effectiveSupportedLongRests,
+                hasSupplyConsumers,
               )}
             </div>
             <p className="mt-1 text-xs leading-5 text-textMuted">
@@ -268,53 +315,66 @@ export function PartyInventoryView() {
           <div className="grid gap-2">
             <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-textH">
               <UserRound className="h-4 w-4 shrink-0 text-accent" />
-              Consumidores considerados ({supplyCalculation.consumers.length})
+              Consumidores considerados ({supplyCalculation.consumers.length}{additionalSupplyConsumption > 0 ? " + adicionais" : ""})
             </div>
 
-            {supplyCalculation.consumers.length > 0 ? (
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {supplyCalculation.consumers.map((consumer) => {
-                  const canViewDetails = canViewCharacterDetails(
-                    consumer.characterId,
-                  )
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {supplyCalculation.consumers.map((consumer) => {
+                const canViewDetails = canViewCharacterDetails(
+                  consumer.characterId,
+                )
 
-                  return (
-                    <div
-                      key={consumer.characterId}
-                      className="min-w-0 rounded-xl border border-border bg-bg-subtle p-3"
-                    >
-                      <div className="truncate text-sm font-semibold text-textH">
-                        {consumer.name}
-                      </div>
-                      {canViewDetails ? (
-                        <>
-                          <div className="mt-1 text-[11px] text-textMuted">
-                            {formatRaceName(consumer.race)}
-                          </div>
-                          <div className="mt-2 text-xs text-text">
-                            Suprimento por descanso: {formatNumber(consumer.supplyPerLongRest)}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="mt-1 text-[11px] font-medium text-textMuted">
-                            Personagem privado
-                          </div>
-                          <div className="mt-2 text-xs text-textMuted">
-                            Raça, ficha e consumo individual ocultos.
-                          </div>
-                        </>
-                      )}
+                return (
+                  <div
+                    key={consumer.characterId}
+                    className="min-w-0 rounded-xl border border-border bg-bg-subtle p-3"
+                  >
+                    <div className="truncate text-sm font-semibold text-textH">
+                      {consumer.name}
                     </div>
-                  )
-                })}
-              </div>
-            ) : (
+                    {canViewDetails ? (
+                      <>
+                        <div className="mt-1 text-[11px] text-textMuted">
+                          {formatRaceName(consumer.race)}
+                        </div>
+                        <div className="mt-2 text-xs text-text">
+                          Suprimento por descanso: {formatNumber(consumer.supplyPerLongRest)}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="mt-1 text-[11px] font-medium text-textMuted">
+                          Personagem privado
+                        </div>
+                        <div className="mt-2 text-xs text-textMuted">
+                          Raça, ficha e consumo individual ocultos.
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+
+              {additionalSupplyConsumption > 0 ? (
+                <div className="min-w-0 rounded-xl border border-accentBorder bg-accentBg p-3">
+                  <div className="text-sm font-semibold text-textH">
+                    NPCs e acompanhantes
+                  </div>
+                  <div className="mt-1 text-[11px] text-textMuted">
+                    Consumo definido manualmente pelo mestre
+                  </div>
+                  <div className="mt-2 text-xs text-text">
+                    Suprimento por descanso: {formatNumber(additionalSupplyConsumption)}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {!hasSupplyConsumers ? (
               <p className="text-xs leading-5 text-textMuted">
-                Nenhum personagem jogador ou humanoide do grupo está disponível
-                para o cálculo.
+                Nenhum personagem jogador, humanoide ou consumo adicional está disponível para o cálculo.
               </p>
-            )}
+            ) : null}
           </div>
 
           <p className="text-[11px] leading-4 text-textMuted">
@@ -416,18 +476,18 @@ function SupplyMetric({
 
 function formatSupportedLongRests(
   value: number,
-  consumerCount: number,
+  hasConsumers: boolean,
 ): string {
-  if (consumerCount === 0) return "Sem membros"
+  if (!hasConsumers) return "Sem membros"
   if (!Number.isFinite(value)) return "Ilimitados"
   return String(Math.max(0, Math.floor(value)))
 }
 
 function formatLongRestEstimate(
   value: number,
-  consumerCount: number,
+  hasConsumers: boolean,
 ): string {
-  if (consumerCount === 0) return "Sem membros"
+  if (!hasConsumers) return "Sem membros"
   if (!Number.isFinite(value)) return "Não é consumido"
   return formatNumber(Math.max(0, value))
 }
