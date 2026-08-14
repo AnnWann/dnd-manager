@@ -1,17 +1,23 @@
 import {
   createContext,
   useContext,
+  useEffect,
+  useMemo,
+  useState,
   type Dispatch,
   type ReactNode,
   type SetStateAction,
 } from "react"
 
-import type { AppStateV1 } from "../lib/remoteState"
+import { readSyncKey, type AppStateV1 } from "../lib/remoteState"
 
 type PartyInventorySettingsContextValue = {
   carryCapacity: number
   canEditCarryCapacity: boolean
   setCarryCapacity: (value: number) => void
+  additionalSupplyConsumption: number
+  canEditAdditionalSupplyConsumption: boolean
+  setAdditionalSupplyConsumption: (value: number) => void
 }
 
 type Props = {
@@ -24,12 +30,30 @@ type Props = {
 const PartyInventorySettingsContext =
   createContext<PartyInventorySettingsContextValue | null>(null)
 
+function storageKey() {
+  const syncKey = readSyncKey().trim()
+  return `dndmm.partyAdditionalSupplyConsumption.v1:${syncKey || "local"}`
+}
+
+function readAdditionalSupplyConsumption(): number {
+  if (typeof window === "undefined") return 0
+  const parsed = Number(window.localStorage.getItem(storageKey()))
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+}
+
 export function PartyInventorySettingsProvider({
   children,
   carryCapacity,
   canEditCarryCapacity,
   setAppState,
 }: Props) {
+  const [additionalSupplyConsumption, setAdditionalSupplyConsumptionState] =
+    useState(readAdditionalSupplyConsumption)
+
+  useEffect(() => {
+    setAdditionalSupplyConsumptionState(readAdditionalSupplyConsumption())
+  }, [])
+
   function setCarryCapacity(value: number) {
     if (!canEditCarryCapacity) return
 
@@ -43,14 +67,26 @@ export function PartyInventorySettingsProvider({
     }))
   }
 
+  function setAdditionalSupplyConsumption(value: number) {
+    if (!canEditCarryCapacity) return
+    const next = Number.isFinite(value) ? Math.max(0, value) : 0
+    setAdditionalSupplyConsumptionState(next)
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(storageKey(), String(next))
+    }
+  }
+
+  const value = useMemo<PartyInventorySettingsContextValue>(() => ({
+    carryCapacity: Math.max(0, carryCapacity),
+    canEditCarryCapacity,
+    setCarryCapacity,
+    additionalSupplyConsumption,
+    canEditAdditionalSupplyConsumption: canEditCarryCapacity,
+    setAdditionalSupplyConsumption,
+  }), [carryCapacity, canEditCarryCapacity, additionalSupplyConsumption])
+
   return (
-    <PartyInventorySettingsContext.Provider
-      value={{
-        carryCapacity: Math.max(0, carryCapacity),
-        canEditCarryCapacity,
-        setCarryCapacity,
-      }}
-    >
+    <PartyInventorySettingsContext.Provider value={value}>
       {children}
     </PartyInventorySettingsContext.Provider>
   )
