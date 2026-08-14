@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 
 import { Button } from "../../../components/ui/Button"
 import { Modal } from "../../../components/ui/Modal"
+import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
 import {
   activateCustomAbility,
@@ -109,6 +110,7 @@ export function MinimalCharacterActions({
 }) {
   const navigate = useNavigate()
   const definitions = useCustomSystemDefinitions()
+  const { getMetamagicsByIds } = useMagicContext()
   const [filter, setFilter] = useState<ActionFilter>("action")
   const [selected, setSelected] = useState<ActionEntry | null>(null)
   const [error, setError] = useState("")
@@ -124,6 +126,23 @@ export function MinimalCharacterActions({
     () => getAbilityActions(character, filter, definitions),
     [character, filter, definitions],
   )
+  const metamagicActions = useMemo<ActionEntry[]>(() => {
+    if (filter !== "free") return []
+    const knownIds = character.get("magic")?.metamagic?.metamagics ?? []
+    return getMetamagicsByIds(knownIds)
+      .map((metamagic) => ({
+        id: `metamagic:${metamagic.id}`,
+        name: metamagic.name,
+        filter: "free" as const,
+        source: "Metamagia",
+        description: [
+          ...metamagic.desc,
+          `Custo: ${formatMetamagicCost(metamagic.sorceryPointCost)}.`,
+          `Momento: ${formatMetamagicTiming(metamagic.timing)}.`,
+        ].join("\n"),
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
+  }, [character, filter, getMetamagicsByIds])
   const channelDivinityActions = abilityActions.filter(
     (entry) => entry.ability?.category === "channelDivinity",
   )
@@ -248,6 +267,9 @@ export function MinimalCharacterActions({
       </div>
 
       <ActionGroup title="Ações padrão" entries={standardActions} onSelect={open} />
+      {metamagicActions.length ? (
+        <ActionGroup title="Metamagia" entries={metamagicActions} onSelect={open} />
+      ) : null}
       {systemActions.length ? (
         <ActionGroup title="Ações de sistemas" entries={systemActions} onSelect={open} />
       ) : null}
@@ -630,6 +652,18 @@ function getPassiveAbilities(character: CharacterTemplate): ActionEntry[] {
       abilitySource: source,
     }))
     .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
+}
+
+function formatMetamagicCost(cost: number | "spell-level"): string {
+  if (cost === "spell-level") return "pontos iguais ao nível da magia (truque = 1)"
+  return `${cost} ponto${cost === 1 ? "" : "s"} de feitiçaria`
+}
+
+function formatMetamagicTiming(timing: string): string {
+  if (timing === "on-cast") return "ao conjurar"
+  if (timing === "on-damage-roll") return "ao rolar dano"
+  if (timing === "on-miss") return "ao errar"
+  return timing
 }
 
 function normalizeActionKind(actionKind: AbilityActionKind | undefined): ActionFilter | undefined {
