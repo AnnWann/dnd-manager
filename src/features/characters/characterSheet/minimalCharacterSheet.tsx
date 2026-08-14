@@ -96,12 +96,6 @@ export function MinimalCharacterSheet({
       )
     : []
 
-  function updateMaxHp(value: number) {
-    updateCharacter(character.get("id"), (current) =>
-      current.setMaxHp(Math.max(1, Math.trunc(value) || 1)),
-    )
-  }
-
   function updateDerivedStat(
     statKey: CalculatedStatKey,
     desiredValue: number,
@@ -148,23 +142,11 @@ export function MinimalCharacterSheet({
   return (
     <div className="grid gap-3">
       <CompactSection title="HP">
-        <div className="grid grid-cols-3 gap-2">
-          <ReadOnlyStat label="Atual" value={String(sheet.HP.current)} />
-          <CompactNumberField
-            label="Máxima"
-            value={sheet.HP.max}
-            min={1}
-            onChange={updateMaxHp}
-          />
-          <ReadOnlyStat label="Temporária" value={String(sheet.HP.temporary)} />
-        </div>
-        <div className="mt-2">
-          <CharacterHpControls
-            character={character}
-            updateCharacter={updateCharacter}
-            compact
-          />
-        </div>
+        <CharacterHpControls
+          character={character}
+          updateCharacter={updateCharacter}
+          compact
+        />
       </CompactSection>
 
       <CompactSection title="Stats">
