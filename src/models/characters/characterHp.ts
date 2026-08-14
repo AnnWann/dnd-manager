@@ -19,11 +19,20 @@ export function withHp<K extends keyof HP>(
   })
 }
 
+/** Vida máxima atual antes de bônus externos, preservando a máxima real em HP.max. */
+export function getCurrentMaxHp(character: CharacterTemplate): number {
+  const hp = character.get("sheet").HP
+  const currentMax = Number(hp.currentMax)
+  return Number.isFinite(currentMax)
+    ? Math.max(1, Math.min(hp.max, currentMax))
+    : Math.max(1, hp.max)
+}
+
 export function getEffectiveMaxHp(
   character: CharacterTemplate,
 ): number {
   return applyBonuses(
-    character.get("sheet").HP.max,
+    getCurrentMaxHp(character),
     getCharacterBonuses(character, "maxHp"),
   )
 }
@@ -55,23 +64,69 @@ export function setTemporaryHp(
   return withHp(character, "temporary", Math.max(0, value))
 }
 
+/** Altera a vida máxima real e mantém a máxima atual sincronizada quando possível. */
 export function setMaxHp(
   character: CharacterTemplate,
   value: number,
 ): CharacterTemplate {
+  const hp = character.get("sheet").HP
+  const previousRealMax = Math.max(1, hp.max)
+  const previousCurrentMax = getCurrentMaxHp(character)
+  const hadReduction = previousCurrentMax < previousRealMax
   const nextMax = Math.max(1, value)
-  const currentHp = Math.min(character.get("sheet").HP.current, nextMax)
+  const nextCurrentMax = hadReduction
+    ? Math.min(nextMax, previousCurrentMax)
+    : nextMax
+  const nextEffectiveMax = applyBonuses(
+    nextCurrentMax,
+    getCharacterBonuses(character, "maxHp"),
+  )
+  const currentHp = Math.min(hp.current, Math.max(1, nextEffectiveMax))
 
   return character.withPatch({
     sheet: {
       ...character.get("sheet"),
       HP: {
-        ...character.get("sheet").HP,
+        ...hp,
         max: nextMax,
+        currentMax: nextCurrentMax,
         current: currentHp,
       },
     },
   })
+}
+
+/**
+ * Altera somente a vida máxima atual. É usada por efeitos que reduzem o máximo
+ * sem apagar o valor real/base do personagem.
+ */
+export function setCurrentMaxHp(
+  character: CharacterTemplate,
+  value: number,
+): CharacterTemplate {
+  const hp = character.get("sheet").HP
+  const nextCurrentMax = clamp(Math.trunc(value), 1, Math.max(1, hp.max))
+  const nextEffectiveMax = applyBonuses(
+    nextCurrentMax,
+    getCharacterBonuses(character, "maxHp"),
+  )
+
+  return character.withPatch({
+    sheet: {
+      ...character.get("sheet"),
+      HP: {
+        ...hp,
+        currentMax: nextCurrentMax,
+        current: Math.min(hp.current, Math.max(1, nextEffectiveMax)),
+      },
+    },
+  })
+}
+
+export function restoreCurrentMaxHp(
+  character: CharacterTemplate,
+): CharacterTemplate {
+  return setCurrentMaxHp(character, character.get("sheet").HP.max)
 }
 
 export function takeDamage(
