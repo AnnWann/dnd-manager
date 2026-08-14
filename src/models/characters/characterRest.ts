@@ -225,7 +225,21 @@ function resetAbilities(
     const shouldRestoreUsage =
       ability.usage && shouldReset(ability.usage.reset, restKind)
 
-    if (!clearInstantEffect && !shouldRestoreUsage) return ability
+    const activationOptions = ability.activationOptions?.map((option) => {
+      if (!option.ability) return option
+      return {
+        ...option,
+        ability: resetAbilities(
+          [option.ability],
+          restKind,
+          recoveryFraction,
+        )[0],
+      }
+    })
+
+    if (!clearInstantEffect && !shouldRestoreUsage && !activationOptions) {
+      return ability
+    }
 
     return {
       ...ability,
@@ -234,6 +248,7 @@ function resetAbilities(
       usage: shouldRestoreUsage && ability.usage
         ? restoreUsage(ability.usage, recoveryFraction)
         : ability.usage,
+      activationOptions,
     }
   })
 }
