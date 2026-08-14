@@ -24,6 +24,7 @@ import {
   isAbilityBenefitsActive,
   useAbilityEffect,
 } from "../../../models/abilities/abilityActivation"
+import { useAbility as useCharacterAbility } from "../../../models/characters/characterAbilities"
 import { getChannelDivinityPool } from "../../../models/characters/characterChannelDivinity"
 import { getKiPool } from "../../../models/characters/characterKi"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
@@ -148,7 +149,11 @@ export function MinimalCharacterActions({
     setSelected(entry)
   }
 
-  function changeAbilityState(entry: ActionEntry, action: "use" | "deactivate") {
+  function changeAbilityState(
+    entry: ActionEntry,
+    action: "use" | "deactivate",
+    optionId?: string,
+  ) {
     if (!entry.abilitySource) return
     updateCharacter(character.get("id"), (current) => {
       const source = entry.abilitySource!
@@ -163,11 +168,11 @@ export function MinimalCharacterActions({
         )
         if (!ability) return current
         return action === "use"
-          ? useAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
+          ? useAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" }, optionId)
           : endAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
       }
       return action === "use"
-        ? current.useAbility(source.abilityId)
+        ? useCharacterAbility(current, source.abilityId, optionId)
         : current.deactivateAbility(source.abilityId)
     })
     setSelected(null)
@@ -244,25 +249,13 @@ export function MinimalCharacterActions({
 
       <ActionGroup title="Ações padrão" entries={standardActions} onSelect={open} />
       {systemActions.length ? (
-        <ActionGroup
-          title="Ações de sistemas"
-          entries={systemActions}
-          onSelect={open}
-        />
+        <ActionGroup title="Ações de sistemas" entries={systemActions} onSelect={open} />
       ) : null}
       {channelDivinityActions.length ? (
-        <ActionGroup
-          title="Canalizar Divindade"
-          entries={channelDivinityActions}
-          onSelect={open}
-        />
+        <ActionGroup title="Canalizar Divindade" entries={channelDivinityActions} onSelect={open} />
       ) : null}
       {martialArtsActions.length ? (
-        <ActionGroup
-          title="Artes marciais"
-          entries={martialArtsActions}
-          onSelect={open}
-        />
+        <ActionGroup title="Artes marciais" entries={martialArtsActions} onSelect={open} />
       ) : null}
       <ActionGroup
         title="Habilidades do personagem"
@@ -293,9 +286,7 @@ export function MinimalCharacterActions({
                 </span>
               ) : null}
               {selected.usageMaximum !== undefined ? (
-                <span>
-                  • {selected.usageRemaining ?? 0}/{selected.usageMaximum} usos
-                </span>
+                <span>• {selected.usageRemaining ?? 0}/{selected.usageMaximum} usos</span>
               ) : null}
               {selected.customAbilitySource || selected.customSystemActionSource ? (
                 <span>• Sistema personalizado</span>
@@ -309,31 +300,45 @@ export function MinimalCharacterActions({
             ) : null}
             {selected.customSystemActionSource ? (
               <div className="flex justify-end border-t border-border pt-3">
-                <Button variant="primary" onClick={() => useCustomSystemAction(selected)}>
-                  Usar
-                </Button>
+                <Button variant="primary" onClick={() => useCustomSystemAction(selected)}>Usar</Button>
               </div>
             ) : selected.customAbilitySource ? (
               <div className="flex justify-end border-t border-border pt-3">
-                <Button
-                  variant="primary"
-                  onClick={() => useCustomAbility(selected)}
-                >
-                  Usar
-                </Button>
+                <Button variant="primary" onClick={() => useCustomAbility(selected)}>Usar</Button>
               </div>
             ) : selected.ability && abilityRequiresActivation(selected.ability) ? (
-              <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
+              <div className="grid gap-2 border-t border-border pt-3">
                 {isAbilityBenefitsActive(selected.ability) ? (
-                  <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>
-                    Encerrar efeito
-                  </Button>
-                ) : null}
-                {!isAbilityBenefitsActive(selected.ability) ? (
-                  <Button variant="primary" onClick={() => changeAbilityState(selected, "use")}>
-                    {(selected.ability.kind ?? "active") === "active" ? "Usar" : "Acionar"}
-                  </Button>
-                ) : null}
+                  <div className="flex justify-end">
+                    <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>Encerrar efeito</Button>
+                  </div>
+                ) : (selected.ability.activationOptions?.length ?? 0) > 0 ? (
+                  <>
+                    <div className="text-xs font-semibold text-textH">Escolha o efeito</div>
+                    {(selected.ability.activationOptions ?? []).map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => changeAbilityState(selected, "use", option.id)}
+                        className="rounded-xl border border-border bg-bg-subtle p-3 text-left transition-colors hover:border-accentBorder hover:bg-accentBg"
+                      >
+                        <div className="text-sm font-semibold text-textH">{option.name}</div>
+                        {option.description ? (
+                          <div className="mt-1 whitespace-pre-wrap text-xs leading-5 text-textMuted">{option.description}</div>
+                        ) : null}
+                        {option.condition?.name ? (
+                          <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-accent">Aplica: {option.condition.name}</div>
+                        ) : null}
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  <div className="flex justify-end">
+                    <Button variant="primary" onClick={() => changeAbilityState(selected, "use")}>
+                      {(selected.ability.kind ?? "active") === "active" ? "Usar" : "Acionar"}
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : null}
           </div>
@@ -428,9 +433,7 @@ function getCustomSystemActions(
       entries.push({
         id: `custom-system-action:${definition.id}:${action.id}`,
         name: action.name || "Ação sem nome",
-        description:
-          action.description?.trim() ||
-          "Esta ação não possui uma descrição cadastrada.",
+        description: action.description?.trim() || "Esta ação não possui uma descrição cadastrada.",
         filter,
         source: definition.name,
         customSystemActionSource: {
@@ -441,9 +444,7 @@ function getCustomSystemActions(
     }
   }
 
-  return entries.sort((left, right) =>
-    left.name.localeCompare(right.name, "pt-BR"),
-  )
+  return entries.sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
 }
 
 function getAbilityActions(
@@ -490,10 +491,8 @@ function getAbilityActions(
       normalizeActionKind(ability.actionKind) === filter,
     )
     .map(({ ability, sourceLabel, source }) => {
-      const usesChannelDivinity =
-        source.type === "character" && ability.category === "channelDivinity"
-      const usesKi =
-        source.type === "character" && ability.category === "martialArts"
+      const usesChannelDivinity = source.type === "character" && ability.category === "channelDivinity"
+      const usesKi = source.type === "character" && ability.category === "martialArts"
       return {
         id: `ability:${source.type}:${ability.id}`,
         name: ability.name || "Habilidade sem nome",
