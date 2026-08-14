@@ -28,6 +28,7 @@ import {
   type EditableSpellGrant,
 } from "../magic/grantedSpellsEditor"
 import { GrantedProficienciesEditor } from "../proficiencies/grantedProficienciesEditor"
+import { AbilityAdvancedEffectsEditor } from "./abilityAdvancedEffectsEditor"
 import {
   ABILITY_ACTION_OPTIONS,
   ABILITY_KIND_OPTIONS,
@@ -143,7 +144,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
               {ability ? "Editar habilidade" : "Adicionar habilidade"}
             </h2>
             <p className="mt-1 text-xs text-textMuted">
-              Configure categoria, comportamento, usos, bônus, proficiências e magias concedidas.
+              Configure categoria, comportamento, usos, recursos compartilhados, condições e benefícios.
             </p>
           </div>
           <Button size="sm" variant="ghost" onClick={onClose}>
@@ -156,9 +157,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
             <span className="text-xs font-medium text-textH">Nome</span>
             <Input
               value={draft.name}
-              onChange={(event) =>
-                setDraft({ ...draft, name: event.target.value })
-              }
+              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
             />
           </label>
 
@@ -167,9 +166,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
             <Textarea
               className="min-h-24"
               value={draft.description ?? ""}
-              onChange={(event) =>
-                setDraft({ ...draft, description: event.target.value })
-              }
+              onChange={(event) => setDraft({ ...draft, description: event.target.value })}
             />
           </label>
 
@@ -249,9 +246,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
             <section className="grid gap-3 rounded-xl border border-border bg-bg-subtle p-3">
               <div className="grid gap-2 md:grid-cols-2">
                 <label className="grid gap-1">
-                  <span className="text-xs font-medium text-textH">
-                    Duração do efeito
-                  </span>
+                  <span className="text-xs font-medium text-textH">Duração do efeito</span>
                   <Select
                     value={duration}
                     onChange={(event) =>
@@ -271,16 +266,13 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                 </label>
 
                 <label className="grid gap-1">
-                  <span className="text-xs font-medium text-textH">
-                    Após o uso ou término
-                  </span>
+                  <span className="text-xs font-medium text-textH">Após o uso ou término</span>
                   <Select
                     value={persistence}
                     onChange={(event) =>
                       setDraft({
                         ...draft,
-                        effectPersistence: event.target
-                          .value as AbilityEffectPersistence,
+                        effectPersistence: event.target.value as AbilityEffectPersistence,
                         benefitsActive: false,
                       })
                     }
@@ -288,27 +280,17 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                     <option value="untilEnd">Remover os benefícios</option>
                     <option value="permanent">Manter os benefícios</option>
                   </Select>
-                  <span className="text-[10px] text-textMuted">
-                    Escolha se os modificadores somem junto com o efeito ou permanecem na ficha.
-                  </span>
                 </label>
               </div>
 
               {duration === "lasting" ? (
                 <label className="grid gap-1">
-                  <span className="text-xs font-medium text-textH">
-                    Duração descrita
-                  </span>
+                  <span className="text-xs font-medium text-textH">Duração descrita</span>
                   <Input
                     value={draft.effectDurationText ?? ""}
                     placeholder="Ex.: 1 minuto, até o próximo descanso, enquanto concentrar"
-                    onChange={(event) =>
-                      setDraft({ ...draft, effectDurationText: event.target.value })
-                    }
+                    onChange={(event) => setDraft({ ...draft, effectDurationText: event.target.value })}
                   />
-                  <span className="text-[10px] text-textMuted">
-                    Este texto aparecerá na condição criada enquanto o efeito estiver ativo.
-                  </span>
                 </label>
               ) : null}
             </section>
@@ -335,17 +317,14 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                 <option key={option.value} value={option.label} />
               ))}
             </datalist>
-            <span className="text-[10px] text-textMuted">
-              Escolha uma sugestão ou escreva qualquer condição de acionamento.
-            </span>
           </label>
 
           <section className="rounded-xl border border-border bg-bg-subtle p-3">
             {sharedClassResource ? (
               <div className="text-xs leading-5 text-text">
                 {draft.category === "martialArts"
-                  ? "Esta habilidade usa o recurso compartilhado de Ki do personagem. O máximo é calculado automaticamente pelo nível de Monge e não precisa de um contador próprio."
-                  : "Esta habilidade usa o recurso compartilhado de Canalizar Divindade e não precisa de um contador próprio."}
+                  ? "Esta habilidade usa o recurso compartilhado de Ki do personagem."
+                  : "Esta habilidade usa o recurso compartilhado de Canalizar Divindade."}
               </div>
             ) : (
               <>
@@ -368,9 +347,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                 {hasUsage && draft.usage ? (
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <label className="grid gap-1">
-                      <span className="text-xs text-textMuted">
-                        Máximo ou fórmula
-                      </span>
+                      <span className="text-xs text-textMuted">Máximo ou fórmula</span>
                       <Input
                         type="text"
                         value={draft.usage.maxFormula ?? String(draft.usage.max)}
@@ -378,9 +355,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                         onChange={(event) => updateUsageMaximum(event.target.value)}
                       />
                       {maximumFormulaError ? (
-                        <span className="text-[10px] text-danger">
-                          {maximumFormulaError}
-                        </span>
+                        <span className="text-[10px] text-danger">{maximumFormulaError}</span>
                       ) : maximumFormula ? (
                         <span className="text-[10px] text-textMuted">
                           A fórmula é recalculada com os valores atuais da ficha.
@@ -399,13 +374,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                             ...draft,
                             usage: {
                               ...draft.usage!,
-                              used: Math.max(
-                                0,
-                                Math.min(
-                                  draft.usage!.max,
-                                  Number(event.target.value) || 0,
-                                ),
-                              ),
+                              used: Math.max(0, Math.min(draft.usage!.max, Number(event.target.value) || 0)),
                             },
                           })
                         }
@@ -427,9 +396,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                         }
                       >
                         {USAGE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
+                          <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
                       </Select>
                     </label>
@@ -447,10 +414,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                                 ...draft,
                                 usage: {
                                   ...draft.usage!,
-                                  cooldownAmount: Math.max(
-                                    1,
-                                    Number(event.target.value) || 1,
-                                  ),
+                                  cooldownAmount: Math.max(1, Number(event.target.value) || 1),
                                 },
                               })
                             }
@@ -465,16 +429,13 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                                 ...draft,
                                 usage: {
                                   ...draft.usage!,
-                                  cooldownUnit: event.target
-                                    .value as AbilityUsageCooldownUnit,
+                                  cooldownUnit: event.target.value as AbilityUsageCooldownUnit,
                                 },
                               })
                             }
                           >
                             {COOLDOWN_UNIT_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
+                              <option key={option.value} value={option.value}>{option.label}</option>
                             ))}
                           </Select>
                         </label>
@@ -489,14 +450,16 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
           <div className="rounded-xl border border-border bg-bg-subtle p-3 text-xs leading-5 text-text">
             {requiresActivation
               ? persistence === "permanent"
-                ? "Ao acionar, os modificadores permanecem ativos mesmo após o uso ou o término da condição. A habilidade não poderá ser acionada novamente enquanto esses benefícios estiverem ativos."
+                ? "Ao acionar, os modificadores permanecem ativos mesmo após o uso ou o término da condição."
                 : duration === "lasting"
-                  ? `${draft.kind === "active" ? "Usar" : "Acionar"} aplica o efeito e cria uma condição duradoura. Encerrar ou remover a condição encerra os modificadores.`
-                  : `${draft.kind === "active" ? "Usar" : "Acionar"} executa o efeito e termina automaticamente. Alterações gravadas diretamente na ficha permanecem.`
+                  ? `${draft.kind === "active" ? "Usar" : "Acionar"} aplica o efeito e cria uma condição duradoura.`
+                  : `${draft.kind === "active" ? "Usar" : "Acionar"} executa o efeito e termina automaticamente.`
               : draft.kind === "feature"
-                ? "Esta característica não possui condição e concede seus benefícios permanentemente. Ela não aparece na seção de ações."
-                : "Esta passiva não possui condição e concede seus benefícios permanentemente."}
+                ? "Esta característica concede seus benefícios permanentemente."
+                : "Esta passiva concede seus benefícios permanentemente."}
           </div>
+
+          <AbilityAdvancedEffectsEditor ability={draft} onChange={setDraft} />
 
           <BonusesFields
             bonuses={draft.bonuses ?? {}}
@@ -505,33 +468,23 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
 
           <GrantedProficienciesEditor
             proficiencies={draft.grantedProficiencies ?? []}
-            onChange={(grantedProficiencies) =>
-              setDraft({ ...draft, grantedProficiencies })
-            }
+            onChange={(grantedProficiencies) => setDraft({ ...draft, grantedProficiencies })}
           />
 
           <GrantedSpellsEditor
             variant="ability"
             grants={(draft.grantedSpells ?? []) as EditableSpellGrant[]}
             abilityHasUsage={hasUsage}
-            onChange={(grantedSpells) =>
-              setDraft({ ...draft, grantedSpells })
-            }
+            onChange={(grantedSpells) => setDraft({ ...draft, grantedSpells })}
           />
         </div>
 
         <div className="mt-4 flex justify-end gap-2 border-t border-border pt-4">
-          <Button variant="secondary" onClick={onClose}>
-            Cancelar
-          </Button>
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
           <Button
             variant="primary"
             disabled={!draft.name.trim() || Boolean(maximumFormulaError)}
-            onClick={() =>
-              onSave(
-                normalizeAbilityActivation(normalizeAbilityText(draft)),
-              )
-            }
+            onClick={() => onSave(normalizeAbilityActivation(normalizeAbilityText(draft)))}
           >
             Salvar
           </Button>
