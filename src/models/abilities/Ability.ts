@@ -1,5 +1,8 @@
 import type { BonusCollection } from "../bonuses/Bonus"
-import type { CharacterConditionGrant } from "../characters/CharacterCondition"
+import type {
+  CharacterConditionDuration,
+  CharacterConditionGrant,
+} from "../characters/CharacterCondition"
 import type { SpellGrant } from "../magic/spells/SpellGrant"
 import type { Proficiency } from "../sheet/Proficiency"
 
@@ -7,13 +10,14 @@ export type AbilityActivationOption = {
   id: string
   /** Rótulo exibido no modal de escolha. */
   name: string
-  /** Texto curto legado; novas opções usam preferencialmente ability.description. */
+  /** Texto curto exibido antes da escolha. */
   description?: string
+  /** Por quanto tempo a mini-habilidade escolhida permanece disponível. */
+  duration?: CharacterConditionDuration
   /**
-   * Mini-habilidade completa executada quando esta opção é escolhida.
-   * Ela pode ter seus próprios usos, tipo, ação, duração, gatilho, bônus,
-   * proficiências, magias e condição ao usar. O editor não cria opções dentro
-   * de opções, embora o tipo continue compatível com Ability.
+   * Mini-habilidade completa concedida quando esta opção é escolhida.
+   * Ela mantém seu próprio tipo, ação, gatilho, duração de efeito, contador,
+   * bônus, proficiências, magias e condição ao usar.
    */
   ability?: Ability
   /** Formato legado das primeiras opções; mantido para migração transparente. */
@@ -45,10 +49,12 @@ export interface Ability {
   benefitsActive?: boolean
   /** Campo legado; novos cálculos usam benefitsActive. */
   modifiersActive?: boolean
-  /** Metadados presentes nas habilidades projetadas por equipamentos. */
-  source?: "equipment" | "race" | string
+  /** Metadados presentes nas habilidades projetadas por outras fontes. */
+  source?: "equipment" | "race" | "condition" | string
   sourceItemId?: string
   sourceItemName?: string
+  sourceConditionId?: string
+  sourceConditionName?: string
   originalAbilityId?: string
 }
 
