@@ -38,10 +38,18 @@ type RaceAbility = Ability & {
   originalAbilityId: string
 }
 
+type ConditionAbility = Ability & {
+  source: "condition"
+  sourceConditionId: string
+  sourceConditionName: string
+  originalAbilityId: string
+}
+
 type AbilitySourceFilter =
   | "all"
   | "character"
   | "race"
+  | "condition"
   | "weapon"
   | "equipment"
   | "invocation"
@@ -92,12 +100,14 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       .filter((ability) => {
         const equipmentAbility = isEquipmentAbility(ability)
         const raceAbility = isRaceAbility(ability)
+        const conditionAbility = isConditionAbility(ability)
         const isWeaponAbility = equipmentAbility && weaponIds.has(ability.sourceItemId)
 
         const matchesSource = (() => {
           switch (sourceFilter) {
-            case "character": return !equipmentAbility && !raceAbility
+            case "character": return !equipmentAbility && !raceAbility && !conditionAbility
             case "race": return raceAbility
+            case "condition": return conditionAbility
             case "weapon": return isWeaponAbility
             case "equipment": return equipmentAbility
             case "invocation": return ability.category === "invocation"
@@ -142,8 +152,6 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       const ability = abilities.find((entry) => entry.id === id)
 
       if (ability && isEquipmentAbility(ability)) {
-        // Opções avançadas são configuráveis nas habilidades próprias. Equipamentos
-        // preservam o fluxo existente até o editor de equipamento expô-las.
         return current.useEquipmentAbility(ability.sourceItemId, ability.originalAbilityId)
       }
 
@@ -197,7 +205,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
             <div>
               <div className="text-sm font-semibold text-textH">Habilidades</div>
               <div className="mt-1 text-xs text-text">
-                Filtre habilidades próprias, raciais, de armas, equipamentos, evocações, talentos, Canalizar Divindade e habilidades marciais.
+                Filtre habilidades próprias, temporárias, raciais, de armas, equipamentos, evocações, talentos, Canalizar Divindade e habilidades marciais.
               </div>
             </div>
             <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>
@@ -214,6 +222,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
             <Select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as AbilitySourceFilter)}>
               <option value="all">Todas as origens</option>
               <option value="character">Habilidades próprias</option>
+              <option value="condition">Habilidades temporárias</option>
               <option value="race">Habilidades raciais</option>
               <option value="weapon">Habilidades de armas</option>
               <option value="equipment">Todos os equipamentos</option>
@@ -239,9 +248,16 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               {filteredAbilities.map((ability) => {
                 const equipmentAbility = isEquipmentAbility(ability)
                 const raceAbility = isRaceAbility(ability)
-                const grantedAbility = equipmentAbility || raceAbility
+                const conditionAbility = isConditionAbility(ability)
+                const grantedAbility = equipmentAbility || raceAbility || conditionAbility
                 const usageMax = ability.usage ? getAbilityUsageMax(character, ability.usage) : undefined
-                const sourceLabel = getAbilitySourceLabel(ability, equipmentAbility, raceAbility, weaponIds)
+                const sourceLabel = getAbilitySourceLabel(
+                  ability,
+                  equipmentAbility,
+                  raceAbility,
+                  conditionAbility,
+                  weaponIds,
+                )
                 const editAbility = grantedAbility ? undefined : () => setEditingAbility(ability)
                 const deleteAbility = grantedAbility ? undefined : () => removeAbility(ability.id)
                 const onUse = () => requestUseAbility(ability)
@@ -293,32 +309,45 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
 
       {activationChoice ? (
         <Modal
-          title={`Escolher efeito — ${activationChoice.name}`}
+          title={`Escolher habilidade — ${activationChoice.name}`}
           onClose={() => setActivationChoice(null)}
           className="max-w-lg"
         >
           <div className="grid gap-2">
             <p className="text-xs leading-5 text-textMuted">
-              Esta habilidade possui efeitos opcionais. Escolha qual será aplicado neste uso; o recurso é consumido apenas depois da escolha.
+              Escolha qual mini-habilidade será concedida. O recurso da habilidade principal só é consumido depois da escolha.
             </p>
-            {(activationChoice.activationOptions ?? []).map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => useAbility(activationChoice.id, option.id)}
-                className="rounded-xl border border-border bg-bg-subtle p-3 text-left transition-colors hover:border-accentBorder hover:bg-accentBg"
-              >
-                <div className="text-sm font-semibold text-textH">{option.name}</div>
-                {option.description ? (
-                  <div className="mt-1 whitespace-pre-wrap text-xs leading-5 text-textMuted">{option.description}</div>
-                ) : null}
-                {option.condition?.name ? (
-                  <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-accent">
-                    Aplica: {option.condition.name}
+            {(activationChoice.activationOptions ?? []).map((option) => {
+              const mini = option.ability
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => useAbility(activationChoice.id, option.id)}
+                  className="rounded-xl border border-border bg-bg-subtle p-3 text-left transition-colors hover:border-accentBorder hover:bg-accentBg"
+                >
+                  <div className="text-sm font-semibold text-textH">
+                    {mini?.name || option.name}
                   </div>
-                ) : null}
-              </button>
-            ))}
+                  {(mini?.description || option.description) ? (
+                    <div className="mt-1 whitespace-pre-wrap text-xs leading-5 text-textMuted">
+                      {mini?.description || option.description}
+                    </div>
+                  ) : null}
+                  {mini ? (
+                    <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-wide text-accent">
+                      <span>{mini.kind === "feature" ? "Característica" : mini.kind === "passive" ? "Passiva" : "Ativa"}</span>
+                      {mini.usage ? <span>• {Math.max(0, mini.usage.max - mini.usage.used)}/{mini.usage.max} usos</span> : null}
+                      {option.duration?.customLabel ? <span>• {option.duration.customLabel}</span> : null}
+                    </div>
+                  ) : option.condition?.name ? (
+                    <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-accent">
+                      Aplica: {option.condition.name}
+                    </div>
+                  ) : null}
+                </button>
+              )
+            })}
           </div>
         </Modal>
       ) : null}
@@ -330,10 +359,14 @@ function getAbilitySourceLabel(
   ability: Ability,
   equipmentAbility: boolean,
   raceAbility: boolean,
+  conditionAbility: boolean,
   weaponIds: Set<string>,
 ): string | undefined {
   if (equipmentAbility && isEquipmentAbility(ability)) {
     return `${weaponIds.has(ability.sourceItemId) ? "Arma" : "Equipamento"}: ${ability.sourceItemName}`
+  }
+  if (conditionAbility && isConditionAbility(ability)) {
+    return `Condição: ${ability.sourceConditionName}`
   }
   if (raceAbility) return "Raça"
   return getCategoryLabel(ability)
@@ -402,4 +435,8 @@ function isEquipmentAbility(ability: Ability): ability is EquipmentAbility {
 
 function isRaceAbility(ability: Ability): ability is RaceAbility {
   return "source" in ability && ability.source === "race"
+}
+
+function isConditionAbility(ability: Ability): ability is ConditionAbility {
+  return "source" in ability && ability.source === "condition"
 }
