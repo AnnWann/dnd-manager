@@ -5,9 +5,18 @@ import type { Proficiency } from "../sheet/Proficiency"
 
 export type AbilityActivationOption = {
   id: string
+  /** Rótulo exibido no modal de escolha. */
   name: string
+  /** Texto curto legado; novas opções usam preferencialmente ability.description. */
   description?: string
-  /** Efeito aplicado apenas quando esta opção é escolhida ao usar a habilidade. */
+  /**
+   * Mini-habilidade completa executada quando esta opção é escolhida.
+   * Ela pode ter seus próprios usos, tipo, ação, duração, gatilho, bônus,
+   * proficiências, magias e condição ao usar. O editor não cria opções dentro
+   * de opções, embora o tipo continue compatível com Ability.
+   */
+  ability?: Ability
+  /** Formato legado das primeiras opções; mantido para migração transparente. */
   condition?: CharacterConditionGrant
 }
 
