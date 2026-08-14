@@ -1,4 +1,6 @@
 import type { BonusCollection } from "../bonuses/Bonus"
+import type { SpellGrant } from "../magic/spells/SpellGrant"
+import type { Proficiency } from "../sheet/Proficiency"
 
 export type ConditionDurationType =
   | "rounds"
@@ -33,6 +35,22 @@ export type CharacterConditionDuration = {
   expiresAt?: string
 }
 
+/**
+ * Template reaproveitável por habilidades. O id/source/createdAt são definidos
+ * quando a condição é realmente aplicada ao personagem.
+ */
+export type CharacterConditionGrant = {
+  name: string
+  description?: string
+  behavior?: string
+  notes?: string
+  tags?: string[]
+  bonuses?: BonusCollection
+  grantedSpells?: SpellGrant[]
+  grantedProficiencies?: Proficiency[]
+  duration?: CharacterConditionDuration
+}
+
 export type CharacterCondition = {
   id: string
   name: string
@@ -42,6 +60,9 @@ export type CharacterCondition = {
   notes: string
   tags: string[]
   bonuses?: BonusCollection
+  /** Benefícios dinâmicos que existem somente enquanto a condição existir. */
+  grantedSpells?: SpellGrant[]
+  grantedProficiencies?: Proficiency[]
   duration: CharacterConditionDuration
   createdAt: string
 
@@ -49,6 +70,7 @@ export type CharacterCondition = {
   sourceAbilityId?: string
   sourceAbilityLocation?: "character" | "race" | "equipment"
   sourceItemId?: string
+  sourceAbilityOptionId?: string
 
   /** Reserved for the future encounter / initiative system. */
   sourceCharacterId?: string
