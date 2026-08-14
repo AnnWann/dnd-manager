@@ -4,6 +4,7 @@ import type { Equipment } from "../items/equipment/EquipmentSlot"
 import type { SpellSource } from "../magic/spells/SpellSource"
 import type { SpellGrantCastingMode } from "../magic/spells/SpellGrant"
 import type { CharacterTemplate } from "./CharacterTemplate"
+import { getCharacterConditions } from "./characterConditionStorage"
 
 export type CharacterGrantedSpellUsageSource =
   | { type: "character"; abilityId: string }
@@ -90,14 +91,31 @@ export function getCharacterGrantedSpells(
             sourceId: `${equipment.id}:${ability.id}`,
             attribute: grant.attribute ?? "cha",
           },
-          // A habilidade pode conceder a magia como conhecida e, ao mesmo tempo,
-          // fornecer conjurações gratuitas por suas próprias cargas.
           usage: ability.usage,
           usageSource: ability.usage
             ? { type: "equipment", itemId: equipment.id, abilityId: ability.id }
             : undefined,
         })
       }
+    }
+  }
+
+  for (const condition of getCharacterConditions(character)) {
+    for (const grant of condition.grantedSpells ?? []) {
+      if (!grant.index) continue
+      results.push({
+        key: `condition:${condition.id}:${grant.index}`,
+        index: grant.index,
+        // Condições concedem acesso enquanto existirem. Sem um contador próprio,
+        // "source" não seria utilizável, portanto o fallback é usar espaços.
+        castingMode: grant.castingMode === "source" ? "known" : (grant.castingMode ?? "known"),
+        source: {
+          type: "ability",
+          name: condition.name || "Condição",
+          sourceId: `condition:${condition.id}`,
+          attribute: grant.attribute ?? "cha",
+        },
+      })
     }
   }
 
@@ -123,8 +141,6 @@ function addAbilitySpellGrants(
         ...source,
         attribute: grant.attribute ?? "cha",
       },
-      // `known` define que a magia também pode usar slots; não elimina os
-      // usos gratuitos compartilhados da habilidade que a concedeu.
       usage: ability.usage,
       usageSource: ability.usage ? usageSource : undefined,
     })
