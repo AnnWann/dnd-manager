@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
+import { Modal } from "../../../components/ui/Modal"
 import { Select } from "../../../components/ui/Select"
 import type { Ability } from "../../../models/abilities/Ability"
 import {
@@ -11,6 +12,7 @@ import {
   getAbilityUsageMax,
   restoreAbilityUse,
 } from "../../../models/abilities/abilityActivation"
+import { useAbility as useCharacterAbility } from "../../../models/characters/characterAbilities"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { AbilityCard } from "./abilityCard"
 import { AbilityDialog } from "./abilityDialog"
@@ -55,13 +57,11 @@ const ABILITY_LIST_VIEW_STORAGE_KEY = "dnd-manager:ability-list-view"
 export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   const [editingAbility, setEditingAbility] = useState<Ability | null>(null)
   const [creating, setCreating] = useState(false)
-  const [sourceFilter, setSourceFilter] =
-    useState<AbilitySourceFilter>("all")
+  const [sourceFilter, setSourceFilter] = useState<AbilitySourceFilter>("all")
   const [kindFilter, setKindFilter] = useState<AbilityKindFilter>("all")
   const [search, setSearch] = useState("")
-  const [viewMode, setViewMode] = useState<AbilityListViewMode>(
-    loadAbilityListViewMode,
-  )
+  const [activationChoice, setActivationChoice] = useState<Ability | null>(null)
+  const [viewMode, setViewMode] = useState<AbilityListViewMode>(loadAbilityListViewMode)
 
   useEffect(() => {
     saveAbilityListViewMode(viewMode)
@@ -92,73 +92,59 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       .filter((ability) => {
         const equipmentAbility = isEquipmentAbility(ability)
         const raceAbility = isRaceAbility(ability)
-        const isWeaponAbility =
-          equipmentAbility && weaponIds.has(ability.sourceItemId)
+        const isWeaponAbility = equipmentAbility && weaponIds.has(ability.sourceItemId)
 
         const matchesSource = (() => {
           switch (sourceFilter) {
-            case "character":
-              return !equipmentAbility && !raceAbility
-            case "race":
-              return raceAbility
-            case "weapon":
-              return isWeaponAbility
-            case "equipment":
-              return equipmentAbility
-            case "invocation":
-              return ability.category === "invocation"
-            case "feat":
-              return ability.category === "feat"
-            case "channelDivinity":
-              return ability.category === "channelDivinity"
-            case "martialArts":
-              return ability.category === "martialArts"
-            default:
-              return true
+            case "character": return !equipmentAbility && !raceAbility
+            case "race": return raceAbility
+            case "weapon": return isWeaponAbility
+            case "equipment": return equipmentAbility
+            case "invocation": return ability.category === "invocation"
+            case "feat": return ability.category === "feat"
+            case "channelDivinity": return ability.category === "channelDivinity"
+            case "martialArts": return ability.category === "martialArts"
+            default: return true
           }
         })()
 
-        const matchesKind =
-          kindFilter === "all" ||
-          (ability.kind ?? "active") === kindFilter
-
+        const matchesKind = kindFilter === "all" || (ability.kind ?? "active") === kindFilter
         const matchesSearch =
           !normalizedSearch ||
           ability.name.toLocaleLowerCase().includes(normalizedSearch) ||
-          ability.description
-            ?.toLocaleLowerCase()
-            .includes(normalizedSearch)
+          ability.description?.toLocaleLowerCase().includes(normalizedSearch)
 
         return matchesSource && matchesKind && matchesSearch
       })
-      .sort((left, right) =>
-        left.name.localeCompare(right.name, "pt-BR"),
-      )
+      .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
   }, [abilities, kindFilter, search, sourceFilter, weaponIds])
 
   function saveAbility(ability: Ability) {
-    updateCharacter(character.get("id"), (current) =>
-      current.saveAbility(ability),
-    )
+    updateCharacter(character.get("id"), (current) => current.saveAbility(ability))
     setCreating(false)
     setEditingAbility(null)
   }
 
   function removeAbility(id: string) {
-    updateCharacter(character.get("id"), (current) =>
-      current.removeAbility(id),
-    )
+    updateCharacter(character.get("id"), (current) => current.removeAbility(id))
   }
 
-  function useAbility(id: string) {
+  function requestUseAbility(ability: Ability) {
+    if ((ability.activationOptions?.length ?? 0) > 0) {
+      setActivationChoice(ability)
+      return
+    }
+    useAbility(ability.id)
+  }
+
+  function useAbility(id: string, optionId?: string) {
     updateCharacter(character.get("id"), (current) => {
       const ability = abilities.find((entry) => entry.id === id)
 
       if (ability && isEquipmentAbility(ability)) {
-        return current.useEquipmentAbility(
-          ability.sourceItemId,
-          ability.originalAbilityId,
-        )
+        // Opções avançadas são configuráveis nas habilidades próprias. Equipamentos
+        // preservam o fluxo existente até o editor de equipamento expô-las.
+        return current.useEquipmentAbility(ability.sourceItemId, ability.originalAbilityId)
       }
 
       if (ability && isRaceAbility(ability)) {
@@ -166,11 +152,13 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
           current,
           ability.originalAbilityId,
           "use",
+          optionId,
         )
       }
 
-      return current.useAbility(id)
+      return useCharacterAbility(current, id, optionId)
     })
+    setActivationChoice(null)
   }
 
   function deactivateAbility(id: string) {
@@ -179,20 +167,11 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       if (!ability) return current
 
       if (isEquipmentAbility(ability)) {
-        return current.deactivateEquipmentAbility(
-          ability.sourceItemId,
-          ability.originalAbilityId,
-        )
+        return current.deactivateEquipmentAbility(ability.sourceItemId, ability.originalAbilityId)
       }
-
       if (isRaceAbility(ability)) {
-        return updateRaceAbilityState(
-          current,
-          ability.originalAbilityId,
-          "deactivate",
-        )
+        return updateRaceAbilityState(current, ability.originalAbilityId, "deactivate")
       }
-
       return current.deactivateAbility(id)
     })
   }
@@ -200,22 +179,12 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   function restoreAbility(id: string) {
     updateCharacter(character.get("id"), (current) => {
       const ability = abilities.find((entry) => entry.id === id)
-
       if (ability && isEquipmentAbility(ability)) {
-        return current.restoreEquipmentAbility(
-          ability.sourceItemId,
-          ability.originalAbilityId,
-        )
+        return current.restoreEquipmentAbility(ability.sourceItemId, ability.originalAbilityId)
       }
-
       if (ability && isRaceAbility(ability)) {
-        return updateRaceAbilityState(
-          current,
-          ability.originalAbilityId,
-          "restore",
-        )
+        return updateRaceAbilityState(current, ability.originalAbilityId, "restore")
       }
-
       return current.restoreAbility(id)
     })
   }
@@ -226,50 +195,23 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
         <CardHeader>
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <div className="text-sm font-semibold text-textH">
-                Habilidades
-              </div>
+              <div className="text-sm font-semibold text-textH">Habilidades</div>
               <div className="mt-1 text-xs text-text">
-                Filtre habilidades próprias, raciais, de armas, equipamentos,
-                evocações, talentos, Canalizar Divindade e habilidades marciais.
+                Filtre habilidades próprias, raciais, de armas, equipamentos, evocações, talentos, Canalizar Divindade e habilidades marciais.
               </div>
             </div>
-
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setCreating(true)}
-            >
+            <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>
               + Adicionar habilidade
             </Button>
           </div>
 
           <div className="mt-4 grid gap-2 md:grid-cols-[minmax(220px,1fr)_150px_190px_150px]">
-            <Input
-              value={search}
-              placeholder="Buscar habilidade..."
-              onChange={(event) => setSearch(event.target.value)}
-            />
-
-            <Select
-              value={viewMode}
-              aria-label="Visualização das habilidades"
-              onChange={(event) =>
-                setViewMode(event.target.value as AbilityListViewMode)
-              }
-            >
+            <Input value={search} placeholder="Buscar habilidade..." onChange={(event) => setSearch(event.target.value)} />
+            <Select value={viewMode} aria-label="Visualização das habilidades" onChange={(event) => setViewMode(event.target.value as AbilityListViewMode)}>
               <option value="detailed">Completa</option>
               <option value="compact">Simplificada</option>
             </Select>
-
-            <Select
-              value={sourceFilter}
-              onChange={(event) =>
-                setSourceFilter(
-                  event.target.value as AbilitySourceFilter,
-                )
-              }
-            >
+            <Select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as AbilitySourceFilter)}>
               <option value="all">Todas as origens</option>
               <option value="character">Habilidades próprias</option>
               <option value="race">Habilidades raciais</option>
@@ -280,13 +222,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
               <option value="channelDivinity">Canalizar Divindade</option>
               <option value="martialArts">Habilidades marciais</option>
             </Select>
-
-            <Select
-              value={kindFilter}
-              onChange={(event) =>
-                setKindFilter(event.target.value as AbilityKindFilter)
-              }
-            >
+            <Select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as AbilityKindFilter)}>
               <option value="all">Ativas, passivas e características</option>
               <option value="active">Somente ativas</option>
               <option value="passive">Somente passivas</option>
@@ -297,30 +233,18 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
 
         <CardContent>
           {filteredAbilities.length === 0 ? (
-            <p className="text-xs text-text">
-              Nenhuma habilidade corresponde aos filtros selecionados.
-            </p>
+            <p className="text-xs text-text">Nenhuma habilidade corresponde aos filtros selecionados.</p>
           ) : (
             <div className={viewMode === "compact" ? "grid gap-2" : "grid gap-3"}>
               {filteredAbilities.map((ability) => {
                 const equipmentAbility = isEquipmentAbility(ability)
                 const raceAbility = isRaceAbility(ability)
                 const grantedAbility = equipmentAbility || raceAbility
-                const usageMax = ability.usage
-                  ? getAbilityUsageMax(character, ability.usage)
-                  : undefined
-                const sourceLabel = getAbilitySourceLabel(
-                  ability,
-                  equipmentAbility,
-                  raceAbility,
-                  weaponIds,
-                )
-                const editAbility = grantedAbility
-                  ? undefined
-                  : () => setEditingAbility(ability)
-                const deleteAbility = grantedAbility
-                  ? undefined
-                  : () => removeAbility(ability.id)
+                const usageMax = ability.usage ? getAbilityUsageMax(character, ability.usage) : undefined
+                const sourceLabel = getAbilitySourceLabel(ability, equipmentAbility, raceAbility, weaponIds)
+                const editAbility = grantedAbility ? undefined : () => setEditingAbility(ability)
+                const deleteAbility = grantedAbility ? undefined : () => removeAbility(ability.id)
+                const onUse = () => requestUseAbility(ability)
 
                 if (viewMode === "compact") {
                   return (
@@ -331,7 +255,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
                       usageMax={usageMax}
                       onEdit={editAbility}
                       onRemove={deleteAbility}
-                      onUse={() => useAbility(ability.id)}
+                      onUse={onUse}
                       onDeactivate={() => deactivateAbility(ability.id)}
                       onRestore={() => restoreAbility(ability.id)}
                     />
@@ -346,7 +270,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
                     usageMax={usageMax}
                     onEdit={editAbility}
                     onRemove={deleteAbility}
-                    onUse={() => useAbility(ability.id)}
+                    onUse={onUse}
                     onDeactivate={() => deactivateAbility(ability.id)}
                     onRestore={() => restoreAbility(ability.id)}
                   />
@@ -366,6 +290,38 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
         }}
         onSave={saveAbility}
       />
+
+      {activationChoice ? (
+        <Modal
+          title={`Escolher efeito — ${activationChoice.name}`}
+          onClose={() => setActivationChoice(null)}
+          className="max-w-lg"
+        >
+          <div className="grid gap-2">
+            <p className="text-xs leading-5 text-textMuted">
+              Esta habilidade possui efeitos opcionais. Escolha qual será aplicado neste uso; o recurso é consumido apenas depois da escolha.
+            </p>
+            {(activationChoice.activationOptions ?? []).map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => useAbility(activationChoice.id, option.id)}
+                className="rounded-xl border border-border bg-bg-subtle p-3 text-left transition-colors hover:border-accentBorder hover:bg-accentBg"
+              >
+                <div className="text-sm font-semibold text-textH">{option.name}</div>
+                {option.description ? (
+                  <div className="mt-1 whitespace-pre-wrap text-xs leading-5 text-textMuted">{option.description}</div>
+                ) : null}
+                {option.condition?.name ? (
+                  <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-accent">
+                    Aplica: {option.condition.name}
+                  </div>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </Modal>
+      ) : null}
     </>
   )
 }
@@ -379,7 +335,6 @@ function getAbilitySourceLabel(
   if (equipmentAbility && isEquipmentAbility(ability)) {
     return `${weaponIds.has(ability.sourceItemId) ? "Arma" : "Equipamento"}: ${ability.sourceItemName}`
   }
-
   if (raceAbility) return "Raça"
   return getCategoryLabel(ability)
 }
@@ -394,11 +349,8 @@ function getCategoryLabel(ability: Ability): string | undefined {
 
 function loadAbilityListViewMode(): AbilityListViewMode {
   if (typeof window === "undefined") return "detailed"
-
   try {
-    return window.localStorage.getItem(ABILITY_LIST_VIEW_STORAGE_KEY) === "compact"
-      ? "compact"
-      : "detailed"
+    return window.localStorage.getItem(ABILITY_LIST_VIEW_STORAGE_KEY) === "compact" ? "compact" : "detailed"
   } catch {
     return "detailed"
   }
@@ -406,7 +358,6 @@ function loadAbilityListViewMode(): AbilityListViewMode {
 
 function saveAbilityListViewMode(viewMode: AbilityListViewMode) {
   if (typeof window === "undefined") return
-
   try {
     window.localStorage.setItem(ABILITY_LIST_VIEW_STORAGE_KEY, viewMode)
   } catch {
@@ -418,18 +369,17 @@ function updateRaceAbilityState(
   character: CharacterTemplate,
   abilityId: string,
   action: "use" | "restore" | "deactivate",
+  optionId?: string,
 ): CharacterTemplate {
   const race = character.get("sheet").race
-  const ability = (race.naturalAbilities ?? []).find(
-    (current) => current.id === abilityId,
-  )
+  const ability = (race.naturalAbilities ?? []).find((current) => current.id === abilityId)
   if (!ability) return character
 
   if (action === "use") {
     return useAbilityEffect(character, ability, {
       type: "race",
       sourceLabel: "Raça",
-    })
+    }, optionId)
   }
   if (action === "deactivate") {
     return endAbilityEffect(character, ability, {
@@ -446,9 +396,7 @@ function updateRaceAbilityState(
   })
 }
 
-function isEquipmentAbility(
-  ability: Ability,
-): ability is EquipmentAbility {
+function isEquipmentAbility(ability: Ability): ability is EquipmentAbility {
   return "source" in ability && ability.source === "equipment"
 }
 
