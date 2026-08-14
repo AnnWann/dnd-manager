@@ -5,6 +5,11 @@ import { Input } from "../../../components/ui/Input"
 import { Modal } from "../../../components/ui/Modal"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
+  getCurrentMaxHp,
+  restoreCurrentMaxHp,
+  setCurrentMaxHp,
+} from "../../../models/characters/characterHp"
+import {
   endConcentration,
   getConcentrationCondition,
 } from "../../../models/characters/characterConcentration"
@@ -24,47 +29,83 @@ type PendingCheck = {
   spellName?: string
 }
 
+type HpTarget = "current" | "maximum" | "temporary"
+
 export function CharacterHpControls({ character, updateCharacter, compact = false }: Props) {
-  const [damageText, setDamageText] = useState("")
-  const [healingText, setHealingText] = useState("")
-  const [healingTarget, setHealingTarget] = useState<"current" | "temporary">("current")
+  const [target, setTarget] = useState<HpTarget | null>(null)
+  const [amountText, setAmountText] = useState("")
   const [pendingCheck, setPendingCheck] = useState<PendingCheck | null>(null)
   const concentration = getConcentrationCondition(character)
   const characterId = character.get("id")
+  const hp = character.get("sheet").HP
+  const currentMax = getCurrentMaxHp(character)
+  const effectiveMax = character.getEffectiveMaxHp()
 
   function parseAmount(value: string): number {
     return Math.max(0, Math.trunc(Number(value) || 0))
   }
 
-  function applyDamage() {
-    const damage = parseAmount(damageText)
-    if (damage <= 0) return
-
-    const concentrationBeforeDamage = getConcentrationCondition(character)
-    updateCharacter(characterId, (current) => current.takeDamage(damage))
-    setDamageText("")
-
-    if (concentrationBeforeDamage) {
-      setPendingCheck({
-        damage,
-        dc: Math.max(10, Math.floor(damage / 2)),
-        spellName: concentrationBeforeDamage.source || undefined,
-      })
-    }
+  function openTarget(nextTarget: HpTarget) {
+    setTarget(nextTarget)
+    setAmountText("")
   }
 
-  function applyHealing() {
-    const amount = parseAmount(healingText)
-    if (amount <= 0) return
+  function closeTarget() {
+    setTarget(null)
+    setAmountText("")
+  }
 
-    updateCharacter(characterId, (current) => {
-      if (healingTarget === "temporary") {
-        const currentTemporary = current.get("sheet").HP.temporary
-        return current.setTemporaryHp(currentTemporary + amount)
+  function reduce() {
+    const amount = parseAmount(amountText)
+    if (!target || amount <= 0) return
+
+    if (target === "current") {
+      const concentrationBeforeDamage = getConcentrationCondition(character)
+      updateCharacter(characterId, (current) => current.takeDamage(amount))
+      if (concentrationBeforeDamage) {
+        setPendingCheck({
+          damage: amount,
+          dc: Math.max(10, Math.floor(amount / 2)),
+          spellName: concentrationBeforeDamage.source || undefined,
+        })
       }
-      return current.heal(amount)
-    })
-    setHealingText("")
+    } else if (target === "temporary") {
+      updateCharacter(characterId, (current) =>
+        current.setTemporaryHp(
+          Math.max(0, current.get("sheet").HP.temporary - amount),
+        ),
+      )
+    } else {
+      updateCharacter(characterId, (current) =>
+        setCurrentMaxHp(current, getCurrentMaxHp(current) - amount),
+      )
+    }
+
+    closeTarget()
+  }
+
+  function increase() {
+    const amount = parseAmount(amountText)
+    if (!target || amount <= 0) return
+
+    if (target === "current") {
+      updateCharacter(characterId, (current) => current.heal(amount))
+    } else if (target === "temporary") {
+      updateCharacter(characterId, (current) =>
+        current.setTemporaryHp(current.get("sheet").HP.temporary + amount),
+      )
+    } else {
+      updateCharacter(characterId, (current) =>
+        setCurrentMaxHp(current, getCurrentMaxHp(current) + amount),
+      )
+    }
+
+    closeTarget()
+  }
+
+  function restoreMaximum() {
+    updateCharacter(characterId, restoreCurrentMaxHp)
+    closeTarget()
   }
 
   function failConcentration() {
@@ -72,65 +113,107 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
     setPendingCheck(null)
   }
 
+  const amount = parseAmount(amountText)
+
   return (
     <>
-      <div className={compact ? "grid gap-2" : "grid gap-3 lg:grid-cols-2"}>
-        <div className="rounded-lg border border-border bg-bg-subtle p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Aplicar dano</div>
-          <div className="mt-2 flex gap-2">
-            <Input
-              type="number"
-              min={0}
-              inputMode="numeric"
-              value={damageText}
-              placeholder="Dano"
-              aria-label="Valor de dano"
-              onChange={(event) => setDamageText(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") applyDamage()
-              }}
-            />
-            <Button variant="primary" onClick={applyDamage} disabled={parseAmount(damageText) <= 0}>
-              Dano
-            </Button>
-          </div>
-          <div className="mt-2 text-[10px] leading-4 text-textMuted">
-            O dano consome primeiro os PV temporários e depois os PV atuais.
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-border bg-bg-subtle p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Aplicar cura</div>
-          <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
-            <Input
-              type="number"
-              min={0}
-              inputMode="numeric"
-              value={healingText}
-              placeholder="Cura"
-              aria-label="Valor de cura"
-              onChange={(event) => setHealingText(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") applyHealing()
-              }}
-            />
-            <Button variant="primary" onClick={applyHealing} disabled={parseAmount(healingText) <= 0}>
-              Curar
-            </Button>
-          </div>
-          <label className="mt-2 grid gap-1 text-[10px] text-textMuted">
-            Aplicar em
-            <select
-              className="h-9 rounded-lg border border-border bg-bg px-2 text-xs text-textH"
-              value={healingTarget}
-              onChange={(event) => setHealingTarget(event.target.value as "current" | "temporary")}
-            >
-              <option value="current">PV atual</option>
-              <option value="temporary">PV temporário</option>
-            </select>
-          </label>
-        </div>
+      <div className={compact ? "grid grid-cols-3 gap-2" : "grid grid-cols-2 gap-3 md:grid-cols-3"}>
+        <HpTile
+          label="Vida atual"
+          value={hp.current}
+          onClick={() => openTarget("current")}
+        />
+        <HpTile
+          label="Vida máxima"
+          value={effectiveMax}
+          reduced={currentMax < hp.max}
+          onClick={() => openTarget("maximum")}
+        />
+        <HpTile
+          label="Vida temporária"
+          value={hp.temporary}
+          onClick={() => openTarget("temporary")}
+        />
       </div>
+
+      {target ? (
+        <Modal
+          title={targetTitle(target)}
+          onClose={closeTarget}
+          className="max-w-md"
+        >
+          <div className="grid gap-4">
+            <div className="rounded-xl border border-border bg-bg-subtle p-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+                Valor atual
+              </div>
+              <div className="mt-1 text-2xl font-bold text-textH">
+                {target === "current"
+                  ? hp.current
+                  : target === "temporary"
+                    ? hp.temporary
+                    : effectiveMax}
+              </div>
+              {target === "maximum" ? (
+                <div className="mt-2 grid gap-1 text-xs text-textMuted">
+                  <div>
+                    Vida máxima atual: <strong className="text-textH">{currentMax}</strong>
+                  </div>
+                  <div>
+                    Vida máxima real: <strong className="text-textH">{hp.max}</strong>
+                  </div>
+                  {effectiveMax !== currentMax ? (
+                    <div>
+                      Com bônus e efeitos: <strong className="text-textH">{effectiveMax}</strong>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            <label className="grid gap-1 text-xs text-textMuted">
+              Valor da alteração
+              <Input
+                autoFocus
+                type="number"
+                min={0}
+                inputMode="numeric"
+                value={amountText}
+                placeholder="0"
+                onChange={(event) => setAmountText(event.target.value)}
+              />
+            </label>
+
+            {target === "current" ? (
+              <p className="text-xs leading-5 text-textMuted">
+                Reduzir aplica dano: PV temporários são consumidos primeiro e, se houver concentração, o teste é solicitado depois do dano.
+              </p>
+            ) : target === "maximum" ? (
+              <p className="text-xs leading-5 text-textMuted">
+                Alterar aqui muda apenas a vida máxima atual. A vida máxima real permanece salva para permitir restauração posterior.
+              </p>
+            ) : (
+              <p className="text-xs leading-5 text-textMuted">
+                Esta alteração afeta somente os PV temporários e não conta como dano recebido.
+              </p>
+            )}
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
+              {target === "maximum" && currentMax < hp.max ? (
+                <Button variant="ghost" onClick={restoreMaximum}>
+                  Restaurar
+                </Button>
+              ) : null}
+              <Button variant="secondary" onClick={reduce} disabled={amount <= 0}>
+                {target === "current" ? "Dano" : "Reduzir"}
+              </Button>
+              <Button variant="primary" onClick={increase} disabled={amount <= 0}>
+                {target === "current" ? "Curar" : "Aumentar"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
 
       {pendingCheck && concentration ? (
         <Modal title="Teste de concentração" onClose={() => setPendingCheck(null)} className="max-w-md">
@@ -157,4 +240,40 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
       ) : null}
     </>
   )
+}
+
+function HpTile({
+  label,
+  value,
+  reduced = false,
+  onClick,
+}: {
+  label: string
+  value: number
+  reduced?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="min-h-16 rounded-xl border border-border bg-bg-subtle px-3 py-2 text-center transition-colors hover:border-accentBorder hover:bg-accentBg"
+    >
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+        {label}
+      </div>
+      <div className="mt-1 text-lg font-bold text-textH">{value}</div>
+      {reduced ? (
+        <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-danger">
+          reduzida
+        </div>
+      ) : null}
+    </button>
+  )
+}
+
+function targetTitle(target: HpTarget): string {
+  if (target === "current") return "Vida atual"
+  if (target === "maximum") return "Vida máxima"
+  return "Vida temporária"
 }
