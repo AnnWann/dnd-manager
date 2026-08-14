@@ -1,6 +1,9 @@
 import { evaluateCharacterSheetFormula } from "../../lib/customSystems/CharacterSheetFormula"
 import type { Bonus } from "../bonuses/Bonus"
-import type { CharacterCondition } from "../characters/CharacterCondition"
+import type {
+  CharacterCondition,
+  CharacterConditionGrant,
+} from "../characters/CharacterCondition"
 import {
   getCharacterConditions,
   withCharacterConditions,
@@ -118,11 +121,12 @@ export function deactivateAbilityBenefits(ability: Ability): Ability {
   }
 }
 
-/** Executa uso, efeitos de PV e registro da condição duradoura. */
+/** Executa uso, efeitos de PV e condições configuradas. */
 export function useAbilityEffect(
   character: CharacterTemplate,
   ability: Ability,
   source: AbilityEffectSource,
+  activationOptionId?: string,
 ): CharacterTemplate {
   if (!abilityRequiresActivation(ability)) return character
   if (!canActivateAbility(character, ability)) return character
@@ -164,6 +168,30 @@ export function useAbilityEffect(
 
   if (duration === "lasting") {
     next = upsertAbilityCondition(next, ability, source)
+  }
+
+  if (ability.conditionOnUse) {
+    next = upsertGrantedCondition(
+      next,
+      ability,
+      source,
+      ability.conditionOnUse,
+      "base",
+    )
+  }
+
+  const option = ability.activationOptions?.find(
+    (entry) => entry.id === activationOptionId,
+  )
+  if (option?.condition) {
+    next = upsertGrantedCondition(
+      next,
+      ability,
+      source,
+      option.condition,
+      option.id,
+      option.name,
+    )
   }
 
   return next
@@ -220,6 +248,20 @@ export function normalizeAbilityActivation(ability: Ability): Ability {
       duration === "lasting" ? ability.effectDurationText?.trim() || undefined : undefined,
     effectPersistence: persistence,
     modifiersActive: undefined,
+    usage: ability.usage
+      ? {
+          ...ability.usage,
+          sharedResourceId: ability.usage.sharedResourceId?.trim() || undefined,
+          sharedResourceName: ability.usage.sharedResourceName?.trim() || undefined,
+        }
+      : undefined,
+    activationOptions: ability.activationOptions
+      ?.filter((option) => option.name.trim())
+      .map((option) => ({
+        ...option,
+        name: option.name.trim(),
+        description: option.description?.trim() || undefined,
+      })),
   }
 
   if (!abilityRequiresActivation(normalized)) {
@@ -273,6 +315,29 @@ function upsertAbilityCondition(
   ])
 }
 
+function upsertGrantedCondition(
+  character: CharacterTemplate,
+  ability: Ability,
+  source: AbilityEffectSource,
+  grant: CharacterConditionGrant,
+  suffix: string,
+  optionName?: string,
+): CharacterTemplate {
+  const condition = createGrantedCondition(
+    ability,
+    source,
+    grant,
+    suffix,
+    optionName,
+  )
+  return withCharacterConditions(character, [
+    ...getCharacterConditions(character).filter(
+      (current) => current.id !== condition.id,
+    ),
+    condition,
+  ])
+}
+
 function createAbilityCondition(
   ability: Ability,
   source: AbilityEffectSource,
@@ -301,6 +366,43 @@ function createAbilityCondition(
     sourceAbilityId: ability.id,
     sourceAbilityLocation: source.type,
     sourceItemId: source.type === "equipment" ? source.itemId : undefined,
+  }
+}
+
+function createGrantedCondition(
+  ability: Ability,
+  source: AbilityEffectSource,
+  grant: CharacterConditionGrant,
+  suffix: string,
+  optionName?: string,
+): CharacterCondition {
+  const duration = grant.duration ?? {
+    type: "custom" as const,
+    customLabel: "Até ser removida",
+    tickOn: "manual" as const,
+    tickOwner: "affected" as const,
+    autoRemoveAtZero: false,
+  }
+
+  return {
+    id: `${getAbilityConditionId(ability.id, source)}:grant:${suffix}`,
+    name: grant.name.trim() || optionName || ability.name || "Efeito de habilidade",
+    description: grant.description?.trim() ?? "",
+    behavior:
+      grant.behavior?.trim() ||
+      "Os benefícios concedidos por esta condição permanecem enquanto ela existir.",
+    source: source.sourceLabel?.trim() || ability.name || "Habilidade",
+    notes: grant.notes?.trim() ?? "",
+    tags: Array.from(new Set(["Habilidade", ...(grant.tags ?? [])])),
+    bonuses: grant.bonuses,
+    grantedSpells: grant.grantedSpells,
+    grantedProficiencies: grant.grantedProficiencies,
+    duration,
+    createdAt: new Date().toISOString(),
+    sourceAbilityId: ability.id,
+    sourceAbilityLocation: source.type,
+    sourceItemId: source.type === "equipment" ? source.itemId : undefined,
+    sourceAbilityOptionId: suffix === "base" ? undefined : suffix,
   }
 }
 
