@@ -1,6 +1,15 @@
 import type { BonusCollection } from "../bonuses/Bonus"
+import type { CharacterConditionGrant } from "../characters/CharacterCondition"
 import type { SpellGrant } from "../magic/spells/SpellGrant"
 import type { Proficiency } from "../sheet/Proficiency"
+
+export type AbilityActivationOption = {
+  id: string
+  name: string
+  description?: string
+  /** Efeito aplicado apenas quando esta opção é escolhida ao usar a habilidade. */
+  condition?: CharacterConditionGrant
+}
 
 export interface Ability {
   id: string
@@ -19,6 +28,10 @@ export interface Ability {
   grantedSpells?: SpellGrant[]
   grantedProficiencies?: Proficiency[]
   bonuses?: BonusCollection
+  /** Condição adicional aplicada ao personagem quando a habilidade é usada. */
+  conditionOnUse?: CharacterConditionGrant
+  /** Alternativas apresentadas ao jogador antes de concluir a ativação. */
+  activationOptions?: AbilityActivationOption[]
   /** Estado persistido dos benefícios de habilidades que precisam ser acionadas. */
   benefitsActive?: boolean
   /** Campo legado; novos cálculos usam benefitsActive. */
@@ -36,6 +49,10 @@ export interface Usage {
   maxFormula?: string
   used: number
   reset: AbilityUsageResetKind
+  /** Habilidades com o mesmo id compartilham o mesmo contador de usos. */
+  sharedResourceId?: string
+  /** Nome amigável exibido na interface para o recurso compartilhado. */
+  sharedResourceName?: string
   cooldownAmount?: number
   cooldownUnit?: AbilityUsageCooldownUnit
   cooldownRemaining?: number
