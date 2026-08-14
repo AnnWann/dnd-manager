@@ -68,6 +68,9 @@ export function getAbilityGrantedProficiencies(
     ...(character.get("abilities") ?? []),
     ...(character.get("sheet").race.naturalAbilities ?? []),
     ...getEquippedItems(character).flatMap((item) => item.abilities ?? []),
+    ...getCharacterConditions(character).flatMap(
+      (condition) => condition.grantedAbilities ?? [],
+    ),
   ].filter(isAbilityBenefitsActive)
 
   return abilities.flatMap((ability) =>
