@@ -4,6 +4,7 @@ import type { Ability } from "../abilities/Ability"
 import {
   abilityRequiresActivation,
   endAbilityEffect,
+  getAbilityUsageMax,
   useAbilityEffect,
   restoreAbilityUse,
 } from "../abilities/abilityActivation"
@@ -67,10 +68,6 @@ export function saveAbility(
     : addAbility(character, ability)
 }
 
-/**
- * Compatibilidade para consumidores que ainda precisam da representação
- * max/used/remaining. A fonte real é magic.channelDivinity.
- */
 export function getChannelDivinityUsage(character: CharacterTemplate): {
   max: number
   used: number
@@ -85,6 +82,7 @@ export function getChannelDivinityUsage(character: CharacterTemplate): {
 export function useAbility(
   character: CharacterTemplate,
   abilityId: string,
+  activationOptionId?: string,
 ): CharacterTemplate {
   const ability = (character.get("abilities") ?? []).find(
     (current) => current.id === abilityId,
@@ -99,6 +97,7 @@ export function useAbility(
       character,
       { ...ability, usage: undefined },
       { type: "character" },
+      activationOptionId,
     )
     return spendChannelDivinity(activated)
   }
@@ -111,11 +110,31 @@ export function useAbility(
       character,
       { ...ability, usage: undefined },
       { type: "character" },
+      activationOptionId,
     )
     return spendKi(activated)
   }
 
-  return useAbilityEffect(character, ability, { type: "character" })
+  const sharedResourceId = ability.usage?.sharedResourceId?.trim()
+  if (sharedResourceId && ability.usage) {
+    if (ability.usage.used >= getAbilityUsageMax(character, ability.usage)) {
+      return character
+    }
+    const activated = useAbilityEffect(
+      character,
+      { ...ability, usage: undefined },
+      { type: "character" },
+      activationOptionId,
+    )
+    return updateSharedResourceUsage(activated, sharedResourceId, 1)
+  }
+
+  return useAbilityEffect(
+    character,
+    ability,
+    { type: "character" },
+    activationOptionId,
+  )
 }
 
 export function deactivateAbility(
@@ -141,6 +160,8 @@ export function resetAbility(
   if (target?.category === "martialArts") {
     return recoverKi(character)
   }
+  const sharedResourceId = target?.usage?.sharedResourceId?.trim()
+  if (sharedResourceId) return setSharedResourceUsage(character, sharedResourceId, 0)
 
   return character.with(
     "abilities",
@@ -181,11 +202,60 @@ export function restoreAbility(
   if (target?.category === "martialArts") {
     return restoreKi(character)
   }
+  const sharedResourceId = target?.usage?.sharedResourceId?.trim()
+  if (sharedResourceId) return updateSharedResourceUsage(character, sharedResourceId, -1)
 
   return character.with(
     "abilities",
     (character.get("abilities") ?? []).map((ability) =>
       ability.id === abilityId ? restoreAbilityUse(ability) : ability,
     ),
+  )
+}
+
+function updateSharedResourceUsage(
+  character: CharacterTemplate,
+  sharedResourceId: string,
+  delta: number,
+): CharacterTemplate {
+  const members = (character.get("abilities") ?? []).filter(
+    (ability) => ability.usage?.sharedResourceId?.trim() === sharedResourceId,
+  )
+  if (!members.length) return character
+  const representative = members[0]
+  if (!representative.usage) return character
+  const nextUsed = Math.max(
+    0,
+    Math.min(
+      getAbilityUsageMax(character, representative.usage),
+      representative.usage.used + delta,
+    ),
+  )
+  return setSharedResourceUsage(character, sharedResourceId, nextUsed)
+}
+
+function setSharedResourceUsage(
+  character: CharacterTemplate,
+  sharedResourceId: string,
+  used: number,
+): CharacterTemplate {
+  return character.with(
+    "abilities",
+    (character.get("abilities") ?? []).map((ability) => {
+      if (
+        !ability.usage ||
+        ability.usage.sharedResourceId?.trim() !== sharedResourceId
+      ) return ability
+      return {
+        ...ability,
+        usage: {
+          ...ability.usage,
+          used: Math.max(
+            0,
+            Math.min(getAbilityUsageMax(character, ability.usage), used),
+          ),
+        },
+      }
+    }),
   )
 }
