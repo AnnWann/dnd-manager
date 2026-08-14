@@ -5,6 +5,7 @@ import type {
 } from "../sheet/Proficiency"
 import { getEquippedItems } from "./characterEquipment"
 import { isAbilityBenefitsActive } from "../abilities/abilityActivation"
+import { getCharacterConditions } from "./characterConditionStorage"
 
 export function addProficiency(
   character: CharacterTemplate,
@@ -81,12 +82,16 @@ export function getAbilityGrantedProficiencies(
 export function getCharacterProficiencies(
   character: CharacterTemplate,
 ): Proficiency[] {
+  const conditionProficiencies = getCharacterConditions(character).flatMap(
+    (condition) => condition.grantedProficiencies ?? [],
+  )
   const proficiencies = [
     ...(character.get("sheet").proficiencies ?? []),
     ...(character.get("sheet").race.proficiencies ?? []),
     ...getAbilityGrantedProficiencies(character).map(
       (entry) => entry.proficiency,
     ),
+    ...conditionProficiencies,
   ]
   const seen = new Set<string>()
 
