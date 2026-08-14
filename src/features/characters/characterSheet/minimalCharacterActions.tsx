@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
 import { Button } from "../../../components/ui/Button"
+import { Input } from "../../../components/ui/Input"
 import { Modal } from "../../../components/ui/Modal"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
@@ -28,6 +29,10 @@ import {
 import { useAbility as useCharacterAbility } from "../../../models/characters/characterAbilities"
 import { getChannelDivinityPool } from "../../../models/characters/characterChannelDivinity"
 import { getKiPool } from "../../../models/characters/characterKi"
+import {
+  getSorceryPointPool,
+  setSorceryPointCurrent,
+} from "../../../models/characters/characterSorceryPoints"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type {
   CharacterCustomSystemState,
@@ -64,6 +69,7 @@ type ActionEntry = {
   abilitySource?: AbilitySource
   customAbilitySource?: CustomAbilitySource
   customSystemActionSource?: CustomSystemActionSource
+  metamagicCost?: number | "spell-level"
   usageRemaining?: number
   usageMaximum?: number
 }
@@ -114,6 +120,7 @@ export function MinimalCharacterActions({
   const [filter, setFilter] = useState<ActionFilter>("action")
   const [selected, setSelected] = useState<ActionEntry | null>(null)
   const [error, setError] = useState("")
+  const [variableMetamagicCost, setVariableMetamagicCost] = useState(1)
   const standardActions = useMemo(
     () => getStandardActions(character, filter, definitions),
     [character, filter, definitions],
@@ -135,6 +142,7 @@ export function MinimalCharacterActions({
         name: metamagic.name,
         filter: "free" as const,
         source: "Metamagia",
+        metamagicCost: metamagic.sorceryPointCost,
         description: [
           ...metamagic.desc,
           `Custo: ${formatMetamagicCost(metamagic.sorceryPointCost)}.`,
@@ -165,6 +173,7 @@ export function MinimalCharacterActions({
       return
     }
     setError("")
+    if (entry.metamagicCost === "spell-level") setVariableMetamagicCost(1)
     setSelected(entry)
   }
 
@@ -242,6 +251,28 @@ export function MinimalCharacterActions({
     }
   }
 
+  function useMetamagic(entry: ActionEntry) {
+    if (entry.metamagicCost === undefined) return
+    const cost = entry.metamagicCost === "spell-level"
+      ? Math.max(1, Math.trunc(variableMetamagicCost || 1))
+      : entry.metamagicCost
+    const pool = getSorceryPointPool(character)
+    if (pool.current < cost) {
+      setError(`Pontos de feitiçaria insuficientes. Necessário: ${cost}; disponível: ${pool.current}.`)
+      return
+    }
+
+    setError("")
+    updateCharacter(character.get("id"), (current) => {
+      const currentPool = getSorceryPointPool(current)
+      if (currentPool.current < cost) return current
+      return setSorceryPointCurrent(current, currentPool.current - cost)
+    })
+    setSelected(null)
+  }
+
+  const sorceryPoints = getSorceryPointPool(character)
+
   return (
     <section className="rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-textH">Ações</h2>
@@ -310,17 +341,50 @@ export function MinimalCharacterActions({
               {selected.usageMaximum !== undefined ? (
                 <span>• {selected.usageRemaining ?? 0}/{selected.usageMaximum} usos</span>
               ) : null}
+              {selected.metamagicCost !== undefined ? (
+                <span>• {sorceryPoints.current}/{sorceryPoints.max} pontos de feitiçaria</span>
+              ) : null}
               {selected.customAbilitySource || selected.customSystemActionSource ? (
                 <span>• Sistema personalizado</span>
               ) : null}
             </div>
             <p className="whitespace-pre-wrap text-sm leading-6 text-text">{selected.description}</p>
+            {selected.metamagicCost === "spell-level" ? (
+              <label className="grid gap-1 rounded-xl border border-border bg-bg-subtle p-3">
+                <span className="text-xs font-semibold text-textH">Pontos a gastar</span>
+                <span className="text-[11px] leading-4 text-textMuted">
+                  Informe o custo desta aplicação. Para Feitiço Duplicado, use o nível da magia; truques custam 1.
+                </span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={Math.max(1, sorceryPoints.current)}
+                  value={variableMetamagicCost}
+                  onChange={(event) => setVariableMetamagicCost(Math.max(1, Math.trunc(Number(event.target.value) || 1)))}
+                />
+              </label>
+            ) : null}
             {error ? (
               <div className="rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">
                 {error}
               </div>
             ) : null}
-            {selected.customSystemActionSource ? (
+            {selected.metamagicCost !== undefined ? (
+              <div className="flex justify-end border-t border-border pt-3">
+                <Button
+                  variant="primary"
+                  disabled={
+                    sorceryPoints.current <
+                    (selected.metamagicCost === "spell-level"
+                      ? Math.max(1, variableMetamagicCost)
+                      : selected.metamagicCost)
+                  }
+                  onClick={() => useMetamagic(selected)}
+                >
+                  Usar
+                </Button>
+              </div>
+            ) : selected.customSystemActionSource ? (
               <div className="flex justify-end border-t border-border pt-3">
                 <Button variant="primary" onClick={() => useCustomSystemAction(selected)}>Usar</Button>
               </div>
