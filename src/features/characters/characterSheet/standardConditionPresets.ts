@@ -48,6 +48,13 @@ export const STANDARD_CONDITION_PRESETS: StandardConditionPreset[] = [
     tags: ["sentidos", "visão", "debilitante"],
   },
   {
+    id: "concentrating",
+    name: "Concentrando",
+    description: "O personagem está mantendo um efeito que exige concentração.",
+    behavior: "Ao sofrer dano, deve realizar o teste de concentração normalmente. Iniciar outra concentração ou falhar no teste encerra esta condição.",
+    tags: ["dnd-manager:concentrating", "magia", "concentração"],
+  },
+  {
     id: "charmed",
     name: "Enfeitiçado",
     description: "O personagem está sob influência sobrenatural de outra criatura.",
