@@ -10,6 +10,11 @@ import { beginSpellConcentration, getConcentrationCondition } from "../../../mod
 import { getChannelDivinityPool, restoreChannelDivinity, spendChannelDivinity } from "../../../models/characters/characterChannelDivinity"
 import { getKiPool, restoreKi, spendKi } from "../../../models/characters/characterKi"
 import { getSorceryPoints, restorePactSlot, restoreSorceryPoint, restoreSpellSlot, spendPactSlot, spendSorceryPoint, spendSpellSlot } from "../../../models/characters/characterMagic"
+import {
+  getCustomSpellSlotPools,
+  restoreCustomSpellSlot,
+  spendCustomSpellSlot,
+} from "../../../models/characters/customClassConfig"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Spell, SpellResourceCost, SpellResourceType } from "../../../models/magic/spells/Spell"
 import { canPaySpellResourceCost, getEffectiveSpellResourceOptions, spellResourceLabel, spendSpellResourceCost } from "../../../models/magic/spells/spellResourceCost"
@@ -37,7 +42,8 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
   const availableLevels = useMemo(() => Array.from(new Set(allSpells.map((entry) => entry.spell.slotLevel))).sort((a, b) => a - b), [allSpells])
   const visibleSpells = allSpells.filter((entry) => normalizeCastingTime(entry.spell) === actionFilter).filter((entry) => levelFilter === "all" || entry.spell.slotLevel === levelFilter).sort((a, b) => a.spell.slotLevel - b.spell.slotLevel || spellName(a.spell).localeCompare(spellName(b.spell), "pt-BR"))
   const slots = character.getSpellSlots(), pactSlots = character.getPactSlots(), sorceryPoints = getSorceryPoints(character), channelDivinity = getChannelDivinityPool(character), ki = getKiPool(character)
-  const hasMagicResources = Object.values(slots).some((slot) => Boolean(slot && slot.max > 0)) || Boolean(pactSlots?.max) || sorceryPoints.max > 0 || Boolean(channelDivinity?.max) || Boolean(ki?.max) || allSpells.some((entry) => entry.sourceUsageMaximum !== undefined)
+  const customSlotPools = getCustomSpellSlotPools(character)
+  const hasMagicResources = Object.values(slots).some((slot) => Boolean(slot && slot.max > 0)) || Boolean(pactSlots?.max) || sorceryPoints.max > 0 || Boolean(channelDivinity?.max) || Boolean(ki?.max) || customSlotPools.length > 0 || allSpells.some((entry) => entry.sourceUsageMaximum !== undefined)
   if (!allSpells.length && !hasMagicResources) return null
 
   const currentConcentration = getConcentrationCondition(character)
@@ -102,6 +108,7 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
     {hasMagicResources ? <div className="mt-4 border-t border-border pt-3"><div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Recursos mágicos</div><div className="mt-2 flex flex-wrap gap-2">
       {Object.entries(slots).map(([level, slot]) => slot && slot.max > 0 ? <ResourcePill key={level} label={`N${level}`} current={slot.current} max={slot.max} onDecrease={() => updateCharacter(character.get("id"), (current) => spendSpellSlot(current, Number(level) as MagicCircleLevel))} onIncrease={() => updateCharacter(character.get("id"), (current) => restoreSpellSlot(current, Number(level) as MagicCircleLevel))} /> : null)}
       {pactSlots?.max ? <ResourcePill label={`Pacto N${pactSlots.level}`} current={pactSlots.current} max={pactSlots.max} onDecrease={() => updateCharacter(character.get("id"), spendPactSlot)} onIncrease={() => updateCharacter(character.get("id"), restorePactSlot)} /> : null}
+      {customSlotPools.flatMap((pool) => Object.values(pool.slots).map((slot) => <ResourcePill key={`${pool.id}:${slot.level}`} label={`${pool.name} N${slot.level}`} current={slot.current} max={slot.max} onDecrease={() => updateCharacter(character.get("id"), (current) => spendCustomSpellSlot(current, pool.id, slot.level))} onIncrease={() => updateCharacter(character.get("id"), (current) => restoreCustomSpellSlot(current, pool.id, slot.level))} />))}
       {sorceryPoints.max > 0 ? <ResourcePill label="Pontos de magia" current={sorceryPoints.current} max={sorceryPoints.max} onDecrease={() => updateCharacter(character.get("id"), spendSorceryPoint)} onIncrease={() => updateCharacter(character.get("id"), restoreSorceryPoint)} /> : null}
       {channelDivinity ? <ResourcePill label="Canalizar Divindade" current={channelDivinity.current} max={channelDivinity.max} onDecrease={() => updateCharacter(character.get("id"), spendChannelDivinity)} onIncrease={() => updateCharacter(character.get("id"), restoreChannelDivinity)} /> : null}
       {ki ? <ResourcePill label="Ki" current={ki.current} max={ki.max} onDecrease={() => updateCharacter(character.get("id"), spendKi)} onIncrease={() => updateCharacter(character.get("id"), restoreKi)} /> : null}
@@ -119,10 +126,10 @@ function isAlwaysAvailableSpell(spell: Spell, source: SpellSource, classes: Char
 function normalizeCastingTime(spell: Spell): ActionFilter { return spell.castingTime.type === "bonusAction" ? "bonusAction" : spell.castingTime.type === "reaction" ? "reaction" : spell.castingTime.type === "action" ? "action" : "other" }
 function getSlotChoices(character: CharacterTemplate, spell: Spell): SlotChoice[] { if (spell.slotLevel <= 0) return []; const choices: SlotChoice[] = []; for (const [text, slot] of Object.entries(character.getSpellSlots())) { const level = Number(text) as MagicCircleLevel; if (slot && slot.current > 0 && level >= spell.slotLevel) choices.push({ level, pool: "normal" }) } const pact = character.getPactSlots(); if (pact && pact.current > 0 && pact.level >= spell.slotLevel) choices.push({ level: pact.level as MagicCircleLevel, pool: "pact" }); return choices.sort((a, b) => a.level - b.level) }
 function ResourcePill({ label, current, max, onDecrease, onIncrease }: { label: string; current: number; max: number; onDecrease?: () => void; onIncrease?: () => void }) {
-  return <div className="flex min-h-14 items-center gap-3 rounded-xl border border-border bg-bg-subtle px-3 py-2.5 text-sm sm:min-h-0 sm:gap-2 sm:rounded-lg sm:px-2.5 sm:py-2 sm:text-xs">
-    <span className="font-semibold text-textH">{label}</span>
-    <span className="text-textMuted">{current}/{max}</span>
-    {onDecrease || onIncrease ? <div className="ml-auto flex gap-2 sm:gap-1">
+  return <div className="flex min-h-14 min-w-0 max-w-full items-center gap-3 rounded-xl border border-border bg-bg-subtle px-3 py-2.5 text-sm sm:min-h-0 sm:gap-2 sm:rounded-lg sm:px-2.5 sm:py-2 sm:text-xs">
+    <span className="min-w-0 break-words font-semibold text-textH">{label}</span>
+    <span className="shrink-0 text-textMuted">{current}/{max}</span>
+    {onDecrease || onIncrease ? <div className="ml-auto flex shrink-0 gap-2 sm:gap-1">
       <button type="button" aria-label={`Diminuir ${label}`} disabled={!onDecrease || current <= 0} onClick={onDecrease} className="grid h-11 w-11 place-items-center rounded-lg border border-border bg-bg text-xl font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg disabled:opacity-35 sm:h-7 sm:w-7 sm:text-sm">−</button>
       <button type="button" aria-label={`Aumentar ${label}`} disabled={!onIncrease || current >= max} onClick={onIncrease} className="grid h-11 w-11 place-items-center rounded-lg border border-border bg-bg text-xl font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg disabled:opacity-35 sm:h-7 sm:w-7 sm:text-sm">+</button>
     </div> : null}
