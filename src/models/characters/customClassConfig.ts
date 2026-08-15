@@ -1,11 +1,14 @@
 import type { CharacterTemplate } from "./CharacterTemplate"
+import type { CharacterClassInterface, ClassName } from "../sheet/Class"
 
+export const CUSTOM_CLASS_RUNTIME_ID = "__custom__" as ClassName
 export const CUSTOM_CLASS_CHOICE_KEY = "dnd-manager:custom-class-name"
 const CUSTOM_CLASS_CONFIG_KEY = "dnd-manager:custom-class-config"
 const CUSTOM_CLASS_SLOT_STATE_KEY = "dnd-manager:custom-class-slot-state"
 
 export type CustomCasterType = "none" | "full" | "half" | "third"
 export type CustomSlotRecovery = "short" | "long"
+export type CustomSpellProgressionMode = "formula" | "table"
 export type CustomSpellSlotPoolConfig = {
   id: string
   name: string
@@ -20,6 +23,8 @@ export type CustomClassRuntimeConfig = {
   knownSpellMode: "limited" | "spellbook" | "prepared-only"
   knownAtLevel1: number
   knownPerLevel: number
+  slotProgressionMode: CustomSpellProgressionMode
+  spellSlotProgression: Record<string, Record<string, number>>
   additionalSlotPools: CustomSpellSlotPoolConfig[]
 }
 export type CustomSpellSlotPool = {
@@ -37,16 +42,36 @@ const DEFAULT_CONFIG: CustomClassRuntimeConfig = {
   knownSpellMode: "limited",
   knownAtLevel1: 2,
   knownPerLevel: 1,
+  slotProgressionMode: "formula",
+  spellSlotProgression: {},
   additionalSlotPools: [],
 }
 
-function getClasses(character: CharacterTemplate) {
-  return character.get("sheet").classes ?? []
+export function isCustomClassEntry(entry: CharacterClassInterface | undefined): boolean {
+  return Boolean(
+    entry &&
+      (entry.className === CUSTOM_CLASS_RUNTIME_ID ||
+        entry.levelChoices?.[CUSTOM_CLASS_CHOICE_KEY]?.length),
+  )
+}
+
+export function createCustomClassEntry(
+  name = "Classe personalizada",
+): CharacterClassInterface {
+  const config = normalizeConfig({ ...DEFAULT_CONFIG, name })
+  return {
+    className: CUSTOM_CLASS_RUNTIME_ID,
+    level: 1,
+    levelChoices: {
+      [CUSTOM_CLASS_CHOICE_KEY]: [config.name],
+      [CUSTOM_CLASS_CONFIG_KEY]: [JSON.stringify(config)],
+    },
+  }
 }
 
 export function getCustomClassIndex(character: CharacterTemplate): number {
-  return getClasses(character).findIndex((entry) =>
-    Boolean(entry.levelChoices?.[CUSTOM_CLASS_CHOICE_KEY]?.length),
+  return (character.get("sheet").classes ?? []).findIndex((entry) =>
+    isCustomClassEntry(entry),
   )
 }
 
@@ -54,11 +79,10 @@ export function hasCustomClass(character: CharacterTemplate): boolean {
   return getCustomClassIndex(character) >= 0
 }
 
-export function getCustomClassConfig(character: CharacterTemplate): CustomClassRuntimeConfig | undefined {
-  const index = getCustomClassIndex(character)
-  if (index < 0) return undefined
-  const entry = getClasses(character)[index]
-  if (!entry) return undefined
+export function getCustomClassConfigFromEntry(
+  entry: CharacterClassInterface | undefined,
+): CustomClassRuntimeConfig | undefined {
+  if (!isCustomClassEntry(entry) || !entry) return undefined
   const raw = entry.levelChoices?.[CUSTOM_CLASS_CONFIG_KEY]?.[0]
   if (raw) {
     try {
@@ -78,17 +102,27 @@ export function getCustomClassConfig(character: CharacterTemplate): CustomClassR
   })
 }
 
+export function getCustomClassConfig(character: CharacterTemplate): CustomClassRuntimeConfig | undefined {
+  const index = getCustomClassIndex(character)
+  if (index < 0) return undefined
+  return getCustomClassConfigFromEntry(character.get("sheet").classes?.[index])
+}
+
 export function updateCustomClassConfig(character: CharacterTemplate, config: CustomClassRuntimeConfig): CharacterTemplate {
   const index = getCustomClassIndex(character)
   if (index < 0) return character
   const normalized = normalizeConfig(config)
-  const classes = [...getClasses(character)]
+  const classes = [...(character.get("sheet").classes ?? [])]
   const entry = classes[index]
   if (!entry) return character
   classes[index] = {
     ...entry,
+    className: CUSTOM_CLASS_RUNTIME_ID,
     castingAttribute: normalized.casterType === "none" ? undefined : normalized.castingAttribute,
-    spellcastingProgression: normalized.casterType === "none" ? undefined : normalized.casterType,
+    spellcastingProgression:
+      normalized.casterType === "none" || normalized.slotProgressionMode === "table"
+        ? undefined
+        : normalized.casterType,
     knownSpells: normalized.casterType === "none" ? undefined : {
       mode: normalized.knownSpellMode,
       baseAtLevel1: normalized.knownSpellMode === "prepared-only" ? 0 : normalized.knownAtLevel1,
@@ -116,7 +150,7 @@ export function getCustomSpellSlotPools(character: CharacterTemplate): CustomSpe
   const config = getCustomClassConfig(character)
   const index = getCustomClassIndex(character)
   if (!config || index < 0) return []
-  const classEntry = getClasses(character)[index]
+  const classEntry = character.get("sheet").classes?.[index]
   if (!classEntry) return []
   const level = String(classEntry.level)
   const state = readState(character, index)
@@ -156,7 +190,7 @@ function changeSlot(character: CharacterTemplate, poolId: string, level: number,
 }
 
 function readState(character: CharacterTemplate, index: number): Record<string, Record<string, number>> {
-  const entry = getClasses(character)[index]
+  const entry = character.get("sheet").classes?.[index]
   const raw = entry?.levelChoices?.[CUSTOM_CLASS_SLOT_STATE_KEY]?.[0]
   if (!raw) return {}
   try {
@@ -167,7 +201,7 @@ function readState(character: CharacterTemplate, index: number): Record<string, 
 }
 
 function writeState(character: CharacterTemplate, index: number, state: Record<string, Record<string, number>>): CharacterTemplate {
-  const classes = [...getClasses(character)]
+  const classes = [...(character.get("sheet").classes ?? [])]
   const entry = classes[index]
   if (!entry) return character
   classes[index] = {
@@ -191,6 +225,11 @@ function normalizeConfig(value: Partial<CustomClassRuntimeConfig> | undefined): 
     knownSpellMode: config.knownSpellMode ?? "limited",
     knownAtLevel1: Math.max(0, Math.trunc(Number(config.knownAtLevel1) || 0)),
     knownPerLevel: Math.max(0, Number(config.knownPerLevel) || 0),
+    slotProgressionMode: config.slotProgressionMode === "table" ? "table" : "formula",
+    spellSlotProgression:
+      config.spellSlotProgression && typeof config.spellSlotProgression === "object"
+        ? config.spellSlotProgression
+        : {},
     additionalSlotPools: Array.isArray(config.additionalSlotPools) ? config.additionalSlotPools : [],
   }
 }
