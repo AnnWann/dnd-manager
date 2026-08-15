@@ -40,8 +40,12 @@ const DEFAULT_CONFIG: CustomClassRuntimeConfig = {
   additionalSlotPools: [],
 }
 
+function getClasses(character: CharacterTemplate) {
+  return character.get("sheet").classes ?? []
+}
+
 export function getCustomClassIndex(character: CharacterTemplate): number {
-  return (character.get("sheet").classes ?? []).findIndex((entry) =>
+  return getClasses(character).findIndex((entry) =>
     Boolean(entry.levelChoices?.[CUSTOM_CLASS_CHOICE_KEY]?.length),
   )
 }
@@ -53,7 +57,7 @@ export function hasCustomClass(character: CharacterTemplate): boolean {
 export function getCustomClassConfig(character: CharacterTemplate): CustomClassRuntimeConfig | undefined {
   const index = getCustomClassIndex(character)
   if (index < 0) return undefined
-  const entry = character.get("sheet").classes[index]
+  const entry = getClasses(character)[index]
   if (!entry) return undefined
   const raw = entry.levelChoices?.[CUSTOM_CLASS_CONFIG_KEY]?.[0]
   if (raw) {
@@ -78,7 +82,7 @@ export function updateCustomClassConfig(character: CharacterTemplate, config: Cu
   const index = getCustomClassIndex(character)
   if (index < 0) return character
   const normalized = normalizeConfig(config)
-  const classes = [...(character.get("sheet").classes ?? [])]
+  const classes = [...getClasses(character)]
   const entry = classes[index]
   if (!entry) return character
   classes[index] = {
@@ -112,7 +116,7 @@ export function getCustomSpellSlotPools(character: CharacterTemplate): CustomSpe
   const config = getCustomClassConfig(character)
   const index = getCustomClassIndex(character)
   if (!config || index < 0) return []
-  const classEntry = character.get("sheet").classes[index]
+  const classEntry = getClasses(character)[index]
   if (!classEntry) return []
   const level = String(classEntry.level)
   const state = readState(character, index)
@@ -152,7 +156,7 @@ function changeSlot(character: CharacterTemplate, poolId: string, level: number,
 }
 
 function readState(character: CharacterTemplate, index: number): Record<string, Record<string, number>> {
-  const entry = character.get("sheet").classes[index]
+  const entry = getClasses(character)[index]
   const raw = entry?.levelChoices?.[CUSTOM_CLASS_SLOT_STATE_KEY]?.[0]
   if (!raw) return {}
   try {
@@ -163,7 +167,7 @@ function readState(character: CharacterTemplate, index: number): Record<string, 
 }
 
 function writeState(character: CharacterTemplate, index: number, state: Record<string, Record<string, number>>): CharacterTemplate {
-  const classes = [...(character.get("sheet").classes ?? [])]
+  const classes = [...getClasses(character)]
   const entry = classes[index]
   if (!entry) return character
   classes[index] = {
