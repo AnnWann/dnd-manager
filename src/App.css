@@ -17,6 +17,40 @@
   }
 }
 
+/* Evita o pequeno overflow horizontal observado em alguns navegadores móveis. */
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+#root {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  main,
+  section,
+  article,
+  form,
+  fieldset,
+  input,
+  select,
+  textarea {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+}
+
 .hero {
   position: relative;
 
