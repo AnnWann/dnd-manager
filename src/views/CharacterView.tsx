@@ -10,6 +10,7 @@ import {
 import { ArrowLeft, Settings2 } from "lucide-react"
 import { useNavigate, useParams } from "react-router-dom"
 import { CharacterAbilitiesTab } from "../features/characters/abilities/characterAbilities"
+import { CustomClassConfigurationTab } from "../features/characters/classes/CustomClassConfigurationTab"
 import { CharacterSelector } from "../features/characters/characterSelector"
 import { CharacterSheetTab } from "../features/characters/characterSheet/characterSheet"
 import { CharacterEquipmentTab } from "../features/characters/equipment/characterEquipment"
@@ -36,6 +37,7 @@ import {
 import { getCustomSystemPlacement } from "../features/customSystems/CustomSystemPlacementEditor"
 import { useCustomSystemDefinitions } from "../lib/customSystems/CustomSystemRegistry"
 import type { CustomSystemActor } from "../lib/customSystems"
+import { hasCustomClass } from "../models/characters/customClassConfig"
 import type {
   CustomSystemDefinition,
   CustomSystemExistingCharacterTab,
@@ -49,6 +51,7 @@ const TAB_SWIPE_MAX_DURATION_MS = 850
 const TAB_SWIPE_HORIZONTAL_DOMINANCE = 1.8
 const TAB_SWIPE_PREVIEW_DOMINANCE = 1.35
 const CONTENT_ANCHOR = "__standard-content__"
+const CUSTOM_CLASS_CONFIG_TAB = "customClassConfig"
 
 type SwipeState = {
   startX: number
@@ -144,14 +147,25 @@ export function CharacterView() {
     [hiddenStandardTabs],
   )
 
-  const characterTabs = useMemo<CharacterViewTabDefinition[]>(
-    () =>
-      orderCharacterTabs(
-        visibleStandardTabs,
-        activeCustomSystemDefinitions,
-      ),
-    [activeCustomSystemDefinitions, visibleStandardTabs],
-  )
+  const characterTabs = useMemo<CharacterViewTabDefinition[]>(() => {
+    const ordered = orderCharacterTabs(
+      visibleStandardTabs,
+      activeCustomSystemDefinitions,
+    )
+
+    if (!routeCharacter || !hasCustomClass(routeCharacter)) return ordered
+
+    const configTab: CharacterViewTabDefinition = {
+      key: CUSTOM_CLASS_CONFIG_TAB,
+      label: "Configuração da classe",
+      icon: Settings2,
+    }
+    const magicIndex = ordered.findIndex((entry) => entry.key === "spellsList")
+    const insertionIndex = magicIndex >= 0 ? magicIndex + 1 : ordered.length
+    const next = [...ordered]
+    next.splice(insertionIndex, 0, configTab)
+    return next
+  }, [activeCustomSystemDefinitions, routeCharacter, visibleStandardTabs])
 
   const activeTab = normalizeCharacterViewTab(tab, characterTabs)
 
@@ -512,6 +526,13 @@ export function CharacterView() {
 
           {activeTab === "spellsList" ? (
             <CharacterMagicTab
+              character={routeCharacter}
+              updateCharacter={updateCharacter}
+            />
+          ) : null}
+
+          {activeTab === CUSTOM_CLASS_CONFIG_TAB ? (
+            <CustomClassConfigurationTab
               character={routeCharacter}
               updateCharacter={updateCharacter}
             />
