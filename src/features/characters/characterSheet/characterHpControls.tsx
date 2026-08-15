@@ -3,6 +3,7 @@ import { useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Modal } from "../../../components/ui/Modal"
+import { useCharacterContext } from "../../../contexts/characterContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
   getCurrentMaxHp,
@@ -35,6 +36,7 @@ type HpModal = "heal" | "damage" | "maximum"
 type HealingTarget = "current" | "temporary"
 
 export function CharacterHpControls({ character, updateCharacter, compact = false }: Props) {
+  const { dispatchGameOperation } = useCharacterContext()
   const [modal, setModal] = useState<HpModal | null>(null)
   const [amountText, setAmountText] = useState("")
   const [realMaxText, setRealMaxText] = useState("")
@@ -68,13 +70,22 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
     if (amount <= 0) return
 
     const concentrationBeforeDamage = getConcentrationCondition(character)
-    updateCharacter(characterId, (current) => current.takeDamage(amount))
+    const concentrationDc = Math.max(10, Math.floor(amount / 2))
+
+    dispatchGameOperation({
+      type: "character.hp.damage",
+      characterId,
+      amount,
+      requiresConcentrationCheck: Boolean(concentrationBeforeDamage),
+      concentrationDc: concentrationBeforeDamage ? concentrationDc : undefined,
+      concentrationSource: concentrationBeforeDamage?.source || undefined,
+    })
     closeModal()
 
     if (concentrationBeforeDamage) {
       setPendingCheck({
         damage: amount,
-        dc: Math.max(10, Math.floor(amount / 2)),
+        dc: concentrationDc,
         spellName: concentrationBeforeDamage.source || undefined,
       })
     }
