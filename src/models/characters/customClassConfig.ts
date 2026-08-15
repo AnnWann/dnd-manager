@@ -54,6 +54,7 @@ export function getCustomClassConfig(character: CharacterTemplate): CustomClassR
   const index = getCustomClassIndex(character)
   if (index < 0) return undefined
   const entry = character.get("sheet").classes[index]
+  if (!entry) return undefined
   const raw = entry.levelChoices?.[CUSTOM_CLASS_CONFIG_KEY]?.[0]
   if (raw) {
     try {
@@ -79,6 +80,7 @@ export function updateCustomClassConfig(character: CharacterTemplate, config: Cu
   const normalized = normalizeConfig(config)
   const classes = [...(character.get("sheet").classes ?? [])]
   const entry = classes[index]
+  if (!entry) return character
   classes[index] = {
     ...entry,
     castingAttribute: normalized.casterType === "none" ? undefined : normalized.castingAttribute,
@@ -110,7 +112,9 @@ export function getCustomSpellSlotPools(character: CharacterTemplate): CustomSpe
   const config = getCustomClassConfig(character)
   const index = getCustomClassIndex(character)
   if (!config || index < 0) return []
-  const level = String(character.get("sheet").classes[index].level)
+  const classEntry = character.get("sheet").classes[index]
+  if (!classEntry) return []
+  const level = String(classEntry.level)
   const state = readState(character, index)
 
   return config.additionalSlotPools.map((pool) => {
@@ -148,7 +152,8 @@ function changeSlot(character: CharacterTemplate, poolId: string, level: number,
 }
 
 function readState(character: CharacterTemplate, index: number): Record<string, Record<string, number>> {
-  const raw = character.get("sheet").classes[index].levelChoices?.[CUSTOM_CLASS_SLOT_STATE_KEY]?.[0]
+  const entry = character.get("sheet").classes[index]
+  const raw = entry?.levelChoices?.[CUSTOM_CLASS_SLOT_STATE_KEY]?.[0]
   if (!raw) return {}
   try {
     return JSON.parse(raw) as Record<string, Record<string, number>>
@@ -160,6 +165,7 @@ function readState(character: CharacterTemplate, index: number): Record<string, 
 function writeState(character: CharacterTemplate, index: number, state: Record<string, Record<string, number>>): CharacterTemplate {
   const classes = [...(character.get("sheet").classes ?? [])]
   const entry = classes[index]
+  if (!entry) return character
   classes[index] = {
     ...entry,
     levelChoices: {
