@@ -16,9 +16,7 @@ export type CustomSpellSlotPoolConfig = {
   id: string
   name: string
   recovery: CustomSlotRecovery
-  progression: Partial<
-    Record<ClassLevel, Partial<Record<MagicCircleLevel, number>>>
-  >
+  progression: Partial<Record<ClassLevel, Partial<Record<MagicCircleLevel, number>>>>
 }
 
 export type CustomClassRuntimeConfig = {
@@ -52,12 +50,6 @@ const DEFAULT_CONFIG: CustomClassRuntimeConfig = {
   additionalSlotPools: [],
 }
 
-export function isCustomClassEntry(
-  classEntry: CharacterTemplate["get"] extends never ? never : any,
-): boolean {
-  return Boolean(classEntry?.levelChoices?.[CUSTOM_CLASS_CHOICE_KEY]?.length)
-}
-
 export function getCustomClassIndex(character: CharacterTemplate): number {
   return (character.get("sheet").classes ?? []).findIndex((entry) =>
     Boolean(entry.levelChoices?.[CUSTOM_CLASS_CHOICE_KEY]?.length),
@@ -87,15 +79,15 @@ export function getCustomClassConfig(
           : [],
       })
     } catch {
-      // Configurações antigas são inferidas dos campos já persistidos na classe.
+      // Mantém compatibilidade com personagens criados antes desta configuração.
     }
   }
 
+  const hitDie = inferHitDie(character)
   return normalizeConfig({
     ...DEFAULT_CONFIG,
-    name:
-      entry.levelChoices?.[CUSTOM_CLASS_CHOICE_KEY]?.[0] ||
-      DEFAULT_CONFIG.name,
+    name: entry.levelChoices?.[CUSTOM_CLASS_CHOICE_KEY]?.[0] || DEFAULT_CONFIG.name,
+    hitDie,
     casterType: entry.spellcastingProgression ?? "none",
     castingAttribute: entry.castingAttribute ?? "int",
     knownSpellMode: entry.knownSpells?.mode ?? "limited",
@@ -116,25 +108,15 @@ export function updateCustomClassConfig(
   const entry = classes[index]
   classes[index] = {
     ...entry,
-    castingAttribute:
-      normalized.casterType === "none"
-        ? undefined
-        : normalized.castingAttribute,
-    spellcastingProgression:
-      normalized.casterType === "none" ? undefined : normalized.casterType,
+    castingAttribute: normalized.casterType === "none" ? undefined : normalized.castingAttribute,
+    spellcastingProgression: normalized.casterType === "none" ? undefined : normalized.casterType,
     knownSpells:
       normalized.casterType === "none"
         ? undefined
         : {
             mode: normalized.knownSpellMode,
-            baseAtLevel1:
-              normalized.knownSpellMode === "prepared-only"
-                ? 0
-                : normalized.knownAtLevel1,
-            perLevel:
-              normalized.knownSpellMode === "prepared-only"
-                ? 0
-                : normalized.knownPerLevel,
+            baseAtLevel1: normalized.knownSpellMode === "prepared-only" ? 0 : normalized.knownAtLevel1,
+            perLevel: normalized.knownSpellMode === "prepared-only" ? 0 : normalized.knownPerLevel,
           },
     levelChoices: {
       ...(entry.levelChoices ?? {}),
@@ -144,16 +126,11 @@ export function updateCustomClassConfig(
   }
 
   return character.withPatch({
-    sheet: {
-      ...character.get("sheet"),
-      classes,
-    },
+    sheet: { ...character.get("sheet"), classes },
   })
 }
 
-export function createCustomSlotPool(
-  name = "Espaços da classe",
-): CustomSpellSlotPoolConfig {
+export function createCustomSlotPool(name = "Espaços da classe"): CustomSpellSlotPoolConfig {
   return {
     id: `custom-slots-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     name,
@@ -162,41 +139,34 @@ export function createCustomSlotPool(
   }
 }
 
-export function getCustomSpellSlotPools(
-  character: CharacterTemplate,
-): CustomSpellSlotPool[] {
+export function getCustomSpellSlotPools(character: CharacterTemplate): CustomSpellSlotPool[] {
   const config = getCustomClassConfig(character)
   const classIndex = getCustomClassIndex(character)
   if (!config || classIndex < 0) return []
 
   const level = character.get("sheet").classes[classIndex].level as ClassLevel
-  const state = getStoredSlotState(character, classIndex)
+  const state = readSlotState(character, classIndex)
 
-  return config.additionalSlotPools
-    .map((pool) => {
-      const row = pool.progression[level] ?? {}
-      const slots: Partial<Record<MagicCircleLevel, Slot>> = {}
+  return config.additionalSlotPools.flatMap((pool) => {
+    const row = pool.progression[level] ?? {}
+    const slots: Partial<Record<MagicCircleLevel, Slot>> = {}
 
-      for (let circle = 1; circle <= 9; circle += 1) {
-        const slotLevel = circle as MagicCircleLevel
-        const max = Math.max(0, Math.trunc(Number(row[slotLevel] ?? 0)))
-        if (max <= 0) continue
-        const saved = state[pool.id]?.[slotLevel]
-        slots[slotLevel] = {
-          level: slotLevel,
-          max,
-          current: Math.min(max, Math.max(0, saved ?? max)),
-        }
+    for (let value = 1; value <= 9; value += 1) {
+      const circle = value as MagicCircleLevel
+      const max = Math.max(0, Math.trunc(Number(row[circle] ?? 0)))
+      if (max <= 0) continue
+      const saved = state[pool.id]?.[circle]
+      slots[circle] = {
+        level: circle,
+        max,
+        current: Math.min(max, Math.max(0, saved ?? max)),
       }
+    }
 
-      return {
-        id: pool.id,
-        name: pool.name || "Espaços da classe",
-        recovery: pool.recovery,
-        slots,
-      }
-    })
-    .filter((pool) => Object.keys(pool.slots).length > 0)
+    return Object.keys(slots).length
+      ? [{ id: pool.id, name: pool.name || "Espaços da classe", recovery: pool.recovery, slots }]
+      : []
+  })
 }
 
 export function spendCustomSpellSlot(
@@ -223,16 +193,17 @@ export function recoverCustomSpellSlotPools(
   const classIndex = getCustomClassIndex(character)
   if (classIndex < 0) return character
 
-  const pools = getCustomSpellSlotPools(character)
-  const currentState = getStoredSlotState(character, classIndex)
-  const nextState: StoredSlotState = { ...currentState }
+  const state = readSlotState(character, classIndex)
+  const nextState: StoredSlotState = { ...state }
   let changed = false
 
-  for (const pool of pools) {
-    if (pool.recovery !== restKind && restKind !== "long") continue
-    if (pool.recovery === "long" && restKind !== "long") continue
+  for (const pool of getCustomSpellSlotPools(character)) {
+    const recovers = restKind === "long" || pool.recovery === "short"
+    if (!recovers) continue
 
-    nextState[pool.id] = { ...(nextState[pool.id] ?? {}) }
+    const poolState: Partial<Record<MagicCircleLevel, number>> = {
+      ...(nextState[pool.id] ?? {}),
+    }
     for (const [levelText, slot] of Object.entries(pool.slots)) {
       if (!slot) continue
       const level = Number(levelText) as MagicCircleLevel
@@ -241,12 +212,13 @@ export function recoverCustomSpellSlotPools(
         slot.max,
         slot.current + Math.ceil(missing * Math.max(0, Math.min(1, fraction))),
       )
-      nextState[pool.id][level] = restored
-      changed = changed || restored !== slot.current
+      poolState[level] = restored
+      if (restored !== slot.current) changed = true
     }
+    nextState[pool.id] = poolState
   }
 
-  return changed ? storeSlotState(character, classIndex, nextState) : character
+  return changed ? writeSlotState(character, classIndex, nextState) : character
 }
 
 function changeCustomSlot(
@@ -257,41 +229,32 @@ function changeCustomSlot(
 ): CharacterTemplate {
   const classIndex = getCustomClassIndex(character)
   if (classIndex < 0) return character
-
-  const pool = getCustomSpellSlotPools(character).find((entry) => entry.id === poolId)
-  const slot = pool?.slots[level]
+  const slot = getCustomSpellSlotPools(character).find((pool) => pool.id === poolId)?.slots[level]
   if (!slot) return character
 
   const next = Math.max(0, Math.min(slot.max, slot.current + delta))
   if (next === slot.current) return character
 
-  const state = getStoredSlotState(character, classIndex)
-  const nextState: StoredSlotState = {
-    ...state,
-    [poolId]: {
-      ...(state[poolId] ?? {}),
-      [level]: next,
-    },
+  const state = readSlotState(character, classIndex)
+  const poolState: Partial<Record<MagicCircleLevel, number>> = {
+    ...(state[poolId] ?? {}),
+    [level]: next,
   }
-  return storeSlotState(character, classIndex, nextState)
+  return writeSlotState(character, classIndex, { ...state, [poolId]: poolState })
 }
 
-function getStoredSlotState(
-  character: CharacterTemplate,
-  classIndex: number,
-): StoredSlotState {
-  const entry = character.get("sheet").classes[classIndex]
-  const raw = entry.levelChoices?.[CUSTOM_CLASS_SLOT_STATE_KEY]?.[0]
+function readSlotState(character: CharacterTemplate, classIndex: number): StoredSlotState {
+  const raw = character.get("sheet").classes[classIndex].levelChoices?.[CUSTOM_CLASS_SLOT_STATE_KEY]?.[0]
   if (!raw) return {}
   try {
-    const parsed = JSON.parse(raw)
-    return parsed && typeof parsed === "object" ? parsed : {}
+    const parsed: unknown = JSON.parse(raw)
+    return parsed && typeof parsed === "object" ? (parsed as StoredSlotState) : {}
   } catch {
     return {}
   }
 }
 
-function storeSlotState(
+function writeSlotState(
   character: CharacterTemplate,
   classIndex: number,
   state: StoredSlotState,
@@ -305,12 +268,13 @@ function storeSlotState(
       [CUSTOM_CLASS_SLOT_STATE_KEY]: [JSON.stringify(state)],
     },
   }
-  return character.withPatch({
-    sheet: {
-      ...character.get("sheet"),
-      classes,
-    },
-  })
+  return character.withPatch({ sheet: { ...character.get("sheet"), classes } })
+}
+
+function inferHitDie(character: CharacterTemplate): DieSides {
+  const entries = Object.entries(character.get("sheet").HP.hitDice)
+  const found = entries.find(([, die]) => (die?.max.quantity ?? 0) > 0)?.[0]
+  return (found as DieSides | undefined) ?? "d8"
 }
 
 function normalizeConfig(config: CustomClassRuntimeConfig): CustomClassRuntimeConfig {
@@ -324,7 +288,6 @@ function normalizeConfig(config: CustomClassRuntimeConfig): CustomClassRuntimeCo
     knownAtLevel1: Math.max(0, Math.trunc(Number(config.knownAtLevel1) || 0)),
     knownPerLevel: Math.max(0, Number(config.knownPerLevel) || 0),
     additionalSlotPools: (config.additionalSlotPools ?? []).map((pool) => ({
-      ...pool,
       id: pool.id || createCustomSlotPool().id,
       name: String(pool.name || "Espaços da classe"),
       recovery: pool.recovery === "short" ? "short" : "long",
