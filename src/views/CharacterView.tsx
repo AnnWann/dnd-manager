@@ -160,8 +160,8 @@ export function CharacterView() {
       label: "Configuração da classe",
       icon: Settings2,
     }
-    const magicIndex = ordered.findIndex((entry) => entry.key === "spellsList")
-    const insertionIndex = magicIndex >= 0 ? magicIndex + 1 : ordered.length
+    const proficienciesIndex = ordered.findIndex((entry) => entry.key === "proficiencies")
+    const insertionIndex = proficienciesIndex >= 0 ? proficienciesIndex + 1 : ordered.length
     const next = [...ordered]
     next.splice(insertionIndex, 0, configTab)
     return next
