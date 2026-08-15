@@ -6,10 +6,8 @@ import { Button } from "../../../components/ui/Button"
 import { Card, CardHeader } from "../../../components/ui/Card"
 import { useCharacterContext } from "../../../contexts/characterContext"
 import { useMagicContext } from "../../../contexts/magicContext"
-import { cn } from "../../../lib/cn"
 import { getCharacterGrantedSpells } from "../../../models/characters/characterGrantedSpells"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import { hasCustomClass } from "../../../models/characters/customClassConfig"
 import { getSorcererLevel } from "../../../models/characters/characterSorceryPoints"
 import type { CharacterSpells } from "../../../models/magic/spells/CharacterSpells"
 import type { Spell } from "../../../models/magic/spells/Spell"
@@ -17,7 +15,6 @@ import type {
   CharacterClassInterface,
   ClassName,
 } from "../../../models/sheet/Class"
-import { CustomClassConfigurationTab } from "../classes/CustomClassConfigurationTab"
 import { ChannelDivinityModule } from "./channelDivinityModule"
 import { KiModule } from "./kiModule"
 import { KnownSpellsList } from "./knownSpellsList"
@@ -33,7 +30,6 @@ type Props = {
 }
 
 type KnownSpellEntry = CharacterSpells["knownSpells"][number]
-type MagicSection = "magic" | "classConfig"
 
 const DIVINE_PREPARED_CLASSES: readonly ClassName[] = [
   "cleric",
@@ -48,19 +44,13 @@ export function CharacterMagicTab({
   const { visibleCharacters } = useCharacterContext()
   const { spells, getSpellByIndex } = useMagicContext()
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle")
-  const [section, setSection] = useState<MagicSection>("magic")
   const sorcererLevel = getSorcererLevel(character)
   const hasSorcererResources = sorcererLevel >= 2
-  const customClass = hasCustomClass(character)
   const spellListText = useMemo(
     () => buildAllCharacterSpellList(visibleCharacters, getSpellByIndex),
     [getSpellByIndex, visibleCharacters],
   )
   const canCopySpellList = spellListText.trim().length > 0
-
-  useEffect(() => {
-    if (!customClass && section === "classConfig") setSection("magic")
-  }, [customClass, section])
 
   useEffect(() => {
     const missingSpells = getMissingDivineClassSpells(character, spells)
@@ -92,110 +82,74 @@ export function CharacterMagicTab({
 
   return (
     <div className="flex flex-col gap-4">
-      {customClass ? (
-        <div className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-bg-subtle p-1">
-          <button
-            type="button"
-            onClick={() => setSection("magic")}
-            className={cn(
-              "rounded-lg px-3 py-2 text-sm font-semibold transition-colors",
-              section === "magic"
-                ? "bg-accentBg text-textH"
-                : "text-textMuted hover:bg-bg",
-            )}
-          >
-            Magias
-          </button>
-          <button
-            type="button"
-            onClick={() => setSection("classConfig")}
-            className={cn(
-              "rounded-lg px-3 py-2 text-sm font-semibold transition-colors",
-              section === "classConfig"
-                ? "bg-accentBg text-textH"
-                : "text-textMuted hover:bg-bg",
-            )}
-          >
-            Configuração da classe
-          </button>
-        </div>
-      ) : null}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-textH">
+                Magias
+              </div>
 
-      {section === "classConfig" && customClass ? (
-        <CustomClassConfigurationTab
+              <div className="mt-1 text-xs text-text">
+                Gerencie magias conhecidas, preparadas e slots.
+              </div>
+            </div>
+
+            <div className="grid gap-1 sm:justify-items-end">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!canCopySpellList}
+                onClick={copyAllSpellLists}
+              >
+                Copiar listas do grupo
+              </Button>
+
+              {copyStatus === "copied" ? (
+                <span className="text-xs text-accent">
+                  Listas copiadas.
+                </span>
+              ) : copyStatus === "error" ? (
+                <span className="text-xs text-danger">
+                  Não foi possível copiar.
+                </span>
+              ) : (
+                <span className="text-xs text-textMuted">
+                  Copia personagem, nível e nome da magia.
+                </span>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+
+        <ChannelDivinityModule
           character={character}
           updateCharacter={updateCharacter}
         />
-      ) : (
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div className="text-sm font-semibold text-textH">
-                  Magias
-                </div>
 
-                <div className="mt-1 text-xs text-text">
-                  Gerencie magias conhecidas, preparadas e slots.
-                </div>
-              </div>
+        <KiModule
+          character={character}
+          updateCharacter={updateCharacter}
+        />
 
-              <div className="grid gap-1 sm:justify-items-end">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={!canCopySpellList}
-                  onClick={copyAllSpellLists}
-                >
-                  Copiar listas do grupo
-                </Button>
-
-                {copyStatus === "copied" ? (
-                  <span className="text-xs text-accent">
-                    Listas copiadas.
-                  </span>
-                ) : copyStatus === "error" ? (
-                  <span className="text-xs text-danger">
-                    Não foi possível copiar.
-                  </span>
-                ) : (
-                  <span className="text-xs text-textMuted">
-                    Copia personagem, nível e nome da magia.
-                  </span>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-
-          <ChannelDivinityModule
+        {hasSorcererResources ? (
+          <MetamagicModule
             character={character}
             updateCharacter={updateCharacter}
           />
+        ) : null}
 
-          <KiModule
-            character={character}
-            updateCharacter={updateCharacter}
-          />
+        <SpellSlotsEditor
+          character={character}
+          updateCharacter={updateCharacter}
+        />
 
-          {hasSorcererResources ? (
-            <MetamagicModule
-              character={character}
-              updateCharacter={updateCharacter}
-            />
-          ) : null}
-
-          <SpellSlotsEditor
-            character={character}
-            updateCharacter={updateCharacter}
-          />
-
-          <KnownSpellsList
-            key={character.get("id")}
-            character={character}
-            updateCharacter={updateCharacter}
-          />
-        </Card>
-      )}
+        <KnownSpellsList
+          key={character.get("id")}
+          character={character}
+          updateCharacter={updateCharacter}
+        />
+      </Card>
     </div>
   )
 }
