@@ -12,7 +12,6 @@ import {
 } from "../../../models/characters/customClassConfig"
 import type { Attribute } from "../../../models/sheet/Attribute"
 import type { KnownSpellMode } from "../../../models/sheet/Class"
-import type { DieSides } from "../../../models/dice/Die"
 
 const ATTRIBUTES: Array<{ value: Attribute; label: string }> = [
   { value: "str", label: "Força" },
@@ -23,7 +22,7 @@ const ATTRIBUTES: Array<{ value: Attribute; label: string }> = [
   { value: "cha", label: "Carisma" },
 ]
 
-const HIT_DICE: DieSides[] = ["d4", "d6", "d8", "d10", "d12"]
+const HIT_DICE: CustomClassRuntimeConfig["hitDie"][] = ["d4", "d6", "d8", "d10", "d12"]
 const LEVELS = Array.from({ length: 20 }, (_, index) => index + 1)
 const CIRCLES = Array.from({ length: 9 }, (_, index) => index + 1)
 
@@ -48,8 +47,10 @@ export function CustomClassConfigurationTab({ character, updateCharacter }: Prop
   }
 
   function save() {
+    const currentDraft = draft
+    if (!currentDraft) return
     updateCharacter(character.get("id"), (current) =>
-      updateCustomClassConfig(current, draft),
+      updateCustomClassConfig(current, currentDraft),
     )
   }
 
@@ -96,7 +97,12 @@ export function CustomClassConfigurationTab({ character, updateCharacter }: Prop
 
           <label className="grid gap-1.5">
             <span className="text-xs font-medium text-textH">Dado de vida</span>
-            <Select value={draft.hitDie} onChange={(event) => patch({ hitDie: event.target.value as DieSides })}>
+            <Select
+              value={draft.hitDie}
+              onChange={(event) =>
+                patch({ hitDie: event.target.value as CustomClassRuntimeConfig["hitDie"] })
+              }
+            >
               {HIT_DICE.map((die) => <option key={die} value={die}>{die}</option>)}
             </Select>
           </label>
