@@ -1,15 +1,137 @@
-name: Temp build check
+name: Apply custom systems mobile optimization
 on:
   push:
     branches: [master]
-  workflow_dispatch:
+permissions:
+  contents: write
 jobs:
-  build:
+  patch:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Apply focused UI patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/features/characters/customSystems/CustomSystemsTab.tsx')
+          text = path.read_text()
+          replacements = [
+            ("import { useState, type ReactNode } from 'react'", "import { useEffect, useState, type ReactNode } from 'react'"),
+            ('<div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">', '<div className="grid min-w-0 max-w-full gap-3 sm:gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">'),
+            ('<section className="grid gap-4">\n      <header className="rounded-xl border border-border bg-bg p-4">', '<section className="grid min-w-0 max-w-full gap-3 sm:gap-4">\n      <header className="min-w-0 rounded-xl border border-border bg-bg p-3 sm:p-4">'),
+            ('    <section className="rounded-xl border border-border bg-bg p-4">\n      <div className="flex items-start justify-between gap-2">', '    <section className="min-w-0 max-w-full rounded-xl border border-border bg-bg p-3 sm:p-4">\n      <div className="flex min-w-0 items-start justify-between gap-2">'),
+            ('          className="rounded-lg p-1.5 text-text hover:bg-[color:var(--social-bg)] disabled:opacity-40"', '          className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-text hover:bg-[color:var(--social-bg)] disabled:opacity-40 sm:h-8 sm:w-8"'),
+            ('          className="h-9 w-9 rounded-lg border border-border text-lg text-textH disabled:opacity-40"', '          className="h-11 w-11 shrink-0 rounded-xl border border-border text-xl text-textH disabled:opacity-40 sm:h-9 sm:w-9 sm:rounded-lg sm:text-lg"'),
+          ]
+          for old, new in replacements:
+            if old not in text:
+              raise SystemExit(f'Missing expected CustomSystemsTab snippet: {old[:80]}')
+            text = text.replace(old, new)
+
+          old = '''  const maximum = resourceState.maximum ?? resource.maximum
+          const canEdit =
+            resource.allowManualAdjustment !== false &&
+            !(resource.editPermission === 'masterOnly' && actor !== 'master')
+
+          return ('''
+          new = '''  const maximum = resourceState.maximum ?? resource.maximum
+          const canEdit =
+            resource.allowManualAdjustment !== false &&
+            !(resource.editPermission === 'masterOnly' && actor !== 'master')
+          const [draftValue, setDraftValue] = useState(String(resourceState.current))
+
+          useEffect(() => {
+            setDraftValue(String(resourceState.current))
+          }, [resourceState.current])
+
+          function commitDraft() {
+            const value = Number(draftValue)
+            if (!Number.isFinite(value) || value === resourceState.current) {
+              setDraftValue(String(resourceState.current))
+              return
+            }
+            onRun(() =>
+              setCustomResourceCurrent(definition, state, resource.id, value, actor),
+            )
+          }
+
+          return ('''
+          if old not in text:
+            raise SystemExit('Missing resource state block')
+          text = text.replace(old, new)
+
+          old = '''        <input
+          type="number"
+          value={resourceState.current}
+          min={resource.minimum}
+          max={maximum}
+          disabled={!canEdit}
+          onChange={(event) => {
+            const value = Number(event.target.value)
+            if (Number.isFinite(value)) {
+              onRun(() =>
+                setCustomResourceCurrent(
+                  definition,
+                  state,
+                  resource.id,
+                  value,
+                  actor,
+                ),
+              )
+            }
+          }}
+          className="min-w-0 flex-1 rounded-lg border border-border bg-transparent px-3 py-2 text-center text-textH"
+        />'''
+          new = '''        <input
+          type="number"
+          value={draftValue}
+          min={resource.minimum}
+          max={maximum}
+          disabled={!canEdit}
+          inputMode="numeric"
+          onChange={(event) => setDraftValue(event.target.value)}
+          onBlur={commitDraft}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur()
+            if (event.key === 'Escape') {
+              setDraftValue(String(resourceState.current))
+              event.currentTarget.blur()
+            }
+          }}
+          className="h-11 min-w-0 flex-1 rounded-xl border border-border bg-transparent px-3 py-2 text-center text-base font-semibold text-textH sm:h-9 sm:rounded-lg sm:text-sm"
+        />'''
+          if old not in text:
+            raise SystemExit('Missing resource input')
+          text = text.replace(old, new)
+          path.write_text(text)
+
+          path = Path('src/features/characters/customSystems/CustomSystemsTabWithLibrary.tsx')
+          text = path.read_text()
+          replacements = [
+            ('    <div className="grid gap-4">', '    <div className="grid min-w-0 max-w-full gap-3 sm:gap-4">'),
+            ('        <div className="flex justify-end">', '        <div className="flex min-w-0 justify-stretch sm:justify-end">'),
+            ('            className="inline-flex items-center gap-2 rounded-lg border border-accent bg-accentBg px-3 py-2 text-sm font-medium text-textH"', '            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-accent bg-accentBg px-3 py-2 text-sm font-medium text-textH sm:min-h-0 sm:w-auto sm:rounded-lg"'),
+            ('            className="[&>div]:!grid-cols-1 [&>div>aside]:hidden"', '            className="min-w-0 max-w-full overflow-x-clip [&>div]:!grid-cols-1 [&>div]:!min-w-0 [&>div]:!max-w-full [&>div>aside]:hidden"'),
+          ]
+          for old, new in replacements:
+            if old not in text:
+              raise SystemExit(f'Missing expected WithLibrary snippet: {old[:80]}')
+            text = text.replace(old, new)
+          path.write_text(text)
+          PY
       - run: npm install
       - run: npm run build
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/features/characters/customSystems/CustomSystemsTab.tsx src/features/characters/customSystems/CustomSystemsTabWithLibrary.tsx
+          git commit -m "Otimiza sistemas customizados no mobile"
+          git push
