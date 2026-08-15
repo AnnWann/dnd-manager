@@ -4,6 +4,10 @@ import { Select } from "../../../../components/ui/Select"
 import { attributeShort } from "../../../../lib/attributeShorts"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
 import {
+  CUSTOM_CLASS_CHOICE_KEY,
+  isCustomClassEntry,
+} from "../../../../models/characters/customClassConfig"
+import {
   getDerivedSorceryPointMaximum,
   getSorceryPointPool,
   setSorceryPointCurrent,
@@ -18,7 +22,7 @@ import type {
   ClassName,
 } from "../../../../models/sheet/Class"
 
-const CLASS_PT: Record<ClassName, string> = {
+const CLASS_PT: Partial<Record<ClassName, string>> = {
   artificer: "Artífice",
   barbarian: "Bárbaro",
   bard: "Bardo",
@@ -50,6 +54,16 @@ function clampLevel(value: number, maxLevel: number): ClassLevel {
   return Math.max(1, Math.min(safeMaxLevel, value)) as ClassLevel
 }
 
+function getClassLabel(classData: CharacterClassInterface): string {
+  if (isCustomClassEntry(classData)) {
+    return (
+      classData.levelChoices?.[CUSTOM_CLASS_CHOICE_KEY]?.[0] ||
+      "Classe personalizada"
+    )
+  }
+  return CLASS_PT[classData.className] ?? String(classData.className)
+}
+
 export function SelectClassModule({
   character,
   classData,
@@ -57,8 +71,10 @@ export function SelectClassModule({
   maxLevel,
   updateCharacter,
 }: Props) {
+  const customClass = isCustomClassEntry(classData)
   const canEditCasting =
-    classData.className === "fighter" || classData.className === "rogue"
+    !customClass &&
+    (classData.className === "fighter" || classData.className === "rogue")
 
   function updateCharacterClasses(
     updater: (
@@ -105,8 +121,13 @@ export function SelectClassModule({
       <div className="min-w-0">
         <div className="text-xs text-text">Classe</div>
         <div className="truncate text-sm text-textH">
-          {CLASS_PT[classData.className]}
+          {getClassLabel(classData)}
         </div>
+        {customClass ? (
+          <div className="mt-1 text-[10px] font-medium text-accent">
+            Classe personalizada
+          </div>
+        ) : null}
       </div>
 
       <div>
@@ -130,49 +151,61 @@ export function SelectClassModule({
       <div>
         <div className="text-xs text-text">Progressão mágica</div>
 
-        <Select
-          className="mt-1 h-9 px-2 py-1"
-          value={classData.spellcastingProgression ?? "none"}
-          onChange={(event) => {
-            const value = event.target.value
+        {customClass ? (
+          <div className="mt-1 flex h-9 items-center rounded-md border border-border bg-bg-subtle px-2 text-xs text-textMuted">
+            Configurar na aba Magias
+          </div>
+        ) : (
+          <Select
+            className="mt-1 h-9 px-2 py-1"
+            value={classData.spellcastingProgression ?? "none"}
+            onChange={(event) => {
+              const value = event.target.value
 
-            updateClass({
-              ...classData,
-              spellcastingProgression:
-                value === "none"
-                  ? undefined
-                  : (value as "full" | "half" | "third"),
-            })
-          }}
-        >
-          <option value="none">Nenhuma</option>
-          <option value="full">Completa</option>
-          <option value="half">Meia</option>
-          <option value="third">Terço</option>
-        </Select>
+              updateClass({
+                ...classData,
+                spellcastingProgression:
+                  value === "none"
+                    ? undefined
+                    : (value as "full" | "half" | "third"),
+              })
+            }}
+          >
+            <option value="none">Nenhuma</option>
+            <option value="full">Completa</option>
+            <option value="half">Meia</option>
+            <option value="third">Terço</option>
+          </Select>
+        )}
       </div>
 
       <div>
         <div className="text-xs text-text">Atributo de conjuração</div>
 
-        <Select
-          className="mt-1 h-9 px-2 py-1"
-          value={classData.castingAttribute ?? ""}
-          disabled={!classData.spellcastingProgression && !canEditCasting}
-          onChange={(event) =>
-            updateClass({
-              ...classData,
-              castingAttribute: event.target.value as Attribute,
-            })
-          }
-        >
-          <option value="">Nenhum</option>
-          {ATTRIBUTE_KEYS.map((attribute) => (
-            <option key={attribute} value={attribute}>
-              {attributeShort(attribute)}
-            </option>
-          ))}
-        </Select>
+        {customClass ? (
+          <div className="mt-1 flex h-9 items-center rounded-md border border-border bg-bg-subtle px-2 text-xs text-textMuted">
+            Configurar na aba Magias
+          </div>
+        ) : (
+          <Select
+            className="mt-1 h-9 px-2 py-1"
+            value={classData.castingAttribute ?? ""}
+            disabled={!classData.spellcastingProgression && !canEditCasting}
+            onChange={(event) =>
+              updateClass({
+                ...classData,
+                castingAttribute: event.target.value as Attribute,
+              })
+            }
+          >
+            <option value="">Nenhum</option>
+            {ATTRIBUTE_KEYS.map((attribute) => (
+              <option key={attribute} value={attribute}>
+                {attributeShort(attribute)}
+              </option>
+            ))}
+          </Select>
+        )}
       </div>
 
       <div className="flex items-end">
