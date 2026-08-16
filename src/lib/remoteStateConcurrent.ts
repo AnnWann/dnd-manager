@@ -271,10 +271,11 @@ export function useConcurrentRemoteAppState() {
         return
       }
       const remote = normalizeState(snapshot.state)
+      const remoteWithLegacyGround = recoverLegacyGroundInventory(local, remote)
       const hasLocalChanges = hydratedRef.current && !sharedStatesEqual(local, previousBase)
       const next: ConcurrentAppState = hasLocalChanges
-        ? (mergeAppStates(previousBase, local, remote) as ConcurrentAppState)
-        : { ...remote, activeCharacterId: local.activeCharacterId }
+        ? (mergeAppStates(previousBase, local, remoteWithLegacyGround) as ConcurrentAppState)
+        : { ...remoteWithLegacyGround, activeCharacterId: local.activeCharacterId }
       hydratedRef.current = true
       revisionRef.current = snapshot.revision
       baseStateRef.current = remote
@@ -378,6 +379,20 @@ function normalizeState(state: unknown): ConcurrentAppState {
       missions: normalizeMissions(raw.missions),
     } as ConcurrentAppState)
   } catch { return defaultState() }
+}
+
+function recoverLegacyGroundInventory(
+  local: ConcurrentAppState,
+  remote: ConcurrentAppState,
+): ConcurrentAppState {
+  const localGround = local.groundInventory ?? []
+  const remoteGround = remote.groundInventory ?? []
+  if (remoteGround.length > 0 || localGround.length === 0) return remote
+
+  return {
+    ...remote,
+    groundInventory: localGround,
+  }
 }
 
 function normalizeEntityVersions(value: unknown): Record<string, GameEntityMetadata> {
