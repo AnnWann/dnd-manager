@@ -148,7 +148,7 @@ export function MasterAbilityAcquisitionExceptions() {
               <div>
                 <h2 className="text-sm font-semibold text-textH">Exceções de aprendizagem e preparo</h2>
                 <p className="mt-1 text-xs leading-5 text-textMuted">
-                  Ajustes exclusivos deste personagem. Habilidades sempre aprendidas ou preparadas não consomem o limite normal.
+                  Ajustes exclusivos deste personagem. Você pode substituir a fórmula do sistema e definir habilidades que não consomem o limite normal.
                 </p>
               </div>
               <button
@@ -221,11 +221,12 @@ function ExceptionTypeCard({
   const acquisition = entry.type.acquisition
   const learned = usesLearned(acquisition?.mode)
   const prepared = usesPrepared(acquisition?.mode)
+  const previewState = withDraftException(entry.state, entry.type.id, draft)
   const learnedLimit = learned
-    ? getCustomAbilityLimit(entry.definition, entry.state, entry.type, "learned", character)
+    ? getCustomAbilityLimit(entry.definition, previewState, entry.type, "learned", character)
     : undefined
   const preparedLimit = prepared
-    ? getCustomAbilityLimit(entry.definition, entry.state, entry.type, "prepared", character)
+    ? getCustomAbilityLimit(entry.definition, previewState, entry.type, "prepared", character)
     : undefined
   const abilities = entry.state.abilities.filter(
     (ability) => ability.abilityTypeId === entry.type.id,
@@ -244,6 +245,25 @@ function ExceptionTypeCard({
           {learnedLimit !== undefined ? <Badge>Aprendidas: {learnedLimit}</Badge> : null}
           {preparedLimit !== undefined ? <Badge>Preparadas: {preparedLimit}</Badge> : null}
         </div>
+      </div>
+
+      <div className="mt-3 grid gap-3">
+        {learned ? (
+          <FormulaOverrideControl
+            label="Fórmula de aprendizagem deste personagem"
+            original={acquisition?.learnedLimitFormula}
+            value={draft.learnedLimitFormulaOverride ?? ""}
+            onChange={(learnedLimitFormulaOverride) => onPatch({ learnedLimitFormulaOverride })}
+          />
+        ) : null}
+        {prepared ? (
+          <FormulaOverrideControl
+            label="Fórmula de preparo deste personagem"
+            original={acquisition?.preparedLimitFormula}
+            value={draft.preparedLimitFormulaOverride ?? ""}
+            onChange={(preparedLimitFormulaOverride) => onPatch({ preparedLimitFormulaOverride })}
+          />
+        ) : null}
       </div>
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -317,6 +337,38 @@ function ExceptionTypeCard({
   )
 }
 
+function FormulaOverrideControl({
+  label,
+  original,
+  value,
+  onChange,
+}: {
+  label: string
+  original?: string
+  value: string
+  onChange: (value: string | undefined) => void
+}) {
+  return (
+    <label className="grid gap-1.5 text-[11px] text-textMuted">
+      <span className="font-medium text-textH">{label}</span>
+      <textarea
+        value={value}
+        rows={3}
+        placeholder={original?.trim() || "Digite uma fórmula para substituir o limite padrão"}
+        onChange={(event) => onChange(event.target.value || undefined)}
+        className="min-h-20 w-full resize-y rounded-lg border border-border bg-bg px-3 py-2 font-mono text-xs leading-5 text-textH"
+      />
+      <span className="leading-4">
+        {value.trim()
+          ? "Esta fórmula substitui a fórmula padrão apenas neste personagem. Apague o campo para voltar ao padrão."
+          : original?.trim()
+            ? `Padrão do sistema: ${original}`
+            : "Sem substituição: o limite fixo/padrão do sistema continua sendo usado."}
+      </span>
+    </label>
+  )
+}
+
 function NumberControl({
   label,
   value,
@@ -387,9 +439,25 @@ function keyFor(entry: EligibleType): string {
 
 function cloneException(value: CustomAbilityAcquisitionExceptionState): ExceptionDraft {
   return {
+    learnedLimitFormulaOverride: value.learnedLimitFormulaOverride,
+    preparedLimitFormulaOverride: value.preparedLimitFormulaOverride,
     extraLearnedSlots: value.extraLearnedSlots,
     extraPreparedSlots: value.extraPreparedSlots,
     alwaysLearnedAbilityIds: [...(value.alwaysLearnedAbilityIds ?? [])],
     alwaysPreparedAbilityIds: [...(value.alwaysPreparedAbilityIds ?? [])],
+  }
+}
+
+function withDraftException(
+  state: CharacterCustomSystemState,
+  typeId: string,
+  draft: ExceptionDraft,
+): CharacterCustomSystemState {
+  return {
+    ...state,
+    abilityAcquisitionExceptions: {
+      ...(state.abilityAcquisitionExceptions ?? {}),
+      [typeId]: draft,
+    },
   }
 }
