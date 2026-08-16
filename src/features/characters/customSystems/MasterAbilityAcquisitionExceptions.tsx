@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { Settings2, X } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
@@ -10,13 +10,17 @@ import {
   setCustomAbilityAcquisitionException,
 } from "../../../lib/customSystems"
 import { useCustomSystemDefinitions } from "../../../lib/customSystems/CustomSystemRegistry"
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type {
   CharacterCustomSystemState,
   CustomAbilityAcquisitionExceptionState,
   CustomAbilityInstance,
   CustomSystemDefinition,
 } from "../../../models/customSystems/CustomSystemDefinition"
-import type { CustomAbilityTypeDefinition } from "../../../models/customSystems/CustomAbilityDefinition"
+import type {
+  CustomAbilityAcquisitionDefinition,
+  CustomAbilityTypeDefinition,
+} from "../../../models/customSystems/CustomAbilityDefinition"
 
 type ExceptionDraft = CustomAbilityAcquisitionExceptionState
 
@@ -205,7 +209,7 @@ function ExceptionTypeCard({
   onToggle,
 }: {
   entry: EligibleType
-  character: NonNullable<ReturnType<typeof useCharacterContext>["activeCharacter"]>
+  character: CharacterTemplate
   draft: ExceptionDraft
   onPatch: (value: Partial<ExceptionDraft>) => void
   onToggle: (
@@ -339,7 +343,7 @@ function NumberControl({
   )
 }
 
-function Badge({ children }: { children: React.ReactNode }) {
+function Badge({ children }: { children: ReactNode }) {
   return (
     <span className="rounded-full border border-border bg-bg-subtle px-2 py-1">
       {children}
@@ -357,11 +361,11 @@ function hasConfigurableLimit(type: CustomAbilityTypeDefinition): boolean {
   return learned || prepared
 }
 
-function usesLearned(mode: CustomAbilityTypeDefinition["acquisition"] extends infer _T ? string | undefined : never): boolean {
+function usesLearned(mode: CustomAbilityAcquisitionDefinition["mode"] | undefined): boolean {
   return mode === "learned" || mode === "learnedAndPrepared"
 }
 
-function usesPrepared(mode: CustomAbilityTypeDefinition["acquisition"] extends infer _T ? string | undefined : never): boolean {
+function usesPrepared(mode: CustomAbilityAcquisitionDefinition["mode"] | undefined): boolean {
   return mode === "prepared" || mode === "learnedAndPrepared"
 }
 
