@@ -188,6 +188,9 @@ export interface CharacterCustomSystemState {
 }
 
 export interface CustomAbilityAcquisitionExceptionState {
+  /** Substitui a fórmula de limite definida pelo sistema apenas neste personagem. */
+  learnedLimitFormulaOverride?: FormulaExpression
+  preparedLimitFormulaOverride?: FormulaExpression
   /** Espaços adicionais além do limite fixo/fórmula. */
   extraLearnedSlots?: number
   extraPreparedSlots?: number
