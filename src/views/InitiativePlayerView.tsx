@@ -1,9 +1,10 @@
 import { Clock3, Grid2X2, List, Shield, Swords } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Button } from "../components/ui/Button"
 import { useCharacterContext } from "../contexts/characterContext"
 import { useSyncContext } from "../contexts/syncContext"
+import { InitiativeCards } from "../features/initiative/InitiativeCards"
 import { useInitiativeSession } from "../hooks/useInitiativeSession"
 import type { InitiativeEntry } from "../models/initiative/Initiative"
 
@@ -14,6 +15,7 @@ export function InitiativePlayerView() {
   const { visibleCharacters } = useCharacterContext()
   const { userKey } = useSyncContext()
   const [viewMode, setViewMode] = useState<PlayerViewMode>("table")
+  const cardRefs = useRef(new Map<string, HTMLDivElement>())
 
   const ownedCharacterIds = useMemo(() => {
     const normalizedUserKey = userKey.trim()
@@ -29,6 +31,22 @@ export function InitiativePlayerView() {
     )
   }, [userKey, visibleCharacters])
 
+  const entries = useMemo(
+    () => session.entries.filter((entry) => !entry.hidden),
+    [session.entries],
+  )
+  const active = entries.find((entry) => entry.id === session.activeEntryId)
+
+  useEffect(() => {
+    if (viewMode !== "cards" || !session.activeEntryId) return
+
+    cardRefs.current.get(session.activeEntryId)?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    })
+  }, [session.activeEntryId, viewMode])
+
   if (!hydrated) {
     return (
       <div className="rounded-xl border border-border bg-bg p-6 text-sm text-text">
@@ -37,8 +55,10 @@ export function InitiativePlayerView() {
     )
   }
 
-  const entries = session.entries.filter((entry) => !entry.hidden)
-  const active = entries.find((entry) => entry.id === session.activeEntryId)
+  const canViewPrivateStats = (entry: InitiativeEntry) =>
+    Boolean(entry.sourceId && ownedCharacterIds.has(entry.sourceId))
+
+  const noop = () => undefined
 
   return (
     <div className="grid min-w-0 gap-4">
@@ -89,18 +109,25 @@ export function InitiativePlayerView() {
           O mestre ainda não adicionou participantes à iniciativa.
         </div>
       ) : viewMode === "cards" ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {entries.map((entry) => (
-            <ReadOnlyCard
-              key={entry.id}
-              entry={entry}
-              active={entry.id === session.activeEntryId}
-              showPrivateStats={Boolean(
-                entry.sourceId && ownedCharacterIds.has(entry.sourceId)
-              )}
-            />
-          ))}
-        </div>
+        <section className="rounded-xl border border-border bg-bg shadow-theme-sm">
+          <InitiativeCards
+            entries={entries}
+            activeEntryId={session.activeEntryId}
+            roundAnchorEntryId={session.roundAnchorEntryId}
+            round={session.round}
+            started={session.started}
+            cardRefs={cardRefs}
+            readOnly
+            canViewPrivateStats={canViewPrivateStats}
+            patchEntry={noop}
+            onOpen={noop}
+            onCondition={noop}
+            onRemove={noop}
+            onTrade={noop}
+            canTrade={() => false}
+            onRemoveCondition={noop}
+          />
+        </section>
       ) : (
         <div className="grid gap-2">
           {entries.map((entry) => (
@@ -108,9 +135,7 @@ export function InitiativePlayerView() {
               key={entry.id}
               entry={entry}
               active={entry.id === session.activeEntryId}
-              showPrivateStats={Boolean(
-                entry.sourceId && ownedCharacterIds.has(entry.sourceId)
-              )}
+              showPrivateStats={canViewPrivateStats(entry)}
             />
           ))}
         </div>
@@ -136,99 +161,47 @@ function ReadOnlyEntry({
         entry.defeated ? "opacity-55" : "",
       ].join(" ")}
     >
-      <InitiativeValue entry={entry} />
-      <EntrySummary entry={entry} active={active} />
+      <div className="flex items-center gap-2 sm:block sm:text-center">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+          Init.
+        </div>
+        <div className="text-lg font-bold text-textH">{entry.initiative}</div>
+      </div>
+
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="min-w-0 break-words text-sm font-semibold text-textH">
+            {entry.name}
+          </h2>
+          {active ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+              <Clock3 className="h-3 w-3" /> Turno atual
+            </span>
+          ) : null}
+          {entry.defeated ? (
+            <span className="rounded-full border border-border px-2 py-1 text-[10px] text-textMuted">
+              Derrotado
+            </span>
+          ) : null}
+        </div>
+
+        {entry.conditions.length ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {entry.conditions.map((condition) => (
+              <span
+                key={condition.id}
+                title={condition.description}
+                className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-[10px] text-textH"
+              >
+                {condition.name}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
       {showPrivateStats ? <PrivateStats entry={entry} /> : null}
     </article>
-  )
-}
-
-function ReadOnlyCard({
-  entry,
-  active,
-  showPrivateStats,
-}: {
-  entry: InitiativeEntry
-  active: boolean
-  showPrivateStats: boolean
-}) {
-  return (
-    <article
-      className={[
-        "flex min-h-44 min-w-0 flex-col rounded-xl border bg-bg p-4 shadow-theme-sm",
-        active ? "border-accent bg-accentBg" : "border-border",
-        entry.defeated ? "opacity-55" : "",
-      ].join(" ")}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <EntrySummary entry={entry} active={active} />
-        <div className="shrink-0 rounded-lg border border-border bg-bg-subtle px-3 py-2 text-center">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-            Init.
-          </div>
-          <div className="text-xl font-bold text-textH">{entry.initiative}</div>
-        </div>
-      </div>
-
-      {showPrivateStats ? (
-        <div className="mt-auto pt-4">
-          <PrivateStats entry={entry} />
-        </div>
-      ) : null}
-    </article>
-  )
-}
-
-function InitiativeValue({ entry }: { entry: InitiativeEntry }) {
-  return (
-    <div className="flex items-center gap-2 sm:block sm:text-center">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-        Init.
-      </div>
-      <div className="text-lg font-bold text-textH">{entry.initiative}</div>
-    </div>
-  )
-}
-
-function EntrySummary({
-  entry,
-  active,
-}: {
-  entry: InitiativeEntry
-  active: boolean
-}) {
-  return (
-    <div className="min-w-0">
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="min-w-0 break-words text-sm font-semibold text-textH">
-          {entry.name}
-        </h2>
-        {active ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
-            <Clock3 className="h-3 w-3" /> Turno atual
-          </span>
-        ) : null}
-        {entry.defeated ? (
-          <span className="rounded-full border border-border px-2 py-1 text-[10px] text-textMuted">
-            Derrotado
-          </span>
-        ) : null}
-      </div>
-
-      {entry.conditions.length ? (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {entry.conditions.map((condition) => (
-            <span
-              key={condition.id}
-              title={condition.description}
-              className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-[10px] text-textH"
-            >
-              {condition.name}
-            </span>
-          ))}
-        </div>
-      ) : null}
-    </div>
   )
 }
 
