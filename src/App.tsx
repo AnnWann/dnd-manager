@@ -28,6 +28,7 @@ import { MissionProvider } from "./contexts/missionContext"
 import { PartyInventorySettingsProvider } from "./contexts/partyInventorySettingsContext"
 import { SyncProvider } from "./contexts/syncContext"
 import { MasterConcentrationAlerts } from "./features/characters/characterSheet/masterConcentrationAlerts"
+import { MasterAbilityAcquisitionExceptions } from "./features/characters/customSystems/MasterAbilityAcquisitionExceptions"
 import { RelationalMigrationBridge } from "./features/sync/RelationalMigrationBridge"
 import { normalizeAppStateInventory } from "./lib/normalizeAppStateInventory"
 import { type AppStateV1 } from "./lib/remoteState"
@@ -133,6 +134,7 @@ function App() {
                 userKey={userKey}
               >
                 <MasterConcentrationAlerts />
+                <MasterAbilityAcquisitionExceptions />
                 <MagicProvider spells={appState.spells ?? []} setAppState={setAppState}>
                   <div className="fixed inset-0 flex w-full max-w-full flex-col overflow-hidden bg-[color:var(--surface-app)] text-text">
                     <AppHeader />
