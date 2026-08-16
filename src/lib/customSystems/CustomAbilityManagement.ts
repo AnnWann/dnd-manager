@@ -125,8 +125,15 @@ export function getCustomAbilityLimit(
   character?: CharacterTemplate,
 ): number | undefined {
   const acquisition = normalizeAcquisition(type.acquisition)
+  const exception = getCustomAbilityAcquisitionException(state, type.id)
   const fixed = kind === 'learned' ? acquisition.learnedLimit : acquisition.preparedLimit
-  const formula = kind === 'learned' ? acquisition.learnedLimitFormula : acquisition.preparedLimitFormula
+  const originalFormula = kind === 'learned'
+    ? acquisition.learnedLimitFormula
+    : acquisition.preparedLimitFormula
+  const overrideFormula = kind === 'learned'
+    ? exception.learnedLimitFormulaOverride
+    : exception.preparedLimitFormulaOverride
+  const formula = overrideFormula?.trim() ? overrideFormula : originalFormula
   let base = fixed
 
   if (formula?.trim()) {
@@ -137,7 +144,6 @@ export function getCustomAbilityLimit(
   }
 
   if (base === undefined) return undefined
-  const exception = getCustomAbilityAcquisitionException(state, type.id)
   const bonus = kind === 'learned'
     ? exception.extraLearnedSlots ?? 0
     : exception.extraPreparedSlots ?? 0
@@ -190,14 +196,20 @@ export function setCustomAbilityAcquisitionException(
     value.alwaysLearnedAbilityIds,
     abilityIds,
   ).filter((id) => !alwaysPreparedAbilityIds.includes(id))
+  const learnedLimitFormulaOverride = normalizeFormula(value.learnedLimitFormulaOverride)
+  const preparedLimitFormulaOverride = normalizeFormula(value.preparedLimitFormulaOverride)
   const normalized: CustomAbilityAcquisitionExceptionState = {
+    learnedLimitFormulaOverride,
+    preparedLimitFormulaOverride,
     extraLearnedSlots: normalizeBonus(value.extraLearnedSlots),
     extraPreparedSlots: normalizeBonus(value.extraPreparedSlots),
     alwaysLearnedAbilityIds,
     alwaysPreparedAbilityIds,
   }
   const hasValue = Boolean(
-    normalized.extraLearnedSlots
+    learnedLimitFormulaOverride
+      || preparedLimitFormulaOverride
+      || normalized.extraLearnedSlots
       || normalized.extraPreparedSlots
       || alwaysLearnedAbilityIds.length
       || alwaysPreparedAbilityIds.length,
@@ -311,6 +323,11 @@ function normalizeBonus(value: number | undefined): number | undefined {
   if (value === undefined) return undefined
   const normalized = Math.max(0, Math.floor(Number(value) || 0))
   return normalized > 0 ? normalized : undefined
+}
+
+function normalizeFormula(value: string | undefined): string | undefined {
+  const normalized = value?.trim()
+  return normalized ? normalized : undefined
 }
 
 function uniqueExistingIds(values: string[] | undefined, valid: Set<string>): string[] {
