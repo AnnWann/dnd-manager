@@ -86,12 +86,12 @@ function App() {
     { label: "Inventário do grupo", icon: <IconBackpack />, active: location.pathname === "/party-inventory", onClick: () => navigate("/party-inventory") },
     { label: "Chão", icon: <IconGround />, active: location.pathname === "/ground-inventory", onClick: () => navigate("/ground-inventory") },
     { label: "Missões", icon: <IconNotes />, active: location.pathname === "/missions", onClick: () => navigate("/missions") },
+    { label: "Iniciativa", icon: <IconInitiative />, active: location.pathname === "/initiative", onClick: () => navigate("/initiative") },
     ...(userRole === "master"
       ? [
           { label: "Compêndio de Itens", icon: <IconEquipment />, active: location.pathname === "/items-compendium", onClick: () => navigate("/items-compendium") },
           { label: "Compêndio de Criaturas", icon: <IconCompendium />, active: location.pathname === "/creatures-compendium", onClick: () => navigate("/creatures-compendium") },
           { label: "Sistemas personalizados", icon: <IconCompendium />, active: location.pathname.startsWith("/custom-systems"), onClick: () => navigate("/custom-systems") },
-          { label: "Iniciativa", icon: <IconInitiative />, active: location.pathname === "/initiative", onClick: () => navigate("/initiative") },
         ]
       : []),
     { label: "Magia", icon: <IconMagic />, active: location.pathname === "/magic", onClick: () => navigate("/magic") },
