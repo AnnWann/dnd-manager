@@ -1,6 +1,7 @@
 import { Skull, Trash2 } from "lucide-react"
 
 import { Button } from "../../components/ui/Button"
+import type { InitiativeEntry } from "../../models/initiative/Initiative"
 import {
   ConditionChips,
   EntryIdentity,
@@ -11,15 +12,23 @@ import type { InitiativeRosterProps } from "./initiativeRosterTypes"
 
 type InitiativeCardsProps = InitiativeRosterProps & {
   cardRefs: { current: Map<string, HTMLDivElement> }
+  readOnly?: boolean
+  canViewPrivateStats?: (entry: InitiativeEntry) => boolean
 }
 
-export function InitiativeCards({ cardRefs, ...props }: InitiativeCardsProps) {
+export function InitiativeCards({
+  cardRefs,
+  readOnly = false,
+  canViewPrivateStats,
+  ...props
+}: InitiativeCardsProps) {
   return (
     <div className="overflow-x-auto scroll-smooth p-5">
       <div className="flex min-w-max items-stretch gap-4 pb-2">
         {props.entries.map((entry) => {
           const active = entry.id === props.activeEntryId
           const anchor = props.started && entry.id === props.roundAnchorEntryId
+          const showPrivateStats = !readOnly || Boolean(canViewPrivateStats?.(entry))
 
           return (
             <div
@@ -52,7 +61,8 @@ export function InitiativeCards({ cardRefs, ...props }: InitiativeCardsProps) {
                 <div className="flex items-start justify-between gap-3">
                   <EntryIdentity
                     entry={entry}
-                    onOpen={() => props.onOpen(entry.id)}
+                    onOpen={readOnly ? undefined : () => props.onOpen(entry.id)}
+                    showTemporaryHp={showPrivateStats}
                   />
                   <div className="rounded-lg border border-border bg-bg-subtle px-3 py-2 text-center">
                     <div className="text-[10px] uppercase text-textMuted">
@@ -70,64 +80,84 @@ export function InitiativeCards({ cardRefs, ...props }: InitiativeCardsProps) {
                   </div>
                 ) : null}
 
-                <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                  <div className="rounded-lg border border-border bg-bg-subtle p-3">
-                    <div className="text-xs text-textMuted">Pontos de vida</div>
-                    <div className="mt-1 font-semibold text-textH">
-                      {formatHp(entry)}
+                {showPrivateStats ? (
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-lg border border-border bg-bg-subtle p-3">
+                      <div className="text-xs text-textMuted">Pontos de vida</div>
+                      <div className="mt-1 font-semibold text-textH">
+                        {formatHp(entry)}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border bg-bg-subtle p-3">
+                      <div className="text-xs text-textMuted">
+                        Classe de armadura
+                      </div>
+                      <div className="mt-1 font-semibold text-textH">
+                        {entry.armorClass ?? "—"}
+                      </div>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-border bg-bg-subtle p-3">
-                    <div className="text-xs text-textMuted">
-                      Classe de armadura
-                    </div>
-                    <div className="mt-1 font-semibold text-textH">
-                      {entry.armorClass ?? "—"}
-                    </div>
-                  </div>
-                </div>
+                ) : null}
 
                 <div className="mt-4 flex-1">
-                  <ConditionChips
-                    entry={entry}
-                    onAdd={() => props.onCondition(entry.id)}
-                    onRemove={(conditionId) =>
-                      props.onRemoveCondition(entry.id, conditionId)
-                    }
-                  />
+                  {readOnly ? (
+                    entry.conditions.length ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {entry.conditions.map((condition) => (
+                          <span
+                            key={condition.id}
+                            title={condition.description}
+                            className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-xs text-textH"
+                          >
+                            {condition.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null
+                  ) : (
+                    <ConditionChips
+                      entry={entry}
+                      onAdd={() => props.onCondition(entry.id)}
+                      onRemove={(conditionId) =>
+                        props.onRemoveCondition(entry.id, conditionId)
+                      }
+                    />
+                  )}
                 </div>
 
-                <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
-                  <TradeControls
-                    entry={entry}
-                    onTrade={props.onTrade}
-                    canTrade={props.canTrade}
-                  />
-                  <div className="flex gap-1">
-                    <Button
-                      size="icon"
-                      variant={entry.defeated ? "outline" : "ghost"}
-                      title={
-                        entry.defeated ? "Reativar" : "Marcar como derrotado"
-                      }
-                      onClick={() =>
-                        props.patchEntry(entry.id, {
-                          defeated: !entry.defeated,
-                        })
-                      }
-                    >
-                      <Skull className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      title="Remover"
-                      onClick={() => props.onRemove(entry.id)}
-                    >
-                      <Trash2 className="h-4 w-4 text-danger" />
-                    </Button>
+                {!readOnly ? (
+                  <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
+                    <TradeControls
+                      entry={entry}
+                      onTrade={props.onTrade}
+                      canTrade={props.canTrade}
+                    />
+                    <div className="flex gap-1">
+                      <Button
+                        size="icon"
+                        variant={entry.defeated ? "outline" : "ghost"}
+                        title={
+                          entry.defeated ? "Reativar" : "Marcar como derrotado"
+                        }
+                        onClick={() =>
+                          props.patchEntry(entry.id, {
+                            defeated: !entry.defeated,
+                          })
+                        }
+                      >
+                        <Skull className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        title="Remover"
+                        onClick={() => props.onRemove(entry.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-danger" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                ) : null}
               </article>
             </div>
           )
