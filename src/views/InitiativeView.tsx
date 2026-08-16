@@ -573,9 +573,6 @@ function InitiativeHeader({
             <h1 className="font-heading text-xl font-semibold text-textH">
               Iniciativa
             </h1>
-            <span className="rounded-full border border-border bg-bg-subtle px-2.5 py-1 text-xs font-medium text-textMuted">
-              Apenas neste dispositivo
-            </span>
             <span className="rounded-full border border-accentBorder bg-accentBg px-2.5 py-1 text-xs font-semibold text-accent">
               Rodada {round}
             </span>
