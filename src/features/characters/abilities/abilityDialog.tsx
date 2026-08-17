@@ -40,6 +40,8 @@ import {
 type Props = {
   open: boolean
   ability: Ability | null
+  title?: string
+  fixedCategory?: AbilityCategory
   onClose: () => void
   onSave: (ability: Ability) => void
 }
@@ -75,6 +77,18 @@ function usesSharedClassResource(category: AbilityCategory | undefined): boolean
   return category === "channelDivinity" || category === "martialArts"
 }
 
+function withFixedCategory(
+  ability: Ability,
+  fixedCategory: AbilityCategory | undefined,
+): Ability {
+  if (!fixedCategory) return ability
+  return {
+    ...ability,
+    category: fixedCategory,
+    usage: usesSharedClassResource(fixedCategory) ? undefined : ability.usage,
+  }
+}
+
 function SectionIntro({ title, description }: { title: string; description: string }) {
   return (
     <div className="mb-3">
@@ -92,15 +106,24 @@ function SummaryPill({ children }: { children: string }) {
   )
 }
 
-export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
-  const [draft, setDraft] = useState<Ability>(() => ability ?? createEmptyAbility())
+export function AbilityDialog({
+  open,
+  ability,
+  title,
+  fixedCategory,
+  onClose,
+  onSave,
+}: Props) {
+  const [draft, setDraft] = useState<Ability>(() =>
+    withFixedCategory(ability ?? createEmptyAbility(), fixedCategory),
+  )
   const [tab, setTab] = useState<EditorTab>("basic")
 
   useEffect(() => {
     if (!open) return
-    setDraft(ability ?? createEmptyAbility())
+    setDraft(withFixedCategory(ability ?? createEmptyAbility(), fixedCategory))
     setTab("basic")
-  }, [open, ability])
+  }, [open, ability, fixedCategory])
 
   useEffect(() => {
     if (!open) return
@@ -113,6 +136,7 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
 
   if (!open) return null
 
+  const dialogTitle = title ?? (ability ? "Editar habilidade" : "Adicionar habilidade")
   const sharedClassResource = usesSharedClassResource(draft.category)
   const hasUsage = !sharedClassResource && draft.usage !== undefined
   const maximumFormula = draft.usage?.maxFormula?.trim() ?? ""
@@ -159,7 +183,8 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
   }
 
   function save() {
-    onSave(normalizeAbilityActivation(normalizeAbilityText(draft)))
+    const normalized = normalizeAbilityActivation(normalizeAbilityText(draft))
+    onSave(withFixedCategory(normalized, fixedCategory))
   }
 
   return createPortal(
@@ -167,14 +192,14 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={ability ? "Editar habilidade" : "Adicionar habilidade"}
+        aria-label={dialogTitle}
         className="flex max-h-[calc(100dvh-1rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-border bg-bg-elevated shadow-theme-lg sm:max-h-[calc(100dvh-2rem)]"
       >
         <header className="shrink-0 border-b border-border px-4 pb-3 pt-4 sm:px-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="truncate text-base font-semibold text-textH">
-                {ability ? "Editar habilidade" : "Adicionar habilidade"}
+                {dialogTitle}
               </h2>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <SummaryPill>{ABILITY_KIND_OPTIONS.find((item) => item.value === draft.kind)?.label ?? "Habilidade"}</SummaryPill>
@@ -246,8 +271,10 @@ export function AbilityDialog({ open, ability, onClose, onSave }: Props) {
                 <label className="grid gap-1">
                   <span className="text-xs font-medium text-textH">Categoria</span>
                   <Select
-                    value={draft.category ?? "general"}
+                    value={fixedCategory ?? draft.category ?? "general"}
+                    disabled={Boolean(fixedCategory)}
                     onChange={(event) => {
+                      if (fixedCategory) return
                       const category = event.target.value as AbilityCategory
                       setDraft({
                         ...draft,
