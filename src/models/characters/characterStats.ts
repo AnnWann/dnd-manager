@@ -12,6 +12,10 @@ import {
 import type { Attribute } from "../sheet/Attribute"
 import type { Sheet } from "../sheet/Sheet"
 import type { CharacterTemplate } from "./CharacterTemplate"
+import {
+  getAsiAttributeIncrease,
+  getCharacterAsis,
+} from "./CharacterAsi"
 import { getEncumbranceSpeedPenalty } from "./characterEncumbrance"
 import { getCharacterConditions } from "./characterConditionStorage"
 import { hasProficiency } from "./characterProficiencies"
@@ -78,8 +82,14 @@ export function getEquippedItems(character: CharacterTemplate): Equipment[] {
 export function getActiveAbilities(
   character: CharacterTemplate,
 ): Ability[] {
+  const asiAbilities = getCharacterAsis(character)
+    .map((entry) => entry.ability)
+    .filter((ability): ability is Ability => Boolean(ability))
+
   return [
     ...(character.get("abilities") ?? []),
+    ...(character.get("magic")?.invocations ?? []),
+    ...asiAbilities,
     ...(character.get("sheet").race.naturalAbilities ?? []),
     ...getEquippedItems(character).flatMap(
       (item) => item.abilities ?? [],
@@ -219,9 +229,10 @@ export function getEffectiveAttribute(
 ): number {
   const racialBonus =
     character.get("sheet").race.attributeBonus?.[attribute] ?? 0
+  const asiBonus = getAsiAttributeIncrease(character, attribute)
 
   const baseValue =
-    character.get("sheet").attributes[attribute] + racialBonus
+    character.get("sheet").attributes[attribute] + racialBonus + asiBonus
 
   const equipmentBonuses = getEquippedItems(character)
     .flatMap((item) => item.bonuses?.attribute ?? [])
