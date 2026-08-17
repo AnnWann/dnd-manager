@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom"
 
 import { useCharacterContext } from "../contexts/characterContext"
 import { CampaignCharacterWorkspace } from "../features/characters/workspace/CampaignCharacterWorkspace"
+import { UserCharacterWorkspace } from "../features/characters/workspace/UserCharacterWorkspace"
 import { campaignCharacterPath } from "../lib/campaignRoutes"
 import {
   readLocalStorageJson,
@@ -79,9 +80,11 @@ export function CharacterDetailView() {
     } satisfies LastOpenedCharacterCache)
   }, [characterId])
 
+  if (!characterId) return null
+
   return (
-    <CampaignCharacterWorkspace>
+    <UserCharacterWorkspace characterId={characterId}>
       <CharacterView />
-    </CampaignCharacterWorkspace>
+    </UserCharacterWorkspace>
   )
 }
