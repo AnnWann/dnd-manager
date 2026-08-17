@@ -8,6 +8,10 @@ import {
 
 import type { AppStateV1 } from "../lib/remoteState"
 
+export type PartyInventoryAppState = AppStateV1 & {
+  partyAdditionalSupplyConsumption?: number
+}
+
 type PartyInventorySettingsContextValue = {
   carryCapacity: number
   canEditCarryCapacity: boolean
@@ -22,7 +26,7 @@ type Props = {
   carryCapacity: number
   additionalSupplyConsumption: number
   canEditCarryCapacity: boolean
-  setAppState: Dispatch<SetStateAction<AppStateV1>>
+  setAppState: Dispatch<SetStateAction<PartyInventoryAppState>>
 }
 
 const PartyInventorySettingsContext =
