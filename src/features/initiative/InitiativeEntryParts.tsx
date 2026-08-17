@@ -21,17 +21,14 @@ const compactInputClassName = [
 export function EntryIdentity({
   entry,
   onOpen,
+  showTemporaryHp = true,
 }: {
   entry: InitiativeEntry
-  onOpen: () => void
+  onOpen?: () => void
+  showTemporaryHp?: boolean
 }) {
-  return (
-    <button
-      type="button"
-      className="flex min-w-0 items-center gap-3 rounded-lg text-left outline-none hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30"
-      onClick={onOpen}
-      title="Abrir ficha rápida"
-    >
+  const content = (
+    <>
       {entry.imageUrl ? (
         <img
           src={entry.imageUrl}
@@ -44,7 +41,7 @@ export function EntryIdentity({
         </div>
       )}
       <div className="min-w-0">
-        <div className="truncate font-semibold text-textH hover:text-accent">
+        <div className="truncate font-semibold text-textH group-hover:text-accent">
           {entry.name}
         </div>
         <div className="mt-1 flex items-center gap-1.5">
@@ -53,13 +50,28 @@ export function EntryIdentity({
           >
             {sideLabel(entry.side)}
           </span>
-          {entry.temporaryHp ? (
+          {showTemporaryHp && entry.temporaryHp ? (
             <span className="text-xs text-accent">
               +{entry.temporaryHp} temp.
             </span>
           ) : null}
         </div>
       </div>
+    </>
+  )
+
+  if (!onOpen) {
+    return <div className="flex min-w-0 items-center gap-3 rounded-lg text-left">{content}</div>
+  }
+
+  return (
+    <button
+      type="button"
+      className="group flex min-w-0 items-center gap-3 rounded-lg text-left outline-none hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/30"
+      onClick={onOpen}
+      title="Abrir ficha rápida"
+    >
+      {content}
     </button>
   )
 }
@@ -92,10 +104,17 @@ export function HitPointEditor({
         className={`${compactInputClassName} w-16 text-center`}
         value={entry.maxHp ?? ""}
         onChange={(event) =>
-          patchEntry(entry.id, { maxHp: optionalNumber(event.target.value) })
+          patchEntry(entry.id, {
+            maxHp: optionalNumber(event.target.value),
+          })
         }
         title="PV máximos"
       />
+      {entry.temporaryHp ? (
+        <span className="ml-1 text-xs text-accent">
+          +{entry.temporaryHp} temp.
+        </span>
+      ) : null}
     </div>
   )
 }
@@ -110,6 +129,7 @@ export function ArmorClassEditor({
   return (
     <input
       type="number"
+      min={0}
       className={`${compactInputClassName} w-16 text-center`}
       value={entry.armorClass ?? ""}
       onChange={(event) =>
@@ -117,6 +137,7 @@ export function ArmorClassEditor({
           armorClass: optionalNumber(event.target.value),
         })
       }
+      title="Classe de armadura"
     />
   )
 }
@@ -133,12 +154,15 @@ export function InitiativeEditor({
   return (
     <input
       type="number"
-      className={`${compactInputClassName} w-20 text-center font-semibold`}
+      className={`${compactInputClassName} w-16 text-center`}
       value={entry.initiative}
       disabled={started}
       onChange={(event) =>
-        patchEntry(entry.id, { initiative: Number(event.target.value) })
+        patchEntry(entry.id, {
+          initiative: Number(event.target.value) || 0,
+        })
       }
+      title="Iniciativa"
     />
   )
 }
@@ -157,18 +181,15 @@ export function ConditionChips({
       {entry.conditions.map((condition) => (
         <span
           key={condition.id}
-          title={condition.description}
-          className="inline-flex items-center gap-1 rounded-full border border-accentBorder bg-accentBg px-2 py-1 text-xs text-textH"
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-subtle px-2 py-1 text-xs text-textH"
+          title={conditionDescription(condition.duration)}
         >
-          <span>{condition.name}</span>
-          <span className="text-[10px] text-textMuted">
-            {conditionDurationLabel(condition.duration)}
-          </span>
+          {condition.name}
           <button
             type="button"
-            aria-label={`Remover ${condition.name}`}
-            className="rounded-full p-0.5 hover:bg-bg-subtle"
+            className="rounded-full text-textMuted hover:text-danger"
             onClick={() => onRemove(condition.id)}
+            aria-label={`Remover ${condition.name}`}
           >
             <X className="h-3 w-3" />
           </button>
@@ -176,10 +197,11 @@ export function ConditionChips({
       ))}
       <button
         type="button"
+        className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2 py-1 text-xs text-textMuted hover:border-accent hover:text-accent"
         onClick={onAdd}
-        className="inline-flex items-center gap-1 rounded-full border border-dashed border-borderStrong px-2 py-1 text-xs text-text hover:border-accent hover:text-accent"
       >
-        <CirclePlus className="h-3 w-3" /> Condição
+        <CirclePlus className="h-3 w-3" />
+        Condição
       </button>
     </div>
   )
@@ -194,41 +216,41 @@ export function TradeControls({
   onTrade: (entryId: string, direction: -1 | 1) => void
   canTrade: (entryId: string, direction: -1 | 1) => boolean
 }) {
+  const canMoveBack = canTrade(entry.id, -1)
+  const canMoveForward = canTrade(entry.id, 1)
+
+  if (!canMoveBack && !canMoveForward) return <span />
+
   return (
-    <div className="flex gap-1">
+    <div className="flex items-center gap-1">
       <Button
         size="icon"
         variant="ghost"
-        title="Trocar com o próximo aliado"
-        disabled={!canTrade(entry.id, 1)}
+        title="Trocar com aliado anterior"
+        disabled={!canMoveBack}
+        onClick={() => onTrade(entry.id, -1)}
+      >
+        <ChevronDown className="h-4 w-4 rotate-90" />
+      </Button>
+      <Button
+        size="icon"
+        variant="ghost"
+        title="Trocar com próximo aliado"
+        disabled={!canMoveForward}
         onClick={() => onTrade(entry.id, 1)}
       >
-        <ChevronDown className="h-4 w-4" />
+        <ChevronDown className="h-4 w-4 -rotate-90" />
       </Button>
     </div>
   )
 }
 
 export function formatHp(entry: InitiativeEntry): string {
-  if (entry.currentHp === undefined && entry.maxHp === undefined) return "—"
-  return `${entry.currentHp ?? "—"} / ${entry.maxHp ?? "—"}`
-}
-
-function conditionDurationLabel(
-  duration: InitiativeConditionDuration,
-): string {
-  switch (duration.type) {
-    case "turns":
-      return `${duration.remaining}t`
-    case "rounds":
-      return `${duration.remaining}r`
-    case "untilTurnStart":
-      return "até início"
-    case "untilTurnEnd":
-      return "até fim"
-    default:
-      return "manual"
-  }
+  const current = entry.currentHp ?? 0
+  const maximum = entry.maxHp
+  const temporary = entry.temporaryHp ?? 0
+  const base = maximum === undefined ? String(current) : `${current} / ${maximum}`
+  return temporary > 0 ? `${base} (+${temporary})` : base
 }
 
 function sideLabel(side: InitiativeSide): string {
@@ -238,17 +260,21 @@ function sideLabel(side: InitiativeSide): string {
 }
 
 function sideClassName(side: InitiativeSide): string {
-  if (side === "ally") {
-    return "border-accentBorder bg-accentBg text-accent"
-  }
-  if (side === "enemy") {
-    return "border-danger bg-transparent text-danger"
-  }
+  if (side === "ally") return "border-accentBorder bg-accentBg text-accent"
+  if (side === "enemy") return "border-danger/50 bg-danger/10 text-danger"
   return "border-border bg-bg-subtle text-textMuted"
 }
 
 function optionalNumber(value: string): number | undefined {
   if (!value.trim()) return undefined
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : undefined
+  const number = Number(value)
+  return Number.isFinite(number) ? number : undefined
+}
+
+function conditionDescription(duration: InitiativeConditionDuration): string {
+  if (duration.type === "manual") return "Remoção manual"
+  if (duration.type === "turns") return `${duration.remaining} turno(s) restante(s)`
+  if (duration.type === "rounds") return `${duration.remaining} rodada(s) restante(s)`
+  if (duration.type === "untilTurnStart") return "Até o início do turno indicado"
+  return "Até o fim do turno indicado"
 }

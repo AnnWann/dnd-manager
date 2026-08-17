@@ -1,5 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom"
 
+import { RequireAuth } from "./auth/requireAuth"
+import { useSyncContext } from "./contexts/syncContext"
 import { CharacterCreateView } from "./views/CharacterCreateView"
 import {
   CharacterDetailView,
@@ -8,28 +10,30 @@ import {
 import { CreaturesCompendiumView } from "./views/CreaturesCompendiumView"
 import { CustomSystemEditorView } from "./views/CustomSystemEditorView"
 import { CustomSystemsListView } from "./views/CustomSystemsListView"
+import { GroundInventoryView } from "./views/GroundInventoryView"
+import { InitiativePlayerView } from "./views/InitiativePlayerView"
 import { InitiativeView } from "./views/InitiativeView"
 import { ItemsCompendiumView } from "./views/ItemsCompendiumView"
 import { MagicView } from "./views/MagicView"
 import { MissionsView } from "./views/MissionsView"
-import { GroundInventoryView } from "./views/GroundInventoryView"
+import { NotFoundView } from "./views/NotFoundView"
 import { PartyInventoryView } from "./views/PartyInventoryView"
 import { SyncView } from "./views/SyncView"
 import { AuthView } from "./views/AuthView"
-import { NotFoundView } from "./views/NotFoundView"
-import { UserCharactersTab } from "./views/user/UserCharactersTab"
-import { UserCampaignsTab } from "./views/user/UserCampaignTab"
-import { UserSpellsTab } from "./views/user/UserSpellsTab"
 import { UnauthorizedView } from "./views/UnauthorisedView"
-import { RequireAuth } from "./auth/requireAuth"
-import { UserDashboardView } from "./views/user/UserDashboardView"
-import { UserCharacterDetailView } from "./views/user/UserCharacterDetailView"
+import { UserCampaignsTab } from "./views/user/UserCampaignTab"
 import { UserCharacterAddSpellsView } from "./views/user/UserCharacterAddSpellsView"
 import { UserCharacterCreateItemView } from "./views/user/UserCharacterCreateItemView"
 import { UserCharacterCreateView } from "./views/user/UserCharacterCreateView"
+import { UserCharacterDetailView } from "./views/user/UserCharacterDetailView"
 import { UserCharacterLevelUpView } from "./views/user/UserCharacterLevelUpView"
+import { UserCharactersTab } from "./views/user/UserCharactersTab"
+import { UserDashboardView } from "./views/user/UserDashboardView"
+import { UserSpellsTab } from "./views/user/UserSpellsTab"
 
 export function AppRouter() {
+  const { userRole } = useSyncContext()
+
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/user" replace />} />
@@ -85,7 +89,10 @@ export function AppRouter() {
       <Route path="/custom-systems" element={<CustomSystemsListView />} />
       <Route path="/custom-systems/:systemId" element={<CustomSystemEditorView />} />
       <Route path="/custom-systems/:systemId/:tab" element={<CustomSystemEditorView />} />
-      <Route path="/initiative" element={<InitiativeView />} />
+      <Route
+        path="/initiative"
+        element={userRole === "master" ? <InitiativeView /> : <InitiativePlayerView />}
+      />
       <Route path="/magic" element={<MagicView />} />
 
       <Route path="*" element={<Navigate to="/not-found" replace />} />
