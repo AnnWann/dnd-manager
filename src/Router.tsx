@@ -76,33 +76,50 @@ export function AppRouter() {
       </Route>
 
       <Route
-        path="/campaign/:campaignId/characters"
+        path="/campaign/:campaignId"
         element={
           <RequireAuth>
-            <CampaignCharactersView />
+            <CampaignRouteOutlet />
           </RequireAuth>
         }
-      />
-
-      <Route path="/sync" element={<SyncView />} />
-      <Route path="/character" element={<CharacterIndexView />} />
-      <Route path="/character/create" element={<CharacterCreateView />} />
-      <Route path="/character/:characterId" element={<CharacterDetailView />} />
-      <Route path="/character/:characterId/:tab" element={<CharacterDetailView />} />
-      <Route path="/party-inventory" element={<PartyInventoryView />} />
-      <Route path="/ground-inventory" element={<GroundInventoryView />} />
-      <Route path="/items-compendium" element={<ItemsCompendiumView />} />
-      <Route path="/missions" element={<MissionsView />} />
-      <Route path="/creatures-compendium" element={<CreaturesCompendiumView />} />
-      <Route path="/custom-systems" element={<CustomSystemsListView />} />
-      <Route path="/custom-systems/:systemId" element={<CustomSystemEditorView />} />
-      <Route path="/custom-systems/:systemId/:tab" element={<CustomSystemEditorView />} />
-      <Route path="/initiative" element={<InitiativeRoute />} />
-      <Route path="/magic" element={<MagicView />} />
+      >
+        <Route index element={<Navigate to="characters" replace />} />
+        <Route path="characters" element={<CampaignCharactersView />} />
+        <Route path="sync" element={<SyncView />} />
+        <Route path="character" element={<CharacterIndexView />} />
+        <Route path="character/create" element={<CharacterCreateView />} />
+        <Route path="character/:characterId" element={<CharacterDetailView />} />
+        <Route path="character/:characterId/:tab" element={<CharacterDetailView />} />
+        <Route path="party-inventory" element={<PartyInventoryView />} />
+        <Route path="ground-inventory" element={<GroundInventoryView />} />
+        <Route path="items-compendium" element={<ItemsCompendiumView />} />
+        <Route path="missions" element={<MissionsView />} />
+        <Route path="creatures-compendium" element={<CreaturesCompendiumView />} />
+        <Route path="custom-systems" element={<CustomSystemsListView />} />
+        <Route path="custom-systems/:systemId" element={<CustomSystemEditorView />} />
+        <Route path="custom-systems/:systemId/:tab" element={<CustomSystemEditorView />} />
+        <Route path="initiative" element={<InitiativeRoute />} />
+        <Route path="magic" element={<MagicView />} />
+      </Route>
 
       <Route path="*" element={<Navigate to="/not-found" replace />} />
     </Routes>
   )
+}
+
+function CampaignRouteOutlet() {
+  return <CampaignRouteChildren />
+}
+
+function CampaignRouteChildren() {
+  // Kept as a component so the auth boundary can wrap the whole campaign branch.
+  // React Router renders nested route elements through this outlet.
+  const { Outlet } = requireReactRouterDom()
+  return <Outlet />
+}
+
+function requireReactRouterDom(): typeof import("react-router-dom") {
+  return require("react-router-dom")
 }
 
 function InitiativeRoute() {
