@@ -14,12 +14,15 @@ type Props = {
 }
 
 /**
- * Transitional write-through bridge.
+ * @deprecated Do not mount this bridge inside an active session.
  *
- * AppState remains the optimistic UI/cache layer, but every character mutation
- * is persisted through the independently versioned relational owner domain.
- * This lets existing screens migrate incrementally without keeping the server
- * write boundary monolithic.
+ * It writes session-state character mutations into the relational
+ * /me/characters owner record. User characters and session characters are now
+ * intentionally independent copies, so active-session layouts must persist only
+ * their own session state.
+ *
+ * Kept temporarily for migration tooling that may still need an explicit,
+ * one-off projection. It must not be part of the normal session render tree.
  */
 export function CharacterRelationalPersistenceBridge({
   state,
