@@ -3,7 +3,7 @@ import { useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Modal } from "../../../components/ui/Modal"
-import { useCharacterContext } from "../../../contexts/characterContext"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
   getCurrentMaxHp,
@@ -36,7 +36,7 @@ type HpModal = "heal" | "damage" | "maximum"
 type HealingTarget = "current" | "temporary"
 
 export function CharacterHpControls({ character, updateCharacter, compact = false }: Props) {
-  const { dispatchGameOperation } = useCharacterContext()
+  const { dispatchGameOperation } = useCharacterWorkspace()
   const [modal, setModal] = useState<HpModal | null>(null)
   const [amountText, setAmountText] = useState("")
   const [realMaxText, setRealMaxText] = useState("")
@@ -72,14 +72,21 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
     const concentrationBeforeDamage = getConcentrationCondition(character)
     const concentrationDc = Math.max(10, Math.floor(amount / 2))
 
-    dispatchGameOperation({
-      type: "character.hp.damage",
-      characterId,
-      amount,
-      requiresConcentrationCheck: Boolean(concentrationBeforeDamage),
-      concentrationDc: concentrationBeforeDamage ? concentrationDc : undefined,
-      concentrationSource: concentrationBeforeDamage?.source || undefined,
-    })
+    if (dispatchGameOperation) {
+      dispatchGameOperation({
+        type: "character.hp.damage",
+        characterId,
+        amount,
+        requiresConcentrationCheck: Boolean(concentrationBeforeDamage),
+        concentrationDc: concentrationBeforeDamage ? concentrationDc : undefined,
+        concentrationSource: concentrationBeforeDamage?.source || undefined,
+      })
+    } else {
+      // Relational/user workspaces do not use the legacy synced operation log.
+      // Persist the HP mutation directly while preserving the local
+      // concentration-check interaction below.
+      updateCharacter(characterId, (current) => current.damage(amount))
+    }
     closeModal()
 
     if (concentrationBeforeDamage) {
@@ -248,9 +255,11 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
               />
             </label>
 
-            <p className="text-xs leading-5 text-textMuted">
-              O dano consome primeiro a vida temporária e depois a vida atual. Se o personagem estiver concentrando, o teste de concentração é solicitado após o dano.
-            </p>
+            {concentration ? (
+              <div className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs text-text">
+                Este personagem está concentrando{concentration.source ? ` em ${concentration.source}` : ""}. Ao sofrer dano, será solicitado um teste de concentração.
+              </div>
+            ) : null}
 
             <div className="flex justify-end border-t border-border pt-3">
               <Button variant="primary" onClick={applyDamage} disabled={amount <= 0}>
@@ -262,102 +271,88 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
       ) : null}
 
       {modal === "maximum" ? (
-        <Modal title="Vida máxima" onClose={closeModal} className="max-w-md">
+        <Modal title="Pontos de vida máximos" onClose={closeModal} className="max-w-md">
           <div className="grid gap-4">
             <div className="grid grid-cols-2 gap-2">
-              <HpSummary label="Máxima atual" value={currentMax} />
-              <HpSummary label="Máxima real" value={hp.max} />
+              <HpSummary label="Máximo real" value={hp.max} />
+              <HpSummary label="Máximo atual" value={currentMax} />
             </div>
-            {effectiveMax !== currentMax ? (
-              <div className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs text-textH">
-                Valor exibido com bônus e efeitos: <strong>{effectiveMax}</strong>
-              </div>
-            ) : null}
 
-            <section className="grid gap-2 rounded-xl border border-border bg-bg-subtle p-3">
-              <div>
-                <div className="text-xs font-semibold text-textH">Atualizar vida máxima real</div>
-                <p className="mt-1 text-[11px] leading-4 text-textMuted">
-                  Altera o valor base permanente do personagem.
-                </p>
+            <label className="grid gap-1 text-xs text-textMuted">
+              Máximo real
+              <Input
+                type="number"
+                min={1}
+                inputMode="numeric"
+                value={realMaxText}
+                onChange={(event) => setRealMaxText(event.target.value)}
+              />
+            </label>
+
+            <Button
+              variant="secondary"
+              onClick={updateRealMaximum}
+              disabled={realMaxValue === hp.max}
+            >
+              Atualizar máximo real
+            </Button>
+
+            <div className="border-t border-border pt-4">
+              <div className="mb-2 text-xs font-semibold text-textH">
+                Alteração temporária do máximo
               </div>
-              <div className="grid grid-cols-[1fr_auto] gap-2">
+              <div className="grid grid-cols-[1fr_auto_auto] gap-2">
                 <Input
                   type="number"
-                  min={1}
+                  min={0}
                   inputMode="numeric"
-                  value={realMaxText}
-                  onChange={(event) => setRealMaxText(event.target.value)}
+                  value={amountText}
+                  placeholder="0"
+                  onChange={(event) => setAmountText(event.target.value)}
                 />
                 <Button
+                  size="sm"
                   variant="secondary"
-                  onClick={updateRealMaximum}
-                  disabled={!realMaxText.trim() || realMaxValue === hp.max}
+                  onClick={() => changeCurrentMaximum("increase")}
+                  disabled={amount <= 0}
                 >
-                  Atualizar
+                  +
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => changeCurrentMaximum("reduce")}
+                  disabled={amount <= 0}
+                >
+                  −
                 </Button>
               </div>
-            </section>
-
-            <section className="grid gap-2 rounded-xl border border-border bg-bg-subtle p-3">
-              <div>
-                <div className="text-xs font-semibold text-textH">Alterar vida máxima atual</div>
-                <p className="mt-1 text-[11px] leading-4 text-textMuted">
-                  Use para reduções ou aumentos temporários sem alterar a máxima real.
-                </p>
-              </div>
-              <Input
-                autoFocus
-                type="number"
-                min={0}
-                inputMode="numeric"
-                value={amountText}
-                placeholder="Valor da alteração"
-                onChange={(event) => setAmountText(event.target.value)}
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="secondary" onClick={() => changeCurrentMaximum("reduce")} disabled={amount <= 0}>
-                  Reduzir
+              {currentMax !== hp.max ? (
+                <Button className="mt-2 w-full" variant="ghost" onClick={restoreMaximum}>
+                  Restaurar máximo real
                 </Button>
-                <Button variant="primary" onClick={() => changeCurrentMaximum("increase")} disabled={amount <= 0 || currentMax >= hp.max}>
-                  Aumentar
-                </Button>
-              </div>
-            </section>
-
-            <section className="flex items-center justify-between gap-3 rounded-xl border border-border bg-bg-subtle p-3">
-              <div>
-                <div className="text-xs font-semibold text-textH">Restaurar vida máxima atual</div>
-                <p className="mt-1 text-[11px] leading-4 text-textMuted">
-                  Retorna a máxima atual ao valor da máxima real.
-                </p>
-              </div>
-              <Button variant="secondary" onClick={restoreMaximum} disabled={currentMax === hp.max}>
-                Restaurar
-              </Button>
-            </section>
+              ) : null}
+            </div>
           </div>
         </Modal>
       ) : null}
 
-      {pendingCheck && concentration ? (
-        <Modal title="Teste de concentração" onClose={() => setPendingCheck(null)} className="max-w-md">
-          <div className="grid gap-3">
-            <p className="text-sm leading-6 text-text">
-              O personagem sofreu <strong>{pendingCheck.damage} de dano</strong> enquanto estava concentrando{pendingCheck.spellName ? ` em ${pendingCheck.spellName}` : ""}.
-            </p>
-            <div className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm text-textH">
-              Faça um teste de resistência de Constituição com <strong>CD {pendingCheck.dc}</strong>.
+      {pendingCheck ? (
+        <Modal
+          title="Teste de concentração"
+          onClose={() => setPendingCheck(null)}
+          className="max-w-md"
+        >
+          <div className="grid gap-4">
+            <div className="rounded-lg border border-accentBorder bg-accentBg p-3 text-sm text-text">
+              O personagem sofreu {pendingCheck.damage} de dano e precisa realizar um teste de Constituição CD {pendingCheck.dc}{pendingCheck.spellName ? ` para manter ${pendingCheck.spellName}` : ""}.
             </div>
-            <p className="text-xs leading-5 text-textMuted">
-              Passar mantém a concentração; falhar encerra a concentração atual.
-            </p>
-            <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
+            <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" onClick={() => setPendingCheck(null)}>
-                Passar
+                Passou
               </Button>
               <Button variant="primary" onClick={failConcentration}>
-                Falhar
+                Falhou
               </Button>
             </div>
           </div>
@@ -369,9 +364,9 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
 
 function HpDisplay({ label, value }: { label: string; value: number }) {
   return (
-    <div className="min-h-16 rounded-xl border border-border bg-bg-subtle px-3 py-2 text-center">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">{label}</div>
-      <div className="mt-1 text-lg font-bold text-textH">{value}</div>
+    <div className="rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center">
+      <div className="text-[10px] uppercase tracking-wide text-textMuted">{label}</div>
+      <div className="mt-1 text-lg font-semibold text-textH">{value}</div>
     </div>
   )
 }
@@ -381,20 +376,20 @@ function HpMaximumButton({ value, reduced, onClick }: { value: number; reduced: 
     <button
       type="button"
       onClick={onClick}
-      className="min-h-16 rounded-xl border border-border bg-bg-subtle px-3 py-2 text-center transition-colors hover:border-accentBorder hover:bg-accentBg"
+      className="rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center transition-colors hover:border-accentBorder hover:bg-accentBg"
     >
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Vida máxima</div>
-      <div className="mt-1 text-lg font-bold text-textH">{value}</div>
-      {reduced ? <div className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-danger">reduzida</div> : null}
+      <div className="text-[10px] uppercase tracking-wide text-textMuted">Vida máxima</div>
+      <div className="mt-1 text-lg font-semibold text-textH">{value}</div>
+      {reduced ? <div className="text-[9px] text-danger">reduzida</div> : null}
     </button>
   )
 }
 
 function HpSummary({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg border border-border bg-bg-subtle px-3 py-2 text-center">
+    <div className="rounded-lg border border-border bg-bg-subtle p-3 text-center">
       <div className="text-[10px] uppercase tracking-wide text-textMuted">{label}</div>
-      <div className="mt-1 text-xl font-bold text-textH">{value}</div>
+      <div className="mt-1 text-xl font-semibold text-textH">{value}</div>
     </div>
   )
 }
