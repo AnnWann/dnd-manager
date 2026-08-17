@@ -92,11 +92,13 @@ export function CampaignLayout() {
 
   const sidebarItems = [
     {
-      label: "Ficha",
+      label: "Personagens",
       icon: <IconCharacter />,
-      active: location.pathname.startsWith(toCampaign("character")),
-      onClick: () =>
-        navigate(toCampaign("character"), { state: { autoOpenLast: true } }),
+      active:
+        location.pathname === toCampaign("characters") ||
+        location.pathname.startsWith(`${toCampaign("character")}/`) ||
+        location.pathname === toCampaign("character"),
+      onClick: () => navigate(toCampaign("characters")),
     },
     {
       label: "Inventário do grupo",
