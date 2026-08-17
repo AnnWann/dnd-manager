@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { Card, CardHeader } from "../../../components/ui/Card"
-import { useCharacterContext } from "../../../contexts/characterContext"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { getCharacterGrantedSpells } from "../../../models/characters/characterGrantedSpells"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
@@ -15,6 +14,7 @@ import type {
   CharacterClassInterface,
   ClassName,
 } from "../../../models/sheet/Class"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { ChannelDivinityModule } from "./channelDivinityModule"
 import { KiModule } from "./kiModule"
 import { KnownSpellsList } from "./knownSpellsList"
@@ -41,14 +41,14 @@ export function CharacterMagicTab({
   character,
   updateCharacter,
 }: Props) {
-  const { visibleCharacters } = useCharacterContext()
+  const { characters } = useCharacterWorkspace()
   const { spells, getSpellByIndex } = useMagicContext()
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle")
   const sorcererLevel = getSorcererLevel(character)
   const hasSorcererResources = sorcererLevel >= 2
   const spellListText = useMemo(
-    () => buildAllCharacterSpellList(visibleCharacters, getSpellByIndex),
-    [getSpellByIndex, visibleCharacters],
+    () => buildAllCharacterSpellList(characters, getSpellByIndex),
+    [characters, getSpellByIndex],
   )
   const canCopySpellList = spellListText.trim().length > 0
 
@@ -143,163 +143,123 @@ export function CharacterMagicTab({
           character={character}
           updateCharacter={updateCharacter}
         />
-
-        <KnownSpellsList
-          key={character.get("id")}
-          character={character}
-          updateCharacter={updateCharacter}
-        />
       </Card>
+
+      <KnownSpellsList
+        character={character}
+        updateCharacter={updateCharacter}
+      />
     </div>
   )
 }
 
+function buildAllCharacterSpellList(
+  characters: CharacterTemplate[],
+  getSpellByIndex: (index: string) => Spell | undefined,
+): string {
+  return characters
+    .flatMap((entry) => buildCharacterSpellList(entry, getSpellByIndex))
+    .filter(Boolean)
+    .join("\n")
+}
+
+function buildCharacterSpellList(
+  character: CharacterTemplate,
+  getSpellByIndex: (index: string) => Spell | undefined,
+): string[] {
+  const level = character.get("level")
+  const name = character.get("name")
+  const knownSpells = character.get("magic")?.spells.knownSpells ?? []
+  const grantedSpells = getCharacterGrantedSpells(character)
+  const seen = new Set<string>()
+  const rows: string[] = []
+
+  for (const entry of knownSpells) {
+    const spell = getSpellByIndex(entry.spells.id)
+    if (!spell || seen.has(spell.index)) continue
+    seen.add(spell.index)
+    rows.push(`${name} | Nível ${level} | ${spell.name}`)
+  }
+
+  for (const grant of grantedSpells) {
+    const spell = getSpellByIndex(grant.index)
+    if (!spell || seen.has(spell.index)) continue
+    seen.add(spell.index)
+    rows.push(`${name} | Nível ${level} | ${spell.name}`)
+  }
+
+  return rows
+}
+
 function getMissingDivineClassSpells(
   character: CharacterTemplate,
-  availableSpells: Spell[],
+  spells: Spell[],
 ): KnownSpellEntry[] {
-  const knownSpellIds = new Set(
-    (character.get("magic")?.spells.knownSpells ?? []).map(
-      (entry) => entry.spells.id,
-    ),
-  )
-  const missingSpells: KnownSpellEntry[] = []
   const classes = character.get("sheet").classes ?? []
+  const knownSpells = character.get("magic")?.spells.knownSpells ?? []
+  const knownIndexes = new Set(knownSpells.map((entry) => entry.spells.id))
 
-  for (const classData of classes) {
-    if (!isDivinePreparedCaster(classData)) continue
+  const divineClasses = classes.filter((entry) =>
+    DIVINE_PREPARED_CLASSES.includes(entry.name),
+  )
 
-    const maximumSpellLevel = getMaximumDivineSpellLevel(classData)
-    if (maximumSpellLevel < 1) continue
+  const missing: KnownSpellEntry[] = []
 
-    for (const spell of availableSpells) {
-      if (
-        knownSpellIds.has(spell.index) ||
-        spell.slotLevel < 1 ||
-        spell.slotLevel > maximumSpellLevel ||
-        !spell.classes.includes(classData.className)
-      ) {
-        continue
-      }
+  for (const classEntry of divineClasses) {
+    const availableLevel = maximumSpellLevelForClass(classEntry)
+    if (availableLevel <= 0) continue
 
-      missingSpells.push({
-        source: {
-          type: "class",
-          name: classData.className,
-          sourceId: classData.className,
-          attribute:
-            classData.castingAttribute ??
-            (classData.className === "paladin" ? "cha" : "wis"),
-        },
+    for (const spell of spells) {
+      if (spell.level > availableLevel) continue
+      if (!spell.classes.includes(classEntry.name)) continue
+      if (knownIndexes.has(spell.index)) continue
+
+      knownIndexes.add(spell.index)
+      missing.push({
         spells: {
           id: spell.index,
           prepared: false,
         },
+        source: {
+          type: "class",
+          sourceId: classEntry.id,
+          sourceName: classEntry.name,
+        },
       })
-      knownSpellIds.add(spell.index)
     }
   }
 
-  return missingSpells
+  return missing
 }
 
-function isDivinePreparedCaster(
-  classData: CharacterClassInterface,
-): classData is CharacterClassInterface & {
-  className: "cleric" | "druid" | "paladin"
-} {
-  return (
-    DIVINE_PREPARED_CLASSES.includes(classData.className) &&
-    classData.knownSpells?.mode === "prepared-only"
-  )
-}
+function maximumSpellLevelForClass(classEntry: CharacterClassInterface): number {
+  const level = classEntry.level
 
-function getMaximumDivineSpellLevel(
-  classData: CharacterClassInterface & {
-    className: "cleric" | "druid" | "paladin"
-  },
-): number {
-  if (classData.className === "paladin") {
-    if (classData.level < 2) return 0
-    return Math.min(5, Math.ceil(classData.level / 4))
+  switch (classEntry.name) {
+    case "cleric":
+    case "druid":
+      return Math.min(9, Math.ceil(level / 2))
+    case "paladin":
+      return level < 2 ? 0 : Math.min(5, Math.ceil((level - 1) / 2))
+    default:
+      return 0
   }
-
-  return Math.min(9, Math.ceil(classData.level / 2))
 }
 
-function buildAllCharacterSpellList(
-  characters: CharacterTemplate[],
-  getSpellByIndex: (spellIndex: string) => Spell | undefined,
-): string {
-  const blocks: string[] = []
-
-  for (const character of characters) {
-    const characterName = character.get("name").trim() || "Personagem sem nome"
-    const spells = getCharacterSpellRows(character, getSpellByIndex)
-
-    if (spells.length === 0) continue
-
-    blocks.push([
-      characterName,
-      ...spells.map(
-        (spell) =>
-          `${spell.displayName || spell.name} - ${formatSpellLevel(spell.slotLevel)}`,
-      ),
-    ].join("\n"))
-  }
-
-  return blocks.join("\n\n")
-}
-
-function getCharacterSpellRows(
-  character: CharacterTemplate,
-  getSpellByIndex: (spellIndex: string) => Spell | undefined,
-): Spell[] {
-  const spellsByIndex = new Map<string, Spell>()
-
-  for (const entry of character.get("magic")?.spells.knownSpells ?? []) {
-    const spell = getSpellByIndex(entry.spells.id)
-    if (spell?.index) spellsByIndex.set(spell.index, spell)
-  }
-
-  for (const entry of getCharacterGrantedSpells(character)) {
-    const spell = getSpellByIndex(entry.index)
-    if (spell?.index) spellsByIndex.set(spell.index, spell)
-  }
-
-  return Array.from(spellsByIndex.values()).toSorted((left, right) => {
-    const levelDifference = left.slotLevel - right.slotLevel
-    if (levelDifference !== 0) return levelDifference
-
-    return (left.displayName || left.name).localeCompare(
-      right.displayName || right.name,
-      "pt-BR",
-    )
-  })
-}
-
-function formatSpellLevel(level: number): string {
-  return level === 0 ? "Truque" : `Nível ${level}`
-}
-
-async function copyText(text: string): Promise<void> {
+async function copyText(value: string): Promise<void> {
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
+    await navigator.clipboard.writeText(value)
     return
   }
 
   const textarea = document.createElement("textarea")
-  textarea.value = text
-  textarea.setAttribute("readonly", "true")
+  textarea.value = value
   textarea.style.position = "fixed"
-  textarea.style.top = "-1000px"
+  textarea.style.opacity = "0"
   document.body.appendChild(textarea)
   textarea.select()
+  const copied = document.execCommand("copy")
+  textarea.remove()
 
-  try {
-    const copied = document.execCommand("copy")
-    if (!copied) throw new Error("Copy command failed")
-  } finally {
-    document.body.removeChild(textarea)
-  }
+  if (!copied) throw new Error("Clipboard unavailable")
 }
