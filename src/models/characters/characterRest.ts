@@ -7,6 +7,7 @@ import type { Itemmable } from "../items/item"
 import type { HP } from "../sheet/HP"
 import { applyCustomSystemRestRecovery } from "../../lib/customSystems"
 import { recoverChannelDivinity } from "./characterChannelDivinity"
+import { recoverKi } from "./characterKi"
 import {
   getCharacterConditions,
   withCharacterConditions,
@@ -171,6 +172,7 @@ function resetRestResources(
   )
 
   nextCharacter = recoverChannelDivinity(nextCharacter, recoveryFraction)
+  nextCharacter = recoverKi(nextCharacter, recoveryFraction)
 
   const magic = nextCharacter.get("magic")
 
