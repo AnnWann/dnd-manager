@@ -32,8 +32,6 @@ import { UserDashboardView } from "./views/user/UserDashboardView"
 import { UserSpellsTab } from "./views/user/UserSpellsTab"
 
 export function AppRouter() {
-  const { userRole } = useSyncContext()
-
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/user" replace />} />
@@ -89,13 +87,15 @@ export function AppRouter() {
       <Route path="/custom-systems" element={<CustomSystemsListView />} />
       <Route path="/custom-systems/:systemId" element={<CustomSystemEditorView />} />
       <Route path="/custom-systems/:systemId/:tab" element={<CustomSystemEditorView />} />
-      <Route
-        path="/initiative"
-        element={userRole === "master" ? <InitiativeView /> : <InitiativePlayerView />}
-      />
+      <Route path="/initiative" element={<InitiativeRoute />} />
       <Route path="/magic" element={<MagicView />} />
 
       <Route path="*" element={<Navigate to="/not-found" replace />} />
     </Routes>
   )
+}
+
+function InitiativeRoute() {
+  const { userRole } = useSyncContext()
+  return userRole === "master" ? <InitiativeView /> : <InitiativePlayerView />
 }
