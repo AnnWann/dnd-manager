@@ -5,6 +5,7 @@ import { Navigate, useNavigate, useParams } from "react-router-dom"
 import { getMyCampaigns, type UserCampaign } from "../../api/user-campaigns"
 import { Button } from "../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../components/ui/Card"
+import { campaignCharacterPath } from "../../lib/campaignRoutes"
 
 export function CampaignCharactersView() {
   const navigate = useNavigate()
@@ -126,9 +127,7 @@ export function CampaignCharactersView() {
                     className="w-full"
                     variant="secondary"
                     onClick={() =>
-                      navigate(
-                        `/user/characters/${encodeURIComponent(character.id)}/sheet`,
-                      )
+                      navigate(campaignCharacterPath(campaignId, character.id, "sheet"))
                     }
                   >
                     Abrir ficha
