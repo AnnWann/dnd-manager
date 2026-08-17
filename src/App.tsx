@@ -134,7 +134,9 @@ function App() {
                 userKey={userKey}
               >
                 <MasterConcentrationAlerts />
-                <MasterAbilityAcquisitionExceptions />
+                <div className="[&>button]:hidden">
+                  <MasterAbilityAcquisitionExceptions />
+                </div>
                 <MagicProvider spells={appState.spells ?? []} setAppState={setAppState}>
                   <div className="fixed inset-0 flex w-full max-w-full flex-col overflow-hidden bg-[color:var(--surface-app)] text-text">
                     <AppHeader />
