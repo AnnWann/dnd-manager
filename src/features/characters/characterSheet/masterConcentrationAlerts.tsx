@@ -3,12 +3,15 @@ import { AlertTriangle, X } from "lucide-react"
 
 import { useCharacterContext } from "../../../contexts/characterContext"
 
+const ALERT_LIFETIME_MS = 5 * 60 * 1000
+
 type ConcentrationAlert = {
   id: string
   characterName: string
   damage: number
   dc: number
   source?: string
+  expiresAt: number
 }
 
 export function MasterConcentrationAlerts() {
@@ -24,6 +27,7 @@ export function MasterConcentrationAlerts() {
 
   useEffect(() => {
     const incoming: ConcentrationAlert[] = []
+    const now = Date.now()
 
     for (const record of operationLog) {
       if (seenOperationIds.current.has(record.id)) continue
@@ -53,6 +57,7 @@ export function MasterConcentrationAlerts() {
           ),
         ),
         source: operation.concentrationSource || undefined,
+        expiresAt: now + ALERT_LIFETIME_MS,
       })
     }
 
@@ -60,6 +65,26 @@ export function MasterConcentrationAlerts() {
       setAlerts((current) => [...current, ...incoming].slice(-5))
     }
   }, [canAssignOwners, operationLog, visibleCharacters])
+
+  useEffect(() => {
+    if (!alerts.length) return
+
+    const removeExpired = () => {
+      const now = Date.now()
+      setAlerts((current) =>
+        current.filter((alert) => alert.expiresAt > now),
+      )
+    }
+
+    removeExpired()
+    const nextExpiry = Math.min(...alerts.map((alert) => alert.expiresAt))
+    const timeout = window.setTimeout(
+      removeExpired,
+      Math.max(0, nextExpiry - Date.now()) + 50,
+    )
+
+    return () => window.clearTimeout(timeout)
+  }, [alerts])
 
   if (!canAssignOwners || alerts.length === 0) return null
 
