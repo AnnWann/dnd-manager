@@ -7,6 +7,10 @@ export type ChannelDivinityResource = {
   used: number
 }
 
+export type KiResource = {
+  used: number
+}
+
 export interface Magic {
   spells: CharacterSpells
   metamagic?: CharacterMetamagics
@@ -15,4 +19,5 @@ export interface Magic {
   /** Compatibility mirror for top-level character ASI persistence. */
   asi?: CharacterAsi[]
   channelDivinity?: ChannelDivinityResource
+  ki?: KiResource
 }
