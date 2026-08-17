@@ -1,6 +1,7 @@
 // models/characters/characterAbilities.ts
 
 import type { Ability } from "../abilities/Ability"
+import type { Attribute } from "../sheet/Attribute"
 import {
   abilityRequiresActivation,
   endAbilityEffect,
@@ -8,6 +9,11 @@ import {
   useAbilityEffect,
   restoreAbilityUse,
 } from "../abilities/abilityActivation"
+import { createCharacterAcquisition } from "./CharacterAcquisition"
+import {
+  getCharacterAsis,
+  withCharacterAsis,
+} from "./CharacterAsi"
 import {
   getChannelDivinityPool,
   recoverChannelDivinity,
@@ -38,9 +44,14 @@ export function addAbility(
   character: CharacterTemplate,
   ability: Ability,
 ): CharacterTemplate {
+  const normalized = withManualAbilityMetadata(character, ability)
+  if (normalized.category === "invocation") {
+    return withInvocations(character, [...getInvocations(character), normalized])
+  }
+
   return character.with("abilities", [
     ...(character.get("abilities") ?? []),
-    ability,
+    normalized,
   ])
 }
 
@@ -48,10 +59,68 @@ export function updateAbility(
   character: CharacterTemplate,
   ability: Ability,
 ): CharacterTemplate {
+  const asiEntry = getCharacterAsis(character).find(
+    (entry) => entry.ability?.id === ability.id,
+  )
+  if (asiEntry) {
+    return withCharacterAsis(
+      character,
+      getCharacterAsis(character).map((entry) =>
+        entry.id === asiEntry.id
+          ? {
+              ...entry,
+              ability: {
+                ...ability,
+                category: "feat",
+                source: "asi",
+                acquisition: ability.acquisition ?? entry.ability?.acquisition,
+              },
+            }
+          : entry,
+      ),
+    )
+  }
+
+  const invocationExists = getInvocations(character).some(
+    (current) => current.id === ability.id,
+  )
+  if (invocationExists || ability.category === "invocation") {
+    const normalized = withManualAbilityMetadata(character, {
+      ...ability,
+      category: "invocation",
+    })
+    return withInvocations(
+      character.with(
+        "abilities",
+        (character.get("abilities") ?? []).filter(
+          (current) => current.id !== ability.id,
+        ),
+      ),
+      invocationExists
+        ? getInvocations(character).map((current) =>
+            current.id === normalized.id
+              ? {
+                  ...normalized,
+                  acquisition: normalized.acquisition ?? current.acquisition,
+                }
+              : current,
+          )
+        : [...getInvocations(character), normalized],
+    )
+  }
+
   return character.with(
     "abilities",
-    (character.get("abilities") ?? []).map((a) =>
-      a.id === ability.id ? ability : a,
+    (character.get("abilities") ?? []).map((current) =>
+      current.id === ability.id
+        ? {
+            ...ability,
+            acquisition:
+              ability.acquisition ??
+              current.acquisition ??
+              withManualAbilityMetadata(character, ability).acquisition,
+          }
+        : current,
     ),
   )
 }
@@ -60,9 +129,24 @@ export function removeAbility(
   character: CharacterTemplate,
   abilityId: string,
 ): CharacterTemplate {
-  return character.with(
-    "abilities",
-    (character.get("abilities") ?? []).filter((a) => a.id !== abilityId),
+  const asiEntry = getCharacterAsis(character).find(
+    (entry) => entry.ability?.id === abilityId,
+  )
+  const withoutAsi = asiEntry
+    ? withCharacterAsis(
+        character,
+        getCharacterAsis(character).filter((entry) => entry.id !== asiEntry.id),
+      )
+    : character
+
+  return withInvocations(
+    withoutAsi.with(
+      "abilities",
+      (withoutAsi.get("abilities") ?? []).filter(
+        (ability) => ability.id !== abilityId,
+      ),
+    ),
+    getInvocations(withoutAsi).filter((ability) => ability.id !== abilityId),
   )
 }
 
@@ -70,13 +154,13 @@ export function saveAbility(
   character: CharacterTemplate,
   ability: Ability,
 ): CharacterTemplate {
-  const exists = (character.get("abilities") ?? []).some(
-    (a) => a.id === ability.id,
-  )
+  const exists = [
+    ...(character.get("abilities") ?? []),
+    ...getInvocations(character),
+    ...getAsiAbilities(character),
+  ].some((current) => current.id === ability.id)
 
-  return exists
-    ? updateAbility(character, ability)
-    : addAbility(character, ability)
+  return exists ? updateAbility(character, ability) : addAbility(character, ability)
 }
 
 export function getChannelDivinityUsage(character: CharacterTemplate): {
@@ -95,9 +179,7 @@ export function useAbility(
   abilityId: string,
   activationOptionId?: string,
 ): CharacterTemplate {
-  const directAbility = (character.get("abilities") ?? []).find(
-    (current) => current.id === abilityId,
-  )
+  const directAbility = findStoredCharacterAbility(character, abilityId)
   const projected = directAbility ? undefined : findConditionAbility(character, abilityId)
   const ability = directAbility ?? projected?.ability
   if (!ability) return character
@@ -113,7 +195,6 @@ export function useAbility(
   if (ability.category === "channelDivinity") {
     const pool = getChannelDivinityPool(character)
     if (!pool || pool.current <= 0) return character
-
     const activated = useAbilityEffect(
       character,
       { ...ability, usage: undefined },
@@ -126,7 +207,6 @@ export function useAbility(
   if (ability.category === "martialArts") {
     const pool = getKiPool(character)
     if (!pool || pool.current <= 0) return character
-
     const activated = useAbilityEffect(
       character,
       { ...ability, usage: undefined },
@@ -136,35 +216,14 @@ export function useAbility(
     return spendKi(activated)
   }
 
-  const sharedResourceId = ability.usage?.sharedResourceId?.trim()
-  if (!projected && sharedResourceId && ability.usage) {
-    if (ability.usage.used >= getAbilityUsageMax(character, ability.usage)) {
-      return character
-    }
-    const activated = useAbilityEffect(
-      character,
-      { ...ability, usage: undefined },
-      source,
-      activationOptionId,
-    )
-    return updateSharedResourceUsage(activated, sharedResourceId, 1)
-  }
-
-  return useAbilityEffect(
-    character,
-    ability,
-    source,
-    activationOptionId,
-  )
+  return useAbilityEffect(character, ability, source, activationOptionId)
 }
 
 export function deactivateAbility(
   character: CharacterTemplate,
   abilityId: string,
 ): CharacterTemplate {
-  const directAbility = (character.get("abilities") ?? []).find(
-    (current) => current.id === abilityId,
-  )
+  const directAbility = findStoredCharacterAbility(character, abilityId)
   if (directAbility) {
     return endAbilityEffect(character, directAbility, { type: "character" })
   }
@@ -183,15 +242,9 @@ export function resetAbility(
   character: CharacterTemplate,
   abilityId: string,
 ): CharacterTemplate {
-  const target = (character.get("abilities") ?? []).find((ability) => ability.id === abilityId)
-  if (target?.category === "channelDivinity") {
-    return recoverChannelDivinity(character)
-  }
-  if (target?.category === "martialArts") {
-    return recoverKi(character)
-  }
-  const sharedResourceId = target?.usage?.sharedResourceId?.trim()
-  if (sharedResourceId) return setSharedResourceUsage(character, sharedResourceId, 0)
+  const target = findStoredCharacterAbility(character, abilityId)
+  if (target?.category === "channelDivinity") return recoverChannelDivinity(character)
+  if (target?.category === "martialArts") return recoverKi(character)
 
   if (!target) {
     const projected = findConditionAbility(character, abilityId)
@@ -205,39 +258,32 @@ export function resetAbility(
         benefitsActive: abilityRequiresActivation(ability) ? false : undefined,
         modifiersActive: undefined,
         usage: ability.usage
-          ? {
-              ...ability.usage,
-              used: 0,
-              cooldownRemaining: undefined,
-            }
+          ? { ...ability.usage, used: 0, cooldownRemaining: undefined }
           : ability.usage,
       }),
     )
   }
 
-  return character.with(
-    "abilities",
-    (character.get("abilities") ?? []).map((a) => {
-      if (a.id !== abilityId || !a.usage) return a
-
-      return {
-        ...a,
-        benefitsActive: abilityRequiresActivation(a) ? false : undefined,
-        modifiersActive: undefined,
-        usage: {
-          ...a.usage,
-          used: 0,
-          cooldownRemaining: undefined,
-        },
-      }
-    }),
-  )
+  if (!target.usage) return character
+  return updateAbility(character, {
+    ...target,
+    benefitsActive: abilityRequiresActivation(target) ? false : undefined,
+    modifiersActive: undefined,
+    usage: {
+      ...target.usage,
+      used: 0,
+      cooldownRemaining: undefined,
+    },
+  })
 }
 
 export function getCharacterAbilities(
   character: CharacterTemplate,
 ): Ability[] {
   const characterAbilities = character.get("abilities") ?? []
+  const invocations = getInvocations(character)
+  const asiAbilities = getAsiAbilities(character)
+  const asiScoreBonuses = getAsiScoreBonusAbilities(character)
   const equipmentAbilities = getEquipmentAbilities(character)
   const conditionAbilities: ConditionAbilityProjection[] = getCharacterConditions(character)
     .flatMap((condition) =>
@@ -251,22 +297,23 @@ export function getCharacterAbilities(
       })),
     )
 
-  return [...characterAbilities, ...equipmentAbilities, ...conditionAbilities]
+  return [
+    ...characterAbilities,
+    ...invocations,
+    ...asiAbilities,
+    ...asiScoreBonuses,
+    ...equipmentAbilities,
+    ...conditionAbilities,
+  ]
 }
 
 export function restoreAbility(
   character: CharacterTemplate,
   abilityId: string,
 ): CharacterTemplate {
-  const target = (character.get("abilities") ?? []).find((ability) => ability.id === abilityId)
-  if (target?.category === "channelDivinity") {
-    return restoreChannelDivinity(character)
-  }
-  if (target?.category === "martialArts") {
-    return restoreKi(character)
-  }
-  const sharedResourceId = target?.usage?.sharedResourceId?.trim()
-  if (sharedResourceId) return updateSharedResourceUsage(character, sharedResourceId, -1)
+  const target = findStoredCharacterAbility(character, abilityId)
+  if (target?.category === "channelDivinity") return restoreChannelDivinity(character)
+  if (target?.category === "martialArts") return restoreKi(character)
 
   if (!target) {
     const projected = findConditionAbility(character, abilityId)
@@ -279,12 +326,114 @@ export function restoreAbility(
     )
   }
 
-  return character.with(
-    "abilities",
-    (character.get("abilities") ?? []).map((ability) =>
-      ability.id === abilityId ? restoreAbilityUse(ability) : ability,
-    ),
+  return updateAbility(character, restoreAbilityUse(target))
+}
+
+function findStoredCharacterAbility(
+  character: CharacterTemplate,
+  abilityId: string,
+): Ability | undefined {
+  return (
+    (character.get("abilities") ?? []).find((ability) => ability.id === abilityId) ??
+    getInvocations(character).find((ability) => ability.id === abilityId) ??
+    getAsiAbilities(character).find((ability) => ability.id === abilityId)
   )
+}
+
+function getInvocations(character: CharacterTemplate): Ability[] {
+  return character.get("magic")?.invocations ?? []
+}
+
+function getAsiAbilities(character: CharacterTemplate): Ability[] {
+  return getCharacterAsis(character)
+    .map((entry) => entry.ability)
+    .filter((ability): ability is Ability => Boolean(ability))
+    .map((ability) => ({
+      ...ability,
+      category: "feat",
+      source: "asi",
+    }))
+}
+
+function getAsiScoreBonusAbilities(character: CharacterTemplate): Ability[] {
+  return getCharacterAsis(character)
+    .filter((entry) =>
+      Object.values(entry.increases).some((amount) => (amount ?? 0) > 0),
+    )
+    .map((entry) => ({
+      id: `asi-score:${entry.id}`,
+      name: `ASI — nível ${entry.classLevel}`,
+      kind: "feature" as const,
+      category: "general" as const,
+      source: "asi",
+      acquisition: entry.acquisition,
+      bonuses: {
+        attribute: Object.entries(entry.increases)
+          .filter(([, amount]) => (amount ?? 0) > 0)
+          .map(([attribute, amount]) => ({
+            attribute: attribute as Attribute,
+            bonus: {
+              type: "add" as const,
+              value: amount ?? 0,
+              label: "ASI",
+            },
+          })),
+      },
+    }))
+}
+
+function withInvocations(
+  character: CharacterTemplate,
+  invocations: Ability[],
+): CharacterTemplate {
+  const magic = character.getOrCreateMagic()
+  return character.with("magic", { ...magic, invocations })
+}
+
+function withManualAbilityMetadata(
+  character: CharacterTemplate,
+  ability: Ability,
+): Ability {
+  if (ability.acquisition) return ability
+
+  const characterLevel = (character.get("sheet").classes ?? []).reduce(
+    (sum, entry) => sum + entry.level,
+    0,
+  )
+  const sourceType =
+    ability.source === "race"
+      ? "race"
+      : ability.source === "equipment"
+        ? "equipment"
+        : ability.category === "feat"
+          ? "feat"
+          : "manual"
+  const acquisition = createCharacterAcquisition({
+    characterLevel,
+    sourceType,
+    sourceId: ability.sourceItemId,
+    sourceName:
+      ability.category === "invocation"
+        ? "Evocação"
+        : ability.sourceItemName || "Adição manual à ficha",
+    reason: "manual",
+  })
+
+  return {
+    ...ability,
+    acquisition,
+    grantedSpells: ability.grantedSpells?.map((grant) => ({
+      ...grant,
+      acquisition:
+        grant.acquisition ??
+        createCharacterAcquisition({
+          ...acquisition,
+          sourceType: "ability",
+          sourceId: ability.id,
+          sourceName: ability.name,
+        }),
+    })),
+  }
 }
 
 function findConditionAbility(
@@ -332,51 +481,4 @@ function updateConditionAbility(
 
 function conditionAbilityProjectionId(conditionId: string, abilityId: string): string {
   return `condition:${conditionId}:${abilityId}`
-}
-
-function updateSharedResourceUsage(
-  character: CharacterTemplate,
-  sharedResourceId: string,
-  delta: number,
-): CharacterTemplate {
-  const members = (character.get("abilities") ?? []).filter(
-    (ability) => ability.usage?.sharedResourceId?.trim() === sharedResourceId,
-  )
-  if (!members.length) return character
-  const representative = members[0]
-  if (!representative.usage) return character
-  const nextUsed = Math.max(
-    0,
-    Math.min(
-      getAbilityUsageMax(character, representative.usage),
-      representative.usage.used + delta,
-    ),
-  )
-  return setSharedResourceUsage(character, sharedResourceId, nextUsed)
-}
-
-function setSharedResourceUsage(
-  character: CharacterTemplate,
-  sharedResourceId: string,
-  used: number,
-): CharacterTemplate {
-  return character.with(
-    "abilities",
-    (character.get("abilities") ?? []).map((ability) => {
-      if (
-        !ability.usage ||
-        ability.usage.sharedResourceId?.trim() !== sharedResourceId
-      ) return ability
-      return {
-        ...ability,
-        usage: {
-          ...ability.usage,
-          used: Math.max(
-            0,
-            Math.min(getAbilityUsageMax(character, ability.usage), used),
-          ),
-        },
-      }
-    }),
-  )
 }
