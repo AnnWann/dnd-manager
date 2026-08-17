@@ -85,7 +85,7 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
       // Relational/user workspaces do not use the legacy synced operation log.
       // Persist the HP mutation directly while preserving the local
       // concentration-check interaction below.
-      updateCharacter(characterId, (current) => current.damage(amount))
+      updateCharacter(characterId, (current) => current.takeDamage(amount))
     }
     closeModal()
 
