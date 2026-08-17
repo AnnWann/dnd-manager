@@ -7,7 +7,14 @@ import {
   type CharacterWorkspaceValue,
 } from "./CharacterWorkspaceContext"
 
-export function CampaignCharacterWorkspace({
+/**
+ * Workspace for the mutable character copy that lives inside an active session.
+ *
+ * This deliberately uses CharacterContext/session state instead of the relational
+ * /me/characters persistence used by UserCharacterWorkspace. Changes made here
+ * must never write through to the user's source character.
+ */
+export function SessionCharacterWorkspace({
   children,
 }: {
   children: ReactNode
@@ -72,3 +79,6 @@ export function CampaignCharacterWorkspace({
     </CharacterWorkspaceProvider>
   )
 }
+
+/** @deprecated Use SessionCharacterWorkspace for active-session character UI. */
+export const CampaignCharacterWorkspace = SessionCharacterWorkspace
