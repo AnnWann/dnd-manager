@@ -21,8 +21,7 @@ import {
   type CharacterViewTabDefinition,
 } from "../features/characters/characterViewTabs"
 import { CharacterMagicTab } from "../features/characters/magic/characterMagicModule"
-import { useCharacterContext } from "../contexts/characterContext"
-import { useSyncContext } from "../contexts/syncContext"
+import { useCharacterWorkspace } from "../features/characters/workspace/CharacterWorkspaceContext"
 import { CharacterProficienciesTab } from "../features/characters/proficiencies/characterProficiencies"
 import { CharacterRaceTab } from "../features/characters/race/characterRaceV2"
 import { CharacterProfileTab } from "../features/characters/profile/characterProfileV2"
@@ -34,6 +33,7 @@ import {
   isActiveSystemState,
 } from "../features/characters/customSystems/CustomSystemsTabWithLibrary"
 import { getCustomSystemPlacement } from "../features/customSystems/CustomSystemPlacementEditor"
+import { campaignCharacterPath, campaignPath } from "../lib/campaignRoutes"
 import { useCustomSystemDefinitions } from "../lib/customSystems/CustomSystemRegistry"
 import type { CustomSystemActor } from "../lib/customSystems"
 import type {
@@ -59,7 +59,8 @@ type SwipeState = {
 
 export function CharacterView() {
   const {
-    visibleCharacters: characters,
+    mode,
+    characters,
     activeCharacter,
     partyInventory,
     setSelectedCharacterId,
@@ -72,10 +73,11 @@ export function CharacterView() {
     knownPlayerKeys: playerKeys,
     getOwner,
     createOwner,
-  } = useCharacterContext()
-  const { userKey } = useSyncContext()
+    currentOwner,
+  } = useCharacterWorkspace()
   const customSystemDefinitions = useCustomSystemDefinitions()
-  const { characterId, tab } = useParams<{
+  const { campaignId, characterId, tab } = useParams<{
+    campaignId?: string
     characterId?: string
     tab?: string
   }>()
@@ -103,8 +105,7 @@ export function CharacterView() {
   )
 
   const defaultOwner = useMemo(() => {
-    const normalizedUserKey = userKey.trim()
-    if (normalizedUserKey) return getOwner(normalizedUserKey)
+    if (currentOwner) return currentOwner
 
     return (
       routeCharacter?.get("owner") ??
@@ -112,7 +113,7 @@ export function CharacterView() {
       owners[0] ??
       createOwner("Jogador local")
     )
-  }, [activeCharacter, createOwner, getOwner, owners, routeCharacter, userKey])
+  }, [activeCharacter, createOwner, currentOwner, owners, routeCharacter])
 
   const wizardOwners = useMemo(
     () => uniqueOwners([defaultOwner, ...owners]),
@@ -158,8 +159,8 @@ export function CharacterView() {
   useEffect(() => {
     if (!routeCharacter || !characterId) return
     if (tab === activeTab) return
-    navigate(characterPath(characterId, activeTab), { replace: true })
-  }, [activeTab, characterId, navigate, routeCharacter, tab])
+    navigate(characterPath(mode, campaignId, characterId, activeTab), { replace: true })
+  }, [activeTab, campaignId, characterId, mode, navigate, routeCharacter, tab])
 
   useLayoutEffect(() => {
     lockTabPanelHeight()
@@ -167,7 +168,7 @@ export function CharacterView() {
 
   function setActiveTab(nextTab: string, replace = false) {
     if (!characterId) return
-    navigate(characterPath(characterId, nextTab), { replace })
+    navigate(characterPath(mode, campaignId, characterId, nextTab), { replace })
   }
 
   function setAdjacentTab(direction: "previous" | "next") {
@@ -289,13 +290,15 @@ export function CharacterView() {
             <div className="mt-1 text-xs text-text">
               Você ainda não tem um personagem associado a este jogador.
             </div>
-            <button
-              type="button"
-              className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accentText"
-              onClick={() => navigate("/character/create")}
-            >
-              Criar personagem
-            </button>
+            {mode === "campaign" && campaignId ? (
+              <button
+                type="button"
+                className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accentText"
+                onClick={() => navigate(campaignPath(campaignId, "character/create"))}
+              >
+                Criar personagem
+              </button>
+            ) : null}
           </div>
         </>
       )
@@ -306,15 +309,22 @@ export function CharacterView() {
         <CharacterSelector
           characters={characters}
           activeCharacter={activeCharacter}
-          addCharacter={() => navigate("/character/create")}
+          addCharacter={() => {
+            if (mode === "campaign" && campaignId) {
+              navigate(campaignPath(campaignId, "character/create"))
+              return
+            }
+            navigate("/user/characters/create")
+          }}
           importCharacter={(raw) => {
+            if (!importCharacter) return activeCharacter
             const imported = importCharacter(raw)
-            navigate(characterPath(imported.get("id"), "sheet"))
+            navigate(characterPath(mode, campaignId, imported.get("id"), "sheet"))
             return imported
           }}
           setActiveCharacterId={(id) => {
             setSelectedCharacterId(id)
-            navigate(characterPath(id, "sheet"))
+            navigate(characterPath(mode, campaignId, id, "sheet"))
           }}
           deleteActiveCharacter={() =>
             deleteCharacter(activeCharacter.get("id"))
@@ -338,7 +348,7 @@ export function CharacterView() {
         <button
           type="button"
           className="mt-4 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-textH hover:bg-accentBg"
-          onClick={() => navigate("/character")}
+          onClick={() => navigate(characterIndexPath(mode, campaignId))}
         >
           <ArrowLeft className="h-4 w-4" /> Selecionar personagem
         </button>
@@ -347,7 +357,7 @@ export function CharacterView() {
   }
 
   const actor: CustomSystemActor = canAssignOwners ? "master" : "owner"
-  const activeStaticTab = isCharacterTab(activeTab) ? activeTab : undefined
+  const activeStaticTab = toCustomSystemExistingTab(activeTab)
   const customTabSystemId = activeCustomSystemDefinitions.some(
     (definition) =>
       definition.id === activeTab &&
@@ -405,7 +415,7 @@ export function CharacterView() {
       <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
         <button
           type="button"
-          onClick={() => navigate("/character")}
+          onClick={() => navigate(characterIndexPath(mode, campaignId))}
           className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-textH hover:bg-accentBg"
         >
           <ArrowLeft className="h-4 w-4" /> Selecionar personagem
@@ -510,7 +520,7 @@ export function CharacterView() {
             />
           ) : null}
 
-          {activeTab === "spellsList" ? (
+          {activeTab === "spells-list" ? (
             <CharacterMagicTab
               character={routeCharacter}
               updateCharacter={updateCharacter}
@@ -548,7 +558,6 @@ export function CharacterView() {
         getOwner={getOwner}
         createOwner={createOwner}
       />
-
     </div>
   )
 }
@@ -581,7 +590,7 @@ function orderCharacterTabs(
         tab: placement.relativeToTab ?? "sheet",
       }
       let anchorKey =
-        reference.type === "system" ? reference.systemId : reference.tab
+        reference.type === "system" ? reference.systemId : fromCustomSystemTab(reference.tab)
 
       if (!result.some((entry) => entry.key === anchorKey)) {
         if (reference.type === "standardTab" && anchorKey !== "sheet") {
@@ -679,8 +688,46 @@ function orderEmbeddedSystems(
   }
 }
 
-function characterPath(characterId: string, tab: string): string {
-  return `/character/${encodeURIComponent(characterId)}/${encodeURIComponent(tab)}`
+function characterPath(
+  mode: "campaign" | "user",
+  campaignId: string | undefined,
+  characterId: string,
+  tab: string,
+): string {
+  if (mode === "campaign" && campaignId) {
+    return campaignCharacterPath(campaignId, characterId, tab)
+  }
+  return `/user/characters/${encodeURIComponent(characterId)}/${encodeURIComponent(tab)}`
+}
+
+function characterIndexPath(
+  mode: "campaign" | "user",
+  campaignId: string | undefined,
+): string {
+  if (mode === "campaign" && campaignId) return campaignPath(campaignId, "characters")
+  return "/user/characters"
+}
+
+function toCustomSystemExistingTab(
+  tab: string,
+): CustomSystemExistingCharacterTab | undefined {
+  if (tab === "spells-list") return "spellsList"
+  if (
+    tab === "sheet" ||
+    tab === "abilities" ||
+    tab === "equipment" ||
+    tab === "inventory" ||
+    tab === "race" ||
+    tab === "profile" ||
+    tab === "proficiencies"
+  ) {
+    return tab
+  }
+  return undefined
+}
+
+function fromCustomSystemTab(tab: CustomSystemExistingCharacterTab): string {
+  return tab === "spellsList" ? "spells-list" : tab
 }
 
 function getSwipePreviewOffset(
@@ -707,10 +754,6 @@ function normalizeCharacterViewTab(
 ): string {
   if (value && tabs.some((tab) => tab.key === value)) return value
   return tabs[0]?.key ?? "sheet"
-}
-
-function isCharacterTab(value: string): value is CharacterTab {
-  return CHARACTER_TABS.some((tab) => tab.key === value)
 }
 
 function shouldIgnoreTabSwipe(target: EventTarget): boolean {
