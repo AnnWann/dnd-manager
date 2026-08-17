@@ -23,6 +23,14 @@ export type CampaignSessionCharacters = {
   characters: CampaignSessionCharacter[]
 }
 
+type CachedSessionRequest = {
+  expiresAt: number
+  promise: Promise<CampaignSessionCharacters>
+}
+
+const SESSION_REQUEST_CACHE_MS = 5_000
+const sessionRequestCache = new Map<string, CachedSessionRequest>()
+
 export async function getCampaignSessionCharacters(
   campaignId: string,
 ): Promise<CampaignSessionCharacters> {
@@ -45,8 +53,24 @@ export async function getCampaignSessionCharacters(
     }
   }
 
-  const response = await apiClient.get<CampaignSessionCharacters>(
-    `/campaigns/${encodeURIComponent(campaignId)}/characters`,
-  )
-  return response.data
+  const now = Date.now()
+  const cached = sessionRequestCache.get(campaignId)
+  if (cached && cached.expiresAt > now) return cached.promise
+
+  const promise = apiClient
+    .get<CampaignSessionCharacters>(
+      `/campaigns/${encodeURIComponent(campaignId)}/characters`,
+    )
+    .then((response) => response.data)
+    .catch((error) => {
+      sessionRequestCache.delete(campaignId)
+      throw error
+    })
+
+  sessionRequestCache.set(campaignId, {
+    expiresAt: now + SESSION_REQUEST_CACHE_MS,
+    promise,
+  })
+
+  return promise
 }
