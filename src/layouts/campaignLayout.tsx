@@ -1,3 +1,4 @@
+import { LogOut } from "lucide-react"
 import {
   useCallback,
   useEffect,
@@ -17,7 +18,6 @@ import {
   IconInitiative,
   IconMagic,
   IconNotes,
-  IconSync,
 } from "../components/AppSidebar"
 import { AppHeader } from "../components/AppTopBar"
 import { CharacterProvider } from "../contexts/characterContext"
@@ -30,6 +30,7 @@ import { SyncProvider } from "../contexts/syncContext"
 import { MasterConcentrationAlerts } from "../features/characters/characterSheet/masterConcentrationAlerts"
 import { CharacterRelationalPersistenceBridge } from "../features/sync/CharacterRelationalPersistenceBridge"
 import { RelationalMigrationBridge } from "../features/sync/RelationalMigrationBridge"
+import { clearActiveCampaign } from "../lib/activeCampaign"
 import { campaignIdFromPathname, campaignPath } from "../lib/campaignRoutes"
 import { normalizeAppStateInventory } from "../lib/normalizeAppStateInventory"
 import { type AppStateV1 } from "../lib/remoteState"
@@ -84,13 +85,12 @@ export function CampaignLayout() {
     setRawAppState(appState)
   }, [appState, rawAppState, setRawAppState])
 
+  function leaveSession() {
+    clearActiveCampaign()
+    navigate("/user")
+  }
+
   const sidebarItems = [
-    {
-      label: "Sync",
-      icon: <IconSync />,
-      active: location.pathname === toCampaign("sync"),
-      onClick: () => navigate(toCampaign("sync")),
-    },
     {
       label: "Ficha",
       icon: <IconCharacter />,
@@ -149,6 +149,12 @@ export function CampaignLayout() {
       icon: <IconMagic />,
       active: location.pathname === toCampaign("magic"),
       onClick: () => navigate(toCampaign("magic")),
+    },
+    {
+      label: "Sair da sessão",
+      icon: <LogOut />,
+      active: false,
+      onClick: leaveSession,
     },
   ]
 
