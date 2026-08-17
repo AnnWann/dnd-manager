@@ -1,7 +1,16 @@
-import { Navigate, Outlet, Route, Routes } from "react-router-dom"
+import { useEffect } from "react"
+import {
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useParams,
+} from "react-router-dom"
 
 import { RequireAuth } from "./auth/requireAuth"
 import { useSyncContext } from "./contexts/syncContext"
+import { campaignPath } from "./lib/campaignRoutes"
 import { CharacterCreateView } from "./views/CharacterCreateView"
 import {
   CharacterDetailView,
@@ -31,6 +40,8 @@ import { UserCharacterLevelUpView } from "./views/user/UserCharacterLevelUpView"
 import { UserCharactersTab } from "./views/user/UserCharactersTab"
 import { UserDashboardView } from "./views/user/UserDashboardView"
 import { UserSpellsTab } from "./views/user/UserSpellsTab"
+
+const ACTIVE_CAMPAIGN_KEY = "dndmm.activeCampaignId.v1"
 
 export function AppRouter() {
   return (
@@ -64,7 +75,7 @@ export function AppRouter() {
         path="/campaign/:campaignId"
         element={
           <RequireAuth>
-            <Outlet />
+            <CampaignRouteOutlet />
           </RequireAuth>
         }
       >
@@ -87,8 +98,43 @@ export function AppRouter() {
         <Route path="magic" element={<MagicView />} />
       </Route>
 
+      <Route path="/sync" element={<LegacyCampaignRedirect />} />
+      <Route path="/character/*" element={<LegacyCampaignRedirect />} />
+      <Route path="/party-inventory" element={<LegacyCampaignRedirect />} />
+      <Route path="/ground-inventory" element={<LegacyCampaignRedirect />} />
+      <Route path="/items-compendium" element={<LegacyCampaignRedirect />} />
+      <Route path="/missions" element={<LegacyCampaignRedirect />} />
+      <Route path="/creatures-compendium" element={<LegacyCampaignRedirect />} />
+      <Route path="/custom-systems/*" element={<LegacyCampaignRedirect />} />
+      <Route path="/initiative" element={<LegacyCampaignRedirect />} />
+      <Route path="/magic" element={<LegacyCampaignRedirect />} />
+
       <Route path="*" element={<Navigate to="/not-found" replace />} />
     </Routes>
+  )
+}
+
+function CampaignRouteOutlet() {
+  const { campaignId } = useParams<{ campaignId?: string }>()
+
+  useEffect(() => {
+    if (campaignId) sessionStorage.setItem(ACTIVE_CAMPAIGN_KEY, campaignId)
+  }, [campaignId])
+
+  return <Outlet />
+}
+
+function LegacyCampaignRedirect() {
+  const location = useLocation()
+  const campaignId = sessionStorage.getItem(ACTIVE_CAMPAIGN_KEY)
+  if (!campaignId) return <Navigate to="/user/campaigns" replace />
+
+  const suffix = location.pathname.replace(/^\/+/, "")
+  return (
+    <Navigate
+      to={`${campaignPath(campaignId, suffix)}${location.search}${location.hash}`}
+      replace
+    />
   )
 }
 
