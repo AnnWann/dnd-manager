@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 
 import { useCharacterContext } from "../contexts/characterContext"
-import { CampaignCharacterWorkspace } from "../features/characters/workspace/CampaignCharacterWorkspace"
+import { SessionCharacterWorkspace } from "../features/characters/workspace/CampaignCharacterWorkspace"
 import { campaignCharacterPath } from "../lib/campaignRoutes"
 import {
   readLocalStorageJson,
@@ -61,9 +61,9 @@ export function CharacterIndexView() {
   if (shouldAutoOpen && cachedCharacter) return null
 
   return (
-    <CampaignCharacterWorkspace>
+    <SessionCharacterWorkspace>
       <CharacterView />
-    </CampaignCharacterWorkspace>
+    </SessionCharacterWorkspace>
   )
 }
 
@@ -82,8 +82,8 @@ export function CharacterDetailView() {
   if (!characterId) return null
 
   return (
-    <CampaignCharacterWorkspace>
+    <SessionCharacterWorkspace>
       <CharacterView />
-    </CampaignCharacterWorkspace>
+    </SessionCharacterWorkspace>
   )
 }
