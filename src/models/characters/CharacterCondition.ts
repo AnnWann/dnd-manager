@@ -1,4 +1,7 @@
+import type { Ability } from "../abilities/Ability"
 import type { BonusCollection } from "../bonuses/Bonus"
+import type { SpellGrant } from "../magic/spells/SpellGrant"
+import type { Proficiency } from "../sheet/Proficiency"
 
 export type ConditionDurationType =
   | "rounds"
@@ -33,6 +36,24 @@ export type CharacterConditionDuration = {
   expiresAt?: string
 }
 
+/**
+ * Template reaproveitável por habilidades. O id/source/createdAt são definidos
+ * quando a condição é realmente aplicada ao personagem.
+ */
+export type CharacterConditionGrant = {
+  name: string
+  description?: string
+  behavior?: string
+  notes?: string
+  tags?: string[]
+  bonuses?: BonusCollection
+  grantedSpells?: SpellGrant[]
+  grantedProficiencies?: Proficiency[]
+  /** Habilidades completas que existem somente enquanto a condição existir. */
+  grantedAbilities?: Ability[]
+  duration?: CharacterConditionDuration
+}
+
 export type CharacterCondition = {
   id: string
   name: string
@@ -42,13 +63,18 @@ export type CharacterCondition = {
   notes: string
   tags: string[]
   bonuses?: BonusCollection
+  /** Benefícios dinâmicos que existem somente enquanto a condição existir. */
+  grantedSpells?: SpellGrant[]
+  grantedProficiencies?: Proficiency[]
+  grantedAbilities?: Ability[]
   duration: CharacterConditionDuration
   createdAt: string
 
   /** Vínculo criado automaticamente por habilidades duradouras. */
   sourceAbilityId?: string
-  sourceAbilityLocation?: "character" | "race" | "equipment"
+  sourceAbilityLocation?: "character" | "race" | "equipment" | "condition"
   sourceItemId?: string
+  sourceAbilityOptionId?: string
 
   /** Reserved for the future encounter / initiative system. */
   sourceCharacterId?: string

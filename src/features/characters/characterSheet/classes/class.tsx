@@ -1,6 +1,10 @@
 import { Select } from "../../../../components/ui/Select"
 import { CLASS_OPTIONS } from "../../../../contexts/consts"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
+import {
+  createCustomClassEntry,
+  CUSTOM_CLASS_RUNTIME_ID,
+} from "../../../../models/characters/customClassConfig"
 import { CharacterClassBuilder, type ClassName } from "../../../../models/sheet/Class"
 import { SelectClassModule } from "./selectClassModule"
 
@@ -51,7 +55,7 @@ export function Classes({
               : "O nível total máximo é 20"
           }
           onChange={(e) => {
-            const value = e.target.value as ClassName | ""
+            const value = e.target.value
 
             if (!value) return
             if (!canAddClass) {
@@ -68,9 +72,14 @@ export function Classes({
 
               if (currentTotal >= MAX_TOTAL_LEVEL) return c
 
+              const nextClass =
+                value === CUSTOM_CLASS_RUNTIME_ID
+                  ? createCustomClassEntry()
+                  : createClass(value as ClassName)
+
               return c.withSheet("classes", [
                 ...currentClasses,
-                createClass(value),
+                nextClass,
               ])
             })
 
@@ -86,6 +95,7 @@ export function Classes({
               {option.label}
             </option>
           ))}
+          <option value={CUSTOM_CLASS_RUNTIME_ID}>Classe personalizada…</option>
         </Select>
       </div>
 

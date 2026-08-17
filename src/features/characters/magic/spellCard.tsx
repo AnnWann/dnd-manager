@@ -8,7 +8,15 @@ import {
   CLASS_NAMES,
   MAGIC_SCHOOLS_MAP,
 } from "../../../contexts/consts"
-import type { Spell } from "../../../models/magic/spells/Spell"
+import { useCharacterContext } from "../../../contexts/characterContext"
+import type { CharacterSpellResourceConfig } from "../../../models/magic/spells/CharacterSpells"
+import type { Spell, SpellResourceType } from "../../../models/magic/spells/Spell"
+import {
+  getCharacterSpellResourceOverride,
+  setCharacterSpellResourceOverride,
+  SPELL_RESOURCE_OPTIONS,
+  spellResourceLabel,
+} from "../../../models/magic/spells/spellResourceCost"
 import type { SpellSource } from "../../../models/magic/spells/SpellSource"
 import type { ClassName } from "../../../models/sheet/Class"
 import type { Attribute } from "../../../models/sheet/Attribute"
@@ -52,6 +60,7 @@ export function SpellCard({
   )
   const [draftCastingDescriptions, setDraftCastingDescriptions] =
     useState(castingDescriptions)
+  const { activeCharacter, updateCharacter } = useCharacterContext()
   const castingDescriptionsKey = castingDescriptions.join("\u0000")
   const canTogglePrepared = Boolean(onTogglePrepared) && !alwaysPrepared
   const canEditCastingDescriptions = Boolean(
@@ -64,6 +73,10 @@ export function SpellCard({
     castingDescriptions.length < MAX_CASTING_DESCRIPTIONS
   const material = spell.material?.trim()
   const spellName = spell.displayName || spell.name
+  const resourceOverride = activeCharacter && source
+    ? getCharacterSpellResourceOverride(activeCharacter, spell)
+    : undefined
+  const canConfigureResources = Boolean(activeCharacter && source)
 
   useEffect(() => {
     setDraftCastingDescriptions(castingDescriptions)
@@ -93,6 +106,48 @@ export function SpellCard({
     const draft = draftCastingDescriptions[index] ?? ""
     if ((castingDescriptions[index] ?? "") === draft) return
     onChangeCastingDescription?.(index, draft)
+  }
+
+  function changeResourceConfig(config: CharacterSpellResourceConfig | undefined) {
+    if (!activeCharacter) return
+    updateCharacter(activeCharacter.get("id"), (current) =>
+      setCharacterSpellResourceOverride(current, spell.index, config),
+    )
+  }
+
+  function beginCustomResourceConfig() {
+    changeResourceConfig(
+      spell.resourceCost
+        ? { useSlots: false, resources: [{ ...spell.resourceCost }] }
+        : { useSlots: true, resources: [] },
+    )
+  }
+
+  function toggleSlots(enabled: boolean) {
+    if (!resourceOverride) return
+    changeResourceConfig({ ...resourceOverride, useSlots: enabled })
+  }
+
+  function toggleResource(resource: SpellResourceType, enabled: boolean) {
+    if (!resourceOverride) return
+    const resources = enabled
+      ? resourceOverride.resources.some((entry) => entry.resource === resource)
+        ? resourceOverride.resources
+        : [...resourceOverride.resources, { resource, amount: 1 }]
+      : resourceOverride.resources.filter((entry) => entry.resource !== resource)
+    changeResourceConfig({ ...resourceOverride, resources })
+  }
+
+  function setResourceAmount(resource: SpellResourceType, amount: number) {
+    if (!resourceOverride) return
+    changeResourceConfig({
+      ...resourceOverride,
+      resources: resourceOverride.resources.map((entry) =>
+        entry.resource === resource
+          ? { ...entry, amount: Math.max(1, Math.trunc(amount) || 1) }
+          : entry,
+      ),
+    })
   }
 
   const spellModal = isViewOpen
@@ -219,6 +274,95 @@ export function SpellCard({
                     ) : null}
                   </div>
                 </section>
+
+                {canConfigureResources ? (
+                  <details className="rounded-xl border border-border bg-bg-subtle p-3">
+                    <summary className="cursor-pointer text-sm font-semibold text-textH">
+                      Configuração
+                    </summary>
+                    <div className="mt-3 grid gap-3">
+                      <label className="grid gap-1 text-xs text-textMuted">
+                        Recurso de conjuração deste personagem
+                        <select
+                          className="h-10 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-textH outline-none"
+                          value={resourceOverride ? "custom" : "inherit"}
+                          onChange={(event) =>
+                            event.target.value === "inherit"
+                              ? changeResourceConfig(undefined)
+                              : beginCustomResourceConfig()
+                          }
+                        >
+                          <option value="inherit">Usar padrão da magia</option>
+                          <option value="custom">Personalizar</option>
+                        </select>
+                      </label>
+
+                      {!resourceOverride ? (
+                        <p className="text-xs leading-5 text-textMuted">
+                          Padrão atual: {spell.resourceCost
+                            ? `${spell.resourceCost.amount} ${spellResourceLabel(spell.resourceCost.resource)}`
+                            : "espaço de magia"}.
+                        </p>
+                      ) : (
+                        <div className="grid gap-2 rounded-lg border border-border bg-bg p-3">
+                          <label className="flex items-center gap-2 text-xs text-textH">
+                            <input
+                              type="checkbox"
+                              checked={resourceOverride.useSlots}
+                              onChange={(event) => toggleSlots(event.target.checked)}
+                            />
+                            Espaço de magia
+                          </label>
+
+                          {SPELL_RESOURCE_OPTIONS.map((option) => {
+                            const cost = resourceOverride.resources.find(
+                              (entry) => entry.resource === option.value,
+                            )
+                            return (
+                              <div key={option.value} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_100px] sm:items-center">
+                                <label className="flex items-center gap-2 text-xs text-textH">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(cost)}
+                                    onChange={(event) =>
+                                      toggleResource(option.value, event.target.checked)
+                                    }
+                                  />
+                                  {option.label}
+                                </label>
+                                {cost ? (
+                                  <label className="grid gap-1 text-[11px] text-textMuted">
+                                    Custo
+                                    <input
+                                      className="h-9 rounded-lg border border-border bg-bg-subtle px-2 text-sm text-textH outline-none focus:border-accentBorder"
+                                      type="number"
+                                      min={1}
+                                      inputMode="numeric"
+                                      value={cost.amount}
+                                      onChange={(event) =>
+                                        setResourceAmount(option.value, Number(event.target.value))
+                                      }
+                                    />
+                                  </label>
+                                ) : null}
+                              </div>
+                            )
+                          })}
+
+                          {!resourceOverride.useSlots && resourceOverride.resources.length === 0 ? (
+                            <p className="text-xs text-danger">
+                              Selecione ao menos uma forma de conjuração.
+                            </p>
+                          ) : (
+                            <p className="text-xs leading-5 text-textMuted">
+                              Se houver mais de uma opção, a ficha perguntará qual recurso usar ao conjurar.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                ) : null}
 
                 <section className="rounded-xl border border-border bg-bg-subtle p-3">
                   <h3 className="text-sm font-semibold text-textH">
@@ -616,14 +760,8 @@ function formatDuration(spell: Spell): string {
     day: ["dia", "dias"],
     special: ["Especial", "Especial"],
     untilDispelled: ["Até ser dissipada", "Até ser dissipada"],
-    "short rest": [
-      "Até o próximo descanso curto",
-      "Até o próximo descanso curto",
-    ],
-    "long rest": [
-      "Até o próximo descanso longo",
-      "Até o próximo descanso longo",
-    ],
+    "short rest": ["Até o próximo descanso curto", "Até o próximo descanso curto"],
+    "long rest": ["Até o próximo descanso longo", "Até o próximo descanso longo"],
     permanent: ["Permanente", "Permanente"],
   }
   const [singular, plural] = labels[unit] ?? [unit, unit]
@@ -652,11 +790,7 @@ function formatTargeting(spell: Spell): string {
     const count = target.targetCount
       ? `${target.targetCount} criaturas`
       : "Múltiplas criaturas"
-    return `${count}${
-      target.canTargetMoreAtHigherLevels
-        ? "; mais alvos em níveis superiores"
-        : ""
-    }${selfSuffix}`
+    return `${count}${target.canTargetMoreAtHigherLevels ? "; mais alvos em níveis superiores" : ""}${selfSuffix}`
   }
   if (target.kind === "area") return formatArea(spell)
   if (target.kind === "object") return "Objeto"
@@ -669,9 +803,7 @@ function formatArea(spell: Spell): string {
 
   if (spell.targeting.affectsArea) {
     if (spell.targeting.areaShape && spell.targeting.areaSize) {
-      return `${formatAreaShape(spell.targeting.areaShape)} de ${
-        spell.targeting.areaSize
-      } m`
+      return `${formatAreaShape(spell.targeting.areaShape)} de ${spell.targeting.areaSize} m`
     }
     return "Área especial"
   }
@@ -760,20 +892,13 @@ function formatAreaTiles(spell: Spell): string | null {
   if (!area) return null
   const sizeInTiles = area.size / 1.5
   if (area.shape === "circle") {
-    return `Aproximadamente ${Math.round(
-      Math.PI * sizeInTiles * sizeInTiles,
-    )} quadrados de 1,5 m`
+    return `Aproximadamente ${Math.round(Math.PI * sizeInTiles * sizeInTiles)} quadrados de 1,5 m`
   }
   if (area.shape === "square") {
-    return `Aproximadamente ${Math.round(
-      sizeInTiles * sizeInTiles,
-    )} quadrados de 1,5 m`
+    return `Aproximadamente ${Math.round(sizeInTiles * sizeInTiles)} quadrados de 1,5 m`
   }
   if (area.shape === "line") {
-    return `Linha de aproximadamente ${Math.max(
-      1,
-      Math.round(sizeInTiles),
-    )} quadrados`
+    return `Linha de aproximadamente ${Math.max(1, Math.round(sizeInTiles))} quadrados`
   }
   return `Cone de ${area.size} m`
 }
@@ -782,31 +907,22 @@ function formatEffect(effect: Spell["effects"][number]): string {
   const data = effect as unknown as Record<string, unknown>
   const parts: string[] = []
 
-  if (typeof data.target === "string" && data.target.trim()) {
-    parts.push(`alvo: ${data.target}`)
-  }
+  if (typeof data.target === "string" && data.target.trim()) parts.push(`alvo: ${data.target}`)
   const rollDice = formatUnknownDie(data.rollDice)
   if (rollDice) parts.push(`rolagem: ${rollDice}`)
   if (Array.isArray(data.rollAppliesTo) && data.rollAppliesTo.length) {
     parts.push(`aplica-se a: ${data.rollAppliesTo.map(String).join(", ")}`)
   }
-  if (typeof data.attribute === "string") {
-    parts.push(`atributo: ${formatAttributeLabel(data.attribute)}`)
-  }
-  if (typeof data.condition === "string") {
-    parts.push(`condição: ${data.condition}`)
-  }
+  if (typeof data.attribute === "string") parts.push(`atributo: ${formatAttributeLabel(data.attribute)}`)
+  if (typeof data.condition === "string") parts.push(`condição: ${data.condition}`)
   if (typeof data.value === "number") {
-    const operation =
-      typeof data.operation === "string" ? ` (${data.operation})` : ""
+    const operation = typeof data.operation === "string" ? ` (${data.operation})` : ""
     parts.push(`valor: ${data.value}${operation}`)
   }
   if (typeof data.when === "string") parts.push(`quando: ${data.when}`)
   const damageDice = formatUnknownDie(data.damageDice)
   if (damageDice) parts.push(`dano: ${damageDice}`)
-  if (typeof data.directionText === "string" && data.directionText.trim()) {
-    parts.push(`movimento: ${data.directionText}`)
-  }
+  if (typeof data.directionText === "string" && data.directionText.trim()) parts.push(`movimento: ${data.directionText}`)
   if (typeof data.type === "string") parts.push(`tipo: ${data.type}`)
 
   return parts.length ? parts.join("; ") : "Dados adicionais não informados."
@@ -820,12 +936,8 @@ function formatAttributeLabel(value: string): string {
 }
 
 function formatUnknownDie(value: unknown): string | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return undefined
-  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
   const die = value as Record<string, unknown>
-  if (typeof die.quantity !== "number" || typeof die.sides !== "string") {
-    return undefined
-  }
+  if (typeof die.quantity !== "number" || typeof die.sides !== "string") return undefined
   return `${die.quantity}${die.sides}`
 }

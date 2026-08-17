@@ -1,10 +1,10 @@
 // features/characters/spells/CharacterSpellsModule.tsx
 
 import { useEffect, useMemo, useState } from "react"
-import { useNavigate } from "react-router-dom"
 
 import { Button } from "../../../components/ui/Button"
 import { Card, CardHeader } from "../../../components/ui/Card"
+import { useCharacterContext } from "../../../contexts/characterContext"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { getCharacterGrantedSpells } from "../../../models/characters/characterGrantedSpells"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
@@ -15,10 +15,8 @@ import type {
   CharacterClassInterface,
   ClassName,
 } from "../../../models/sheet/Class"
-import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { ChannelDivinityModule } from "./channelDivinityModule"
-import { CharacterSpellLibrary } from "./CharacterSpellLibrary"
-import { InvocationModule } from "./invocationModule"
+import { KiModule } from "./kiModule"
 import { KnownSpellsList } from "./knownSpellsList"
 import { MetamagicModule } from "./metamagicModule"
 import { SpellSlotsEditor } from "./slots"
@@ -43,15 +41,14 @@ export function CharacterMagicTab({
   character,
   updateCharacter,
 }: Props) {
-  const navigate = useNavigate()
-  const { characters, mode } = useCharacterWorkspace()
+  const { visibleCharacters } = useCharacterContext()
   const { spells, getSpellByIndex } = useMagicContext()
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle")
   const sorcererLevel = getSorcererLevel(character)
   const hasSorcererResources = sorcererLevel >= 2
   const spellListText = useMemo(
-    () => buildAllCharacterSpellList(characters, getSpellByIndex),
-    [characters, getSpellByIndex],
+    () => buildAllCharacterSpellList(visibleCharacters, getSpellByIndex),
+    [getSpellByIndex, visibleCharacters],
   )
   const canCopySpellList = spellListText.trim().length > 0
 
@@ -83,12 +80,6 @@ export function CharacterMagicTab({
     }
   }
 
-  function openAddSpellsPage() {
-    navigate(
-      `/user/characters/${encodeURIComponent(character.get("id"))}/spells-list/add-spells`,
-    )
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <Card>
@@ -104,44 +95,39 @@ export function CharacterMagicTab({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-start justify-end gap-2">
-              {mode === "user" ? (
-                <Button size="sm" onClick={openAddSpellsPage}>
-                  Adicionar magias
-                </Button>
-              ) : null}
+            <div className="grid gap-1 sm:justify-items-end">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!canCopySpellList}
+                onClick={copyAllSpellLists}
+              >
+                Copiar listas do grupo
+              </Button>
 
-              <div className="grid gap-1 sm:justify-items-end">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={!canCopySpellList}
-                  onClick={copyAllSpellLists}
-                >
-                  {mode === "campaign"
-                    ? "Copiar listas do grupo"
-                    : "Copiar lista do personagem"}
-                </Button>
-
-                {copyStatus === "copied" ? (
-                  <span className="text-xs text-accent">
-                    Listas copiadas.
-                  </span>
-                ) : copyStatus === "error" ? (
-                  <span className="text-xs text-danger">
-                    Não foi possível copiar.
-                  </span>
-                ) : (
-                  <span className="text-xs text-textMuted">
-                    Copia personagem, nível e nome da magia.
-                  </span>
-                )}
-              </div>
+              {copyStatus === "copied" ? (
+                <span className="text-xs text-accent">
+                  Listas copiadas.
+                </span>
+              ) : copyStatus === "error" ? (
+                <span className="text-xs text-danger">
+                  Não foi possível copiar.
+                </span>
+              ) : (
+                <span className="text-xs text-textMuted">
+                  Copia personagem, nível e nome da magia.
+                </span>
+              )}
             </div>
           </div>
         </CardHeader>
 
         <ChannelDivinityModule
+          character={character}
+          updateCharacter={updateCharacter}
+        />
+
+        <KiModule
           character={character}
           updateCharacter={updateCharacter}
         />
@@ -152,11 +138,6 @@ export function CharacterMagicTab({
             updateCharacter={updateCharacter}
           />
         ) : null}
-
-        <InvocationModule
-          character={character}
-          updateCharacter={updateCharacter}
-        />
 
         <SpellSlotsEditor
           character={character}
@@ -169,13 +150,6 @@ export function CharacterMagicTab({
           updateCharacter={updateCharacter}
         />
       </Card>
-
-      {mode === "campaign" ? (
-        <CharacterSpellLibrary
-          character={character}
-          updateCharacter={updateCharacter}
-        />
-      ) : null}
     </div>
   )
 }
