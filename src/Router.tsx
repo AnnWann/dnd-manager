@@ -10,6 +10,7 @@ import {
 
 import { RequireAuth } from "./auth/requireAuth"
 import { useSyncContext } from "./contexts/syncContext"
+import { readActiveCampaign, rememberActiveCampaign } from "./lib/activeCampaign"
 import { campaignPath } from "./lib/campaignRoutes"
 import { CharacterCreateView } from "./views/CharacterCreateView"
 import {
@@ -27,7 +28,6 @@ import { MagicView } from "./views/MagicView"
 import { MissionsView } from "./views/MissionsView"
 import { NotFoundView } from "./views/NotFoundView"
 import { PartyInventoryView } from "./views/PartyInventoryView"
-import { SyncView } from "./views/SyncView"
 import { AuthView } from "./views/AuthView"
 import { UnauthorizedView } from "./views/UnauthorisedView"
 import { CampaignCharactersView } from "./views/campaign/CampaignCharactersView"
@@ -40,8 +40,6 @@ import { UserCharacterLevelUpView } from "./views/user/UserCharacterLevelUpView"
 import { UserCharactersTab } from "./views/user/UserCharactersTab"
 import { UserDashboardView } from "./views/user/UserDashboardView"
 import { UserSpellsTab } from "./views/user/UserSpellsTab"
-
-const ACTIVE_CAMPAIGN_KEY = "dndmm.activeCampaignId.v1"
 
 export function AppRouter() {
   return (
@@ -81,7 +79,6 @@ export function AppRouter() {
       >
         <Route index element={<Navigate to="characters" replace />} />
         <Route path="characters" element={<CampaignCharactersView />} />
-        <Route path="sync" element={<SyncView />} />
         <Route path="character" element={<CharacterIndexView />} />
         <Route path="character/create" element={<CharacterCreateView />} />
         <Route path="character/:characterId" element={<CharacterDetailView />} />
@@ -98,7 +95,6 @@ export function AppRouter() {
         <Route path="magic" element={<MagicView />} />
       </Route>
 
-      <Route path="/sync" element={<LegacyCampaignRedirect />} />
       <Route path="/character/*" element={<LegacyCampaignRedirect />} />
       <Route path="/party-inventory" element={<LegacyCampaignRedirect />} />
       <Route path="/ground-inventory" element={<LegacyCampaignRedirect />} />
@@ -118,7 +114,7 @@ function CampaignRouteOutlet() {
   const { campaignId } = useParams<{ campaignId?: string }>()
 
   useEffect(() => {
-    if (campaignId) sessionStorage.setItem(ACTIVE_CAMPAIGN_KEY, campaignId)
+    if (campaignId) rememberActiveCampaign(campaignId)
   }, [campaignId])
 
   return <Outlet />
@@ -126,7 +122,7 @@ function CampaignRouteOutlet() {
 
 function LegacyCampaignRedirect() {
   const location = useLocation()
-  const campaignId = sessionStorage.getItem(ACTIVE_CAMPAIGN_KEY)
+  const campaignId = readActiveCampaign()
   if (!campaignId) return <Navigate to="/user/campaigns" replace />
 
   const suffix = location.pathname.replace(/^\/+/, "")
