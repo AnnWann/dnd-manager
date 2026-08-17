@@ -21,7 +21,8 @@ import { PartyInventoryView } from "./views/PartyInventoryView"
 import { SyncView } from "./views/SyncView"
 import { AuthView } from "./views/AuthView"
 import { UnauthorizedView } from "./views/UnauthorisedView"
-import { UserCampaignsTab } from "./views/user/UserCampaignTab"
+import { CampaignCharactersView } from "./views/campaign/CampaignCharactersView"
+import { UserCampaignsRouteView } from "./views/user/UserCampaignsRouteView"
 import { UserCharacterAddSpellsView } from "./views/user/UserCharacterAddSpellsView"
 import { UserCharacterCreateItemView } from "./views/user/UserCharacterCreateItemView"
 import { UserCharacterCreateView } from "./views/user/UserCharacterCreateView"
@@ -71,8 +72,17 @@ export function AppRouter() {
           element={<UserCharacterDetailView />}
         />
         <Route path="spells" element={<UserSpellsTab />} />
-        <Route path="campaigns" element={<UserCampaignsTab />} />
+        <Route path="campaigns" element={<UserCampaignsRouteView />} />
       </Route>
+
+      <Route
+        path="/campaign/:campaignId/characters"
+        element={
+          <RequireAuth>
+            <CampaignCharactersView />
+          </RequireAuth>
+        }
+      />
 
       <Route path="/sync" element={<SyncView />} />
       <Route path="/character" element={<CharacterIndexView />} />
