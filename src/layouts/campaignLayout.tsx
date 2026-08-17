@@ -28,10 +28,9 @@ import { MissionProvider } from "../contexts/missionContext"
 import { PartyInventorySettingsProvider } from "../contexts/partyInventorySettingsContext"
 import { SyncProvider } from "../contexts/syncContext"
 import { MasterConcentrationAlerts } from "../features/characters/characterSheet/masterConcentrationAlerts"
-import { CharacterRelationalPersistenceBridge } from "../features/sync/CharacterRelationalPersistenceBridge"
 import { RelationalMigrationBridge } from "../features/sync/RelationalMigrationBridge"
-import { clearActiveCampaign } from "../lib/activeCampaign"
-import { campaignIdFromPathname, campaignPath } from "../lib/campaignRoutes"
+import { clearActiveSession } from "../lib/activeCampaign"
+import { sessionIdFromPathname, sessionPath } from "../lib/campaignRoutes"
 import { normalizeAppStateInventory } from "../lib/normalizeAppStateInventory"
 import { type AppStateV1 } from "../lib/remoteState"
 import { useConcurrentRemoteAppState } from "../lib/remoteStateConcurrent"
@@ -40,10 +39,10 @@ import { AppRouter } from "../Router"
 export function CampaignLayout() {
   const navigate = useNavigate()
   const location = useLocation()
-  const campaignId = campaignIdFromPathname(location.pathname)
-  const toCampaign = useCallback(
-    (path: string) => campaignId ? campaignPath(campaignId, path) : "/user/campaigns",
-    [campaignId],
+  const sessionId = sessionIdFromPathname(location.pathname)
+  const toSession = useCallback(
+    (path: string) => sessionId ? sessionPath(sessionId, path) : "/user/campaigns",
+    [sessionId],
   )
 
   const {
@@ -86,7 +85,7 @@ export function CampaignLayout() {
   }, [appState, rawAppState, setRawAppState])
 
   function leaveSession() {
-    clearActiveCampaign()
+    clearActiveSession()
     navigate("/user")
   }
 
@@ -95,62 +94,62 @@ export function CampaignLayout() {
       label: "Personagens",
       icon: <IconCharacter />,
       active:
-        location.pathname === toCampaign("characters") ||
-        location.pathname.startsWith(`${toCampaign("character")}/`) ||
-        location.pathname === toCampaign("character"),
-      onClick: () => navigate(toCampaign("characters")),
+        location.pathname === toSession("characters") ||
+        location.pathname.startsWith(`${toSession("character")}/`) ||
+        location.pathname === toSession("character"),
+      onClick: () => navigate(toSession("characters")),
     },
     {
       label: "Inventário do grupo",
       icon: <IconBackpack />,
-      active: location.pathname === toCampaign("party-inventory"),
-      onClick: () => navigate(toCampaign("party-inventory")),
+      active: location.pathname === toSession("party-inventory"),
+      onClick: () => navigate(toSession("party-inventory")),
     },
     {
       label: "Chão",
       icon: <IconGround />,
-      active: location.pathname === toCampaign("ground-inventory"),
-      onClick: () => navigate(toCampaign("ground-inventory")),
+      active: location.pathname === toSession("ground-inventory"),
+      onClick: () => navigate(toSession("ground-inventory")),
     },
     {
       label: "Missões",
       icon: <IconNotes />,
-      active: location.pathname === toCampaign("missions"),
-      onClick: () => navigate(toCampaign("missions")),
+      active: location.pathname === toSession("missions"),
+      onClick: () => navigate(toSession("missions")),
     },
     ...(userRole === "master"
       ? [
           {
             label: "Compêndio de Itens",
             icon: <IconEquipment />,
-            active: location.pathname === toCampaign("items-compendium"),
-            onClick: () => navigate(toCampaign("items-compendium")),
+            active: location.pathname === toSession("items-compendium"),
+            onClick: () => navigate(toSession("items-compendium")),
           },
           {
             label: "Compêndio de Criaturas",
             icon: <IconCompendium />,
-            active: location.pathname === toCampaign("creatures-compendium"),
-            onClick: () => navigate(toCampaign("creatures-compendium")),
+            active: location.pathname === toSession("creatures-compendium"),
+            onClick: () => navigate(toSession("creatures-compendium")),
           },
           {
             label: "Sistemas personalizados",
             icon: <IconCompendium />,
-            active: location.pathname.startsWith(toCampaign("custom-systems")),
-            onClick: () => navigate(toCampaign("custom-systems")),
+            active: location.pathname.startsWith(toSession("custom-systems")),
+            onClick: () => navigate(toSession("custom-systems")),
           },
           {
             label: "Iniciativa",
             icon: <IconInitiative />,
-            active: location.pathname === toCampaign("initiative"),
-            onClick: () => navigate(toCampaign("initiative")),
+            active: location.pathname === toSession("initiative"),
+            onClick: () => navigate(toSession("initiative")),
           },
         ]
       : []),
     {
       label: "Magia",
       icon: <IconMagic />,
-      active: location.pathname === toCampaign("magic"),
-      onClick: () => navigate(toCampaign("magic")),
+      active: location.pathname === toSession("magic"),
+      onClick: () => navigate(toSession("magic")),
     },
     {
       label: "Sair da sessão",
@@ -186,11 +185,6 @@ export function CampaignLayout() {
     >
       <CustomSystemsProvider>
         <RelationalMigrationBridge state={appState} />
-        <CharacterRelationalPersistenceBridge
-          state={appState}
-          syncKey={syncKey}
-          actorKey={userKey.trim() || userRole}
-        />
         <PartyInventorySettingsProvider
           carryCapacity={appState.partyCarryCapacity ?? 0}
           additionalSupplyConsumption={
