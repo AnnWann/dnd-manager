@@ -18,7 +18,7 @@ export function SpellcastingHandsWarning({
       <p>
         <span className="font-semibold text-danger">Conjuração bloqueada:</span>{" "}
         com todas as mãos ocupadas, o personagem não pode conjurar magias com
-        componentes verbais e somáticos. Libere uma mão pelo card do item ou use
+        componentes somáticos ou materiais. Libere uma mão pelo card do item ou use
         a proficiência “Conjuração com mãos ocupadas”.
       </p>
     </div>

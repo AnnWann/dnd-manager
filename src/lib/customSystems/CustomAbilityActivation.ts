@@ -67,33 +67,20 @@ export function activateCustomAbility(
 
   const abilityName = resolveAbilityName(type, ability, preset)
   for (const conditionChange of activation.conditionChanges ?? []) {
-    nextCharacter = applyConditionChange(
-      nextCharacter,
-      sourceDefinition.name,
-      abilityName,
-      conditionChange,
-    )
+    nextCharacter = applyConditionChange(nextCharacter, sourceDefinition.name, abilityName, conditionChange)
   }
 
   const nextSourceState = requireState(states, sourceSystemId)
   nextSourceState.abilities = nextSourceState.abilities.map((entry) =>
     entry.id === abilityId
-      ? {
-          ...entry,
-          usage: usage.limited
-            ? { used: usage.used + 1, maximum: usage.maximum }
-            : undefined,
-        }
+      ? { ...entry, usage: usage.limited ? { used: usage.used + 1, maximum: usage.maximum } : undefined }
       : entry,
   )
 
   return nextCharacter.withSheet('customSystems', states)
 }
 
-function mergeActivation(
-  base: CustomAbilityActivationDefinition | undefined,
-  preset: CustomPredefinedAbilityDefinition | undefined,
-): CustomAbilityActivationDefinition {
+function mergeActivation(base: CustomAbilityActivationDefinition | undefined, preset: CustomPredefinedAbilityDefinition | undefined): CustomAbilityActivationDefinition {
   if (!preset?.activation) return base ?? {}
   return {
     ...base,
@@ -104,134 +91,64 @@ function mergeActivation(
   }
 }
 
-function resolveUsage(
-  activation: CustomAbilityActivationDefinition,
-  definition: CustomSystemDefinition,
-  state: CharacterCustomSystemState,
-  type: CustomAbilityTypeDefinition,
-  ability: CustomAbilityInstance,
-  character: CharacterTemplate,
-) {
+function resolveUsage(activation: CustomAbilityActivationDefinition, definition: CustomSystemDefinition, state: CharacterCustomSystemState, type: CustomAbilityTypeDefinition, ability: CustomAbilityInstance, character: CharacterTemplate) {
   const usage = activation.usage
   const limited = Boolean(usage && (usage.mode ?? 'limited') === 'limited')
   if (!limited) return { limited: false, used: 0, maximum: undefined as number | undefined }
-
   let maximum = ability.usage?.maximum ?? usage?.maximum
   if (usage?.maximumFormula?.trim()) {
-    const result = evaluateCustomFormula(
-      usage.maximumFormula,
-      definition,
-      state,
-      character,
-      { type, values: ability.values },
-    )
-    if (result.ok && typeof result.value === 'number' && Number.isFinite(result.value)) {
-      maximum = Math.max(0, Math.floor(result.value))
-    }
+    const result = evaluateCustomFormula(usage.maximumFormula, definition, state, character, { type, values: ability.values })
+    if (result.ok && typeof result.value === 'number' && Number.isFinite(result.value)) maximum = Math.max(0, Math.floor(result.value))
   }
-
-  return {
-    limited: true,
-    used: ability.usage?.used ?? 0,
-    maximum,
-  }
+  return { limited: true, used: ability.usage?.used ?? 0, maximum }
 }
 
-function resolveAmount(
-  change: CustomAbilityResourceChangeDefinition,
-  definition: CustomSystemDefinition,
-  state: CharacterCustomSystemState,
-  type: CustomAbilityTypeDefinition,
-  ability: CustomAbilityInstance,
-  character: CharacterTemplate,
-): number {
+function resolveAmount(change: CustomAbilityResourceChangeDefinition, definition: CustomSystemDefinition, state: CharacterCustomSystemState, type: CustomAbilityTypeDefinition, ability: CustomAbilityInstance, character: CharacterTemplate): number {
   if (change.formula?.trim()) {
-    const result = evaluateCustomFormula(
-      change.formula,
-      definition,
-      state,
-      character,
-      { type, values: ability.values },
-    )
-    if (!result.ok || typeof result.value !== 'number' || !Number.isFinite(result.value)) {
-      throw new Error(`A fórmula do efeito de recurso “${change.id}” não retornou um número válido.`)
-    }
+    const result = evaluateCustomFormula(change.formula, definition, state, character, { type, values: ability.values })
+    if (!result.ok || typeof result.value !== 'number' || !Number.isFinite(result.value)) throw new Error(`A fórmula do efeito de recurso “${change.id}” não retornou um número válido.`)
     return Math.max(0, result.value)
   }
   return Math.max(0, change.amount ?? 0)
 }
 
-function validateResourceChanges(
-  character: CharacterTemplate,
-  definitions: CustomSystemDefinition[],
-  states: CharacterCustomSystemState[],
-  changes: Array<{ change: CustomAbilityResourceChangeDefinition; amount: number }>,
-) {
+function validateResourceChanges(character: CharacterTemplate, definitions: CustomSystemDefinition[], states: CharacterCustomSystemState[], changes: Array<{ change: CustomAbilityResourceChangeDefinition; amount: number }>) {
   for (const { change, amount } of changes) {
     if (change.operation !== 'spend') continue
     if (change.target.source === 'native') {
       const available = nativeResourceValue(character, change.target.resource)
-      if (available < amount && change.target.resource !== 'hitPoints') {
-        throw new Error('Recurso nativo insuficiente para usar a habilidade.')
-      }
+      if (available < amount && change.target.resource !== 'hitPoints') throw new Error('Recurso nativo insuficiente para usar a habilidade.')
       continue
     }
-
     const state = requireState(states, change.target.systemId)
     const definition = requireDefinition(definitions, change.target.systemId)
     const resource = definition.resources.find((entry) => entry.id === change.target.resourceId)
     const resourceState = state.resources[change.target.resourceId]
     if (!resource || !resourceState) throw new Error(`O recurso “${change.target.resourceId}” não está disponível.`)
     const minimum = resource.minimum ?? 0
-    if (resourceState.current - amount < minimum) {
-      throw new Error(`Não há ${resource.name} suficiente para usar a habilidade.`)
-    }
+    if (resourceState.current - amount < minimum) throw new Error(`Não há ${resource.name} suficiente para usar a habilidade.`)
   }
 }
 
-function applyResourceChange(
-  character: CharacterTemplate,
-  definitions: CustomSystemDefinition[],
-  states: CharacterCustomSystemState[],
-  change: CustomAbilityResourceChangeDefinition,
-  amount: number,
-): CharacterTemplate {
-  if (change.target.source === 'native') {
-    return applyNativeChange(character, change.target.resource, change.operation, amount)
-  }
-
+function applyResourceChange(character: CharacterTemplate, definitions: CustomSystemDefinition[], states: CharacterCustomSystemState[], change: CustomAbilityResourceChangeDefinition, amount: number): CharacterTemplate {
+  if (change.target.source === 'native') return applyNativeChange(character, change.target.resource, change.operation, amount)
   const state = requireState(states, change.target.systemId)
   const definition = requireDefinition(definitions, change.target.systemId)
   const resource = definition.resources.find((entry) => entry.id === change.target.resourceId)
   const current = state.resources[change.target.resourceId]
   if (!resource || !current) throw new Error(`O recurso “${change.target.resourceId}” não está disponível.`)
-
   const raw = operationValue(current.current, change.operation, amount)
   const maximum = current.maximum ?? resource.maximum
-  const next = clamp(raw, resource.minimum, maximum)
-  state.resources[change.target.resourceId] = { ...current, current: next }
+  state.resources[change.target.resourceId] = { ...current, current: clamp(raw, resource.minimum, maximum) }
   return character
 }
 
-function applyConditionChange(
-  character: CharacterTemplate,
-  defaultSource: string,
-  abilityName: string,
-  change: CustomAbilityConditionChangeDefinition,
-): CharacterTemplate {
+function applyConditionChange(character: CharacterTemplate, defaultSource: string, abilityName: string, change: CustomAbilityConditionChangeDefinition): CharacterTemplate {
   const name = change.name.trim()
   if (!name) return character
-
   const normalizedName = normalize(name)
   const conditions = getCharacterConditions(character)
-
-  if (change.operation === 'remove') {
-    return withCharacterConditions(
-      character,
-      conditions.filter((condition) => normalize(condition.name) !== normalizedName),
-    )
-  }
-
+  if (change.operation === 'remove') return withCharacterConditions(character, conditions.filter((condition) => normalize(condition.name) !== normalizedName))
   const source = change.source?.trim() || defaultSource
   const condition: CharacterCondition = {
     id: crypto.randomUUID(),
@@ -247,14 +164,8 @@ function applyConditionChange(
     sourceCharacterId: change.sourceCharacterId,
     linkedCombatantId: change.linkedCombatantId,
   }
-
   return withCharacterConditions(character, [
-    ...conditions.filter(
-      (existing) => !(
-        normalize(existing.name) === normalizedName &&
-        normalize(existing.source) === normalize(source)
-      ),
-    ),
+    ...conditions.filter((existing) => !(normalize(existing.name) === normalizedName && normalize(existing.source) === normalize(source))),
     condition,
   ])
 }
@@ -265,9 +176,7 @@ function resolveAbilityName(type: CustomAbilityTypeDefinition, ability: CustomAb
   return preset?.id || type.name
 }
 
-function buildDuration(
-  duration: CustomAbilityConditionChangeDefinition['duration'],
-): CharacterCondition['duration'] {
+function buildDuration(duration: CustomAbilityConditionChangeDefinition['duration']): CharacterCondition['duration'] {
   const type: ConditionDurationType = duration?.type ?? 'permanent'
   const numeric = isNumericDuration(type)
   const legacyAmount = duration?.amount
@@ -289,37 +198,26 @@ function isNumericDuration(type: ConditionDurationType) {
   return type === 'rounds' || type === 'turns' || type === 'minutes' || type === 'hours' || type === 'days'
 }
 
-function applyNativeChange(
-  character: CharacterTemplate,
-  resource: 'hitPoints' | 'temporaryHitPoints' | 'inspiration' | 'exhaustion',
-  operation: 'spend' | 'gain' | 'set',
-  amount: number,
-): CharacterTemplate {
+function applyNativeChange(character: CharacterTemplate, resource: 'hitPoints' | 'temporaryHitPoints' | 'inspiration' | 'exhaustion', operation: 'spend' | 'gain' | 'set', amount: number): CharacterTemplate {
   if (resource === 'hitPoints') {
     if (operation === 'spend') return character.takeDamage(amount)
     if (operation === 'gain') return character.heal(amount)
     return character.setCurrentHp(amount)
   }
-
   if (resource === 'temporaryHitPoints') {
     const current = character.get('sheet').HP.temporary ?? 0
     if (operation === 'gain') return character.addTemporaryHp(amount)
     return character.setTemporaryHp(Math.max(0, operation === 'set' ? amount : current - amount))
   }
-
   if (resource === 'inspiration') {
     const next = operation === 'spend' ? false : operation === 'gain' ? true : amount > 0
     return character.withStat('inspiration', next)
   }
-
   const current = character.get('sheet').stats.exhaustion ?? 0
   return character.withStat('exhaustion', clamp(operationValue(current, operation, amount), 0, 6))
 }
 
-function nativeResourceValue(
-  character: CharacterTemplate,
-  resource: 'hitPoints' | 'temporaryHitPoints' | 'inspiration' | 'exhaustion',
-): number {
+function nativeResourceValue(character: CharacterTemplate, resource: 'hitPoints' | 'temporaryHitPoints' | 'inspiration' | 'exhaustion'): number {
   if (resource === 'hitPoints') return character.get('sheet').HP.current
   if (resource === 'temporaryHitPoints') return character.get('sheet').HP.temporary ?? 0
   if (resource === 'inspiration') return character.get('sheet').stats.inspiration ? 1 : 0
@@ -359,21 +257,11 @@ function cloneState(state: CharacterCustomSystemState): CharacterCustomSystemSta
   return {
     ...state,
     fields: { ...state.fields },
-    resources: Object.fromEntries(
-      Object.entries(state.resources).map(([id, resource]) => [id, { ...resource } satisfies CustomResourceState]),
-    ),
-    abilities: state.abilities.map((ability) => ({
-      ...ability,
-      values: { ...ability.values },
-      usage: ability.usage ? { ...ability.usage } : undefined,
-    })),
+    resources: Object.fromEntries(Object.entries(state.resources).map(([id, resource]) => [id, { ...resource } satisfies CustomResourceState])),
+    abilities: state.abilities.map((ability) => ({ ...ability, values: { ...ability.values }, usage: ability.usage ? { ...ability.usage } : undefined })),
   }
 }
 
 function normalize(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLocaleLowerCase('pt-BR')
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR')
 }

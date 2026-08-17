@@ -47,10 +47,18 @@ export function restoreKi(
   return withKiUsed(character, pool.used - normalizedAmount)
 }
 
-export function recoverKi(character: CharacterTemplate): CharacterTemplate {
+export function recoverKi(
+  character: CharacterTemplate,
+  recoveryFraction = 1,
+): CharacterTemplate {
   const pool = getKiPool(character)
   if (!pool || pool.used <= 0) return character
-  return withKiUsed(character, 0)
+
+  const fraction = Math.max(0, Math.min(1, recoveryFraction))
+  const recovered = Math.ceil(pool.used * fraction)
+  if (recovered <= 0) return character
+
+  return withKiUsed(character, pool.used - recovered)
 }
 
 function withKiUsed(

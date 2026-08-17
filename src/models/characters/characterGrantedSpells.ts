@@ -1,14 +1,20 @@
 import type { Ability, Usage } from "../abilities/Ability"
 import { getAbilityUsageMax } from "../abilities/abilityActivation"
 import type { Equipment } from "../items/equipment/EquipmentSlot"
+import type { SpellResourceCost } from "../magic/spells/Spell"
 import type { SpellSource } from "../magic/spells/SpellSource"
 import type { SpellGrantCastingMode } from "../magic/spells/SpellGrant"
 import type { CharacterTemplate } from "./CharacterTemplate"
+import {
+  getCharacterConditions,
+  withCharacterConditions,
+} from "./characterConditionStorage"
 
 export type CharacterGrantedSpellUsageSource =
   | { type: "character"; abilityId: string }
   | { type: "race"; abilityId: string }
   | { type: "equipment"; itemId: string; abilityId: string }
+  | { type: "condition"; conditionId: string; abilityId: string }
 
 export type CharacterGrantedSpell = {
   key: string
@@ -17,6 +23,7 @@ export type CharacterGrantedSpell = {
   source: SpellSource
   usage?: Usage
   usageSource?: CharacterGrantedSpellUsageSource
+  resourceCost?: SpellResourceCost
 }
 
 export function getCharacterGrantedSpells(
@@ -75,29 +82,45 @@ export function getCharacterGrantedSpells(
     }
 
     for (const ability of equipment.abilities ?? []) {
-      for (const grant of ability.grantedSpells ?? []) {
-        if (!grant.index) continue
+      addAbilitySpellGrants(results, ability, {
+        type: "equipment",
+        name: `${equipment.name || "Equipamento"} — ${ability.name || "Habilidade"}`,
+        sourceId: `${equipment.id}:${ability.id}`,
+      }, { type: "equipment", itemId: equipment.id, abilityId: ability.id })
+    }
+  }
 
-        const castingMode = grant.castingMode ?? "source"
+  for (const condition of getCharacterConditions(character)) {
+    for (const grant of condition.grantedSpells ?? []) {
+      if (!grant.index) continue
+      results.push({
+        key: `condition:${condition.id}:${grant.index}`,
+        index: grant.index,
+        castingMode: grant.resourceCost
+          ? "source"
+          : grant.castingMode === "source"
+            ? "known"
+            : (grant.castingMode ?? "known"),
+        source: {
+          type: "ability",
+          name: condition.name || "Condição",
+          sourceId: `condition:${condition.id}`,
+          attribute: grant.attribute ?? "cha",
+        },
+        resourceCost: grant.resourceCost,
+      })
+    }
 
-        results.push({
-          key: `equipment-ability:${equipment.id}:${ability.id}:${grant.index}`,
-          index: grant.index,
-          castingMode,
-          source: {
-            type: "equipment",
-            name: `${equipment.name || "Equipamento"} — ${ability.name || "Habilidade"}`,
-            sourceId: `${equipment.id}:${ability.id}`,
-            attribute: grant.attribute ?? "cha",
-          },
-          // A habilidade pode conceder a magia como conhecida e, ao mesmo tempo,
-          // fornecer conjurações gratuitas por suas próprias cargas.
-          usage: ability.usage,
-          usageSource: ability.usage
-            ? { type: "equipment", itemId: equipment.id, abilityId: ability.id }
-            : undefined,
-        })
-      }
+    for (const ability of condition.grantedAbilities ?? []) {
+      addAbilitySpellGrants(results, ability, {
+        type: ability.category === "feat" ? "feat" : "ability",
+        name: ability.name || condition.name || "Habilidade",
+        sourceId: `condition:${condition.id}:${ability.id}`,
+      }, {
+        type: "condition",
+        conditionId: condition.id,
+        abilityId: ability.id,
+      })
     }
   }
 
@@ -114,6 +137,7 @@ function addAbilitySpellGrants(
     if (!grant.index) continue
 
     const castingMode = grant.castingMode ?? "source"
+    const usesAlternateResource = Boolean(grant.resourceCost)
 
     results.push({
       key: `${source.type}:${source.sourceId}:${grant.index}`,
@@ -123,10 +147,12 @@ function addAbilitySpellGrants(
         ...source,
         attribute: grant.attribute ?? "cha",
       },
-      // `known` define que a magia também pode usar slots; não elimina os
-      // usos gratuitos compartilhados da habilidade que a concedeu.
-      usage: ability.usage,
-      usageSource: ability.usage ? usageSource : undefined,
+      resourceCost: grant.resourceCost,
+      usage: !usesAlternateResource && castingMode === "source" ? ability.usage : undefined,
+      usageSource:
+        !usesAlternateResource && castingMode === "source" && ability.usage
+          ? usageSource
+          : undefined,
     })
   }
 }
@@ -167,6 +193,22 @@ export function spendGrantedSpellAbilityUse(
     )
     if (!ability) return character
     return character.updateEquipmentAbility(source.itemId, spend({ ...ability, id: source.abilityId }))
+  }
+
+  if (source.type === "condition") {
+    return withCharacterConditions(
+      character,
+      getCharacterConditions(character).map((condition) =>
+        condition.id === source.conditionId
+          ? {
+              ...condition,
+              grantedAbilities: (condition.grantedAbilities ?? []).map((ability) =>
+                ability.id === source.abilityId ? spend(ability) : ability,
+              ),
+            }
+          : condition,
+      ),
+    )
   }
 
   const ability = (character.get("abilities") ?? []).find((entry) => entry.id === source.abilityId)

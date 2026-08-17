@@ -2,6 +2,7 @@ import type { CharacterTemplateProps } from '../../models/characters/CharacterTe
 import type { JsonValue } from '../../models/customSystems/CustomGenerals'
 import type {
   CharacterCustomSystemState,
+  CustomAbilityAcquisitionExceptionState,
   CustomAbilityInstance,
   CustomResourceState,
 } from '../../models/customSystems/CustomSystemDefinition'
@@ -224,6 +225,14 @@ function normalizeSystem(
     }
   }
 
+  const abilityAcquisitionExceptions = normalizeAbilityAcquisitionExceptions(
+    value.abilityAcquisitionExceptions,
+  )
+  const installationSource =
+    value.installationSource === 'master' || value.installationSource === 'automatic'
+      ? value.installationSource
+      : undefined
+
   return {
     value: {
       systemId,
@@ -232,6 +241,10 @@ function normalizeSystem(
       fields,
       resources,
       abilities,
+      ...(abilityAcquisitionExceptions
+        ? { abilityAcquisitionExceptions }
+        : {}),
+      ...(installationSource ? { installationSource } : {}),
     },
     issues,
   }
@@ -290,12 +303,72 @@ function normalizeAbility(value: unknown): CustomAbilityInstance | undefined {
   }
 }
 
+function normalizeAbilityAcquisitionExceptions(
+  value: unknown,
+): Record<string, CustomAbilityAcquisitionExceptionState> | undefined {
+  if (!isRecord(value)) return undefined
+
+  const result: Record<string, CustomAbilityAcquisitionExceptionState> = {}
+  for (const [typeId, rawException] of Object.entries(value)) {
+    if (!typeId.trim() || !isRecord(rawException)) continue
+
+    const learnedLimitFormulaOverride = readOptionalFormula(
+      rawException.learnedLimitFormulaOverride,
+    )
+    const preparedLimitFormulaOverride = readOptionalFormula(
+      rawException.preparedLimitFormulaOverride,
+    )
+    const extraLearnedSlots = readOptionalNonNegativeInteger(
+      rawException.extraLearnedSlots,
+    )
+    const extraPreparedSlots = readOptionalNonNegativeInteger(
+      rawException.extraPreparedSlots,
+    )
+    const alwaysLearnedAbilityIds = readStringArray(
+      rawException.alwaysLearnedAbilityIds,
+    )
+    const alwaysPreparedAbilityIds = readStringArray(
+      rawException.alwaysPreparedAbilityIds,
+    )
+
+    const normalized: CustomAbilityAcquisitionExceptionState = {
+      ...(learnedLimitFormulaOverride
+        ? { learnedLimitFormulaOverride }
+        : {}),
+      ...(preparedLimitFormulaOverride
+        ? { preparedLimitFormulaOverride }
+        : {}),
+      ...(extraLearnedSlots !== undefined
+        ? { extraLearnedSlots }
+        : {}),
+      ...(extraPreparedSlots !== undefined
+        ? { extraPreparedSlots }
+        : {}),
+      ...(alwaysLearnedAbilityIds.length
+        ? { alwaysLearnedAbilityIds }
+        : {}),
+      ...(alwaysPreparedAbilityIds.length
+        ? { alwaysPreparedAbilityIds }
+        : {}),
+    }
+
+    if (Object.keys(normalized).length) result[typeId] = normalized
+  }
+
+  return Object.keys(result).length ? result : undefined
+}
+
 function mergeDuplicateSystemStates(
   first: CharacterCustomSystemState,
   second: CharacterCustomSystemState,
 ): CharacterCustomSystemState {
   const abilities = new Map(first.abilities.map((ability) => [ability.id, ability]))
   for (const ability of second.abilities) abilities.set(ability.id, ability)
+
+  const abilityAcquisitionExceptions = {
+    ...(first.abilityAcquisitionExceptions ?? {}),
+    ...(second.abilityAcquisitionExceptions ?? {}),
+  }
 
   return {
     systemId: first.systemId,
@@ -304,6 +377,12 @@ function mergeDuplicateSystemStates(
     fields: { ...first.fields, ...second.fields },
     resources: { ...first.resources, ...second.resources },
     abilities: [...abilities.values()],
+    ...(Object.keys(abilityAcquisitionExceptions).length
+      ? { abilityAcquisitionExceptions }
+      : {}),
+    ...(second.installationSource ?? first.installationSource
+      ? { installationSource: second.installationSource ?? first.installationSource }
+      : {}),
   }
 }
 
@@ -336,6 +415,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readNonEmptyString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim().slice(0, 500) : undefined
+}
+
+function readOptionalFormula(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim()
+    ? value.trim().slice(0, 20_000)
+    : undefined
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return Array.from(
+    new Set(
+      value
+        .map(readNonEmptyString)
+        .filter((entry): entry is string => Boolean(entry)),
+    ),
+  )
+}
+
+function readOptionalNonNegativeInteger(value: unknown): number | undefined {
+  const parsed = finiteNumber(value)
+  return parsed === undefined ? undefined : Math.max(0, Math.trunc(parsed))
 }
 
 function finiteNumber(value: unknown): number | undefined {

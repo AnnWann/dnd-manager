@@ -4,6 +4,10 @@ import { Select } from "../../../../components/ui/Select"
 import { attributeShort } from "../../../../lib/attributeShorts"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
 import {
+  CUSTOM_CLASS_CHOICE_KEY,
+  isCustomClassEntry,
+} from "../../../../models/characters/customClassConfig"
+import {
   getDerivedSorceryPointMaximum,
   getSorceryPointPool,
   setSorceryPointCurrent,
@@ -18,7 +22,7 @@ import type {
   ClassName,
 } from "../../../../models/sheet/Class"
 
-const CLASS_PT: Record<ClassName, string> = {
+const CLASS_PT: Partial<Record<ClassName, string>> = {
   artificer: "Artífice",
   barbarian: "Bárbaro",
   bard: "Bardo",
@@ -50,13 +54,14 @@ function clampLevel(value: number, maxLevel: number): ClassLevel {
   return Math.max(1, Math.min(safeMaxLevel, value)) as ClassLevel
 }
 
-function slug(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("en-US")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+function getClassLabel(classData: CharacterClassInterface): string {
+  if (isCustomClassEntry(classData)) {
+    return (
+      classData.levelChoices?.[CUSTOM_CLASS_CHOICE_KEY]?.[0] ||
+      "Classe personalizada"
+    )
+  }
+  return CLASS_PT[classData.className] ?? String(classData.className)
 }
 
 export function SelectClassModule({
@@ -66,8 +71,10 @@ export function SelectClassModule({
   maxLevel,
   updateCharacter,
 }: Props) {
+  const customClass = isCustomClassEntry(classData)
   const canEditCasting =
-    classData.className === "fighter" || classData.className === "rogue"
+    !customClass &&
+    (classData.className === "fighter" || classData.className === "rogue")
 
   function updateCharacterClasses(
     updater: (
@@ -101,31 +108,6 @@ export function SelectClassModule({
     })
   }
 
-  function updateSubclass(name: string) {
-    const trimmed = name.trim()
-    updateClass({
-      ...classData,
-      subclass: trimmed
-        ? {
-            id: classData.subclass?.id || slug(trimmed),
-            name,
-            source: classData.subclass?.source || "Manual",
-          }
-        : undefined,
-    })
-  }
-
-  function updateSubclassSource(source: string) {
-    if (!classData.subclass) return
-    updateClass({
-      ...classData,
-      subclass: {
-        ...classData.subclass,
-        source,
-      },
-    })
-  }
-
   function removeClass() {
     updateCharacterClasses((classes) =>
       classes.filter((_, index) => index !== classIndex),
@@ -135,35 +117,17 @@ export function SelectClassModule({
   const safeMaxLevel = Math.max(1, Math.min(20, Math.trunc(maxLevel) || 1))
 
   return (
-    <div className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 md:grid-cols-[minmax(260px,1fr)_100px_220px_220px_44px]">
-      <div className="grid min-w-0 gap-2">
-        <div>
-          <div className="text-xs text-text">Classe</div>
-          <div className="truncate text-sm text-textH">
-            {CLASS_PT[classData.className]}
+    <div className="grid grid-cols-1 gap-2 rounded-md border border-border p-2 md:grid-cols-[1fr_100px_220px_220px_44px]">
+      <div className="min-w-0">
+        <div className="text-xs text-text">Classe</div>
+        <div className="truncate text-sm text-textH">
+          {getClassLabel(classData)}
+        </div>
+        {customClass ? (
+          <div className="mt-1 text-[10px] font-medium text-accent">
+            Classe personalizada
           </div>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="text-xs text-text">
-            Subclasse
-            <Input
-              className="mt-1 h-9 px-2"
-              value={classData.subclass?.name ?? ""}
-              placeholder="Digite manualmente"
-              onChange={(event) => updateSubclass(event.target.value)}
-            />
-          </label>
-          <label className="text-xs text-text">
-            Fonte
-            <Input
-              className="mt-1 h-9 px-2"
-              value={classData.subclass?.source ?? ""}
-              disabled={!classData.subclass}
-              placeholder="Opcional"
-              onChange={(event) => updateSubclassSource(event.target.value)}
-            />
-          </label>
-        </div>
+        ) : null}
       </div>
 
       <div>
@@ -187,49 +151,61 @@ export function SelectClassModule({
       <div>
         <div className="text-xs text-text">Progressão mágica</div>
 
-        <Select
-          className="mt-1 h-9 px-2 py-1"
-          value={classData.spellcastingProgression ?? "none"}
-          onChange={(event) => {
-            const value = event.target.value
+        {customClass ? (
+          <div className="mt-1 flex h-9 items-center rounded-md border border-border bg-bg-subtle px-2 text-xs text-textMuted">
+            Configurar na aba Magias
+          </div>
+        ) : (
+          <Select
+            className="mt-1 h-9 px-2 py-1"
+            value={classData.spellcastingProgression ?? "none"}
+            onChange={(event) => {
+              const value = event.target.value
 
-            updateClass({
-              ...classData,
-              spellcastingProgression:
-                value === "none"
-                  ? undefined
-                  : (value as "full" | "half" | "third"),
-            })
-          }}
-        >
-          <option value="none">Nenhuma</option>
-          <option value="full">Completa</option>
-          <option value="half">Meia</option>
-          <option value="third">Terço</option>
-        </Select>
+              updateClass({
+                ...classData,
+                spellcastingProgression:
+                  value === "none"
+                    ? undefined
+                    : (value as "full" | "half" | "third"),
+              })
+            }}
+          >
+            <option value="none">Nenhuma</option>
+            <option value="full">Completa</option>
+            <option value="half">Meia</option>
+            <option value="third">Terço</option>
+          </Select>
+        )}
       </div>
 
       <div>
         <div className="text-xs text-text">Atributo de conjuração</div>
 
-        <Select
-          className="mt-1 h-9 px-2 py-1"
-          value={classData.castingAttribute ?? ""}
-          disabled={!classData.spellcastingProgression && !canEditCasting}
-          onChange={(event) =>
-            updateClass({
-              ...classData,
-              castingAttribute: event.target.value as Attribute,
-            })
-          }
-        >
-          <option value="">Nenhum</option>
-          {ATTRIBUTE_KEYS.map((attribute) => (
-            <option key={attribute} value={attribute}>
-              {attributeShort(attribute)}
-            </option>
-          ))}
-        </Select>
+        {customClass ? (
+          <div className="mt-1 flex h-9 items-center rounded-md border border-border bg-bg-subtle px-2 text-xs text-textMuted">
+            Configurar na aba Magias
+          </div>
+        ) : (
+          <Select
+            className="mt-1 h-9 px-2 py-1"
+            value={classData.castingAttribute ?? ""}
+            disabled={!classData.spellcastingProgression && !canEditCasting}
+            onChange={(event) =>
+              updateClass({
+                ...classData,
+                castingAttribute: event.target.value as Attribute,
+              })
+            }
+          >
+            <option value="">Nenhum</option>
+            {ATTRIBUTE_KEYS.map((attribute) => (
+              <option key={attribute} value={attribute}>
+                {attributeShort(attribute)}
+              </option>
+            ))}
+          </Select>
+        )}
       </div>
 
       <div className="flex items-end">

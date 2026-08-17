@@ -7,6 +7,11 @@ import type { Itemmable } from "../items/item"
 import type { HP } from "../sheet/HP"
 import { applyCustomSystemRestRecovery } from "../../lib/customSystems"
 import { recoverChannelDivinity } from "./characterChannelDivinity"
+import { recoverKi } from "./characterKi"
+import {
+  getCharacterConditions,
+  withCharacterConditions,
+} from "./characterConditionStorage"
 import type { CharacterTemplate } from "./CharacterTemplate"
 
 type HitDiceConsumption = Partial<Record<DieSides, number>>
@@ -152,7 +157,22 @@ function resetRestResources(
         ),
       )
 
+  nextCharacter = withCharacterConditions(
+    nextCharacter,
+    getCharacterConditions(nextCharacter).map((condition) => ({
+      ...condition,
+      grantedAbilities: condition.grantedAbilities
+        ? resetAbilities(
+            condition.grantedAbilities,
+            restKind,
+            recoveryFraction,
+          )
+        : condition.grantedAbilities,
+    })),
+  )
+
   nextCharacter = recoverChannelDivinity(nextCharacter, recoveryFraction)
+  nextCharacter = recoverKi(nextCharacter, recoveryFraction)
 
   const magic = nextCharacter.get("magic")
 
@@ -225,7 +245,21 @@ function resetAbilities(
     const shouldRestoreUsage =
       ability.usage && shouldReset(ability.usage.reset, restKind)
 
-    if (!clearInstantEffect && !shouldRestoreUsage) return ability
+    const activationOptions = ability.activationOptions?.map((option) => {
+      if (!option.ability) return option
+      return {
+        ...option,
+        ability: resetAbilities(
+          [option.ability],
+          restKind,
+          recoveryFraction,
+        )[0],
+      }
+    })
+
+    if (!clearInstantEffect && !shouldRestoreUsage && !activationOptions) {
+      return ability
+    }
 
     return {
       ...ability,
@@ -234,6 +268,7 @@ function resetAbilities(
       usage: shouldRestoreUsage && ability.usage
         ? restoreUsage(ability.usage, recoveryFraction)
         : ability.usage,
+      activationOptions,
     }
   })
 }

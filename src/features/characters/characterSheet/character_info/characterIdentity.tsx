@@ -9,6 +9,8 @@ import { CLASS_NAMES } from "../../../../contexts/consts"
 import { Classes } from "../classes/class"
 import { CharacterExperience } from "../characterExperience"
 
+const CUSTOM_CLASS_CHOICE_KEY = "dnd-manager:custom-class-name"
+
 type Props = {
   character: CharacterTemplate
   updateCharacter: (
@@ -30,10 +32,13 @@ export function CharacterIdentity({
   const classDescription =
     classes.length > 0
       ? classes
-          .map(
-            (characterClass) =>
-              `${CLASS_NAMES[characterClass.className]} ${characterClass.level}`,
-          )
+          .map((characterClass) => {
+            const customName = characterClass.levelChoices?.[
+              CUSTOM_CLASS_CHOICE_KEY
+            ]?.[0]
+            const displayName = customName || CLASS_NAMES[characterClass.className]
+            return `${displayName} ${characterClass.level}`
+          })
           .join(" / ")
       : "Sem classe"
   const canEditClasses = character.get("sheet").type === "pc"

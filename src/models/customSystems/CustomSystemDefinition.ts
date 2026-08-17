@@ -182,7 +182,21 @@ export interface CharacterCustomSystemState {
   fields: Record<string, JsonValue>
   resources: Record<string, CustomResourceState>
   abilities: CustomAbilityInstance[]
+  /** Exceções de aquisição/preparo definidas pelo mestre para este personagem. */
+  abilityAcquisitionExceptions?: Record<string, CustomAbilityAcquisitionExceptionState>
   installationSource?: "master" | "automatic"
+}
+
+export interface CustomAbilityAcquisitionExceptionState {
+  /** Substitui a fórmula de limite definida pelo sistema apenas neste personagem. */
+  learnedLimitFormulaOverride?: FormulaExpression
+  preparedLimitFormulaOverride?: FormulaExpression
+  /** Espaços adicionais além do limite fixo/fórmula. */
+  extraLearnedSlots?: number
+  extraPreparedSlots?: number
+  /** Habilidades que não consomem o limite normal. */
+  alwaysLearnedAbilityIds?: string[]
+  alwaysPreparedAbilityIds?: string[]
 }
 
 export interface CustomResourceState {

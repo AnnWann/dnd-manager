@@ -9,7 +9,6 @@ import type {
   CustomOperand,
   CustomSystemEventType,
 } from '../../models/customSystems/CustomAutomationDefinition'
-import type { CustomFieldDefinition } from '../../models/customSystems/CustomFieldDefinition'
 import type {
   CustomPanelBlock,
   CustomPanelDefinition,
