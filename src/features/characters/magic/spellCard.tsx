@@ -8,7 +8,7 @@ import {
   CLASS_NAMES,
   MAGIC_SCHOOLS_MAP,
 } from "../../../contexts/consts"
-import { useCharacterContext } from "../../../contexts/characterContext"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import type { CharacterSpellResourceConfig } from "../../../models/magic/spells/CharacterSpells"
 import type { Spell, SpellResourceType } from "../../../models/magic/spells/Spell"
 import {
@@ -60,7 +60,7 @@ export function SpellCard({
   )
   const [draftCastingDescriptions, setDraftCastingDescriptions] =
     useState(castingDescriptions)
-  const { activeCharacter, updateCharacter } = useCharacterContext()
+  const { activeCharacter, updateCharacter } = useCharacterWorkspace()
   const castingDescriptionsKey = castingDescriptions.join("\u0000")
   const canTogglePrepared = Boolean(onTogglePrepared) && !alwaysPrepared
   const canEditCastingDescriptions = Boolean(
