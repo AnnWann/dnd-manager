@@ -1,6 +1,5 @@
-import { useState } from "react"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
-import { SelectHpModule } from "./SelectHpModule"
+import { CharacterHpControls } from "../../../characterHpControls"
 import { GroupHitDice } from "../hitdice/groupHitDice"
 
 type Props = {
@@ -27,28 +26,10 @@ export function GroupHP({
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        <SelectHpModule
-          name="Vida Atual"
-          hpKey="current"
-          character={character}
-          updateCharacter={updateCharacter}
-        />
-
-        <SelectHpModule
-          name="Vida Máxima"
-          hpKey="max"
-          character={character}
-          updateCharacter={updateCharacter}
-        />
-
-        <SelectHpModule
-          name="Vida Temporária"
-          hpKey="temporary"
-          character={character}
-          updateCharacter={updateCharacter}
-        />
-      </div>
+      <CharacterHpControls
+        character={character}
+        updateCharacter={updateCharacter}
+      />
 
       <div className="mt-4 border-t border-border pt-3">
         <GroupHitDice

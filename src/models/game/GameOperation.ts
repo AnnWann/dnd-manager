@@ -61,6 +61,10 @@ export type GameOperation =
       type: "character.hp.damage"
       characterId: string
       amount: number
+      /** True when this damage triggered the concentration-check prompt on the source client. */
+      requiresConcentrationCheck?: boolean
+      concentrationDc?: number
+      concentrationSource?: string
     }
   | {
       type: "character.hp.heal"
