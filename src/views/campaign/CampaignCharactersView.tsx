@@ -1,19 +1,20 @@
 import { UsersRound, UserRound } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 
 import {
   getCampaignSessionCharacters,
-  type CampaignSessionCharacter,
   type CampaignSessionCharacters,
 } from "../../api/campaign-session"
-import type { CampaignCharacterVisibility } from "../../api/user-campaigns"
 import { Button } from "../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../components/ui/Card"
-import { campaignCharacterPath } from "../../lib/campaignRoutes"
+import { useCharacterContext } from "../../contexts/characterContext"
+import { sessionCharacterPath } from "../../lib/campaignRoutes"
+import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
 
 export function CampaignCharactersView() {
   const { campaignId } = useParams<{ campaignId?: string }>()
+  const { visibleCharacters } = useCharacterContext()
   const [data, setData] = useState<CampaignSessionCharacters | null>(null)
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState("")
@@ -45,13 +46,23 @@ export function CampaignCharactersView() {
     }
   }, [campaignId])
 
+  const sessionCharacters = useMemo(() => {
+    if (!data) return []
+    if (data.campaign.isMaster) return visibleCharacters
+
+    const ownedSourceIds = new Set(data.characters.map((character) => character.id))
+    return visibleCharacters.filter((character) =>
+      ownedSourceIds.has(character.get("id")),
+    )
+  }, [data, visibleCharacters])
+
   if (!campaignId) return <Navigate to="/not-found" replace />
 
   if (loading) {
     return (
       <CampaignCharactersShell title="Personagens" subtitle="Carregando sessão...">
         <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-textMuted">
-          Carregando personagens da campanha...
+          Carregando personagens da sessão...
         </div>
       </CampaignCharactersShell>
     )
@@ -68,18 +79,28 @@ export function CampaignCharactersView() {
   }
 
   return data.campaign.isMaster ? (
-    <MasterCampaignCharactersView campaignId={campaignId} data={data} />
+    <MasterSessionCharactersView
+      sessionId={campaignId}
+      data={data}
+      characters={sessionCharacters}
+    />
   ) : (
-    <PlayerCampaignCharactersView campaignId={campaignId} data={data} />
+    <PlayerSessionCharactersView
+      sessionId={campaignId}
+      data={data}
+      characters={sessionCharacters}
+    />
   )
 }
 
-function PlayerCampaignCharactersView({
-  campaignId,
+function PlayerSessionCharactersView({
+  sessionId,
   data,
+  characters,
 }: {
-  campaignId: string
+  sessionId: string
   data: CampaignSessionCharacters
+  characters: CharacterTemplate[]
 }) {
   const navigate = useNavigate()
 
@@ -89,27 +110,29 @@ function PlayerCampaignCharactersView({
       subtitle={`${data.campaign.name} · Jogador`}
     >
       <p className="text-sm leading-6 text-textMuted">
-        Apenas os seus personagens vinculados a esta sessão aparecem aqui.
+        Estas são as cópias de sessão dos seus personagens. Alterações feitas aqui não modificam a ficha da sua área de usuário.
       </p>
 
       <CharacterGrid
-        characters={data.characters}
-        emptyTitle="Nenhum personagem seu nesta sessão"
-        emptyDescription="Vincule um personagem à campanha pela sua área de usuário para que ele apareça aqui."
+        characters={characters}
+        emptyTitle="Nenhum personagem seu carregado nesta sessão"
+        emptyDescription="Vincular um personagem à campanha define quem pode participar; a sessão mantém sua própria cópia mutável da ficha."
         onOpen={(character) =>
-          navigate(campaignCharacterPath(campaignId, character.id, "sheet"))
+          navigate(sessionCharacterPath(sessionId, character.get("id"), "sheet"))
         }
       />
     </CampaignCharactersShell>
   )
 }
 
-function MasterCampaignCharactersView({
-  campaignId,
+function MasterSessionCharactersView({
+  sessionId,
   data,
+  characters,
 }: {
-  campaignId: string
+  sessionId: string
   data: CampaignSessionCharacters
+  characters: CharacterTemplate[]
 }) {
   const navigate = useNavigate()
 
@@ -120,21 +143,21 @@ function MasterCampaignCharactersView({
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm leading-6 text-textMuted">
-          Todos os personagens vinculados à campanha, independentemente do jogador.
+          Todas as cópias de personagem atualmente carregadas nesta sessão.
         </p>
         <div className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs text-textMuted">
           <UsersRound className="h-4 w-4" />
-          {data.characters.length} personagem{data.characters.length === 1 ? "" : "s"}
+          {characters.length} personagem{characters.length === 1 ? "" : "s"}
         </div>
       </div>
 
       <CharacterGrid
-        characters={data.characters}
+        characters={characters}
         showOwner
-        emptyTitle="Nenhum personagem na sessão"
-        emptyDescription="Os personagens adicionados pelos jogadores aparecerão aqui."
+        emptyTitle="Nenhum personagem carregado na sessão"
+        emptyDescription="Quando a sessão carregar suas cópias de personagem, elas aparecerão aqui."
         onOpen={(character) =>
-          navigate(campaignCharacterPath(campaignId, character.id, "sheet"))
+          navigate(sessionCharacterPath(sessionId, character.get("id"), "sheet"))
         }
       />
     </CampaignCharactersShell>
@@ -148,11 +171,11 @@ function CharacterGrid({
   emptyDescription,
   onOpen,
 }: {
-  characters: CampaignSessionCharacter[]
+  characters: CharacterTemplate[]
   showOwner?: boolean
   emptyTitle: string
   emptyDescription: string
-  onOpen: (character: CampaignSessionCharacter) => void
+  onOpen: (character: CharacterTemplate) => void
 }) {
   if (!characters.length) {
     return (
@@ -167,39 +190,42 @@ function CharacterGrid({
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {characters.map((character) => (
-        <Card key={character.id}>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-bg-subtle text-textMuted">
-                <UserRound className="h-5 w-5" />
+      {characters.map((character) => {
+        const owner = character.get("owner")
+        return (
+          <Card key={character.get("id")}>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-bg-subtle text-textMuted">
+                  <UserRound className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate text-base font-semibold text-textH">
+                    {character.get("name")}
+                  </h2>
+                  {showOwner ? (
+                    <p className="mt-1 truncate text-xs text-textMuted">
+                      Jogador: {owner?.name || owner?.id || "Sem jogador"}
+                    </p>
+                  ) : null}
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <h2 className="truncate text-base font-semibold text-textH">
-                  {character.name}
-                </h2>
-                {showOwner ? (
-                  <p className="mt-1 truncate text-xs text-textMuted">
-                    Jogador: {character.owner.name}
-                  </p>
-                ) : null}
+            </CardHeader>
+            <CardContent>
+              <div className="mb-3 text-xs text-textMuted">
+                {visibilityLabel(character.get("visibility"))}
               </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-3 text-xs text-textMuted">
-              {visibilityLabel(character.visibility)}
-            </div>
-            <Button
-              className="w-full"
-              variant="secondary"
-              onClick={() => onOpen(character)}
-            >
-              Abrir ficha
-            </Button>
-          </CardContent>
-        </Card>
-      ))}
+              <Button
+                className="w-full"
+                variant="secondary"
+                onClick={() => onOpen(character)}
+              >
+                Abrir ficha da sessão
+              </Button>
+            </CardContent>
+          </Card>
+        )
+      })}
     </div>
   )
 }
@@ -224,11 +250,11 @@ function CampaignCharactersShell({
   )
 }
 
-function visibilityLabel(visibility: CampaignCharacterVisibility): string {
+function visibilityLabel(visibility: "private" | "party" | "master"): string {
   switch (visibility) {
-    case "PRIVATE":
+    case "private":
       return "Visibilidade: privada"
-    case "MASTER":
+    case "master":
       return "Visibilidade: mestre"
     default:
       return "Visibilidade: grupo"
