@@ -157,6 +157,15 @@ export function CharacterSettingsModal({
     })
   }
 
+  function openCharacterExceptions() {
+    const trigger = document.querySelector<HTMLButtonElement>(
+      'button[title="Configurar exceções de aprendizagem e preparo"]',
+    )
+    if (!trigger) return
+    onClose()
+    window.setTimeout(() => trigger.click(), 0)
+  }
+
   return (
     <div
       className="fixed inset-0 z-[10000] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/65 p-3 backdrop-blur-sm sm:p-4"
@@ -276,20 +285,28 @@ export function CharacterSettingsModal({
           </p>
 
           <div className="mt-4 grid gap-3">
-            {activeSystems.map((state) => (
-              <SystemRow
-                key={state.systemId}
-                name={systemName(definitions, state.systemId)}
-                status="Visível na ficha"
-              >
-                <SmallAction onClick={() => hideSystem(state.systemId)}>
-                  <EyeOff className="h-4 w-4" /> Esconder
-                </SmallAction>
-                <SmallAction danger onClick={() => removeSystem(state)}>
-                  <Trash2 className="h-4 w-4" /> Remover
-                </SmallAction>
-              </SystemRow>
-            ))}
+            {activeSystems.map((state) => {
+              const definition = definitions.find((entry) => entry.id === state.systemId)
+              return (
+                <SystemRow
+                  key={state.systemId}
+                  name={systemName(definitions, state.systemId)}
+                  status="Visível na ficha"
+                >
+                  {definition && hasConfigurableAbilityLimits(definition) ? (
+                    <SmallAction onClick={openCharacterExceptions}>
+                      <Settings2 className="h-4 w-4" /> Exceções
+                    </SmallAction>
+                  ) : null}
+                  <SmallAction onClick={() => hideSystem(state.systemId)}>
+                    <EyeOff className="h-4 w-4" /> Esconder
+                  </SmallAction>
+                  <SmallAction danger onClick={() => removeSystem(state)}>
+                    <Trash2 className="h-4 w-4" /> Remover
+                  </SmallAction>
+                </SystemRow>
+              )
+            })}
 
             {hiddenSystems.map((state) => (
               <SystemRow
@@ -405,4 +422,20 @@ function systemName(
   systemId: string,
 ): string {
   return definitions.find((definition) => definition.id === systemId)?.name ?? systemId
+}
+
+function hasConfigurableAbilityLimits(definition: CustomSystemDefinition): boolean {
+  return definition.abilityTypes.some((type) => {
+    const acquisition = type.acquisition
+    if (!acquisition) return false
+
+    const learned =
+      (acquisition.mode === 'learned' || acquisition.mode === 'learnedAndPrepared') &&
+      (acquisition.learnedLimit !== undefined || Boolean(acquisition.learnedLimitFormula?.trim()))
+    const prepared =
+      (acquisition.mode === 'prepared' || acquisition.mode === 'learnedAndPrepared') &&
+      (acquisition.preparedLimit !== undefined || Boolean(acquisition.preparedLimitFormula?.trim()))
+
+    return learned || prepared
+  })
 }
