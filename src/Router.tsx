@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom"
+import { Navigate, Outlet, Route, Routes } from "react-router-dom"
 
 import { RequireAuth } from "./auth/requireAuth"
 import { useSyncContext } from "./contexts/syncContext"
@@ -51,26 +51,11 @@ export function AppRouter() {
         <Route index element={<Navigate to="characters" replace />} />
         <Route path="characters" element={<UserCharactersTab />} />
         <Route path="characters/create" element={<UserCharacterCreateView />} />
-        <Route
-          path="characters/:characterId"
-          element={<Navigate to="sheet" replace />}
-        />
-        <Route
-          path="characters/:characterId/level-up"
-          element={<UserCharacterLevelUpView />}
-        />
-        <Route
-          path="characters/:characterId/spells-list/add-spells"
-          element={<UserCharacterAddSpellsView />}
-        />
-        <Route
-          path="characters/:characterId/inventory/add-item"
-          element={<UserCharacterCreateItemView />}
-        />
-        <Route
-          path="characters/:characterId/:tab"
-          element={<UserCharacterDetailView />}
-        />
+        <Route path="characters/:characterId" element={<Navigate to="sheet" replace />} />
+        <Route path="characters/:characterId/level-up" element={<UserCharacterLevelUpView />} />
+        <Route path="characters/:characterId/spells-list/add-spells" element={<UserCharacterAddSpellsView />} />
+        <Route path="characters/:characterId/inventory/add-item" element={<UserCharacterCreateItemView />} />
+        <Route path="characters/:characterId/:tab" element={<UserCharacterDetailView />} />
         <Route path="spells" element={<UserSpellsTab />} />
         <Route path="campaigns" element={<UserCampaignsRouteView />} />
       </Route>
@@ -79,7 +64,7 @@ export function AppRouter() {
         path="/campaign/:campaignId"
         element={
           <RequireAuth>
-            <CampaignRouteOutlet />
+            <Outlet />
           </RequireAuth>
         }
       >
@@ -105,21 +90,6 @@ export function AppRouter() {
       <Route path="*" element={<Navigate to="/not-found" replace />} />
     </Routes>
   )
-}
-
-function CampaignRouteOutlet() {
-  return <CampaignRouteChildren />
-}
-
-function CampaignRouteChildren() {
-  // Kept as a component so the auth boundary can wrap the whole campaign branch.
-  // React Router renders nested route elements through this outlet.
-  const { Outlet } = requireReactRouterDom()
-  return <Outlet />
-}
-
-function requireReactRouterDom(): typeof import("react-router-dom") {
-  return require("react-router-dom")
 }
 
 function InitiativeRoute() {
