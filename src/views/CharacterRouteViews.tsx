@@ -2,8 +2,8 @@ import { useEffect, useMemo } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 
 import { useCharacterContext } from "../contexts/characterContext"
-import { SessionCharacterWorkspace } from "../features/characters/workspace/CampaignCharacterWorkspace"
-import { campaignCharacterPath } from "../lib/campaignRoutes"
+import { SessionCharacterWorkspace } from "../features/characters/workspace/SessionCharacterWorkspace"
+import { sessionCharacterPath } from "../lib/campaignRoutes"
 import {
   readLocalStorageJson,
   writeLocalStorageJson,
@@ -50,7 +50,7 @@ export function CharacterIndexView() {
     if (!shouldAutoOpen || !cachedCharacter || !campaignId) return
 
     navigate(
-      campaignCharacterPath(campaignId, cachedCharacter.get("id"), "sheet"),
+      sessionCharacterPath(campaignId, cachedCharacter.get("id"), "sheet"),
       {
         replace: true,
         state: null,
