@@ -193,6 +193,13 @@ export function CampaignLayout() {
         />
         <PartyInventorySettingsProvider
           carryCapacity={appState.partyCarryCapacity ?? 0}
+          additionalSupplyConsumption={
+            (
+              appState as AppStateV1 & {
+                partyAdditionalSupplyConsumption?: number
+              }
+            ).partyAdditionalSupplyConsumption ?? 0
+          }
           canEditCarryCapacity={userRole === "master"}
           setAppState={setAppState}
         >
