@@ -1,7 +1,30 @@
 import type { BonusCollection } from "../bonuses/Bonus"
-import type { CharacterAcquisitionMetadata } from "../characters/CharacterAcquisition"
+import type {
+  CharacterConditionDuration,
+  CharacterConditionGrant,
+} from "../characters/CharacterCondition"
 import type { SpellGrant } from "../magic/spells/SpellGrant"
 import type { Proficiency } from "../sheet/Proficiency"
+
+export type AbilityActivationOption = {
+  id: string
+  /** Rótulo exibido no modal de escolha. */
+  name: string
+  /** Texto curto exibido antes da escolha. */
+  description?: string
+  /** Por quanto tempo as mini-habilidades escolhidas permanecem disponíveis. */
+  duration?: CharacterConditionDuration
+  /**
+   * Mini-habilidades completas concedidas quando esta opção é escolhida.
+   * Cada uma mantém seu próprio tipo, ação, gatilho, duração de efeito,
+   * contador, bônus, proficiências, magias e condição ao usar.
+   */
+  abilities?: Ability[]
+  /** Formato de uma única mini-habilidade; mantido para compatibilidade. */
+  ability?: Ability
+  /** Formato legado das primeiras opções; mantido para migração transparente. */
+  condition?: CharacterConditionGrant
+}
 
 export interface Ability {
   id: string
@@ -20,17 +43,21 @@ export interface Ability {
   grantedSpells?: SpellGrant[]
   grantedProficiencies?: Proficiency[]
   bonuses?: BonusCollection
+  /** Condição adicional aplicada ao personagem quando a habilidade é usada. */
+  conditionOnUse?: CharacterConditionGrant
+  /** Alternativas apresentadas ao jogador antes de concluir a ativação. */
+  activationOptions?: AbilityActivationOption[]
   /** Estado persistido dos benefícios de habilidades que precisam ser acionadas. */
   benefitsActive?: boolean
   /** Campo legado; novos cálculos usam benefitsActive. */
   modifiersActive?: boolean
-  /** Metadados presentes nas habilidades projetadas por equipamentos. */
-  source?: "equipment" | "race" | string
+  /** Metadados presentes nas habilidades projetadas por outras fontes. */
+  source?: "equipment" | "race" | "condition" | string
   sourceItemId?: string
   sourceItemName?: string
+  sourceConditionId?: string
+  sourceConditionName?: string
   originalAbilityId?: string
-  /** Audit trail describing when and why the character obtained this ability. */
-  acquisition?: CharacterAcquisitionMetadata
 }
 
 export interface Usage {
@@ -39,12 +66,16 @@ export interface Usage {
   maxFormula?: string
   used: number
   reset: AbilityUsageResetKind
+  /** Habilidades com o mesmo id compartilham o mesmo contador de usos. */
+  sharedResourceId?: string
+  /** Nome amigável exibido na interface para o recurso compartilhado. */
+  sharedResourceName?: string
   cooldownAmount?: number
   cooldownUnit?: AbilityUsageCooldownUnit
   cooldownRemaining?: number
 }
 
-export type AbilityCategory = 'general' | 'invocation' | 'feat' | 'channelDivinity'
+export type AbilityCategory = 'general' | 'invocation' | 'feat' | 'channelDivinity' | 'martialArts'
 
 export type AbilityUsageResetKind = 'turn' | 'cooldown' | 'shortRest' | 'longRest' | 'limited' | 'spellSlot'
 
