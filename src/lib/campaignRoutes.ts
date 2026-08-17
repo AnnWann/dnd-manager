@@ -1,40 +1,40 @@
-export function campaignBasePath(campaignId: string): string {
-  return `/campaign/${encodeURIComponent(campaignId)}`
+export function sessionBasePath(sessionId: string): string {
+  return `/session/${encodeURIComponent(sessionId)}`
 }
 
-export function campaignPath(campaignId: string, path = ""): string {
+export function sessionPath(sessionId: string, path = ""): string {
   const suffix = path.replace(/^\/+/, "")
-  return suffix ? `${campaignBasePath(campaignId)}/${suffix}` : campaignBasePath(campaignId)
+  return suffix ? `${sessionBasePath(sessionId)}/${suffix}` : sessionBasePath(sessionId)
 }
 
-export function campaignCharacterPath(
-  campaignId: string,
+export function sessionCharacterPath(
+  sessionId: string,
   characterId?: string,
   tab?: string,
 ): string {
-  if (!characterId) return campaignPath(campaignId, "character")
-  const base = campaignPath(
-    campaignId,
+  if (!characterId) return sessionPath(sessionId, "character")
+  const base = sessionPath(
+    sessionId,
     `character/${encodeURIComponent(characterId)}`,
   )
   return tab ? `${base}/${encodeURIComponent(tab)}` : base
 }
 
-export function campaignCustomSystemPath(
-  campaignId: string,
+export function sessionCustomSystemPath(
+  sessionId: string,
   systemId?: string,
   tab?: string,
 ): string {
-  if (!systemId) return campaignPath(campaignId, "custom-systems")
-  const base = campaignPath(
-    campaignId,
+  if (!systemId) return sessionPath(sessionId, "custom-systems")
+  const base = sessionPath(
+    sessionId,
     `custom-systems/${encodeURIComponent(systemId)}`,
   )
   return tab ? `${base}/${encodeURIComponent(tab)}` : base
 }
 
-export function campaignIdFromPathname(pathname: string): string | undefined {
-  const match = pathname.match(/^\/campaign\/([^/]+)(?:\/|$)/)
+export function sessionIdFromPathname(pathname: string): string | undefined {
+  const match = pathname.match(/^\/(?:session|campaign)\/([^/]+)(?:\/|$)/)
   if (!match?.[1]) return undefined
   try {
     return decodeURIComponent(match[1])
@@ -42,3 +42,13 @@ export function campaignIdFromPathname(pathname: string): string | undefined {
     return match[1]
   }
 }
+
+/**
+ * Compatibility aliases while campaign-management code is progressively
+ * separated from the active-session UI. These all resolve to /session routes.
+ */
+export const campaignBasePath = sessionBasePath
+export const campaignPath = sessionPath
+export const campaignCharacterPath = sessionCharacterPath
+export const campaignCustomSystemPath = sessionCustomSystemPath
+export const campaignIdFromPathname = sessionIdFromPathname
