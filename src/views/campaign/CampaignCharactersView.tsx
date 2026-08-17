@@ -1,159 +1,230 @@
-import { ArrowLeft, UserRound } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { UsersRound, UserRound } from "lucide-react"
+import { useEffect, useState } from "react"
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 
-import { getMyCampaigns, type UserCampaign } from "../../api/user-campaigns"
+import {
+  getCampaignSessionCharacters,
+  type CampaignSessionCharacter,
+  type CampaignSessionCharacters,
+} from "../../api/campaign-session"
+import type { CampaignCharacterVisibility } from "../../api/user-campaigns"
 import { Button } from "../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../components/ui/Card"
 import { campaignCharacterPath } from "../../lib/campaignRoutes"
 
 export function CampaignCharactersView() {
-  const navigate = useNavigate()
-  const { campaignId } = useParams<{ campaignId: string }>()
-  const [campaigns, setCampaigns] = useState<UserCampaign[]>([])
+  const { campaignId } = useParams<{ campaignId?: string }>()
+  const [data, setData] = useState<CampaignSessionCharacters | null>(null)
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState("")
 
   useEffect(() => {
+    if (!campaignId) return
     let cancelled = false
 
-    async function loadCampaign() {
+    async function loadCharacters() {
       setLoading(true)
       setErrorMessage("")
 
       try {
-        const nextCampaigns = await getMyCampaigns()
-        if (!cancelled) setCampaigns(nextCampaigns)
+        const nextData = await getCampaignSessionCharacters(campaignId!)
+        if (!cancelled) setData(nextData)
       } catch {
         if (!cancelled) {
-          setErrorMessage("Não foi possível carregar a campanha.")
+          setData(null)
+          setErrorMessage("Não foi possível carregar os personagens da sessão.")
         }
       } finally {
         if (!cancelled) setLoading(false)
       }
     }
 
-    void loadCampaign()
-
+    void loadCharacters()
     return () => {
       cancelled = true
     }
   }, [campaignId])
 
-  const campaign = useMemo(
-    () => campaigns.find((entry) => entry.id === campaignId),
-    [campaignId, campaigns],
+  if (!campaignId) return <Navigate to="/not-found" replace />
+
+  if (loading) {
+    return (
+      <CampaignCharactersShell title="Personagens" subtitle="Carregando sessão...">
+        <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-textMuted">
+          Carregando personagens da campanha...
+        </div>
+      </CampaignCharactersShell>
+    )
+  }
+
+  if (errorMessage || !data) {
+    return (
+      <CampaignCharactersShell title="Personagens" subtitle="Sessão indisponível">
+        <div className="rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger">
+          {errorMessage || "Não foi possível carregar a campanha."}
+        </div>
+      </CampaignCharactersShell>
+    )
+  }
+
+  return data.campaign.isMaster ? (
+    <MasterCampaignCharactersView campaignId={campaignId} data={data} />
+  ) : (
+    <PlayerCampaignCharactersView campaignId={campaignId} data={data} />
   )
+}
 
-  if (!campaignId) {
-    return <Navigate to="/not-found" replace />
-  }
+function PlayerCampaignCharactersView({
+  campaignId,
+  data,
+}: {
+  campaignId: string
+  data: CampaignSessionCharacters
+}) {
+  const navigate = useNavigate()
 
-  if (!loading && !errorMessage && !campaign) {
-    return <Navigate to="/not-found" replace />
-  }
+  return (
+    <CampaignCharactersShell
+      title="Seus personagens"
+      subtitle={`${data.campaign.name} · Jogador`}
+    >
+      <p className="text-sm leading-6 text-textMuted">
+        Apenas os seus personagens vinculados a esta sessão aparecem aqui.
+      </p>
 
-  if (!loading && campaign && campaign.status !== "ACTIVE") {
-    return <Navigate to="/unauthorized" replace />
+      <CharacterGrid
+        characters={data.characters}
+        emptyTitle="Nenhum personagem seu nesta sessão"
+        emptyDescription="Vincule um personagem à campanha pela sua área de usuário para que ele apareça aqui."
+        onOpen={(character) =>
+          navigate(campaignCharacterPath(campaignId, character.id, "sheet"))
+        }
+      />
+    </CampaignCharactersShell>
+  )
+}
+
+function MasterCampaignCharactersView({
+  campaignId,
+  data,
+}: {
+  campaignId: string
+  data: CampaignSessionCharacters
+}) {
+  const navigate = useNavigate()
+
+  return (
+    <CampaignCharactersShell
+      title="Personagens da sessão"
+      subtitle={`${data.campaign.name} · Mestre`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm leading-6 text-textMuted">
+          Todos os personagens vinculados à campanha, independentemente do jogador.
+        </p>
+        <div className="inline-flex items-center gap-2 rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs text-textMuted">
+          <UsersRound className="h-4 w-4" />
+          {data.characters.length} personagem{data.characters.length === 1 ? "" : "s"}
+        </div>
+      </div>
+
+      <CharacterGrid
+        characters={data.characters}
+        showOwner
+        emptyTitle="Nenhum personagem na sessão"
+        emptyDescription="Os personagens adicionados pelos jogadores aparecerão aqui."
+        onOpen={(character) =>
+          navigate(campaignCharacterPath(campaignId, character.id, "sheet"))
+        }
+      />
+    </CampaignCharactersShell>
+  )
+}
+
+function CharacterGrid({
+  characters,
+  showOwner = false,
+  emptyTitle,
+  emptyDescription,
+  onOpen,
+}: {
+  characters: CampaignSessionCharacter[]
+  showOwner?: boolean
+  emptyTitle: string
+  emptyDescription: string
+  onOpen: (character: CampaignSessionCharacter) => void
+}) {
+  if (!characters.length) {
+    return (
+      <div className="rounded-xl border border-dashed border-border p-10 text-center">
+        <div className="text-sm font-semibold text-textH">{emptyTitle}</div>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-textMuted">
+          {emptyDescription}
+        </p>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-dvh bg-[color:var(--surface-app)] text-text">
-      <header className="border-b border-border bg-bg-elevated">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-3 py-3 sm:px-4">
-          <div className="flex min-w-0 items-center gap-3">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {characters.map((character) => (
+        <Card key={character.id}>
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-bg-subtle text-textMuted">
+                <UserRound className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-base font-semibold text-textH">
+                  {character.name}
+                </h2>
+                {showOwner ? (
+                  <p className="mt-1 truncate text-xs text-textMuted">
+                    Jogador: {character.owner.name}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-3 text-xs text-textMuted">
+              {visibilityLabel(character.visibility)}
+            </div>
             <Button
-              size="sm"
+              className="w-full"
               variant="secondary"
-              onClick={() => navigate("/user/campaigns")}
+              onClick={() => onOpen(character)}
             >
-              <ArrowLeft className="h-4 w-4" />
-              Campanhas
+              Abrir ficha
             </Button>
-
-            <div className="min-w-0">
-              <div className="truncate font-heading text-base font-semibold text-textH">
-                {campaign?.name ?? "Campanha"}
-              </div>
-              <div className="truncate text-xs text-textMuted">
-                {campaign
-                  ? campaign.isOwner || campaign.role === "MASTER"
-                    ? "Sessão · Mestre"
-                    : "Sessão · Jogador"
-                  : "Carregando sessão..."}
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto grid w-full max-w-6xl gap-4 px-3 py-4 sm:px-4 sm:py-6">
-        <div>
-          <h1 className="text-xl font-semibold text-textH">Personagens</h1>
-          <p className="mt-1 text-sm leading-6 text-textMuted">
-            Personagens que você vinculou a esta campanha.
-          </p>
-        </div>
-
-        {errorMessage ? (
-          <div className="rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger">
-            {errorMessage}
-          </div>
-        ) : loading ? (
-          <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-textMuted">
-            Carregando personagens da campanha...
-          </div>
-        ) : campaign && campaign.characters.length > 0 ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {campaign.characters.map((character) => (
-              <Card key={character.id}>
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border bg-bg-subtle text-textMuted">
-                      <UserRound className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <h2 className="truncate text-base font-semibold text-textH">
-                        {character.name}
-                      </h2>
-                      <p className="mt-1 text-xs text-textMuted">
-                        {visibilityLabel(character.visibility)}
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <Button
-                    className="w-full"
-                    variant="secondary"
-                    onClick={() =>
-                      navigate(campaignCharacterPath(campaignId, character.id, "sheet"))
-                    }
-                  >
-                    Abrir ficha
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-border p-10 text-center">
-            <div className="text-sm font-semibold text-textH">
-              Nenhum personagem vinculado
-            </div>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-textMuted">
-              Adicione um personagem à campanha pela tela de campanhas para que ele apareça aqui.
-            </p>
-          </div>
-        )}
-      </main>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   )
 }
 
-function visibilityLabel(
-  visibility: UserCampaign["characters"][number]["visibility"],
-): string {
+function CampaignCharactersShell({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string
+  subtitle: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="mx-auto grid w-full max-w-6xl gap-4">
+      <header className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
+        <h1 className="text-xl font-semibold text-textH">{title}</h1>
+        <p className="mt-1 text-sm text-textMuted">{subtitle}</p>
+      </header>
+      {children}
+    </div>
+  )
+}
+
+function visibilityLabel(visibility: CampaignCharacterVisibility): string {
   switch (visibility) {
     case "PRIVATE":
       return "Visibilidade: privada"
