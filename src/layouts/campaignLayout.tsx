@@ -30,6 +30,7 @@ import { SyncProvider } from "../contexts/syncContext"
 import { MasterConcentrationAlerts } from "../features/characters/characterSheet/masterConcentrationAlerts"
 import { CharacterRelationalPersistenceBridge } from "../features/sync/CharacterRelationalPersistenceBridge"
 import { RelationalMigrationBridge } from "../features/sync/RelationalMigrationBridge"
+import { campaignIdFromPathname, campaignPath } from "../lib/campaignRoutes"
 import { normalizeAppStateInventory } from "../lib/normalizeAppStateInventory"
 import { type AppStateV1 } from "../lib/remoteState"
 import { useConcurrentRemoteAppState } from "../lib/remoteStateConcurrent"
@@ -38,6 +39,11 @@ import { AppRouter } from "../Router"
 export function CampaignLayout() {
   const navigate = useNavigate()
   const location = useLocation()
+  const campaignId = campaignIdFromPathname(location.pathname)
+  const toCampaign = useCallback(
+    (path: string) => campaignId ? campaignPath(campaignId, path) : "/user/campaigns",
+    [campaignId],
+  )
 
   const {
     syncKey,
@@ -82,67 +88,67 @@ export function CampaignLayout() {
     {
       label: "Sync",
       icon: <IconSync />,
-      active: location.pathname === "/sync",
-      onClick: () => navigate("/sync"),
+      active: location.pathname === toCampaign("sync"),
+      onClick: () => navigate(toCampaign("sync")),
     },
     {
       label: "Ficha",
       icon: <IconCharacter />,
-      active: location.pathname.startsWith("/character"),
+      active: location.pathname.startsWith(toCampaign("character")),
       onClick: () =>
-        navigate("/character", { state: { autoOpenLast: true } }),
+        navigate(toCampaign("character"), { state: { autoOpenLast: true } }),
     },
     {
       label: "Inventário do grupo",
       icon: <IconBackpack />,
-      active: location.pathname === "/party-inventory",
-      onClick: () => navigate("/party-inventory"),
+      active: location.pathname === toCampaign("party-inventory"),
+      onClick: () => navigate(toCampaign("party-inventory")),
     },
     {
       label: "Chão",
       icon: <IconGround />,
-      active: location.pathname === "/ground-inventory",
-      onClick: () => navigate("/ground-inventory"),
+      active: location.pathname === toCampaign("ground-inventory"),
+      onClick: () => navigate(toCampaign("ground-inventory")),
     },
     {
       label: "Missões",
       icon: <IconNotes />,
-      active: location.pathname === "/missions",
-      onClick: () => navigate("/missions"),
+      active: location.pathname === toCampaign("missions"),
+      onClick: () => navigate(toCampaign("missions")),
     },
     ...(userRole === "master"
       ? [
           {
             label: "Compêndio de Itens",
             icon: <IconEquipment />,
-            active: location.pathname === "/items-compendium",
-            onClick: () => navigate("/items-compendium"),
+            active: location.pathname === toCampaign("items-compendium"),
+            onClick: () => navigate(toCampaign("items-compendium")),
           },
           {
             label: "Compêndio de Criaturas",
             icon: <IconCompendium />,
-            active: location.pathname === "/creatures-compendium",
-            onClick: () => navigate("/creatures-compendium"),
+            active: location.pathname === toCampaign("creatures-compendium"),
+            onClick: () => navigate(toCampaign("creatures-compendium")),
           },
           {
             label: "Sistemas personalizados",
             icon: <IconCompendium />,
-            active: location.pathname.startsWith("/custom-systems"),
-            onClick: () => navigate("/custom-systems"),
+            active: location.pathname.startsWith(toCampaign("custom-systems")),
+            onClick: () => navigate(toCampaign("custom-systems")),
           },
           {
             label: "Iniciativa",
             icon: <IconInitiative />,
-            active: location.pathname === "/initiative",
-            onClick: () => navigate("/initiative"),
+            active: location.pathname === toCampaign("initiative"),
+            onClick: () => navigate(toCampaign("initiative")),
           },
         ]
       : []),
     {
       label: "Magia",
       icon: <IconMagic />,
-      active: location.pathname === "/magic",
-      onClick: () => navigate("/magic"),
+      active: location.pathname === toCampaign("magic"),
+      onClick: () => navigate(toCampaign("magic")),
     },
   ]
 

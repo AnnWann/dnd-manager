@@ -1,10 +1,11 @@
 import { useMemo } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 
 import { useCharacterContext } from "../contexts/characterContext"
 import { useSyncContext } from "../contexts/syncContext"
 import { CharacterCreationWizard } from "../features/characters/creation/characterCreationWizard"
 import { ensureCharacterBackgroundFromHistory } from "../lib/characterCreation/inferCharacterBackground"
+import { campaignCharacterPath } from "../lib/campaignRoutes"
 import type { Player } from "../models/player/Player"
 
 export function CharacterCreateView() {
@@ -17,6 +18,7 @@ export function CharacterCreateView() {
     createOwner,
   } = useCharacterContext()
   const { userKey } = useSyncContext()
+  const { campaignId = "" } = useParams<{ campaignId?: string }>()
   const navigate = useNavigate()
 
   const owners = useMemo(
@@ -43,13 +45,15 @@ export function CharacterCreateView() {
       owners={wizardOwners}
       canAssignOwners={canAssignOwners}
       createOwner={createOwner}
-      onClose={() => navigate("/character")}
+      onClose={() => campaignId && navigate(campaignCharacterPath(campaignId))}
       onCreate={(character) => {
         const prepared = ensureCharacterBackgroundFromHistory(character)
         const imported = importCharacter(prepared.toJSON())
-        navigate(`/character/${encodeURIComponent(imported.get("id"))}/profile`, {
-          replace: true,
-        })
+        if (!campaignId) return
+        navigate(
+          campaignCharacterPath(campaignId, imported.get("id"), "profile"),
+          { replace: true },
+        )
       }}
     />
   )

@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom"
 
 import { useCharacterContext } from "../contexts/characterContext"
 import { CampaignCharacterWorkspace } from "../features/characters/workspace/CampaignCharacterWorkspace"
+import { campaignCharacterPath } from "../lib/campaignRoutes"
 import {
   readLocalStorageJson,
   writeLocalStorageJson,
@@ -22,6 +23,7 @@ type CharacterIndexLocationState = {
 
 export function CharacterIndexView() {
   const { visibleCharacters } = useCharacterContext()
+  const { campaignId = "" } = useParams<{ campaignId?: string }>()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -45,13 +47,16 @@ export function CharacterIndexView() {
   }, [shouldAutoOpen, visibleCharacters])
 
   useEffect(() => {
-    if (!shouldAutoOpen || !cachedCharacter) return
+    if (!shouldAutoOpen || !cachedCharacter || !campaignId) return
 
-    navigate(characterPath(cachedCharacter.get("id"), "sheet"), {
-      replace: true,
-      state: null,
-    })
-  }, [cachedCharacter, navigate, shouldAutoOpen])
+    navigate(
+      campaignCharacterPath(campaignId, cachedCharacter.get("id"), "sheet"),
+      {
+        replace: true,
+        state: null,
+      },
+    )
+  }, [cachedCharacter, campaignId, navigate, shouldAutoOpen])
 
   if (shouldAutoOpen && cachedCharacter) return null
 
@@ -79,8 +84,4 @@ export function CharacterDetailView() {
       <CharacterView />
     </CampaignCharacterWorkspace>
   )
-}
-
-function characterPath(characterId: string, tab: string): string {
-  return `/character/${encodeURIComponent(characterId)}/${encodeURIComponent(tab)}`
 }
