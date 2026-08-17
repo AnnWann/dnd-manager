@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom"
 import { getMyCampaigns, type UserCampaign } from "../../api/user-campaigns"
 import { Button } from "../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../components/ui/Card"
+import { sessionPath } from "../../lib/campaignRoutes"
 import { UserCampaignsTab } from "./UserCampaignTab"
 
 export function UserCampaignsRouteView() {
@@ -41,7 +42,7 @@ export function UserCampaignsRouteView() {
         <CardHeader>
           <h1 className="text-base font-semibold text-textH">Sessões</h1>
           <p className="mt-1 text-xs leading-5 text-text">
-            Entre em uma campanha ativa para acessar os personagens vinculados a ela.
+            Entre em uma campanha ativa para acessar a cópia de sessão dos personagens vinculados a ela.
           </p>
         </CardHeader>
         <CardContent>
@@ -72,7 +73,7 @@ export function UserCampaignsRouteView() {
                   <Button
                     size="sm"
                     onClick={() =>
-                      navigate(`/campaign/${encodeURIComponent(campaign.id)}/characters`)
+                      navigate(sessionPath(campaign.id, "characters"))
                     }
                   >
                     Entrar
