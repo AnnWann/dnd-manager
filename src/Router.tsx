@@ -10,8 +10,8 @@ import {
 
 import { RequireAuth } from "./auth/requireAuth"
 import { useSyncContext } from "./contexts/syncContext"
-import { readActiveCampaign, rememberActiveCampaign } from "./lib/activeCampaign"
-import { campaignPath } from "./lib/campaignRoutes"
+import { readActiveSession, rememberActiveSession } from "./lib/activeCampaign"
+import { sessionPath } from "./lib/campaignRoutes"
 import { CharacterCreateView } from "./views/CharacterCreateView"
 import {
   CharacterDetailView,
@@ -70,10 +70,10 @@ export function AppRouter() {
       </Route>
 
       <Route
-        path="/campaign/:campaignId"
+        path="/session/:campaignId"
         element={
           <RequireAuth>
-            <CampaignRouteOutlet />
+            <SessionRouteOutlet />
           </RequireAuth>
         }
       >
@@ -95,40 +95,59 @@ export function AppRouter() {
         <Route path="magic" element={<MagicView />} />
       </Route>
 
-      <Route path="/character/*" element={<LegacyCampaignRedirect />} />
-      <Route path="/party-inventory" element={<LegacyCampaignRedirect />} />
-      <Route path="/ground-inventory" element={<LegacyCampaignRedirect />} />
-      <Route path="/items-compendium" element={<LegacyCampaignRedirect />} />
-      <Route path="/missions" element={<LegacyCampaignRedirect />} />
-      <Route path="/creatures-compendium" element={<LegacyCampaignRedirect />} />
-      <Route path="/custom-systems/*" element={<LegacyCampaignRedirect />} />
-      <Route path="/initiative" element={<LegacyCampaignRedirect />} />
-      <Route path="/magic" element={<LegacyCampaignRedirect />} />
+      <Route path="/campaign/:campaignId/*" element={<LegacyCampaignNamespaceRedirect />} />
+      <Route path="/character/*" element={<LegacySessionRedirect />} />
+      <Route path="/party-inventory" element={<LegacySessionRedirect />} />
+      <Route path="/ground-inventory" element={<LegacySessionRedirect />} />
+      <Route path="/items-compendium" element={<LegacySessionRedirect />} />
+      <Route path="/missions" element={<LegacySessionRedirect />} />
+      <Route path="/creatures-compendium" element={<LegacySessionRedirect />} />
+      <Route path="/custom-systems/*" element={<LegacySessionRedirect />} />
+      <Route path="/initiative" element={<LegacySessionRedirect />} />
+      <Route path="/magic" element={<LegacySessionRedirect />} />
 
       <Route path="*" element={<Navigate to="/not-found" replace />} />
     </Routes>
   )
 }
 
-function CampaignRouteOutlet() {
+function SessionRouteOutlet() {
   const { campaignId } = useParams<{ campaignId?: string }>()
 
   useEffect(() => {
-    if (campaignId) rememberActiveCampaign(campaignId)
+    if (campaignId) rememberActiveSession(campaignId)
   }, [campaignId])
 
   return <Outlet />
 }
 
-function LegacyCampaignRedirect() {
+function LegacyCampaignNamespaceRedirect() {
   const location = useLocation()
-  const campaignId = readActiveCampaign()
+  const { campaignId } = useParams<{ campaignId?: string }>()
+  if (!campaignId) return <Navigate to="/user/campaigns" replace />
+
+  const prefix = `/campaign/${encodeURIComponent(campaignId)}`
+  const suffix = location.pathname.startsWith(prefix)
+    ? location.pathname.slice(prefix.length).replace(/^\/+/, "")
+    : ""
+
+  return (
+    <Navigate
+      to={`${sessionPath(campaignId, suffix)}${location.search}${location.hash}`}
+      replace
+    />
+  )
+}
+
+function LegacySessionRedirect() {
+  const location = useLocation()
+  const campaignId = readActiveSession()
   if (!campaignId) return <Navigate to="/user/campaigns" replace />
 
   const suffix = location.pathname.replace(/^\/+/, "")
   return (
     <Navigate
-      to={`${campaignPath(campaignId, suffix)}${location.search}${location.hash}`}
+      to={`${sessionPath(campaignId, suffix)}${location.search}${location.hash}`}
       replace
     />
   )
