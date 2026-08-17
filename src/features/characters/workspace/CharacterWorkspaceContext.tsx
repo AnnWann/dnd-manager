@@ -12,6 +12,7 @@ import type {
 } from "../../../models/characters/characterEquippedItemMovement"
 import type { HandOccupantReference } from "../../../models/characters/characterHands"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import type { GameOperation } from "../../../models/game/GameOperation"
 import type { Itemmable } from "../../../models/items/item"
 import type { Player } from "../../../models/player/Player"
 import type { LongRestSupplySelection } from "../../../models/supplies/partySupply"
@@ -36,6 +37,11 @@ export type CharacterWorkspaceValue = {
     domain: CharacterDomainName,
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) => void
+  /**
+   * Shared semantic operation channel. Campaign workspaces can broadcast these;
+   * relational/user workspaces may omit it and let controls persist directly.
+   */
+  dispatchGameOperation?: (operation: GameOperation) => void
   deleteCharacter: (characterId: string) => void
   importCharacter?: (rawCharacter: unknown) => CharacterTemplate
   completeLongRest: (
