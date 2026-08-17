@@ -32,6 +32,7 @@ import {
   ATTRIBUTE_KEYS,
   type Attribute,
 } from "../../../models/sheet/Attribute"
+import { CharacterHpControls } from "./characterHpControls"
 import { SpellcastingHandsWarning } from "./spellcastingHandsWarning"
 import {
   HandItemActionsDialog,
@@ -95,15 +96,6 @@ export function MinimalCharacterSheet({
       )
     : []
 
-  function updateHp(
-    key: "current" | "max" | "temporary",
-    value: number,
-  ) {
-    updateCharacter(character.get("id"), (current) =>
-      current.withHp(key, Math.max(0, Math.trunc(value) || 0)),
-    )
-  }
-
   function updateDerivedStat(
     statKey: CalculatedStatKey,
     desiredValue: number,
@@ -150,23 +142,11 @@ export function MinimalCharacterSheet({
   return (
     <div className="grid gap-3">
       <CompactSection title="HP">
-        <div className="grid grid-cols-3 gap-2">
-          <CompactNumberField
-            label="Atual"
-            value={sheet.HP.current}
-            onChange={(value) => updateHp("current", value)}
-          />
-          <CompactNumberField
-            label="Máxima"
-            value={sheet.HP.max}
-            onChange={(value) => updateHp("max", value)}
-          />
-          <CompactNumberField
-            label="Temporária"
-            value={sheet.HP.temporary}
-            onChange={(value) => updateHp("temporary", value)}
-          />
-        </div>
+        <CharacterHpControls
+          character={character}
+          updateCharacter={updateCharacter}
+          compact
+        />
       </CompactSection>
 
       <CompactSection title="Stats">

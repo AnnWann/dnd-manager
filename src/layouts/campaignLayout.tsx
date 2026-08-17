@@ -27,6 +27,7 @@ import { MagicProvider } from "../contexts/magicContext"
 import { MissionProvider } from "../contexts/missionContext"
 import { PartyInventorySettingsProvider } from "../contexts/partyInventorySettingsContext"
 import { SyncProvider } from "../contexts/syncContext"
+import { MasterConcentrationAlerts } from "../features/characters/characterSheet/masterConcentrationAlerts"
 import { CharacterRelationalPersistenceBridge } from "../features/sync/CharacterRelationalPersistenceBridge"
 import { RelationalMigrationBridge } from "../features/sync/RelationalMigrationBridge"
 import { normalizeAppStateInventory } from "../lib/normalizeAppStateInventory"
@@ -194,6 +195,7 @@ export function CampaignLayout() {
                 userRole={userRole}
                 userKey={userKey}
               >
+                <MasterConcentrationAlerts />
                 <MagicProvider
                   spells={appState.spells ?? []}
                   setAppState={setAppState}
