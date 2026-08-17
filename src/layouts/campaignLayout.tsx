@@ -3,11 +3,15 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useState,
   type Dispatch,
   type SetStateAction,
 } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 
+import { getCampaignSessionCharacters } from "../api/campaign-session"
+import { authClient } from "../auth/auth-client"
+import { getLocalUser, LOCAL_AUTH_BYPASS } from "../auth/local-auth"
 import {
   AppSidebar,
   IconBackpack,
@@ -40,6 +44,13 @@ export function CampaignLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const sessionId = sessionIdFromPathname(location.pathname)
+  const { data: authSession } = authClient.useSession()
+  const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
+  const authenticatedUserId = authSession?.user.id ?? localUser?.id ?? ""
+  const [resolvedSessionRole, setResolvedSessionRole] = useState<
+    "master" | "player" | null
+  >(null)
+
   const toSession = useCallback(
     (path: string) => sessionId ? sessionPath(sessionId, path) : "/user/campaigns",
     [sessionId],
@@ -58,6 +69,31 @@ export function CampaignLayout() {
     status: syncStatus,
     pullFromServer,
   } = useConcurrentRemoteAppState()
+
+  useEffect(() => {
+    if (!sessionId) {
+      setResolvedSessionRole(null)
+      return
+    }
+
+    let cancelled = false
+    void getCampaignSessionCharacters(sessionId)
+      .then((data) => {
+        if (!cancelled) {
+          setResolvedSessionRole(data.campaign.isMaster ? "master" : "player")
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setResolvedSessionRole(null)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [sessionId])
+
+  const effectiveUserRole = resolvedSessionRole ?? userRole
+  const effectiveUserKey = authenticatedUserId || userKey
 
   const appState = useMemo(
     () => normalizeAppStateInventory(rawAppState),
@@ -117,7 +153,7 @@ export function CampaignLayout() {
       active: location.pathname === toSession("missions"),
       onClick: () => navigate(toSession("missions")),
     },
-    ...(userRole === "master"
+    ...(effectiveUserRole === "master"
       ? [
           {
             label: "Compêndio de Itens",
@@ -174,9 +210,9 @@ export function CampaignLayout() {
       value={{
         syncKey,
         setSyncKey,
-        userRole,
+        userRole: effectiveUserRole,
         setUserRole,
-        userKey,
+        userKey: effectiveUserKey,
         setUserKey,
         canSync,
         pullFromServer,
@@ -194,21 +230,21 @@ export function CampaignLayout() {
               }
             ).partyAdditionalSupplyConsumption ?? 0
           }
-          canEditCarryCapacity={userRole === "master"}
+          canEditCarryCapacity={effectiveUserRole === "master"}
           setAppState={setAppState}
         >
           <MissionProvider
             state={rawAppState}
             setState={setRawAppState}
-            userRole={userRole}
-            userKey={userKey}
+            userRole={effectiveUserRole}
+            userKey={effectiveUserKey}
           >
             <CreatureCompendiumProvider>
               <CharacterProvider
                 appState={appState}
                 setAppState={setAppState}
-                userRole={userRole}
-                userKey={userKey}
+                userRole={effectiveUserRole}
+                userKey={effectiveUserKey}
               >
                 <MasterConcentrationAlerts />
                 <MagicProvider
