@@ -7,7 +7,7 @@ import {
   type CSSProperties,
   type TouchEvent,
 } from "react"
-import { ArrowLeft, Settings2 } from "lucide-react"
+import { ArrowLeft, Settings2, TrendingUp } from "lucide-react"
 import { useNavigate, useParams } from "react-router-dom"
 import { CharacterAbilitiesTab } from "../features/characters/abilities/characterAbilities"
 import { CharacterSelector } from "../features/characters/characterSelector"
@@ -290,15 +290,13 @@ export function CharacterView() {
             <div className="mt-1 text-xs text-text">
               Você ainda não tem um personagem associado a este jogador.
             </div>
-            {mode === "campaign" && campaignId ? (
-              <button
-                type="button"
-                className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accentText"
-                onClick={() => navigate(campaignPath(campaignId, "character/create"))}
-              >
-                Criar personagem
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accentText"
+              onClick={() => navigate(characterCreatePath(mode, campaignId))}
+            >
+              Criar personagem
+            </button>
           </div>
         </>
       )
@@ -309,13 +307,7 @@ export function CharacterView() {
         <CharacterSelector
           characters={characters}
           activeCharacter={activeCharacter}
-          addCharacter={() => {
-            if (mode === "campaign" && campaignId) {
-              navigate(campaignPath(campaignId, "character/create"))
-              return
-            }
-            navigate("/user/characters/create")
-          }}
+          addCharacter={() => navigate(characterCreatePath(mode, campaignId))}
           importCharacter={(raw) => {
             if (!importCharacter) return activeCharacter
             const imported = importCharacter(raw)
@@ -430,17 +422,32 @@ export function CharacterView() {
           </div>
         </div>
 
-        {canAssignOwners ? (
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            title="Configurações do personagem"
-            aria-label="Configurações do personagem"
-            className="rounded-lg border border-border p-2.5 text-textH hover:bg-accentBg"
-          >
-            <Settings2 className="h-5 w-5" />
-          </button>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-2">
+          {mode === "user" && !campaignId ? (
+            <button
+              type="button"
+              onClick={() =>
+                navigate(`/user/characters/${encodeURIComponent(routeCharacter.get("id"))}/level-up`)
+              }
+              className="inline-flex items-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-medium text-textH hover:bg-bg-subtle"
+            >
+              <TrendingUp className="h-4 w-4" />
+              Subir de nível
+            </button>
+          ) : null}
+
+          {canAssignOwners ? (
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              title="Configurações do personagem"
+              aria-label="Configurações do personagem"
+              className="rounded-lg border border-border p-2.5 text-textH hover:bg-accentBg"
+            >
+              <Settings2 className="h-5 w-5" />
+            </button>
+          ) : null}
+        </div>
       </header>
 
       <CharacterRestControls
@@ -558,6 +565,7 @@ export function CharacterView() {
         getOwner={getOwner}
         createOwner={createOwner}
       />
+
     </div>
   )
 }
@@ -706,6 +714,14 @@ function characterIndexPath(
 ): string {
   if (mode === "campaign" && campaignId) return campaignPath(campaignId, "characters")
   return "/user/characters"
+}
+
+function characterCreatePath(
+  mode: "campaign" | "user",
+  campaignId: string | undefined,
+): string {
+  if (mode === "campaign" && campaignId) return campaignPath(campaignId, "character/create")
+  return "/user/characters/create"
 }
 
 function toCustomSystemExistingTab(
