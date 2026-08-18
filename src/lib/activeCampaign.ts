@@ -1,5 +1,6 @@
 export const ACTIVE_SESSION_STORAGE_KEY = "dndmm.activeSessionId.v1"
 const LEGACY_ACTIVE_CAMPAIGN_STORAGE_KEY = "dndmm.activeCampaignId.v1"
+const SESSION_STATE_OWNER_STORAGE_KEY = "dndmm.sessionStateOwner.v1"
 
 export function rememberActiveSession(sessionId: string): void {
   sessionStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, sessionId)
@@ -16,6 +17,18 @@ export function readActiveSession(): string | null {
 export function clearActiveSession(): void {
   sessionStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY)
   sessionStorage.removeItem(LEGACY_ACTIVE_CAMPAIGN_STORAGE_KEY)
+}
+
+/**
+ * The temporary session runtime still stores one AppState snapshot locally.
+ * This marker prevents a snapshot from one session being mistaken for another.
+ */
+export function rememberSessionStateOwner(sessionId: string): void {
+  localStorage.setItem(SESSION_STATE_OWNER_STORAGE_KEY, sessionId)
+}
+
+export function readSessionStateOwner(): string | null {
+  return localStorage.getItem(SESSION_STATE_OWNER_STORAGE_KEY)
 }
 
 /** Compatibility aliases for code that still names the backing campaign id. */
