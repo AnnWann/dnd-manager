@@ -7,12 +7,6 @@ const environment = args.has("--production") ? "production" : "development"
 const vercelPort = process.env.LOCAL_VERCEL_PORT || "3000"
 const sessionServerUrl = process.env.VITE_SESSION_SERVER_URL || "http://localhost:8787"
 
-if (!existsSync(".vercel/project.json")) {
-  console.error("\n[dev:full] This repository is not linked to Vercel yet.")
-  console.error("Run `npm run dev:link` once, then run this command again.\n")
-  process.exit(1)
-}
-
 if (!existsSync("session-server/node_modules")) {
   console.error("\n[dev:full] session-server dependencies are missing.")
   console.error("Run `npm install --prefix session-server` once, then run this command again.\n")
