@@ -348,6 +348,7 @@ export function CharacterView() {
     transition: swipeDragging
       ? "none"
       : "transform 160ms ease-out, opacity 160ms ease-out",
+    willChange: swipeDragging || swipeOffset !== 0 ? "transform, opacity" : undefined,
   }
 
   const placedBefore = embedded.before.length ? (
@@ -435,7 +436,7 @@ export function CharacterView() {
       >
         <div
           ref={tabContentRef}
-          className="flex min-w-0 flex-col gap-4 will-change-transform"
+          className="flex min-w-0 flex-col gap-4"
           style={tabContentStyle}
         >
           {placedBefore}
