@@ -2,7 +2,7 @@ import { History, Undo2 } from "lucide-react"
 import { useMemo } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
-import type { SessionHpLogRecord } from "../session-runtime/sessionProtocol"
+import type { SessionHpLogRecord, SessionSkill } from "../session-runtime/sessionProtocol"
 import { useOptionalSessionRuntime } from "../session-runtime/useSessionRuntime"
 import type {
   GameOperation,
@@ -188,6 +188,12 @@ function describeHpOperation(operation: SessionHpLogRecord["operation"], charact
     case "character.savingThrow.set": return operation.proficient
       ? `${characterName} ganhou proficiência no teste de resistência de ${attributeLabel(operation.attribute)}.`
       : `${characterName} perdeu proficiência no teste de resistência de ${attributeLabel(operation.attribute)}.`
+    case "character.skill.set": {
+      const skill = skillLabel(operation.skill)
+      if (operation.proficiency === "expertise") return `${characterName} ganhou especialização em ${skill}.`
+      if (operation.proficiency === "proficient") return `${characterName} ganhou proficiência em ${skill}.`
+      return `${characterName} perdeu a proficiência manual em ${skill}.`
+    }
     case "character.stat.armorClass.set": return `Definiu a CA de ${characterName} para ${formatStat(operation.value)}.`
     case "character.stat.initiative.set": return `Definiu a iniciativa de ${characterName} para ${formatSignedStat(operation.value)}.`
     case "character.stat.mobility.set": return `Definiu a mobilidade de ${characterName} para ${formatStat(operation.value)}.`
@@ -239,6 +245,30 @@ function describeOperation(operation: GameOperation, characterNames: ReadonlyMap
 
 function attributeLabel(attribute: "str" | "dex" | "con" | "int" | "wis" | "cha"): string {
   return ({ str: "FOR", dex: "DES", con: "CON", int: "INT", wis: "SAB", cha: "CAR" })[attribute]
+}
+
+function skillLabel(skill: SessionSkill): string {
+  const labels: Record<SessionSkill, string> = {
+    acrobatics: "Acrobacia",
+    arcana: "Arcanismo",
+    athletics: "Atletismo",
+    animalHandling: "Lidar com Animais",
+    performance: "Atuação",
+    deception: "Blefe",
+    stealth: "Furtividade",
+    history: "História",
+    intimidation: "Intimidação",
+    insight: "Intuição",
+    investigation: "Investigação",
+    medicine: "Medicina",
+    nature: "Natureza",
+    perception: "Percepção",
+    persuasion: "Persuasão",
+    sleightOfHand: "Prestidigitação",
+    religion: "Religião",
+    survival: "Sobrevivência",
+  }
+  return labels[skill]
 }
 
 function locationLabel(location: InventoryLocation, characterNames: ReadonlyMap<string, string>): string {
