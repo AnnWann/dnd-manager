@@ -26,7 +26,6 @@ import { CharacterProficienciesTab } from "../features/characters/proficiencies/
 import { CharacterRaceTab } from "../features/characters/race/characterRaceV2"
 import { CharacterProfileTab } from "../features/characters/profile/characterProfileV2"
 import { CharacterRestControls } from "../features/characters/rest/characterRestControlsV2"
-import { CharacterSettingsModal } from "../features/characters/settings/CharacterSettingsModal"
 import {
   CustomSystemsRuntime,
   CustomSystemsTabWithLibrary,
@@ -40,7 +39,6 @@ import type {
   CustomSystemDefinition,
   CustomSystemExistingCharacterTab,
 } from "../models/customSystems/CustomSystemDefinition"
-import type { Player } from "../models/player/Player"
 
 const TAB_SWIPE_MIN_DISTANCE = 88
 const TAB_SWIPE_PREVIEW_DISTANCE = 28
@@ -69,11 +67,6 @@ export function CharacterView() {
     updateCharacter,
     completeLongRest,
     canAssignOwners,
-    canEditCharacterType,
-    knownPlayerKeys: playerKeys,
-    getOwner,
-    createOwner,
-    currentOwner,
   } = useCharacterWorkspace()
   const customSystemDefinitions = useCustomSystemDefinitions()
   const { campaignId, characterId, tab } = useParams<{
@@ -87,7 +80,6 @@ export function CharacterView() {
     ? characters.find((character) => character.get("id") === characterId)
     : undefined
 
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [swipeDragging, setSwipeDragging] = useState(false)
   const [tabPanelMinHeight, setTabPanelMinHeight] = useState(0)
@@ -98,27 +90,6 @@ export function CharacterView() {
     if (!routeCharacter) return
     setSelectedCharacterId(routeCharacter.get("id"))
   }, [routeCharacter, setSelectedCharacterId])
-
-  const owners = useMemo(
-    () => playerKeys.map((key) => getOwner(key)),
-    [getOwner, playerKeys],
-  )
-
-  const defaultOwner = useMemo(() => {
-    if (currentOwner) return currentOwner
-
-    return (
-      routeCharacter?.get("owner") ??
-      activeCharacter?.get("owner") ??
-      owners[0] ??
-      createOwner("Jogador local")
-    )
-  }, [activeCharacter, createOwner, currentOwner, owners, routeCharacter])
-
-  const wizardOwners = useMemo(
-    () => uniqueOwners([defaultOwner, ...owners]),
-    [defaultOwner, owners],
-  )
 
   const activeCustomSystemDefinitions = useMemo(() => {
     if (!routeCharacter) return []
@@ -433,18 +404,6 @@ export function CharacterView() {
             <TrendingUp className="h-4 w-4" />
             Subir de nível
           </button>
-
-          {canAssignOwners ? (
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(true)}
-              title="Configurações do personagem"
-              aria-label="Configurações do personagem"
-              className="rounded-lg border border-border p-2.5 text-textH hover:bg-accentBg"
-            >
-              <Settings2 className="h-5 w-5" />
-            </button>
-          ) : null}
         </div>
       </header>
 
@@ -515,20 +474,6 @@ export function CharacterView() {
           {placedAfter}
         </div>
       </div>
-
-      {canAssignOwners ? (
-        <CharacterSettingsModal
-          open={settingsOpen}
-          character={routeCharacter}
-          owners={wizardOwners}
-          canEditCharacterType={canEditCharacterType}
-          onClose={() => setSettingsOpen(false)}
-          onSave={(updated) => {
-            updateCharacter(routeCharacter.get("id"), () => updated)
-            setSettingsOpen(false)
-          }}
-        />
-      ) : null}
     </div>
   )
 }
@@ -764,15 +709,4 @@ function shouldIgnoreTabSwipe(target: EventTarget): boolean {
       ].join(","),
     ),
   )
-}
-
-function uniqueOwners(owners: Player[]): Player[] {
-  const seen = new Set<string>()
-
-  return owners.filter((owner) => {
-    const key = owner.id.trim() || owner.name.trim()
-    if (!key || seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
 }
