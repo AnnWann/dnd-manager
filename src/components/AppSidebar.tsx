@@ -30,9 +30,10 @@ type SidebarItem = {
 
 type AppSidebarProps = {
   items: SidebarItem[]
+  topContent?: ReactNode
 }
 
-export function AppSidebar({ items }: AppSidebarProps) {
+export function AppSidebar({ items, topContent }: AppSidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
 
@@ -145,6 +146,10 @@ export function AppSidebar({ items }: AppSidebarProps) {
               </button>
             </div>
 
+            {topContent ? (
+              <div className="border-b border-border p-3">{topContent}</div>
+            ) : null}
+
             <SidebarNavigation
               items={items}
               onItemClick={handleItemClick}
@@ -202,6 +207,10 @@ export function AppSidebar({ items }: AppSidebarProps) {
             )}
           </button>
         </div>
+
+        {topContent && !collapsed ? (
+          <div className="border-b border-border p-3">{topContent}</div>
+        ) : null}
 
         <SidebarNavigation
           items={items}
