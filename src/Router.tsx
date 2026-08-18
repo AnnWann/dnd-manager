@@ -31,6 +31,7 @@ import { PartyInventoryView } from "./views/PartyInventoryView"
 import { AuthView } from "./views/AuthView"
 import { UnauthorizedView } from "./views/UnauthorisedView"
 import { CampaignCharactersView } from "./views/campaign/CampaignCharactersView"
+import { SessionCharacterLevelUpView } from "./views/session/SessionCharacterLevelUpView"
 import { UserCampaignsRouteView } from "./views/user/UserCampaignsRouteView"
 import { UserCharacterAddSpellsView } from "./views/user/UserCharacterAddSpellsView"
 import { UserCharacterCreateItemView } from "./views/user/UserCharacterCreateItemView"
@@ -78,33 +79,44 @@ export function AppRouter() {
         }
       >
         <Route index element={<Navigate to="characters" replace />} />
+
         <Route path="characters" element={<CampaignCharactersView />} />
         <Route path="character" element={<CharacterIndexView />} />
         <Route path="character/create" element={<CharacterCreateView />} />
         <Route path="character/:characterId" element={<CharacterDetailView />} />
+        <Route path="character/:characterId/level-up" element={<SessionCharacterLevelUpView />} />
         <Route path="character/:characterId/:tab" element={<CharacterDetailView />} />
         <Route path="party-inventory" element={<PartyInventoryView />} />
         <Route path="ground-inventory" element={<GroundInventoryView />} />
-        <Route path="items-compendium" element={<ItemsCompendiumView />} />
         <Route path="missions" element={<MissionsView />} />
-        <Route path="creatures-compendium" element={<CreaturesCompendiumView />} />
-        <Route path="custom-systems" element={<CustomSystemsListView />} />
-        <Route path="custom-systems/:systemId" element={<CustomSystemEditorView />} />
-        <Route path="custom-systems/:systemId/:tab" element={<CustomSystemEditorView />} />
         <Route path="initiative" element={<InitiativeRoute />} />
-        <Route path="magic" element={<MagicView />} />
+
+        <Route path="creation" element={<Navigate to="items-compendium" replace />} />
+        <Route path="creation/items-compendium" element={<ItemsCompendiumView />} />
+        <Route path="creation/creatures-compendium" element={<CreaturesCompendiumView />} />
+        <Route path="creation/custom-systems" element={<CustomSystemsListView />} />
+        <Route path="creation/custom-systems/:systemId" element={<CustomSystemEditorView />} />
+        <Route path="creation/custom-systems/:systemId/:tab" element={<CustomSystemEditorView />} />
+        <Route path="creation/magic" element={<MagicView />} />
+
+        <Route path="items-compendium" element={<LegacyCreationRouteRedirect suffix="items-compendium" />} />
+        <Route path="creatures-compendium" element={<LegacyCreationRouteRedirect suffix="creatures-compendium" />} />
+        <Route path="custom-systems" element={<LegacyCreationRouteRedirect suffix="custom-systems" />} />
+        <Route path="custom-systems/:systemId" element={<LegacyCreationCustomSystemRedirect />} />
+        <Route path="custom-systems/:systemId/:tab" element={<LegacyCreationCustomSystemRedirect />} />
+        <Route path="magic" element={<LegacyCreationRouteRedirect suffix="magic" />} />
       </Route>
 
       <Route path="/campaign/:campaignId/*" element={<LegacyCampaignNamespaceRedirect />} />
       <Route path="/character/*" element={<LegacySessionRedirect />} />
       <Route path="/party-inventory" element={<LegacySessionRedirect />} />
       <Route path="/ground-inventory" element={<LegacySessionRedirect />} />
-      <Route path="/items-compendium" element={<LegacySessionRedirect />} />
+      <Route path="/items-compendium" element={<LegacyCreationRootRedirect suffix="items-compendium" />} />
       <Route path="/missions" element={<LegacySessionRedirect />} />
-      <Route path="/creatures-compendium" element={<LegacySessionRedirect />} />
-      <Route path="/custom-systems/*" element={<LegacySessionRedirect />} />
+      <Route path="/creatures-compendium" element={<LegacyCreationRootRedirect suffix="creatures-compendium" />} />
+      <Route path="/custom-systems/*" element={<LegacyCreationRootRedirect suffix="custom-systems" preserveTail />} />
       <Route path="/initiative" element={<LegacySessionRedirect />} />
-      <Route path="/magic" element={<LegacySessionRedirect />} />
+      <Route path="/magic" element={<LegacyCreationRootRedirect suffix="magic" />} />
 
       <Route path="*" element={<Navigate to="/not-found" replace />} />
     </Routes>
@@ -148,6 +160,54 @@ function LegacySessionRedirect() {
   return (
     <Navigate
       to={`${sessionPath(campaignId, suffix)}${location.search}${location.hash}`}
+      replace
+    />
+  )
+}
+
+function LegacyCreationRouteRedirect({ suffix }: { suffix: string }) {
+  const { campaignId } = useParams<{ campaignId?: string }>()
+  if (!campaignId) return <Navigate to="/user/campaigns" replace />
+  return <Navigate to={sessionPath(campaignId, `creation/${suffix}`)} replace />
+}
+
+function LegacyCreationCustomSystemRedirect() {
+  const { campaignId, systemId, tab } = useParams<{
+    campaignId?: string
+    systemId?: string
+    tab?: string
+  }>()
+  if (!campaignId) return <Navigate to="/user/campaigns" replace />
+
+  const suffix = [
+    "creation/custom-systems",
+    systemId ? encodeURIComponent(systemId) : "",
+    tab ? encodeURIComponent(tab) : "",
+  ].filter(Boolean).join("/")
+
+  return <Navigate to={sessionPath(campaignId, suffix)} replace />
+}
+
+function LegacyCreationRootRedirect({
+  suffix,
+  preserveTail = false,
+}: {
+  suffix: string
+  preserveTail?: boolean
+}) {
+  const location = useLocation()
+  const campaignId = readActiveSession()
+  if (!campaignId) return <Navigate to="/user/campaigns" replace />
+
+  let resolvedSuffix = suffix
+  if (preserveTail) {
+    const tail = location.pathname.replace(/^\/custom-systems\/?/, "")
+    resolvedSuffix = tail ? `${suffix}/${tail}` : suffix
+  }
+
+  return (
+    <Navigate
+      to={`${sessionPath(campaignId, `creation/${resolvedSuffix}`)}${location.search}${location.hash}`}
       replace
     />
   )
