@@ -8,6 +8,7 @@ import type {
   SessionReverseOperation,
   SessionRestOperation,
   SessionStatOperation,
+  SessionStatReverseOperation,
   SessionStatsState,
 } from "./protocol";
 
@@ -116,31 +117,33 @@ export function applyHpUndo(
   const beforeUndo = cloneState(current);
   let restored = cloneState(current);
 
-  if (source.reverseOperation.type === "character.stats.restore") {
-    restored.stats = cloneStats(source.reverseOperation.stats);
-    restored.statsInitialized = true;
-  } else {
-    const reverseState = (
-      source.reverseOperation.type === "character.rest.restore"
-        ? source.reverseOperation.snapshot.hp
-        : source.reverseOperation.hp
-    ) as SessionHpState & {
+  if (source.reverseOperation.type === "character.rest.restore") {
+    const reverseState = source.reverseOperation.snapshot.hp as SessionHpState & {
       hitDice?: SessionHpState["hitDice"];
       stats?: SessionStatsState;
       statsInitialized?: boolean;
     };
-
+    restored = cloneState({
+      ...reverseState,
+      hitDice: reverseState.hitDice ?? current.hitDice,
+      stats: source.reverseOperation.snapshot.stats ?? reverseState.stats ?? current.stats,
+      statsInitialized: true,
+    });
+  } else if (source.reverseOperation.type === "character.hp.restore") {
+    const reverseState = source.reverseOperation.hp as SessionHpState & {
+      hitDice?: SessionHpState["hitDice"];
+      stats?: SessionStatsState;
+      statsInitialized?: boolean;
+    };
     restored = cloneState({
       ...reverseState,
       hitDice: reverseState.hitDice ?? current.hitDice,
       stats: reverseState.stats ?? current.stats,
       statsInitialized: reverseState.statsInitialized ?? current.statsInitialized,
     });
-
-    if (source.reverseOperation.type === "character.rest.restore") {
-      restored.stats = cloneStats(source.reverseOperation.snapshot.stats ?? restored.stats);
-      restored.statsInitialized = true;
-    }
+  } else {
+    restoreSingleStat(restored, source.reverseOperation);
+    restored.statsInitialized = true;
   }
 
   restored.revision = current.revision + 1;
@@ -169,14 +172,51 @@ function createReverseOperation(
       snapshot: { hp: before, stats: cloneStats(before.stats) },
     };
   }
-  if (isStatOperation(operation)) {
-    return {
-      type: "character.stats.restore",
-      characterId: before.characterId,
-      stats: cloneStats(before.stats),
-    };
+
+  switch (operation.type) {
+    case "character.stat.armorClass.set":
+      return { type: "character.stat.armorClass.restore", characterId: before.characterId, adjustment: before.stats.armorClassAdjustment };
+    case "character.stat.initiative.set":
+      return { type: "character.stat.initiative.restore", characterId: before.characterId, adjustment: before.stats.initiativeAdjustment };
+    case "character.stat.mobility.set":
+      return { type: "character.stat.mobility.restore", characterId: before.characterId, adjustment: before.stats.mobilityAdjustment };
+    case "character.stat.passivePerception.set":
+      return { type: "character.stat.passivePerception.restore", characterId: before.characterId, adjustment: before.stats.passivePerceptionAdjustment };
+    case "character.stat.exhaustion.set":
+      return { type: "character.stat.exhaustion.restore", characterId: before.characterId, value: before.stats.exhaustion };
+    case "character.stat.inspiration.set":
+      return { type: "character.stat.inspiration.restore", characterId: before.characterId, value: before.stats.inspiration };
+    case "character.stat.experience.set":
+      return { type: "character.stat.experience.restore", characterId: before.characterId, value: before.stats.experience };
+    default:
+      return { type: "character.hp.restore", characterId: before.characterId, hp: before };
   }
-  return { type: "character.hp.restore", characterId: before.characterId, hp: before };
+}
+
+function restoreSingleStat(state: SessionHpState, operation: SessionStatReverseOperation): void {
+  switch (operation.type) {
+    case "character.stat.armorClass.restore":
+      state.stats.armorClassAdjustment = operation.adjustment;
+      break;
+    case "character.stat.initiative.restore":
+      state.stats.initiativeAdjustment = operation.adjustment;
+      break;
+    case "character.stat.mobility.restore":
+      state.stats.mobilityAdjustment = operation.adjustment;
+      break;
+    case "character.stat.passivePerception.restore":
+      state.stats.passivePerceptionAdjustment = operation.adjustment;
+      break;
+    case "character.stat.exhaustion.restore":
+      state.stats.exhaustion = operation.value;
+      break;
+    case "character.stat.inspiration.restore":
+      state.stats.inspiration = operation.value;
+      break;
+    case "character.stat.experience.restore":
+      state.stats.experience = operation.value;
+      break;
+  }
 }
 
 function isRestOperation(operation: SessionAuthoritativeOperation): operation is SessionRestOperation {
@@ -202,6 +242,10 @@ function validateOperation(
 ): { ok: false; code: string; message: string } | null {
   if (operation.characterId !== state.characterId) {
     return { ok: false, code: "CHARACTER_MISMATCH", message: "Operation target does not match the loaded character." };
+  }
+
+  if ((isStatOperation(operation) || operation.type === "character.rest.long") && !state.statsInitialized) {
+    return invalid("STATS_NOT_INITIALIZED", "Stats for this character must be initialized by the MASTER first.");
   }
 
   const validInteger = (value: number) => Number.isFinite(value) && Number.isInteger(value);
