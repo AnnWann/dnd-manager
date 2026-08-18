@@ -138,13 +138,16 @@ export type SessionConditionOperation =
   | { type: "character.condition.add"; characterId: string; condition: SessionCondition }
   | { type: "character.condition.update"; characterId: string; condition: SessionCondition }
   | { type: "character.condition.remove"; characterId: string; conditionId: string }
+export type SessionConcentrationOperation =
+  | { type: "character.concentration.start"; characterId: string; spellIndex: string; spellName: string }
+  | { type: "character.concentration.end"; characterId: string; reason?: "manual" | "failed-save" }
 
 export type SessionRestOperation =
   | { type: "character.rest.short"; characterId: string; healing: number; hitDiceConsumption: Partial<Record<SessionDieSides, number>> }
   | { type: "character.rest.long"; characterId: string; recovery: "partial" | "full" }
 
 export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionAttributeOperation | SessionSavingThrowOperation | SessionSkillOperation | SessionRestOperation
-export type SessionLoggedOperation = SessionAuthoritativeOperation | SessionConditionOperation
+export type SessionLoggedOperation = SessionAuthoritativeOperation | SessionConditionOperation | SessionConcentrationOperation
 
 export type SessionHpLogRecord = {
   id: string
@@ -165,6 +168,7 @@ export type SessionHpLogRecord = {
     | { type: "character.skill.restore"; characterId: string; skill: SessionSkill; proficiency: SessionSkillProficiency }
     | { type: "character.condition.delete"; characterId: string; conditionId: string }
     | { type: "character.condition.restore"; characterId: string; condition: SessionCondition }
+    | { type: "character.concentration.restore"; characterId: string; conditions: SessionCondition[] }
     | { type: "character.rest.restore"; characterId: string; snapshot: { hp: SessionHpState; stats: SessionStatsState } }
   undoneAt?: string
   undoneBy?: string
@@ -187,13 +191,31 @@ export type ServerSessionMessage =
   | SessionConditionsSnapshotMessage | SessionConditionsUpdatedMessage
   | SessionHpLogMessage | SessionPongMessage | SessionErrorMessage
 
+export type CharacterSheetRoute =
+  | "characters/sheet/hp"
+  | "characters/sheet/hitdice"
+  | "characters/sheet/stats/armor-class"
+  | "characters/sheet/stats/initiative"
+  | "characters/sheet/stats/mobility"
+  | "characters/sheet/stats/passive-perception"
+  | "characters/sheet/stats/exhaustion"
+  | "characters/sheet/stats/inspiration"
+  | "characters/sheet/stats/experience"
+  | "characters/sheet/attributes"
+  | "characters/sheet/saving-throws"
+  | "characters/sheet/skills"
+  | "characters/sheet/conditions"
+  | "characters/sheet/concentration"
+  | "characters/sheet/rest"
+
 export type ClientSessionMessage =
   | { type: "session.heartbeat"; clientId: string }
   | { type: "session.ping" }
   | { type: "session.hp.initialize"; characters: SessionHpSeed[] }
   | { type: "session.hp.operation"; operation: SessionAuthoritativeOperation }
   | { type: "session.conditions.initialize"; characters: SessionConditionSeed[] }
-  | { type: "session.conditions.operation"; operation: SessionConditionOperation }
+  | { type: "session.conditions.operation"; operation: SessionConditionOperation | SessionConcentrationOperation }
+  | { type: "session.sheet.operation"; route: CharacterSheetRoute; operation: SessionLoggedOperation }
   | { type: "session.log.undo"; logId: string }
 
 export function parseServerSessionMessage(raw: string): ServerSessionMessage | null {
