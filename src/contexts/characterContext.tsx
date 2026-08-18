@@ -9,6 +9,10 @@ import {
   type SetStateAction,
 } from "react"
 
+import type {
+  SessionDieSides,
+  SessionStatOperation,
+} from "../features/session-runtime/sessionProtocol"
 import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
 import { newCharacterTemplate } from "../lib/newCharacterTemplate"
 import type { AppStateV1 } from "../lib/remoteState"
@@ -58,6 +62,7 @@ export type CharacterContextValue = {
   groundInventory: Itemmable[]
   operationLog: GameOperationRecord[]
   dispatchGameOperation: (operation: GameOperation) => void
+  dispatchStatOperation: (operation: SessionStatOperation) => boolean
   /**
    * Compatibility mutation. Prefer updateCharacterDomain for new code so the
    * subsystem that owns the write is explicit.
@@ -153,19 +158,46 @@ export function CharacterProvider({
 
   const characters = useMemo(
     () => sourceCharacters.map((character) => {
-      const authoritativeHp = sessionRuntime?.hpByCharacterId[character.get("id")]
-      if (!authoritativeHp) return character
+      const authoritative = sessionRuntime?.hpByCharacterId[character.get("id")]
+      if (!authoritative) return character
 
       const sheet = character.get("sheet")
+      const authoritativeHitDice = Object.fromEntries(
+        Object.entries(authoritative.hitDice ?? {}).flatMap(([side, pool]) =>
+          pool
+            ? [[
+                side,
+                {
+                  current: { quantity: pool.current, sides: side as SessionDieSides },
+                  max: { quantity: pool.max, sides: side as SessionDieSides },
+                },
+              ]]
+            : [],
+        ),
+      ) as typeof sheet.HP.hitDice
+
       return character.withPatch({
         sheet: {
           ...sheet,
+          stats: authoritative.statsInitialized
+            ? {
+                ...sheet.stats,
+                armorClassAdjustment: authoritative.stats.armorClassAdjustment,
+                initiativeAdjustment: authoritative.stats.initiativeAdjustment,
+                mobilityAdjustment: authoritative.stats.mobilityAdjustment,
+                passivePerceptionAdjustment: authoritative.stats.passivePerceptionAdjustment,
+                exhaustion: authoritative.stats.exhaustion,
+                inspiration: authoritative.stats.inspiration,
+                experience: authoritative.stats.experience,
+              }
+            : sheet.stats,
           HP: {
             ...sheet.HP,
-            current: authoritativeHp.current,
-            temporary: authoritativeHp.temporary,
-            max: authoritativeHp.max,
-            currentMax: authoritativeHp.currentMax,
+            current: authoritative.current,
+            temporary: authoritative.temporary,
+            max: authoritative.max,
+            currentMax: authoritative.currentMax,
+            hitDice: authoritativeHitDice,
           },
         },
       })
@@ -188,8 +220,17 @@ export function CharacterProvider({
 
     sessionRuntime.initializeHp(
       sourceCharacters.map((character) => {
-        const hp = character.get("sheet").HP
+        const sheet = character.get("sheet")
+        const hp = sheet.HP
         const currentMax = getCurrentMaxHp(character)
+        const hitDice = Object.fromEntries(
+          Object.entries(hp.hitDice).flatMap(([side, pool]) =>
+            pool
+              ? [[side, { current: pool.current.quantity, max: pool.max.quantity }]]
+              : [],
+          ),
+        )
+
         return {
           characterId: character.get("id"),
           ownerUserId: character.get("owner")?.id?.trim() || undefined,
@@ -198,6 +239,16 @@ export function CharacterProvider({
           max: hp.max,
           currentMax,
           maxHpBonus: character.getEffectiveMaxHp() - currentMax,
+          hitDice,
+          stats: {
+            armorClassAdjustment: sheet.stats.armorClassAdjustment ?? 0,
+            initiativeAdjustment: sheet.stats.initiativeAdjustment ?? 0,
+            mobilityAdjustment: sheet.stats.mobilityAdjustment ?? 0,
+            passivePerceptionAdjustment: sheet.stats.passivePerceptionAdjustment ?? 0,
+            exhaustion: sheet.stats.exhaustion ?? 0,
+            inspiration: sheet.stats.inspiration ?? false,
+            experience: sheet.stats.experience ?? 0,
+          },
         }
       }),
     )
@@ -333,6 +384,16 @@ export function CharacterProvider({
     )
     setSelectedCharacterId(character.get("id"))
   }, [actorId, characters.length, setAppState, userKey])
+
+  function dispatchStatOperation(operation: SessionStatOperation): boolean {
+    if (!sessionRuntime) return false
+    if (sessionRuntime.status !== "connected") {
+      console.warn("[session-runtime] Stat change ignored while the authoritative session server is disconnected.")
+      return true
+    }
+    sessionRuntime.dispatchHpOperation(operation)
+    return true
+  }
 
   function dispatchGameOperation(operation: GameOperation) {
     if (sessionRuntime && isAuthoritativeHpOperation(operation)) {
@@ -472,7 +533,9 @@ export function CharacterProvider({
 
       if (!canRest) return previous
 
-      const previousHp = restedCharacter.get("sheet").HP
+      const previousSheet = restedCharacter.get("sheet")
+      const previousHp = previousSheet.HP
+      const previousStats = previousSheet.stats
       const applied = applyRecordedGameOperation(
         previous,
         createGameOperationRecord(
@@ -497,10 +560,12 @@ export function CharacterProvider({
           return nextCharacter.withPatch({
             sheet: {
               ...nextSheet,
+              stats: previousStats,
               HP: {
                 ...nextSheet.HP,
                 current: previousHp.current,
                 temporary: previousHp.temporary,
+                hitDice: previousHp.hitDice,
               },
             },
           }).toJSON()
@@ -808,6 +873,7 @@ export function CharacterProvider({
         groundInventory: appState.groundInventory ?? [],
         operationLog,
         dispatchGameOperation,
+        dispatchStatOperation,
         updateCharacter,
         updateCharacterDomain,
         setCharacterCurrentHp,
