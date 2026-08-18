@@ -4,11 +4,13 @@ import {
   applyHpUndo,
   defaultAttributes,
   defaultSavingThrows,
+  defaultSkills,
   defaultStats,
   MAX_HP_LOG_RECORDS,
   normalizeAttributesSeed,
   normalizeHpSeed,
   normalizeSavingThrowsSeed,
+  normalizeSkillsSeed,
   normalizeStatsSeed,
 } from "./hpState";
 import {
@@ -166,29 +168,22 @@ export class SessionActor extends DurableObject<Env> {
       }
 
       if (existing.statsInitialized !== true && seed.stats !== undefined) {
-        next = {
-          ...next,
-          stats: normalizeStatsSeed(seed.stats),
-          statsInitialized: true,
-        };
+        next = { ...next, stats: normalizeStatsSeed(seed.stats), statsInitialized: true };
         entryChanged = true;
       }
 
       if (existing.attributesInitialized !== true && seed.attributes !== undefined) {
-        next = {
-          ...next,
-          attributes: normalizeAttributesSeed(seed.attributes),
-          attributesInitialized: true,
-        };
+        next = { ...next, attributes: normalizeAttributesSeed(seed.attributes), attributesInitialized: true };
         entryChanged = true;
       }
 
       if (existing.savingThrowsInitialized !== true && seed.savingThrows !== undefined) {
-        next = {
-          ...next,
-          savingThrows: normalizeSavingThrowsSeed(seed.savingThrows),
-          savingThrowsInitialized: true,
-        };
+        next = { ...next, savingThrows: normalizeSavingThrowsSeed(seed.savingThrows), savingThrowsInitialized: true };
+        entryChanged = true;
+      }
+
+      if (existing.skillsInitialized !== true && seed.skills !== undefined) {
+        next = { ...next, skills: normalizeSkillsSeed(seed.skills), skillsInitialized: true };
         entryChanged = true;
       }
 
@@ -301,6 +296,8 @@ export class SessionActor extends DurableObject<Env> {
         attributesInitialized: state.attributesInitialized ?? false,
         savingThrows: state.savingThrows ?? defaultSavingThrows(),
         savingThrowsInitialized: state.savingThrowsInitialized ?? false,
+        skills: state.skills ?? defaultSkills(),
+        skillsInitialized: state.skillsInitialized ?? false,
       }]),
     );
   }
