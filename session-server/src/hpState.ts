@@ -9,6 +9,7 @@ import type {
   SessionHpState,
   SessionReverseOperation,
   SessionRestOperation,
+  SessionSavingThrowsState,
   SessionStatOperation,
   SessionStatReverseOperation,
   SessionStatsState,
@@ -36,6 +37,10 @@ export function defaultAttributes(): SessionAttributesState {
   return { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
 }
 
+export function defaultSavingThrows(): SessionSavingThrowsState {
+  return { str: false, dex: false, con: false, int: false, wis: false, cha: false };
+}
+
 export function normalizeStatsSeed(stats: SessionStatsState | undefined): SessionStatsState {
   if (!stats) return defaultStats();
   return {
@@ -58,6 +63,21 @@ export function normalizeAttributesSeed(attributes: SessionAttributesState | und
     int: clamp(integer(attributes.int), 1, 30),
     wis: clamp(integer(attributes.wis), 1, 30),
     cha: clamp(integer(attributes.cha), 1, 30),
+  };
+}
+
+export function normalizeSavingThrowsSeed(
+  savingThrows: Partial<SessionSavingThrowsState> | undefined,
+): SessionSavingThrowsState {
+  const defaults = defaultSavingThrows();
+  if (!savingThrows) return defaults;
+  return {
+    str: Boolean(savingThrows.str),
+    dex: Boolean(savingThrows.dex),
+    con: Boolean(savingThrows.con),
+    int: Boolean(savingThrows.int),
+    wis: Boolean(savingThrows.wis),
+    cha: Boolean(savingThrows.cha),
   };
 }
 
@@ -87,6 +107,8 @@ export function normalizeHpSeed(state: SessionHpSeed): SessionHpState {
     statsInitialized: state.stats !== undefined,
     attributes: normalizeAttributesSeed(state.attributes),
     attributesInitialized: state.attributes !== undefined,
+    savingThrows: normalizeSavingThrowsSeed(state.savingThrows),
+    savingThrowsInitialized: state.savingThrows !== undefined,
     revision: 0,
   };
 }
@@ -144,6 +166,8 @@ export function applyHpUndo(
       statsInitialized?: boolean;
       attributes?: SessionAttributesState;
       attributesInitialized?: boolean;
+      savingThrows?: SessionSavingThrowsState;
+      savingThrowsInitialized?: boolean;
     };
     restored = cloneState({
       ...reverseState,
@@ -152,6 +176,8 @@ export function applyHpUndo(
       statsInitialized: true,
       attributes: reverseState.attributes ?? current.attributes,
       attributesInitialized: reverseState.attributesInitialized ?? current.attributesInitialized,
+      savingThrows: reverseState.savingThrows ?? current.savingThrows,
+      savingThrowsInitialized: reverseState.savingThrowsInitialized ?? current.savingThrowsInitialized,
     });
   } else if (source.reverseOperation.type === "character.hp.restore") {
     const reverseState = source.reverseOperation.hp as SessionHpState & {
@@ -160,6 +186,8 @@ export function applyHpUndo(
       statsInitialized?: boolean;
       attributes?: SessionAttributesState;
       attributesInitialized?: boolean;
+      savingThrows?: SessionSavingThrowsState;
+      savingThrowsInitialized?: boolean;
     };
     restored = cloneState({
       ...reverseState,
@@ -168,10 +196,15 @@ export function applyHpUndo(
       statsInitialized: reverseState.statsInitialized ?? current.statsInitialized,
       attributes: reverseState.attributes ?? current.attributes,
       attributesInitialized: reverseState.attributesInitialized ?? current.attributesInitialized,
+      savingThrows: reverseState.savingThrows ?? current.savingThrows,
+      savingThrowsInitialized: reverseState.savingThrowsInitialized ?? current.savingThrowsInitialized,
     });
   } else if (source.reverseOperation.type === "character.attribute.restore") {
     restored.attributes[source.reverseOperation.attribute] = source.reverseOperation.value;
     restored.attributesInitialized = true;
+  } else if (source.reverseOperation.type === "character.savingThrow.restore") {
+    restored.savingThrows[source.reverseOperation.attribute] = source.reverseOperation.proficient;
+    restored.savingThrowsInitialized = true;
   } else {
     restoreSingleStat(restored, source.reverseOperation);
     restored.statsInitialized = true;
@@ -211,6 +244,13 @@ function createReverseOperation(
         characterId: before.characterId,
         attribute: operation.attribute,
         value: before.attributes[operation.attribute],
+      };
+    case "character.savingThrow.set":
+      return {
+        type: "character.savingThrow.restore",
+        characterId: before.characterId,
+        attribute: operation.attribute,
+        proficient: before.savingThrows[operation.attribute],
       };
     case "character.stat.armorClass.set":
       return { type: "character.stat.armorClass.restore", characterId: before.characterId, adjustment: before.stats.armorClassAdjustment };
@@ -274,6 +314,9 @@ function validateOperation(
   if (operation.type === "character.attribute.set" && !state.attributesInitialized) {
     return invalid("ATTRIBUTES_NOT_INITIALIZED", "Attributes for this character must be initialized by the MASTER first.");
   }
+  if (operation.type === "character.savingThrow.set" && !state.savingThrowsInitialized) {
+    return invalid("SAVING_THROWS_NOT_INITIALIZED", "Saving throws for this character must be initialized by the MASTER first.");
+  }
 
   const validInteger = (value: number) => Number.isFinite(value) && Number.isInteger(value);
 
@@ -281,6 +324,11 @@ function validateOperation(
     case "character.attribute.set":
       if (!validInteger(operation.value) || operation.value < 1 || operation.value > 30) {
         return invalid("INVALID_ATTRIBUTE", "Attribute scores must be integers from 1 to 30.");
+      }
+      break;
+    case "character.savingThrow.set":
+      if (typeof operation.proficient !== "boolean") {
+        return invalid("INVALID_SAVING_THROW_PROFICIENCY", "Saving throw proficiency must be true or false.");
       }
       break;
     case "character.hp.damage":
@@ -358,6 +406,10 @@ function mutateState(previous: SessionHpState, operation: SessionAuthoritativeOp
       next.attributes[operation.attribute] = operation.value;
       next.attributesInitialized = true;
       break;
+    case "character.savingThrow.set":
+      next.savingThrows[operation.attribute] = operation.proficient;
+      next.savingThrowsInitialized = true;
+      break;
     case "character.hp.set": next.current = clamp(operation.value, 0, effectiveMax(next)); break;
     case "character.hp.temporary.set": next.temporary = Math.max(0, operation.value); break;
     case "character.hp.temporary.add": next.temporary = Math.max(0, next.temporary + operation.amount); break;
@@ -434,6 +486,7 @@ function mutateState(previous: SessionHpState, operation: SessionAuthoritativeOp
 function effectiveMax(state: SessionHpState): number { return Math.max(1, state.currentMax + state.maxHpBonus); }
 function cloneStats(stats: SessionStatsState): SessionStatsState { return { ...stats }; }
 function cloneAttributes(attributes: SessionAttributesState): SessionAttributesState { return { ...attributes }; }
+function cloneSavingThrows(savingThrows: SessionSavingThrowsState): SessionSavingThrowsState { return { ...savingThrows }; }
 function cloneState(state: SessionHpState): SessionHpState {
   const hitDice = state.hitDice ?? {};
   return {
@@ -443,6 +496,8 @@ function cloneState(state: SessionHpState): SessionHpState {
     statsInitialized: state.statsInitialized ?? false,
     attributes: cloneAttributes(state.attributes ?? defaultAttributes()),
     attributesInitialized: state.attributesInitialized ?? false,
+    savingThrows: cloneSavingThrows(state.savingThrows ?? defaultSavingThrows()),
+    savingThrowsInitialized: state.savingThrowsInitialized ?? false,
   };
 }
 function integer(value: number): number { return Math.trunc(Number(value) || 0); }
