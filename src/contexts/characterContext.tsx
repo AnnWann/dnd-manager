@@ -12,6 +12,7 @@ import {
 import type {
   SessionAttributeOperation,
   SessionDieSides,
+  SessionSavingThrowOperation,
   SessionStatOperation,
 } from "../features/session-runtime/sessionProtocol"
 import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
@@ -60,6 +61,7 @@ export type CharacterContextValue = {
   dispatchGameOperation: (operation: GameOperation) => void
   dispatchStatOperation: (operation: SessionStatOperation) => boolean
   dispatchAttributeOperation: (operation: SessionAttributeOperation) => boolean
+  dispatchSavingThrowOperation: (operation: SessionSavingThrowOperation) => boolean
   updateCharacter: (characterId: string, updater: (c: CharacterTemplate) => CharacterTemplate) => void
   updateCharacterDomain: (characterId: string, domain: CharacterDomainName, updater: (c: CharacterTemplate) => CharacterTemplate) => void
   setCharacterCurrentHp: (characterId: string, value: number) => void
@@ -131,6 +133,9 @@ export function CharacterProvider({ children, appState, setAppState, userRole, u
         sheet: {
           ...sheet,
           attributes: authoritative.attributesInitialized ? { ...authoritative.attributes } : sheet.attributes,
+          savingThrowProficiencies: authoritative.savingThrowsInitialized
+            ? { ...authoritative.savingThrows }
+            : sheet.savingThrowProficiencies,
           stats: authoritative.statsInitialized ? {
             ...sheet.stats,
             armorClassAdjustment: authoritative.stats.armorClassAdjustment,
@@ -183,6 +188,7 @@ export function CharacterProvider({ children, appState, setAppState, userRole, u
         maxHpBonus: character.getEffectiveMaxHp() - currentMax,
         hitDice,
         attributes: { ...sheet.attributes },
+        savingThrows: { ...sheet.savingThrowProficiencies },
         stats: {
           armorClassAdjustment: sheet.stats.armorClassAdjustment ?? 0,
           initiativeAdjustment: sheet.stats.initiativeAdjustment ?? 0,
@@ -281,6 +287,16 @@ export function CharacterProvider({ children, appState, setAppState, userRole, u
     if (!sessionRuntime) return false
     if (sessionRuntime.status !== "connected") {
       console.warn("[session-runtime] Attribute change ignored while the authoritative session server is disconnected.")
+      return true
+    }
+    sessionRuntime.dispatchHpOperation(operation)
+    return true
+  }
+
+  function dispatchSavingThrowOperation(operation: SessionSavingThrowOperation): boolean {
+    if (!sessionRuntime) return false
+    if (sessionRuntime.status !== "connected") {
+      console.warn("[session-runtime] Saving-throw change ignored while the authoritative session server is disconnected.")
       return true
     }
     sessionRuntime.dispatchHpOperation(operation)
@@ -440,7 +456,7 @@ export function CharacterProvider({ children, appState, setAppState, userRole, u
     <CharacterContext.Provider value={{
       activeCharacter, visibleCharacters, transferCharacters,
       partyInventory: appState.partyInventory ?? [], groundInventory: appState.groundInventory ?? [], operationLog,
-      dispatchGameOperation, dispatchStatOperation, dispatchAttributeOperation,
+      dispatchGameOperation, dispatchStatOperation, dispatchAttributeOperation, dispatchSavingThrowOperation,
       updateCharacter, updateCharacterDomain,
       setCharacterCurrentHp, setCharacterTemporaryHp, damageCharacter, healCharacter,
       useCharacterAbility, restoreCharacterAbility, resetCharacterAbility, completeLongRest,
