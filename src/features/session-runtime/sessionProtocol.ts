@@ -35,18 +35,37 @@ export type SessionHpOperation =
   | { type: "character.hp.max.set"; characterId: string; value: number }
   | { type: "character.hp.currentMax.adjust"; characterId: string; amount: number }
   | { type: "character.hp.currentMax.restore"; characterId: string }
-  | { type: "character.hp.rest"; characterId: string; fraction: 0.5 | 1 }
+
+export type SessionRestOperation =
+  | { type: "character.rest.short"; characterId: string; healing: number }
+  | {
+      type: "character.rest.long"
+      characterId: string
+      recovery: "partial" | "full"
+    }
+
+export type SessionAuthoritativeOperation = SessionHpOperation | SessionRestOperation
 
 export type SessionHpLogRecord = {
   id: string
   actorId: string
   createdAt: string
-  operation: SessionHpOperation | { type: "character.hp.undo"; characterId: string; sourceLogId: string }
-  reverseOperation: {
-    type: "character.hp.restore"
-    characterId: string
-    hp: SessionHpState
-  }
+  operation:
+    | SessionAuthoritativeOperation
+    | { type: "character.hp.undo"; characterId: string; sourceLogId: string }
+  reverseOperation:
+    | {
+        type: "character.hp.restore"
+        characterId: string
+        hp: SessionHpState
+      }
+    | {
+        type: "character.rest.restore"
+        characterId: string
+        snapshot: {
+          hp: SessionHpState
+        }
+      }
   undoneAt?: string
   undoneBy?: string
 }
@@ -108,7 +127,7 @@ export type ClientSessionMessage =
   | { type: "session.heartbeat"; clientId: string }
   | { type: "session.ping" }
   | { type: "session.hp.initialize"; characters: SessionHpSeed[] }
-  | { type: "session.hp.operation"; operation: SessionHpOperation }
+  | { type: "session.hp.operation"; operation: SessionAuthoritativeOperation }
   | { type: "session.log.undo"; logId: string }
 
 export function parseServerSessionMessage(raw: string): ServerSessionMessage | null {
