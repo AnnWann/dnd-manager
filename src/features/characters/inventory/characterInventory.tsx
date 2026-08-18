@@ -119,6 +119,15 @@ export function CharacterInventoryTab({
     return true
   }
 
+  function addCompendiumItem(item: Itemmable) {
+    const candidateItems = [...items, item]
+    if (wouldExceedBagCapacity(candidateItems)) return
+
+    updateCharacter(character.get("id"), (current) =>
+      current.addInventoryItem(item),
+    )
+  }
+
   function updateItem(
     itemId: string,
     updater: (item: Itemmable) => Itemmable,
@@ -240,6 +249,9 @@ export function CharacterInventoryTab({
           normalizedSearchQuery
             ? "Nenhum item corresponde à busca."
             : "Nenhum item encontrado."
+        }
+        onAddCompendiumItem={
+          mode === "campaign" ? addCompendiumItem : undefined
         }
         onUpdateItem={updateItem}
         onRemoveItem={removeItem}
