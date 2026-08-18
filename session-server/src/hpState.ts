@@ -1,6 +1,7 @@
 import type {
   SessionAuthoritativeOperation,
   SessionConnection,
+  SessionDieSides,
   SessionHpLogRecord,
   SessionHpState,
   SessionReverseOperation,
@@ -13,13 +14,18 @@ export type HpApplyResult =
   | { ok: true; next: SessionHpState; record: SessionHpLogRecord }
   | { ok: false; code: string; message: string };
 
-export function normalizeHpSeed(
-  state: Omit<SessionHpState, "revision">,
-): SessionHpState {
+export function normalizeHpSeed(state: Omit<SessionHpState, "revision">): SessionHpState {
   const max = Math.max(1, integer(state.max));
   const currentMax = clamp(integer(state.currentMax), 1, max);
   const maxHpBonus = integer(state.maxHpBonus);
   const effectiveMax = Math.max(1, currentMax + maxHpBonus);
+  const hitDice = Object.fromEntries(
+    Object.entries(state.hitDice ?? {}).flatMap(([side, pool]) => {
+      if (!pool) return [];
+      const normalizedMax = Math.max(0, integer(pool.max));
+      return [[side, { current: clamp(integer(pool.current), 0, normalizedMax), max: normalizedMax }]];
+    }),
+  ) as SessionHpState["hitDice"];
 
   return {
     characterId: state.characterId,
@@ -29,6 +35,7 @@ export function normalizeHpSeed(
     max,
     currentMax,
     maxHpBonus,
+    hitDice,
     revision: 0,
   };
 }
@@ -41,11 +48,11 @@ export function applyHpOperation(
   const permissionError = validatePermission(previous, connection);
   if (permissionError) return permissionError;
 
-  const validationError = validateOperation(operation, previous.characterId);
+  const validationError = validateOperation(operation, previous);
   if (validationError) return validationError;
 
-  const before = cloneHp(previous);
-  const next = mutateHp(previous, operation);
+  const before = cloneState(previous);
+  const next = mutateState(previous, operation);
   next.revision = previous.revision + 1;
 
   return {
@@ -67,31 +74,17 @@ export function applyHpUndo(
   connection: SessionConnection,
 ): HpApplyResult {
   if (connection.role !== "MASTER") {
-    return {
-      ok: false,
-      code: "MASTER_REQUIRED",
-      message: "Only the MASTER can undo session changes.",
-    };
+    return { ok: false, code: "MASTER_REQUIRED", message: "Only the MASTER can undo session changes." };
   }
-
   if (source.undoneAt) {
-    return {
-      ok: false,
-      code: "ALREADY_UNDONE",
-      message: "This change has already been undone.",
-    };
+    return { ok: false, code: "ALREADY_UNDONE", message: "This change has already been undone." };
   }
-
   if (source.reverseOperation.characterId !== current.characterId) {
-    return {
-      ok: false,
-      code: "UNDO_TARGET_MISMATCH",
-      message: "Undo target does not match the current HP state.",
-    };
+    return { ok: false, code: "UNDO_TARGET_MISMATCH", message: "Undo target does not match the current character state." };
   }
 
-  const beforeUndo = cloneHp(current);
-  const restored = cloneHp(getReverseHp(source.reverseOperation));
+  const beforeUndo = cloneState(current);
+  const restored = cloneState(getReverseState(source.reverseOperation));
   restored.revision = current.revision + 1;
 
   return {
@@ -101,16 +94,8 @@ export function applyHpUndo(
       id: crypto.randomUUID(),
       actorId: connection.userId,
       createdAt: new Date().toISOString(),
-      operation: {
-        type: "character.hp.undo",
-        characterId: current.characterId,
-        sourceLogId: source.id,
-      },
-      reverseOperation: {
-        type: "character.hp.restore",
-        characterId: current.characterId,
-        hp: beforeUndo,
-      },
+      operation: { type: "character.hp.undo", characterId: current.characterId, sourceLogId: source.id },
+      reverseOperation: { type: "character.hp.restore", characterId: current.characterId, hp: beforeUndo },
     },
   };
 }
@@ -123,33 +108,18 @@ function createReverseOperation(
     return {
       type: "character.rest.restore",
       characterId: before.characterId,
-      snapshot: {
-        hp: before,
-        // Future authoritative rest domains are added to this same snapshot.
-      },
+      snapshot: { hp: before },
     };
   }
-
-  return {
-    type: "character.hp.restore",
-    characterId: before.characterId,
-    hp: before,
-  };
+  return { type: "character.hp.restore", characterId: before.characterId, hp: before };
 }
 
-function getReverseHp(operation: SessionReverseOperation): SessionHpState {
-  return operation.type === "character.rest.restore"
-    ? operation.snapshot.hp
-    : operation.hp;
+function getReverseState(operation: SessionReverseOperation): SessionHpState {
+  return operation.type === "character.rest.restore" ? operation.snapshot.hp : operation.hp;
 }
 
-function isRestOperation(
-  operation: SessionAuthoritativeOperation,
-): operation is SessionRestOperation {
-  return (
-    operation.type === "character.rest.short" ||
-    operation.type === "character.rest.long"
-  );
+function isRestOperation(operation: SessionAuthoritativeOperation): operation is SessionRestOperation {
+  return operation.type === "character.rest.short" || operation.type === "character.rest.long";
 }
 
 function validatePermission(
@@ -157,134 +127,74 @@ function validatePermission(
   connection: SessionConnection,
 ): { ok: false; code: string; message: string } | null {
   if (connection.role === "MASTER") return null;
-
   if (state.ownerUserId && state.ownerUserId === connection.userId) return null;
-
-  return {
-    ok: false,
-    code: "HP_FORBIDDEN",
-    message: "Players may only change HP for characters they own.",
-  };
+  return { ok: false, code: "CHARACTER_FORBIDDEN", message: "Players may only change resources for characters they own." };
 }
 
 function validateOperation(
   operation: SessionAuthoritativeOperation,
-  characterId: string,
+  state: SessionHpState,
 ): { ok: false; code: string; message: string } | null {
-  if (operation.characterId !== characterId) {
-    return {
-      ok: false,
-      code: "CHARACTER_MISMATCH",
-      message: "Operation target does not match the loaded character.",
-    };
+  if (operation.characterId !== state.characterId) {
+    return { ok: false, code: "CHARACTER_MISMATCH", message: "Operation target does not match the loaded character." };
   }
 
-  const hasValidAmount = "amount" in operation
-    ? Number.isFinite(operation.amount) && Number.isInteger(operation.amount)
-    : true;
-  const hasValidValue = "value" in operation
-    ? Number.isFinite(operation.value) && Number.isInteger(operation.value)
-    : true;
-
-  if (!hasValidAmount || !hasValidValue) {
-    return {
-      ok: false,
-      code: "INVALID_HP_VALUE",
-      message: "HP values must be finite integers.",
-    };
-  }
+  const validInteger = (value: number) => Number.isFinite(value) && Number.isInteger(value);
 
   switch (operation.type) {
     case "character.hp.damage":
     case "character.hp.heal":
     case "character.hp.temporary.add":
-      if (operation.amount <= 0) {
-        return {
-          ok: false,
-          code: "INVALID_HP_AMOUNT",
-          message: "HP change amount must be greater than zero.",
-        };
-      }
+      if (!validInteger(operation.amount) || operation.amount <= 0) return invalid("INVALID_HP_AMOUNT", "HP change amount must be a positive integer.");
       break;
-
     case "character.hp.currentMax.adjust":
-      if (operation.amount === 0) {
-        return {
-          ok: false,
-          code: "INVALID_HP_AMOUNT",
-          message: "Maximum HP adjustment cannot be zero.",
-        };
-      }
+      if (!validInteger(operation.amount) || operation.amount === 0) return invalid("INVALID_HP_AMOUNT", "Maximum HP adjustment must be a non-zero integer.");
       break;
-
     case "character.hp.set":
     case "character.hp.temporary.set":
-      if (operation.value < 0) {
-        return {
-          ok: false,
-          code: "INVALID_HP_VALUE",
-          message: "HP cannot be negative.",
-        };
-      }
+      if (!validInteger(operation.value) || operation.value < 0) return invalid("INVALID_HP_VALUE", "HP must be a non-negative integer.");
       break;
-
     case "character.hp.max.set":
-      if (operation.value < 1) {
-        return {
-          ok: false,
-          code: "INVALID_HP_MAX",
-          message: "Maximum HP must be at least 1.",
-        };
-      }
+      if (!validInteger(operation.value) || operation.value < 1) return invalid("INVALID_HP_MAX", "Maximum HP must be at least 1.");
       break;
-
+    case "character.hitDice.use":
+    case "character.hitDice.recover": {
+      if (!validInteger(operation.amount) || operation.amount <= 0) return invalid("INVALID_HIT_DICE_AMOUNT", "Hit dice amount must be a positive integer.");
+      const pool = state.hitDice[operation.side];
+      if (!pool) return invalid("HIT_DICE_NOT_FOUND", `No ${operation.side} hit dice pool exists.`);
+      if (operation.type === "character.hitDice.use" && operation.amount > pool.current) return invalid("INSUFFICIENT_HIT_DICE", `Not enough ${operation.side} hit dice are available.`);
+      break;
+    }
+    case "character.hitDice.add":
+      if (!validInteger(operation.amount) || operation.amount <= 0) return invalid("INVALID_HIT_DICE_AMOUNT", "Hit dice amount must be a positive integer.");
+      break;
+    case "character.hitDice.remove":
+      if (!state.hitDice[operation.side]) return invalid("HIT_DICE_NOT_FOUND", `No ${operation.side} hit dice pool exists.`);
+      break;
     case "character.rest.short":
-      if (
-        !Number.isFinite(operation.healing) ||
-        !Number.isInteger(operation.healing) ||
-        operation.healing < 0
-      ) {
-        return {
-          ok: false,
-          code: "INVALID_SHORT_REST_HEALING",
-          message: "Short-rest healing must be a non-negative integer.",
-        };
+      if (!validInteger(operation.healing) || operation.healing < 0) return invalid("INVALID_SHORT_REST_HEALING", "Short-rest healing must be a non-negative integer.");
+      for (const [side, amount] of Object.entries(operation.hitDiceConsumption)) {
+        if (!validInteger(amount) || amount < 0) return invalid("INVALID_HIT_DICE_AMOUNT", "Short-rest hit dice consumption must use non-negative integers.");
+        const pool = state.hitDice[side as SessionDieSides];
+        if ((amount ?? 0) > (pool?.current ?? 0)) return invalid("INSUFFICIENT_HIT_DICE", `Not enough ${side} hit dice are available.`);
       }
       break;
-
     case "character.rest.long":
-      if (operation.recovery !== "partial" && operation.recovery !== "full") {
-        return {
-          ok: false,
-          code: "INVALID_LONG_REST_RECOVERY",
-          message: "Long-rest recovery must be partial or full.",
-        };
-      }
+      if (operation.recovery !== "partial" && operation.recovery !== "full") return invalid("INVALID_LONG_REST_RECOVERY", "Long-rest recovery must be partial or full.");
+      break;
+    case "character.hp.currentMax.restore":
       break;
   }
-
   return null;
 }
 
-function mutateHp(
-  previous: SessionHpState,
-  operation: SessionAuthoritativeOperation,
-): SessionHpState {
-  const next = cloneHp(previous);
+function mutateState(previous: SessionHpState, operation: SessionAuthoritativeOperation): SessionHpState {
+  const next = cloneState(previous);
 
   switch (operation.type) {
-    case "character.hp.set":
-      next.current = clamp(operation.value, 0, effectiveMax(next));
-      break;
-
-    case "character.hp.temporary.set":
-      next.temporary = Math.max(0, operation.value);
-      break;
-
-    case "character.hp.temporary.add":
-      next.temporary = Math.max(0, next.temporary + operation.amount);
-      break;
-
+    case "character.hp.set": next.current = clamp(operation.value, 0, effectiveMax(next)); break;
+    case "character.hp.temporary.set": next.temporary = Math.max(0, operation.value); break;
+    case "character.hp.temporary.add": next.temporary = Math.max(0, next.temporary + operation.amount); break;
     case "character.hp.damage": {
       let remaining = operation.amount;
       const absorbed = Math.min(next.temporary, remaining);
@@ -293,64 +203,68 @@ function mutateHp(
       next.current = Math.max(0, next.current - remaining);
       break;
     }
-
-    case "character.hp.heal":
-      next.current = Math.min(effectiveMax(next), next.current + operation.amount);
-      break;
-
+    case "character.hp.heal": next.current = Math.min(effectiveMax(next), next.current + operation.amount); break;
     case "character.hp.max.set": {
       const previousRealMax = Math.max(1, next.max);
       const hadReduction = next.currentMax < previousRealMax;
       next.max = Math.max(1, operation.value);
-      next.currentMax = hadReduction
-        ? Math.min(next.max, next.currentMax)
-        : next.max;
+      next.currentMax = hadReduction ? Math.min(next.max, next.currentMax) : next.max;
       next.current = Math.min(next.current, effectiveMax(next));
       break;
     }
-
     case "character.hp.currentMax.adjust":
       next.currentMax = clamp(next.currentMax + operation.amount, 1, next.max);
       next.current = Math.min(next.current, effectiveMax(next));
       break;
-
     case "character.hp.currentMax.restore":
       next.currentMax = next.max;
       next.current = Math.min(next.current, effectiveMax(next));
       break;
-
+    case "character.hitDice.use":
+      next.hitDice[operation.side]!.current -= operation.amount;
+      break;
+    case "character.hitDice.recover": {
+      const pool = next.hitDice[operation.side]!;
+      pool.current = Math.min(pool.max, pool.current + operation.amount);
+      break;
+    }
+    case "character.hitDice.add": {
+      const pool = next.hitDice[operation.side] ?? { current: 0, max: 0 };
+      next.hitDice[operation.side] = { current: pool.current + operation.amount, max: pool.max + operation.amount };
+      break;
+    }
+    case "character.hitDice.remove":
+      delete next.hitDice[operation.side];
+      break;
     case "character.rest.short":
       next.current = Math.min(effectiveMax(next), next.current + operation.healing);
+      for (const [side, amount] of Object.entries(operation.hitDiceConsumption)) {
+        const pool = next.hitDice[side as SessionDieSides];
+        if (pool && amount) pool.current -= amount;
+      }
       break;
-
     case "character.rest.long": {
-      const maximum = effectiveMax(next);
-      const missing = Math.max(0, maximum - next.current);
       const fraction = operation.recovery === "full" ? 1 : 0.5;
-      next.current = Math.min(
-        maximum,
-        next.current + Math.ceil(missing * fraction),
-      );
+      const maximum = effectiveMax(next);
+      next.current = Math.min(maximum, next.current + Math.ceil(Math.max(0, maximum - next.current) * fraction));
       next.temporary = 0;
+      for (const pool of Object.values(next.hitDice)) {
+        if (!pool) continue;
+        pool.current = Math.min(pool.max, pool.current + Math.ceil(Math.max(0, pool.max - pool.current) * fraction));
+      }
       break;
     }
   }
-
   return next;
 }
 
-function effectiveMax(state: SessionHpState): number {
-  return Math.max(1, state.currentMax + state.maxHpBonus);
+function effectiveMax(state: SessionHpState): number { return Math.max(1, state.currentMax + state.maxHpBonus); }
+function cloneState(state: SessionHpState): SessionHpState {
+  return {
+    ...state,
+    hitDice: Object.fromEntries(Object.entries(state.hitDice).map(([side, pool]) => [side, pool ? { ...pool } : pool])) as SessionHpState["hitDice"],
+  };
 }
-
-function cloneHp(state: SessionHpState): SessionHpState {
-  return { ...state };
-}
-
-function integer(value: number): number {
-  return Math.trunc(Number(value) || 0);
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
+function integer(value: number): number { return Math.trunc(Number(value) || 0); }
+function clamp(value: number, min: number, max: number): number { return Math.max(min, Math.min(max, value)); }
+function invalid(code: string, message: string): { ok: false; code: string; message: string } { return { ok: false, code, message }; }
