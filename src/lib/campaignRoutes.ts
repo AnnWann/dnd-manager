@@ -7,6 +7,11 @@ export function sessionPath(sessionId: string, path = ""): string {
   return suffix ? `${sessionBasePath(sessionId)}/${suffix}` : sessionBasePath(sessionId)
 }
 
+export function sessionCreationPath(sessionId: string, path = ""): string {
+  const suffix = path.replace(/^\/+/, "")
+  return sessionPath(sessionId, suffix ? `creation/${suffix}` : "creation")
+}
+
 export function sessionCharacterPath(
   sessionId: string,
   characterId?: string,
@@ -25,8 +30,8 @@ export function sessionCustomSystemPath(
   systemId?: string,
   tab?: string,
 ): string {
-  if (!systemId) return sessionPath(sessionId, "custom-systems")
-  const base = sessionPath(
+  if (!systemId) return sessionCreationPath(sessionId, "custom-systems")
+  const base = sessionCreationPath(
     sessionId,
     `custom-systems/${encodeURIComponent(systemId)}`,
   )
