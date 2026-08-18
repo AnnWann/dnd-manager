@@ -3,6 +3,7 @@ import { Award, Minus, Plus } from "lucide-react"
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
+import { useCharacterContext } from "../../../contexts/characterContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getExperienceProgress } from "../../../models/characters/characterExperience"
 
@@ -18,11 +19,20 @@ export function CharacterExperience({
   character,
   updateCharacter,
 }: Props) {
+  const { dispatchStatOperation } = useCharacterContext()
   const progress = getExperienceProgress(character)
+  const characterId = character.get("id")
 
   function setExperience(value: number) {
-    updateCharacter(character.get("id"), (current) =>
-      current.withStat("experience", Math.max(0, Math.trunc(value))),
+    const nextExperience = Math.max(0, Math.trunc(value))
+    if (dispatchStatOperation({
+      type: "character.stat.experience.set",
+      characterId,
+      value: nextExperience,
+    })) return
+
+    updateCharacter(characterId, (current) =>
+      current.withStat("experience", nextExperience),
     )
   }
 
@@ -40,9 +50,7 @@ export function CharacterExperience({
             </span>
 
             <div>
-              <div className="text-sm font-semibold text-textH">
-                Experiência
-              </div>
+              <div className="text-sm font-semibold text-textH">Experiência</div>
               <div className="mt-1 text-xs text-textMuted">
                 Nível total {progress.level}. A subida de nível automática foi removida temporariamente.
               </div>
@@ -64,37 +72,19 @@ export function CharacterExperience({
               min={0}
               step={1}
               value={progress.experience}
-              onChange={(event) =>
-                setExperience(Number(event.target.value) || 0)
-              }
+              onChange={(event) => setExperience(Number(event.target.value) || 0)}
             />
           </label>
 
           <div className="grid grid-cols-3 gap-2 sm:flex">
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={progress.experience <= 0}
-              onClick={() => adjustExperience(-100)}
-            >
-              <Minus className="mr-1 h-3.5 w-3.5" />
-              100
+            <Button size="sm" variant="secondary" disabled={progress.experience <= 0} onClick={() => adjustExperience(-100)}>
+              <Minus className="mr-1 h-3.5 w-3.5" />100
             </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => adjustExperience(100)}
-            >
-              <Plus className="mr-1 h-3.5 w-3.5" />
-              100
+            <Button size="sm" variant="secondary" onClick={() => adjustExperience(100)}>
+              <Plus className="mr-1 h-3.5 w-3.5" />100
             </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => adjustExperience(500)}
-            >
-              <Plus className="mr-1 h-3.5 w-3.5" />
-              500
+            <Button size="sm" variant="secondary" onClick={() => adjustExperience(500)}>
+              <Plus className="mr-1 h-3.5 w-3.5" />500
             </Button>
           </div>
         </div>
@@ -102,18 +92,10 @@ export function CharacterExperience({
         <div className="mt-4 rounded-xl border border-border bg-bg-subtle p-3">
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
             <span className="font-medium text-textH">
-              {progress.level >= 20
-                ? "Nível máximo"
-                : `Progresso para o nível ${progress.level + 1}`}
+              {progress.level >= 20 ? "Nível máximo" : `Progresso para o nível ${progress.level + 1}`}
             </span>
 
-            <span
-              className={
-                progress.canLevelUp
-                  ? "font-semibold text-accent"
-                  : "text-textMuted"
-              }
-            >
+            <span className={progress.canLevelUp ? "font-semibold text-accent" : "text-textMuted"}>
               {progress.level >= 20
                 ? `${formatXp(progress.experience)} XP acumulado`
                 : progress.canLevelUp
@@ -123,10 +105,7 @@ export function CharacterExperience({
           </div>
 
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-bg">
-            <div
-              className="h-full rounded-full bg-accent transition-[width]"
-              style={{ width: `${progress.progressPercent}%` }}
-            />
+            <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${progress.progressPercent}%` }} />
           </div>
 
           {progress.nextLevelExperience !== undefined ? (
