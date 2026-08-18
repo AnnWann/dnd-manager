@@ -1,4 +1,4 @@
-import { createContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { createContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { SessionSocket, type SessionRuntimeStatus } from "./sessionSocket"
 import type { SessionRuntimePresenceUser, SessionRuntimeRole } from "./sessionProtocol"
 
@@ -36,8 +36,7 @@ export function SessionRuntimeProvider({
   const [status, setStatus] = useState<SessionRuntimeStatus>("disconnected")
   const [presence, setPresence] = useState<SessionRuntimePresenceUser[]>([])
   const [lastHeartbeatAckAt, setLastHeartbeatAckAt] = useState<number | null>(null)
-  const clientIdRef = useRef<string>(getOrCreateClientId(sessionId))
-
+  const clientId = useMemo(() => getOrCreateClientId(sessionId), [sessionId])
   const baseUrl = import.meta.env.VITE_SESSION_SERVER_URL?.trim() ?? ""
 
   useEffect(() => {
@@ -54,7 +53,7 @@ export function SessionRuntimeProvider({
       sessionId,
       userId,
       role,
-      clientId: clientIdRef.current,
+      clientId,
       onStatusChange: setStatus,
       onMessage: (message) => {
         if (message.type === "session.presence") {
@@ -75,15 +74,15 @@ export function SessionRuntimeProvider({
 
     socket.connect()
     return () => socket.disconnect()
-  }, [baseUrl, role, sessionId, userId])
+  }, [baseUrl, clientId, role, sessionId, userId])
 
   const value = useMemo<SessionRuntimeContextValue>(() => ({
     status,
     sessionId,
-    clientId: clientIdRef.current,
+    clientId,
     presence,
     lastHeartbeatAckAt,
-  }), [lastHeartbeatAckAt, presence, sessionId, status])
+  }), [clientId, lastHeartbeatAckAt, presence, sessionId, status])
 
   return (
     <SessionRuntimeContext.Provider value={value}>
