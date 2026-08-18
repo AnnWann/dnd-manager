@@ -1,5 +1,5 @@
 import { History, Undo2 } from "lucide-react"
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
 import { getCurrentMaxHp } from "../../models/characters/characterHp"
@@ -20,11 +20,12 @@ const REST_LEGACY_MATCH_WINDOW_MS = 3_000
 export function SessionActionLog() {
   const { operationLog, visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
   const runtime = useOptionalSessionRuntime()
+  const lastSeedSignatureRef = useRef("")
 
   useEffect(() => {
     if (!runtime || runtime.role !== "MASTER" || runtime.status !== "connected") return
 
-    runtime.initializeHp(visibleCharacters.map((character) => {
+    const seeds = visibleCharacters.map((character) => {
       const hp = character.get("sheet").HP
       const currentMax = getCurrentMaxHp(character)
       const hitDice = Object.fromEntries(
@@ -43,8 +44,17 @@ export function SessionActionLog() {
         maxHpBonus: character.getEffectiveMaxHp() - currentMax,
         hitDice,
       }
-    }))
-  }, [runtime, visibleCharacters])
+    })
+
+    const signature = JSON.stringify(
+      seeds.map(({ characterId, hitDice }) => ({ characterId, hitDice })),
+    )
+    if (signature === lastSeedSignatureRef.current) return
+
+    if (runtime.initializeHp(seeds)) {
+      lastSeedSignatureRef.current = signature
+    }
+  }, [runtime?.initializeHp, runtime?.role, runtime?.status, visibleCharacters])
 
   const characterNames = useMemo(
     () => new Map(visibleCharacters.map((character) => [character.get("id"), character.get("name")])),
