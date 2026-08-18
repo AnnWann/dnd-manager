@@ -185,6 +185,9 @@ function describeHpOperation(operation: SessionHpLogRecord["operation"], charact
     case "character.hitDice.add": return `Adicionou ${operation.amount} ${operation.side} de vida a ${characterName}.`
     case "character.hitDice.remove": return `Removeu o pool ${operation.side} de dados de vida de ${characterName}.`
     case "character.attribute.set": return `Definiu ${attributeLabel(operation.attribute)} de ${characterName} para ${operation.value}.`
+    case "character.savingThrow.set": return operation.proficient
+      ? `${characterName} ganhou proficiência no teste de resistência de ${attributeLabel(operation.attribute)}.`
+      : `${characterName} perdeu proficiência no teste de resistência de ${attributeLabel(operation.attribute)}.`
     case "character.stat.armorClass.set": return `Definiu a CA de ${characterName} para ${formatStat(operation.value)}.`
     case "character.stat.initiative.set": return `Definiu a iniciativa de ${characterName} para ${formatSignedStat(operation.value)}.`
     case "character.stat.mobility.set": return `Definiu a mobilidade de ${characterName} para ${formatStat(operation.value)}.`
