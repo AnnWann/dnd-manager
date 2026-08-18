@@ -32,6 +32,7 @@ import { AuthView } from "./views/AuthView"
 import { UnauthorizedView } from "./views/UnauthorisedView"
 import { CampaignCharactersView } from "./views/campaign/CampaignCharactersView"
 import { SessionCharacterLevelUpView } from "./views/session/SessionCharacterLevelUpView"
+import { SessionCreationSettingsView } from "./views/session/SessionCreationSettingsView"
 import { UserCampaignsRouteView } from "./views/user/UserCampaignsRouteView"
 import { UserCharacterAddSpellsView } from "./views/user/UserCharacterAddSpellsView"
 import { UserCharacterCreateItemView } from "./views/user/UserCharacterCreateItemView"
@@ -91,7 +92,8 @@ export function AppRouter() {
         <Route path="missions" element={<MissionsView />} />
         <Route path="initiative" element={<InitiativeRoute />} />
 
-        <Route path="creation" element={<Navigate to="items-compendium" replace />} />
+        <Route path="creation" element={<Navigate to="settings" replace />} />
+        <Route path="creation/settings" element={<SessionCreationSettingsView />} />
         <Route path="creation/items-compendium" element={<ItemsCompendiumView />} />
         <Route path="creation/creatures-compendium" element={<CreaturesCompendiumView />} />
         <Route path="creation/custom-systems" element={<CustomSystemsListView />} />
