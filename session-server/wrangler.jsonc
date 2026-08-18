@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dnd-manager-session-server",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-18",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SESSION_ACTOR",
+        "class_name": "SessionActor"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SessionActor"]
+    }
+  ],
+  "vars": {
+    "SESSION_AUTH_MODE": "development"
+  }
+}
