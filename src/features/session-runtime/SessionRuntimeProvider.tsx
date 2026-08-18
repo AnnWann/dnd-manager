@@ -11,6 +11,9 @@ import {
 import { SessionSocket, type SessionRuntimeStatus } from "./sessionSocket"
 import type {
   SessionAuthoritativeOperation,
+  SessionConditionOperation,
+  SessionConditionSeed,
+  SessionConditionsState,
   SessionHpLogRecord,
   SessionHpSeed,
   SessionHpState,
@@ -26,9 +29,12 @@ export type SessionRuntimeContextValue = {
   presence: SessionRuntimePresenceUser[]
   lastHeartbeatAckAt: number | null
   hpByCharacterId: Readonly<Record<string, SessionHpState>>
+  conditionsByCharacterId: Readonly<Record<string, SessionConditionsState>>
   hpLog: SessionHpLogRecord[]
   initializeHp: (characters: SessionHpSeed[]) => boolean
+  initializeConditions: (characters: SessionConditionSeed[]) => boolean
   dispatchHpOperation: (operation: SessionAuthoritativeOperation) => boolean
+  dispatchConditionOperation: (operation: SessionConditionOperation) => boolean
   undoLog: (logId: string) => boolean
 }
 
@@ -81,6 +87,7 @@ function SessionRuntimeProviderInner({
   const [presence, setPresence] = useState<SessionRuntimePresenceUser[]>([])
   const [lastHeartbeatAckAt, setLastHeartbeatAckAt] = useState<number | null>(null)
   const [hpByCharacterId, setHpByCharacterId] = useState<Record<string, SessionHpState>>({})
+  const [conditionsByCharacterId, setConditionsByCharacterId] = useState<Record<string, SessionConditionsState>>({})
   const [hpLog, setHpLog] = useState<SessionHpLogRecord[]>([])
   const socketRef = useRef<SessionSocket | null>(null)
   const clientId = useMemo(() => getOrCreateClientId(sessionId), [sessionId])
@@ -90,6 +97,7 @@ function SessionRuntimeProviderInner({
     setPresence([])
     setLastHeartbeatAckAt(null)
     setHpByCharacterId({})
+    setConditionsByCharacterId({})
     setHpLog([])
 
     if (!baseUrl) {
@@ -131,6 +139,21 @@ function SessionRuntimeProviderInner({
           return
         }
 
+        if (message.type === "session.conditions.snapshot") {
+          setConditionsByCharacterId(Object.fromEntries(
+            message.characters.map((character) => [character.characterId, character]),
+          ))
+          return
+        }
+
+        if (message.type === "session.conditions.updated") {
+          setConditionsByCharacterId((current) => ({
+            ...current,
+            [message.character.characterId]: message.character,
+          }))
+          return
+        }
+
         if (message.type === "session.hp.log") {
           setHpLog(message.records)
           return
@@ -154,8 +177,16 @@ function SessionRuntimeProviderInner({
     socketRef.current?.send({ type: "session.hp.initialize", characters }) ?? false,
   [])
 
+  const initializeConditions = useCallback((characters: SessionConditionSeed[]) =>
+    socketRef.current?.send({ type: "session.conditions.initialize", characters }) ?? false,
+  [])
+
   const dispatchHpOperation = useCallback((operation: SessionAuthoritativeOperation) =>
     socketRef.current?.send({ type: "session.hp.operation", operation }) ?? false,
+  [])
+
+  const dispatchConditionOperation = useCallback((operation: SessionConditionOperation) =>
+    socketRef.current?.send({ type: "session.conditions.operation", operation }) ?? false,
   [])
 
   const undoLog = useCallback((logId: string) =>
@@ -170,15 +201,21 @@ function SessionRuntimeProviderInner({
     presence,
     lastHeartbeatAckAt,
     hpByCharacterId,
+    conditionsByCharacterId,
     hpLog,
     initializeHp,
+    initializeConditions,
     dispatchHpOperation,
+    dispatchConditionOperation,
     undoLog,
   }), [
     clientId,
+    conditionsByCharacterId,
+    dispatchConditionOperation,
     dispatchHpOperation,
     hpByCharacterId,
     hpLog,
+    initializeConditions,
     initializeHp,
     lastHeartbeatAckAt,
     presence,
