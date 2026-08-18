@@ -1,5 +1,6 @@
 import { Check } from "lucide-react"
 
+import { useCharacterContext } from "../../../contexts/characterContext"
 import { cn } from "../../../lib/cn"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatSigned } from "../../../lib/formatSigned"
@@ -32,16 +33,22 @@ export function SavingThrows({
   character,
   updateCharacter,
 }: Props) {
-  function toggleProficiency(attribute: Attribute) {
-    updateCharacter(character.get("id"), (current) => {
-      const proficient =
-        current.isSavingThrowProficient(attribute)
+  const { dispatchSavingThrowOperation } = useCharacterContext()
+  const characterId = character.get("id")
 
-      return current.setSavingThrowProficiency(
-        attribute,
-        !proficient,
-      )
-    })
+  function toggleProficiency(attribute: Attribute) {
+    const proficient = character.isSavingThrowProficient(attribute)
+
+    if (dispatchSavingThrowOperation({
+      type: "character.savingThrow.set",
+      characterId,
+      attribute,
+      proficient: !proficient,
+    })) return
+
+    updateCharacter(characterId, (current) =>
+      current.setSavingThrowProficiency(attribute, !proficient),
+    )
   }
 
   return (
@@ -58,25 +65,16 @@ export function SavingThrows({
 
       <div className="grid grid-cols-2 gap-2">
         {SAVING_THROWS.map(({ attribute, label }) => {
-          const proficient =
-            character.isSavingThrowProficient(attribute)
-
-          const bonus =
-            character.getSavingThrowBonus(attribute)
+          const proficient = character.isSavingThrowProficient(attribute)
+          const bonus = character.getSavingThrowBonus(attribute)
 
           return (
             <button
               key={attribute}
               type="button"
               aria-pressed={proficient}
-              title={`${label}: ${
-                proficient
-                  ? "proficiente"
-                  : "não proficiente"
-              }`}
-              onClick={() =>
-                toggleProficiency(attribute)
-              }
+              title={`${label}: ${proficient ? "proficiente" : "não proficiente"}`}
+              onClick={() => toggleProficiency(attribute)}
               className={cn(
                 "grid grid-cols-[22px_1fr_auto] items-center gap-2",
                 "rounded-lg border px-2.5 py-2 text-left",
@@ -123,9 +121,7 @@ export function SavingThrows({
       </div>
 
       <div className="mt-3 border-t border-border pt-2 text-[10px] text-textMuted">
-        Modificador do atributo
-        {" + "}
-        proficiência quando marcada.
+        Modificador do atributo{" + "}proficiência quando marcada.
       </div>
     </section>
   )
