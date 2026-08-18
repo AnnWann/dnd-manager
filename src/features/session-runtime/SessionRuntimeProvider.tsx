@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react"
 import { SessionSocket, type SessionRuntimeStatus } from "./sessionSocket"
+import { toSheetOperationMessage } from "./sheetRoutes"
 import type {
   SessionAuthoritativeOperation,
   SessionConditionOperation,
@@ -17,6 +18,7 @@ import type {
   SessionHpLogRecord,
   SessionHpSeed,
   SessionHpState,
+  SessionLoggedOperation,
   SessionRuntimePresenceUser,
   SessionRuntimeRole,
 } from "./sessionProtocol"
@@ -33,6 +35,7 @@ export type SessionRuntimeContextValue = {
   hpLog: SessionHpLogRecord[]
   initializeHp: (characters: SessionHpSeed[]) => boolean
   initializeConditions: (characters: SessionConditionSeed[]) => boolean
+  dispatchSheetOperation: (operation: SessionLoggedOperation) => boolean
   dispatchHpOperation: (operation: SessionAuthoritativeOperation) => boolean
   dispatchConditionOperation: (operation: SessionConditionOperation) => boolean
   undoLog: (logId: string) => boolean
@@ -118,47 +121,30 @@ function SessionRuntimeProviderInner({
           setPresence(message.users)
           return
         }
-
         if (message.type === "session.heartbeat.ack") {
           setLastHeartbeatAckAt(Date.now())
           return
         }
-
         if (message.type === "session.hp.snapshot") {
-          setHpByCharacterId(Object.fromEntries(
-            message.characters.map((character) => [character.characterId, character]),
-          ))
+          setHpByCharacterId(Object.fromEntries(message.characters.map((character) => [character.characterId, character])))
           return
         }
-
         if (message.type === "session.hp.updated") {
-          setHpByCharacterId((current) => ({
-            ...current,
-            [message.character.characterId]: message.character,
-          }))
+          setHpByCharacterId((current) => ({ ...current, [message.character.characterId]: message.character }))
           return
         }
-
         if (message.type === "session.conditions.snapshot") {
-          setConditionsByCharacterId(Object.fromEntries(
-            message.characters.map((character) => [character.characterId, character]),
-          ))
+          setConditionsByCharacterId(Object.fromEntries(message.characters.map((character) => [character.characterId, character])))
           return
         }
-
         if (message.type === "session.conditions.updated") {
-          setConditionsByCharacterId((current) => ({
-            ...current,
-            [message.character.characterId]: message.character,
-          }))
+          setConditionsByCharacterId((current) => ({ ...current, [message.character.characterId]: message.character }))
           return
         }
-
         if (message.type === "session.hp.log") {
           setHpLog(message.records)
           return
         }
-
         if (message.type === "session.error") {
           console.error(`[session-runtime] ${message.code}: ${message.message}`)
         }
@@ -181,13 +167,18 @@ function SessionRuntimeProviderInner({
     socketRef.current?.send({ type: "session.conditions.initialize", characters }) ?? false,
   [])
 
-  const dispatchHpOperation = useCallback((operation: SessionAuthoritativeOperation) =>
-    socketRef.current?.send({ type: "session.hp.operation", operation }) ?? false,
+  const dispatchSheetOperation = useCallback((operation: SessionLoggedOperation) =>
+    socketRef.current?.send(toSheetOperationMessage(operation)) ?? false,
   [])
 
+  // Compatibility aliases while call sites are migrated domain-by-domain.
+  const dispatchHpOperation = useCallback((operation: SessionAuthoritativeOperation) =>
+    dispatchSheetOperation(operation),
+  [dispatchSheetOperation])
+
   const dispatchConditionOperation = useCallback((operation: SessionConditionOperation) =>
-    socketRef.current?.send({ type: "session.conditions.operation", operation }) ?? false,
-  [])
+    dispatchSheetOperation(operation),
+  [dispatchSheetOperation])
 
   const undoLog = useCallback((logId: string) =>
     socketRef.current?.send({ type: "session.log.undo", logId }) ?? false,
@@ -205,6 +196,7 @@ function SessionRuntimeProviderInner({
     hpLog,
     initializeHp,
     initializeConditions,
+    dispatchSheetOperation,
     dispatchHpOperation,
     dispatchConditionOperation,
     undoLog,
@@ -213,6 +205,7 @@ function SessionRuntimeProviderInner({
     conditionsByCharacterId,
     dispatchConditionOperation,
     dispatchHpOperation,
+    dispatchSheetOperation,
     hpByCharacterId,
     hpLog,
     initializeConditions,
