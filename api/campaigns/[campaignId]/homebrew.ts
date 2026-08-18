@@ -18,6 +18,18 @@ type RouteContext = {
   }>
 }
 
+type RawHomebrewAsset = {
+  id: string
+  type: "SYSTEM" | "CLASS" | "OTHER"
+  sourceId: string
+  name: string
+  data: unknown
+  addedById: string
+  addedByName: string
+  createdAt: Date
+  updatedAt: Date
+}
+
 export async function GET(
   request: Request,
   context: RouteContext,
@@ -67,58 +79,76 @@ export async function GET(
       campaign.ownerId === session.user.id ||
       campaign.members.some((member) => member.role === CampaignRole.MASTER)
 
-    const links = await prisma.campaignHomebrewSpell.findMany({
-      where: {
-        campaignId,
-        spell: {
-          status: HomebrewSpellStatus.ACTIVE,
-        },
-        ...(isMaster
-          ? {}
-          : {
-              OR: [
-                { status: CampaignSpellApprovalStatus.APPROVED },
-                { submittedById: session.user.id },
-              ],
-            }),
-      },
-      select: {
-        id: true,
-        status: true,
-        note: true,
-        submittedAt: true,
-        reviewedAt: true,
-        submittedBy: {
-          select: {
-            id: true,
-            name: true,
+    const [links, assets] = await Promise.all([
+      prisma.campaignHomebrewSpell.findMany({
+        where: {
+          campaignId,
+          spell: {
+            status: HomebrewSpellStatus.ACTIVE,
           },
+          ...(isMaster
+            ? {}
+            : {
+                OR: [
+                  { status: CampaignSpellApprovalStatus.APPROVED },
+                  { submittedById: session.user.id },
+                ],
+              }),
         },
-        reviewedBy: {
-          select: {
-            id: true,
-            name: true,
+        select: {
+          id: true,
+          status: true,
+          note: true,
+          submittedAt: true,
+          reviewedAt: true,
+          submittedBy: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
-        },
-        spell: {
-          select: {
-            id: true,
-            index: true,
-            name: true,
-            data: true,
-            owner: {
-              select: {
-                id: true,
-                name: true,
+          reviewedBy: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          spell: {
+            select: {
+              id: true,
+              index: true,
+              name: true,
+              data: true,
+              owner: {
+                select: {
+                  id: true,
+                  name: true,
+                },
               },
             },
           },
         },
-      },
-      orderBy: {
-        submittedAt: "desc",
-      },
-    })
+        orderBy: {
+          submittedAt: "desc",
+        },
+      }),
+      prisma.$queryRaw<RawHomebrewAsset[]>`
+        SELECT
+          asset."id",
+          asset."type",
+          asset."sourceId",
+          asset."name",
+          asset."data",
+          asset."addedById",
+          added_by."name" AS "addedByName",
+          asset."createdAt",
+          asset."updatedAt"
+        FROM "campaign_homebrew_asset" AS asset
+        JOIN "user" AS added_by ON added_by."id" = asset."addedById"
+        WHERE asset."campaignId" = ${campaignId}
+        ORDER BY asset."updatedAt" DESC
+      `,
+    ])
 
     return jsonResponse({
       campaign: {
@@ -139,6 +169,19 @@ export async function GET(
         name: link.spell.name,
         data: link.spell.data,
         author: link.spell.owner,
+      })),
+      assets: assets.map((asset) => ({
+        id: asset.id,
+        type: asset.type,
+        sourceId: asset.sourceId,
+        name: asset.name,
+        data: asset.data,
+        addedBy: {
+          id: asset.addedById,
+          name: asset.addedByName,
+        },
+        createdAt: asset.createdAt,
+        updatedAt: asset.updatedAt,
       })),
     })
   } catch (error) {
