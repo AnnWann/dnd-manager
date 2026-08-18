@@ -1,5 +1,5 @@
 import { Check, FileQuestion, ShieldQuestion, X } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { Navigate, useParams } from "react-router-dom"
 
 import {
@@ -9,19 +9,30 @@ import {
   type SessionHomebrewSpell,
 } from "../../api/session-homebrew"
 import {
+  getSessionContentRequests,
+  reviewSessionContentRequest,
+  type SessionContentRequest,
+  type SessionContentRequestType,
+} from "../../api/session-requests"
+import {
   getSessionCreationSettings,
   updateSessionMember,
   type SessionCreationSettings,
   type SessionSettingsMember,
 } from "../../api/session-settings"
 import { Button } from "../../components/ui/Button"
+import { useCustomSystemsContext } from "../../contexts/customSystemsContext"
+import type { CustomSystemDefinition } from "../../models/customSystems/CustomSystemDefinition"
 import type { Spell } from "../../models/magic/spells/Spell"
 
 export function SessionCreationRequestsView() {
   const { campaignId } = useParams<{ campaignId?: string }>()
+  const { saveDefinitions } = useCustomSystemsContext()
   const [settings, setSettings] = useState<SessionCreationSettings | null>(null)
   const [homebrew, setHomebrew] = useState<SessionHomebrewCatalog | null>(null)
+  const [contentRequests, setContentRequests] = useState<SessionContentRequest[]>([])
   const [viewingSpell, setViewingSpell] = useState<SessionHomebrewSpell | null>(null)
+  const [viewingContent, setViewingContent] = useState<SessionContentRequest | null>(null)
   const [workingKey, setWorkingKey] = useState("")
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState("")
@@ -34,7 +45,21 @@ export function SessionCreationRequestsView() {
     () => homebrew?.spells.filter((spell) => spell.status === "PENDING") ?? [],
     [homebrew],
   )
-  const totalPending = pendingMembers.length + pendingSpells.length
+  const requestsByType = useMemo(() => {
+    const result = new Map<SessionContentRequestType, SessionContentRequest[]>()
+    for (const entry of contentRequests) {
+      const current = result.get(entry.type) ?? []
+      current.push(entry)
+      result.set(entry.type, current)
+    }
+    return result
+  }, [contentRequests])
+  const pendingCharacters = requestsByType.get("CHARACTER") ?? []
+  const pendingSystems = requestsByType.get("SYSTEM") ?? []
+  const pendingClasses = requestsByType.get("CLASS") ?? []
+  const pendingOther = requestsByType.get("OTHER") ?? []
+  const totalPending =
+    pendingMembers.length + pendingSpells.length + contentRequests.length
 
   useEffect(() => {
     if (!campaignId) return
@@ -48,12 +73,14 @@ export function SessionCreationRequestsView() {
     setLoading(true)
     setErrorMessage("")
     try {
-      const [nextSettings, nextHomebrew] = await Promise.all([
+      const [nextSettings, nextHomebrew, nextContentRequests] = await Promise.all([
         getSessionCreationSettings(campaignId),
         getSessionHomebrew(campaignId),
+        getSessionContentRequests(campaignId, "PENDING"),
       ])
       setSettings(nextSettings)
       setHomebrew(nextHomebrew)
+      setContentRequests(nextContentRequests)
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -111,6 +138,34 @@ export function SessionCreationRequestsView() {
     }
   }
 
+  async function reviewContent(
+    request: SessionContentRequest,
+    status: "APPROVED" | "REJECTED",
+  ) {
+    if (!campaignId || workingKey) return
+    setWorkingKey(`content:${request.id}`)
+    setErrorMessage("")
+    try {
+      await reviewSessionContentRequest(campaignId, request.id, status)
+
+      if (status === "APPROVED" && request.type === "SYSTEM") {
+        const definition = toCustomSystemDefinition(request.data)
+        if (definition) saveDefinitions([definition])
+      }
+
+      if (viewingContent?.id === request.id) setViewingContent(null)
+      await reload()
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível revisar a solicitação.",
+      )
+    } finally {
+      setWorkingKey("")
+    }
+  }
+
   return (
     <div className="mx-auto grid w-full max-w-7xl gap-5">
       <header className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm sm:p-5">
@@ -122,7 +177,7 @@ export function SessionCreationRequestsView() {
             <div>
               <h1 className="text-xl font-semibold text-textH">Solicitações</h1>
               <p className="mt-1 text-sm text-textMuted">
-                Caixa central de aprovação para entradas e conteúdo enviado à sessão.
+                Caixa central de aprovação para usuários, personagens e conteúdo homebrew enviado à sessão.
               </p>
             </div>
           </div>
@@ -133,10 +188,13 @@ export function SessionCreationRequestsView() {
 
         <div className="mt-4 flex flex-wrap gap-2 text-xs">
           <RequestCount label="Usuários" count={pendingMembers.length} />
-          <RequestCount label="Personagens" count={0} />
+          <RequestCount label="Personagens" count={pendingCharacters.length} />
           <RequestCount label="Magias" count={pendingSpells.length} />
-          <RequestCount label="Sistemas" count={0} />
-          <RequestCount label="Classes" count={0} />
+          <RequestCount label="Sistemas" count={pendingSystems.length} />
+          <RequestCount label="Classes" count={pendingClasses.length} />
+          {pendingOther.length ? (
+            <RequestCount label="Outros" count={pendingOther.length} />
+          ) : null}
         </div>
       </header>
 
@@ -170,30 +228,28 @@ export function SessionCreationRequestsView() {
                     </div>
                   ) : null}
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    loading={workingKey === `member:${member.id}`}
-                    onClick={() => void reviewMember(member, "ACTIVE")}
-                  >
-                    <Check className="h-4 w-4" /> Aprovar
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    disabled={Boolean(workingKey)}
-                    onClick={() => void reviewMember(member, "REMOVED")}
-                  >
-                    <X className="h-4 w-4" /> Rejeitar
-                  </Button>
-                </div>
+                <RequestButtons
+                  working={workingKey === `member:${member.id}`}
+                  onApprove={() => void reviewMember(member, "ACTIVE")}
+                  onReject={() => void reviewMember(member, "REMOVED")}
+                />
               </article>
             ))}
           </RequestSection>
 
+          <ContentRequestSection
+            title="Personagens"
+            description="Personagens enviados por jogadores só entram na sessão depois da aprovação do mestre."
+            empty="Nenhum personagem aguardando aprovação."
+            requests={pendingCharacters}
+            workingKey={workingKey}
+            onView={setViewingContent}
+            onReview={reviewContent}
+          />
+
           <RequestSection
             title="Magias homebrew"
-            description="Magias enviadas por jogadores precisam de aprovação antes de entrarem no acervo homebrew da sessão."
+            description="Magias enviadas por jogadores precisam de aprovação antes de entrarem no acervo Homebrew da sessão."
             empty="Nenhuma magia homebrew aguardando aprovação."
           >
             {pendingSpells.map((spell) => (
@@ -205,9 +261,7 @@ export function SessionCreationRequestsView() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-medium text-textH">{spell.name}</h3>
-                      <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
-                        Magia homebrew
-                      </span>
+                      <RequestTypeBadge label="Magia homebrew" />
                     </div>
                     <div className="mt-1 text-xs text-textMuted">
                       Autor: {spell.author.name} · Enviado por {spell.submittedBy.name}
@@ -225,26 +279,48 @@ export function SessionCreationRequestsView() {
                     >
                       <FileQuestion className="h-4 w-4" /> Visualizar
                     </Button>
-                    <Button
-                      size="sm"
-                      loading={workingKey === `spell:${spell.id}`}
-                      onClick={() => void reviewSpell(spell, "APPROVED")}
-                    >
-                      <Check className="h-4 w-4" /> Aprovar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      disabled={Boolean(workingKey)}
-                      onClick={() => void reviewSpell(spell, "REJECTED")}
-                    >
-                      <X className="h-4 w-4" /> Rejeitar
-                    </Button>
+                    <RequestButtons
+                      working={workingKey === `spell:${spell.id}`}
+                      onApprove={() => void reviewSpell(spell, "APPROVED")}
+                      onReject={() => void reviewSpell(spell, "REJECTED")}
+                    />
                   </div>
                 </div>
               </article>
             ))}
           </RequestSection>
+
+          <ContentRequestSection
+            title="Sistemas homebrew"
+            description="Sistemas aprovados entram no acervo Homebrew e são instalados na sessão."
+            empty="Nenhum sistema homebrew aguardando aprovação."
+            requests={pendingSystems}
+            workingKey={workingKey}
+            onView={setViewingContent}
+            onReview={reviewContent}
+          />
+
+          <ContentRequestSection
+            title="Classes homebrew"
+            description="Classes aprovadas entram no acervo Homebrew central da sessão."
+            empty="Nenhuma classe homebrew aguardando aprovação."
+            requests={pendingClasses}
+            workingKey={workingKey}
+            onView={setViewingContent}
+            onReview={reviewContent}
+          />
+
+          {pendingOther.length ? (
+            <ContentRequestSection
+              title="Outros conteúdos"
+              description="Outros tipos de conteúdo homebrew enviados para esta sessão."
+              empty=""
+              requests={pendingOther}
+              workingKey={workingKey}
+              onView={setViewingContent}
+              onReview={reviewContent}
+            />
+          ) : null}
         </>
       )}
 
@@ -257,7 +333,102 @@ export function SessionCreationRequestsView() {
           onReject={() => void reviewSpell(viewingSpell, "REJECTED")}
         />
       ) : null}
+
+      {viewingContent ? (
+        <ContentRequestDetails
+          request={viewingContent}
+          working={workingKey === `content:${viewingContent.id}`}
+          onClose={() => setViewingContent(null)}
+          onApprove={() => void reviewContent(viewingContent, "APPROVED")}
+          onReject={() => void reviewContent(viewingContent, "REJECTED")}
+        />
+      ) : null}
     </div>
+  )
+}
+
+function ContentRequestSection({
+  title,
+  description,
+  empty,
+  requests,
+  workingKey,
+  onView,
+  onReview,
+}: {
+  title: string
+  description: string
+  empty: string
+  requests: SessionContentRequest[]
+  workingKey: string
+  onView: (request: SessionContentRequest) => void
+  onReview: (
+    request: SessionContentRequest,
+    status: "APPROVED" | "REJECTED",
+  ) => Promise<void>
+}) {
+  return (
+    <RequestSection title={title} description={description} empty={empty}>
+      {requests.map((request) => (
+        <article
+          key={request.id}
+          className="rounded-xl border border-border bg-bg-subtle p-4"
+        >
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-medium text-textH">{request.title}</h3>
+                <RequestTypeBadge label={requestTypeLabel(request.type)} />
+              </div>
+              <div className="mt-1 text-xs text-textMuted">
+                Enviado por {request.submittedBy.name}
+              </div>
+            </div>
+
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => onView(request)}
+              >
+                <FileQuestion className="h-4 w-4" /> Visualizar
+              </Button>
+              <RequestButtons
+                working={workingKey === `content:${request.id}`}
+                onApprove={() => void onReview(request, "APPROVED")}
+                onReject={() => void onReview(request, "REJECTED")}
+              />
+            </div>
+          </div>
+        </article>
+      ))}
+    </RequestSection>
+  )
+}
+
+function RequestButtons({
+  working,
+  onApprove,
+  onReject,
+}: {
+  working: boolean
+  onApprove: () => void
+  onReject: () => void
+}) {
+  return (
+    <>
+      <Button size="sm" loading={working} onClick={onApprove}>
+        <Check className="h-4 w-4" /> Aprovar
+      </Button>
+      <Button
+        size="sm"
+        variant="danger"
+        disabled={working}
+        onClick={onReject}
+      >
+        <X className="h-4 w-4" /> Rejeitar
+      </Button>
+    </>
   )
 }
 
@@ -270,7 +441,7 @@ function RequestSection({
   title: string
   description: string
   empty: string
-  children: React.ReactNode
+  children: ReactNode
 }) {
   const hasChildren = Array.isArray(children) ? children.length > 0 : Boolean(children)
   return (
@@ -298,6 +469,14 @@ function RequestCount({ label, count }: { label: string; count: number }) {
   )
 }
 
+function RequestTypeBadge({ label }: { label: string }) {
+  return (
+    <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
+      {label}
+    </span>
+  )
+}
+
 function SpellRequestDetails({
   request,
   working,
@@ -313,6 +492,105 @@ function SpellRequestDetails({
 }) {
   const spell: Spell = request.data
   return (
+    <RequestDetailsFrame
+      title={request.name}
+      subtitle={`${spell.slotLevel === 0 ? "Truque" : `${spell.slotLevel}º nível`} · ${spell.school}`}
+      working={working}
+      approveLabel="Aprovar e adicionar ao Homebrew"
+      onClose={onClose}
+      onApprove={onApprove}
+      onReject={onReject}
+    >
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Info label="Autor" value={request.author.name} />
+        <Info label="Enviado por" value={request.submittedBy.name} />
+        <Info label="Concentração" value={spell.concentration ? "Sim" : "Não"} />
+        <Info label="Ritual" value={spell.ritual ? "Sim" : "Não"} />
+      </div>
+      <section>
+        <h3 className="font-semibold text-textH">Descrição</h3>
+        <p className="mt-2 whitespace-pre-wrap leading-6">
+          {spell.description?.trim() || "Sem descrição."}
+        </p>
+      </section>
+      <section>
+        <h3 className="font-semibold text-textH">Em níveis superiores</h3>
+        <p className="mt-2 whitespace-pre-wrap leading-6">
+          {spell.higherLevelText?.trim() || "Sem efeito adicional."}
+        </p>
+      </section>
+    </RequestDetailsFrame>
+  )
+}
+
+function ContentRequestDetails({
+  request,
+  working,
+  onClose,
+  onApprove,
+  onReject,
+}: {
+  request: SessionContentRequest
+  working: boolean
+  onClose: () => void
+  onApprove: () => void
+  onReject: () => void
+}) {
+  const characterRequest = request.type === "CHARACTER"
+  return (
+    <RequestDetailsFrame
+      title={request.title}
+      subtitle={`${requestTypeLabel(request.type)} · enviado por ${request.submittedBy.name}`}
+      working={working}
+      approveLabel={
+        characterRequest
+          ? "Aprovar e adicionar à sessão"
+          : "Aprovar e adicionar ao Homebrew"
+      }
+      onClose={onClose}
+      onApprove={onApprove}
+      onReject={onReject}
+    >
+      {characterRequest ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Info label="Personagem" value={request.title} />
+          <Info
+            label="Visibilidade"
+            value={String(request.data.visibility ?? "PARTY")}
+          />
+        </div>
+      ) : (
+        <section>
+          <h3 className="font-semibold text-textH">Dados enviados</h3>
+          <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-border bg-bg-subtle p-3 text-xs leading-5 text-text">
+            {JSON.stringify(request.data, null, 2)}
+          </pre>
+        </section>
+      )}
+    </RequestDetailsFrame>
+  )
+}
+
+function RequestDetailsFrame({
+  title,
+  subtitle,
+  working,
+  approveLabel,
+  onClose,
+  onApprove,
+  onReject,
+  children,
+}: {
+  title: string
+  subtitle: string
+  working: boolean
+  approveLabel: string
+  onClose: () => void
+  onApprove: () => void
+  onReject: () => void
+  children: ReactNode
+}) {
+  return (
     <div
       className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/80 p-4"
       role="dialog"
@@ -321,41 +599,20 @@ function SpellRequestDetails({
       <div className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-border bg-bg shadow-xl">
         <header className="sticky top-0 flex items-start justify-between gap-3 border-b border-border bg-bg p-4">
           <div>
-            <h2 className="text-lg font-semibold text-textH">{request.name}</h2>
-            <p className="mt-1 text-xs text-textMuted">
-              {spell.slotLevel === 0 ? "Truque" : `${spell.slotLevel}º nível`} · {spell.school}
-            </p>
+            <h2 className="text-lg font-semibold text-textH">{title}</h2>
+            <p className="mt-1 text-xs text-textMuted">{subtitle}</p>
           </div>
           <Button size="sm" variant="secondary" onClick={onClose}>Fechar</Button>
         </header>
 
-        <div className="grid gap-4 p-4 text-sm text-text">
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Info label="Autor" value={request.author.name} />
-            <Info label="Enviado por" value={request.submittedBy.name} />
-            <Info label="Concentração" value={spell.concentration ? "Sim" : "Não"} />
-            <Info label="Ritual" value={spell.ritual ? "Sim" : "Não"} />
-          </div>
-          <section>
-            <h3 className="font-semibold text-textH">Descrição</h3>
-            <p className="mt-2 whitespace-pre-wrap leading-6">
-              {spell.description?.trim() || "Sem descrição."}
-            </p>
-          </section>
-          <section>
-            <h3 className="font-semibold text-textH">Em níveis superiores</h3>
-            <p className="mt-2 whitespace-pre-wrap leading-6">
-              {spell.higherLevelText?.trim() || "Sem efeito adicional."}
-            </p>
-          </section>
-        </div>
+        <div className="grid gap-4 p-4 text-sm text-text">{children}</div>
 
         <footer className="sticky bottom-0 flex justify-end gap-2 border-t border-border bg-bg p-4">
           <Button variant="danger" disabled={working} onClick={onReject}>
             Rejeitar
           </Button>
           <Button loading={working} onClick={onApprove}>
-            Aprovar e adicionar ao homebrew
+            {approveLabel}
           </Button>
         </footer>
       </div>
@@ -372,4 +629,18 @@ function Info({ label, value }: { label: string; value: string }) {
       <div className="mt-1 text-sm text-textH">{value}</div>
     </div>
   )
+}
+
+function requestTypeLabel(type: SessionContentRequestType): string {
+  if (type === "CHARACTER") return "Personagem"
+  if (type === "SYSTEM") return "Sistema homebrew"
+  if (type === "CLASS") return "Classe homebrew"
+  return "Homebrew"
+}
+
+function toCustomSystemDefinition(
+  value: Record<string, unknown>,
+): CustomSystemDefinition | null {
+  if (typeof value.id !== "string" || typeof value.name !== "string") return null
+  return value as unknown as CustomSystemDefinition
 }
