@@ -1,6 +1,6 @@
-import { getMyCampaigns } from "./user-campaigns"
-import { apiClient } from "./api-client"
 import { LOCAL_AUTH_BYPASS } from "../auth/local-auth"
+import { apiClient } from "./api-client"
+import { getMyCampaigns, reviewCampaignMember } from "./user-campaigns"
 
 export type SessionSettingsMember = {
   id: string
@@ -70,8 +70,7 @@ export async function updateSessionMember(
   },
 ): Promise<void> {
   if (LOCAL_AUTH_BYPASS) {
-    // Local auth only models pending membership requests. Keeping this a no-op
-    // for role changes avoids fabricating relational users that do not exist.
+    await reviewCampaignMember(campaignId, userId, input.status)
     return
   }
 
