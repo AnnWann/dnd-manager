@@ -1,18 +1,36 @@
-import { Copy, PackagePlus, Plus, Search, Trash2 } from "lucide-react"
+import {
+  Copy,
+  Eye,
+  EyeOff,
+  PackagePlus,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
-import { Navigate } from "react-router-dom"
+import { Navigate, useParams } from "react-router-dom"
 
+import {
+  deleteSessionItemCompendiumEntry,
+  getSessionItemCompendium,
+  upsertSessionItemCompendiumEntry,
+  type SessionItemCompendiumEntry,
+  type SessionItemCompendiumVisibility,
+} from "../api/session-item-compendium"
 import { Button } from "../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../components/ui/Card"
 import { Input } from "../components/ui/Input"
 import { useCharacterContext } from "../contexts/characterContext"
 import { useSyncContext } from "../contexts/syncContext"
-import { cloneCompendiumItem } from "../features/items/itemCompendium"
 import { ItemCreationDialog } from "../features/items/ItemCreationDialog"
-import { STANDARD_ITEM_COMPENDIUM } from "../features/items/standardItemCompendium"
+import {
+  buildSessionCompendiumItems,
+  instantiateSessionCompendiumItem,
+  type SessionCompendiumItem,
+} from "../features/items/sessionItemCompendium"
 import type { ItemKind, Itemmable } from "../models/items/item"
 
-const CUSTOM_TEMPLATES_STORAGE_KEY = "dndmm.itemCompendium.custom.v1"
+const LEGACY_CUSTOM_TEMPLATES_STORAGE_KEY = "dndmm.itemCompendium.custom.v1"
 const ITEM_KINDS = new Set<ItemKind>([
   "common",
   "equipment",
@@ -30,36 +48,78 @@ const ITEM_KINDS = new Set<ItemKind>([
 ])
 
 export function ItemsCompendiumView() {
+  const { campaignId } = useParams<{ campaignId?: string }>()
   const { userRole } = useSyncContext()
   const { addGroundItem } = useCharacterContext()
   const [query, setQuery] = useState("")
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
-  const [customTemplates, setCustomTemplates] = useState<Itemmable[]>(
-    readCustomTemplates,
-  )
+  const [entries, setEntries] = useState<SessionItemCompendiumEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [workingId, setWorkingId] = useState("")
+  const [errorMessage, setErrorMessage] = useState("")
 
   useEffect(() => {
-    window.localStorage.setItem(
-      CUSTOM_TEMPLATES_STORAGE_KEY,
-      JSON.stringify(customTemplates),
-    )
-  }, [customTemplates])
+    if (!campaignId || userRole !== "master") return
+    let cancelled = false
+
+    async function load() {
+      setLoading(true)
+      setErrorMessage("")
+      try {
+        const catalog = await getSessionItemCompendium(campaignId!)
+        let nextEntries = catalog.entries
+
+        const legacyTemplates = readLegacyCustomTemplates()
+        if (legacyTemplates.length) {
+          const knownIds = new Set(nextEntries.map((entry) => entry.templateId))
+          const missing = legacyTemplates.filter((item) => !knownIds.has(item.id))
+
+          if (missing.length) {
+            const imported = await Promise.all(
+              missing.map((item) =>
+                upsertSessionItemCompendiumEntry(campaignId!, {
+                  item,
+                  custom: true,
+                  visibility: "PUBLIC",
+                }),
+              ),
+            )
+            nextEntries = mergeEntries(nextEntries, imported)
+          }
+
+          window.localStorage.removeItem(LEGACY_CUSTOM_TEMPLATES_STORAGE_KEY)
+        }
+
+        if (!cancelled) setEntries(nextEntries)
+      } catch (error) {
+        if (!cancelled) {
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Não foi possível carregar o compêndio de itens.",
+          )
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [campaignId, userRole])
 
   const compendiumItems = useMemo(
-    () => [...STANDARD_ITEM_COMPENDIUM, ...customTemplates],
-    [customTemplates],
-  )
-
-  const customTemplateIds = useMemo(
-    () => new Set(customTemplates.map((item) => item.id)),
-    [customTemplates],
+    () => buildSessionCompendiumItems(entries),
+    [entries],
   )
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("pt-BR")
     if (!normalized) return compendiumItems
-    return compendiumItems.filter((item) =>
+    return compendiumItems.filter(({ item }) =>
       `${item.name} ${item.desc} ${item.kind} ${item.category ?? ""}`
         .toLocaleLowerCase("pt-BR")
         .includes(normalized),
@@ -70,24 +130,82 @@ export function ItemsCompendiumView() {
     return <Navigate to="/character" replace />
   }
 
-  async function copyItem(itemId: string) {
-    const item = compendiumItems.find((entry) => entry.id === itemId)
-    if (!item) return
+  if (!campaignId) {
+    return <Navigate to="/not-found" replace />
+  }
+
+  async function copyItem(item: Itemmable) {
     await navigator.clipboard.writeText(JSON.stringify(item, null, 2))
-    setCopiedId(itemId)
+    setCopiedId(item.id)
     window.setTimeout(() => setCopiedId(null), 1500)
   }
 
-  function addCustomItem(item: Itemmable) {
+  async function addCustomItem(item: Itemmable) {
     const template = normalizeTemplate(item)
-    setCustomTemplates((current) => [...current, template])
-    setCreating(false)
+    setWorkingId(template.id)
+    setErrorMessage("")
+    try {
+      const saved = await upsertSessionItemCompendiumEntry(campaignId!, {
+        item: template,
+        custom: true,
+        visibility: "PUBLIC",
+      })
+      setEntries((current) => mergeEntries(current, [saved]))
+      setCreating(false)
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível adicionar o item ao compêndio.",
+      )
+    } finally {
+      setWorkingId("")
+    }
   }
 
-  function removeTemplate(itemId: string) {
-    setCustomTemplates((current) =>
-      current.filter((item) => item.id !== itemId),
-    )
+  async function changeVisibility(
+    entry: SessionCompendiumItem,
+    visibility: SessionItemCompendiumVisibility,
+  ) {
+    if (workingId) return
+    setWorkingId(entry.item.id)
+    setErrorMessage("")
+    try {
+      const saved = await upsertSessionItemCompendiumEntry(campaignId!, {
+        item: entry.item,
+        custom: entry.custom,
+        visibility,
+      })
+      setEntries((current) => mergeEntries(current, [saved]))
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível alterar a visibilidade do item.",
+      )
+    } finally {
+      setWorkingId("")
+    }
+  }
+
+  async function removeTemplate(itemId: string) {
+    if (workingId) return
+    setWorkingId(itemId)
+    setErrorMessage("")
+    try {
+      await deleteSessionItemCompendiumEntry(campaignId!, itemId)
+      setEntries((current) =>
+        current.filter((entry) => entry.templateId !== itemId),
+      )
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir o item do compêndio.",
+      )
+    } finally {
+      setWorkingId("")
+    }
   }
 
   return (
@@ -100,7 +218,7 @@ export function ItemsCompendiumView() {
                 Compêndio de Itens
               </h1>
               <p className="mt-1 text-xs leading-5 text-textMuted">
-                Itens canônicos usados também pelo wizard de inventário, além de modelos personalizados do mestre.
+                Itens públicos podem ser adicionados diretamente pelas telas de inventário. Itens de mestre permanecem visíveis apenas na área de criação.
               </p>
             </div>
             <Button
@@ -126,79 +244,123 @@ export function ItemsCompendiumView() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((item) => {
-          const custom = customTemplateIds.has(item.id)
-          const protectedItem =
-            item.kind === "currency" || item.category === "bagOfHolding"
+      {errorMessage ? (
+        <div className="rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger">
+          {errorMessage}
+        </div>
+      ) : null}
 
-          return (
-            <Card key={item.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="truncate text-base font-semibold text-textH">
-                        {item.name}
-                      </h2>
-                      {custom ? (
-                        <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
-                          Personalizado
-                        </span>
-                      ) : protectedItem ? (
-                        <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
-                          Canônico
-                        </span>
-                      ) : null}
+      {loading ? (
+        <div className="rounded-xl border border-dashed border-border bg-bg px-4 py-10 text-center text-sm text-textMuted">
+          Carregando compêndio...
+        </div>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((entry) => {
+            const item = entry.item
+            const protectedItem =
+              !entry.custom &&
+              (item.kind === "currency" || item.category === "bagOfHolding")
+            const publicItem = entry.visibility === "PUBLIC"
+
+            return (
+              <Card key={item.id}>
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="truncate text-base font-semibold text-textH">
+                          {item.name}
+                        </h2>
+                        {entry.custom ? (
+                          <Badge label="Personalizado" />
+                        ) : protectedItem ? (
+                          <Badge label="Canônico" />
+                        ) : (
+                          <Badge label="Padrão" />
+                        )}
+                        <Badge
+                          label={publicItem ? "Público" : "Somente mestre"}
+                          icon={publicItem ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                        />
+                      </div>
+                      <div className="mt-1 text-[11px] uppercase tracking-wide text-textMuted">
+                        {item.kind} · quantidade {item.quantity}
+                      </div>
                     </div>
-                    <div className="mt-1 text-[11px] uppercase tracking-wide text-textMuted">
-                      {item.kind} · quantidade {item.quantity}
+                    <div className="shrink-0 rounded-lg border border-border bg-bg-subtle px-2 py-1 text-xs text-textH">
+                      {item.weight} kg
                     </div>
                   </div>
-                  <div className="shrink-0 rounded-lg border border-border bg-bg-subtle px-2 py-1 text-xs text-textH">
-                    {item.weight} kg
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="min-h-12 text-sm leading-6 text-text">
-                  {item.desc}
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onClick={() => addGroundItem(cloneCompendiumItem(item))}
-                  >
-                    <PackagePlus className="h-4 w-4" />
-                    Adicionar ao chão
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => copyItem(item.id)}
-                  >
-                    <Copy className="h-4 w-4" />
-                    {copiedId === item.id ? "Copiado" : "Copiar JSON"}
-                  </Button>
-                  {custom ? (
+                </CardHeader>
+                <CardContent>
+                  <p className="min-h-12 text-sm leading-6 text-text">
+                    {item.desc}
+                  </p>
+
+                  <label className="mt-4 grid gap-1 text-xs text-textMuted">
+                    Visibilidade
+                    <select
+                      className="h-9 rounded-lg border border-border bg-bg px-3 text-sm text-textH outline-none"
+                      value={entry.visibility}
+                      disabled={Boolean(workingId)}
+                      onChange={(event) =>
+                        void changeVisibility(
+                          entry,
+                          event.target.value as SessionItemCompendiumVisibility,
+                        )
+                      }
+                    >
+                      <option value="PUBLIC">Público</option>
+                      <option value="MASTER">Somente mestre</option>
+                    </select>
+                  </label>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
                     <Button
                       size="sm"
-                      variant="ghost"
-                      title="Excluir item personalizado"
-                      onClick={() => removeTemplate(item.id)}
+                      variant="primary"
+                      disabled={!publicItem || Boolean(workingId)}
+                      title={
+                        publicItem
+                          ? "Adicionar uma cópia ao chão"
+                          : "Itens de mestre precisam ser públicos para entrar em inventários"
+                      }
+                      onClick={() =>
+                        addGroundItem(instantiateSessionCompendiumItem(entry))
+                      }
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <PackagePlus className="h-4 w-4" />
+                      Adicionar ao chão
                     </Button>
-                  ) : null}
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => void copyItem(item)}
+                    >
+                      <Copy className="h-4 w-4" />
+                      {copiedId === item.id ? "Copiado" : "Copiar JSON"}
+                    </Button>
+                    {entry.custom ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={Boolean(workingId)}
+                        title="Excluir item personalizado"
+                        onClick={() => void removeTemplate(item.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      )}
 
-      {filtered.length === 0 ? (
+      {!loading && filtered.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-bg px-4 py-10 text-center text-sm text-textMuted">
           Nenhum item encontrado.
         </div>
@@ -210,18 +372,44 @@ export function ItemsCompendiumView() {
         enableJson
         saveLabel="Adicionar item"
         onClose={() => setCreating(false)}
-        onSave={addCustomItem}
+        onSave={(item) => void addCustomItem(item)}
       />
     </div>
   )
 }
 
-function readCustomTemplates(): Itemmable[] {
+function Badge({
+  label,
+  icon,
+}: {
+  label: string
+  icon?: React.ReactNode
+}) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
+      {icon}
+      {label}
+    </span>
+  )
+}
+
+function mergeEntries(
+  current: SessionItemCompendiumEntry[],
+  incoming: SessionItemCompendiumEntry[],
+): SessionItemCompendiumEntry[] {
+  const byTemplateId = new Map(
+    current.map((entry) => [entry.templateId, entry]),
+  )
+  for (const entry of incoming) byTemplateId.set(entry.templateId, entry)
+  return Array.from(byTemplateId.values())
+}
+
+function readLegacyCustomTemplates(): Itemmable[] {
   if (typeof window === "undefined") return []
 
   try {
     const parsed = JSON.parse(
-      window.localStorage.getItem(CUSTOM_TEMPLATES_STORAGE_KEY) ?? "[]",
+      window.localStorage.getItem(LEGACY_CUSTOM_TEMPLATES_STORAGE_KEY) ?? "[]",
     ) as unknown
     if (!Array.isArray(parsed)) return []
     return parsed.flatMap((entry) => {
