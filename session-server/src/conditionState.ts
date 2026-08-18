@@ -7,6 +7,8 @@ import type {
   SessionHpLogRecord,
 } from "./protocol";
 
+const CONCENTRATION_TAG = "dnd-manager:concentrating";
+
 export type ConditionApplyResult =
   | { ok: true; next: SessionConditionsState; record: SessionHpLogRecord }
   | { ok: false; code: string; message: string };
@@ -44,6 +46,7 @@ export function applyConditionOperation(
 
   switch (operation.type) {
     case "character.condition.add": {
+      if (isConcentrationCondition(operation.condition)) return concentrationDomainRequired();
       const conditionError = validateCondition(operation.condition);
       if (conditionError) return conditionError;
       if (next.conditions.some((condition) => condition.id === operation.condition.id)) {
@@ -60,10 +63,11 @@ export function applyConditionOperation(
     }
 
     case "character.condition.update": {
-      const conditionError = validateCondition(operation.condition);
-      if (conditionError) return conditionError;
       const index = next.conditions.findIndex((condition) => condition.id === operation.condition.id);
       if (index < 0) return invalid("CONDITION_NOT_FOUND", "The condition to update does not exist.");
+      if (isConcentrationCondition(next.conditions[index]) || isConcentrationCondition(operation.condition)) return concentrationDomainRequired();
+      const conditionError = validateCondition(operation.condition);
+      if (conditionError) return conditionError;
       const previousCondition = cloneCondition(next.conditions[index]);
       next.conditions[index] = normalizeCondition(operation.condition);
       reverseOperation = {
@@ -77,6 +81,7 @@ export function applyConditionOperation(
     case "character.condition.remove": {
       const index = next.conditions.findIndex((condition) => condition.id === operation.conditionId);
       if (index < 0) return invalid("CONDITION_NOT_FOUND", "The condition to remove does not exist.");
+      if (isConcentrationCondition(next.conditions[index])) return concentrationDomainRequired();
       const [removed] = next.conditions.splice(index, 1);
       reverseOperation = {
         type: "character.condition.restore",
@@ -246,21 +251,16 @@ function normalizeCondition(condition: SessionCondition): SessionCondition {
   });
 }
 
-function cloneCondition(condition: SessionCondition): SessionCondition {
-  return structuredClone(condition);
+function isConcentrationCondition(condition: SessionCondition): boolean {
+  return condition.tags.includes(CONCENTRATION_TAG) || normalize(condition.name) === "concentrando";
 }
-
-function cloneState(state: SessionConditionsState): SessionConditionsState {
-  return {
-    ...state,
-    conditions: state.conditions.map(cloneCondition),
-  };
+function concentrationDomainRequired() {
+  return invalid("CONCENTRATION_DOMAIN_REQUIRED", "Concentration conditions must be changed through characters/sheet/concentration.");
 }
-
-function validString(value: unknown, min: number, max: number): value is string {
-  return typeof value === "string" && value.length >= min && value.length <= max;
+function normalize(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
 }
-
-function invalid(code: string, message: string): { ok: false; code: string; message: string } {
-  return { ok: false, code, message };
-}
+function cloneCondition(condition: SessionCondition): SessionCondition { return structuredClone(condition); }
+function cloneState(state: SessionConditionsState): SessionConditionsState { return { ...state, conditions: state.conditions.map(cloneCondition) }; }
+function validString(value: unknown, min: number, max: number): value is string { return typeof value === "string" && value.length >= min && value.length <= max; }
+function invalid(code: string, message: string): { ok: false; code: string; message: string } { return { ok: false, code, message }; }
