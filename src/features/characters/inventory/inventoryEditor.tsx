@@ -1,7 +1,9 @@
 import { useState, type ComponentProps } from "react"
+import { useParams } from "react-router-dom"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
+import { CompendiumItemPickerDialog } from "../../items/CompendiumItemPickerDialog"
 import {
   CURRENCY_DEFINITIONS,
   CURRENCY_TYPES,
@@ -12,19 +14,25 @@ import {
 import type { Itemmable } from "../../../models/items/item"
 import { InventoryEditor as InventoryEditorV2 } from "./inventoryEditorV2"
 
-type Props = ComponentProps<typeof InventoryEditorV2>
+type Props = ComponentProps<typeof InventoryEditorV2> & {
+  onAddCompendiumItem?: (item: Itemmable) => void
+}
 
 export function InventoryEditor(props: Props) {
+  const { campaignId } = useParams<{ campaignId?: string }>()
+  const { onAddCompendiumItem, ...editorProps } = props
   const [currencyDialogOpen, setCurrencyDialogOpen] = useState(false)
   const [currencyType, setCurrencyType] = useState<CurrencyType>("gold")
   const [currencyQuantity, setCurrencyQuantity] = useState("1")
   const [insideBagOfHolding, setInsideBagOfHolding] = useState(false)
+  const [compendiumOpen, setCompendiumOpen] = useState(false)
 
-  const canUseBagOfHolding = props.onToggleBagOfHolding !== undefined
+  const canUseBagOfHolding = editorProps.onToggleBagOfHolding !== undefined
+  const compendiumTarget = onAddCompendiumItem ?? editorProps.onAddItem
 
   function requestAddItem(item: Itemmable) {
     if (item.kind !== "currency") {
-      props.onAddItem?.(item)
+      editorProps.onAddItem?.(item)
       return
     }
 
@@ -33,7 +41,7 @@ export function InventoryEditor(props: Props) {
       String(Math.max(1, Math.trunc(Number(item.quantity) || 1))),
     )
     setInsideBagOfHolding(
-      canUseBagOfHolding && areAllCurrenciesInBagOfHolding(props.items),
+      canUseBagOfHolding && areAllCurrenciesInBagOfHolding(editorProps.items),
     )
     setCurrencyDialogOpen(true)
   }
@@ -49,7 +57,7 @@ export function InventoryEditor(props: Props) {
       Math.trunc(Number(currencyQuantity) || 1),
     )
 
-    props.onAddItem?.(
+    editorProps.onAddItem?.(
       createCurrencyItem(
         currencyType,
         quantity,
@@ -62,9 +70,21 @@ export function InventoryEditor(props: Props) {
 
   return (
     <>
+      {campaignId && compendiumTarget ? (
+        <div className="mb-2 flex justify-end">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setCompendiumOpen(true)}
+          >
+            Adicionar do compêndio
+          </Button>
+        </div>
+      ) : null}
+
       <InventoryEditorV2
-        {...props}
-        onAddItem={props.onAddItem ? requestAddItem : undefined}
+        {...editorProps}
+        onAddItem={editorProps.onAddItem ? requestAddItem : undefined}
       />
 
       <CurrencyAddDialog
@@ -79,6 +99,15 @@ export function InventoryEditor(props: Props) {
         onCancel={closeCurrencyDialog}
         onConfirm={addCurrency}
       />
+
+      {campaignId && compendiumTarget ? (
+        <CompendiumItemPickerDialog
+          open={compendiumOpen}
+          campaignId={campaignId}
+          onClose={() => setCompendiumOpen(false)}
+          onSelect={compendiumTarget}
+        />
+      ) : null}
     </>
   )
 }
