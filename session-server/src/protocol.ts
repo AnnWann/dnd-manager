@@ -18,6 +18,13 @@ export type SessionHitDiceState = Partial<Record<SessionDieSides, SessionHitDice
 export type SessionAttribute = "str" | "dex" | "con" | "int" | "wis" | "cha";
 export type SessionAttributesState = Record<SessionAttribute, number>;
 export type SessionSavingThrowsState = Record<SessionAttribute, boolean>;
+export type SessionSkill =
+  | "acrobatics" | "arcana" | "athletics" | "animalHandling" | "performance"
+  | "deception" | "stealth" | "history" | "intimidation" | "insight"
+  | "investigation" | "medicine" | "nature" | "perception" | "persuasion"
+  | "sleightOfHand" | "religion" | "survival";
+export type SessionSkillProficiency = "none" | "proficient" | "expertise";
+export type SessionSkillsState = Record<SessionSkill, SessionSkillProficiency>;
 
 export type SessionStatsState = {
   armorClassAdjustment: number;
@@ -44,14 +51,17 @@ export type SessionHpState = {
   attributesInitialized: boolean;
   savingThrows: SessionSavingThrowsState;
   savingThrowsInitialized: boolean;
+  skills: SessionSkillsState;
+  skillsInitialized: boolean;
   revision: number;
 };
 
-export type SessionHpSeed = Omit<SessionHpState, "revision" | "hitDice" | "stats" | "statsInitialized" | "attributes" | "attributesInitialized" | "savingThrows" | "savingThrowsInitialized"> & {
+export type SessionHpSeed = Omit<SessionHpState, "revision" | "hitDice" | "stats" | "statsInitialized" | "attributes" | "attributesInitialized" | "savingThrows" | "savingThrowsInitialized" | "skills" | "skillsInitialized"> & {
   hitDice?: SessionHitDiceState;
   stats?: SessionStatsState;
   attributes?: SessionAttributesState;
   savingThrows?: Partial<SessionSavingThrowsState>;
+  skills?: Partial<SessionSkillsState>;
 };
 
 export type SessionHpOperation =
@@ -84,12 +94,13 @@ export type SessionSimpleStatOperation =
 export type SessionStatOperation = SessionCalculatedStatOperation | SessionSimpleStatOperation;
 export type SessionAttributeOperation = { type: "character.attribute.set"; characterId: string; attribute: SessionAttribute; value: number };
 export type SessionSavingThrowOperation = { type: "character.savingThrow.set"; characterId: string; attribute: SessionAttribute; proficient: boolean };
+export type SessionSkillOperation = { type: "character.skill.set"; characterId: string; skill: SessionSkill; proficiency: SessionSkillProficiency };
 
 export type SessionRestOperation =
   | { type: "character.rest.short"; characterId: string; healing: number; hitDiceConsumption: Partial<Record<SessionDieSides, number>> }
   | { type: "character.rest.long"; characterId: string; recovery: "partial" | "full" };
 
-export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionAttributeOperation | SessionSavingThrowOperation | SessionRestOperation;
+export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionAttributeOperation | SessionSavingThrowOperation | SessionSkillOperation | SessionRestOperation;
 
 export type SessionHpReverseOperation = { type: "character.hp.restore"; characterId: string; hp: SessionHpState };
 export type SessionStatReverseOperation =
@@ -102,12 +113,13 @@ export type SessionStatReverseOperation =
   | { type: "character.stat.experience.restore"; characterId: string; value: number };
 export type SessionAttributeReverseOperation = { type: "character.attribute.restore"; characterId: string; attribute: SessionAttribute; value: number };
 export type SessionSavingThrowReverseOperation = { type: "character.savingThrow.restore"; characterId: string; attribute: SessionAttribute; proficient: boolean };
+export type SessionSkillReverseOperation = { type: "character.skill.restore"; characterId: string; skill: SessionSkill; proficiency: SessionSkillProficiency };
 export type SessionRestReverseOperation = {
   type: "character.rest.restore";
   characterId: string;
   snapshot: { hp: SessionHpState; stats: SessionStatsState };
 };
-export type SessionReverseOperation = SessionHpReverseOperation | SessionStatReverseOperation | SessionAttributeReverseOperation | SessionSavingThrowReverseOperation | SessionRestReverseOperation;
+export type SessionReverseOperation = SessionHpReverseOperation | SessionStatReverseOperation | SessionAttributeReverseOperation | SessionSavingThrowReverseOperation | SessionSkillReverseOperation | SessionRestReverseOperation;
 
 export type SessionHpLogRecord = {
   id: string;
@@ -139,6 +151,12 @@ export type ServerSessionMessage = SessionReadyMessage | SessionHeartbeatAckMess
 
 const DIE_SIDES = new Set<SessionDieSides>(["d2", "d3", "d4", "d6", "d8", "d10", "d12", "d20", "d100"]);
 const ATTRIBUTES = new Set<SessionAttribute>(["str", "dex", "con", "int", "wis", "cha"]);
+const SKILLS = new Set<SessionSkill>([
+  "acrobatics", "arcana", "athletics", "animalHandling", "performance", "deception",
+  "stealth", "history", "intimidation", "insight", "investigation", "medicine",
+  "nature", "perception", "persuasion", "sleightOfHand", "religion", "survival",
+]);
+const SKILL_PROFICIENCIES = new Set<SessionSkillProficiency>(["none", "proficient", "expertise"]);
 
 export function parseClientSessionMessage(raw: string): ClientSessionMessage | null {
   let value: unknown;
@@ -165,7 +183,8 @@ function isHpSeed(value: unknown): value is SessionHpSeed {
     (value.hitDice === undefined || isHitDiceState(value.hitDice)) &&
     (value.stats === undefined || isStatsState(value.stats)) &&
     (value.attributes === undefined || isAttributesState(value.attributes)) &&
-    (value.savingThrows === undefined || isSavingThrowsSeed(value.savingThrows));
+    (value.savingThrows === undefined || isSavingThrowsSeed(value.savingThrows)) &&
+    (value.skills === undefined || isSkillsSeed(value.skills));
 }
 
 function isAuthoritativeOperation(value: unknown): value is SessionAuthoritativeOperation {
@@ -192,6 +211,7 @@ function isAuthoritativeOperation(value: unknown): value is SessionAuthoritative
     case "character.stat.inspiration.set": return typeof value.value === "boolean";
     case "character.attribute.set": return isAttribute(value.attribute) && isFiniteNumber(value.value);
     case "character.savingThrow.set": return isAttribute(value.attribute) && typeof value.proficient === "boolean";
+    case "character.skill.set": return isSkill(value.skill) && isSkillProficiency(value.proficiency);
     case "character.rest.short": return isFiniteNumber(value.healing) && isHitDiceConsumption(value.hitDiceConsumption);
     case "character.rest.long": return value.recovery === "partial" || value.recovery === "full";
     default: return false;
@@ -212,6 +232,10 @@ function isSavingThrowsSeed(value: unknown): value is Partial<SessionSavingThrow
   if (!isRecord(value)) return false;
   return Object.entries(value).every(([attribute, proficient]) => isAttribute(attribute) && typeof proficient === "boolean");
 }
+function isSkillsSeed(value: unknown): value is Partial<SessionSkillsState> {
+  if (!isRecord(value)) return false;
+  return Object.entries(value).every(([skill, proficiency]) => isSkill(skill) && isSkillProficiency(proficiency));
+}
 function isHitDiceState(value: unknown): value is SessionHitDiceState {
   if (!isRecord(value)) return false;
   return Object.entries(value).every(([side, pool]) => isDieSide(side) && isRecord(pool) && isFiniteNumber(pool.current) && isFiniteNumber(pool.max));
@@ -221,6 +245,8 @@ function isHitDiceConsumption(value: unknown): value is Partial<Record<SessionDi
   return Object.entries(value).every(([side, amount]) => isDieSide(side) && isFiniteNumber(amount));
 }
 function isAttribute(value: unknown): value is SessionAttribute { return typeof value === "string" && ATTRIBUTES.has(value as SessionAttribute); }
+function isSkill(value: unknown): value is SessionSkill { return typeof value === "string" && SKILLS.has(value as SessionSkill); }
+function isSkillProficiency(value: unknown): value is SessionSkillProficiency { return typeof value === "string" && SKILL_PROFICIENCIES.has(value as SessionSkillProficiency); }
 function isDieSide(value: unknown): value is SessionDieSides { return typeof value === "string" && DIE_SIDES.has(value as SessionDieSides); }
 function isFiniteNumber(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value); }
 function isRecord(value: unknown): value is Record<string, any> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
