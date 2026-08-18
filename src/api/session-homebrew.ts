@@ -1,4 +1,5 @@
 import { LOCAL_AUTH_BYPASS } from "../auth/local-auth"
+import { notifySessionContentChanged } from "../lib/sessionEvents"
 import type { Spell } from "../models/magic/spells/Spell"
 import { apiClient } from "./api-client"
 import { getMyCampaigns, reviewCampaignSpell } from "./user-campaigns"
@@ -132,6 +133,7 @@ export async function reviewSessionHomebrewSpell(
 ): Promise<void> {
   if (LOCAL_AUTH_BYPASS) {
     await reviewCampaignSpell(campaignId, spellId, status, note)
+    notifySessionContentChanged()
     return
   }
 
@@ -142,4 +144,5 @@ export async function reviewSessionHomebrewSpell(
       note,
     },
   )
+  notifySessionContentChanged()
 }
