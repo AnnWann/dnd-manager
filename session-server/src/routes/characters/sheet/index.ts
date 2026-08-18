@@ -1,7 +1,4 @@
-import {
-  parseClientSessionMessage,
-  type SessionLoggedOperation,
-} from "../../../protocol";
+import type { SessionLoggedOperation } from "../../../protocol";
 import { ATTRIBUTES_ROUTE, isAttributesRouteOperation } from "./attributes";
 import { CONDITIONS_ROUTE, isConditionsRouteOperation } from "./conditions";
 import { HIT_DICE_ROUTE, isHitDiceRouteOperation } from "./hitDice";
@@ -21,12 +18,6 @@ export type CharacterSheetRoute =
   | typeof CONDITIONS_ROUTE
   | typeof REST_ROUTE;
 
-export type SessionSheetOperationMessage = {
-  type: "session.sheet.operation";
-  route: CharacterSheetRoute;
-  operation: SessionLoggedOperation;
-};
-
 export function routeForSheetOperation(operation: SessionLoggedOperation): CharacterSheetRoute {
   if (isHpRouteOperation(operation)) return HP_ROUTE;
   if (isHitDiceRouteOperation(operation)) return HIT_DICE_ROUTE;
@@ -38,35 +29,4 @@ export function routeForSheetOperation(operation: SessionLoggedOperation): Chara
   if (isConditionsRouteOperation(operation)) return CONDITIONS_ROUTE;
   if (isRestRouteOperation(operation)) return REST_ROUTE;
   throw new Error(`No character sheet route registered for operation ${operation.type}.`);
-}
-
-export function parseSheetOperationMessage(raw: string): SessionSheetOperationMessage | null {
-  let value: unknown;
-  try { value = JSON.parse(raw); } catch { return null; }
-  if (!isRecord(value) || value.type !== "session.sheet.operation" || typeof value.route !== "string" || !isRecord(value.operation)) return null;
-
-  const operation = parseOperationWithExistingValidators(value.operation);
-  if (!operation) return null;
-
-  let expectedRoute: CharacterSheetRoute;
-  try { expectedRoute = routeForSheetOperation(operation); }
-  catch { return null; }
-
-  if (value.route !== expectedRoute) return null;
-  return { type: "session.sheet.operation", route: expectedRoute, operation };
-}
-
-function parseOperationWithExistingValidators(operation: Record<string, unknown>): SessionLoggedOperation | null {
-  const type = typeof operation.type === "string" ? operation.type : "";
-  const legacyType = type.startsWith("character.condition.")
-    ? "session.conditions.operation"
-    : "session.hp.operation";
-  const parsed = parseClientSessionMessage(JSON.stringify({ type: legacyType, operation }));
-  if (!parsed) return null;
-  if (parsed.type === "session.hp.operation" || parsed.type === "session.conditions.operation") return parsed.operation;
-  return null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
