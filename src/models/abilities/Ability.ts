@@ -1,4 +1,5 @@
 import type { BonusCollection } from "../bonuses/Bonus"
+import type { CharacterAcquisitionMetadata } from "../characters/CharacterAcquisition"
 import type {
   CharacterConditionDuration,
   CharacterConditionGrant,
@@ -58,6 +59,8 @@ export interface Ability {
   sourceConditionId?: string
   sourceConditionName?: string
   originalAbilityId?: string
+  /** Audit trail describing when and why the character obtained this ability. */
+  acquisition?: CharacterAcquisitionMetadata
 }
 
 export interface Usage {
