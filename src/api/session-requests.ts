@@ -1,4 +1,5 @@
 import { LOCAL_AUTH_BYPASS } from "../auth/local-auth"
+import { notifySessionContentChanged } from "../lib/sessionEvents"
 import { apiClient } from "./api-client"
 
 export type SessionContentRequestType =
@@ -99,6 +100,9 @@ export async function submitSessionContentRequest(
   const response = await apiClient.post<{
     status: "PENDING" | "APPROVED"
   }>(`/campaigns/${encodeURIComponent(campaignId)}/requests`, input)
+  if (response.data.status === "APPROVED") {
+    notifySessionContentChanged()
+  }
   return response.data.status
 }
 
@@ -127,6 +131,7 @@ export async function reviewSessionContentRequest(
           : entry,
       ),
     )
+    notifySessionContentChanged()
     return
   }
 
@@ -134,6 +139,7 @@ export async function reviewSessionContentRequest(
     `/campaigns/${encodeURIComponent(campaignId)}/requests/${encodeURIComponent(requestId)}`,
     { status, note },
   )
+  notifySessionContentChanged()
 }
 
 function readLocalRequests(): SessionContentRequest[] {
