@@ -1,6 +1,7 @@
 import {
   createContext,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -50,7 +51,22 @@ function resolveSessionServerUrl(): string {
   return ""
 }
 
-export function SessionRuntimeProvider({
+export function SessionRuntimeProvider(props: {
+  sessionId: string
+  userId: string
+  role: SessionRuntimeRole
+  children: ReactNode
+}) {
+  const parent = useContext(SessionRuntimeContext)
+
+  if (parent?.sessionId === props.sessionId) {
+    return <>{props.children}</>
+  }
+
+  return <SessionRuntimeProviderInner {...props} />
+}
+
+function SessionRuntimeProviderInner({
   sessionId,
   userId,
   role,
