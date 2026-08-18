@@ -2,10 +2,7 @@ import { History, Undo2 } from "lucide-react"
 import { useMemo } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
-import type {
-  SessionHpLogRecord,
-  SessionHpOperation,
-} from "../session-runtime/sessionProtocol"
+import type { SessionHpLogRecord } from "../session-runtime/sessionProtocol"
 import { useOptionalSessionRuntime } from "../session-runtime/useSessionRuntime"
 import type {
   GameOperation,
@@ -205,8 +202,12 @@ function describeHpOperation(
         : `Reduziu o máximo atual de ${characterName} em ${Math.abs(operation.amount)} PV.`
     case "character.hp.currentMax.restore":
       return `Restaurou o máximo atual de ${characterName}.`
+    case "character.rest.short":
+      return `${characterName} concluiu um descanso curto.`
+    case "character.rest.long":
+      return `${characterName} concluiu um descanso longo${operation.recovery === "partial" ? " parcial" : ""}.`
     case "character.hp.undo":
-      return `Desfez uma alteração de PV de ${characterName}.`
+      return `Desfez uma alteração de ${characterName}.`
   }
 }
 
