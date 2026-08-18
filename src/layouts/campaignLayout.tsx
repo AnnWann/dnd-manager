@@ -9,7 +9,10 @@ import {
 } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 
-import { getCampaignSessionCharacters } from "../api/campaign-session"
+import {
+  buildSessionCharacterSnapshots,
+  getCampaignSessionCharacters,
+} from "../api/campaign-session"
 import { authClient } from "../auth/auth-client"
 import { getLocalUser, LOCAL_AUTH_BYPASS } from "../auth/local-auth"
 import {
@@ -33,7 +36,11 @@ import { PartyInventorySettingsProvider } from "../contexts/partyInventorySettin
 import { SyncProvider } from "../contexts/syncContext"
 import { MasterConcentrationAlerts } from "../features/characters/characterSheet/masterConcentrationAlerts"
 import { RelationalMigrationBridge } from "../features/sync/RelationalMigrationBridge"
-import { clearActiveSession } from "../lib/activeCampaign"
+import {
+  clearActiveSession,
+  readSessionStateOwner,
+  rememberSessionStateOwner,
+} from "../lib/activeCampaign"
 import { sessionIdFromPathname, sessionPath } from "../lib/campaignRoutes"
 import { normalizeAppStateInventory } from "../lib/normalizeAppStateInventory"
 import { type AppStateV1 } from "../lib/remoteState"
@@ -50,6 +57,8 @@ export function CampaignLayout() {
   const [resolvedSessionRole, setResolvedSessionRole] = useState<
     "master" | "player" | null
   >(null)
+  const [sessionReady, setSessionReady] = useState(!sessionId)
+  const [sessionLoadError, setSessionLoadError] = useState("")
 
   const toSession = useCallback(
     (path: string) => sessionId ? sessionPath(sessionId, path) : "/user/campaigns",
@@ -70,31 +79,6 @@ export function CampaignLayout() {
     pullFromServer,
   } = useConcurrentRemoteAppState()
 
-  useEffect(() => {
-    if (!sessionId) {
-      setResolvedSessionRole(null)
-      return
-    }
-
-    let cancelled = false
-    void getCampaignSessionCharacters(sessionId)
-      .then((data) => {
-        if (!cancelled) {
-          setResolvedSessionRole(data.campaign.isMaster ? "master" : "player")
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setResolvedSessionRole(null)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [sessionId])
-
-  const effectiveUserRole = resolvedSessionRole ?? userRole
-  const effectiveUserKey = authenticatedUserId || userKey
-
   const appState = useMemo(
     () => normalizeAppStateInventory(rawAppState),
     [rawAppState],
@@ -114,6 +98,76 @@ export function CampaignLayout() {
     },
     [setRawAppState],
   )
+
+  useEffect(() => {
+    if (!sessionId) {
+      setResolvedSessionRole(null)
+      setSessionLoadError("")
+      setSessionReady(true)
+      return
+    }
+
+    let cancelled = false
+    setSessionReady(false)
+    setSessionLoadError("")
+
+    void getCampaignSessionCharacters(sessionId)
+      .then((data) => {
+        if (cancelled) return
+
+        setResolvedSessionRole(data.campaign.isMaster ? "master" : "player")
+
+        const sourceSnapshots = buildSessionCharacterSnapshots(data)
+        const stateBelongsToThisSession = readSessionStateOwner() === sessionId
+
+        setAppState((previous) => {
+          const existingById = stateBelongsToThisSession
+            ? new Map(previous.characters.map((character) => [character.id, character]))
+            : new Map<string, (typeof previous.characters)[number]>()
+
+          const characters = sourceSnapshots.map(
+            (source) => existingById.get(source.id) ?? source,
+          )
+          const activeCharacterId = characters.some(
+            (character) => character.id === previous.activeCharacterId,
+          )
+            ? previous.activeCharacterId
+            : characters[0]?.id ?? ""
+
+          const unchanged =
+            stateBelongsToThisSession &&
+            previous.activeCharacterId === activeCharacterId &&
+            previous.characters.length === characters.length &&
+            previous.characters.every(
+              (character, index) => character.id === characters[index]?.id,
+            )
+
+          if (unchanged) return previous
+
+          return {
+            ...previous,
+            characters,
+            activeCharacterId,
+          }
+        })
+
+        rememberSessionStateOwner(sessionId)
+        setSessionReady(true)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setResolvedSessionRole(null)
+        setSessionLoadError("Não foi possível carregar os personagens vinculados a esta sessão.")
+        setSessionReady(true)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [sessionId, setAppState])
+
+  const effectiveUserRole = resolvedSessionRole ?? userRole
+  const effectiveUserKey = authenticatedUserId || userKey
 
   useEffect(() => {
     if (appState === rawAppState) return
@@ -201,6 +255,24 @@ export function CampaignLayout() {
     return (
       <div className="min-h-dvh bg-[color:var(--surface-app)] text-text">
         <AppRouter />
+      </div>
+    )
+  }
+
+  if (sessionId && !sessionReady) {
+    return (
+      <div className="grid min-h-dvh place-items-center bg-[color:var(--surface-app)] text-sm text-textMuted">
+        Carregando sessão...
+      </div>
+    )
+  }
+
+  if (sessionId && sessionLoadError) {
+    return (
+      <div className="grid min-h-dvh place-items-center bg-[color:var(--surface-app)] p-4">
+        <div className="max-w-lg rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger">
+          {sessionLoadError}
+        </div>
       </div>
     )
   }
