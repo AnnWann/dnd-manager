@@ -14,6 +14,7 @@ export type CharacterSheetRoute =
   | "characters/sheet/saving-throws"
   | "characters/sheet/skills"
   | "characters/sheet/conditions"
+  | "characters/sheet/concentration"
   | "characters/sheet/rest"
 
 export type SessionSheetOperationMessage = {
@@ -40,6 +41,8 @@ export function routeForSheetOperation(operation: SessionLoggedOperation): Chara
     case "character.condition.add":
     case "character.condition.update":
     case "character.condition.remove": return "characters/sheet/conditions"
+    case "character.concentration.start":
+    case "character.concentration.end": return "characters/sheet/concentration"
     case "character.rest.short":
     case "character.rest.long": return "characters/sheet/rest"
     default: throw new Error(`No character sheet route registered for operation ${operation.type}.`)
