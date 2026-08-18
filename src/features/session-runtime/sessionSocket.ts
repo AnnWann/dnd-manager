@@ -4,6 +4,7 @@ import {
   type ServerSessionMessage,
   type SessionRuntimeRole,
 } from "./sessionProtocol"
+import type { SessionSheetOperationMessage } from "./sheetRoutes"
 
 export type SessionRuntimeStatus = "disconnected" | "connecting" | "connected" | "reconnecting" | "error"
 
@@ -37,7 +38,7 @@ export class SessionSocket {
     this.openSocket()
   }
 
-  send(message: ClientSessionMessage): boolean {
+  send(message: ClientSessionMessage | SessionSheetOperationMessage): boolean {
     if (this.socket?.readyState !== WebSocket.OPEN) return false
     this.socket.send(JSON.stringify(message))
     return true
