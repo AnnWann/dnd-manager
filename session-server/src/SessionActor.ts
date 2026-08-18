@@ -1,3 +1,4 @@
+import { DurableObject } from "cloudflare:workers";
 import {
   encodeServerSessionMessage,
   parseClientSessionMessage,
@@ -10,14 +11,7 @@ const CONNECTION_TIMEOUT_MS = 90_000;
 const CLOSE_CODE_TIMEOUT = 4000;
 const CLOSE_CODE_REPLACED = 4001;
 
-export class SessionActor implements DurableObject {
-  constructor(
-    private readonly state: DurableObjectState,
-    private readonly env: unknown,
-  ) {
-    void this.env;
-  }
-
+export class SessionActor extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return new Response("Expected WebSocket upgrade.", { status: 426 });
@@ -34,7 +28,7 @@ export class SessionActor implements DurableObject {
     const [client, server] = Object.values(pair);
 
     server.serializeAttachment(connection);
-    this.state.acceptWebSocket(server);
+    this.ctx.acceptWebSocket(server);
 
     this.send(server, {
       type: "session.ready",
@@ -52,8 +46,14 @@ export class SessionActor implements DurableObject {
     });
   }
 
-  async webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void> {
-    const raw = typeof message === "string" ? message : new TextDecoder().decode(message);
+  async webSocketMessage(
+    webSocket: WebSocket,
+    message: string | ArrayBuffer,
+  ): Promise<void> {
+    const raw =
+      typeof message === "string"
+        ? message
+        : new TextDecoder().decode(message);
     const parsed = parseClientSessionMessage(raw);
 
     if (!parsed) {
@@ -123,7 +123,7 @@ export class SessionActor implements DurableObject {
   async alarm(): Promise<void> {
     const now = Date.now();
 
-    for (const webSocket of this.state.getWebSockets()) {
+    for (const webSocket of this.ctx.getWebSockets()) {
       const connection = this.getConnection(webSocket);
       if (!connection) {
         webSocket.close(1011, "Missing connection attachment");
@@ -169,10 +169,13 @@ export class SessionActor implements DurableObject {
   }
 
   private replaceExistingClientConnection(clientId: string): void {
-    for (const webSocket of this.state.getWebSockets()) {
+    for (const webSocket of this.ctx.getWebSockets()) {
       const connection = this.getConnection(webSocket);
       if (connection?.clientId === clientId) {
-        webSocket.close(CLOSE_CODE_REPLACED, "Connection replaced by reconnect");
+        webSocket.close(
+          CLOSE_CODE_REPLACED,
+          "Connection replaced by reconnect",
+        );
       }
     }
   }
@@ -194,7 +197,7 @@ export class SessionActor implements DurableObject {
   }
 
   private broadcastPresence(now = Date.now()): void {
-    const activeSockets = this.state.getWebSockets().filter((webSocket) => {
+    const activeSockets = this.ctx.getWebSockets().filter((webSocket) => {
       const connection = this.getConnection(webSocket);
       return (
         connection !== null &&
@@ -232,7 +235,7 @@ export class SessionActor implements DurableObject {
   private async scheduleNextAlarm(now = Date.now()): Promise<void> {
     let nextDeadline: number | null = null;
 
-    for (const webSocket of this.state.getWebSockets()) {
+    for (const webSocket of this.ctx.getWebSockets()) {
       const connection = this.getConnection(webSocket);
       if (!connection) continue;
 
@@ -245,10 +248,10 @@ export class SessionActor implements DurableObject {
     }
 
     if (nextDeadline === null) {
-      await this.state.storage.deleteAlarm();
+      await this.ctx.storage.deleteAlarm();
       return;
     }
 
-    await this.state.storage.setAlarm(nextDeadline);
+    await this.ctx.storage.setAlarm(nextDeadline);
   }
 }
