@@ -472,7 +472,8 @@ export function CharacterProvider({
 
       if (!canRest) return previous
 
-      return applyRecordedGameOperation(
+      const previousHp = restedCharacter.get("sheet").HP
+      const applied = applyRecordedGameOperation(
         previous,
         createGameOperationRecord(
           {
@@ -483,6 +484,28 @@ export function CharacterProvider({
           actorId,
         ),
       )
+
+      if (!sessionRuntime) return applied
+
+      return {
+        ...applied,
+        characters: applied.characters.map((entry) => {
+          if (entry.id !== characterId) return entry
+
+          const nextCharacter = CharacterTemplate.fromJSON(entry)
+          const nextSheet = nextCharacter.get("sheet")
+          return nextCharacter.withPatch({
+            sheet: {
+              ...nextSheet,
+              HP: {
+                ...nextSheet.HP,
+                current: previousHp.current,
+                temporary: previousHp.temporary,
+              },
+            },
+          }).toJSON()
+        }),
+      }
     })
   }
 
