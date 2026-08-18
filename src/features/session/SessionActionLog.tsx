@@ -14,6 +14,8 @@ type DisplayRecord =
   | { source: "legacy"; record: GameOperationRecord }
   | { source: "hp"; record: SessionHpLogRecord }
 
+const REST_LEGACY_MATCH_WINDOW_MS = 3_000
+
 export function SessionActionLog() {
   const {
     operationLog,
@@ -51,12 +53,44 @@ export function SessionActionLog() {
     return latest
   }, [runtime?.hpLog])
 
+  const visibleLegacyRecords = useMemo(() => {
+    if (!runtime) return operationLog
+
+    const restRecords = runtime.hpLog.filter(
+      (record) =>
+        record.operation.type === "character.rest.short" ||
+        record.operation.type === "character.rest.long",
+    )
+
+    return operationLog.filter((record) => {
+      if (record.operation.type === "character.longRest.complete") {
+        return !hasMatchingRestRecord(
+          restRecords,
+          record.operation.characterId,
+          record.createdAt,
+          "character.rest.long",
+        )
+      }
+
+      if (record.operation.type === "character.replace") {
+        return !hasMatchingRestRecord(
+          restRecords,
+          record.operation.characterId,
+          record.createdAt,
+          "character.rest.short",
+        )
+      }
+
+      return true
+    })
+  }, [operationLog, runtime])
+
   const records = useMemo<DisplayRecord[]>(() => [
-    ...operationLog.map((record) => ({ source: "legacy" as const, record })),
+    ...visibleLegacyRecords.map((record) => ({ source: "legacy" as const, record })),
     ...(runtime?.hpLog ?? []).map((record) => ({ source: "hp" as const, record })),
   ].sort((left, right) =>
     new Date(right.record.createdAt).getTime() - new Date(left.record.createdAt).getTime(),
-  ), [operationLog, runtime?.hpLog])
+  ), [runtime?.hpLog, visibleLegacyRecords])
 
   return (
     <aside className="hidden w-80 shrink-0 flex-col border-l border-border bg-bg-elevated xl:flex">
@@ -105,6 +139,27 @@ export function SessionActionLog() {
       </div>
     </aside>
   )
+}
+
+function hasMatchingRestRecord(
+  records: SessionHpLogRecord[],
+  characterId: string,
+  legacyCreatedAt: string,
+  restType: "character.rest.short" | "character.rest.long",
+): boolean {
+  const legacyTime = new Date(legacyCreatedAt).getTime()
+  if (!Number.isFinite(legacyTime)) return false
+
+  return records.some((record) => {
+    if (record.operation.type !== restType) return false
+    if (record.operation.characterId !== characterId) return false
+
+    const restTime = new Date(record.createdAt).getTime()
+    return (
+      Number.isFinite(restTime) &&
+      Math.abs(restTime - legacyTime) <= REST_LEGACY_MATCH_WINDOW_MS
+    )
+  })
 }
 
 function HpLogEntry({
