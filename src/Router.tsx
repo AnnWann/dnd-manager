@@ -8,8 +8,11 @@ import {
   useParams,
 } from "react-router-dom"
 
+import { authClient } from "./auth/auth-client"
+import { getLocalUser } from "./auth/local-auth"
 import { RequireAuth } from "./auth/requireAuth"
 import { useSyncContext } from "./contexts/syncContext"
+import { SessionRuntimeProvider } from "./features/session-runtime/SessionRuntimeProvider"
 import { readActiveSession, rememberActiveSession } from "./lib/activeCampaign"
 import { sessionPath } from "./lib/campaignRoutes"
 import { CharacterCreateView } from "./views/CharacterCreateView"
@@ -135,12 +138,26 @@ export function AppRouter() {
 
 function SessionRouteOutlet() {
   const { campaignId } = useParams<{ campaignId?: string }>()
+  const { userRole } = useSyncContext()
+  const { data: authSession } = authClient.useSession()
+  const localUser = getLocalUser()
+  const userId = authSession?.user?.id ?? localUser?.id
 
   useEffect(() => {
     if (campaignId) rememberActiveSession(campaignId)
   }, [campaignId])
 
-  return <Outlet />
+  if (!campaignId || !userId) return <Outlet />
+
+  return (
+    <SessionRuntimeProvider
+      sessionId={campaignId}
+      userId={userId}
+      role={userRole === "master" ? "MASTER" : "PLAYER"}
+    >
+      <Outlet />
+    </SessionRuntimeProvider>
+  )
 }
 
 function LegacyCampaignNamespaceRedirect() {
