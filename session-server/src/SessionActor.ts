@@ -3,10 +3,12 @@ import {
   applyHpOperation,
   applyHpUndo,
   defaultAttributes,
+  defaultSavingThrows,
   defaultStats,
   MAX_HP_LOG_RECORDS,
   normalizeAttributesSeed,
   normalizeHpSeed,
+  normalizeSavingThrowsSeed,
   normalizeStatsSeed,
 } from "./hpState";
 import {
@@ -181,6 +183,15 @@ export class SessionActor extends DurableObject<Env> {
         entryChanged = true;
       }
 
+      if (existing.savingThrowsInitialized !== true && seed.savingThrows !== undefined) {
+        next = {
+          ...next,
+          savingThrows: normalizeSavingThrowsSeed(seed.savingThrows),
+          savingThrowsInitialized: true,
+        };
+        entryChanged = true;
+      }
+
       if (entryChanged) {
         state[seed.characterId] = next;
         changed = true;
@@ -288,6 +299,8 @@ export class SessionActor extends DurableObject<Env> {
         statsInitialized: state.statsInitialized ?? false,
         attributes: state.attributes ?? defaultAttributes(),
         attributesInitialized: state.attributesInitialized ?? false,
+        savingThrows: state.savingThrows ?? defaultSavingThrows(),
+        savingThrowsInitialized: state.savingThrowsInitialized ?? false,
       }]),
     );
   }
