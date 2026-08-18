@@ -47,6 +47,10 @@ type CachedSessionRequest = {
 const SESSION_REQUEST_CACHE_MS = 5_000
 const sessionRequestCache = new Map<string, CachedSessionRequest>()
 
+export function invalidateCampaignSessionCharacters(campaignId: string): void {
+  sessionRequestCache.delete(campaignId)
+}
+
 export async function getCampaignSessionCharacters(
   campaignId: string,
 ): Promise<CampaignSessionCharacters> {
