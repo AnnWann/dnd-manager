@@ -7,7 +7,7 @@ import {
   Search,
   Trash2,
 } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { Navigate, useParams } from "react-router-dom"
 
 import {
@@ -70,6 +70,10 @@ export function ItemsCompendiumView() {
         const catalog = await getSessionItemCompendium(campaignId!)
         let nextEntries = catalog.entries
 
+        // The old compendium was global localStorage state. Keep that source
+        // intact while materializing its missing templates into each session,
+        // otherwise opening the first session would consume the migration for
+        // every other campaign on this browser.
         const legacyTemplates = readLegacyCustomTemplates()
         if (legacyTemplates.length) {
           const knownIds = new Set(nextEntries.map((entry) => entry.templateId))
@@ -87,8 +91,6 @@ export function ItemsCompendiumView() {
             )
             nextEntries = mergeEntries(nextEntries, imported)
           }
-
-          window.localStorage.removeItem(LEGACY_CUSTOM_TEMPLATES_STORAGE_KEY)
         }
 
         if (!cancelled) setEntries(nextEntries)
@@ -383,7 +385,7 @@ function Badge({
   icon,
 }: {
   label: string
-  icon?: React.ReactNode
+  icon?: ReactNode
 }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
