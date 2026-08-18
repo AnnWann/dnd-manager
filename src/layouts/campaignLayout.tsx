@@ -230,6 +230,12 @@ export function CampaignLayout() {
 
   const creationSidebarItems = [
     {
+      label: "Configuração",
+      icon: <IconCompendium />,
+      active: location.pathname === toSession("creation/settings"),
+      onClick: () => navigate(toSession("creation/settings")),
+    },
+    {
       label: "Compêndio de Itens",
       icon: <IconEquipment />,
       active: location.pathname === toSession("creation/items-compendium"),
@@ -282,7 +288,7 @@ export function CampaignLayout() {
       </button>
       <button
         type="button"
-        onClick={() => navigate(toSession("creation/items-compendium"))}
+        onClick={() => navigate(toSession("creation/settings"))}
         className={
           isCreationMode
             ? "rounded-md bg-accentBg px-2 py-2 text-xs font-semibold text-textH"
