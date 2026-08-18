@@ -1026,7 +1026,7 @@ function createLevelUpPlans(
 ): ProgressionClassPlan[] {
   const existing = character.get("sheet").classes ?? []
   const hasClass = existing.some((entry) => entry.className === advancedClassName)
-  const plans = existing.map((entry) => ({
+  const plans: ProgressionClassPlan[] = existing.map((entry) => ({
     className: entry.className,
     previousLevel: entry.level,
     level: entry.level + (entry.className === advancedClassName ? 1 : 0),
