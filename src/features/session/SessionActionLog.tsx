@@ -194,6 +194,9 @@ function describeHpOperation(operation: SessionHpLogRecord["operation"], charact
       if (operation.proficiency === "proficient") return `${characterName} ganhou proficiência em ${skill}.`
       return `${characterName} perdeu a proficiência manual em ${skill}.`
     }
+    case "character.condition.add": return `Adicionou a condição ${operation.condition.name} a ${characterName}.`
+    case "character.condition.update": return `Editou a condição ${operation.condition.name} de ${characterName}.`
+    case "character.condition.remove": return `Removeu uma condição de ${characterName}.`
     case "character.stat.armorClass.set": return `Definiu a CA de ${characterName} para ${formatStat(operation.value)}.`
     case "character.stat.initiative.set": return `Definiu a iniciativa de ${characterName} para ${formatSignedStat(operation.value)}.`
     case "character.stat.mobility.set": return `Definiu a mobilidade de ${characterName} para ${formatStat(operation.value)}.`
