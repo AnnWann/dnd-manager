@@ -1,4 +1,9 @@
-import { parseServerSessionMessage, type ServerSessionMessage, type SessionRuntimeRole } from "./sessionProtocol"
+import {
+  parseServerSessionMessage,
+  type ClientSessionMessage,
+  type ServerSessionMessage,
+  type SessionRuntimeRole,
+} from "./sessionProtocol"
 
 export type SessionRuntimeStatus = "disconnected" | "connecting" | "connected" | "reconnecting" | "error"
 
@@ -30,6 +35,12 @@ export class SessionSocket {
     this.stopped = false
     this.clearReconnectTimer()
     this.openSocket()
+  }
+
+  send(message: ClientSessionMessage): boolean {
+    if (this.socket?.readyState !== WebSocket.OPEN) return false
+    this.socket.send(JSON.stringify(message))
+    return true
   }
 
   disconnect(): void {
