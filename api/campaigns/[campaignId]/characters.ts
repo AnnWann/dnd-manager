@@ -83,10 +83,24 @@ export async function GET(
           select: {
             id: true,
             name: true,
+            data: true,
+            revision: true,
             owner: {
               select: {
                 id: true,
                 name: true,
+              },
+            },
+            domains: {
+              select: {
+                domain: true,
+                data: true,
+                revision: true,
+                updatedById: true,
+                updatedAt: true,
+              },
+              orderBy: {
+                domain: "asc",
               },
             },
           },
@@ -107,9 +121,18 @@ export async function GET(
       characters: links.map((link) => ({
         id: link.character.id,
         name: link.character.name,
+        data: link.character.data,
+        revision: link.character.revision,
         visibility: link.visibility,
         owner: link.character.owner,
         addedAt: link.addedAt,
+        domains: link.character.domains.map((domain) => ({
+          domain: domain.domain.toLowerCase(),
+          payload: domain.data,
+          version: domain.revision,
+          updatedBy: domain.updatedById,
+          updatedAt: domain.updatedAt,
+        })),
       })),
     })
   } catch (error) {
