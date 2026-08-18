@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 
 import { Input } from "../../../../../../components/ui/Input"
+import { useCharacterContext } from "../../../../../../contexts/characterContext"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
 import {
   getCalculatedArmorClass,
@@ -36,6 +37,7 @@ export function SelectStatModule({
   fallback = 0,
   readOnly = false,
 }: Props) {
+  const { dispatchStatOperation } = useCharacterContext()
   const effectiveValue = finiteOr(getValue(character), fallback)
   const adjustmentKey = getStatAdjustmentKey(statKey)
   const adjustment = getStatAdjustment(character, adjustmentKey)
@@ -58,19 +60,58 @@ export function SelectStatModule({
       return
     }
 
-    updateCharacter(character.get("id"), (current) => {
-      const currentCalculated = finiteOr(calculate(current), fallback)
-      const nextAdjustment = cleanNumber(desiredValue - currentCalculated)
+    const currentCalculated = finiteOr(calculate(character), fallback)
+    if (dispatchCalculatedStat(desiredValue, currentCalculated)) return
 
+    updateCharacter(character.get("id"), (current) => {
+      const calculated = finiteOr(calculate(current), fallback)
+      const nextAdjustment = cleanNumber(desiredValue - calculated)
       return current.withStat(adjustmentKey, nextAdjustment)
     })
   }
 
   function clearAdjustment() {
     setEditing(false)
+    const currentCalculated = finiteOr(calculate(character), fallback)
+    if (dispatchCalculatedStat(currentCalculated, currentCalculated)) return
+
     updateCharacter(character.get("id"), (current) =>
       current.withStat(adjustmentKey, 0),
     )
+  }
+
+  function dispatchCalculatedStat(value: number, calculatedValue: number): boolean {
+    const characterId = character.get("id")
+    switch (statKey) {
+      case "armorClass":
+        return dispatchStatOperation({
+          type: "character.stat.armorClass.set",
+          characterId,
+          value,
+          calculatedValue,
+        })
+      case "initiative":
+        return dispatchStatOperation({
+          type: "character.stat.initiative.set",
+          characterId,
+          value,
+          calculatedValue,
+        })
+      case "mobility":
+        return dispatchStatOperation({
+          type: "character.stat.mobility.set",
+          characterId,
+          value,
+          calculatedValue,
+        })
+      case "passive_perception":
+        return dispatchStatOperation({
+          type: "character.stat.passivePerception.set",
+          characterId,
+          value,
+          calculatedValue,
+        })
+    }
   }
 
   return (
@@ -87,10 +128,7 @@ export function SelectStatModule({
         onChange={(event) => setDraft(event.target.value)}
         onBlur={commitDraft}
         onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.currentTarget.blur()
-          }
-
+          if (event.key === "Enter") event.currentTarget.blur()
           if (event.key === "Escape") {
             setDraft(String(effectiveValue))
             event.currentTarget.blur()
