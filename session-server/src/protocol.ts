@@ -37,8 +37,28 @@ export type SessionHpOperation =
   | { type: "character.hp.heal"; characterId: string; amount: number }
   | { type: "character.hp.max.set"; characterId: string; value: number }
   | { type: "character.hp.currentMax.adjust"; characterId: string; amount: number }
-  | { type: "character.hp.currentMax.restore"; characterId: string }
-  | { type: "character.hp.rest"; characterId: string; fraction: 0.5 | 1 };
+  | { type: "character.hp.currentMax.restore"; characterId: string };
+
+/**
+ * Rest is a domain operation, not a collection of HP/resource micro-events.
+ * Only HP is authoritative today; future migrated rest domains must be added
+ * to the same operation/reverse snapshot instead of creating extra log rows.
+ */
+export type SessionRestOperation =
+  | {
+      type: "character.rest.short";
+      characterId: string;
+      healing: number;
+    }
+  | {
+      type: "character.rest.long";
+      characterId: string;
+      recovery: "partial" | "full";
+    };
+
+export type SessionAuthoritativeOperation =
+  | SessionHpOperation
+  | SessionRestOperation;
 
 export type SessionHpReverseOperation = {
   type: "character.hp.restore";
@@ -46,12 +66,28 @@ export type SessionHpReverseOperation = {
   hp: SessionHpState;
 };
 
+export type SessionRestReverseOperation = {
+  type: "character.rest.restore";
+  characterId: string;
+  snapshot: {
+    hp: SessionHpState;
+    // Add hit dice, resources, conditions, supplies, etc. here as each domain
+    // becomes authoritative. A rest must remain one atomic reversible event.
+  };
+};
+
+export type SessionReverseOperation =
+  | SessionHpReverseOperation
+  | SessionRestReverseOperation;
+
 export type SessionHpLogRecord = {
   id: string;
   actorId: string;
   createdAt: string;
-  operation: SessionHpOperation | { type: "character.hp.undo"; characterId: string; sourceLogId: string };
-  reverseOperation: SessionHpReverseOperation;
+  operation:
+    | SessionAuthoritativeOperation
+    | { type: "character.hp.undo"; characterId: string; sourceLogId: string };
+  reverseOperation: SessionReverseOperation;
   undoneAt?: string;
   undoneBy?: string;
 };
@@ -72,7 +108,7 @@ export type SessionHpInitializeMessage = {
 
 export type SessionHpOperationMessage = {
   type: "session.hp.operation";
-  operation: SessionHpOperation;
+  operation: SessionAuthoritativeOperation;
 };
 
 export type SessionLogUndoMessage = {
@@ -166,7 +202,11 @@ export function parseClientSessionMessage(raw: string): ClientSessionMessage | n
     return { type: "session.heartbeat", clientId: value.clientId };
   }
 
-  if (value.type === "session.log.undo" && typeof value.logId === "string" && value.logId.length > 0) {
+  if (
+    value.type === "session.log.undo" &&
+    typeof value.logId === "string" &&
+    value.logId.length > 0
+  ) {
     return { type: "session.log.undo", logId: value.logId };
   }
 
@@ -176,7 +216,10 @@ export function parseClientSessionMessage(raw: string): ClientSessionMessage | n
     return { type: "session.hp.initialize", characters };
   }
 
-  if (value.type === "session.hp.operation" && isHpOperation(value.operation)) {
+  if (
+    value.type === "session.hp.operation" &&
+    isAuthoritativeOperation(value.operation)
+  ) {
     return { type: "session.hp.operation", operation: value.operation };
   }
 
@@ -197,8 +240,15 @@ function isHpSeed(value: unknown): value is SessionHpSeed {
   );
 }
 
-function isHpOperation(value: unknown): value is SessionHpOperation {
-  if (!isRecord(value) || typeof value.type !== "string" || typeof value.characterId !== "string") {
+function isAuthoritativeOperation(
+  value: unknown,
+): value is SessionAuthoritativeOperation {
+  if (
+    !isRecord(value) ||
+    typeof value.type !== "string" ||
+    typeof value.characterId !== "string" ||
+    value.characterId.length === 0
+  ) {
     return false;
   }
 
@@ -214,8 +264,10 @@ function isHpOperation(value: unknown): value is SessionHpOperation {
       return isFiniteNumber(value.amount);
     case "character.hp.currentMax.restore":
       return true;
-    case "character.hp.rest":
-      return value.fraction === 0.5 || value.fraction === 1;
+    case "character.rest.short":
+      return isFiniteNumber(value.healing);
+    case "character.rest.long":
+      return value.recovery === "partial" || value.recovery === "full";
     default:
       return false;
   }
