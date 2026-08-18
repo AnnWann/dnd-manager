@@ -357,7 +357,12 @@ export type ClassName =
   | "warlock"
   | "wizard"
 
+/**
+ * Level zero is used only as the previous level when adding a new class during
+ * multiclass progression. Persisted class entries should still start at 1.
+ */
 export type ClassLevel =
+  | 0
   | 1
   | 2
   | 3
