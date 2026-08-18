@@ -10,8 +10,8 @@ import {
 } from "react"
 import { SessionSocket, type SessionRuntimeStatus } from "./sessionSocket"
 import type {
+  SessionAuthoritativeOperation,
   SessionHpLogRecord,
-  SessionHpOperation,
   SessionHpSeed,
   SessionHpState,
   SessionRuntimePresenceUser,
@@ -28,7 +28,7 @@ export type SessionRuntimeContextValue = {
   hpByCharacterId: Readonly<Record<string, SessionHpState>>
   hpLog: SessionHpLogRecord[]
   initializeHp: (characters: SessionHpSeed[]) => boolean
-  dispatchHpOperation: (operation: SessionHpOperation) => boolean
+  dispatchHpOperation: (operation: SessionAuthoritativeOperation) => boolean
   undoLog: (logId: string) => boolean
 }
 
@@ -154,7 +154,7 @@ function SessionRuntimeProviderInner({
     socketRef.current?.send({ type: "session.hp.initialize", characters }) ?? false,
   [])
 
-  const dispatchHpOperation = useCallback((operation: SessionHpOperation) =>
+  const dispatchHpOperation = useCallback((operation: SessionAuthoritativeOperation) =>
     socketRef.current?.send({ type: "session.hp.operation", operation }) ?? false,
   [])
 
