@@ -9,13 +9,24 @@ const sessionServerUrl = process.env.VITE_SESSION_SERVER_URL || "http://localhos
 
 if (!existsSync(".vercel/project.json")) {
   console.error("\n[dev:full] This repository is not linked to Vercel yet.")
-  console.error("Run `npx vercel link` once, then run this command again.\n")
+  console.error("Run `npm run dev:link` once, then run this command again.\n")
   process.exit(1)
 }
 
 if (!existsSync("session-server/node_modules")) {
   console.error("\n[dev:full] session-server dependencies are missing.")
   console.error("Run `npm install --prefix session-server` once, then run this command again.\n")
+  process.exit(1)
+}
+
+if (
+  environment === "production" &&
+  process.env.ALLOW_PRODUCTION_DATA !== "1"
+) {
+  console.error("\n[dev:full] Refusing to load Production Vercel environment variables by default.")
+  console.error("Production variables may point at the real production database and external services.")
+  console.error("If that is intentional, run:")
+  console.error("  ALLOW_PRODUCTION_DATA=1 npm run dev:full:prod-env\n")
   process.exit(1)
 }
 
@@ -46,7 +57,6 @@ function start(name, command, commandArgs, env = commonEnv) {
   })
 
   children.push(child)
-  return child
 }
 
 function shutdown(exitCode = 0) {
@@ -73,9 +83,14 @@ process.on("SIGTERM", () => shutdown(0))
 
 console.log("\n[dev:full] Local production-like stack")
 console.log(`[dev:full] Vercel env: ${environment}`)
-console.log(`[dev:full] App/functions: http://localhost:${vercelPort}`)
-console.log(`[dev:full] Session server: ${sessionServerUrl}`)
-console.log("[dev:full] Local auth bypass: disabled\n")
+console.log(`[dev:full] App + Vercel Functions: http://localhost:${vercelPort}`)
+console.log(`[dev:full] Session Worker + Durable Objects: ${sessionServerUrl}`)
+console.log("[dev:full] Local auth bypass: disabled")
+console.log(
+  environment === "development"
+    ? "[dev:full] Database/services: values configured in Vercel Development env\n"
+    : "[dev:full] WARNING: using Vercel Production env values locally\n",
+)
 
 const vercelArgs =
   environment === "production"
