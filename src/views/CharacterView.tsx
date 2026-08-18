@@ -423,18 +423,16 @@ export function CharacterView() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {mode === "user" && !campaignId ? (
-            <button
-              type="button"
-              onClick={() =>
-                navigate(`/user/characters/${encodeURIComponent(routeCharacter.get("id"))}/level-up`)
-              }
-              className="inline-flex items-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-medium text-textH hover:bg-bg-subtle"
-            >
-              <TrendingUp className="h-4 w-4" />
-              Subir de nível
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={() =>
+              navigate(characterLevelUpPath(mode, campaignId, routeCharacter.get("id")))
+            }
+            className="inline-flex items-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-medium text-textH hover:bg-bg-subtle"
+          >
+            <TrendingUp className="h-4 w-4" />
+            Subir de nível
+          </button>
 
           {canAssignOwners ? (
             <button
@@ -466,7 +464,7 @@ export function CharacterView() {
       </div>
 
       <div
-        className="min-w-0 overflow-hidden touch-pan-y"
+        className="min-w-0 overflow-hidden"
         style={tabPanelStyle}
         onTouchStart={handleSwipeStart}
         onTouchMove={handleSwipeMove}
@@ -478,71 +476,34 @@ export function CharacterView() {
       >
         <div
           ref={tabContentRef}
-          className="grid min-w-0 gap-4"
+          className="flex min-w-0 flex-col gap-4 will-change-transform"
           style={tabContentStyle}
         >
           {placedBefore}
-
-          {activeTab === "sheet" ? (
-            <CharacterSheetTab
-              character={routeCharacter}
-              updateCharacter={updateCharacter}
-              canAssignOwners={canAssignOwners}
-            />
+          {activeStaticTab === "sheet" ? (
+            <CharacterSheetTab character={routeCharacter} updateCharacter={updateCharacter} />
           ) : null}
-
-          {activeTab === "race" ? (
-            <CharacterRaceTab
-              character={routeCharacter}
-              updateCharacter={updateCharacter}
-            />
+          {activeStaticTab === "abilities" ? (
+            <CharacterAbilitiesTab character={routeCharacter} updateCharacter={updateCharacter} />
           ) : null}
-
-          {activeTab === "profile" ? (
-            <CharacterProfileTab
-              character={routeCharacter}
-              updateCharacter={updateCharacter}
-            />
+          {activeStaticTab === "spellsList" ? (
+            <CharacterMagicTab character={routeCharacter} updateCharacter={updateCharacter} />
           ) : null}
-
-          {activeTab === "abilities" ? (
-            <CharacterAbilitiesTab
-              character={routeCharacter}
-              updateCharacter={updateCharacter}
-            />
+          {activeStaticTab === "equipment" ? (
+            <CharacterEquipmentTab character={routeCharacter} updateCharacter={updateCharacter} />
           ) : null}
-
-          {activeTab === "equipment" ? (
-            <CharacterEquipmentTab
-              character={routeCharacter}
-              updateCharacter={updateCharacter}
-            />
+          {activeStaticTab === "inventory" ? (
+            <CharacterInventoryTab character={routeCharacter} updateCharacter={updateCharacter} />
           ) : null}
-
-          {activeTab === "inventory" ? (
-            <CharacterInventoryTab
-              character={routeCharacter}
-              updateCharacter={updateCharacter}
-              canEditInventory={canEditCharacterType}
-            />
+          {activeStaticTab === "race" ? (
+            <CharacterRaceTab character={routeCharacter} updateCharacter={updateCharacter} />
           ) : null}
-
-          {activeTab === "spells-list" ? (
-            <CharacterMagicTab
-              character={routeCharacter}
-              updateCharacter={updateCharacter}
-            />
+          {activeStaticTab === "profile" ? (
+            <CharacterProfileTab character={routeCharacter} updateCharacter={updateCharacter} />
           ) : null}
-
-          {activeTab === "proficiencies" ? (
-            <CharacterProficienciesTab
-              character={routeCharacter}
-              updateCharacter={updateCharacter}
-            />
+          {activeStaticTab === "proficiencies" ? (
+            <CharacterProficienciesTab character={routeCharacter} updateCharacter={updateCharacter} />
           ) : null}
-
-          {placedAfter}
-
           {customTabSystemId ? (
             <CustomSystemsTabWithLibrary
               character={routeCharacter}
@@ -551,35 +512,37 @@ export function CharacterView() {
               systemIds={[customTabSystemId]}
             />
           ) : null}
+          {placedAfter}
         </div>
       </div>
 
-      <CharacterSettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        character={routeCharacter}
-        updateCharacter={updateCharacter}
-        canAssignOwners={canAssignOwners}
-        canEditCharacterType={canEditCharacterType}
-        playerKeys={playerKeys}
-        getOwner={getOwner}
-        createOwner={createOwner}
-      />
-
+      {canAssignOwners ? (
+        <CharacterSettingsModal
+          open={settingsOpen}
+          character={routeCharacter}
+          owners={wizardOwners}
+          canEditCharacterType={canEditCharacterType}
+          onClose={() => setSettingsOpen(false)}
+          onSave={(updated) => {
+            updateCharacter(routeCharacter.get("id"), () => updated)
+            setSettingsOpen(false)
+          }}
+        />
+      ) : null}
     </div>
   )
 }
 
 function orderCharacterTabs(
-  standardTabs: Array<CharacterViewTabDefinition & { key: CharacterTab }>,
+  standardTabs: CharacterViewTabDefinition[],
   definitions: CustomSystemDefinition[],
 ): CharacterViewTabDefinition[] {
-  const result: CharacterViewTabDefinition[] = [...standardTabs]
-  const pending = definitions
-    .filter((definition) => getCustomSystemPlacement(definition).mode === "newTab")
-    .filter((definition) => !result.some((tab) => tab.key === definition.id))
-
-  const unresolved = [...pending]
+  const sequence = standardTabs.map((entry) => entry.key)
+  const byKey = new Map(standardTabs.map((entry) => [entry.key, entry]))
+  const unresolved = definitions.filter(
+    (definition) => getCustomSystemPlacement(definition).mode === "newTab",
+  )
+  const result = [...standardTabs]
   let madeProgress = true
 
   while (unresolved.length && madeProgress) {
@@ -593,30 +556,27 @@ function orderCharacterTabs(
         continue
       }
 
-      const reference = placement.reference ?? {
-        type: "standardTab" as const,
-        tab: placement.relativeToTab ?? "sheet",
-      }
-      let anchorKey =
-        reference.type === "system" ? reference.systemId : fromCustomSystemTab(reference.tab)
+      const reference = placement.reference
+      const referenceKey = reference
+        ? reference.type === "system"
+          ? reference.systemId
+          : fromCustomSystemTab(reference.tab)
+        : undefined
 
-      if (!result.some((entry) => entry.key === anchorKey)) {
-        if (reference.type === "standardTab" && anchorKey !== "sheet") {
-          anchorKey = "sheet"
-        } else {
-          continue
-        }
+      let insertionIndex = result.length
+      if (referenceKey) {
+        const anchorIndex = result.findIndex((entry) => entry.key === referenceKey)
+        if (anchorIndex < 0) continue
+        insertionIndex = placement.position === "before" ? anchorIndex : anchorIndex + 1
       }
-
-      const anchorIndex = result.findIndex((entry) => entry.key === anchorKey)
-      const insertionIndex =
-        placement.position === "before" ? anchorIndex : anchorIndex + 1
 
       result.splice(insertionIndex, 0, {
         key: definition.id,
         label: placement.tabLabel || definition.name,
         icon: Settings2,
       })
+      sequence.splice(insertionIndex, 0, definition.id)
+      byKey.set(definition.id, result[insertionIndex])
       unresolved.splice(index, 1)
       madeProgress = true
     }
@@ -722,6 +682,20 @@ function characterCreatePath(
 ): string {
   if (mode === "campaign" && campaignId) return campaignPath(campaignId, "character/create")
   return "/user/characters/create"
+}
+
+function characterLevelUpPath(
+  mode: "campaign" | "user",
+  campaignId: string | undefined,
+  characterId: string,
+): string {
+  if (mode === "campaign" && campaignId) {
+    return campaignPath(
+      campaignId,
+      `character/${encodeURIComponent(characterId)}/level-up`,
+    )
+  }
+  return `/user/characters/${encodeURIComponent(characterId)}/level-up`
 }
 
 function toCustomSystemExistingTab(
