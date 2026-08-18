@@ -77,6 +77,15 @@ function SessionRuntimeDevPanel({
       hitDice: {
         d8: { current: 4, max: 4 },
       },
+      stats: {
+        armorClassAdjustment: 0,
+        initiativeAdjustment: 0,
+        mobilityAdjustment: 0,
+        passivePerceptionAdjustment: 0,
+        exhaustion: 0,
+        inspiration: false,
+        experience: 0,
+      },
     }])
   }
 
@@ -86,7 +95,7 @@ function SessionRuntimeDevPanel({
         <p className="text-xs uppercase tracking-[0.2em] text-textMuted">Development only</p>
         <h1 className="text-2xl font-semibold">Session Runtime Test</h1>
         <p className="mt-2 text-sm text-textMuted">
-          Validate presence, authoritative HP/hit dice, rest operations, broadcast and MASTER undo without a campaign.
+          Validate authoritative HP, hit dice, granular stats, rests, broadcast and MASTER undo without a campaign.
         </p>
       </div>
 
@@ -142,11 +151,18 @@ function SessionRuntimeDevPanel({
         </div>
 
         {state ? (
-          <div className="grid gap-2 text-sm sm:grid-cols-3">
+          <div className="grid gap-2 text-sm sm:grid-cols-4">
             <RuntimeRow label="HP" value={`${state.current}/${state.currentMax}`} />
             <RuntimeRow label="Temporary HP" value={String(state.temporary)} />
             <RuntimeRow label="d8 hit dice" value={d8 ? `${d8.current}/${d8.max}` : "none"} />
             <RuntimeRow label="Revision" value={String(state.revision)} />
+            <RuntimeRow label="CA adjustment" value={String(state.stats.armorClassAdjustment)} />
+            <RuntimeRow label="Initiative adjustment" value={String(state.stats.initiativeAdjustment)} />
+            <RuntimeRow label="Mobility adjustment" value={String(state.stats.mobilityAdjustment)} />
+            <RuntimeRow label="Passive adjustment" value={String(state.stats.passivePerceptionAdjustment)} />
+            <RuntimeRow label="Exhaustion" value={String(state.stats.exhaustion)} />
+            <RuntimeRow label="Inspiration" value={String(state.stats.inspiration)} />
+            <RuntimeRow label="Experience" value={String(state.stats.experience)} />
           </div>
         ) : (
           <p className="text-sm text-textMuted">Character state has not been initialized.</p>
@@ -154,12 +170,19 @@ function SessionRuntimeDevPanel({
 
         <div className="flex flex-wrap gap-2">
           {runtime.role === "MASTER" && !state ? (
-            <DevButton onClick={initializeCharacter}>Initialize 20 HP + 4d8</DevButton>
+            <DevButton onClick={initializeCharacter}>Initialize character</DevButton>
           ) : null}
           <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.hp.damage", characterId: DEV_CHARACTER_ID, amount: 5 })}>Damage 5</DevButton>
           <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.hp.heal", characterId: DEV_CHARACTER_ID, amount: 3 })}>Heal 3</DevButton>
           <DevButton disabled={!d8 || d8.current <= 0} onClick={() => runtime.dispatchHpOperation({ type: "character.hitDice.use", characterId: DEV_CHARACTER_ID, side: "d8", amount: 1 })}>Use 1d8</DevButton>
           <DevButton disabled={!d8 || d8.current >= d8.max} onClick={() => runtime.dispatchHpOperation({ type: "character.hitDice.recover", characterId: DEV_CHARACTER_ID, side: "d8", amount: 1 })}>Recover 1d8</DevButton>
+          <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.stat.armorClass.set", characterId: DEV_CHARACTER_ID, value: 18, calculatedValue: 15 })}>Set CA 18 (auto 15)</DevButton>
+          <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.stat.initiative.set", characterId: DEV_CHARACTER_ID, value: 4, calculatedValue: 2 })}>Set initiative +4 (auto +2)</DevButton>
+          <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.stat.mobility.set", characterId: DEV_CHARACTER_ID, value: 12, calculatedValue: 9 })}>Set mobility 12 (auto 9)</DevButton>
+          <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.stat.passivePerception.set", characterId: DEV_CHARACTER_ID, value: 15, calculatedValue: 12 })}>Set passive 15 (auto 12)</DevButton>
+          <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.stat.exhaustion.set", characterId: DEV_CHARACTER_ID, value: 2 })}>Set exhaustion 2</DevButton>
+          <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.stat.inspiration.set", characterId: DEV_CHARACTER_ID, value: !(state?.stats.inspiration ?? false) })}>Toggle inspiration</DevButton>
+          <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.stat.experience.set", characterId: DEV_CHARACTER_ID, value: (state?.stats.experience ?? 0) + 500 })}>XP +500</DevButton>
           <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.rest.short", characterId: DEV_CHARACTER_ID, healing: 4, hitDiceConsumption: { d8: 1 } })}>Short rest: +4 HP, -1d8</DevButton>
           <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.rest.long", characterId: DEV_CHARACTER_ID, recovery: "full" })}>Full long rest</DevButton>
           <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.rest.long", characterId: DEV_CHARACTER_ID, recovery: "partial" })}>Partial long rest</DevButton>
@@ -195,12 +218,13 @@ function SessionRuntimeDevPanel({
       <section className="rounded-lg border border-border bg-surface p-4 text-sm">
         <p className="font-medium">Cross-browser test</p>
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-textMuted">
-          <li>Open MASTER and initialize 20 HP + 4d8.</li>
+          <li>Open MASTER and initialize the character.</li>
           <li>Open the same session in another browser as userId player.</li>
-          <li>Use/recover d8 and confirm both browsers update.</li>
-          <li>Run a short rest and confirm it creates one log entry while changing HP + d8.</li>
-          <li>Undo the short rest as MASTER and confirm HP + d8 both return together.</li>
-          <li>Run a long rest and verify hit-dice recovery follows the same single-event rule.</li>
+          <li>Change CA, initiative, mobility, passive perception, exhaustion, inspiration and XP independently.</li>
+          <li>Confirm every individual change broadcasts to both browsers and creates one MASTER log entry.</li>
+          <li>Undo each stat and verify only that stat returns to its previous value.</li>
+          <li>Run a partial long rest: it must be one log event and increase exhaustion together with HP/hit-dice recovery.</li>
+          <li>Undo that long rest and verify HP, hit dice and exhaustion return atomically.</li>
         </ol>
         <code className="mt-3 block break-all rounded bg-background p-3 text-xs">
           /dev/session-runtime/{sessionId}?userId=player&role=PLAYER
