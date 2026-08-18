@@ -35,6 +35,7 @@ import { MissionProvider } from "../contexts/missionContext"
 import { PartyInventorySettingsProvider } from "../contexts/partyInventorySettingsContext"
 import { SyncProvider } from "../contexts/syncContext"
 import { MasterConcentrationAlerts } from "../features/characters/characterSheet/masterConcentrationAlerts"
+import { SessionActionLog } from "../features/session/SessionActionLog"
 import { RelationalMigrationBridge } from "../features/sync/RelationalMigrationBridge"
 import {
   clearActiveSession,
@@ -168,6 +169,14 @@ export function CampaignLayout() {
 
   const effectiveUserRole = resolvedSessionRole ?? userRole
   const effectiveUserKey = authenticatedUserId || userKey
+  const isCreationMode = Boolean(
+    sessionId && location.pathname.startsWith(toSession("creation")),
+  )
+
+  useEffect(() => {
+    if (!sessionReady || effectiveUserRole === "master" || !isCreationMode) return
+    navigate(toSession("characters"), { replace: true })
+  }, [effectiveUserRole, isCreationMode, navigate, sessionReady, toSession])
 
   useEffect(() => {
     if (appState === rawAppState) return
@@ -179,7 +188,7 @@ export function CampaignLayout() {
     navigate("/user")
   }
 
-  const sidebarItems = [
+  const sessionSidebarItems = [
     {
       label: "Personagens",
       icon: <IconCharacter />,
@@ -210,24 +219,6 @@ export function CampaignLayout() {
     ...(effectiveUserRole === "master"
       ? [
           {
-            label: "Compêndio de Itens",
-            icon: <IconEquipment />,
-            active: location.pathname === toSession("items-compendium"),
-            onClick: () => navigate(toSession("items-compendium")),
-          },
-          {
-            label: "Compêndio de Criaturas",
-            icon: <IconCompendium />,
-            active: location.pathname === toSession("creatures-compendium"),
-            onClick: () => navigate(toSession("creatures-compendium")),
-          },
-          {
-            label: "Sistemas personalizados",
-            icon: <IconCompendium />,
-            active: location.pathname.startsWith(toSession("custom-systems")),
-            onClick: () => navigate(toSession("custom-systems")),
-          },
-          {
             label: "Iniciativa",
             icon: <IconInitiative />,
             active: location.pathname === toSession("initiative"),
@@ -235,12 +226,39 @@ export function CampaignLayout() {
           },
         ]
       : []),
+  ]
+
+  const creationSidebarItems = [
+    {
+      label: "Compêndio de Itens",
+      icon: <IconEquipment />,
+      active: location.pathname === toSession("creation/items-compendium"),
+      onClick: () => navigate(toSession("creation/items-compendium")),
+    },
+    {
+      label: "Compêndio de Criaturas",
+      icon: <IconCompendium />,
+      active: location.pathname === toSession("creation/creatures-compendium"),
+      onClick: () => navigate(toSession("creation/creatures-compendium")),
+    },
+    {
+      label: "Sistemas personalizados",
+      icon: <IconCompendium />,
+      active: location.pathname.startsWith(toSession("creation/custom-systems")),
+      onClick: () => navigate(toSession("creation/custom-systems")),
+    },
     {
       label: "Magia",
       icon: <IconMagic />,
-      active: location.pathname === toSession("magic"),
-      onClick: () => navigate(toSession("magic")),
+      active: location.pathname === toSession("creation/magic"),
+      onClick: () => navigate(toSession("creation/magic")),
     },
+  ]
+
+  const sidebarItems = [
+    ...(effectiveUserRole === "master" && isCreationMode
+      ? creationSidebarItems
+      : sessionSidebarItems),
     {
       label: "Sair da sessão",
       icon: <LogOut />,
@@ -248,6 +266,33 @@ export function CampaignLayout() {
       onClick: leaveSession,
     },
   ]
+
+  const modeSwitcher = effectiveUserRole === "master" ? (
+    <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-bg p-1">
+      <button
+        type="button"
+        onClick={() => navigate(toSession("characters"))}
+        className={
+          !isCreationMode
+            ? "rounded-md bg-accentBg px-2 py-2 text-xs font-semibold text-textH"
+            : "rounded-md px-2 py-2 text-xs font-medium text-textMuted hover:bg-bg-subtle hover:text-textH"
+        }
+      >
+        Sessão
+      </button>
+      <button
+        type="button"
+        onClick={() => navigate(toSession("creation/items-compendium"))}
+        className={
+          isCreationMode
+            ? "rounded-md bg-accentBg px-2 py-2 text-xs font-semibold text-textH"
+            : "rounded-md px-2 py-2 text-xs font-medium text-textMuted hover:bg-bg-subtle hover:text-textH"
+        }
+      >
+        Criação
+      </button>
+    </div>
+  ) : undefined
 
   const NoSideBar = ["/auth", "/not-found"].includes(location.pathname)
 
@@ -327,12 +372,15 @@ export function CampaignLayout() {
                     <AppHeader />
 
                     <div className="flex min-h-0 min-w-0 max-w-full flex-1 overflow-hidden">
-                      <AppSidebar items={sidebarItems} />
+                      <AppSidebar items={sidebarItems} topContent={modeSwitcher} />
                       <main className="min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto has-[[aria-modal=true]]:overflow-y-hidden">
                         <div className="w-full min-w-0 max-w-full overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6">
                           <AppRouter />
                         </div>
                       </main>
+                      {effectiveUserRole === "master" && !isCreationMode ? (
+                        <SessionActionLog />
+                      ) : null}
                     </div>
                   </div>
                 </MagicProvider>
