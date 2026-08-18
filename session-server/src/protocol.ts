@@ -37,7 +37,8 @@ export type SessionHpOperation =
   | { type: "character.hp.heal"; characterId: string; amount: number }
   | { type: "character.hp.max.set"; characterId: string; value: number }
   | { type: "character.hp.currentMax.adjust"; characterId: string; amount: number }
-  | { type: "character.hp.currentMax.restore"; characterId: string };
+  | { type: "character.hp.currentMax.restore"; characterId: string }
+  | { type: "character.hp.rest"; characterId: string; fraction: 0.5 | 1 };
 
 export type SessionHpReverseOperation = {
   type: "character.hp.restore";
@@ -213,6 +214,8 @@ function isHpOperation(value: unknown): value is SessionHpOperation {
       return isFiniteNumber(value.amount);
     case "character.hp.currentMax.restore":
       return true;
+    case "character.hp.rest":
+      return value.fraction === 0.5 || value.fraction === 1;
     default:
       return false;
   }
