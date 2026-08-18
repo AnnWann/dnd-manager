@@ -34,6 +34,20 @@ export type SessionHomebrewSpell = {
   reviewedAt?: string | null
 }
 
+export type SessionHomebrewAsset = {
+  id: string
+  type: "SYSTEM" | "CLASS" | "OTHER"
+  sourceId: string
+  name: string
+  data: Record<string, unknown>
+  addedBy: {
+    id: string
+    name: string
+  }
+  createdAt: string
+  updatedAt: string
+}
+
 export type SessionHomebrewCatalog = {
   campaign: {
     id: string
@@ -41,6 +55,7 @@ export type SessionHomebrewCatalog = {
     isMaster: boolean
   }
   spells: SessionHomebrewSpell[]
+  assets: SessionHomebrewAsset[]
 }
 
 export async function getSessionHomebrew(
@@ -96,13 +111,17 @@ export async function getSessionHomebrew(
         isMaster,
       },
       spells,
+      assets: [],
     }
   }
 
   const response = await apiClient.get<SessionHomebrewCatalog>(
     `/campaigns/${encodeURIComponent(campaignId)}/homebrew`,
   )
-  return response.data
+  return {
+    ...response.data,
+    assets: response.data.assets ?? [],
+  }
 }
 
 export async function reviewSessionHomebrewSpell(
