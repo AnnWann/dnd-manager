@@ -1,9 +1,8 @@
 import { History, Undo2 } from "lucide-react"
-import { useEffect, useMemo, useRef } from "react"
+import { useMemo } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
-import { getCurrentMaxHp } from "../../models/characters/characterHp"
-import type { SessionDieSides, SessionHpLogRecord } from "../session-runtime/sessionProtocol"
+import type { SessionHpLogRecord } from "../session-runtime/sessionProtocol"
 import { useOptionalSessionRuntime } from "../session-runtime/useSessionRuntime"
 import type {
   GameOperation,
@@ -20,41 +19,6 @@ const REST_LEGACY_MATCH_WINDOW_MS = 3_000
 export function SessionActionLog() {
   const { operationLog, visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
   const runtime = useOptionalSessionRuntime()
-  const lastSeedSignatureRef = useRef("")
-
-  useEffect(() => {
-    if (!runtime || runtime.role !== "MASTER" || runtime.status !== "connected") return
-
-    const seeds = visibleCharacters.map((character) => {
-      const hp = character.get("sheet").HP
-      const currentMax = getCurrentMaxHp(character)
-      const hitDice = Object.fromEntries(
-        Object.entries(hp.hitDice).flatMap(([side, pool]) =>
-          pool ? [[side, { current: pool.current.quantity, max: pool.max.quantity }]] : [],
-        ),
-      ) as Partial<Record<SessionDieSides, { current: number; max: number }>>
-
-      return {
-        characterId: character.get("id"),
-        ownerUserId: character.get("owner")?.id?.trim() || undefined,
-        current: hp.current,
-        temporary: hp.temporary,
-        max: hp.max,
-        currentMax,
-        maxHpBonus: character.getEffectiveMaxHp() - currentMax,
-        hitDice,
-      }
-    })
-
-    const signature = JSON.stringify(
-      seeds.map(({ characterId, hitDice }) => ({ characterId, hitDice })),
-    )
-    if (signature === lastSeedSignatureRef.current) return
-
-    if (runtime.initializeHp(seeds)) {
-      lastSeedSignatureRef.current = signature
-    }
-  }, [runtime?.initializeHp, runtime?.role, runtime?.status, visibleCharacters])
 
   const characterNames = useMemo(
     () => new Map(visibleCharacters.map((character) => [character.get("id"), character.get("name")])),
@@ -220,6 +184,15 @@ function describeHpOperation(operation: SessionHpLogRecord["operation"], charact
     case "character.hitDice.recover": return `${characterName} recuperou ${operation.amount} ${operation.side} de vida.`
     case "character.hitDice.add": return `Adicionou ${operation.amount} ${operation.side} de vida a ${characterName}.`
     case "character.hitDice.remove": return `Removeu o pool ${operation.side} de dados de vida de ${characterName}.`
+    case "character.stat.armorClass.set": return `Definiu a CA de ${characterName} para ${formatStat(operation.value)}.`
+    case "character.stat.initiative.set": return `Definiu a iniciativa de ${characterName} para ${formatSignedStat(operation.value)}.`
+    case "character.stat.mobility.set": return `Definiu a mobilidade de ${characterName} para ${formatStat(operation.value)}.`
+    case "character.stat.passivePerception.set": return `Definiu a percepção passiva de ${characterName} para ${formatStat(operation.value)}.`
+    case "character.stat.exhaustion.set": return `Definiu a exaustão de ${characterName} para ${operation.value}.`
+    case "character.stat.inspiration.set": return operation.value
+      ? `${characterName} recebeu inspiração.`
+      : `${characterName} gastou a inspiração.`
+    case "character.stat.experience.set": return `Definiu a experiência de ${characterName} para ${operation.value.toLocaleString("pt-BR")} XP.`
     case "character.rest.short": return `${characterName} concluiu um descanso curto.`
     case "character.rest.long": return `${characterName} concluiu um descanso longo${operation.recovery === "partial" ? " parcial" : ""}.`
     case "character.hp.undo": return `Desfez uma alteração de ${characterName}.`
@@ -264,6 +237,14 @@ function locationLabel(location: InventoryLocation, characterNames: ReadonlyMap<
   if (location.type === "party") return "Inventário do grupo"
   if (location.type === "ground") return "Chão"
   return characterNames.get(location.characterId) ?? "um personagem"
+}
+
+function formatStat(value: number): string {
+  return value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })
+}
+
+function formatSignedStat(value: number): string {
+  return `${value >= 0 ? "+" : ""}${formatStat(value)}`
 }
 
 function formatTime(value: string): string {
