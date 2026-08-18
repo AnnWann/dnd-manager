@@ -29,6 +29,7 @@ type MagicContextValue = {
   getMetamagicById: (metamagicId: MetamagicId) => Metamagic | undefined
   getMetamagicsByIds: (metamagicIds: MetamagicId[]) => Metamagic[]
   saveSpell: (spell: Spell) => void
+  saveSpells: (spells: Spell[]) => void
   deleteSpell: (spellIndex: string) => void
 }
 
@@ -113,20 +114,28 @@ export function MagicProvider({
     onSpellsChange?.(nextSpells)
   }
 
-  function saveSpell(spell: Spell) {
-    const normalizedSpell = normalizeSpellText(spell)
+  function saveSpells(incoming: Spell[]) {
+    const normalizedIncoming = incoming.map(normalizeSpellText)
+    if (!normalizedIncoming.length) return
 
     if (onSaveSpell) {
-      onSaveSpell(normalizedSpell)
+      for (const spell of normalizedIncoming) onSaveSpell(spell)
       return
     }
 
-    commitSavedSpells([
-      ...normalizedSavedSpells.filter(
-        (existing) => existing.index !== normalizedSpell.index,
-      ),
-      normalizedSpell,
-    ])
+    if (setAppState) {
+      setAppState((previous) => ({
+        ...previous,
+        spells: mergeSpells(previous.spells ?? [], normalizedIncoming),
+      }))
+      return
+    }
+
+    commitSavedSpells(mergeSpells(normalizedSavedSpells, normalizedIncoming))
+  }
+
+  function saveSpell(spell: Spell) {
+    saveSpells([spell])
   }
 
   function deleteSpell(spellIndex: string) {
@@ -157,12 +166,19 @@ export function MagicProvider({
         getMetamagicById,
         getMetamagicsByIds,
         saveSpell,
+        saveSpells,
         deleteSpell,
       }}
     >
       {children}
     </MagicContext.Provider>
   )
+}
+
+function mergeSpells(existing: Spell[], incoming: Spell[]): Spell[] {
+  const byIndex = new Map(existing.map((spell) => [spell.index, spell]))
+  for (const spell of incoming) byIndex.set(spell.index, spell)
+  return Array.from(byIndex.values())
 }
 
 export function useMagicContext() {
