@@ -1,6 +1,9 @@
 import { useState } from "react"
 import { useOptionalSessionRuntime } from "../../../../session-runtime/useSessionRuntime"
-import type { SessionDieSides } from "../../../../session-runtime/sessionProtocol"
+import type {
+  SessionAuthoritativeOperation,
+  SessionDieSides,
+} from "../../../../session-runtime/sessionProtocol"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
 import type { DieSides } from "../../../../../../models/dice/Die"
 import { AddHitDiceDialog } from "./addHitDiceDialog"
@@ -31,7 +34,7 @@ export function GroupHitDice({ character, updateCharacter }: Props) {
           : [],
       )
 
-  function sendRuntimeOperation(operation: Parameters<NonNullable<typeof runtime>["dispatchHpOperation"]>[0]) {
+  function sendRuntimeOperation(operation: SessionAuthoritativeOperation) {
     if (!runtime) return false
     if (runtime.status !== "connected") {
       console.warn("[session-runtime] Hit-dice change ignored while the authoritative session server is disconnected.")
