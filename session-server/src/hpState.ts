@@ -197,6 +197,15 @@ function validateOperation(
         };
       }
       break;
+    case "character.hp.rest":
+      if (operation.fraction !== 0.5 && operation.fraction !== 1) {
+        return {
+          ok: false,
+          code: "INVALID_REST_FRACTION",
+          message: "HP rest recovery fraction must be 0.5 or 1.",
+        };
+      }
+      break;
   }
 
   return null;
@@ -254,6 +263,17 @@ function mutateHp(
       next.currentMax = next.max;
       next.current = Math.min(next.current, effectiveMax(next));
       break;
+
+    case "character.hp.rest": {
+      const maximum = effectiveMax(next);
+      const missing = Math.max(0, maximum - next.current);
+      next.current = Math.min(
+        maximum,
+        next.current + Math.ceil(missing * operation.fraction),
+      );
+      next.temporary = 0;
+      break;
+    }
   }
 
   return next;
