@@ -176,7 +176,17 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
   }
 
   function failConcentration() {
-    updateCharacter(characterId, endConcentration)
+    if (authoritativeHp?.status === "connected") {
+      authoritativeHp.dispatchConcentrationOperation({
+        type: "character.concentration.end",
+        characterId,
+        reason: "failed-save",
+      })
+    } else if (!authoritativeHp) {
+      updateCharacter(characterId, endConcentration)
+    } else {
+      console.warn("[session-runtime] Concentration change ignored while the authoritative session server is disconnected.")
+    }
     setPendingCheck(null)
   }
 
