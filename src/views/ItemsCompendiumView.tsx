@@ -3,6 +3,7 @@ import {
   Eye,
   EyeOff,
   PackagePlus,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -55,6 +56,8 @@ export function ItemsCompendiumView() {
   const [query, setQuery] = useState("")
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [editingEntry, setEditingEntry] =
+    useState<SessionCompendiumItem | null>(null)
   const [entries, setEntries] = useState<SessionItemCompendiumEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [workingId, setWorkingId] = useState("")
@@ -171,6 +174,39 @@ export function ItemsCompendiumView() {
     }
   }
 
+  async function editCustomItem(item: Itemmable) {
+    const currentEntry = editingEntry
+    if (!currentEntry?.custom || workingId) return
+
+    const templateId = currentEntry.item.id
+    const template = {
+      ...normalizeStoredTemplate(item),
+      // A definição mantém identidade estável mesmo se o JSON editado tentar
+      // trocar o id. Instâncias futuras continuam apontando para a mesma fonte.
+      id: templateId,
+    }
+
+    setWorkingId(templateId)
+    setErrorMessage("")
+    try {
+      const saved = await upsertSessionItemCompendiumEntry(campaignId!, {
+        item: template,
+        custom: true,
+        visibility: currentEntry.visibility,
+      })
+      setEntries((current) => mergeEntries(current, [saved]))
+      setEditingEntry(null)
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível editar o item do compêndio.",
+      )
+    } finally {
+      setWorkingId("")
+    }
+  }
+
   async function changeVisibility(
     entry: SessionCompendiumItem,
     visibility: SessionItemCompendiumVisibility,
@@ -205,6 +241,7 @@ export function ItemsCompendiumView() {
       setEntries((current) =>
         current.filter((entry) => entry.templateId !== itemId),
       )
+      if (editingEntry?.item.id === itemId) setEditingEntry(null)
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -226,7 +263,7 @@ export function ItemsCompendiumView() {
                 Compêndio de Itens
               </h1>
               <p className="mt-1 text-xs leading-5 text-textMuted">
-                Itens públicos podem ser adicionados diretamente pelas telas de inventário. Itens de mestre permanecem visíveis apenas na área de criação.
+                Itens públicos ficam disponíveis para todos. Itens de mestre ficam ocultos dos jogadores, mas mestres ainda podem adicioná-los normalmente aos inventários da sessão.
               </p>
             </div>
             <Button
@@ -328,11 +365,11 @@ export function ItemsCompendiumView() {
                     <Button
                       size="sm"
                       variant="primary"
-                      disabled={!publicItem || Boolean(workingId)}
+                      disabled={Boolean(workingId)}
                       title={
                         publicItem
                           ? "Adicionar uma cópia ao chão"
-                          : "Itens de mestre precisam ser públicos para entrar em inventários"
+                          : "Adicionar uma cópia de mestre ao chão"
                       }
                       onClick={() =>
                         addGroundItem(instantiateSessionCompendiumItem(entry))
@@ -350,15 +387,26 @@ export function ItemsCompendiumView() {
                       {copiedId === item.id ? "Copiado" : "Copiar JSON"}
                     </Button>
                     {entry.custom ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={Boolean(workingId)}
-                        title="Excluir item personalizado"
-                        onClick={() => void removeTemplate(item.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={Boolean(workingId)}
+                          onClick={() => setEditingEntry(entry)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          Editar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={Boolean(workingId)}
+                          title="Excluir item personalizado"
+                          onClick={() => void removeTemplate(item.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
                     ) : null}
                   </div>
                 </CardContent>
@@ -381,6 +429,16 @@ export function ItemsCompendiumView() {
         saveLabel="Adicionar item"
         onClose={() => setCreating(false)}
         onSave={(item) => void addCustomItem(item)}
+      />
+
+      <ItemCreationDialog
+        open={editingEntry !== null}
+        title="Editar item do compêndio"
+        item={editingEntry?.item ?? null}
+        enableJson
+        saveLabel="Salvar alterações"
+        onClose={() => setEditingEntry(null)}
+        onSave={(item) => void editCustomItem(item)}
       />
     </div>
   )
