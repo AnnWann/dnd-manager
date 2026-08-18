@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 
 import { useCustomSystemDefinitions } from "../../../lib/customSystems/CustomSystemRegistry"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 
 import { AttributeCalculators } from "./attributeCalculators"
 import { Attributes } from "./attributes"
@@ -25,7 +26,6 @@ type Props = {
     characterId: string,
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) => void
-  canAssignOwners: boolean
 }
 
 type SheetViewMode = "full" | "minimal"
@@ -35,10 +35,10 @@ const SHEET_VIEW_STORAGE_KEY = "dnd-manager:character-sheet-view"
 export function CharacterSheetTab({
   character,
   updateCharacter,
-  canAssignOwners,
 }: Props) {
   const [viewMode, setViewMode] = useState<SheetViewMode>(loadSheetViewMode)
   const customSystemDefinitions = useCustomSystemDefinitions()
+  const { canAssignOwners } = useCharacterWorkspace()
   const showActionEconomy = canAssignOwners
   const showCustomActions = hasCustomSystemSheetActions(
     character,
