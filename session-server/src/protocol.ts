@@ -17,6 +17,7 @@ export type SessionHitDiceState = Partial<Record<SessionDieSides, SessionHitDice
 
 export type SessionAttribute = "str" | "dex" | "con" | "int" | "wis" | "cha";
 export type SessionAttributesState = Record<SessionAttribute, number>;
+export type SessionSavingThrowsState = Record<SessionAttribute, boolean>;
 
 export type SessionStatsState = {
   armorClassAdjustment: number;
@@ -41,13 +42,16 @@ export type SessionHpState = {
   statsInitialized: boolean;
   attributes: SessionAttributesState;
   attributesInitialized: boolean;
+  savingThrows: SessionSavingThrowsState;
+  savingThrowsInitialized: boolean;
   revision: number;
 };
 
-export type SessionHpSeed = Omit<SessionHpState, "revision" | "hitDice" | "stats" | "statsInitialized" | "attributes" | "attributesInitialized"> & {
+export type SessionHpSeed = Omit<SessionHpState, "revision" | "hitDice" | "stats" | "statsInitialized" | "attributes" | "attributesInitialized" | "savingThrows" | "savingThrowsInitialized"> & {
   hitDice?: SessionHitDiceState;
   stats?: SessionStatsState;
   attributes?: SessionAttributesState;
+  savingThrows?: Partial<SessionSavingThrowsState>;
 };
 
 export type SessionHpOperation =
@@ -79,12 +83,13 @@ export type SessionSimpleStatOperation =
 
 export type SessionStatOperation = SessionCalculatedStatOperation | SessionSimpleStatOperation;
 export type SessionAttributeOperation = { type: "character.attribute.set"; characterId: string; attribute: SessionAttribute; value: number };
+export type SessionSavingThrowOperation = { type: "character.savingThrow.set"; characterId: string; attribute: SessionAttribute; proficient: boolean };
 
 export type SessionRestOperation =
   | { type: "character.rest.short"; characterId: string; healing: number; hitDiceConsumption: Partial<Record<SessionDieSides, number>> }
   | { type: "character.rest.long"; characterId: string; recovery: "partial" | "full" };
 
-export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionAttributeOperation | SessionRestOperation;
+export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionAttributeOperation | SessionSavingThrowOperation | SessionRestOperation;
 
 export type SessionHpReverseOperation = { type: "character.hp.restore"; characterId: string; hp: SessionHpState };
 export type SessionStatReverseOperation =
@@ -96,12 +101,13 @@ export type SessionStatReverseOperation =
   | { type: "character.stat.inspiration.restore"; characterId: string; value: boolean }
   | { type: "character.stat.experience.restore"; characterId: string; value: number };
 export type SessionAttributeReverseOperation = { type: "character.attribute.restore"; characterId: string; attribute: SessionAttribute; value: number };
+export type SessionSavingThrowReverseOperation = { type: "character.savingThrow.restore"; characterId: string; attribute: SessionAttribute; proficient: boolean };
 export type SessionRestReverseOperation = {
   type: "character.rest.restore";
   characterId: string;
   snapshot: { hp: SessionHpState; stats: SessionStatsState };
 };
-export type SessionReverseOperation = SessionHpReverseOperation | SessionStatReverseOperation | SessionAttributeReverseOperation | SessionRestReverseOperation;
+export type SessionReverseOperation = SessionHpReverseOperation | SessionStatReverseOperation | SessionAttributeReverseOperation | SessionSavingThrowReverseOperation | SessionRestReverseOperation;
 
 export type SessionHpLogRecord = {
   id: string;
@@ -158,7 +164,8 @@ function isHpSeed(value: unknown): value is SessionHpSeed {
     isFiniteNumber(value.currentMax) && isFiniteNumber(value.maxHpBonus) &&
     (value.hitDice === undefined || isHitDiceState(value.hitDice)) &&
     (value.stats === undefined || isStatsState(value.stats)) &&
-    (value.attributes === undefined || isAttributesState(value.attributes));
+    (value.attributes === undefined || isAttributesState(value.attributes)) &&
+    (value.savingThrows === undefined || isSavingThrowsSeed(value.savingThrows));
 }
 
 function isAuthoritativeOperation(value: unknown): value is SessionAuthoritativeOperation {
@@ -184,6 +191,7 @@ function isAuthoritativeOperation(value: unknown): value is SessionAuthoritative
     case "character.stat.experience.set": return isFiniteNumber(value.value);
     case "character.stat.inspiration.set": return typeof value.value === "boolean";
     case "character.attribute.set": return isAttribute(value.attribute) && isFiniteNumber(value.value);
+    case "character.savingThrow.set": return isAttribute(value.attribute) && typeof value.proficient === "boolean";
     case "character.rest.short": return isFiniteNumber(value.healing) && isHitDiceConsumption(value.hitDiceConsumption);
     case "character.rest.long": return value.recovery === "partial" || value.recovery === "full";
     default: return false;
@@ -199,6 +207,10 @@ function isStatsState(value: unknown): value is SessionStatsState {
 function isAttributesState(value: unknown): value is SessionAttributesState {
   if (!isRecord(value)) return false;
   return [...ATTRIBUTES].every((attribute) => isFiniteNumber(value[attribute]));
+}
+function isSavingThrowsSeed(value: unknown): value is Partial<SessionSavingThrowsState> {
+  if (!isRecord(value)) return false;
+  return Object.entries(value).every(([attribute, proficient]) => isAttribute(attribute) && typeof proficient === "boolean");
 }
 function isHitDiceState(value: unknown): value is SessionHitDiceState {
   if (!isRecord(value)) return false;
