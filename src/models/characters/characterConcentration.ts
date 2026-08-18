@@ -23,11 +23,12 @@ export function beginSpellConcentration(
   character: CharacterTemplate,
   spell: Spell,
 ): CharacterTemplate {
-  let next = endConcentration(character)
+  const previous = getConcentrationCondition(character)
+  const next = previous ? removeCharacterCondition(character, previous.id) : character
   const name = spell.displayName || spell.name
 
   return addCharacterCondition(next, {
-    id: `concentration:${crypto.randomUUID()}`,
+    id: previous?.id ?? `concentration:${crypto.randomUUID()}`,
     name: "Concentrando",
     description: `Mantendo concentração em ${name}.`,
     behavior: "A concentração termina ao falhar em um teste de concentração, ao iniciar outra concentração ou quando o efeito for encerrado.",
