@@ -1,4 +1,6 @@
 import type {
+  SessionAttribute,
+  SessionAttributesState,
   SessionAuthoritativeOperation,
   SessionConnection,
   SessionDieSides,
@@ -30,6 +32,10 @@ export function defaultStats(): SessionStatsState {
   };
 }
 
+export function defaultAttributes(): SessionAttributesState {
+  return { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
+}
+
 export function normalizeStatsSeed(stats: SessionStatsState | undefined): SessionStatsState {
   if (!stats) return defaultStats();
   return {
@@ -40,6 +46,18 @@ export function normalizeStatsSeed(stats: SessionStatsState | undefined): Sessio
     exhaustion: clamp(integer(stats.exhaustion), 0, 6),
     inspiration: Boolean(stats.inspiration),
     experience: Math.max(0, integer(stats.experience)),
+  };
+}
+
+export function normalizeAttributesSeed(attributes: SessionAttributesState | undefined): SessionAttributesState {
+  if (!attributes) return defaultAttributes();
+  return {
+    str: clamp(integer(attributes.str), 1, 30),
+    dex: clamp(integer(attributes.dex), 1, 30),
+    con: clamp(integer(attributes.con), 1, 30),
+    int: clamp(integer(attributes.int), 1, 30),
+    wis: clamp(integer(attributes.wis), 1, 30),
+    cha: clamp(integer(attributes.cha), 1, 30),
   };
 }
 
@@ -67,6 +85,8 @@ export function normalizeHpSeed(state: SessionHpSeed): SessionHpState {
     hitDice,
     stats: normalizeStatsSeed(state.stats),
     statsInitialized: state.stats !== undefined,
+    attributes: normalizeAttributesSeed(state.attributes),
+    attributesInitialized: state.attributes !== undefined,
     revision: 0,
   };
 }
@@ -122,25 +142,36 @@ export function applyHpUndo(
       hitDice?: SessionHpState["hitDice"];
       stats?: SessionStatsState;
       statsInitialized?: boolean;
+      attributes?: SessionAttributesState;
+      attributesInitialized?: boolean;
     };
     restored = cloneState({
       ...reverseState,
       hitDice: reverseState.hitDice ?? current.hitDice,
       stats: source.reverseOperation.snapshot.stats ?? reverseState.stats ?? current.stats,
       statsInitialized: true,
+      attributes: reverseState.attributes ?? current.attributes,
+      attributesInitialized: reverseState.attributesInitialized ?? current.attributesInitialized,
     });
   } else if (source.reverseOperation.type === "character.hp.restore") {
     const reverseState = source.reverseOperation.hp as SessionHpState & {
       hitDice?: SessionHpState["hitDice"];
       stats?: SessionStatsState;
       statsInitialized?: boolean;
+      attributes?: SessionAttributesState;
+      attributesInitialized?: boolean;
     };
     restored = cloneState({
       ...reverseState,
       hitDice: reverseState.hitDice ?? current.hitDice,
       stats: reverseState.stats ?? current.stats,
       statsInitialized: reverseState.statsInitialized ?? current.statsInitialized,
+      attributes: reverseState.attributes ?? current.attributes,
+      attributesInitialized: reverseState.attributesInitialized ?? current.attributesInitialized,
     });
+  } else if (source.reverseOperation.type === "character.attribute.restore") {
+    restored.attributes[source.reverseOperation.attribute] = source.reverseOperation.value;
+    restored.attributesInitialized = true;
   } else {
     restoreSingleStat(restored, source.reverseOperation);
     restored.statsInitialized = true;
@@ -174,6 +205,13 @@ function createReverseOperation(
   }
 
   switch (operation.type) {
+    case "character.attribute.set":
+      return {
+        type: "character.attribute.restore",
+        characterId: before.characterId,
+        attribute: operation.attribute,
+        value: before.attributes[operation.attribute],
+      };
     case "character.stat.armorClass.set":
       return { type: "character.stat.armorClass.restore", characterId: before.characterId, adjustment: before.stats.armorClassAdjustment };
     case "character.stat.initiative.set":
@@ -195,27 +233,13 @@ function createReverseOperation(
 
 function restoreSingleStat(state: SessionHpState, operation: SessionStatReverseOperation): void {
   switch (operation.type) {
-    case "character.stat.armorClass.restore":
-      state.stats.armorClassAdjustment = operation.adjustment;
-      break;
-    case "character.stat.initiative.restore":
-      state.stats.initiativeAdjustment = operation.adjustment;
-      break;
-    case "character.stat.mobility.restore":
-      state.stats.mobilityAdjustment = operation.adjustment;
-      break;
-    case "character.stat.passivePerception.restore":
-      state.stats.passivePerceptionAdjustment = operation.adjustment;
-      break;
-    case "character.stat.exhaustion.restore":
-      state.stats.exhaustion = operation.value;
-      break;
-    case "character.stat.inspiration.restore":
-      state.stats.inspiration = operation.value;
-      break;
-    case "character.stat.experience.restore":
-      state.stats.experience = operation.value;
-      break;
+    case "character.stat.armorClass.restore": state.stats.armorClassAdjustment = operation.adjustment; break;
+    case "character.stat.initiative.restore": state.stats.initiativeAdjustment = operation.adjustment; break;
+    case "character.stat.mobility.restore": state.stats.mobilityAdjustment = operation.adjustment; break;
+    case "character.stat.passivePerception.restore": state.stats.passivePerceptionAdjustment = operation.adjustment; break;
+    case "character.stat.exhaustion.restore": state.stats.exhaustion = operation.value; break;
+    case "character.stat.inspiration.restore": state.stats.inspiration = operation.value; break;
+    case "character.stat.experience.restore": state.stats.experience = operation.value; break;
   }
 }
 
@@ -247,10 +271,18 @@ function validateOperation(
   if ((isStatOperation(operation) || operation.type === "character.rest.long") && !state.statsInitialized) {
     return invalid("STATS_NOT_INITIALIZED", "Stats for this character must be initialized by the MASTER first.");
   }
+  if (operation.type === "character.attribute.set" && !state.attributesInitialized) {
+    return invalid("ATTRIBUTES_NOT_INITIALIZED", "Attributes for this character must be initialized by the MASTER first.");
+  }
 
   const validInteger = (value: number) => Number.isFinite(value) && Number.isInteger(value);
 
   switch (operation.type) {
+    case "character.attribute.set":
+      if (!validInteger(operation.value) || operation.value < 1 || operation.value > 30) {
+        return invalid("INVALID_ATTRIBUTE", "Attribute scores must be integers from 1 to 30.");
+      }
+      break;
     case "character.hp.damage":
     case "character.hp.heal":
     case "character.hp.temporary.add":
@@ -293,19 +325,13 @@ function validateOperation(
       }
       break;
     case "character.stat.exhaustion.set":
-      if (!validInteger(operation.value) || operation.value < 0 || operation.value > 6) {
-        return invalid("INVALID_EXHAUSTION", "Exhaustion must be an integer from 0 to 6.");
-      }
+      if (!validInteger(operation.value) || operation.value < 0 || operation.value > 6) return invalid("INVALID_EXHAUSTION", "Exhaustion must be an integer from 0 to 6.");
       break;
     case "character.stat.experience.set":
-      if (!validInteger(operation.value) || operation.value < 0) {
-        return invalid("INVALID_EXPERIENCE", "Experience must be a non-negative integer.");
-      }
+      if (!validInteger(operation.value) || operation.value < 0) return invalid("INVALID_EXPERIENCE", "Experience must be a non-negative integer.");
       break;
     case "character.stat.inspiration.set":
-      if (typeof operation.value !== "boolean") {
-        return invalid("INVALID_INSPIRATION", "Inspiration must be true or false.");
-      }
+      if (typeof operation.value !== "boolean") return invalid("INVALID_INSPIRATION", "Inspiration must be true or false.");
       break;
     case "character.rest.short":
       if (!validInteger(operation.healing) || operation.healing < 0) return invalid("INVALID_SHORT_REST_HEALING", "Short-rest healing must be a non-negative integer.");
@@ -328,6 +354,10 @@ function mutateState(previous: SessionHpState, operation: SessionAuthoritativeOp
   const next = cloneState(previous);
 
   switch (operation.type) {
+    case "character.attribute.set":
+      next.attributes[operation.attribute] = operation.value;
+      next.attributesInitialized = true;
+      break;
     case "character.hp.set": next.current = clamp(operation.value, 0, effectiveMax(next)); break;
     case "character.hp.temporary.set": next.temporary = Math.max(0, operation.value); break;
     case "character.hp.temporary.add": next.temporary = Math.max(0, next.temporary + operation.amount); break;
@@ -356,9 +386,7 @@ function mutateState(previous: SessionHpState, operation: SessionAuthoritativeOp
       next.currentMax = next.max;
       next.current = Math.min(next.current, effectiveMax(next));
       break;
-    case "character.hitDice.use":
-      next.hitDice[operation.side]!.current -= operation.amount;
-      break;
+    case "character.hitDice.use": next.hitDice[operation.side]!.current -= operation.amount; break;
     case "character.hitDice.recover": {
       const pool = next.hitDice[operation.side]!;
       pool.current = Math.min(pool.max, pool.current + operation.amount);
@@ -369,37 +397,14 @@ function mutateState(previous: SessionHpState, operation: SessionAuthoritativeOp
       next.hitDice[operation.side] = { current: pool.current + operation.amount, max: pool.max + operation.amount };
       break;
     }
-    case "character.hitDice.remove":
-      delete next.hitDice[operation.side];
-      break;
-    case "character.stat.armorClass.set":
-      next.stats.armorClassAdjustment = cleanNumber(operation.value - operation.calculatedValue);
-      next.statsInitialized = true;
-      break;
-    case "character.stat.initiative.set":
-      next.stats.initiativeAdjustment = cleanNumber(operation.value - operation.calculatedValue);
-      next.statsInitialized = true;
-      break;
-    case "character.stat.mobility.set":
-      next.stats.mobilityAdjustment = cleanNumber(operation.value - operation.calculatedValue);
-      next.statsInitialized = true;
-      break;
-    case "character.stat.passivePerception.set":
-      next.stats.passivePerceptionAdjustment = cleanNumber(operation.value - operation.calculatedValue);
-      next.statsInitialized = true;
-      break;
-    case "character.stat.exhaustion.set":
-      next.stats.exhaustion = operation.value;
-      next.statsInitialized = true;
-      break;
-    case "character.stat.inspiration.set":
-      next.stats.inspiration = operation.value;
-      next.statsInitialized = true;
-      break;
-    case "character.stat.experience.set":
-      next.stats.experience = operation.value;
-      next.statsInitialized = true;
-      break;
+    case "character.hitDice.remove": delete next.hitDice[operation.side]; break;
+    case "character.stat.armorClass.set": next.stats.armorClassAdjustment = cleanNumber(operation.value - operation.calculatedValue); next.statsInitialized = true; break;
+    case "character.stat.initiative.set": next.stats.initiativeAdjustment = cleanNumber(operation.value - operation.calculatedValue); next.statsInitialized = true; break;
+    case "character.stat.mobility.set": next.stats.mobilityAdjustment = cleanNumber(operation.value - operation.calculatedValue); next.statsInitialized = true; break;
+    case "character.stat.passivePerception.set": next.stats.passivePerceptionAdjustment = cleanNumber(operation.value - operation.calculatedValue); next.statsInitialized = true; break;
+    case "character.stat.exhaustion.set": next.stats.exhaustion = operation.value; next.statsInitialized = true; break;
+    case "character.stat.inspiration.set": next.stats.inspiration = operation.value; next.statsInitialized = true; break;
+    case "character.stat.experience.set": next.stats.experience = operation.value; next.statsInitialized = true; break;
     case "character.rest.short":
       next.current = Math.min(effectiveMax(next), next.current + operation.healing);
       for (const [side, amount] of Object.entries(operation.hitDiceConsumption)) {
@@ -428,6 +433,7 @@ function mutateState(previous: SessionHpState, operation: SessionAuthoritativeOp
 
 function effectiveMax(state: SessionHpState): number { return Math.max(1, state.currentMax + state.maxHpBonus); }
 function cloneStats(stats: SessionStatsState): SessionStatsState { return { ...stats }; }
+function cloneAttributes(attributes: SessionAttributesState): SessionAttributesState { return { ...attributes }; }
 function cloneState(state: SessionHpState): SessionHpState {
   const hitDice = state.hitDice ?? {};
   return {
@@ -435,6 +441,8 @@ function cloneState(state: SessionHpState): SessionHpState {
     hitDice: Object.fromEntries(Object.entries(hitDice).map(([side, pool]) => [side, pool ? { ...pool } : pool])) as SessionHpState["hitDice"],
     stats: cloneStats(state.stats ?? defaultStats()),
     statsInitialized: state.statsInitialized ?? false,
+    attributes: cloneAttributes(state.attributes ?? defaultAttributes()),
+    attributesInitialized: state.attributesInitialized ?? false,
   };
 }
 function integer(value: number): number { return Math.trunc(Number(value) || 0); }
