@@ -27,6 +27,7 @@ export function CompendiumItemPickerDialog({
   onSelect,
 }: Props) {
   const [entries, setEntries] = useState<SessionItemCompendiumEntry[]>([])
+  const [isMaster, setIsMaster] = useState(false)
   const [query, setQuery] = useState("")
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
@@ -39,11 +40,14 @@ export function CompendiumItemPickerDialog({
 
     void getSessionItemCompendium(campaignId)
       .then((catalog) => {
-        if (!cancelled) setEntries(catalog.entries)
+        if (cancelled) return
+        setEntries(catalog.entries)
+        setIsMaster(catalog.campaign.isMaster)
       })
       .catch((error) => {
         if (!cancelled) {
           setEntries([])
+          setIsMaster(false)
           setErrorMessage(
             error instanceof Error
               ? error.message
@@ -60,24 +64,24 @@ export function CompendiumItemPickerDialog({
     }
   }, [campaignId, open])
 
-  const publicItems = useMemo(
+  const availableItems = useMemo(
     () =>
       buildSessionCompendiumItems(entries).filter(
-        (entry) => entry.visibility === "PUBLIC",
+        (entry) => isMaster || entry.visibility === "PUBLIC",
       ),
-    [entries],
+    [entries, isMaster],
   )
 
   const filtered = useMemo(() => {
     const normalized = normalizeSearch(query)
-    if (!normalized) return publicItems
+    if (!normalized) return availableItems
 
-    return publicItems.filter(({ item }) =>
+    return availableItems.filter(({ item }) =>
       normalizeSearch(
         `${item.name} ${item.desc ?? ""} ${item.kind} ${item.category ?? ""}`,
       ).includes(normalized),
     )
-  }, [publicItems, query])
+  }, [availableItems, query])
 
   if (!open) return null
 
@@ -102,7 +106,9 @@ export function CompendiumItemPickerDialog({
                 Adicionar do compêndio
               </h2>
               <p className="mt-1 text-xs leading-5 text-textMuted">
-                Apenas itens marcados como públicos podem ser adicionados por esta tela.
+                {isMaster
+                  ? "Como mestre, você pode adicionar itens públicos e itens visíveis apenas para mestres."
+                  : "Apenas itens marcados como públicos podem ser adicionados por esta tela."}
               </p>
             </div>
           </div>
@@ -147,6 +153,11 @@ export function CompendiumItemPickerDialog({
                     <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
                       {entry.custom ? "Personalizado" : "Padrão"}
                     </span>
+                    {isMaster && entry.visibility === "MASTER" ? (
+                      <span className="rounded-full border border-border bg-bg-subtle px-2 py-0.5 text-[10px] text-textMuted">
+                        Somente mestre
+                      </span>
+                    ) : null}
                   </div>
                   <div className="mt-1 text-[11px] uppercase tracking-wide text-textMuted">
                     {entry.item.kind} · {entry.item.weight ?? 0} kg · qtd. {entry.item.quantity ?? 1}
@@ -169,7 +180,9 @@ export function CompendiumItemPickerDialog({
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-textMuted">
-              Nenhum item público corresponde à busca.
+              {isMaster
+                ? "Nenhum item do compêndio corresponde à busca."
+                : "Nenhum item público corresponde à busca."}
             </div>
           )}
         </div>
