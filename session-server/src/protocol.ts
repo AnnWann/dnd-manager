@@ -26,7 +26,14 @@ export type SessionHpOperation =
   | { type: "character.hp.set"; characterId: string; value: number }
   | { type: "character.hp.temporary.set"; characterId: string; value: number }
   | { type: "character.hp.temporary.add"; characterId: string; amount: number }
-  | { type: "character.hp.damage"; characterId: string; amount: number }
+  | {
+      type: "character.hp.damage";
+      characterId: string;
+      amount: number;
+      requiresConcentrationCheck?: boolean;
+      concentrationDc?: number;
+      concentrationSource?: string;
+    }
   | { type: "character.hp.heal"; characterId: string; amount: number }
   | { type: "character.hp.max.set"; characterId: string; value: number }
   | { type: "character.hp.currentMax.adjust"; characterId: string; amount: number }
