@@ -46,7 +46,7 @@ export function CampaignLayout() {
   const sessionId = sessionIdFromPathname(location.pathname)
   const { data: authSession } = authClient.useSession()
   const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
-  const authenticatedUserId = authSession?.user.id ?? localUser?.id ?? ""
+  const authenticatedUserId = authSession?.user?.id ?? localUser?.id ?? ""
   const [resolvedSessionRole, setResolvedSessionRole] = useState<
     "master" | "player" | null
   >(null)
