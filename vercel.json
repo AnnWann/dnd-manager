@@ -1,9 +1,22 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/auth", "destination": "/index.html" },
+    { "source": "/not-found", "destination": "/index.html" },
+    { "source": "/unauthorized", "destination": "/index.html" },
+    { "source": "/user/:path*", "destination": "/index.html" },
+    { "source": "/session/:path*", "destination": "/index.html" },
+    { "source": "/campaign/:path*", "destination": "/index.html" },
+    { "source": "/character/:path*", "destination": "/index.html" },
+    { "source": "/party-inventory", "destination": "/index.html" },
+    { "source": "/ground-inventory", "destination": "/index.html" },
+    { "source": "/items-compendium", "destination": "/index.html" },
+    { "source": "/missions", "destination": "/index.html" },
+    { "source": "/creatures-compendium", "destination": "/index.html" },
+    { "source": "/custom-systems/:path*", "destination": "/index.html" },
+    { "source": "/initiative", "destination": "/index.html" },
+    { "source": "/magic", "destination": "/index.html" },
+    { "source": "/requests", "destination": "/index.html" },
+    { "source": "/homebrew", "destination": "/index.html" }
   ]
 }
