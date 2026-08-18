@@ -10,6 +10,7 @@ import type {
   SessionReverseOperation,
   SessionRestOperation,
   SessionSavingThrowsState,
+  SessionSkillsState,
   SessionStatOperation,
   SessionStatReverseOperation,
   SessionStatsState,
@@ -39,6 +40,29 @@ export function defaultAttributes(): SessionAttributesState {
 
 export function defaultSavingThrows(): SessionSavingThrowsState {
   return { str: false, dex: false, con: false, int: false, wis: false, cha: false };
+}
+
+export function defaultSkills(): SessionSkillsState {
+  return {
+    acrobatics: "none",
+    arcana: "none",
+    athletics: "none",
+    animalHandling: "none",
+    performance: "none",
+    deception: "none",
+    stealth: "none",
+    history: "none",
+    intimidation: "none",
+    insight: "none",
+    investigation: "none",
+    medicine: "none",
+    nature: "none",
+    perception: "none",
+    persuasion: "none",
+    sleightOfHand: "none",
+    religion: "none",
+    survival: "none",
+  };
 }
 
 export function normalizeStatsSeed(stats: SessionStatsState | undefined): SessionStatsState {
@@ -81,6 +105,20 @@ export function normalizeSavingThrowsSeed(
   };
 }
 
+export function normalizeSkillsSeed(
+  skills: Partial<SessionSkillsState> | undefined,
+): SessionSkillsState {
+  const normalized = defaultSkills();
+  if (!skills) return normalized;
+  for (const skill of Object.keys(normalized) as Array<keyof SessionSkillsState>) {
+    const proficiency = skills[skill];
+    if (proficiency === "none" || proficiency === "proficient" || proficiency === "expertise") {
+      normalized[skill] = proficiency;
+    }
+  }
+  return normalized;
+}
+
 export function normalizeHpSeed(state: SessionHpSeed): SessionHpState {
   const max = Math.max(1, integer(state.max));
   const currentMax = clamp(integer(state.currentMax), 1, max);
@@ -109,6 +147,8 @@ export function normalizeHpSeed(state: SessionHpSeed): SessionHpState {
     attributesInitialized: state.attributes !== undefined,
     savingThrows: normalizeSavingThrowsSeed(state.savingThrows),
     savingThrowsInitialized: state.savingThrows !== undefined,
+    skills: normalizeSkillsSeed(state.skills),
+    skillsInitialized: state.skills !== undefined,
     revision: 0,
   };
 }
@@ -168,6 +208,8 @@ export function applyHpUndo(
       attributesInitialized?: boolean;
       savingThrows?: SessionSavingThrowsState;
       savingThrowsInitialized?: boolean;
+      skills?: SessionSkillsState;
+      skillsInitialized?: boolean;
     };
     restored = cloneState({
       ...reverseState,
@@ -178,6 +220,8 @@ export function applyHpUndo(
       attributesInitialized: reverseState.attributesInitialized ?? current.attributesInitialized,
       savingThrows: reverseState.savingThrows ?? current.savingThrows,
       savingThrowsInitialized: reverseState.savingThrowsInitialized ?? current.savingThrowsInitialized,
+      skills: reverseState.skills ?? current.skills,
+      skillsInitialized: reverseState.skillsInitialized ?? current.skillsInitialized,
     });
   } else if (source.reverseOperation.type === "character.hp.restore") {
     const reverseState = source.reverseOperation.hp as SessionHpState & {
@@ -188,6 +232,8 @@ export function applyHpUndo(
       attributesInitialized?: boolean;
       savingThrows?: SessionSavingThrowsState;
       savingThrowsInitialized?: boolean;
+      skills?: SessionSkillsState;
+      skillsInitialized?: boolean;
     };
     restored = cloneState({
       ...reverseState,
@@ -198,6 +244,8 @@ export function applyHpUndo(
       attributesInitialized: reverseState.attributesInitialized ?? current.attributesInitialized,
       savingThrows: reverseState.savingThrows ?? current.savingThrows,
       savingThrowsInitialized: reverseState.savingThrowsInitialized ?? current.savingThrowsInitialized,
+      skills: reverseState.skills ?? current.skills,
+      skillsInitialized: reverseState.skillsInitialized ?? current.skillsInitialized,
     });
   } else if (source.reverseOperation.type === "character.attribute.restore") {
     restored.attributes[source.reverseOperation.attribute] = source.reverseOperation.value;
@@ -205,6 +253,9 @@ export function applyHpUndo(
   } else if (source.reverseOperation.type === "character.savingThrow.restore") {
     restored.savingThrows[source.reverseOperation.attribute] = source.reverseOperation.proficient;
     restored.savingThrowsInitialized = true;
+  } else if (source.reverseOperation.type === "character.skill.restore") {
+    restored.skills[source.reverseOperation.skill] = source.reverseOperation.proficiency;
+    restored.skillsInitialized = true;
   } else {
     restoreSingleStat(restored, source.reverseOperation);
     restored.statsInitialized = true;
@@ -239,19 +290,11 @@ function createReverseOperation(
 
   switch (operation.type) {
     case "character.attribute.set":
-      return {
-        type: "character.attribute.restore",
-        characterId: before.characterId,
-        attribute: operation.attribute,
-        value: before.attributes[operation.attribute],
-      };
+      return { type: "character.attribute.restore", characterId: before.characterId, attribute: operation.attribute, value: before.attributes[operation.attribute] };
     case "character.savingThrow.set":
-      return {
-        type: "character.savingThrow.restore",
-        characterId: before.characterId,
-        attribute: operation.attribute,
-        proficient: before.savingThrows[operation.attribute],
-      };
+      return { type: "character.savingThrow.restore", characterId: before.characterId, attribute: operation.attribute, proficient: before.savingThrows[operation.attribute] };
+    case "character.skill.set":
+      return { type: "character.skill.restore", characterId: before.characterId, skill: operation.skill, proficiency: before.skills[operation.skill] };
     case "character.stat.armorClass.set":
       return { type: "character.stat.armorClass.restore", characterId: before.characterId, adjustment: before.stats.armorClassAdjustment };
     case "character.stat.initiative.set":
@@ -317,18 +360,22 @@ function validateOperation(
   if (operation.type === "character.savingThrow.set" && !state.savingThrowsInitialized) {
     return invalid("SAVING_THROWS_NOT_INITIALIZED", "Saving throws for this character must be initialized by the MASTER first.");
   }
+  if (operation.type === "character.skill.set" && !state.skillsInitialized) {
+    return invalid("SKILLS_NOT_INITIALIZED", "Skills for this character must be initialized by the MASTER first.");
+  }
 
   const validInteger = (value: number) => Number.isFinite(value) && Number.isInteger(value);
 
   switch (operation.type) {
     case "character.attribute.set":
-      if (!validInteger(operation.value) || operation.value < 1 || operation.value > 30) {
-        return invalid("INVALID_ATTRIBUTE", "Attribute scores must be integers from 1 to 30.");
-      }
+      if (!validInteger(operation.value) || operation.value < 1 || operation.value > 30) return invalid("INVALID_ATTRIBUTE", "Attribute scores must be integers from 1 to 30.");
       break;
     case "character.savingThrow.set":
-      if (typeof operation.proficient !== "boolean") {
-        return invalid("INVALID_SAVING_THROW_PROFICIENCY", "Saving throw proficiency must be true or false.");
+      if (typeof operation.proficient !== "boolean") return invalid("INVALID_SAVING_THROW_PROFICIENCY", "Saving throw proficiency must be true or false.");
+      break;
+    case "character.skill.set":
+      if (operation.proficiency !== "none" && operation.proficiency !== "proficient" && operation.proficiency !== "expertise") {
+        return invalid("INVALID_SKILL_PROFICIENCY", "Skill proficiency must be none, proficient, or expertise.");
       }
       break;
     case "character.hp.damage":
@@ -363,14 +410,10 @@ function validateOperation(
     case "character.stat.armorClass.set":
     case "character.stat.mobility.set":
     case "character.stat.passivePerception.set":
-      if (!Number.isFinite(operation.value) || operation.value < 0 || !Number.isFinite(operation.calculatedValue)) {
-        return invalid("INVALID_STAT_VALUE", "Stat value and automatic value must be finite; this stat cannot be negative.");
-      }
+      if (!Number.isFinite(operation.value) || operation.value < 0 || !Number.isFinite(operation.calculatedValue)) return invalid("INVALID_STAT_VALUE", "Stat value and automatic value must be finite; this stat cannot be negative.");
       break;
     case "character.stat.initiative.set":
-      if (!Number.isFinite(operation.value) || !Number.isFinite(operation.calculatedValue)) {
-        return invalid("INVALID_STAT_VALUE", "Initiative value and automatic value must be finite.");
-      }
+      if (!Number.isFinite(operation.value) || !Number.isFinite(operation.calculatedValue)) return invalid("INVALID_STAT_VALUE", "Initiative value and automatic value must be finite.");
       break;
     case "character.stat.exhaustion.set":
       if (!validInteger(operation.value) || operation.value < 0 || operation.value > 6) return invalid("INVALID_EXHAUSTION", "Exhaustion must be an integer from 0 to 6.");
@@ -402,14 +445,9 @@ function mutateState(previous: SessionHpState, operation: SessionAuthoritativeOp
   const next = cloneState(previous);
 
   switch (operation.type) {
-    case "character.attribute.set":
-      next.attributes[operation.attribute] = operation.value;
-      next.attributesInitialized = true;
-      break;
-    case "character.savingThrow.set":
-      next.savingThrows[operation.attribute] = operation.proficient;
-      next.savingThrowsInitialized = true;
-      break;
+    case "character.attribute.set": next.attributes[operation.attribute] = operation.value; next.attributesInitialized = true; break;
+    case "character.savingThrow.set": next.savingThrows[operation.attribute] = operation.proficient; next.savingThrowsInitialized = true; break;
+    case "character.skill.set": next.skills[operation.skill] = operation.proficiency; next.skillsInitialized = true; break;
     case "character.hp.set": next.current = clamp(operation.value, 0, effectiveMax(next)); break;
     case "character.hp.temporary.set": next.temporary = Math.max(0, operation.value); break;
     case "character.hp.temporary.add": next.temporary = Math.max(0, next.temporary + operation.amount); break;
@@ -430,25 +468,11 @@ function mutateState(previous: SessionHpState, operation: SessionAuthoritativeOp
       next.current = Math.min(next.current, effectiveMax(next));
       break;
     }
-    case "character.hp.currentMax.adjust":
-      next.currentMax = clamp(next.currentMax + operation.amount, 1, next.max);
-      next.current = Math.min(next.current, effectiveMax(next));
-      break;
-    case "character.hp.currentMax.restore":
-      next.currentMax = next.max;
-      next.current = Math.min(next.current, effectiveMax(next));
-      break;
+    case "character.hp.currentMax.adjust": next.currentMax = clamp(next.currentMax + operation.amount, 1, next.max); next.current = Math.min(next.current, effectiveMax(next)); break;
+    case "character.hp.currentMax.restore": next.currentMax = next.max; next.current = Math.min(next.current, effectiveMax(next)); break;
     case "character.hitDice.use": next.hitDice[operation.side]!.current -= operation.amount; break;
-    case "character.hitDice.recover": {
-      const pool = next.hitDice[operation.side]!;
-      pool.current = Math.min(pool.max, pool.current + operation.amount);
-      break;
-    }
-    case "character.hitDice.add": {
-      const pool = next.hitDice[operation.side] ?? { current: 0, max: 0 };
-      next.hitDice[operation.side] = { current: pool.current + operation.amount, max: pool.max + operation.amount };
-      break;
-    }
+    case "character.hitDice.recover": { const pool = next.hitDice[operation.side]!; pool.current = Math.min(pool.max, pool.current + operation.amount); break; }
+    case "character.hitDice.add": { const pool = next.hitDice[operation.side] ?? { current: 0, max: 0 }; next.hitDice[operation.side] = { current: pool.current + operation.amount, max: pool.max + operation.amount }; break; }
     case "character.hitDice.remove": delete next.hitDice[operation.side]; break;
     case "character.stat.armorClass.set": next.stats.armorClassAdjustment = cleanNumber(operation.value - operation.calculatedValue); next.statsInitialized = true; break;
     case "character.stat.initiative.set": next.stats.initiativeAdjustment = cleanNumber(operation.value - operation.calculatedValue); next.statsInitialized = true; break;
@@ -487,6 +511,7 @@ function effectiveMax(state: SessionHpState): number { return Math.max(1, state.
 function cloneStats(stats: SessionStatsState): SessionStatsState { return { ...stats }; }
 function cloneAttributes(attributes: SessionAttributesState): SessionAttributesState { return { ...attributes }; }
 function cloneSavingThrows(savingThrows: SessionSavingThrowsState): SessionSavingThrowsState { return { ...savingThrows }; }
+function cloneSkills(skills: SessionSkillsState): SessionSkillsState { return { ...skills }; }
 function cloneState(state: SessionHpState): SessionHpState {
   const hitDice = state.hitDice ?? {};
   return {
@@ -498,6 +523,8 @@ function cloneState(state: SessionHpState): SessionHpState {
     attributesInitialized: state.attributesInitialized ?? false,
     savingThrows: cloneSavingThrows(state.savingThrows ?? defaultSavingThrows()),
     savingThrowsInitialized: state.savingThrowsInitialized ?? false,
+    skills: cloneSkills(state.skills ?? defaultSkills()),
+    skillsInitialized: state.skillsInitialized ?? false,
   };
 }
 function integer(value: number): number { return Math.trunc(Number(value) || 0); }
