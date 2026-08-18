@@ -2,8 +2,10 @@ import { DurableObject } from "cloudflare:workers";
 import {
   applyHpOperation,
   applyHpUndo,
+  defaultStats,
   MAX_HP_LOG_RECORDS,
   normalizeHpSeed,
+  normalizeStatsSeed,
 } from "./hpState";
 import {
   encodeServerSessionMessage,
@@ -139,30 +141,39 @@ export class SessionActor extends DurableObject<Env> {
       if (!existing) {
         state[seed.characterId] = {
           ...normalized,
-          hitDiceInitialized: true,
+          hitDiceInitialized: seed.hitDice !== undefined,
         };
         changed = true;
         continue;
       }
 
-      // Existing states created before hit dice were migrated get exactly one
-      // non-destructive seed. After that, an absent pool means it was removed
-      // intentionally and must never be recreated by frontend legacy data.
-      if (existing.hitDiceInitialized === true) continue;
+      let next = existing;
+      let entryChanged = false;
 
-      const nextHitDice = { ...(existing.hitDice ?? {}) };
-      for (const [side, pool] of Object.entries(normalized.hitDice)) {
-        const typedSide = side as SessionDieSides;
-        if (!pool || nextHitDice[typedSide]) continue;
-        nextHitDice[typedSide] = pool;
+      if (existing.hitDiceInitialized !== true && seed.hitDice !== undefined) {
+        const nextHitDice = { ...(existing.hitDice ?? {}) };
+        for (const [side, pool] of Object.entries(normalized.hitDice)) {
+          const typedSide = side as SessionDieSides;
+          if (!pool || nextHitDice[typedSide]) continue;
+          nextHitDice[typedSide] = pool;
+        }
+        next = { ...next, hitDice: nextHitDice, hitDiceInitialized: true };
+        entryChanged = true;
       }
 
-      state[seed.characterId] = {
-        ...existing,
-        hitDice: nextHitDice,
-        hitDiceInitialized: true,
-      };
-      changed = true;
+      if (existing.statsInitialized !== true && seed.stats !== undefined) {
+        next = {
+          ...next,
+          stats: normalizeStatsSeed(seed.stats),
+          statsInitialized: true,
+        };
+        entryChanged = true;
+      }
+
+      if (entryChanged) {
+        state[seed.characterId] = next;
+        changed = true;
+      }
     }
 
     if (changed) {
@@ -191,10 +202,11 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
 
-    state[operation.characterId] = {
+    const storedNext: StoredSessionHpState = {
       ...result.next,
       hitDiceInitialized: current.hitDiceInitialized ?? true,
     };
+    state[operation.characterId] = storedNext;
     log.push(result.record);
     const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
     await this.ctx.storage.put({ [HP_STATE_KEY]: state, [HP_LOG_KEY]: nextLog });
@@ -258,7 +270,12 @@ export class SessionActor extends DurableObject<Env> {
   private async readHpState(): Promise<Record<string, StoredSessionHpState>> {
     const raw = (await this.ctx.storage.get<Record<string, StoredSessionHpState>>(HP_STATE_KEY)) ?? {};
     return Object.fromEntries(
-      Object.entries(raw).map(([id, state]) => [id, { ...state, hitDice: state.hitDice ?? {} }]),
+      Object.entries(raw).map(([id, state]) => [id, {
+        ...state,
+        hitDice: state.hitDice ?? {},
+        stats: state.stats ?? defaultStats(),
+        statsInitialized: state.statsInitialized ?? false,
+      }]),
     );
   }
 
