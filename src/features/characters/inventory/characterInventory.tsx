@@ -33,7 +33,6 @@ type Props = {
     characterId: string,
     updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
-  canEditInventory: boolean
 }
 
 const BAG_CAPACITY_EPSILON = 0.000001
