@@ -1,5 +1,6 @@
 import {
   CampaignMemberStatus,
+  CampaignRole,
   CharacterVisibility,
 } from "../../../../../generated/prisma/client"
 import {
@@ -28,8 +29,61 @@ export async function POST(
     const body = await readJsonObject(request)
     const visibility = parseVisibility(body.visibility)
 
-    await requireCampaignAccess(campaignId, session.user.id)
-    await requireOwnedCharacter(characterId, session.user.id)
+    const access = await requireCampaignAccess(campaignId, session.user.id)
+    const character = await requireOwnedCharacter(characterId, session.user.id)
+
+    if (!access.isMaster) {
+      const requestId = crypto.randomUUID()
+      const dataJson = JSON.stringify({ visibility })
+
+      await prisma.$executeRaw`
+        INSERT INTO "campaign_content_request" (
+          "id",
+          "campaignId",
+          "type",
+          "status",
+          "title",
+          "sourceId",
+          "data",
+          "submittedById",
+          "submittedAt",
+          "updatedAt"
+        ) VALUES (
+          ${requestId},
+          ${campaignId},
+          'CHARACTER',
+          'PENDING',
+          ${character.name},
+          ${characterId},
+          ${dataJson}::jsonb,
+          ${session.user.id},
+          CURRENT_TIMESTAMP,
+          CURRENT_TIMESTAMP
+        )
+        ON CONFLICT ("campaignId", "type", "sourceId") DO UPDATE SET
+          "status" = 'PENDING',
+          "title" = EXCLUDED."title",
+          "data" = EXCLUDED."data",
+          "note" = NULL,
+          "submittedById" = EXCLUDED."submittedById",
+          "submittedAt" = CURRENT_TIMESTAMP,
+          "reviewedById" = NULL,
+          "reviewedAt" = NULL,
+          "updatedAt" = CURRENT_TIMESTAMP
+      `
+
+      return jsonResponse(
+        {
+          character: {
+            id: character.id,
+            name: character.name,
+            visibility,
+          },
+          requestStatus: "PENDING",
+        },
+        202,
+      )
+    }
 
     const link = await prisma.campaignCharacter.upsert({
       where: {
@@ -63,6 +117,7 @@ export async function POST(
           ...link.character,
           visibility: link.visibility,
         },
+        requestStatus: "APPROVED",
       },
       201,
     )
@@ -124,12 +179,21 @@ export async function DELETE(
     await requireCampaignAccess(campaignId, session.user.id)
     await requireOwnedCharacter(characterId, session.user.id)
 
-    await prisma.campaignCharacter.deleteMany({
-      where: {
-        campaignId,
-        characterId,
-      },
-    })
+    await prisma.$transaction([
+      prisma.campaignCharacter.deleteMany({
+        where: {
+          campaignId,
+          characterId,
+        },
+      }),
+      prisma.$executeRaw`
+        DELETE FROM "campaign_content_request"
+        WHERE "campaignId" = ${campaignId}
+          AND "type" = 'CHARACTER'
+          AND "sourceId" = ${characterId}
+          AND "submittedById" = ${session.user.id}
+      `,
+    ])
 
     return new Response(null, { status: 204 })
   } catch (error) {
@@ -153,7 +217,7 @@ function parseVisibility(value: unknown): CharacterVisibility {
 async function requireCampaignAccess(
   campaignId: string,
   userId: string,
-): Promise<void> {
+): Promise<{ isMaster: boolean }> {
   const campaign = await prisma.campaign.findFirst({
     where: {
       id: campaignId,
@@ -170,7 +234,16 @@ async function requireCampaignAccess(
       ],
     },
     select: {
-      id: true,
+      ownerId: true,
+      members: {
+        where: {
+          userId,
+          status: CampaignMemberStatus.ACTIVE,
+        },
+        select: {
+          role: true,
+        },
+      },
     },
   })
 
@@ -181,12 +254,18 @@ async function requireCampaignAccess(
       "Você precisa ser membro ativo desta campanha.",
     )
   }
+
+  return {
+    isMaster:
+      campaign.ownerId === userId ||
+      campaign.members.some((member) => member.role === CampaignRole.MASTER),
+  }
 }
 
 async function requireOwnedCharacter(
   characterId: string,
   userId: string,
-): Promise<void> {
+): Promise<{ id: string; name: string }> {
   const character = await prisma.character.findFirst({
     where: {
       id: characterId,
@@ -194,6 +273,7 @@ async function requireOwnedCharacter(
     },
     select: {
       id: true,
+      name: true,
     },
   })
 
@@ -204,4 +284,6 @@ async function requireOwnedCharacter(
       "Personagem não encontrado.",
     )
   }
+
+  return character
 }
