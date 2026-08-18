@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 
 import { CharacterProgressionFlow } from "../../features/characters/progression/CharacterProgressionFlow"
@@ -18,20 +19,36 @@ export function SessionCharacterLevelUpView() {
 
   return (
     <SessionCharacterWorkspace>
-      <LevelUpContent sessionId={campaignId} />
+      <LevelUpContent sessionId={campaignId} characterId={characterId} />
     </SessionCharacterWorkspace>
   )
 }
 
-function LevelUpContent({ sessionId }: { sessionId: string }) {
+function LevelUpContent({
+  sessionId,
+  characterId,
+}: {
+  sessionId: string
+  characterId: string
+}) {
   const navigate = useNavigate()
-  const { activeCharacter, updateCharacter } = useCharacterWorkspace()
+  const { characters, setSelectedCharacterId, updateCharacter } = useCharacterWorkspace()
+  const character = characters.find((entry) => entry.get("id") === characterId)
 
-  if (!activeCharacter) return null
+  useEffect(() => {
+    if (character) setSelectedCharacterId(characterId)
+  }, [character, characterId, setSelectedCharacterId])
 
-  const characterId = activeCharacter.get("id")
+  if (!character) {
+    return (
+      <div className="grid min-h-64 place-items-center text-sm text-textMuted">
+        Personagem da sessão não encontrado.
+      </div>
+    )
+  }
+
   const returnPath = sessionCharacterPath(sessionId, characterId, "sheet")
-  const preparedCharacter = prepareCharacterForProgression(activeCharacter)
+  const preparedCharacter = prepareCharacterForProgression(character)
 
   return (
     <CharacterProgressionFlow
