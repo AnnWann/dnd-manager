@@ -19,6 +19,7 @@ import { Button } from "../../components/ui/Button"
 import { useCharacterContext } from "../../contexts/characterContext"
 import { CharacterSettingsModal } from "../../features/characters/settings/CharacterSettingsModal"
 import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
+import type { Player } from "../../models/player/Player"
 
 export function SessionCreationSettingsView() {
   const { campaignId } = useParams<{ campaignId?: string }>()
@@ -71,6 +72,44 @@ export function SessionCreationSettingsView() {
     () => visibleCharacters.find((entry) => entry.get("id") === selectedCharacterId),
     [selectedCharacterId, visibleCharacters],
   )
+
+  const configuredPlayers = useMemo(() => {
+    const byId = new Map<string, Player>()
+
+    for (const key of knownPlayerKeys) {
+      const player = getOwner(key)
+      if (player.id) byId.set(player.id, player)
+    }
+
+    if (settings) {
+      const users = [settings.owner, ...settings.members].filter(
+        (member) => member.status === "ACTIVE",
+      )
+      for (const member of users) {
+        byId.set(member.id, {
+          id: member.id,
+          name: member.name,
+          role: member.role === "MASTER" ? "master" : "player",
+        })
+      }
+    }
+
+    return byId
+  }, [getOwner, knownPlayerKeys, settings])
+
+  const configuredPlayerKeys = useMemo(
+    () => Array.from(configuredPlayers.keys()).sort((left, right) =>
+      configuredPlayers.get(left)!.name.localeCompare(
+        configuredPlayers.get(right)!.name,
+        "pt-BR",
+      ),
+    ),
+    [configuredPlayers],
+  )
+
+  function resolveConfiguredOwner(ownerId: string): Player {
+    return configuredPlayers.get(ownerId) ?? getOwner(ownerId)
+  }
 
   if (!campaignId) return <Navigate to="/not-found" replace />
 
@@ -225,8 +264,8 @@ export function SessionCreationSettingsView() {
           updateCharacter={updateCharacter}
           canAssignOwners={canAssignOwners}
           canEditCharacterType={canEditCharacterType}
-          playerKeys={knownPlayerKeys}
-          getOwner={getOwner}
+          playerKeys={configuredPlayerKeys}
+          getOwner={resolveConfiguredOwner}
           createOwner={createOwner}
         />
       ) : null}
