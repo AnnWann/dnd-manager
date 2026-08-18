@@ -22,6 +22,17 @@ function getOrCreateClientId(sessionId: string): string {
   return clientId
 }
 
+function resolveSessionServerUrl(): string {
+  const configured = import.meta.env.VITE_SESSION_SERVER_URL?.trim()
+  if (configured) return configured
+
+  if (import.meta.env.DEV) {
+    return "http://localhost:8787"
+  }
+
+  return ""
+}
+
 export function SessionRuntimeProvider({
   sessionId,
   userId,
@@ -37,16 +48,25 @@ export function SessionRuntimeProvider({
   const [presence, setPresence] = useState<SessionRuntimePresenceUser[]>([])
   const [lastHeartbeatAckAt, setLastHeartbeatAckAt] = useState<number | null>(null)
   const clientId = useMemo(() => getOrCreateClientId(sessionId), [sessionId])
-  const baseUrl = import.meta.env.VITE_SESSION_SERVER_URL?.trim() ?? ""
+  const baseUrl = resolveSessionServerUrl()
 
   useEffect(() => {
     setPresence([])
     setLastHeartbeatAckAt(null)
 
     if (!baseUrl) {
+      console.warn("[session-runtime] VITE_SESSION_SERVER_URL is not configured; realtime session runtime is disabled.")
       setStatus("disconnected")
       return
     }
+
+    console.info("[session-runtime] connecting", {
+      baseUrl,
+      sessionId,
+      userId,
+      role,
+      clientId,
+    })
 
     const socket = new SessionSocket({
       baseUrl,
@@ -54,8 +74,13 @@ export function SessionRuntimeProvider({
       userId,
       role,
       clientId,
-      onStatusChange: setStatus,
+      onStatusChange: (nextStatus) => {
+        console.info("[session-runtime] status", nextStatus)
+        setStatus(nextStatus)
+      },
       onMessage: (message) => {
+        console.debug("[session-runtime] message", message)
+
         if (message.type === "session.presence") {
           setPresence(message.users)
           return
