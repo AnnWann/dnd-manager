@@ -27,6 +27,55 @@ export type SessionStatsState = {
   experience: number
 }
 
+export type SessionConditionDuration = {
+  type:
+    | "rounds" | "turns" | "minutes" | "hours" | "days"
+    | "until-start-of-turn" | "until-end-of-turn" | "until-save"
+    | "concentration" | "permanent" | "custom"
+  total?: number
+  remaining?: number
+  tickOn?: "start-of-turn" | "end-of-turn" | "manual"
+  tickOwner?: "affected" | "source"
+  autoRemoveAtZero?: boolean
+  customLabel?: string
+  expiresAt?: string
+}
+
+export type SessionCondition = {
+  id: string
+  name: string
+  description: string
+  behavior: string
+  source: string
+  notes: string
+  tags: string[]
+  bonuses?: unknown
+  grantedSpells?: unknown[]
+  grantedProficiencies?: unknown[]
+  grantedAbilities?: unknown[]
+  duration: SessionConditionDuration
+  createdAt: string
+  sourceAbilityId?: string
+  sourceAbilityLocation?: "character" | "race" | "equipment" | "condition"
+  sourceItemId?: string
+  sourceAbilityOptionId?: string
+  sourceCharacterId?: string
+  linkedCombatantId?: string
+  initiativeEffectId?: string
+}
+
+export type SessionConditionsState = {
+  characterId: string
+  conditions: SessionCondition[]
+  initialized: boolean
+  revision: number
+}
+
+export type SessionConditionSeed = {
+  characterId: string
+  conditions: SessionCondition[]
+}
+
 export type SessionHpState = {
   characterId: string
   ownerUserId?: string
@@ -85,18 +134,23 @@ export type SessionStatOperation = SessionCalculatedStatOperation | SessionSimpl
 export type SessionAttributeOperation = { type: "character.attribute.set"; characterId: string; attribute: SessionAttribute; value: number }
 export type SessionSavingThrowOperation = { type: "character.savingThrow.set"; characterId: string; attribute: SessionAttribute; proficient: boolean }
 export type SessionSkillOperation = { type: "character.skill.set"; characterId: string; skill: SessionSkill; proficiency: SessionSkillProficiency }
+export type SessionConditionOperation =
+  | { type: "character.condition.add"; characterId: string; condition: SessionCondition }
+  | { type: "character.condition.update"; characterId: string; condition: SessionCondition }
+  | { type: "character.condition.remove"; characterId: string; conditionId: string }
 
 export type SessionRestOperation =
   | { type: "character.rest.short"; characterId: string; healing: number; hitDiceConsumption: Partial<Record<SessionDieSides, number>> }
   | { type: "character.rest.long"; characterId: string; recovery: "partial" | "full" }
 
 export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionAttributeOperation | SessionSavingThrowOperation | SessionSkillOperation | SessionRestOperation
+export type SessionLoggedOperation = SessionAuthoritativeOperation | SessionConditionOperation
 
 export type SessionHpLogRecord = {
   id: string
   actorId: string
   createdAt: string
-  operation: SessionAuthoritativeOperation | { type: "character.hp.undo"; characterId: string; sourceLogId: string }
+  operation: SessionLoggedOperation | { type: "character.hp.undo"; characterId: string; sourceLogId: string }
   reverseOperation:
     | { type: "character.hp.restore"; characterId: string; hp: SessionHpState }
     | { type: "character.stat.armorClass.restore"; characterId: string; adjustment: number }
@@ -109,6 +163,8 @@ export type SessionHpLogRecord = {
     | { type: "character.attribute.restore"; characterId: string; attribute: SessionAttribute; value: number }
     | { type: "character.savingThrow.restore"; characterId: string; attribute: SessionAttribute; proficient: boolean }
     | { type: "character.skill.restore"; characterId: string; skill: SessionSkill; proficiency: SessionSkillProficiency }
+    | { type: "character.condition.delete"; characterId: string; conditionId: string }
+    | { type: "character.condition.restore"; characterId: string; condition: SessionCondition }
     | { type: "character.rest.restore"; characterId: string; snapshot: { hp: SessionHpState; stats: SessionStatsState } }
   undoneAt?: string
   undoneBy?: string
@@ -119,20 +175,25 @@ export type SessionHeartbeatAckMessage = { type: "session.heartbeat.ack"; server
 export type SessionPresenceMessage = { type: "session.presence"; users: SessionRuntimePresenceUser[] }
 export type SessionHpSnapshotMessage = { type: "session.hp.snapshot"; characters: SessionHpState[] }
 export type SessionHpUpdatedMessage = { type: "session.hp.updated"; character: SessionHpState }
+export type SessionConditionsSnapshotMessage = { type: "session.conditions.snapshot"; characters: SessionConditionsState[] }
+export type SessionConditionsUpdatedMessage = { type: "session.conditions.updated"; character: SessionConditionsState }
 export type SessionHpLogMessage = { type: "session.hp.log"; records: SessionHpLogRecord[] }
 export type SessionPongMessage = { type: "session.pong"; serverTime: number }
 export type SessionErrorMessage = { type: "session.error"; code: string; message: string }
 
 export type ServerSessionMessage =
   | SessionReadyMessage | SessionHeartbeatAckMessage | SessionPresenceMessage
-  | SessionHpSnapshotMessage | SessionHpUpdatedMessage | SessionHpLogMessage
-  | SessionPongMessage | SessionErrorMessage
+  | SessionHpSnapshotMessage | SessionHpUpdatedMessage
+  | SessionConditionsSnapshotMessage | SessionConditionsUpdatedMessage
+  | SessionHpLogMessage | SessionPongMessage | SessionErrorMessage
 
 export type ClientSessionMessage =
   | { type: "session.heartbeat"; clientId: string }
   | { type: "session.ping" }
   | { type: "session.hp.initialize"; characters: SessionHpSeed[] }
   | { type: "session.hp.operation"; operation: SessionAuthoritativeOperation }
+  | { type: "session.conditions.initialize"; characters: SessionConditionSeed[] }
+  | { type: "session.conditions.operation"; operation: SessionConditionOperation }
   | { type: "session.log.undo"; logId: string }
 
 export function parseServerSessionMessage(raw: string): ServerSessionMessage | null {
@@ -151,6 +212,8 @@ export function parseServerSessionMessage(raw: string): ServerSessionMessage | n
     case "session.presence": if (Array.isArray(message.users)) return message as SessionPresenceMessage; break
     case "session.hp.snapshot": if (Array.isArray(message.characters)) return message as SessionHpSnapshotMessage; break
     case "session.hp.updated": if (message.character && typeof message.character === "object") return message as SessionHpUpdatedMessage; break
+    case "session.conditions.snapshot": if (Array.isArray(message.characters)) return message as SessionConditionsSnapshotMessage; break
+    case "session.conditions.updated": if (message.character && typeof message.character === "object") return message as SessionConditionsUpdatedMessage; break
     case "session.hp.log": if (Array.isArray(message.records)) return message as SessionHpLogMessage; break
     case "session.error": if (typeof message.code === "string" && typeof message.message === "string") return message as SessionErrorMessage; break
   }
