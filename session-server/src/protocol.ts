@@ -80,13 +80,20 @@ export type SessionRestOperation =
 export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionRestOperation;
 
 export type SessionHpReverseOperation = { type: "character.hp.restore"; characterId: string; hp: SessionHpState };
-export type SessionStatsReverseOperation = { type: "character.stats.restore"; characterId: string; stats: SessionStatsState };
+export type SessionStatReverseOperation =
+  | { type: "character.stat.armorClass.restore"; characterId: string; adjustment: number }
+  | { type: "character.stat.initiative.restore"; characterId: string; adjustment: number }
+  | { type: "character.stat.mobility.restore"; characterId: string; adjustment: number }
+  | { type: "character.stat.passivePerception.restore"; characterId: string; adjustment: number }
+  | { type: "character.stat.exhaustion.restore"; characterId: string; value: number }
+  | { type: "character.stat.inspiration.restore"; characterId: string; value: boolean }
+  | { type: "character.stat.experience.restore"; characterId: string; value: number };
 export type SessionRestReverseOperation = {
   type: "character.rest.restore";
   characterId: string;
   snapshot: { hp: SessionHpState; stats: SessionStatsState };
 };
-export type SessionReverseOperation = SessionHpReverseOperation | SessionStatsReverseOperation | SessionRestReverseOperation;
+export type SessionReverseOperation = SessionHpReverseOperation | SessionStatReverseOperation | SessionRestReverseOperation;
 
 export type SessionHpLogRecord = {
   id: string;
