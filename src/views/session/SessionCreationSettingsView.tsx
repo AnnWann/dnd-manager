@@ -1,13 +1,13 @@
 import {
-  Check,
   Copy,
+  Inbox,
   Settings2,
   ShieldCheck,
   Trash2,
   UsersRound,
 } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
-import { Navigate, useParams } from "react-router-dom"
+import { Navigate, useNavigate, useParams } from "react-router-dom"
 
 import {
   getSessionCreationSettings,
@@ -18,11 +18,13 @@ import {
 import { Button } from "../../components/ui/Button"
 import { useCharacterContext } from "../../contexts/characterContext"
 import { CharacterSettingsModal } from "../../features/characters/settings/CharacterSettingsModal"
+import { sessionPath } from "../../lib/campaignRoutes"
 import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
 import type { Player } from "../../models/player/Player"
 
 export function SessionCreationSettingsView() {
   const { campaignId } = useParams<{ campaignId?: string }>()
+  const navigate = useNavigate()
   const {
     visibleCharacters,
     updateCharacter,
@@ -71,6 +73,15 @@ export function SessionCreationSettingsView() {
   const selectedCharacter = useMemo(
     () => visibleCharacters.find((entry) => entry.get("id") === selectedCharacterId),
     [selectedCharacterId, visibleCharacters],
+  )
+
+  const activeMembers = useMemo(
+    () => settings?.members.filter((member) => member.status === "ACTIVE") ?? [],
+    [settings],
+  )
+  const pendingMemberCount = useMemo(
+    () => settings?.members.filter((member) => member.status === "INVITED").length ?? 0,
+    [settings],
   )
 
   const configuredPlayers = useMemo(() => {
@@ -149,7 +160,7 @@ export function SessionCreationSettingsView() {
           <div>
             <h1 className="text-xl font-semibold text-textH">Configuração</h1>
             <p className="mt-1 text-sm text-textMuted">
-              Configure as cópias de personagem e os usuários que participam desta sessão.
+              Configure as cópias de personagem e os usuários ativos desta sessão. Novas entradas são revisadas em Solicitações.
             </p>
           </div>
         </div>
@@ -194,20 +205,33 @@ export function SessionCreationSettingsView() {
               <h2 className="font-semibold text-textH">Usuários da sessão</h2>
             </div>
             <p className="mt-1 text-xs text-textMuted">
-              Aprove participantes, altere papéis e remova acessos à campanha.
+              Gerencie papéis e acesso dos membros já aprovados.
             </p>
           </div>
 
-          {settings?.campaign.inviteCode ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => void navigator.clipboard.writeText(settings.campaign.inviteCode ?? "")}
-            >
-              <Copy className="h-4 w-4" />
-              Copiar convite
-            </Button>
-          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {pendingMemberCount ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => navigate(sessionPath(campaignId, "creation/requests"))}
+              >
+                <Inbox className="h-4 w-4" />
+                {pendingMemberCount} solicitação(ões)
+              </Button>
+            ) : null}
+
+            {settings?.campaign.inviteCode ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => void navigator.clipboard.writeText(settings.campaign.inviteCode ?? "")}
+              >
+                <Copy className="h-4 w-4" />
+                Copiar convite
+              </Button>
+            ) : null}
+          </div>
         </header>
 
         <div className="p-4">
@@ -218,17 +242,11 @@ export function SessionCreationSettingsView() {
           ) : settings ? (
             <div className="grid gap-3">
               <MemberRow member={settings.owner} owner />
-              {settings.members.map((member) => (
+              {activeMembers.map((member) => (
                 <MemberRow
                   key={member.id}
                   member={member}
                   working={workingUserId === member.id}
-                  onApprove={() =>
-                    void changeMember(member, {
-                      status: "ACTIVE",
-                      role: member.role,
-                    })
-                  }
                   onRoleChange={(role) =>
                     void changeMember(member, {
                       status: "ACTIVE",
@@ -246,9 +264,9 @@ export function SessionCreationSettingsView() {
                   }}
                 />
               ))}
-              {!settings.members.length ? (
+              {!activeMembers.length ? (
                 <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-textMuted">
-                  Nenhum outro usuário participa desta sessão.
+                  Nenhum outro usuário ativo participa desta sessão.
                 </div>
               ) : null}
             </div>
@@ -305,19 +323,15 @@ function MemberRow({
   member,
   owner = false,
   working = false,
-  onApprove,
   onRoleChange,
   onRemove,
 }: {
   member: SessionSettingsMember
   owner?: boolean
   working?: boolean
-  onApprove?: () => void
   onRoleChange?: (role: "MASTER" | "PLAYER") => void
   onRemove?: () => void
 }) {
-  const invited = member.status === "INVITED"
-
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-3">
       <div className="min-w-0">
@@ -326,10 +340,6 @@ function MemberRow({
           {owner ? (
             <span className="inline-flex items-center gap-1 rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
               <ShieldCheck className="h-3 w-3" /> Mestre principal
-            </span>
-          ) : invited ? (
-            <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-300">
-              Pendente
             </span>
           ) : null}
         </div>
@@ -342,23 +352,17 @@ function MemberRow({
         <div className="text-xs font-medium text-textMuted">Mestre</div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          {invited ? (
-            <Button size="sm" disabled={working} onClick={onApprove}>
-              <Check className="h-4 w-4" /> Aprovar
-            </Button>
-          ) : (
-            <select
-              value={member.role}
-              disabled={working}
-              onChange={(event) =>
-                onRoleChange?.(event.target.value as "MASTER" | "PLAYER")
-              }
-              className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH outline-none"
-            >
-              <option value="PLAYER">Jogador</option>
-              <option value="MASTER">Mestre</option>
-            </select>
-          )}
+          <select
+            value={member.role}
+            disabled={working}
+            onChange={(event) =>
+              onRoleChange?.(event.target.value as "MASTER" | "PLAYER")
+            }
+            className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH outline-none"
+          >
+            <option value="PLAYER">Jogador</option>
+            <option value="MASTER">Mestre</option>
+          </select>
 
           <Button
             size="sm"
@@ -367,7 +371,7 @@ function MemberRow({
             onClick={onRemove}
           >
             <Trash2 className="h-4 w-4" />
-            {invited ? "Rejeitar" : "Remover"}
+            Remover
           </Button>
         </div>
       )}
