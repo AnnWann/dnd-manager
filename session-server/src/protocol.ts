@@ -150,13 +150,16 @@ export type SessionConditionOperation =
   | { type: "character.condition.add"; characterId: string; condition: SessionCondition }
   | { type: "character.condition.update"; characterId: string; condition: SessionCondition }
   | { type: "character.condition.remove"; characterId: string; conditionId: string };
+export type SessionConcentrationOperation =
+  | { type: "character.concentration.start"; characterId: string; spellIndex: string; spellName: string }
+  | { type: "character.concentration.end"; characterId: string; reason?: "manual" | "failed-save" };
 
 export type SessionRestOperation =
   | { type: "character.rest.short"; characterId: string; healing: number; hitDiceConsumption: Partial<Record<SessionDieSides, number>> }
   | { type: "character.rest.long"; characterId: string; recovery: "partial" | "full" };
 
 export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionAttributeOperation | SessionSavingThrowOperation | SessionSkillOperation | SessionRestOperation;
-export type SessionLoggedOperation = SessionAuthoritativeOperation | SessionConditionOperation;
+export type SessionLoggedOperation = SessionAuthoritativeOperation | SessionConditionOperation | SessionConcentrationOperation;
 
 export type SessionHpReverseOperation = { type: "character.hp.restore"; characterId: string; hp: SessionHpState };
 export type SessionStatReverseOperation =
@@ -173,12 +176,17 @@ export type SessionSkillReverseOperation = { type: "character.skill.restore"; ch
 export type SessionConditionReverseOperation =
   | { type: "character.condition.delete"; characterId: string; conditionId: string }
   | { type: "character.condition.restore"; characterId: string; condition: SessionCondition };
+export type SessionConcentrationReverseOperation = {
+  type: "character.concentration.restore";
+  characterId: string;
+  conditions: SessionCondition[];
+};
 export type SessionRestReverseOperation = {
   type: "character.rest.restore";
   characterId: string;
   snapshot: { hp: SessionHpState; stats: SessionStatsState };
 };
-export type SessionReverseOperation = SessionHpReverseOperation | SessionStatReverseOperation | SessionAttributeReverseOperation | SessionSavingThrowReverseOperation | SessionSkillReverseOperation | SessionConditionReverseOperation | SessionRestReverseOperation;
+export type SessionReverseOperation = SessionHpReverseOperation | SessionStatReverseOperation | SessionAttributeReverseOperation | SessionSavingThrowReverseOperation | SessionSkillReverseOperation | SessionConditionReverseOperation | SessionConcentrationReverseOperation | SessionRestReverseOperation;
 
 export type SessionHpLogRecord = {
   id: string;
@@ -195,10 +203,10 @@ export type SessionPingMessage = { type: "session.ping" };
 export type SessionHpInitializeMessage = { type: "session.hp.initialize"; characters: SessionHpSeed[] };
 export type SessionHpOperationMessage = { type: "session.hp.operation"; operation: SessionAuthoritativeOperation };
 export type SessionConditionsInitializeMessage = { type: "session.conditions.initialize"; characters: SessionConditionSeed[] };
-export type SessionConditionOperationMessage = { type: "session.conditions.operation"; operation: SessionConditionOperation };
+export type SessionConditionOperationMessage = { type: "session.conditions.operation"; operation: SessionConditionOperation | SessionConcentrationOperation };
 export type SessionSheetOperationWireMessage = { type: "session.sheet.operation"; route: CharacterSheetRoute; operation: SessionLoggedOperation };
 export type SessionLogUndoMessage = { type: "session.log.undo"; logId: string };
-export type ClientSessionMessage = SessionHeartbeatMessage | SessionPingMessage | SessionHpInitializeMessage | SessionHpOperationMessage | SessionConditionsInitializeMessage | SessionConditionOperationMessage | SessionLogUndoMessage;
+export type ClientSessionMessage = SessionHeartbeatMessage | SessionPingMessage | SessionHpInitializeMessage | SessionHpOperationMessage | SessionConditionsInitializeMessage | SessionConditionOperationMessage | SessionSheetOperationWireMessage | SessionLogUndoMessage;
 
 export type SessionReadyMessage = { type: "session.ready"; sessionId: string; clientId: string; serverTime: number };
 export type SessionHeartbeatAckMessage = { type: "session.heartbeat.ack"; serverTime: number };
@@ -241,14 +249,16 @@ export function parseClientSessionMessage(raw: string): ClientSessionMessage | n
   }
   if (value.type === "session.sheet.operation") return parseRoutedSheetOperation(value);
   if (value.type === "session.hp.operation" && isAuthoritativeOperation(value.operation)) return { type: "session.hp.operation", operation: value.operation };
-  if (value.type === "session.conditions.operation" && isConditionOperation(value.operation)) return { type: "session.conditions.operation", operation: value.operation };
+  if (value.type === "session.conditions.operation" && (isConditionOperation(value.operation) || isConcentrationOperation(value.operation))) {
+    return { type: "session.conditions.operation", operation: value.operation };
+  }
   return null;
 }
 
 function parseRoutedSheetOperation(value: Record<string, any>): SessionHpOperationMessage | SessionConditionOperationMessage | null {
   if (typeof value.route !== "string") return null;
   const operation = value.operation;
-  const valid = isAuthoritativeOperation(operation) || isConditionOperation(operation);
+  const valid = isAuthoritativeOperation(operation) || isConditionOperation(operation) || isConcentrationOperation(operation);
   if (!valid) return null;
 
   let expectedRoute: CharacterSheetRoute;
@@ -256,7 +266,7 @@ function parseRoutedSheetOperation(value: Record<string, any>): SessionHpOperati
   catch { return null; }
   if (value.route !== expectedRoute) return null;
 
-  if (isConditionOperation(operation)) return { type: "session.conditions.operation", operation };
+  if (isConditionOperation(operation) || isConcentrationOperation(operation)) return { type: "session.conditions.operation", operation };
   return { type: "session.hp.operation", operation };
 }
 
@@ -317,6 +327,17 @@ function isConditionOperation(value: unknown): value is SessionConditionOperatio
     case "character.condition.remove": return typeof value.conditionId === "string" && value.conditionId.length > 0;
     default: return false;
   }
+}
+
+function isConcentrationOperation(value: unknown): value is SessionConcentrationOperation {
+  if (!isRecord(value) || typeof value.type !== "string" || typeof value.characterId !== "string" || !value.characterId) return false;
+  if (value.type === "character.concentration.start") {
+    return typeof value.spellIndex === "string" && value.spellIndex.length > 0 && typeof value.spellName === "string" && value.spellName.length > 0;
+  }
+  if (value.type === "character.concentration.end") {
+    return value.reason === undefined || value.reason === "manual" || value.reason === "failed-save";
+  }
+  return false;
 }
 
 function isCondition(value: unknown): value is SessionCondition {
