@@ -85,7 +85,7 @@ export function MinimalCharacterSheet({
   character,
   updateCharacter,
 }: Props) {
-  const { dispatchStatOperation } = useCharacterContext()
+  const { dispatchStatOperation, dispatchAttributeOperation } = useCharacterContext()
   const [skillQuery, setSkillQuery] = useState("")
   const [handDialog, setHandDialog] =
     useState<HandItemActionsDialogState | null>(null)
@@ -145,21 +145,27 @@ export function MinimalCharacterSheet({
 
   function updateAttribute(attribute: Attribute, desiredScore: number) {
     const requestedScore = clampInt(desiredScore, 1, 30)
+    const attributes = character.get("sheet").attributes
+    const baseScore = attributes[attribute]
+    const nextBase = clampInt(
+      baseScore + requestedScore - character.getEffectiveAttribute(attribute),
+      1,
+      30,
+    )
 
-    updateCharacter(characterId, (current) => {
-      const attributes = current.get("sheet").attributes
-      const baseScore = attributes[attribute]
-      const nextBase = clampInt(
-        baseScore + requestedScore - current.getEffectiveAttribute(attribute),
-        1,
-        30,
-      )
+    if (dispatchAttributeOperation({
+      type: "character.attribute.set",
+      characterId,
+      attribute,
+      value: nextBase,
+    })) return
 
-      return current.withSheet("attributes", {
-        ...attributes,
+    updateCharacter(characterId, (current) =>
+      current.withSheet("attributes", {
+        ...current.get("sheet").attributes,
         [attribute]: nextBase,
-      })
-    })
+      }),
+    )
   }
 
   function toggleSavingThrow(attribute: Attribute) {
@@ -174,43 +180,16 @@ export function MinimalCharacterSheet({
   return (
     <div className="grid gap-3">
       <CompactSection title="HP">
-        <CharacterHpControls
-          character={character}
-          updateCharacter={updateCharacter}
-          compact
-        />
+        <CharacterHpControls character={character} updateCharacter={updateCharacter} compact />
       </CompactSection>
 
       <CompactSection title="Stats">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
-          <CompactNumberField
-            label="CA"
-            value={getEffectiveArmorClassWithShield(character)}
-            onChange={(value) => updateDerivedStat("armorClass", value, getCalculatedArmorClassWithShield)}
-          />
-          <CompactNumberField
-            label="Iniciativa"
-            value={character.getEffectiveInitiative()}
-            signed
-            onChange={(value) => updateDerivedStat("initiative", value, getCalculatedInitiative)}
-          />
-          <CompactNumberField
-            label="Desloc."
-            value={character.getEffectiveMobility()}
-            onChange={(value) => updateDerivedStat("mobility", value, getCalculatedMobility)}
-          />
-          <CompactNumberField
-            label="Passiva"
-            value={character.getEffectivePassivePerception()}
-            onChange={(value) => updateDerivedStat("passive_perception", value, getCalculatedPassivePerception)}
-          />
-          <CompactNumberField
-            label="Exaustão"
-            value={sheet.stats.exhaustion ?? 0}
-            min={0}
-            max={6}
-            onChange={setExhaustion}
-          />
+          <CompactNumberField label="CA" value={getEffectiveArmorClassWithShield(character)} onChange={(value) => updateDerivedStat("armorClass", value, getCalculatedArmorClassWithShield)} />
+          <CompactNumberField label="Iniciativa" value={character.getEffectiveInitiative()} signed onChange={(value) => updateDerivedStat("initiative", value, getCalculatedInitiative)} />
+          <CompactNumberField label="Desloc." value={character.getEffectiveMobility()} onChange={(value) => updateDerivedStat("mobility", value, getCalculatedMobility)} />
+          <CompactNumberField label="Passiva" value={character.getEffectivePassivePerception()} onChange={(value) => updateDerivedStat("passive_perception", value, getCalculatedPassivePerception)} />
+          <CompactNumberField label="Exaustão" value={sheet.stats.exhaustion ?? 0} min={0} max={6} onChange={setExhaustion} />
           <ReadOnlyStat label="Proficiência" value={formatSigned(proficiency)} />
           <button
             type="button"
@@ -218,15 +197,11 @@ export function MinimalCharacterSheet({
             onClick={() => setInspiration(!(sheet.stats.inspiration ?? false))}
             className={cn(
               "min-h-16 rounded-lg border px-2 py-2 text-center transition-colors",
-              sheet.stats.inspiration
-                ? "border-accentBorder bg-accentBg text-textH"
-                : "border-border bg-bg-subtle text-textMuted hover:border-borderStrong",
+              sheet.stats.inspiration ? "border-accentBorder bg-accentBg text-textH" : "border-border bg-bg-subtle text-textMuted hover:border-borderStrong",
             )}
           >
             <div className="text-[10px] uppercase tracking-wide">Inspiração</div>
-            <div className="mt-1 text-sm font-bold">
-              {sheet.stats.inspiration ? "Disponível" : "Gasta"}
-            </div>
+            <div className="mt-1 text-sm font-bold">{sheet.stats.inspiration ? "Disponível" : "Gasta"}</div>
           </button>
         </div>
       </CompactSection>
@@ -291,23 +266,11 @@ export function MinimalCharacterSheet({
               {character.get("equipment").weapons.length ? (
                 character.get("equipment").weapons.map((weapon, index) => {
                   const attribute = getWeaponAttackAttribute(weapon)
-                  const baseAttack =
-                    character.getEffectiveAttributeModifier(attribute) +
-                    (weapon.proficient && !isWeaponImprovisedGrip(weapon) ? proficiency : 0)
+                  const baseAttack = character.getEffectiveAttributeModifier(attribute) + (weapon.proficient && !isWeaponImprovisedGrip(weapon) ? proficiency : 0)
                   const attack = character.getEffectiveWeaponAttackBonus(weapon, baseAttack)
-                  const damageBonus = character.getEffectiveWeaponDamageBonus(
-                    weapon,
-                    character.getEffectiveAttributeModifier(attribute),
-                  )
-
+                  const damageBonus = character.getEffectiveWeaponDamageBonus(weapon, character.getEffectiveAttributeModifier(attribute))
                   return (
-                    <CompactWeaponTile
-                      key={`${weapon.id}-${index}`}
-                      weapon={weapon}
-                      attack={attack}
-                      damageBonus={damageBonus}
-                      onClick={() => setHandDialog({ itemId: weapon.id })}
-                    />
+                    <CompactWeaponTile key={`${weapon.id}-${index}`} weapon={weapon} attack={attack} damageBonus={damageBonus} onClick={() => setHandDialog({ itemId: weapon.id })} />
                   )
                 })
               ) : (
@@ -325,13 +288,9 @@ export function MinimalCharacterSheet({
                   <div key={attribute} className="rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center">
                     <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">{attributeShort(attribute)}</div>
                     <div className="mt-1 flex items-baseline justify-center gap-2">
-                      <span className="text-sm font-bold text-textH">
-                        {formatSigned(character.getEffectiveSpellAttackBonus(attribute, modifier + proficiency))}
-                      </span>
+                      <span className="text-sm font-bold text-textH">{formatSigned(character.getEffectiveSpellAttackBonus(attribute, modifier + proficiency))}</span>
                       <span className="text-[10px] text-textMuted">CD</span>
-                      <span className="text-sm font-bold text-textH">
-                        {character.getEffectiveSpellSaveDc(attribute, 8 + modifier + proficiency)}
-                      </span>
+                      <span className="text-sm font-bold text-textH">{character.getEffectiveSpellSaveDc(attribute, 8 + modifier + proficiency)}</span>
                     </div>
                   </div>
                 )
@@ -344,139 +303,56 @@ export function MinimalCharacterSheet({
           {ATTRIBUTE_KEYS.map((attribute) => (
             <span key={attribute} className="rounded-full border border-border bg-bg px-2 py-1 text-[10px] text-text">
               CD {attributeShort(attribute)}{" "}
-              {character.getEffectiveAbilitySaveDc(
-                attribute,
-                8 + character.getEffectiveAttributeModifier(attribute) + proficiency,
-              )}
+              {character.getEffectiveAbilitySaveDc(attribute, 8 + character.getEffectiveAttributeModifier(attribute) + proficiency)}
             </span>
           ))}
         </div>
       </CompactSection>
 
       <CompactSection title="Perícias">
-        <Input
-          value={skillQuery}
-          placeholder="Buscar perícia pelo nome"
-          aria-label="Buscar perícia pelo nome"
-          onChange={(event) => setSkillQuery(event.target.value)}
-        />
-
+        <Input value={skillQuery} placeholder="Buscar perícia pelo nome" aria-label="Buscar perícia pelo nome" onChange={(event) => setSkillQuery(event.target.value)} />
         {normalizedSkillQuery ? (
           matchingSkills.length ? (
             <div className="mt-2 grid gap-1 sm:grid-cols-2 xl:grid-cols-3">
               {matchingSkills.map((skill) => (
-                <SelectSkillModule
-                  key={skill.key}
-                  character={character}
-                  updateCharacter={updateCharacter}
-                  skillKey={skill.key}
-                  label={skill.label}
-                  ability={skill.ability}
-                  profBonus={proficiency}
-                />
+                <SelectSkillModule key={skill.key} character={character} updateCharacter={updateCharacter} skillKey={skill.key} label={skill.label} ability={skill.ability} profBonus={proficiency} />
               ))}
             </div>
-          ) : (
-            <p className="mt-2 text-xs text-textMuted">Nenhuma perícia corresponde à busca.</p>
-          )
-        ) : (
-          <p className="mt-2 text-xs text-textMuted">Digite para localizar uma perícia.</p>
-        )}
+          ) : <p className="mt-2 text-xs text-textMuted">Nenhuma perícia corresponde à busca.</p>
+        ) : <p className="mt-2 text-xs text-textMuted">Digite para localizar uma perícia.</p>}
       </CompactSection>
 
       <MinimalCharacterActions character={character} updateCharacter={updateCharacter} />
-
-      <HandItemActionsDialog
-        character={character}
-        state={handDialog}
-        onClose={() => setHandDialog(null)}
-      />
+      <HandItemActionsDialog character={character} state={handDialog} onClose={() => setHandDialog(null)} />
     </div>
   )
 }
 
 function CompactSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
-      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-textH">{title}</h2>
-      {children}
-    </section>
-  )
+  return <section className="rounded-xl border border-border bg-bg p-3 shadow-theme-sm"><h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-textH">{title}</h2>{children}</section>
 }
 
-function CompactNumberField({
-  label,
-  value,
-  onChange,
-  min,
-  max,
-  signed = false,
-}: {
-  label: string
-  value: number
-  onChange: (value: number) => void
-  min?: number
-  max?: number
-  signed?: boolean
-}) {
+function CompactNumberField({ label, value, onChange, min, max, signed = false }: { label: string; value: number; onChange: (value: number) => void; min?: number; max?: number; signed?: boolean }) {
   return (
     <label className="grid min-w-0 gap-1 rounded-lg border border-border bg-bg-subtle p-2 text-center">
       <span className="truncate text-[10px] uppercase tracking-wide text-textMuted">{label}</span>
-      <Input
-        type="number"
-        inputMode="decimal"
-        min={min}
-        max={max}
-        className="h-8 min-w-0 px-1 text-center text-sm font-bold"
-        value={value}
-        aria-label={label}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
+      <Input type="number" inputMode="decimal" min={min} max={max} className="h-8 min-w-0 px-1 text-center text-sm font-bold" value={value} aria-label={label} onChange={(event) => onChange(Number(event.target.value))} />
       {signed ? <span className="sr-only">Valor atual {formatSigned(value)}</span> : null}
     </label>
   )
 }
 
 function ReadOnlyStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex min-h-16 flex-col items-center justify-center rounded-lg border border-accentBorder bg-accentBg px-2 py-2 text-center">
-      <div className="text-[10px] uppercase tracking-wide text-textMuted">{label}</div>
-      <div className="mt-1 text-lg font-bold text-textH">{value}</div>
-    </div>
-  )
+  return <div className="flex min-h-16 flex-col items-center justify-center rounded-lg border border-accentBorder bg-accentBg px-2 py-2 text-center"><div className="text-[10px] uppercase tracking-wide text-textMuted">{label}</div><div className="mt-1 text-lg font-bold text-textH">{value}</div></div>
 }
 
-function CompactWeaponTile({
-  weapon,
-  attack,
-  damageBonus,
-  onClick,
-}: {
-  weapon: Weapon
-  attack: number
-  damageBonus: number
-  onClick: () => void
-}) {
+function CompactWeaponTile({ weapon, attack, damageBonus, onClick }: { weapon: Weapon; attack: number; damageBonus: number; onClick: () => void }) {
   const die = getWeaponDamageDie(weapon) ?? weapon.damage
-  const damage = `${die.quantity}${die.sides}${
-    damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""
-  }`
+  const damage = `${die.quantity}${die.sides}${damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""}`
   const hands = weapon.wieldedTwoHanded ? 2 : 1
-
   return (
-    <button
-      type="button"
-      title="Abrir opções de empunhadura, guardar ou largar"
-      onClick={onClick}
-      className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center transition-colors hover:border-accentBorder hover:bg-accentBg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      <div className="flex min-w-0 items-center justify-center gap-1 text-[10px] uppercase tracking-wide text-textMuted">
-        <span className="truncate">
-          {weapon.name || "Arma"}
-          {isWeaponImprovisedGrip(weapon) ? " · imp." : ""}
-        </span>
-        <span className="shrink-0 rounded-full border border-accentBorder bg-accentBg px-1 py-0.5 text-[9px] font-semibold text-accent">{hands}M</span>
-      </div>
+    <button type="button" title="Abrir opções de empunhadura, guardar ou largar" onClick={onClick} className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center transition-colors hover:border-accentBorder hover:bg-accentBg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+      <div className="flex min-w-0 items-center justify-center gap-1 text-[10px] uppercase tracking-wide text-textMuted"><span className="truncate">{weapon.name || "Arma"}{isWeaponImprovisedGrip(weapon) ? " · imp." : ""}</span><span className="shrink-0 rounded-full border border-accentBorder bg-accentBg px-1 py-0.5 text-[9px] font-semibold text-accent">{hands}M</span></div>
       <div className="mt-1 text-lg font-bold text-textH">{formatSigned(attack)}</div>
       <div className="text-[10px] font-medium text-textMuted">{damage}</div>
     </button>
@@ -485,30 +361,13 @@ function CompactWeaponTile({
 
 function CompactUnarmedTile({ character }: { character: CharacterTemplate }) {
   const profile = getUnarmedAttackProfile(character)
-  return (
-    <div className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center">
-      <div className="truncate text-[10px] uppercase tracking-wide text-textMuted">
-        Ataque desarmado{profile.monkLevel > 0 ? ` · M${profile.monkLevel}` : ""}
-      </div>
-      <div className="mt-1 text-lg font-bold text-textH">{formatSigned(profile.attack)}</div>
-      <div className="text-[10px] font-medium text-textMuted">{formatUnarmedDamage(profile)}</div>
-    </div>
-  )
+  return <div className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center"><div className="truncate text-[10px] uppercase tracking-wide text-textMuted">Ataque desarmado{profile.monkLevel > 0 ? ` · M${profile.monkLevel}` : ""}</div><div className="mt-1 text-lg font-bold text-textH">{formatSigned(profile.attack)}</div><div className="text-[10px] font-medium text-textMuted">{formatUnarmedDamage(profile)}</div></div>
 }
 
 function DerivedTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center">
-      <div className="text-[10px] uppercase tracking-wide text-textMuted">{label}</div>
-      <div className="mt-1 text-lg font-bold text-textH">{value}</div>
-    </div>
-  )
+  return <div className="rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center"><div className="text-[10px] uppercase tracking-wide text-textMuted">{label}</div><div className="mt-1 text-lg font-bold text-textH">{value}</div></div>
 }
 
 function normalizeSearchText(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("pt-BR")
-    .trim()
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim()
 }
