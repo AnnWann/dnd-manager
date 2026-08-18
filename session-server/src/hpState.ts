@@ -3,6 +3,7 @@ import type {
   SessionConnection,
   SessionDieSides,
   SessionHpLogRecord,
+  SessionHpSeed,
   SessionHpState,
   SessionReverseOperation,
   SessionRestOperation,
@@ -14,7 +15,7 @@ export type HpApplyResult =
   | { ok: true; next: SessionHpState; record: SessionHpLogRecord }
   | { ok: false; code: string; message: string };
 
-export function normalizeHpSeed(state: Omit<SessionHpState, "revision">): SessionHpState {
+export function normalizeHpSeed(state: SessionHpSeed): SessionHpState {
   const max = Math.max(1, integer(state.max));
   const currentMax = clamp(integer(state.currentMax), 1, max);
   const maxHpBonus = integer(state.maxHpBonus);
@@ -84,7 +85,15 @@ export function applyHpUndo(
   }
 
   const beforeUndo = cloneState(current);
-  const restored = cloneState(getReverseState(source.reverseOperation));
+  const reverseState = getReverseState(source.reverseOperation) as SessionHpState & {
+    hitDice?: SessionHpState["hitDice"];
+  };
+  const restored = cloneState({
+    ...reverseState,
+    // Logs created before the hit-dice migration have no hitDice snapshot.
+    // Preserve the current authoritative pools rather than erasing them.
+    hitDice: reverseState.hitDice ?? current.hitDice,
+  });
   restored.revision = current.revision + 1;
 
   return {
@@ -260,9 +269,10 @@ function mutateState(previous: SessionHpState, operation: SessionAuthoritativeOp
 
 function effectiveMax(state: SessionHpState): number { return Math.max(1, state.currentMax + state.maxHpBonus); }
 function cloneState(state: SessionHpState): SessionHpState {
+  const hitDice = state.hitDice ?? {};
   return {
     ...state,
-    hitDice: Object.fromEntries(Object.entries(state.hitDice).map(([side, pool]) => [side, pool ? { ...pool } : pool])) as SessionHpState["hitDice"],
+    hitDice: Object.fromEntries(Object.entries(hitDice).map(([side, pool]) => [side, pool ? { ...pool } : pool])) as SessionHpState["hitDice"],
   };
 }
 function integer(value: number): number { return Math.trunc(Number(value) || 0); }
