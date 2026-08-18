@@ -1,12 +1,21 @@
-import { History } from "lucide-react"
+import { History, Undo2 } from "lucide-react"
 import { useMemo } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
+import type {
+  SessionHpLogRecord,
+  SessionHpOperation,
+} from "../session-runtime/sessionProtocol"
+import { useOptionalSessionRuntime } from "../session-runtime/useSessionRuntime"
 import type {
   GameOperation,
   GameOperationRecord,
   InventoryLocation,
 } from "../../models/game/GameOperation"
+
+type DisplayRecord =
+  | { source: "legacy"; record: GameOperationRecord }
+  | { source: "hp"; record: SessionHpLogRecord }
 
 export function SessionActionLog() {
   const {
@@ -15,6 +24,7 @@ export function SessionActionLog() {
     partyInventory,
     groundInventory,
   } = useCharacterContext()
+  const runtime = useOptionalSessionRuntime()
 
   const characterNames = useMemo(
     () => new Map(
@@ -35,7 +45,21 @@ export function SessionActionLog() {
     return new Map(entries.map((item) => [item.id, item.name]))
   }, [groundInventory, partyInventory, visibleCharacters])
 
-  const records = [...operationLog].reverse()
+  const latestUndoableHpLogByCharacter = useMemo(() => {
+    const latest = new Map<string, string>()
+    for (const record of runtime?.hpLog ?? []) {
+      if (record.undoneAt || record.operation.type === "character.hp.undo") continue
+      latest.set(record.operation.characterId, record.id)
+    }
+    return latest
+  }, [runtime?.hpLog])
+
+  const records = useMemo<DisplayRecord[]>(() => [
+    ...operationLog.map((record) => ({ source: "legacy" as const, record })),
+    ...(runtime?.hpLog ?? []).map((record) => ({ source: "hp" as const, record })),
+  ].sort((left, right) =>
+    new Date(right.record.createdAt).getTime() - new Date(left.record.createdAt).getTime(),
+  ), [operationLog, runtime?.hpLog])
 
   return (
     <aside className="hidden w-80 shrink-0 flex-col border-l border-border bg-bg-elevated xl:flex">
@@ -52,14 +76,29 @@ export function SessionActionLog() {
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {records.length ? (
           <div className="flex flex-col gap-2">
-            {records.map((record) => (
-              <LogEntry
-                key={record.id}
-                record={record}
-                characterNames={characterNames}
-                itemNames={itemNames}
-              />
-            ))}
+            {records.map((entry) =>
+              entry.source === "hp" ? (
+                <HpLogEntry
+                  key={`hp:${entry.record.id}`}
+                  record={entry.record}
+                  characterNames={characterNames}
+                  canUndo={
+                    runtime?.role === "MASTER" &&
+                    !entry.record.undoneAt &&
+                    entry.record.operation.type !== "character.hp.undo" &&
+                    latestUndoableHpLogByCharacter.get(entry.record.operation.characterId) === entry.record.id
+                  }
+                  onUndo={() => runtime?.undoLog(entry.record.id)}
+                />
+              ) : (
+                <LegacyLogEntry
+                  key={`legacy:${entry.record.id}`}
+                  record={entry.record}
+                  characterNames={characterNames}
+                  itemNames={itemNames}
+                />
+              ),
+            )}
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-xs leading-5 text-textMuted">
@@ -71,7 +110,54 @@ export function SessionActionLog() {
   )
 }
 
-function LogEntry({
+function HpLogEntry({
+  record,
+  characterNames,
+  canUndo,
+  onUndo,
+}: {
+  record: SessionHpLogRecord
+  characterNames: ReadonlyMap<string, string>
+  canUndo: boolean
+  onUndo: () => void
+}) {
+  const description = describeHpOperation(record.operation, characterNames)
+  const timestamp = formatTime(record.createdAt)
+
+  return (
+    <article
+      className={`rounded-lg border border-border bg-bg px-3 py-2.5 ${record.undoneAt ? "opacity-55" : ""}`}
+    >
+      <div className={record.undoneAt ? "text-xs leading-5 text-textMuted line-through" : "text-xs leading-5 text-textH"}>
+        {description}
+      </div>
+      {record.undoneAt ? (
+        <div className="mt-1 text-[10px] font-medium text-textMuted">
+          Desfeito por {record.undoneBy || "MASTER"}.
+        </div>
+      ) : null}
+      <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-textMuted">
+        <span className="truncate" title={record.actorId}>{record.actorId}</span>
+        <div className="flex items-center gap-2">
+          {canUndo ? (
+            <button
+              type="button"
+              onClick={onUndo}
+              className="inline-flex items-center gap-1 rounded px-1.5 py-1 font-medium text-textMuted hover:bg-bg-subtle hover:text-textH"
+              title="Desfazer esta alteração"
+            >
+              <Undo2 className="h-3 w-3" />
+              Desfazer
+            </button>
+          ) : null}
+          <time dateTime={record.createdAt}>{timestamp}</time>
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function LegacyLogEntry({
   record,
   characterNames,
   itemNames,
@@ -92,6 +178,36 @@ function LogEntry({
       </div>
     </article>
   )
+}
+
+function describeHpOperation(
+  operation: SessionHpLogRecord["operation"],
+  characterNames: ReadonlyMap<string, string>,
+): string {
+  const characterName = characterNames.get(operation.characterId) ?? "Personagem"
+
+  switch (operation.type) {
+    case "character.hp.set":
+      return `Definiu os PV de ${characterName} para ${operation.value}.`
+    case "character.hp.temporary.set":
+      return `Definiu os PV temporários de ${characterName} para ${operation.value}.`
+    case "character.hp.temporary.add":
+      return `${characterName} recebeu ${operation.amount} PV temporários.`
+    case "character.hp.damage":
+      return `${characterName} sofreu ${operation.amount} de dano.`
+    case "character.hp.heal":
+      return `${characterName} recuperou ${operation.amount} PV.`
+    case "character.hp.max.set":
+      return `Definiu o máximo real de ${characterName} para ${operation.value} PV.`
+    case "character.hp.currentMax.adjust":
+      return operation.amount > 0
+        ? `Aumentou o máximo atual de ${characterName} em ${operation.amount} PV.`
+        : `Reduziu o máximo atual de ${characterName} em ${Math.abs(operation.amount)} PV.`
+    case "character.hp.currentMax.restore":
+      return `Restaurou o máximo atual de ${characterName}.`
+    case "character.hp.undo":
+      return `Desfez uma alteração de PV de ${characterName}.`
+  }
 }
 
 function describeOperation(
