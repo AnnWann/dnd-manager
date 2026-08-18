@@ -78,22 +78,21 @@ export function CharacterRestControls({
     hitDiceConsumption: HitDiceConsumption,
   ) {
     if (runtime) {
-      // Hit dice/resources remain on the legacy path for this migration slice.
-      // HP healing itself is authoritative on the SessionActor.
+      // Until the remaining rest domains become authoritative, their legacy
+      // mutation still happens locally. HP is excluded from that mutation and
+      // the server receives exactly one short-rest domain event.
       updateCharacter(characterId, (current) =>
         takeShortRest(current, 0, hitDiceConsumption),
       )
 
-      if (healing > 0) {
-        if (runtime.status === "connected") {
-          runtime.dispatchHpOperation({
-            type: "character.hp.heal",
-            characterId,
-            amount: healing,
-          })
-        } else {
-          console.warn("[session-runtime] Short-rest HP recovery ignored while the authoritative session server is disconnected.")
-        }
+      if (runtime.status === "connected") {
+        runtime.dispatchHpOperation({
+          type: "character.rest.short",
+          characterId,
+          healing,
+        })
+      } else {
+        console.warn("[session-runtime] Short rest ignored by the authoritative session server while disconnected.")
       }
     } else {
       updateCharacter(characterId, (current) =>
@@ -108,17 +107,19 @@ export function CharacterRestControls({
     if (runtime) {
       const requiredSupply = getRequiredSupplyForRace(character.get("sheet").race)
       const totals = getSupplySelectionTotals(partyInventory, selection)
-      const fraction: 0.5 | 1 =
-        totals.selectedPortions + PORTION_EPSILON < requiredSupply ? 0.5 : 1
+      const recovery =
+        totals.selectedPortions + PORTION_EPSILON < requiredSupply
+          ? "partial" as const
+          : "full" as const
 
       if (runtime.status === "connected") {
         runtime.dispatchHpOperation({
-          type: "character.hp.rest",
+          type: "character.rest.long",
           characterId,
-          fraction,
+          recovery,
         })
       } else {
-        console.warn("[session-runtime] Long-rest HP recovery ignored while the authoritative session server is disconnected.")
+        console.warn("[session-runtime] Long rest ignored by the authoritative session server while disconnected.")
       }
     }
 
