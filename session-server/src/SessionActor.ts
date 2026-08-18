@@ -10,6 +10,7 @@ import {
   parseClientSessionMessage,
   type ServerSessionMessage,
   type SessionConnection,
+  type SessionDieSides,
   type SessionHpLogRecord,
   type SessionHpSeed,
   type SessionHpState,
@@ -21,6 +22,11 @@ const CLOSE_CODE_TIMEOUT = 4000;
 const CLOSE_CODE_REPLACED = 4001;
 const HP_STATE_KEY = "hp-state";
 const HP_LOG_KEY = "hp-log";
+
+type StoredSessionHpState = SessionHpState & {
+  /** Distinguishes an old HP-only state from an intentionally empty hit-dice state. */
+  hitDiceInitialized?: boolean;
+};
 
 export class SessionActor extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
@@ -131,25 +137,32 @@ export class SessionActor extends DurableObject<Env> {
       const normalized = normalizeHpSeed(seed);
       const existing = state[seed.characterId];
       if (!existing) {
-        state[seed.characterId] = normalized;
+        state[seed.characterId] = {
+          ...normalized,
+          hitDiceInitialized: true,
+        };
         changed = true;
         continue;
       }
 
-      // Initialization is non-destructive: it only fills hit-dice pools that
-      // did not exist when HP was first migrated. It never overwrites runtime
-      // current/max values after they have become authoritative.
+      // Existing states created before hit dice were migrated get exactly one
+      // non-destructive seed. After that, an absent pool means it was removed
+      // intentionally and must never be recreated by frontend legacy data.
+      if (existing.hitDiceInitialized === true) continue;
+
       const nextHitDice = { ...(existing.hitDice ?? {}) };
-      let hitDiceChanged = false;
       for (const [side, pool] of Object.entries(normalized.hitDice)) {
-        if (!pool || nextHitDice[side as keyof typeof nextHitDice]) continue;
-        nextHitDice[side as keyof typeof nextHitDice] = pool;
-        hitDiceChanged = true;
+        const typedSide = side as SessionDieSides;
+        if (!pool || nextHitDice[typedSide]) continue;
+        nextHitDice[typedSide] = pool;
       }
-      if (hitDiceChanged) {
-        state[seed.characterId] = { ...existing, hitDice: nextHitDice };
-        changed = true;
-      }
+
+      state[seed.characterId] = {
+        ...existing,
+        hitDice: nextHitDice,
+        hitDiceInitialized: true,
+      };
+      changed = true;
     }
 
     if (changed) {
@@ -178,7 +191,10 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
 
-    state[operation.characterId] = result.next;
+    state[operation.characterId] = {
+      ...result.next,
+      hitDiceInitialized: current.hitDiceInitialized ?? true,
+    };
     log.push(result.record);
     const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
     await this.ctx.storage.put({ [HP_STATE_KEY]: state, [HP_LOG_KEY]: nextLog });
@@ -229,15 +245,18 @@ export class SessionActor extends DurableObject<Env> {
     const now = new Date().toISOString();
     log[sourceIndex] = { ...source, undoneAt: now, undoneBy: connection.userId };
     log.push(result.record);
-    state[characterId] = result.next;
+    state[characterId] = {
+      ...result.next,
+      hitDiceInitialized: current.hitDiceInitialized ?? true,
+    };
     const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
     await this.ctx.storage.put({ [HP_STATE_KEY]: state, [HP_LOG_KEY]: nextLog });
     this.broadcast({ type: "session.hp.updated", character: result.next });
     this.broadcastHpLogToMasters(nextLog);
   }
 
-  private async readHpState(): Promise<Record<string, SessionHpState>> {
-    const raw = (await this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY)) ?? {};
+  private async readHpState(): Promise<Record<string, StoredSessionHpState>> {
+    const raw = (await this.ctx.storage.get<Record<string, StoredSessionHpState>>(HP_STATE_KEY)) ?? {};
     return Object.fromEntries(
       Object.entries(raw).map(([id, state]) => [id, { ...state, hitDice: state.hitDice ?? {} }]),
     );
