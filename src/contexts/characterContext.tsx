@@ -397,15 +397,14 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
   function updateCharacterDomain(characterId: string, domain: CharacterDomainName, updater: (c: CharacterTemplate) => CharacterTemplate) { replaceCharacter(characterId, updater, domain) }
 
   function replaceCharacter(characterId: string, updater: (c: CharacterTemplate) => CharacterTemplate, declaredDomain?: CharacterDomainName) {
+    let interceptedConditionOperation: SessionConditionOperation | null = null
+
     if (sessionRuntime) {
       const projectedCharacter = characters.find((entry) => entry.get("id") === characterId)
       if (projectedCharacter) {
         const projectedNext = updater(projectedCharacter)
-        const conditionOperation = deriveConditionOperation(projectedCharacter, projectedNext)
-        if (conditionOperation) {
-          dispatchConditionOperation(conditionOperation)
-          return
-        }
+        interceptedConditionOperation = deriveConditionOperation(projectedCharacter, projectedNext)
+        if (interceptedConditionOperation) dispatchConditionOperation(interceptedConditionOperation)
       }
     }
 
@@ -413,7 +412,13 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
       const rawCharacter = previous.characters.find((entry) => entry.id === characterId)
       if (!rawCharacter) return previous
       const character = CharacterTemplate.fromJSON(rawCharacter)
-      const nextCharacter = updater(character)
+      let nextCharacter = updater(character)
+
+      if (interceptedConditionOperation) {
+        nextCharacter = withCharacterConditions(nextCharacter, getCharacterConditions(character))
+        if (JSON.stringify(nextCharacter.toJSON()) === JSON.stringify(character.toJSON())) return previous
+      }
+
       if (declaredDomain) {
         const changedDomains = getChangedCharacterDomains(character.toJSON(), nextCharacter.toJSON())
         const unexpected = changedDomains.filter((changedDomain) => changedDomain !== declaredDomain)
