@@ -18,9 +18,10 @@ Install dependencies:
 
 ```bash
 npm install
+npm install --prefix session-server
 ```
 
-Run the app in development (builds local spell JSON first):
+Run only the frontend:
 
 ```bash
 npm run dev
@@ -36,6 +37,55 @@ Run the Vercel local dev server (includes `/api` serverless functions):
 
 ```bash
 npm run dev:vercel
+```
+
+## Full local stack
+
+The full local mode runs the production-shaped topology locally:
+
+```text
+Browser
+  -> Vercel local app + Functions (:3000)
+       -> Postgres configured in Vercel Development env
+  -> Cloudflare Worker + Durable Objects (:8787)
+```
+
+First link the checkout to the Vercel project once:
+
+```bash
+npm run dev:link
+```
+
+Then start everything with one command:
+
+```bash
+npm run dev:full
+```
+
+`dev:full`:
+
+- runs `vercel dev` on port 3000;
+- runs the Cloudflare session server on port 8787;
+- disables `VITE_LOCAL_AUTH_BYPASS`, so Better Auth and Vercel Functions are exercised;
+- injects `VITE_SESSION_SERVER_URL=http://localhost:8787`;
+- uses the Environment Variables configured for the linked Vercel **Development** environment, including the Postgres connection strings.
+
+For realistic testing, configure the Vercel Development environment to point at a dedicated Neon/development database branch instead of production data.
+
+### Using Production Vercel env values locally
+
+There is an explicit opt-in command for reproducing the local stack with Vercel Production environment variables:
+
+```bash
+ALLOW_PRODUCTION_DATA=1 npm run dev:full:prod-env
+```
+
+This can connect local code to the real production database and external services. It is intentionally blocked unless `ALLOW_PRODUCTION_DATA=1` is supplied.
+
+You can override the local ports/Worker URL when necessary:
+
+```bash
+LOCAL_VERCEL_PORT=3001 VITE_SESSION_SERVER_URL=http://localhost:8788 npm run dev:full
 ```
 
 Build for production:
@@ -64,8 +114,8 @@ npm run spells:fetch
 ## Server / Persistence
 
 - The `/api` folder contains serverless endpoints used for sharing and translating data.
-- State persistence (optional) uses a Postgres database via `POSTGRES_URL` (Neon, Vercel Postgres, etc.).
-- To run the API locally use the Vercel CLI: install `vercel` and run `npm run dev:vercel`.
+- State persistence uses Postgres via `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, or `DATABASE_URL` depending on the configured environment.
+- `npm run dev:full` is the preferred way to test Vercel Functions, the database-backed application, and the Cloudflare session runtime together.
 
 ## Translation
 
@@ -80,7 +130,3 @@ npm run spells:fetch
 ## License
 
 MIT
-
----
-
-If you'd like, I can also add a short development guide or update the `package.json` scripts section with examples. 
