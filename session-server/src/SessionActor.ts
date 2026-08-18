@@ -2,8 +2,10 @@ import { DurableObject } from "cloudflare:workers";
 import {
   applyHpOperation,
   applyHpUndo,
+  defaultAttributes,
   defaultStats,
   MAX_HP_LOG_RECORDS,
+  normalizeAttributesSeed,
   normalizeHpSeed,
   normalizeStatsSeed,
 } from "./hpState";
@@ -170,6 +172,15 @@ export class SessionActor extends DurableObject<Env> {
         entryChanged = true;
       }
 
+      if (existing.attributesInitialized !== true && seed.attributes !== undefined) {
+        next = {
+          ...next,
+          attributes: normalizeAttributesSeed(seed.attributes),
+          attributesInitialized: true,
+        };
+        entryChanged = true;
+      }
+
       if (entryChanged) {
         state[seed.characterId] = next;
         changed = true;
@@ -275,6 +286,8 @@ export class SessionActor extends DurableObject<Env> {
         hitDice: state.hitDice ?? {},
         stats: state.stats ?? defaultStats(),
         statsInitialized: state.statsInitialized ?? false,
+        attributes: state.attributes ?? defaultAttributes(),
+        attributesInitialized: state.attributesInitialized ?? false,
       }]),
     );
   }
