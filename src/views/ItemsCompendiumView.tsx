@@ -31,6 +31,7 @@ import {
 import type { ItemKind, Itemmable } from "../models/items/item"
 
 const LEGACY_CUSTOM_TEMPLATES_STORAGE_KEY = "dndmm.itemCompendium.custom.v1"
+const LEGACY_MIGRATION_KEY_PREFIX = "dndmm.itemCompendium.customMigrated.v1:"
 const ITEM_KINDS = new Set<ItemKind>([
   "common",
   "equipment",
@@ -69,28 +70,33 @@ export function ItemsCompendiumView() {
       try {
         const catalog = await getSessionItemCompendium(campaignId!)
         let nextEntries = catalog.entries
+        const migrationKey = `${LEGACY_MIGRATION_KEY_PREFIX}${campaignId}`
+        const shouldMigrateLegacy =
+          window.localStorage.getItem(migrationKey) !== "1"
 
-        // The old compendium was global localStorage state. Keep that source
-        // intact while materializing its missing templates into each session,
-        // otherwise opening the first session would consume the migration for
-        // every other campaign on this browser.
-        const legacyTemplates = readLegacyCustomTemplates()
-        if (legacyTemplates.length) {
-          const knownIds = new Set(nextEntries.map((entry) => entry.templateId))
-          const missing = legacyTemplates.filter((item) => !knownIds.has(item.id))
+        // The old compendium was global localStorage state. Materialize it once
+        // into each session, but keep the original source available so every
+        // campaign can perform its own one-time migration.
+        if (shouldMigrateLegacy) {
+          const legacyTemplates = readLegacyCustomTemplates()
+          if (legacyTemplates.length) {
+            const knownIds = new Set(nextEntries.map((entry) => entry.templateId))
+            const missing = legacyTemplates.filter((item) => !knownIds.has(item.id))
 
-          if (missing.length) {
-            const imported = await Promise.all(
-              missing.map((item) =>
-                upsertSessionItemCompendiumEntry(campaignId!, {
-                  item,
-                  custom: true,
-                  visibility: "PUBLIC",
-                }),
-              ),
-            )
-            nextEntries = mergeEntries(nextEntries, imported)
+            if (missing.length) {
+              const imported = await Promise.all(
+                missing.map((item) =>
+                  upsertSessionItemCompendiumEntry(campaignId!, {
+                    item,
+                    custom: true,
+                    visibility: "PUBLIC",
+                  }),
+                ),
+              )
+              nextEntries = mergeEntries(nextEntries, imported)
+            }
           }
+          window.localStorage.setItem(migrationKey, "1")
         }
 
         if (!cancelled) setEntries(nextEntries)
