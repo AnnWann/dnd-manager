@@ -5,6 +5,11 @@ import {
   normalizeConditionsSeed,
 } from "./conditionState";
 import {
+  applyConcentrationOperation,
+  applyConcentrationUndo,
+  isConcentrationCondition,
+} from "./concentrationState";
+import {
   applyHpOperation,
   applyHpUndo,
   defaultAttributes,
@@ -24,6 +29,7 @@ import {
   type ServerSessionMessage,
   type SessionConditionOperation,
   type SessionConditionSeed,
+  type SessionConcentrationOperation,
   type SessionConditionsState,
   type SessionConnection,
   type SessionDieSides,
@@ -60,10 +66,7 @@ export class SessionActor extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server);
 
     this.send(server, { type: "session.ready", sessionId: connection.sessionId, clientId: connection.clientId, serverTime: Date.now() });
-    await Promise.all([
-      this.sendHpSnapshot(server),
-      this.sendConditionsSnapshot(server),
-    ]);
+    await Promise.all([this.sendHpSnapshot(server), this.sendConditionsSnapshot(server)]);
     if (connection.role === "MASTER") await this.sendHpLog(server);
     this.broadcastPresence();
     await this.scheduleNextAlarm();
@@ -110,6 +113,9 @@ export class SessionActor extends DurableObject<Env> {
       case "session.conditions.operation":
         await this.handleConditionOperation(webSocket, connection, parsed.operation);
         break;
+      case "session.sheet.operation":
+        // Routed messages are normalized by parseClientSessionMessage and should never reach this branch.
+        break;
       case "session.log.undo":
         await this.handleUndo(webSocket, connection, parsed.logId);
         break;
@@ -146,11 +152,7 @@ export class SessionActor extends DurableObject<Env> {
     await this.scheduleNextAlarm(now);
   }
 
-  private async initializeHp(
-    webSocket: WebSocket,
-    connection: SessionConnection,
-    seeds: SessionHpSeed[],
-  ): Promise<void> {
+  private async initializeHp(webSocket: WebSocket, connection: SessionConnection, seeds: SessionHpSeed[]): Promise<void> {
     if (connection.role !== "MASTER") {
       this.sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can initialize authoritative character state.");
       return;
@@ -158,22 +160,17 @@ export class SessionActor extends DurableObject<Env> {
 
     const state = await this.readHpState();
     let changed = false;
-
     for (const seed of seeds) {
       const normalized = normalizeHpSeed(seed);
       const existing = state[seed.characterId];
       if (!existing) {
-        state[seed.characterId] = {
-          ...normalized,
-          hitDiceInitialized: seed.hitDice !== undefined,
-        };
+        state[seed.characterId] = { ...normalized, hitDiceInitialized: seed.hitDice !== undefined };
         changed = true;
         continue;
       }
 
       let next = existing;
       let entryChanged = false;
-
       if (existing.hitDiceInitialized !== true && seed.hitDice !== undefined) {
         const nextHitDice = { ...(existing.hitDice ?? {}) };
         for (const [side, pool] of Object.entries(normalized.hitDice)) {
@@ -184,27 +181,22 @@ export class SessionActor extends DurableObject<Env> {
         next = { ...next, hitDice: nextHitDice, hitDiceInitialized: true };
         entryChanged = true;
       }
-
       if (existing.statsInitialized !== true && seed.stats !== undefined) {
         next = { ...next, stats: normalizeStatsSeed(seed.stats), statsInitialized: true };
         entryChanged = true;
       }
-
       if (existing.attributesInitialized !== true && seed.attributes !== undefined) {
         next = { ...next, attributes: normalizeAttributesSeed(seed.attributes), attributesInitialized: true };
         entryChanged = true;
       }
-
       if (existing.savingThrowsInitialized !== true && seed.savingThrows !== undefined) {
         next = { ...next, savingThrows: normalizeSavingThrowsSeed(seed.savingThrows), savingThrowsInitialized: true };
         entryChanged = true;
       }
-
       if (existing.skillsInitialized !== true && seed.skills !== undefined) {
         next = { ...next, skills: normalizeSkillsSeed(seed.skills), skillsInitialized: true };
         entryChanged = true;
       }
-
       if (entryChanged) {
         state[seed.characterId] = next;
         changed = true;
@@ -219,16 +211,11 @@ export class SessionActor extends DurableObject<Env> {
     }
   }
 
-  private async initializeConditions(
-    webSocket: WebSocket,
-    connection: SessionConnection,
-    seeds: SessionConditionSeed[],
-  ): Promise<void> {
+  private async initializeConditions(webSocket: WebSocket, connection: SessionConnection, seeds: SessionConditionSeed[]): Promise<void> {
     if (connection.role !== "MASTER") {
       this.sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can initialize authoritative conditions.");
       return;
     }
-
     const state = await this.readConditionsState();
     let changed = false;
     for (const seed of seeds) {
@@ -237,7 +224,6 @@ export class SessionActor extends DurableObject<Env> {
       state[seed.characterId] = normalizeConditionsSeed(seed.characterId, seed.conditions);
       changed = true;
     }
-
     if (changed) {
       await this.ctx.storage.put(CONDITIONS_STATE_KEY, state);
       await this.broadcastConditionsSnapshot();
@@ -251,23 +237,35 @@ export class SessionActor extends DurableObject<Env> {
     connection: SessionConnection,
     operation: Parameters<typeof applyHpOperation>[1],
   ): Promise<void> {
-    const [state, log] = await Promise.all([this.readHpState(), this.readHpLog()]);
+    const [state, conditionsState, log] = await Promise.all([
+      this.readHpState(),
+      this.readConditionsState(),
+      this.readHpLog(),
+    ]);
     const current = state[operation.characterId];
     if (!current) {
       this.sendError(webSocket, "HP_NOT_INITIALIZED", "Authoritative state for this character has not been initialized by the MASTER.");
       return;
     }
 
-    const result = applyHpOperation(current, operation, connection);
+    let effectiveOperation = operation;
+    if (operation.type === "character.hp.damage") {
+      const concentration = conditionsState[operation.characterId]?.conditions.find(isConcentrationCondition);
+      effectiveOperation = {
+        ...operation,
+        requiresConcentrationCheck: Boolean(concentration),
+        concentrationDc: concentration ? Math.max(10, Math.floor(operation.amount / 2)) : undefined,
+        concentrationSource: concentration?.source || undefined,
+      };
+    }
+
+    const result = applyHpOperation(current, effectiveOperation, connection);
     if (!result.ok) {
       this.sendError(webSocket, result.code, result.message);
       return;
     }
 
-    const storedNext: StoredSessionHpState = {
-      ...result.next,
-      hitDiceInitialized: current.hitDiceInitialized ?? true,
-    };
+    const storedNext: StoredSessionHpState = { ...result.next, hitDiceInitialized: current.hitDiceInitialized ?? true };
     state[operation.characterId] = storedNext;
     log.push(result.record);
     const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
@@ -279,7 +277,7 @@ export class SessionActor extends DurableObject<Env> {
   private async handleConditionOperation(
     webSocket: WebSocket,
     connection: SessionConnection,
-    operation: SessionConditionOperation,
+    operation: SessionConditionOperation | SessionConcentrationOperation,
   ): Promise<void> {
     const [hpState, conditionsState, log] = await Promise.all([
       this.readHpState(),
@@ -297,7 +295,9 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
 
-    const result = applyConditionOperation(current, operation, connection, hp.ownerUserId);
+    const result = operation.type.startsWith("character.concentration.")
+      ? applyConcentrationOperation(current, operation as SessionConcentrationOperation, connection, hp.ownerUserId)
+      : applyConditionOperation(current, operation as SessionConditionOperation, connection, hp.ownerUserId);
     if (!result.ok) {
       this.sendError(webSocket, result.code, result.message);
       return;
@@ -339,7 +339,11 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
 
-    if (source.reverseOperation.type === "character.condition.delete" || source.reverseOperation.type === "character.condition.restore") {
+    if (
+      source.reverseOperation.type === "character.condition.delete" ||
+      source.reverseOperation.type === "character.condition.restore" ||
+      source.reverseOperation.type === "character.concentration.restore"
+    ) {
       await this.handleConditionUndo(webSocket, connection, sourceIndex, source, log);
       return;
     }
@@ -360,10 +364,7 @@ export class SessionActor extends DurableObject<Env> {
     const now = new Date().toISOString();
     log[sourceIndex] = { ...source, undoneAt: now, undoneBy: connection.userId };
     log.push(result.record);
-    state[characterId] = {
-      ...result.next,
-      hitDiceInitialized: current.hitDiceInitialized ?? true,
-    };
+    state[characterId] = { ...result.next, hitDiceInitialized: current.hitDiceInitialized ?? true };
     const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
     await this.ctx.storage.put({ [HP_STATE_KEY]: state, [HP_LOG_KEY]: nextLog });
     this.broadcast({ type: "session.hp.updated", character: result.next });
@@ -385,7 +386,9 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
 
-    const result = applyConditionUndo(current, source, connection);
+    const result = source.reverseOperation.type === "character.concentration.restore"
+      ? applyConcentrationUndo(current, source, connection)
+      : applyConditionUndo(current, source, connection);
     if (!result.ok) {
       this.sendError(webSocket, result.code, result.message);
       return;
