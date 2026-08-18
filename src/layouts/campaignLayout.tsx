@@ -236,6 +236,18 @@ export function CampaignLayout() {
       onClick: () => navigate(toSession("creation/settings")),
     },
     {
+      label: "Solicitações",
+      icon: <IconNotes />,
+      active: location.pathname === toSession("creation/requests"),
+      onClick: () => navigate(toSession("creation/requests")),
+    },
+    {
+      label: "Homebrew",
+      icon: <IconCompendium />,
+      active: location.pathname === toSession("creation/homebrew"),
+      onClick: () => navigate(toSession("creation/homebrew")),
+    },
+    {
       label: "Compêndio de Itens",
       icon: <IconEquipment />,
       active: location.pathname === toSession("creation/items-compendium"),
