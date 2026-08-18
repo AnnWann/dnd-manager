@@ -35,6 +35,7 @@ export type SessionHpOperation =
   | { type: "character.hp.max.set"; characterId: string; value: number }
   | { type: "character.hp.currentMax.adjust"; characterId: string; amount: number }
   | { type: "character.hp.currentMax.restore"; characterId: string }
+  | { type: "character.hp.rest"; characterId: string; fraction: 0.5 | 1 }
 
 export type SessionHpLogRecord = {
   id: string
