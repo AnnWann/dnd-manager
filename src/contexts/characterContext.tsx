@@ -8,7 +8,9 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react"
+import { useLocation } from "react-router-dom"
 
+import { SessionRuntimeProvider } from "../features/session-runtime/SessionRuntimeProvider"
 import type {
   SessionAttributeOperation,
   SessionConditionOperation,
@@ -18,6 +20,7 @@ import type {
   SessionStatOperation,
 } from "../features/session-runtime/sessionProtocol"
 import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
+import { sessionIdFromPathname } from "../lib/campaignRoutes"
 import { newCharacterTemplate } from "../lib/newCharacterTemplate"
 import type { AppStateV1 } from "../lib/remoteState"
 import { getChangedCharacterDomains } from "../lib/characterDomains"
@@ -114,7 +117,25 @@ type CharacterProviderProps = {
 
 const CharacterContext = createContext<CharacterContextValue | null>(null)
 
-export function CharacterProvider({ children, appState, setAppState, userRole, userKey }: CharacterProviderProps) {
+export function CharacterProvider(props: CharacterProviderProps) {
+  const location = useLocation()
+  const sessionId = sessionIdFromPathname(location.pathname)
+  const userId = props.userKey.trim()
+
+  if (!sessionId || !userId) return <CharacterProviderInner {...props} />
+
+  return (
+    <SessionRuntimeProvider
+      sessionId={sessionId}
+      userId={userId}
+      role={props.userRole === "master" ? "MASTER" : "PLAYER"}
+    >
+      <CharacterProviderInner {...props} />
+    </SessionRuntimeProvider>
+  )
+}
+
+function CharacterProviderInner({ children, appState, setAppState, userRole, userKey }: CharacterProviderProps) {
   const [selectedCharacterId, setSelectedCharacterId] = useState("")
   const sessionRuntime = useOptionalSessionRuntime()
 
