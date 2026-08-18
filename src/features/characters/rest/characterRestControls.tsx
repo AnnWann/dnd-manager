@@ -8,6 +8,7 @@ import { Coffee, Moon, X } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
   takeShortRest,
@@ -67,21 +68,61 @@ export function CharacterRestControls({
   updateCharacter,
   completeLongRest,
 }: Props) {
+  const runtime = useOptionalSessionRuntime()
   const [shortRestOpen, setShortRestOpen] = useState(false)
   const [longRestOpen, setLongRestOpen] = useState(false)
+  const characterId = character.get("id")
 
   function completeShortRest(
     healing: number,
     hitDiceConsumption: HitDiceConsumption,
   ) {
-    updateCharacter(character.get("id"), (current) =>
-      takeShortRest(current, healing, hitDiceConsumption),
-    )
+    if (runtime) {
+      // Hit dice/resources remain on the legacy path for this migration slice.
+      // HP healing itself is authoritative on the SessionActor.
+      updateCharacter(characterId, (current) =>
+        takeShortRest(current, 0, hitDiceConsumption),
+      )
+
+      if (healing > 0) {
+        if (runtime.status === "connected") {
+          runtime.dispatchHpOperation({
+            type: "character.hp.heal",
+            characterId,
+            amount: healing,
+          })
+        } else {
+          console.warn("[session-runtime] Short-rest HP recovery ignored while the authoritative session server is disconnected.")
+        }
+      }
+    } else {
+      updateCharacter(characterId, (current) =>
+        takeShortRest(current, healing, hitDiceConsumption),
+      )
+    }
+
     setShortRestOpen(false)
   }
 
   function confirmLongRest(selection: LongRestSupplySelection[]) {
-    completeLongRest(character.get("id"), selection)
+    if (runtime) {
+      const requiredSupply = getRequiredSupplyForRace(character.get("sheet").race)
+      const totals = getSupplySelectionTotals(partyInventory, selection)
+      const fraction: 0.5 | 1 =
+        totals.selectedPortions + PORTION_EPSILON < requiredSupply ? 0.5 : 1
+
+      if (runtime.status === "connected") {
+        runtime.dispatchHpOperation({
+          type: "character.hp.rest",
+          characterId,
+          fraction,
+        })
+      } else {
+        console.warn("[session-runtime] Long-rest HP recovery ignored while the authoritative session server is disconnected.")
+      }
+    }
+
+    completeLongRest(characterId, selection)
     setLongRestOpen(false)
   }
 
