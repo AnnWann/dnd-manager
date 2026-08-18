@@ -197,6 +197,10 @@ function describeHpOperation(operation: SessionHpLogRecord["operation"], charact
     case "character.condition.add": return `Adicionou a condição ${operation.condition.name} a ${characterName}.`
     case "character.condition.update": return `Editou a condição ${operation.condition.name} de ${characterName}.`
     case "character.condition.remove": return `Removeu uma condição de ${characterName}.`
+    case "character.concentration.start": return `${characterName} começou a concentrar em ${operation.spellName}.`
+    case "character.concentration.end": return operation.reason === "failed-save"
+      ? `${characterName} falhou no teste e perdeu a concentração.`
+      : `${characterName} encerrou a concentração.`
     case "character.stat.armorClass.set": return `Definiu a CA de ${characterName} para ${formatStat(operation.value)}.`
     case "character.stat.initiative.set": return `Definiu a iniciativa de ${characterName} para ${formatSignedStat(operation.value)}.`
     case "character.stat.mobility.set": return `Definiu a mobilidade de ${characterName} para ${formatStat(operation.value)}.`
