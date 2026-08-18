@@ -12,7 +12,9 @@ import { useLocation, useNavigate } from "react-router-dom"
 import {
   buildSessionCharacterSnapshots,
   getCampaignSessionCharacters,
+  invalidateCampaignSessionCharacters,
 } from "../api/campaign-session"
+import { getSessionHomebrew } from "../api/session-homebrew"
 import { authClient } from "../auth/auth-client"
 import { getLocalUser, LOCAL_AUTH_BYPASS } from "../auth/local-auth"
 import {
@@ -46,6 +48,7 @@ import { sessionIdFromPathname, sessionPath } from "../lib/campaignRoutes"
 import { normalizeAppStateInventory } from "../lib/normalizeAppStateInventory"
 import { type AppStateV1 } from "../lib/remoteState"
 import { useConcurrentRemoteAppState } from "../lib/remoteStateConcurrent"
+import { SESSION_CONTENT_CHANGED_EVENT } from "../lib/sessionEvents"
 import { AppRouter } from "../Router"
 
 export function CampaignLayout() {
@@ -60,6 +63,7 @@ export function CampaignLayout() {
   >(null)
   const [sessionReady, setSessionReady] = useState(!sessionId)
   const [sessionLoadError, setSessionLoadError] = useState("")
+  const [sessionContentRevision, setSessionContentRevision] = useState(0)
 
   const toSession = useCallback(
     (path: string) => sessionId ? sessionPath(sessionId, path) : "/user/campaigns",
@@ -101,6 +105,24 @@ export function CampaignLayout() {
   )
 
   useEffect(() => {
+    function refreshSessionContent() {
+      if (sessionId) invalidateCampaignSessionCharacters(sessionId)
+      setSessionContentRevision((current) => current + 1)
+    }
+
+    window.addEventListener(
+      SESSION_CONTENT_CHANGED_EVENT,
+      refreshSessionContent,
+    )
+    return () => {
+      window.removeEventListener(
+        SESSION_CONTENT_CHANGED_EVENT,
+        refreshSessionContent,
+      )
+    }
+  }, [sessionId])
+
+  useEffect(() => {
     if (!sessionId) {
       setResolvedSessionRole(null)
       setSessionLoadError("")
@@ -112,13 +134,22 @@ export function CampaignLayout() {
     setSessionReady(false)
     setSessionLoadError("")
 
-    void getCampaignSessionCharacters(sessionId)
-      .then((data) => {
+    void Promise.all([
+      getCampaignSessionCharacters(sessionId),
+      getSessionHomebrew(sessionId),
+    ])
+      .then(([data, homebrew]) => {
         if (cancelled) return
 
         setResolvedSessionRole(data.campaign.isMaster ? "master" : "player")
 
         const sourceSnapshots = buildSessionCharacterSnapshots(data)
+        const approvedSpells = homebrew.spells
+          .filter((entry) => entry.status === "APPROVED")
+          .map((entry) => ({
+            ...entry.data,
+            homebrew: true,
+          }))
         const stateBelongsToThisSession = readSessionStateOwner() === sessionId
 
         setAppState((previous) => {
@@ -135,20 +166,34 @@ export function CampaignLayout() {
             ? previous.activeCharacterId
             : characters[0]?.id ?? ""
 
-          const unchanged =
+          const spellMap = new Map(
+            (stateBelongsToThisSession ? previous.spells ?? [] : []).map(
+              (spell) => [spell.index, spell],
+            ),
+          )
+          for (const spell of approvedSpells) {
+            spellMap.set(spell.index, spell)
+          }
+          const spells = Array.from(spellMap.values())
+
+          const charactersUnchanged =
             stateBelongsToThisSession &&
             previous.activeCharacterId === activeCharacterId &&
             previous.characters.length === characters.length &&
             previous.characters.every(
               (character, index) => character.id === characters[index]?.id,
             )
+          const spellsUnchanged =
+            stateBelongsToThisSession &&
+            JSON.stringify(previous.spells ?? []) === JSON.stringify(spells)
 
-          if (unchanged) return previous
+          if (charactersUnchanged && spellsUnchanged) return previous
 
           return {
             ...previous,
             characters,
             activeCharacterId,
+            spells,
           }
         })
 
@@ -158,14 +203,14 @@ export function CampaignLayout() {
       .catch(() => {
         if (cancelled) return
         setResolvedSessionRole(null)
-        setSessionLoadError("Não foi possível carregar os personagens vinculados a esta sessão.")
+        setSessionLoadError("Não foi possível carregar o conteúdo vinculado a esta sessão.")
         setSessionReady(true)
       })
 
     return () => {
       cancelled = true
     }
-  }, [sessionId, setAppState])
+  }, [sessionContentRevision, sessionId, setAppState])
 
   const effectiveUserRole = resolvedSessionRole ?? userRole
   const effectiveUserKey = authenticatedUserId || userKey
