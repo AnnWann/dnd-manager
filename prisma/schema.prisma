@@ -321,3 +321,40 @@ model CharacterHomebrewSpell {
   @@index([sourceCampaignId])
   @@map("character_homebrew_spell")
 }
+
+model CampaignContentRequest {
+  id            String   @id
+  campaignId    String
+  type          String
+  status        String   @default("PENDING")
+  title         String
+  sourceId      String
+  data          Json     @default("{}")
+  note          String?
+  submittedById String
+  reviewedById  String?
+  submittedAt   DateTime @default(now())
+  reviewedAt    DateTime?
+  updatedAt     DateTime @updatedAt
+
+  @@unique([campaignId, type, sourceId], map: "campaign_content_request_campaign_type_source_key")
+  @@index([campaignId, status], map: "campaign_content_request_campaign_status_idx")
+  @@index([submittedById], map: "campaign_content_request_submitter_idx")
+  @@map("campaign_content_request")
+}
+
+model CampaignHomebrewAsset {
+  id         String   @id
+  campaignId String
+  type       String
+  sourceId   String
+  name       String
+  data       Json
+  addedById  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([campaignId, type, sourceId], map: "campaign_homebrew_asset_campaign_type_source_key")
+  @@index([campaignId, type], map: "campaign_homebrew_asset_campaign_type_idx")
+  @@map("campaign_homebrew_asset")
+}
