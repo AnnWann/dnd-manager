@@ -12,7 +12,6 @@ import type {
   SessionSavingThrowsState,
   SessionSkillsState,
   SessionStatOperation,
-  SessionStatReverseOperation,
   SessionStatsState,
 } from "./protocol";
 
@@ -256,9 +255,15 @@ export function applyHpUndo(
   } else if (source.reverseOperation.type === "character.skill.restore") {
     restored.skills[source.reverseOperation.skill] = source.reverseOperation.proficiency;
     restored.skillsInitialized = true;
-  } else {
+  } else if (isStatReverseOperation(source.reverseOperation)) {
     restoreSingleStat(restored, source.reverseOperation);
     restored.statsInitialized = true;
+  } else {
+    return {
+      ok: false,
+      code: "UNDO_TARGET_MISMATCH",
+      message: "This undo operation belongs to a different authoritative domain.",
+    };
   }
 
   restored.revision = current.revision + 1;
@@ -314,7 +319,10 @@ function createReverseOperation(
   }
 }
 
-function restoreSingleStat(state: SessionHpState, operation: SessionStatReverseOperation): void {
+function restoreSingleStat(
+  state: SessionHpState,
+  operation: Extract<SessionReverseOperation, { type: `character.stat.${string}` }>,
+): void {
   switch (operation.type) {
     case "character.stat.armorClass.restore": state.stats.armorClassAdjustment = operation.adjustment; break;
     case "character.stat.initiative.restore": state.stats.initiativeAdjustment = operation.adjustment; break;
@@ -324,6 +332,12 @@ function restoreSingleStat(state: SessionHpState, operation: SessionStatReverseO
     case "character.stat.inspiration.restore": state.stats.inspiration = operation.value; break;
     case "character.stat.experience.restore": state.stats.experience = operation.value; break;
   }
+}
+
+function isStatReverseOperation(
+  operation: SessionReverseOperation,
+): operation is Extract<SessionReverseOperation, { type: `character.stat.${string}` }> {
+  return operation.type.startsWith("character.stat.");
 }
 
 function isRestOperation(operation: SessionAuthoritativeOperation): operation is SessionRestOperation {
