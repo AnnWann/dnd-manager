@@ -1,9 +1,9 @@
 import { useState } from "react"
-import { useOptionalSessionRuntime } from "../../../../session-runtime/useSessionRuntime"
+import { useOptionalSessionRuntime } from "../../../../../session-runtime/useSessionRuntime"
 import type {
   SessionAuthoritativeOperation,
   SessionDieSides,
-} from "../../../../session-runtime/sessionProtocol"
+} from "../../../../../session-runtime/sessionProtocol"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
 import type { DieSides } from "../../../../../../models/dice/Die"
 import { AddHitDiceDialog } from "./addHitDiceDialog"
