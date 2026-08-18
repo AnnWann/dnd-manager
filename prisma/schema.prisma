@@ -358,3 +358,20 @@ model CampaignHomebrewAsset {
   @@index([campaignId, type], map: "campaign_homebrew_asset_campaign_type_idx")
   @@map("campaign_homebrew_asset")
 }
+
+model CampaignItemCompendium {
+  id          String   @id
+  campaignId  String
+  templateId  String
+  item        Json
+  custom      Boolean  @default(false)
+  visibility  String   @default("PUBLIC")
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([campaignId, templateId], map: "campaign_item_compendium_campaign_template_key")
+  @@index([campaignId, visibility], map: "campaign_item_compendium_campaign_visibility_idx")
+  @@index([createdById], map: "campaign_item_compendium_created_by_idx")
+  @@map("campaign_item_compendium")
+}
