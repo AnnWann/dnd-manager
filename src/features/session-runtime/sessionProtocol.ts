@@ -9,6 +9,13 @@ export type SessionHitDiceState = Partial<Record<SessionDieSides, SessionHitDice
 export type SessionAttribute = "str" | "dex" | "con" | "int" | "wis" | "cha"
 export type SessionAttributesState = Record<SessionAttribute, number>
 export type SessionSavingThrowsState = Record<SessionAttribute, boolean>
+export type SessionSkill =
+  | "acrobatics" | "arcana" | "athletics" | "animalHandling" | "performance"
+  | "deception" | "stealth" | "history" | "intimidation" | "insight"
+  | "investigation" | "medicine" | "nature" | "perception" | "persuasion"
+  | "sleightOfHand" | "religion" | "survival"
+export type SessionSkillProficiency = "none" | "proficient" | "expertise"
+export type SessionSkillsState = Record<SessionSkill, SessionSkillProficiency>
 
 export type SessionStatsState = {
   armorClassAdjustment: number
@@ -35,13 +42,16 @@ export type SessionHpState = {
   attributesInitialized: boolean
   savingThrows: SessionSavingThrowsState
   savingThrowsInitialized: boolean
+  skills: SessionSkillsState
+  skillsInitialized: boolean
   revision: number
 }
-export type SessionHpSeed = Omit<SessionHpState, "revision" | "hitDice" | "stats" | "statsInitialized" | "attributes" | "attributesInitialized" | "savingThrows" | "savingThrowsInitialized"> & {
+export type SessionHpSeed = Omit<SessionHpState, "revision" | "hitDice" | "stats" | "statsInitialized" | "attributes" | "attributesInitialized" | "savingThrows" | "savingThrowsInitialized" | "skills" | "skillsInitialized"> & {
   hitDice?: SessionHitDiceState
   stats?: SessionStatsState
   attributes?: SessionAttributesState
   savingThrows?: Partial<SessionSavingThrowsState>
+  skills?: Partial<SessionSkillsState>
 }
 
 export type SessionHpOperation =
@@ -74,12 +84,13 @@ export type SessionSimpleStatOperation =
 export type SessionStatOperation = SessionCalculatedStatOperation | SessionSimpleStatOperation
 export type SessionAttributeOperation = { type: "character.attribute.set"; characterId: string; attribute: SessionAttribute; value: number }
 export type SessionSavingThrowOperation = { type: "character.savingThrow.set"; characterId: string; attribute: SessionAttribute; proficient: boolean }
+export type SessionSkillOperation = { type: "character.skill.set"; characterId: string; skill: SessionSkill; proficiency: SessionSkillProficiency }
 
 export type SessionRestOperation =
   | { type: "character.rest.short"; characterId: string; healing: number; hitDiceConsumption: Partial<Record<SessionDieSides, number>> }
   | { type: "character.rest.long"; characterId: string; recovery: "partial" | "full" }
 
-export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionAttributeOperation | SessionSavingThrowOperation | SessionRestOperation
+export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionAttributeOperation | SessionSavingThrowOperation | SessionSkillOperation | SessionRestOperation
 
 export type SessionHpLogRecord = {
   id: string
@@ -97,6 +108,7 @@ export type SessionHpLogRecord = {
     | { type: "character.stat.experience.restore"; characterId: string; value: number }
     | { type: "character.attribute.restore"; characterId: string; attribute: SessionAttribute; value: number }
     | { type: "character.savingThrow.restore"; characterId: string; attribute: SessionAttribute; proficient: boolean }
+    | { type: "character.skill.restore"; characterId: string; skill: SessionSkill; proficiency: SessionSkillProficiency }
     | { type: "character.rest.restore"; characterId: string; snapshot: { hp: SessionHpState; stats: SessionStatsState } }
   undoneAt?: string
   undoneBy?: string
