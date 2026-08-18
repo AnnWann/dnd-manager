@@ -1,5 +1,10 @@
 import { DurableObject } from "cloudflare:workers";
 import {
+  applyConditionOperation,
+  applyConditionUndo,
+  normalizeConditionsSeed,
+} from "./conditionState";
+import {
   applyHpOperation,
   applyHpUndo,
   defaultAttributes,
@@ -17,6 +22,9 @@ import {
   encodeServerSessionMessage,
   parseClientSessionMessage,
   type ServerSessionMessage,
+  type SessionConditionOperation,
+  type SessionConditionSeed,
+  type SessionConditionsState,
   type SessionConnection,
   type SessionDieSides,
   type SessionHpLogRecord,
@@ -29,6 +37,7 @@ const CONNECTION_TIMEOUT_MS = 90_000;
 const CLOSE_CODE_TIMEOUT = 4000;
 const CLOSE_CODE_REPLACED = 4001;
 const HP_STATE_KEY = "hp-state";
+const CONDITIONS_STATE_KEY = "conditions-state";
 const HP_LOG_KEY = "hp-log";
 
 type StoredSessionHpState = SessionHpState & {
@@ -51,7 +60,10 @@ export class SessionActor extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server);
 
     this.send(server, { type: "session.ready", sessionId: connection.sessionId, clientId: connection.clientId, serverTime: Date.now() });
-    await this.sendHpSnapshot(server);
+    await Promise.all([
+      this.sendHpSnapshot(server),
+      this.sendConditionsSnapshot(server),
+    ]);
     if (connection.role === "MASTER") await this.sendHpLog(server);
     this.broadcastPresence();
     await this.scheduleNextAlarm();
@@ -91,6 +103,12 @@ export class SessionActor extends DurableObject<Env> {
         break;
       case "session.hp.operation":
         await this.handleHpOperation(webSocket, connection, parsed.operation);
+        break;
+      case "session.conditions.initialize":
+        await this.initializeConditions(webSocket, connection, parsed.characters);
+        break;
+      case "session.conditions.operation":
+        await this.handleConditionOperation(webSocket, connection, parsed.operation);
         break;
       case "session.log.undo":
         await this.handleUndo(webSocket, connection, parsed.logId);
@@ -201,6 +219,33 @@ export class SessionActor extends DurableObject<Env> {
     }
   }
 
+  private async initializeConditions(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    seeds: SessionConditionSeed[],
+  ): Promise<void> {
+    if (connection.role !== "MASTER") {
+      this.sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can initialize authoritative conditions.");
+      return;
+    }
+
+    const state = await this.readConditionsState();
+    let changed = false;
+    for (const seed of seeds) {
+      const existing = state[seed.characterId];
+      if (existing?.initialized) continue;
+      state[seed.characterId] = normalizeConditionsSeed(seed.characterId, seed.conditions);
+      changed = true;
+    }
+
+    if (changed) {
+      await this.ctx.storage.put(CONDITIONS_STATE_KEY, state);
+      await this.broadcastConditionsSnapshot();
+    } else {
+      await this.sendConditionsSnapshot(webSocket);
+    }
+  }
+
   private async handleHpOperation(
     webSocket: WebSocket,
     connection: SessionConnection,
@@ -231,13 +276,48 @@ export class SessionActor extends DurableObject<Env> {
     this.broadcastHpLogToMasters(nextLog);
   }
 
+  private async handleConditionOperation(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    operation: SessionConditionOperation,
+  ): Promise<void> {
+    const [hpState, conditionsState, log] = await Promise.all([
+      this.readHpState(),
+      this.readConditionsState(),
+      this.readHpLog(),
+    ]);
+    const hp = hpState[operation.characterId];
+    if (!hp) {
+      this.sendError(webSocket, "CHARACTER_NOT_INITIALIZED", "Authoritative character state has not been initialized by the MASTER.");
+      return;
+    }
+    const current = conditionsState[operation.characterId];
+    if (!current?.initialized) {
+      this.sendError(webSocket, "CONDITIONS_NOT_INITIALIZED", "Conditions for this character have not been initialized by the MASTER.");
+      return;
+    }
+
+    const result = applyConditionOperation(current, operation, connection, hp.ownerUserId);
+    if (!result.ok) {
+      this.sendError(webSocket, result.code, result.message);
+      return;
+    }
+
+    conditionsState[operation.characterId] = result.next;
+    log.push(result.record);
+    const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
+    await this.ctx.storage.put({ [CONDITIONS_STATE_KEY]: conditionsState, [HP_LOG_KEY]: nextLog });
+    this.broadcast({ type: "session.conditions.updated", character: result.next });
+    this.broadcastHpLogToMasters(nextLog);
+  }
+
   private async handleUndo(webSocket: WebSocket, connection: SessionConnection, logId: string): Promise<void> {
     if (connection.role !== "MASTER") {
       this.sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can undo session changes.");
       return;
     }
 
-    const [state, log] = await Promise.all([this.readHpState(), this.readHpLog()]);
+    const log = await this.readHpLog();
     const sourceIndex = log.findIndex((record) => record.id === logId);
     if (sourceIndex < 0) {
       this.sendError(webSocket, "LOG_NOT_FOUND", "The selected log entry no longer exists.");
@@ -259,6 +339,12 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
 
+    if (source.reverseOperation.type === "character.condition.delete" || source.reverseOperation.type === "character.condition.restore") {
+      await this.handleConditionUndo(webSocket, connection, sourceIndex, source, log);
+      return;
+    }
+
+    const state = await this.readHpState();
     const current = state[characterId];
     if (!current) {
       this.sendError(webSocket, "HP_NOT_INITIALIZED", "Authoritative state for this character is missing.");
@@ -284,6 +370,37 @@ export class SessionActor extends DurableObject<Env> {
     this.broadcastHpLogToMasters(nextLog);
   }
 
+  private async handleConditionUndo(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    sourceIndex: number,
+    source: SessionHpLogRecord,
+    log: SessionHpLogRecord[],
+  ): Promise<void> {
+    const characterId = source.reverseOperation.characterId;
+    const state = await this.readConditionsState();
+    const current = state[characterId];
+    if (!current?.initialized) {
+      this.sendError(webSocket, "CONDITIONS_NOT_INITIALIZED", "Authoritative conditions for this character are missing.");
+      return;
+    }
+
+    const result = applyConditionUndo(current, source, connection);
+    if (!result.ok) {
+      this.sendError(webSocket, result.code, result.message);
+      return;
+    }
+
+    const now = new Date().toISOString();
+    log[sourceIndex] = { ...source, undoneAt: now, undoneBy: connection.userId };
+    log.push(result.record);
+    state[characterId] = result.next;
+    const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
+    await this.ctx.storage.put({ [CONDITIONS_STATE_KEY]: state, [HP_LOG_KEY]: nextLog });
+    this.broadcast({ type: "session.conditions.updated", character: result.next });
+    this.broadcastHpLogToMasters(nextLog);
+  }
+
   private async readHpState(): Promise<Record<string, StoredSessionHpState>> {
     const raw = (await this.ctx.storage.get<Record<string, StoredSessionHpState>>(HP_STATE_KEY)) ?? {};
     return Object.fromEntries(
@@ -302,6 +419,10 @@ export class SessionActor extends DurableObject<Env> {
     );
   }
 
+  private async readConditionsState(): Promise<Record<string, SessionConditionsState>> {
+    return (await this.ctx.storage.get<Record<string, SessionConditionsState>>(CONDITIONS_STATE_KEY)) ?? {};
+  }
+
   private async readHpLog(): Promise<SessionHpLogRecord[]> {
     return (await this.ctx.storage.get<SessionHpLogRecord[]>(HP_LOG_KEY)) ?? [];
   }
@@ -314,6 +435,16 @@ export class SessionActor extends DurableObject<Env> {
   private async broadcastHpSnapshot(): Promise<void> {
     const state = await this.readHpState();
     this.broadcast({ type: "session.hp.snapshot", characters: Object.values(state) });
+  }
+
+  private async sendConditionsSnapshot(webSocket: WebSocket): Promise<void> {
+    const state = await this.readConditionsState();
+    this.send(webSocket, { type: "session.conditions.snapshot", characters: Object.values(state) });
+  }
+
+  private async broadcastConditionsSnapshot(): Promise<void> {
+    const state = await this.readConditionsState();
+    this.broadcast({ type: "session.conditions.snapshot", characters: Object.values(state) });
   }
 
   private async sendHpLog(webSocket: WebSocket): Promise<void> {
