@@ -1,17 +1,22 @@
 import { useMemo, useState, type FormEvent } from "react"
-import { Navigate, useParams, useSearchParams } from "react-router-dom"
+import { Navigate, useLocation, useSearchParams } from "react-router-dom"
 
 import { SessionRuntimeProvider } from "../../features/session-runtime/SessionRuntimeProvider"
 import type { SessionRuntimeRole } from "../../features/session-runtime/sessionProtocol"
 import { useSessionRuntime } from "../../features/session-runtime/useSessionRuntime"
+
+const DEV_RUNTIME_PREFIX = "/dev/session-runtime/"
 
 export function SessionRuntimeDevView() {
   if (!import.meta.env.DEV) {
     return <Navigate to="/not-found" replace />
   }
 
-  const { sessionId } = useParams<{ sessionId?: string }>()
+  const location = useLocation()
   const [searchParams] = useSearchParams()
+  const sessionId = decodeURIComponent(
+    location.pathname.slice(DEV_RUNTIME_PREFIX.length).split("/")[0] ?? "",
+  ).trim()
 
   if (!sessionId) {
     return <Navigate to="/not-found" replace />
