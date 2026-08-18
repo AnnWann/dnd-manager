@@ -32,7 +32,9 @@ import { AuthView } from "./views/AuthView"
 import { UnauthorizedView } from "./views/UnauthorisedView"
 import { CampaignCharactersView } from "./views/campaign/CampaignCharactersView"
 import { SessionCharacterLevelUpView } from "./views/session/SessionCharacterLevelUpView"
+import { SessionCreationRequestsView } from "./views/session/SessionCreationRequestsView"
 import { SessionCreationSettingsView } from "./views/session/SessionCreationSettingsView"
+import { SessionHomebrewView } from "./views/session/SessionHomebrewView"
 import { UserCampaignsRouteView } from "./views/user/UserCampaignsRouteView"
 import { UserCharacterAddSpellsView } from "./views/user/UserCharacterAddSpellsView"
 import { UserCharacterCreateItemView } from "./views/user/UserCharacterCreateItemView"
@@ -94,6 +96,8 @@ export function AppRouter() {
 
         <Route path="creation" element={<Navigate to="settings" replace />} />
         <Route path="creation/settings" element={<SessionCreationSettingsView />} />
+        <Route path="creation/requests" element={<SessionCreationRequestsView />} />
+        <Route path="creation/homebrew" element={<SessionHomebrewView />} />
         <Route path="creation/items-compendium" element={<ItemsCompendiumView />} />
         <Route path="creation/creatures-compendium" element={<CreaturesCompendiumView />} />
         <Route path="creation/custom-systems" element={<CustomSystemsListView />} />
@@ -101,6 +105,8 @@ export function AppRouter() {
         <Route path="creation/custom-systems/:systemId/:tab" element={<CustomSystemEditorView />} />
         <Route path="creation/magic" element={<MagicView />} />
 
+        <Route path="requests" element={<LegacyCreationRouteRedirect suffix="requests" />} />
+        <Route path="homebrew" element={<LegacyCreationRouteRedirect suffix="homebrew" />} />
         <Route path="items-compendium" element={<LegacyCreationRouteRedirect suffix="items-compendium" />} />
         <Route path="creatures-compendium" element={<LegacyCreationRouteRedirect suffix="creatures-compendium" />} />
         <Route path="custom-systems" element={<LegacyCreationRouteRedirect suffix="custom-systems" />} />
@@ -119,6 +125,8 @@ export function AppRouter() {
       <Route path="/custom-systems/*" element={<LegacyCreationRootRedirect suffix="custom-systems" preserveTail />} />
       <Route path="/initiative" element={<LegacySessionRedirect />} />
       <Route path="/magic" element={<LegacyCreationRootRedirect suffix="magic" />} />
+      <Route path="/requests" element={<LegacyCreationRootRedirect suffix="requests" />} />
+      <Route path="/homebrew" element={<LegacyCreationRootRedirect suffix="homebrew" />} />
 
       <Route path="*" element={<Navigate to="/not-found" replace />} />
     </Routes>
