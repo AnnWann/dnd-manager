@@ -33,6 +33,7 @@ export function UserCampaignsTab() {
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
+  const [noticeMessage, setNoticeMessage] = useState("")
   const [campaignName, setCampaignName] = useState("")
   const [campaignDescription, setCampaignDescription] = useState("")
   const [inviteCode, setInviteCode] = useState("")
@@ -80,6 +81,7 @@ export function UserCampaignsTab() {
     if (!campaignName.trim() || working) return
     setWorking(true)
     setErrorMessage("")
+    setNoticeMessage("")
 
     try {
       const created = await createMyCampaign({
@@ -100,6 +102,7 @@ export function UserCampaignsTab() {
     if (!inviteCode.trim() || working) return
     setWorking(true)
     setErrorMessage("")
+    setNoticeMessage("")
 
     try {
       await requestCampaignJoin(inviteCode)
@@ -123,6 +126,7 @@ export function UserCampaignsTab() {
 
     setWorking(true)
     setErrorMessage("")
+    setNoticeMessage("")
 
     try {
       await linkCharacterToCampaign(
@@ -130,8 +134,16 @@ export function UserCampaignsTab() {
         characterId,
         visibility,
       )
+
+      const needsApproval = !(campaign.isOwner || campaign.role === "MASTER")
       const character = characterById.get(characterId)
-      if (character) {
+
+      if (needsApproval) {
+        setNoticeMessage(
+          `Solicitação para adicionar ${character?.name ?? "o personagem"} à sessão “${campaign.name}” enviada ao mestre.`,
+        )
+        await reload()
+      } else if (character) {
         setCampaigns((current) =>
           current.map((entry) =>
             entry.id === campaign.id
@@ -158,6 +170,7 @@ export function UserCampaignsTab() {
           ),
         )
       }
+
       setSelectedCharacter((current) => ({
         ...current,
         [campaign.id]: "",
@@ -177,6 +190,7 @@ export function UserCampaignsTab() {
     if (working) return
     setWorking(true)
     setErrorMessage("")
+    setNoticeMessage("")
 
     try {
       await updateCharacterCampaignVisibility(
@@ -214,6 +228,7 @@ export function UserCampaignsTab() {
     if (working) return
     setWorking(true)
     setErrorMessage("")
+    setNoticeMessage("")
 
     try {
       await unlinkCharacterFromCampaign(campaignId, characterId)
@@ -246,6 +261,7 @@ export function UserCampaignsTab() {
 
     setWorking(true)
     setErrorMessage("")
+    setNoticeMessage("")
 
     try {
       await leaveCampaign(campaign.id)
@@ -267,6 +283,7 @@ export function UserCampaignsTab() {
     if (working) return
     setWorking(true)
     setErrorMessage("")
+    setNoticeMessage("")
 
     try {
       await reviewCampaignMember(campaignId, userId, status)
@@ -304,6 +321,7 @@ export function UserCampaignsTab() {
 
     setWorking(true)
     setErrorMessage("")
+    setNoticeMessage("")
 
     try {
       await reviewCampaignSpell(campaignId, spellId, status, note)
@@ -344,6 +362,7 @@ export function UserCampaignsTab() {
 
     setWorking(true)
     setErrorMessage("")
+    setNoticeMessage("")
 
     try {
       await submitOwnedHomebrewSpellToCampaign(record, {
@@ -355,6 +374,11 @@ export function UserCampaignsTab() {
         ...current,
         [campaign.id]: "",
       }))
+      setNoticeMessage(
+        campaign.isOwner || campaign.role === "MASTER"
+          ? `Magia “${record.name}” adicionada à sessão “${campaign.name}”.`
+          : `Solicitação para adicionar “${record.name}” à sessão “${campaign.name}” enviada ao mestre.`,
+      )
       await Promise.all([reloadSpells(), reload()])
     } catch (error) {
       setErrorMessage(
@@ -447,6 +471,12 @@ export function UserCampaignsTab() {
         </div>
       ) : null}
 
+      {noticeMessage ? (
+        <div className="rounded-xl border border-accentBorder bg-accentBg px-4 py-3 text-sm text-textH">
+          {noticeMessage}
+        </div>
+      ) : null}
+
       {loading ? (
         <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-textMuted">
           Carregando campanhas...
@@ -473,6 +503,7 @@ export function UserCampaignsTab() {
             const active = campaign.status === "ACTIVE"
             const canReviewSpells =
               active && (campaign.isOwner || campaign.role === "MASTER")
+            const canDirectlyAdd = campaign.isOwner || campaign.role === "MASTER"
 
             return (
               <Card key={campaign.id}>
@@ -671,7 +702,9 @@ export function UserCampaignsTab() {
                             disabled={!selectedSpell[campaign.id] || working}
                             onClick={() => void submitSpell(campaign)}
                           >
-                            Enviar para aprovação
+                            {canDirectlyAdd
+                              ? "Adicionar à sessão"
+                              : "Enviar para aprovação"}
                           </Button>
                         </div>
                       ) : null}
@@ -828,7 +861,7 @@ export function UserCampaignsTab() {
                             onClick={() => void linkCharacter(campaign)}
                           >
                             <Link2 className="h-4 w-4" />
-                            Vincular
+                            {canDirectlyAdd ? "Vincular" : "Solicitar vínculo"}
                           </Button>
                         </div>
                       ) : null}
