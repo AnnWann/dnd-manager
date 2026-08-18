@@ -6,6 +6,9 @@ export type SessionDieSides =
 export type SessionHitDicePool = { current: number; max: number }
 export type SessionHitDiceState = Partial<Record<SessionDieSides, SessionHitDicePool>>
 
+export type SessionAttribute = "str" | "dex" | "con" | "int" | "wis" | "cha"
+export type SessionAttributesState = Record<SessionAttribute, number>
+
 export type SessionStatsState = {
   armorClassAdjustment: number
   initiativeAdjustment: number
@@ -27,11 +30,14 @@ export type SessionHpState = {
   hitDice: SessionHitDiceState
   stats: SessionStatsState
   statsInitialized: boolean
+  attributes: SessionAttributesState
+  attributesInitialized: boolean
   revision: number
 }
-export type SessionHpSeed = Omit<SessionHpState, "revision" | "hitDice" | "stats" | "statsInitialized"> & {
+export type SessionHpSeed = Omit<SessionHpState, "revision" | "hitDice" | "stats" | "statsInitialized" | "attributes" | "attributesInitialized"> & {
   hitDice?: SessionHitDiceState
   stats?: SessionStatsState
+  attributes?: SessionAttributesState
 }
 
 export type SessionHpOperation =
@@ -62,12 +68,13 @@ export type SessionSimpleStatOperation =
   | { type: "character.stat.experience.set"; characterId: string; value: number }
 
 export type SessionStatOperation = SessionCalculatedStatOperation | SessionSimpleStatOperation
+export type SessionAttributeOperation = { type: "character.attribute.set"; characterId: string; attribute: SessionAttribute; value: number }
 
 export type SessionRestOperation =
   | { type: "character.rest.short"; characterId: string; healing: number; hitDiceConsumption: Partial<Record<SessionDieSides, number>> }
   | { type: "character.rest.long"; characterId: string; recovery: "partial" | "full" }
 
-export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionRestOperation
+export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionAttributeOperation | SessionRestOperation
 
 export type SessionHpLogRecord = {
   id: string
@@ -83,6 +90,7 @@ export type SessionHpLogRecord = {
     | { type: "character.stat.exhaustion.restore"; characterId: string; value: number }
     | { type: "character.stat.inspiration.restore"; characterId: string; value: boolean }
     | { type: "character.stat.experience.restore"; characterId: string; value: number }
+    | { type: "character.attribute.restore"; characterId: string; attribute: SessionAttribute; value: number }
     | { type: "character.rest.restore"; characterId: string; snapshot: { hp: SessionHpState; stats: SessionStatsState } }
   undoneAt?: string
   undoneBy?: string
