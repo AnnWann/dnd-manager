@@ -184,6 +184,7 @@ function describeHpOperation(operation: SessionHpLogRecord["operation"], charact
     case "character.hitDice.recover": return `${characterName} recuperou ${operation.amount} ${operation.side} de vida.`
     case "character.hitDice.add": return `Adicionou ${operation.amount} ${operation.side} de vida a ${characterName}.`
     case "character.hitDice.remove": return `Removeu o pool ${operation.side} de dados de vida de ${characterName}.`
+    case "character.attribute.set": return `Definiu ${attributeLabel(operation.attribute)} de ${characterName} para ${operation.value}.`
     case "character.stat.armorClass.set": return `Definiu a CA de ${characterName} para ${formatStat(operation.value)}.`
     case "character.stat.initiative.set": return `Definiu a iniciativa de ${characterName} para ${formatSignedStat(operation.value)}.`
     case "character.stat.mobility.set": return `Definiu a mobilidade de ${characterName} para ${formatStat(operation.value)}.`
@@ -231,6 +232,10 @@ function describeOperation(operation: GameOperation, characterNames: ReadonlyMap
       return `Moveu ${operation.request.quantity}× ${itemName} de ${locationLabel(operation.request.from, characterNames)} para ${locationLabel(operation.request.to, characterNames)}.`
     }
   }
+}
+
+function attributeLabel(attribute: "str" | "dex" | "con" | "int" | "wis" | "cha"): string {
+  return ({ str: "FOR", dex: "DES", con: "CON", int: "INT", wis: "SAB", cha: "CAR" })[attribute]
 }
 
 function locationLabel(location: InventoryLocation, characterNames: ReadonlyMap<string, string>): string {
