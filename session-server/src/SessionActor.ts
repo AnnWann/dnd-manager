@@ -11,6 +11,7 @@ import {
   type ServerSessionMessage,
   type SessionConnection,
   type SessionHpLogRecord,
+  type SessionHpSeed,
   type SessionHpState,
   type SessionPresenceUser,
 } from "./protocol";
@@ -168,7 +169,7 @@ export class SessionActor extends DurableObject<Env> {
   private async initializeHp(
     webSocket: WebSocket,
     connection: SessionConnection,
-    seeds: Parameters<typeof normalizeHpSeed>[0][],
+    seeds: SessionHpSeed[],
   ): Promise<void> {
     if (connection.role !== "MASTER") {
       this.sendError(
@@ -201,7 +202,10 @@ export class SessionActor extends DurableObject<Env> {
     connection: SessionConnection,
     operation: Parameters<typeof applyHpOperation>[1],
   ): Promise<void> {
-    const state = await this.readHpState();
+    const [state, log] = await Promise.all([
+      this.readHpState(),
+      this.readHpLog(),
+    ]);
     const current = state[operation.characterId];
 
     if (!current) {
@@ -220,11 +224,16 @@ export class SessionActor extends DurableObject<Env> {
     }
 
     state[operation.characterId] = result.next;
-    await this.ctx.storage.put(HP_STATE_KEY, state);
-    await this.appendHpLog(result.record);
+    log.push(result.record);
+    const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
+
+    await this.ctx.storage.put({
+      [HP_STATE_KEY]: state,
+      [HP_LOG_KEY]: nextLog,
+    });
 
     this.broadcast({ type: "session.hp.updated", character: result.next });
-    await this.broadcastHpLogToMasters();
+    this.broadcastHpLogToMasters(nextLog);
   }
 
   private async handleUndo(
@@ -241,7 +250,10 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
 
-    const log = await this.readHpLog();
+    const [state, log] = await Promise.all([
+      this.readHpState(),
+      this.readHpLog(),
+    ]);
     const sourceIndex = log.findIndex((record) => record.id === logId);
     if (sourceIndex < 0) {
       this.sendError(webSocket, "LOG_NOT_FOUND", "The selected log entry no longer exists.");
@@ -273,7 +285,6 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
 
-    const state = await this.readHpState();
     const current = state[characterId];
     if (!current) {
       this.sendError(webSocket, "HP_NOT_INITIALIZED", "HP state for this character is missing.");
@@ -295,11 +306,14 @@ export class SessionActor extends DurableObject<Env> {
     log.push(result.record);
 
     state[characterId] = result.next;
-    await this.ctx.storage.put(HP_STATE_KEY, state);
-    await this.ctx.storage.put(HP_LOG_KEY, log.slice(-MAX_HP_LOG_RECORDS));
+    const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
+    await this.ctx.storage.put({
+      [HP_STATE_KEY]: state,
+      [HP_LOG_KEY]: nextLog,
+    });
 
     this.broadcast({ type: "session.hp.updated", character: result.next });
-    await this.broadcastHpLogToMasters();
+    this.broadcastHpLogToMasters(nextLog);
   }
 
   private async readHpState(): Promise<Record<string, SessionHpState>> {
@@ -313,12 +327,6 @@ export class SessionActor extends DurableObject<Env> {
     return (
       (await this.ctx.storage.get<SessionHpLogRecord[]>(HP_LOG_KEY)) ?? []
     );
-  }
-
-  private async appendHpLog(record: SessionHpLogRecord): Promise<void> {
-    const log = await this.readHpLog();
-    log.push(record);
-    await this.ctx.storage.put(HP_LOG_KEY, log.slice(-MAX_HP_LOG_RECORDS));
   }
 
   private async sendHpSnapshot(webSocket: WebSocket): Promise<void> {
@@ -344,10 +352,10 @@ export class SessionActor extends DurableObject<Env> {
     });
   }
 
-  private async broadcastHpLogToMasters(): Promise<void> {
+  private broadcastHpLogToMasters(records: SessionHpLogRecord[]): void {
     const message: ServerSessionMessage = {
       type: "session.hp.log",
-      records: await this.readHpLog(),
+      records,
     };
 
     for (const socket of this.activeSockets()) {
