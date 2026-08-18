@@ -2,40 +2,69 @@ import {
   getLocalCharacters,
   LOCAL_AUTH_BYPASS,
   setLocalCharacters,
+  type LocalCharacter,
 } from "../auth/local-auth"
+import { applyCharacterDomains } from "../lib/characterDomains"
+import type { CharacterDomainName } from "../lib/relationalApi"
 import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from "../models/characters/CharacterTemplate"
-import type { CharacterDataDomain } from "../models/characters/characterDataDomains"
-import {
-  applyCharacterDomains,
-  buildCharacterDomainPayloads,
-} from "../models/characters/characterDataDomains"
-import { apiClient } from "./api-client"
+import { apiClient, getApiStatus } from "./api-client"
 
-export type UserCharacterVisibility = "PRIVATE" | "PARTY" | "MASTER"
+export type CharacterVisibility = "PRIVATE" | "PARTY" | "MASTER"
+export type UserCharacterVisibility = CharacterVisibility
 
 export type UserCharacterDomain = {
-  domain: CharacterDataDomain
-  data: unknown
-  revision: number
-  updatedAt?: string
+  domain: CharacterDomainName
+  payload: Record<string, unknown>
+  version: number
+  updatedBy?: string | null
+  updatedAt?: string | null
 }
 
-export type UserCharacterSummary = {
-  id: string
-  name: string
-  visibility: UserCharacterVisibility
-  revision: number
-  data: Record<string, unknown>
+export type UserCharacterSummary = LocalCharacter & {
+  visibility: CharacterVisibility
+  revision?: number
   domains?: UserCharacterDomain[]
-  campaigns: Array<{
+  campaigns?: Array<{
     id: string
     name: string
   }>
-  createdAt: string
-  updatedAt: string
+}
+
+export type UserCharacterAccess = {
+  campaigns: Array<{
+    id: string
+    name: string
+    master: {
+      id: string
+      name: string
+    }
+    visibility: CharacterVisibility
+    role: "MASTER" | "PLAYER"
+    status: "ACTIVE" | "INVITED" | "REMOVED"
+  }>
+  homebrewSpells: Array<{
+    id: string
+    index: string
+    name: string
+    author: {
+      id: string
+      name: string
+    }
+    ownedByCurrentUser: boolean
+    sourceCampaign?: {
+      id: string
+      name: string
+    } | null
+    approvedCampaigns: Array<{
+      id: string
+      name: string
+      status: "APPROVED"
+    }>
+    grantedAt: string
+  }>
 }
 
 type CharactersResponse = {
@@ -46,273 +75,306 @@ type CharacterResponse = {
   character: UserCharacterSummary
 }
 
-type DomainResponse = {
-  domain: UserCharacterDomain
+type CharacterAccessResponse = {
+  access: UserCharacterAccess
 }
 
-type DomainMutationResponse = DomainResponse & {
-  mutation: {
-    id: string
-    previousRevision: number
-    revision: number
-    operation: string
-    mutationId?: string | null
-    clientId?: string | null
-    createdAt: string
+type DomainResponse = {
+  domain: UserCharacterDomain | null
+  duplicate?: boolean
+}
+
+export class UserCharacterDomainConflictError extends Error {
+  constructor(readonly current: UserCharacterDomain | null) {
+    super("Conflito de versão no domínio do personagem.")
   }
 }
 
 export async function getMyCharacters(): Promise<UserCharacterSummary[]> {
   if (LOCAL_AUTH_BYPASS) {
-    return getLocalCharacters().map((entry, index) => ({
-      id: entry.id,
-      name: entry.name,
-      visibility: entry.visibility,
-      revision: entry.revision ?? 1,
-      data: entry.data,
-      domains: entry.domains ?? [],
-      campaigns: entry.campaigns ?? [],
-      createdAt: entry.createdAt ?? new Date(index).toISOString(),
-      updatedAt: entry.updatedAt ?? new Date(index).toISOString(),
-    }))
+    return getLocalCharacters() as UserCharacterSummary[]
   }
 
   const response = await apiClient.get<CharactersResponse>("/me/characters")
   return (response.data.characters ?? []).map(hydrateCharacterSummary)
 }
 
-export async function createMyCharacter(input: {
-  name: string
-  visibility?: UserCharacterVisibility
-  data?: Record<string, unknown>
-  character?: CharacterTemplate
-}): Promise<UserCharacterSummary> {
-  const character = input.character
-  const data = character
-    ? (character.toJSON() as unknown as Record<string, unknown>)
-    : input.data ?? {}
-  const domains = character ? buildCharacterDomainPayloads(character) : undefined
-
-  if (LOCAL_AUTH_BYPASS) {
-    const now = new Date().toISOString()
-    const id = character?.get("id") ?? crypto.randomUUID()
-    const summary: UserCharacterSummary = {
-      id,
-      name: input.name.trim() || character?.get("name") || "Personagem",
-      visibility: input.visibility ?? "PRIVATE",
-      revision: 1,
-      data: {
-        ...data,
-        id,
-      },
-      domains: domains?.map((entry) => ({
-        domain: entry.domain,
-        data: entry.data,
-        revision: 1,
-        updatedAt: now,
-      })),
-      campaigns: [],
-      createdAt: now,
-      updatedAt: now,
-    }
-    setLocalCharacters([summary, ...getLocalCharacters()])
-    return summary
-  }
-
-  const response = await apiClient.post<CharacterResponse>("/me/characters", {
-    name: input.name,
-    visibility: input.visibility,
-    data,
-    domains,
-  })
-  return hydrateCharacterSummary(response.data.character)
-}
-
 export async function getMyCharacter(
   characterId: string,
 ): Promise<UserCharacterSummary> {
   if (LOCAL_AUTH_BYPASS) {
-    const character = getLocalCharacters().find((entry) => entry.id === characterId)
-    if (!character) throw new Error("Personagem local não encontrado.")
+    const character = getLocalCharacters().find(
+      (entry) => entry.id === characterId,
+    ) as UserCharacterSummary | undefined
+
+    if (!character) {
+      throw new Error("Personagem local não encontrado.")
+    }
+
     return character
   }
 
   const response = await apiClient.get<CharacterResponse>(
     `/me/characters/${encodeURIComponent(characterId)}`,
   )
+
   return hydrateCharacterSummary(response.data.character)
 }
 
-export async function updateMyCharacter(
+export async function getMyCharacterDomain(
   characterId: string,
-  input: {
-    name?: string
-    visibility?: UserCharacterVisibility
-    data?: Record<string, unknown>
-    character?: CharacterTemplate
-  },
-): Promise<UserCharacterSummary> {
-  const character = input.character
-  const data = character
-    ? (character.toJSON() as unknown as Record<string, unknown>)
-    : input.data
-  const domains = character ? buildCharacterDomainPayloads(character) : undefined
+  domain: CharacterDomainName,
+): Promise<UserCharacterDomain | null> {
+  if (LOCAL_AUTH_BYPASS) return null
 
-  if (LOCAL_AUTH_BYPASS) {
-    const now = new Date().toISOString()
-    let updated: UserCharacterSummary | undefined
-    const characters = getLocalCharacters().map((entry) => {
-      if (entry.id !== characterId) return entry
-
-      const nextDomains = domains
-        ? domains.map((domain) => {
-            const previous = entry.domains?.find(
-              (candidate) => candidate.domain === domain.domain,
-            )
-            return {
-              domain: domain.domain,
-              data: domain.data,
-              revision: (previous?.revision ?? 0) + 1,
-              updatedAt: now,
-            }
-          })
-        : entry.domains
-
-      updated = {
-        ...entry,
-        name: input.name ?? character?.get("name") ?? entry.name,
-        visibility: input.visibility ?? entry.visibility,
-        data: data ?? entry.data,
-        domains: nextDomains,
-        revision: (entry.revision ?? 1) + 1,
-        updatedAt: now,
-      }
-      return updated
-    })
-    if (!updated) throw new Error("Personagem local não encontrado.")
-    setLocalCharacters(characters)
-    return updated
-  }
-
-  const response = await apiClient.patch<CharacterResponse>(
-    `/me/characters/${encodeURIComponent(characterId)}`,
-    {
-      name: input.name ?? character?.get("name"),
-      visibility: input.visibility,
-      data,
-      domains,
-    },
-  )
-  return hydrateCharacterSummary(response.data.character)
-}
-
-export async function updateMyCharacterDomain(
-  characterId: string,
-  domain: CharacterDataDomain,
-  data: unknown,
-  expectedRevision?: number,
-): Promise<UserCharacterDomain> {
-  if (LOCAL_AUTH_BYPASS) {
-    const now = new Date().toISOString()
-    let updatedDomain: UserCharacterDomain | undefined
-    const characters = getLocalCharacters().map((entry) => {
-      if (entry.id !== characterId) return entry
-
-      const current = entry.domains?.find((candidate) => candidate.domain === domain)
-      const revision = (current?.revision ?? 0) + 1
-      updatedDomain = { domain, data, revision, updatedAt: now }
-      const domains = [
-        ...(entry.domains ?? []).filter((candidate) => candidate.domain !== domain),
-        updatedDomain,
-      ]
-
-      return {
-        ...entry,
-        domains,
-        updatedAt: now,
-      }
-    })
-    if (!updatedDomain) throw new Error("Personagem local não encontrado.")
-    setLocalCharacters(characters)
-    return updatedDomain
-  }
-
-  const response = await apiClient.put<DomainResponse>(
-    `/me/characters/${encodeURIComponent(characterId)}/domains/${encodeURIComponent(domain)}`,
-    { data, expectedRevision },
+  const response = await apiClient.get<DomainResponse>(
+    `/me/characters/${encodeURIComponent(characterId)}/domains/${domain}`,
   )
   return response.data.domain
 }
 
-export async function mutateMyCharacterDomain(
+export async function replaceMyCharacterDomain(
   characterId: string,
-  domain: CharacterDataDomain,
-  input: {
-    operation: string
-    data: unknown
-    expectedRevision?: number
+  domain: CharacterDomainName,
+  payload: Record<string, unknown>,
+  expectedVersion: number,
+  metadata: {
     mutationId?: string
     clientId?: string
-  },
-): Promise<DomainMutationResponse> {
+  } = {},
+): Promise<UserCharacterDomain> {
   if (LOCAL_AUTH_BYPASS) {
-    const previous = getLocalCharacters()
-      .find((entry) => entry.id === characterId)
-      ?.domains?.find((entry) => entry.domain === domain)
-    const updated = await updateMyCharacterDomain(
-      characterId,
-      domain,
-      input.data,
-      input.expectedRevision,
+    throw new Error(
+      "Domínios remotos não são usados no modo local de desenvolvimento.",
     )
-    return {
-      domain: updated,
-      mutation: {
-        id: crypto.randomUUID(),
-        previousRevision: previous?.revision ?? 0,
-        revision: updated.revision,
-        operation: input.operation,
-        mutationId: input.mutationId,
-        clientId: input.clientId,
-        createdAt: new Date().toISOString(),
-      },
-    }
   }
 
   try {
-    const response = await apiClient.post<DomainMutationResponse>(
-      `/me/characters/${encodeURIComponent(characterId)}/domains/${encodeURIComponent(domain)}/mutations`,
-      input,
+    const response = await apiClient.put<DomainResponse>(
+      `/me/characters/${encodeURIComponent(characterId)}/domains/${domain}`,
+      {
+        payload,
+        expectedVersion,
+        ...metadata,
+      },
     )
-    return response.data
+
+    if (!response.data.domain) {
+      throw new Error("O servidor não retornou o domínio atualizado.")
+    }
+    return response.data.domain
   } catch (error) {
-    if (isDomainConflictResponse(error) && error.response?.data.current) {
-      return {
-        domain: error.response.data.current,
-        mutation: {
-          id: "conflict",
-          previousRevision: input.expectedRevision ?? 0,
-          revision: error.response.data.current.revision,
-          operation: input.operation,
-          mutationId: input.mutationId,
-          clientId: input.clientId,
-          createdAt: new Date().toISOString(),
-        },
-      }
+    if (getApiStatus(error) === 409) {
+      const current = isDomainConflictResponse(error)
+        ? error.response?.data.current ?? null
+        : null
+      throw new UserCharacterDomainConflictError(current)
     }
     throw error
   }
 }
 
-export async function deleteMyCharacter(characterId: string): Promise<void> {
+export async function getMyCharacterAccess(
+  characterId: string,
+): Promise<UserCharacterAccess> {
   if (LOCAL_AUTH_BYPASS) {
-    setLocalCharacters(
-      getLocalCharacters().filter((entry) => entry.id !== characterId),
+    const character = await getMyCharacter(characterId)
+    return {
+      campaigns: (character.campaigns ?? []).map((campaign) => ({
+        ...campaign,
+        master: {
+          id: "local-development-user",
+          name: "Usuário local",
+        },
+        visibility: "PARTY" as const,
+        role: "MASTER" as const,
+        status: "ACTIVE" as const,
+      })),
+      homebrewSpells: [],
+    }
+  }
+
+  const response = await apiClient.get<CharacterAccessResponse>(
+    `/me/characters/${encodeURIComponent(characterId)}/access`,
+  )
+
+  return response.data.access
+}
+
+export async function createMyCharacter(input: {
+  name: string
+  visibility?: CharacterVisibility
+  data?: Record<string, unknown>
+  character?: CharacterTemplate
+}): Promise<UserCharacterSummary> {
+  const data = input.character
+    ? (input.character.toJSON() as unknown as Record<string, unknown>)
+    : input.data ?? {}
+
+  if (LOCAL_AUTH_BYPASS) {
+    const now = new Date().toISOString()
+    const id = input.character?.get("id") ?? crypto.randomUUID()
+
+    const character: UserCharacterSummary = {
+      id,
+      name: input.name.trim() || input.character?.get("name") || "Personagem",
+      visibility: input.visibility ?? "PRIVATE",
+      data: {
+        ...data,
+        id,
+      },
+      createdAt: now,
+      updatedAt: now,
+      campaigns: [],
+    }
+
+    setLocalCharacters([
+      character,
+      ...getLocalCharacters(),
+    ])
+
+    return character
+  }
+
+  const response = await apiClient.post<CharacterResponse>(
+    "/me/characters",
+    {
+      name: input.name,
+      visibility: input.visibility,
+      data,
+    },
+  )
+
+  return hydrateCharacterSummary(response.data.character)
+}
+
+/**
+ * Legacy whole-document update. New character editing code should use
+ * replaceMyCharacterDomain and updateMyCharacterRoot instead.
+ */
+export async function updateMyCharacter(
+  characterId: string,
+  data: Record<string, unknown>,
+  options: {
+    name?: string
+    visibility?: CharacterVisibility
+  } = {},
+): Promise<UserCharacterSummary> {
+  const requestedName =
+    options.name ??
+    (typeof data.name === "string" ? data.name : undefined)
+
+  if (LOCAL_AUTH_BYPASS) {
+    const now = new Date().toISOString()
+    let updatedCharacter: UserCharacterSummary | undefined
+
+    const characters = getLocalCharacters().map((character) => {
+      if (character.id !== characterId) return character
+
+      updatedCharacter = {
+        ...character,
+        name: requestedName?.trim() || character.name,
+        visibility:
+          options.visibility ??
+          (character.visibility as CharacterVisibility) ??
+          "PRIVATE",
+        data,
+        updatedAt: now,
+      } as UserCharacterSummary
+
+      return updatedCharacter
+    })
+
+    if (!updatedCharacter) {
+      throw new Error("Personagem local não encontrado.")
+    }
+
+    setLocalCharacters(characters)
+    return updatedCharacter
+  }
+
+  const response = await apiClient.patch<CharacterResponse>(
+    `/me/characters/${encodeURIComponent(characterId)}`,
+    {
+      name: requestedName,
+      visibility: options.visibility,
+      data,
+    },
+  )
+
+  return hydrateCharacterSummary(response.data.character)
+}
+
+export async function updateMyCharacterRoot(
+  characterId: string,
+  expectedVersion: number,
+  options: {
+    name?: string
+    visibility?: CharacterVisibility
+  },
+): Promise<UserCharacterSummary> {
+  if (LOCAL_AUTH_BYPASS) {
+    const current = await getMyCharacter(characterId)
+    return updateMyCharacter(
+      characterId,
+      current.data as Record<string, unknown>,
+      options,
     )
+  }
+
+  try {
+    const response = await apiClient.patch<CharacterResponse>(
+      `/me/characters/${encodeURIComponent(characterId)}`,
+      {
+        expectedVersion,
+        name: options.name,
+        visibility: options.visibility,
+      },
+    )
+    return hydrateCharacterSummary(response.data.character)
+  } catch (error) {
+    if (getApiStatus(error) === 409) {
+      throw new Error("A identidade do personagem foi alterada em outro cliente.")
+    }
+    throw error
+  }
+}
+
+/** Compatibility alias for older callers. */
+export async function updateMyCharacterDomain(
+  characterId: string,
+  domain: CharacterDomainName,
+  payload: Record<string, unknown>,
+  expectedVersion = 0,
+): Promise<UserCharacterDomain> {
+  return replaceMyCharacterDomain(
+    characterId,
+    domain,
+    payload,
+    expectedVersion,
+  )
+}
+
+export async function deleteMyCharacter(
+  characterId: string,
+): Promise<void> {
+  if (LOCAL_AUTH_BYPASS) {
+    const current = getLocalCharacters()
+    const remaining = current.filter(
+      (character) => character.id !== characterId,
+    )
+
+    if (remaining.length === current.length) {
+      throw new Error("Personagem local não encontrado.")
+    }
+
+    setLocalCharacters(remaining)
     return
   }
 
-  await apiClient.delete(`/me/characters/${encodeURIComponent(characterId)}`)
+  await apiClient.delete(
+    `/me/characters/${encodeURIComponent(characterId)}`,
+  )
 }
 
 export function characterTemplateFromSummary(
@@ -323,7 +385,8 @@ export function characterTemplateFromSummary(
     ...(hydrated.data as unknown as CharacterTemplateProps),
     id: hydrated.id,
     name: hydrated.name,
-    visibility: hydrated.visibility.toLowerCase() as CharacterTemplateProps["visibility"],
+    visibility:
+      hydrated.visibility.toLowerCase() as CharacterTemplateProps["visibility"],
   })
 }
 
