@@ -27,57 +27,28 @@ export class SessionActor extends DurableObject<Env> {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return new Response("Expected WebSocket upgrade.", { status: 426 });
     }
-
     const connection = this.readConnectionHeaders(request);
-    if (!connection) {
-      return new Response("Invalid session connection metadata.", { status: 400 });
-    }
+    if (!connection) return new Response("Invalid session connection metadata.", { status: 400 });
 
     this.replaceExistingClientConnection(connection.clientId);
-
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-
     server.serializeAttachment(connection);
     this.ctx.acceptWebSocket(server);
 
-    this.send(server, {
-      type: "session.ready",
-      sessionId: connection.sessionId,
-      clientId: connection.clientId,
-      serverTime: Date.now(),
-    });
-
+    this.send(server, { type: "session.ready", sessionId: connection.sessionId, clientId: connection.clientId, serverTime: Date.now() });
     await this.sendHpSnapshot(server);
-    if (connection.role === "MASTER") {
-      await this.sendHpLog(server);
-    }
-
+    if (connection.role === "MASTER") await this.sendHpLog(server);
     this.broadcastPresence();
     await this.scheduleNextAlarm();
-
-    return new Response(null, {
-      status: 101,
-      webSocket: client,
-    });
+    return new Response(null, { status: 101, webSocket: client });
   }
 
-  async webSocketMessage(
-    webSocket: WebSocket,
-    message: string | ArrayBuffer,
-  ): Promise<void> {
-    const raw =
-      typeof message === "string"
-        ? message
-        : new TextDecoder().decode(message);
+  async webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    const raw = typeof message === "string" ? message : new TextDecoder().decode(message);
     const parsed = parseClientSessionMessage(raw);
-
     if (!parsed) {
-      this.sendError(
-        webSocket,
-        "INVALID_MESSAGE",
-        "Unsupported or malformed session message.",
-      );
+      this.sendError(webSocket, "INVALID_MESSAGE", "Unsupported or malformed session message.");
       return;
     }
 
@@ -86,16 +57,8 @@ export class SessionActor extends DurableObject<Env> {
       webSocket.close(1011, "Missing connection attachment");
       return;
     }
-
-    if (
-      parsed.type === "session.heartbeat" &&
-      parsed.clientId !== connection.clientId
-    ) {
-      this.sendError(
-        webSocket,
-        "CLIENT_ID_MISMATCH",
-        "Heartbeat clientId does not match this connection.",
-      );
+    if (parsed.type === "session.heartbeat" && parsed.clientId !== connection.clientId) {
+      this.sendError(webSocket, "CLIENT_ID_MISMATCH", "Heartbeat clientId does not match this connection.");
       return;
     }
 
@@ -104,32 +67,21 @@ export class SessionActor extends DurableObject<Env> {
 
     switch (parsed.type) {
       case "session.heartbeat":
-        this.send(webSocket, {
-          type: "session.heartbeat.ack",
-          serverTime: Date.now(),
-        });
+        this.send(webSocket, { type: "session.heartbeat.ack", serverTime: Date.now() });
         break;
-
       case "session.ping":
-        this.send(webSocket, {
-          type: "session.pong",
-          serverTime: Date.now(),
-        });
+        this.send(webSocket, { type: "session.pong", serverTime: Date.now() });
         break;
-
       case "session.hp.initialize":
         await this.initializeHp(webSocket, connection, parsed.characters);
         break;
-
       case "session.hp.operation":
         await this.handleHpOperation(webSocket, connection, parsed.operation);
         break;
-
       case "session.log.undo":
         await this.handleUndo(webSocket, connection, parsed.logId);
         break;
     }
-
     await this.scheduleNextAlarm();
   }
 
@@ -139,9 +91,8 @@ export class SessionActor extends DurableObject<Env> {
   }
 
   async webSocketError(webSocket: WebSocket): Promise<void> {
-    try {
-      webSocket.close(1011, "WebSocket error");
-    } finally {
+    try { webSocket.close(1011, "WebSocket error"); }
+    finally {
       this.broadcastPresence();
       await this.scheduleNextAlarm();
     }
@@ -149,19 +100,16 @@ export class SessionActor extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     const now = Date.now();
-
     for (const webSocket of this.ctx.getWebSockets()) {
       const connection = this.getConnection(webSocket);
       if (!connection) {
         webSocket.close(1011, "Missing connection attachment");
         continue;
       }
-
       if (now - connection.lastHeartbeatAt >= CONNECTION_TIMEOUT_MS) {
         webSocket.close(CLOSE_CODE_TIMEOUT, "Session heartbeat timeout");
       }
     }
-
     this.broadcastPresence(now);
     await this.scheduleNextAlarm(now);
   }
@@ -172,11 +120,7 @@ export class SessionActor extends DurableObject<Env> {
     seeds: SessionHpSeed[],
   ): Promise<void> {
     if (connection.role !== "MASTER") {
-      this.sendError(
-        webSocket,
-        "MASTER_REQUIRED",
-        "Only the MASTER can initialize authoritative HP state.",
-      );
+      this.sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can initialize authoritative character state.");
       return;
     }
 
@@ -184,9 +128,28 @@ export class SessionActor extends DurableObject<Env> {
     let changed = false;
 
     for (const seed of seeds) {
-      if (state[seed.characterId]) continue;
-      state[seed.characterId] = normalizeHpSeed(seed);
-      changed = true;
+      const normalized = normalizeHpSeed(seed);
+      const existing = state[seed.characterId];
+      if (!existing) {
+        state[seed.characterId] = normalized;
+        changed = true;
+        continue;
+      }
+
+      // Initialization is non-destructive: it only fills hit-dice pools that
+      // did not exist when HP was first migrated. It never overwrites runtime
+      // current/max values after they have become authoritative.
+      const nextHitDice = { ...(existing.hitDice ?? {}) };
+      let hitDiceChanged = false;
+      for (const [side, pool] of Object.entries(normalized.hitDice)) {
+        if (!pool || nextHitDice[side as keyof typeof nextHitDice]) continue;
+        nextHitDice[side as keyof typeof nextHitDice] = pool;
+        hitDiceChanged = true;
+      }
+      if (hitDiceChanged) {
+        state[seed.characterId] = { ...existing, hitDice: nextHitDice };
+        changed = true;
+      }
     }
 
     if (changed) {
@@ -202,18 +165,10 @@ export class SessionActor extends DurableObject<Env> {
     connection: SessionConnection,
     operation: Parameters<typeof applyHpOperation>[1],
   ): Promise<void> {
-    const [state, log] = await Promise.all([
-      this.readHpState(),
-      this.readHpLog(),
-    ]);
+    const [state, log] = await Promise.all([this.readHpState(), this.readHpLog()]);
     const current = state[operation.characterId];
-
     if (!current) {
-      this.sendError(
-        webSocket,
-        "HP_NOT_INITIALIZED",
-        "HP state for this character has not been initialized by the MASTER.",
-      );
+      this.sendError(webSocket, "HP_NOT_INITIALIZED", "Authoritative state for this character has not been initialized by the MASTER.");
       return;
     }
 
@@ -226,34 +181,18 @@ export class SessionActor extends DurableObject<Env> {
     state[operation.characterId] = result.next;
     log.push(result.record);
     const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
-
-    await this.ctx.storage.put({
-      [HP_STATE_KEY]: state,
-      [HP_LOG_KEY]: nextLog,
-    });
-
+    await this.ctx.storage.put({ [HP_STATE_KEY]: state, [HP_LOG_KEY]: nextLog });
     this.broadcast({ type: "session.hp.updated", character: result.next });
     this.broadcastHpLogToMasters(nextLog);
   }
 
-  private async handleUndo(
-    webSocket: WebSocket,
-    connection: SessionConnection,
-    logId: string,
-  ): Promise<void> {
+  private async handleUndo(webSocket: WebSocket, connection: SessionConnection, logId: string): Promise<void> {
     if (connection.role !== "MASTER") {
-      this.sendError(
-        webSocket,
-        "MASTER_REQUIRED",
-        "Only the MASTER can undo session changes.",
-      );
+      this.sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can undo session changes.");
       return;
     }
 
-    const [state, log] = await Promise.all([
-      this.readHpState(),
-      this.readHpLog(),
-    ]);
+    const [state, log] = await Promise.all([this.readHpState(), this.readHpLog()]);
     const sourceIndex = log.findIndex((record) => record.id === logId);
     if (sourceIndex < 0) {
       this.sendError(webSocket, "LOG_NOT_FOUND", "The selected log entry no longer exists.");
@@ -267,27 +206,17 @@ export class SessionActor extends DurableObject<Env> {
     }
 
     const characterId = source.reverseOperation.characterId;
-    const newerActiveChange = log
-      .slice(sourceIndex + 1)
-      .some(
-        (record) =>
-          !record.undoneAt &&
-          record.operation.type !== "character.hp.undo" &&
-          record.reverseOperation.characterId === characterId,
-      );
-
+    const newerActiveChange = log.slice(sourceIndex + 1).some(
+      (record) => !record.undoneAt && record.operation.type !== "character.hp.undo" && record.reverseOperation.characterId === characterId,
+    );
     if (newerActiveChange) {
-      this.sendError(
-        webSocket,
-        "UNDO_NOT_LATEST",
-        "Undo newer HP changes for this character first.",
-      );
+      this.sendError(webSocket, "UNDO_NOT_LATEST", "Undo newer changes for this character first.");
       return;
     }
 
     const current = state[characterId];
     if (!current) {
-      this.sendError(webSocket, "HP_NOT_INITIALIZED", "HP state for this character is missing.");
+      this.sendError(webSocket, "HP_NOT_INITIALIZED", "Authoritative state for this character is missing.");
       return;
     }
 
@@ -298,70 +227,44 @@ export class SessionActor extends DurableObject<Env> {
     }
 
     const now = new Date().toISOString();
-    log[sourceIndex] = {
-      ...source,
-      undoneAt: now,
-      undoneBy: connection.userId,
-    };
+    log[sourceIndex] = { ...source, undoneAt: now, undoneBy: connection.userId };
     log.push(result.record);
-
     state[characterId] = result.next;
     const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
-    await this.ctx.storage.put({
-      [HP_STATE_KEY]: state,
-      [HP_LOG_KEY]: nextLog,
-    });
-
+    await this.ctx.storage.put({ [HP_STATE_KEY]: state, [HP_LOG_KEY]: nextLog });
     this.broadcast({ type: "session.hp.updated", character: result.next });
     this.broadcastHpLogToMasters(nextLog);
   }
 
   private async readHpState(): Promise<Record<string, SessionHpState>> {
-    return (
-      (await this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY)) ??
-      {}
+    const raw = (await this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY)) ?? {};
+    return Object.fromEntries(
+      Object.entries(raw).map(([id, state]) => [id, { ...state, hitDice: state.hitDice ?? {} }]),
     );
   }
 
   private async readHpLog(): Promise<SessionHpLogRecord[]> {
-    return (
-      (await this.ctx.storage.get<SessionHpLogRecord[]>(HP_LOG_KEY)) ?? []
-    );
+    return (await this.ctx.storage.get<SessionHpLogRecord[]>(HP_LOG_KEY)) ?? [];
   }
 
   private async sendHpSnapshot(webSocket: WebSocket): Promise<void> {
     const state = await this.readHpState();
-    this.send(webSocket, {
-      type: "session.hp.snapshot",
-      characters: Object.values(state),
-    });
+    this.send(webSocket, { type: "session.hp.snapshot", characters: Object.values(state) });
   }
 
   private async broadcastHpSnapshot(): Promise<void> {
     const state = await this.readHpState();
-    this.broadcast({
-      type: "session.hp.snapshot",
-      characters: Object.values(state),
-    });
+    this.broadcast({ type: "session.hp.snapshot", characters: Object.values(state) });
   }
 
   private async sendHpLog(webSocket: WebSocket): Promise<void> {
-    this.send(webSocket, {
-      type: "session.hp.log",
-      records: await this.readHpLog(),
-    });
+    this.send(webSocket, { type: "session.hp.log", records: await this.readHpLog() });
   }
 
   private broadcastHpLogToMasters(records: SessionHpLogRecord[]): void {
-    const message: ServerSessionMessage = {
-      type: "session.hp.log",
-      records,
-    };
-
+    const message: ServerSessionMessage = { type: "session.hp.log", records };
     for (const socket of this.activeSockets()) {
-      if (this.getConnection(socket)?.role === "MASTER") {
-        this.send(socket, message);
-      }
+      if (this.getConnection(socket)?.role === "MASTER") this.send(socket, message);
     }
   }
 
@@ -371,47 +274,21 @@ export class SessionActor extends DurableObject<Env> {
     const userId = request.headers.get("x-session-user-id")?.trim();
     const role = request.headers.get("x-session-role")?.trim();
     const expiresAt = Number(request.headers.get("x-session-expires-at"));
-
-    if (
-      !sessionId ||
-      !clientId ||
-      !userId ||
-      (role !== "MASTER" && role !== "PLAYER") ||
-      !Number.isFinite(expiresAt) ||
-      expiresAt <= Date.now()
-    ) {
-      return null;
-    }
-
+    if (!sessionId || !clientId || !userId || (role !== "MASTER" && role !== "PLAYER") || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
     const now = Date.now();
-    return {
-      sessionId,
-      clientId,
-      userId,
-      role,
-      connectedAt: now,
-      lastHeartbeatAt: now,
-    };
+    return { sessionId, clientId, userId, role, connectedAt: now, lastHeartbeatAt: now };
   }
 
   private replaceExistingClientConnection(clientId: string): void {
     for (const webSocket of this.ctx.getWebSockets()) {
       const connection = this.getConnection(webSocket);
-      if (connection?.clientId === clientId) {
-        webSocket.close(
-          CLOSE_CODE_REPLACED,
-          "Connection replaced by reconnect",
-        );
-      }
+      if (connection?.clientId === clientId) webSocket.close(CLOSE_CODE_REPLACED, "Connection replaced by reconnect");
     }
   }
 
   private getConnection(webSocket: WebSocket): SessionConnection | null {
-    try {
-      return webSocket.deserializeAttachment() as SessionConnection;
-    } catch {
-      return null;
-    }
+    try { return webSocket.deserializeAttachment() as SessionConnection; }
+    catch { return null; }
   }
 
   private sendError(webSocket: WebSocket, code: string, message: string): void {
@@ -419,31 +296,20 @@ export class SessionActor extends DurableObject<Env> {
   }
 
   private send(webSocket: WebSocket, message: ServerSessionMessage): void {
-    try {
-      webSocket.send(encodeServerSessionMessage(message));
-    } catch {
-      // The socket may have closed between enumeration and send.
-    }
+    try { webSocket.send(encodeServerSessionMessage(message)); } catch {}
   }
 
   private broadcast(message: ServerSessionMessage): void {
     const payload = encodeServerSessionMessage(message);
     for (const webSocket of this.activeSockets()) {
-      try {
-        webSocket.send(payload);
-      } catch {
-        // Ignore sockets that close while broadcasting.
-      }
+      try { webSocket.send(payload); } catch {}
     }
   }
 
   private activeSockets(now = Date.now()): WebSocket[] {
     return this.ctx.getWebSockets().filter((webSocket) => {
       const connection = this.getConnection(webSocket);
-      return (
-        connection !== null &&
-        now - connection.lastHeartbeatAt < CONNECTION_TIMEOUT_MS
-      );
+      return connection !== null && now - connection.lastHeartbeatAt < CONNECTION_TIMEOUT_MS;
     });
   }
 
@@ -451,50 +317,27 @@ export class SessionActor extends DurableObject<Env> {
     const activeSockets = this.activeSockets(now);
     const users: SessionPresenceUser[] = activeSockets.flatMap((webSocket) => {
       const connection = this.getConnection(webSocket);
-      if (!connection) return [];
-      return [
-        {
-          userId: connection.userId,
-          clientId: connection.clientId,
-          role: connection.role,
-        },
-      ];
+      return connection ? [{ userId: connection.userId, clientId: connection.clientId, role: connection.role }] : [];
     });
-
-    const payload = encodeServerSessionMessage({
-      type: "session.presence",
-      users,
-    });
-
+    const payload = encodeServerSessionMessage({ type: "session.presence", users });
     for (const webSocket of activeSockets) {
-      try {
-        webSocket.send(payload);
-      } catch {
-        // Ignore sockets that close while broadcasting.
-      }
+      try { webSocket.send(payload); } catch {}
     }
   }
 
   private async scheduleNextAlarm(now = Date.now()): Promise<void> {
     let nextDeadline: number | null = null;
-
     for (const webSocket of this.ctx.getWebSockets()) {
       const connection = this.getConnection(webSocket);
       if (!connection) continue;
-
       const deadline = connection.lastHeartbeatAt + CONNECTION_TIMEOUT_MS;
       if (deadline <= now) continue;
-
-      if (nextDeadline === null || deadline < nextDeadline) {
-        nextDeadline = deadline;
-      }
+      if (nextDeadline === null || deadline < nextDeadline) nextDeadline = deadline;
     }
-
     if (nextDeadline === null) {
       await this.ctx.storage.deleteAlarm();
       return;
     }
-
     await this.ctx.storage.setAlarm(nextDeadline);
   }
 }
