@@ -12,8 +12,10 @@ import { SessionSocket, type SessionRuntimeStatus } from "./sessionSocket"
 import { toSheetOperationMessage } from "./sheetRoutes"
 import type {
   SessionAuthoritativeOperation,
+  SessionCondition,
   SessionConditionOperation,
   SessionConditionSeed,
+  SessionConcentrationOperation,
   SessionConditionsState,
   SessionHpLogRecord,
   SessionHpSeed,
@@ -22,6 +24,8 @@ import type {
   SessionRuntimePresenceUser,
   SessionRuntimeRole,
 } from "./sessionProtocol"
+
+const CONCENTRATION_TAG = "dnd-manager:concentrating"
 
 export type SessionRuntimeContextValue = {
   status: SessionRuntimeStatus
@@ -38,6 +42,7 @@ export type SessionRuntimeContextValue = {
   dispatchSheetOperation: (operation: SessionLoggedOperation) => boolean
   dispatchHpOperation: (operation: SessionAuthoritativeOperation) => boolean
   dispatchConditionOperation: (operation: SessionConditionOperation) => boolean
+  dispatchConcentrationOperation: (operation: SessionConcentrationOperation) => boolean
   undoLog: (logId: string) => boolean
 }
 
@@ -171,14 +176,43 @@ function SessionRuntimeProviderInner({
     socketRef.current?.send(toSheetOperationMessage(operation)) ?? false,
   [])
 
-  // Compatibility aliases while call sites are migrated domain-by-domain.
   const dispatchHpOperation = useCallback((operation: SessionAuthoritativeOperation) =>
     dispatchSheetOperation(operation),
   [dispatchSheetOperation])
 
-  const dispatchConditionOperation = useCallback((operation: SessionConditionOperation) =>
+  const dispatchConcentrationOperation = useCallback((operation: SessionConcentrationOperation) =>
     dispatchSheetOperation(operation),
   [dispatchSheetOperation])
+
+  // Legacy condition call sites are translated here so the concentration condition
+  // cannot bypass the dedicated concentration domain while those call sites migrate.
+  const dispatchConditionOperation = useCallback((operation: SessionConditionOperation) => {
+    if (operation.type === "character.condition.add" || operation.type === "character.condition.update") {
+      if (isConcentrationCondition(operation.condition)) {
+        return dispatchConcentrationOperation({
+          type: "character.concentration.start",
+          characterId: operation.characterId,
+          spellIndex: concentrationSpellIndex(operation.condition),
+          spellName: operation.condition.source.trim() || "Concentração",
+        })
+      }
+    }
+
+    if (operation.type === "character.condition.remove") {
+      const condition = conditionsByCharacterId[operation.characterId]?.conditions.find(
+        (entry) => entry.id === operation.conditionId,
+      )
+      if (condition && isConcentrationCondition(condition)) {
+        return dispatchConcentrationOperation({
+          type: "character.concentration.end",
+          characterId: operation.characterId,
+          reason: "manual",
+        })
+      }
+    }
+
+    return dispatchSheetOperation(operation)
+  }, [conditionsByCharacterId, dispatchConcentrationOperation, dispatchSheetOperation])
 
   const undoLog = useCallback((logId: string) =>
     socketRef.current?.send({ type: "session.log.undo", logId }) ?? false,
@@ -199,11 +233,13 @@ function SessionRuntimeProviderInner({
     dispatchSheetOperation,
     dispatchHpOperation,
     dispatchConditionOperation,
+    dispatchConcentrationOperation,
     undoLog,
   }), [
     clientId,
     conditionsByCharacterId,
     dispatchConditionOperation,
+    dispatchConcentrationOperation,
     dispatchHpOperation,
     dispatchSheetOperation,
     hpByCharacterId,
@@ -223,4 +259,21 @@ function SessionRuntimeProviderInner({
       {children}
     </SessionRuntimeContext.Provider>
   )
+}
+
+function isConcentrationCondition(condition: SessionCondition): boolean {
+  return condition.tags.includes(CONCENTRATION_TAG) || normalize(condition.name) === "concentrando"
+}
+
+function concentrationSpellIndex(condition: SessionCondition): string {
+  const notes = condition.notes.trim()
+  return notes.startsWith("spell:") ? notes.slice("spell:".length).trim() || "unknown" : "unknown"
+}
+
+function normalize(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLocaleLowerCase("pt-BR")
 }
