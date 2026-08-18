@@ -10,18 +10,20 @@ export type SessionConnection = {
 };
 
 export type SessionDieSides =
-  | "d2"
-  | "d3"
-  | "d4"
-  | "d6"
-  | "d8"
-  | "d10"
-  | "d12"
-  | "d20"
-  | "d100";
+  | "d2" | "d3" | "d4" | "d6" | "d8" | "d10" | "d12" | "d20" | "d100";
 
 export type SessionHitDicePool = { current: number; max: number };
 export type SessionHitDiceState = Partial<Record<SessionDieSides, SessionHitDicePool>>;
+
+export type SessionStatsState = {
+  armorClassAdjustment: number;
+  initiativeAdjustment: number;
+  mobilityAdjustment: number;
+  passivePerceptionAdjustment: number;
+  exhaustion: number;
+  inspiration: boolean;
+  experience: number;
+};
 
 export type SessionHpState = {
   characterId: string;
@@ -32,11 +34,14 @@ export type SessionHpState = {
   currentMax: number;
   maxHpBonus: number;
   hitDice: SessionHitDiceState;
+  stats: SessionStatsState;
+  statsInitialized: boolean;
   revision: number;
 };
 
-export type SessionHpSeed = Omit<SessionHpState, "revision" | "hitDice"> & {
+export type SessionHpSeed = Omit<SessionHpState, "revision" | "hitDice" | "stats" | "statsInitialized"> & {
   hitDice?: SessionHitDiceState;
+  stats?: SessionStatsState;
 };
 
 export type SessionHpOperation =
@@ -55,22 +60,33 @@ export type SessionHitDiceOperation =
   | { type: "character.hitDice.add"; characterId: string; side: SessionDieSides; amount: number }
   | { type: "character.hitDice.remove"; characterId: string; side: SessionDieSides };
 
+export type SessionCalculatedStatOperation =
+  | { type: "character.stat.armorClass.set"; characterId: string; value: number; calculatedValue: number }
+  | { type: "character.stat.initiative.set"; characterId: string; value: number; calculatedValue: number }
+  | { type: "character.stat.mobility.set"; characterId: string; value: number; calculatedValue: number }
+  | { type: "character.stat.passivePerception.set"; characterId: string; value: number; calculatedValue: number };
+
+export type SessionSimpleStatOperation =
+  | { type: "character.stat.exhaustion.set"; characterId: string; value: number }
+  | { type: "character.stat.inspiration.set"; characterId: string; value: boolean }
+  | { type: "character.stat.experience.set"; characterId: string; value: number };
+
+export type SessionStatOperation = SessionCalculatedStatOperation | SessionSimpleStatOperation;
+
 export type SessionRestOperation =
   | { type: "character.rest.short"; characterId: string; healing: number; hitDiceConsumption: Partial<Record<SessionDieSides, number>> }
   | { type: "character.rest.long"; characterId: string; recovery: "partial" | "full" };
 
-export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionRestOperation;
+export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionRestOperation;
 
 export type SessionHpReverseOperation = { type: "character.hp.restore"; characterId: string; hp: SessionHpState };
+export type SessionStatsReverseOperation = { type: "character.stats.restore"; characterId: string; stats: SessionStatsState };
 export type SessionRestReverseOperation = {
   type: "character.rest.restore";
   characterId: string;
-  snapshot: {
-    hp: SessionHpState;
-    // Future resources/conditions/supplies are added here, preserving one rest event.
-  };
+  snapshot: { hp: SessionHpState; stats: SessionStatsState };
 };
-export type SessionReverseOperation = SessionHpReverseOperation | SessionRestReverseOperation;
+export type SessionReverseOperation = SessionHpReverseOperation | SessionStatsReverseOperation | SessionRestReverseOperation;
 
 export type SessionHpLogRecord = {
   id: string;
@@ -124,7 +140,8 @@ function isHpSeed(value: unknown): value is SessionHpSeed {
     (value.ownerUserId === undefined || typeof value.ownerUserId === "string") &&
     isFiniteNumber(value.current) && isFiniteNumber(value.temporary) && isFiniteNumber(value.max) &&
     isFiniteNumber(value.currentMax) && isFiniteNumber(value.maxHpBonus) &&
-    (value.hitDice === undefined || isHitDiceState(value.hitDice));
+    (value.hitDice === undefined || isHitDiceState(value.hitDice)) &&
+    (value.stats === undefined || isStatsState(value.stats));
 }
 
 function isAuthoritativeOperation(value: unknown): value is SessionAuthoritativeOperation {
@@ -142,12 +159,25 @@ function isAuthoritativeOperation(value: unknown): value is SessionAuthoritative
     case "character.hitDice.recover":
     case "character.hitDice.add": return isDieSide(value.side) && isFiniteNumber(value.amount);
     case "character.hitDice.remove": return isDieSide(value.side);
+    case "character.stat.armorClass.set":
+    case "character.stat.initiative.set":
+    case "character.stat.mobility.set":
+    case "character.stat.passivePerception.set": return isFiniteNumber(value.value) && isFiniteNumber(value.calculatedValue);
+    case "character.stat.exhaustion.set":
+    case "character.stat.experience.set": return isFiniteNumber(value.value);
+    case "character.stat.inspiration.set": return typeof value.value === "boolean";
     case "character.rest.short": return isFiniteNumber(value.healing) && isHitDiceConsumption(value.hitDiceConsumption);
     case "character.rest.long": return value.recovery === "partial" || value.recovery === "full";
     default: return false;
   }
 }
 
+function isStatsState(value: unknown): value is SessionStatsState {
+  if (!isRecord(value)) return false;
+  return isFiniteNumber(value.armorClassAdjustment) && isFiniteNumber(value.initiativeAdjustment) &&
+    isFiniteNumber(value.mobilityAdjustment) && isFiniteNumber(value.passivePerceptionAdjustment) &&
+    isFiniteNumber(value.exhaustion) && typeof value.inspiration === "boolean" && isFiniteNumber(value.experience);
+}
 function isHitDiceState(value: unknown): value is SessionHitDiceState {
   if (!isRecord(value)) return false;
   return Object.entries(value).every(([side, pool]) => isDieSide(side) && isRecord(pool) && isFiniteNumber(pool.current) && isFiniteNumber(pool.max));
