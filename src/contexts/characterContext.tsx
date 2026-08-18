@@ -9,6 +9,7 @@ import {
   type SetStateAction,
 } from "react"
 
+import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
 import { newCharacterTemplate } from "../lib/newCharacterTemplate"
 import type { AppStateV1 } from "../lib/remoteState"
 import {
@@ -19,6 +20,7 @@ import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from "../models/characters/CharacterTemplate"
+import { getCurrentMaxHp } from "../models/characters/characterHp"
 import {
   applyRecordedGameOperation,
 } from "../models/game/applyGameOperation"
@@ -137,8 +139,9 @@ export function CharacterProvider({
   userKey,
 }: CharacterProviderProps) {
   const [selectedCharacterId, setSelectedCharacterId] = useState("")
+  const sessionRuntime = useOptionalSessionRuntime()
 
-  const characters = useMemo(
+  const sourceCharacters = useMemo(
     () =>
       appState.characters.map((character) =>
         character instanceof CharacterTemplate
@@ -148,10 +151,62 @@ export function CharacterProvider({
     [appState.characters],
   )
 
+  const characters = useMemo(
+    () => sourceCharacters.map((character) => {
+      const authoritativeHp = sessionRuntime?.hpByCharacterId[character.get("id")]
+      if (!authoritativeHp) return character
+
+      const sheet = character.get("sheet")
+      return character.withPatch({
+        sheet: {
+          ...sheet,
+          HP: {
+            ...sheet.HP,
+            current: authoritativeHp.current,
+            temporary: authoritativeHp.temporary,
+            max: authoritativeHp.max,
+            currentMax: authoritativeHp.currentMax,
+          },
+        },
+      })
+    }),
+    [sessionRuntime?.hpByCharacterId, sourceCharacters],
+  )
+
   const canAssignOwners = userRole === "master"
   const canEditCharacterType = userRole === "master"
   const normalizedUserKey = userKey.trim()
   const actorId = normalizedUserKey || userRole
+
+  useEffect(() => {
+    if (
+      !sessionRuntime ||
+      sessionRuntime.status !== "connected" ||
+      sessionRuntime.role !== "MASTER" ||
+      sourceCharacters.length === 0
+    ) return
+
+    sessionRuntime.initializeHp(
+      sourceCharacters.map((character) => {
+        const hp = character.get("sheet").HP
+        const currentMax = getCurrentMaxHp(character)
+        return {
+          characterId: character.get("id"),
+          ownerUserId: character.get("owner")?.id?.trim() || undefined,
+          current: hp.current,
+          temporary: hp.temporary,
+          max: hp.max,
+          currentMax,
+          maxHpBonus: character.getEffectiveMaxHp() - currentMax,
+        }
+      }),
+    )
+  }, [
+    sessionRuntime?.initializeHp,
+    sessionRuntime?.role,
+    sessionRuntime?.status,
+    sourceCharacters,
+  ])
 
   const playersById = useMemo(() => {
     const map = new Map<string, Player>()
@@ -280,6 +335,16 @@ export function CharacterProvider({
   }, [actorId, characters.length, setAppState, userKey])
 
   function dispatchGameOperation(operation: GameOperation) {
+    if (sessionRuntime && isAuthoritativeHpOperation(operation)) {
+      if (sessionRuntime.status !== "connected") {
+        console.warn("[session-runtime] HP change ignored while the authoritative session server is disconnected.")
+        return
+      }
+
+      sessionRuntime.dispatchHpOperation(operation)
+      return
+    }
+
     setAppState((previous) =>
       applyRecordedGameOperation(
         previous,
@@ -706,6 +771,10 @@ export function CharacterProvider({
     })
   }
 
+  const operationLog = sessionRuntime
+    ? (appState.operations ?? []).filter((record) => !isAuthoritativeHpOperation(record.operation))
+    : appState.operations ?? []
+
   return (
     <CharacterContext.Provider
       value={{
@@ -714,7 +783,7 @@ export function CharacterProvider({
         transferCharacters,
         partyInventory: appState.partyInventory ?? [],
         groundInventory: appState.groundInventory ?? [],
-        operationLog: appState.operations ?? [],
+        operationLog,
         dispatchGameOperation,
         updateCharacter,
         updateCharacterDomain,
@@ -751,6 +820,20 @@ export function CharacterProvider({
     >
       {children}
     </CharacterContext.Provider>
+  )
+}
+
+function isAuthoritativeHpOperation(
+  operation: GameOperation,
+): operation is Extract<
+  GameOperation,
+  { type: "character.hp.set" | "character.hp.temporary.set" | "character.hp.damage" | "character.hp.heal" }
+> {
+  return (
+    operation.type === "character.hp.set" ||
+    operation.type === "character.hp.temporary.set" ||
+    operation.type === "character.hp.damage" ||
+    operation.type === "character.hp.heal"
   )
 }
 
