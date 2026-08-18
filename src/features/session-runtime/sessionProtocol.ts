@@ -6,6 +6,16 @@ export type SessionDieSides =
 export type SessionHitDicePool = { current: number; max: number }
 export type SessionHitDiceState = Partial<Record<SessionDieSides, SessionHitDicePool>>
 
+export type SessionStatsState = {
+  armorClassAdjustment: number
+  initiativeAdjustment: number
+  mobilityAdjustment: number
+  passivePerceptionAdjustment: number
+  exhaustion: number
+  inspiration: boolean
+  experience: number
+}
+
 export type SessionHpState = {
   characterId: string
   ownerUserId?: string
@@ -15,9 +25,14 @@ export type SessionHpState = {
   currentMax: number
   maxHpBonus: number
   hitDice: SessionHitDiceState
+  stats: SessionStatsState
+  statsInitialized: boolean
   revision: number
 }
-export type SessionHpSeed = Omit<SessionHpState, "revision" | "hitDice"> & { hitDice?: SessionHitDiceState }
+export type SessionHpSeed = Omit<SessionHpState, "revision" | "hitDice" | "stats" | "statsInitialized"> & {
+  hitDice?: SessionHitDiceState
+  stats?: SessionStatsState
+}
 
 export type SessionHpOperation =
   | { type: "character.hp.set"; characterId: string; value: number }
@@ -35,11 +50,24 @@ export type SessionHitDiceOperation =
   | { type: "character.hitDice.add"; characterId: string; side: SessionDieSides; amount: number }
   | { type: "character.hitDice.remove"; characterId: string; side: SessionDieSides }
 
+export type SessionCalculatedStatOperation =
+  | { type: "character.stat.armorClass.set"; characterId: string; value: number; calculatedValue: number }
+  | { type: "character.stat.initiative.set"; characterId: string; value: number; calculatedValue: number }
+  | { type: "character.stat.mobility.set"; characterId: string; value: number; calculatedValue: number }
+  | { type: "character.stat.passivePerception.set"; characterId: string; value: number; calculatedValue: number }
+
+export type SessionSimpleStatOperation =
+  | { type: "character.stat.exhaustion.set"; characterId: string; value: number }
+  | { type: "character.stat.inspiration.set"; characterId: string; value: boolean }
+  | { type: "character.stat.experience.set"; characterId: string; value: number }
+
+export type SessionStatOperation = SessionCalculatedStatOperation | SessionSimpleStatOperation
+
 export type SessionRestOperation =
   | { type: "character.rest.short"; characterId: string; healing: number; hitDiceConsumption: Partial<Record<SessionDieSides, number>> }
   | { type: "character.rest.long"; characterId: string; recovery: "partial" | "full" }
 
-export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionRestOperation
+export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionRestOperation
 
 export type SessionHpLogRecord = {
   id: string
@@ -48,7 +76,8 @@ export type SessionHpLogRecord = {
   operation: SessionAuthoritativeOperation | { type: "character.hp.undo"; characterId: string; sourceLogId: string }
   reverseOperation:
     | { type: "character.hp.restore"; characterId: string; hp: SessionHpState }
-    | { type: "character.rest.restore"; characterId: string; snapshot: { hp: SessionHpState } }
+    | { type: "character.stats.restore"; characterId: string; stats: SessionStatsState }
+    | { type: "character.rest.restore"; characterId: string; snapshot: { hp: SessionHpState; stats: SessionStatsState } }
   undoneAt?: string
   undoneBy?: string
 }
