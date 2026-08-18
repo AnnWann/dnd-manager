@@ -8,6 +8,7 @@ function App() {
 
   const usesPublicLayout =
     location.pathname.startsWith("/auth") ||
+    (import.meta.env.DEV && location.pathname.startsWith("/dev/session-runtime")) ||
     location.pathname === "/not-found" ||
     location.pathname === "/unauthorized"
 
