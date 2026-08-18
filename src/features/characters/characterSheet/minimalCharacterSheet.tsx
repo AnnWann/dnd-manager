@@ -85,7 +85,11 @@ export function MinimalCharacterSheet({
   character,
   updateCharacter,
 }: Props) {
-  const { dispatchStatOperation, dispatchAttributeOperation } = useCharacterContext()
+  const {
+    dispatchStatOperation,
+    dispatchAttributeOperation,
+    dispatchSavingThrowOperation,
+  } = useCharacterContext()
   const [skillQuery, setSkillQuery] = useState("")
   const [handDialog, setHandDialog] =
     useState<HandItemActionsDialogState | null>(null)
@@ -169,11 +173,16 @@ export function MinimalCharacterSheet({
   }
 
   function toggleSavingThrow(attribute: Attribute) {
+    const proficient = character.isSavingThrowProficient(attribute)
+    if (dispatchSavingThrowOperation({
+      type: "character.savingThrow.set",
+      characterId,
+      attribute,
+      proficient: !proficient,
+    })) return
+
     updateCharacter(characterId, (current) =>
-      current.setSavingThrowProficiency(
-        attribute,
-        !current.isSavingThrowProficient(attribute),
-      ),
+      current.setSavingThrowProficiency(attribute, !proficient),
     )
   }
 
