@@ -1,3 +1,4 @@
+import { useCharacterContext } from "../../../../contexts/characterContext"
 import { attributeShort } from "../../../../lib/attributeShorts"
 import { formatSigned } from "../../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
@@ -25,6 +26,7 @@ export function SelectSkillModule({
   ability,
   profBonus,
 }: Props) {
+  const { dispatchSkillOperation } = useCharacterContext()
   const sheet = character.get("sheet")
   const proficiency = sheet.skills[skillKey] ?? "none"
   const grantedProficiency =
@@ -44,6 +46,13 @@ export function SelectSkillModule({
     (effectiveProficiency === "expertise" ? profBonus * 2 : 0)
 
   function setProficiency(next: SkillProficiency) {
+    if (dispatchSkillOperation({
+      type: "character.skill.set",
+      characterId: character.get("id"),
+      skill: skillKey,
+      proficiency: next,
+    })) return
+
     updateCharacter(character.get("id"), (c) =>
       c.withSheet("skills", {
         ...c.get("sheet").skills,
