@@ -1,10 +1,26 @@
-import { LOCAL_AUTH_BYPASS } from "../auth/local-auth"
+import {
+  getLocalCharacters,
+  LOCAL_AUTH_BYPASS,
+} from "../auth/local-auth"
+import { applyCharacterDomains } from "../lib/characterDomains"
+import {
+  CharacterTemplate,
+  type CharacterTemplateProps,
+} from "../models/characters/CharacterTemplate"
 import { apiClient } from "./api-client"
-import { getMyCampaigns, type CampaignCharacterVisibility, type CampaignRole } from "./user-campaigns"
+import {
+  getMyCampaigns,
+  type CampaignCharacterVisibility,
+  type CampaignRole,
+} from "./user-campaigns"
+import type { UserCharacterDomain } from "./user-characters"
 
 export type CampaignSessionCharacter = {
   id: string
   name: string
+  data: Record<string, unknown>
+  revision?: number
+  domains?: UserCharacterDomain[]
   visibility: CampaignCharacterVisibility
   owner: {
     id: string
@@ -39,6 +55,10 @@ export async function getCampaignSessionCharacters(
     const campaign = campaigns.find((entry) => entry.id === campaignId)
     if (!campaign) throw new Error("Campanha local não encontrada.")
 
+    const localCharacters = new Map(
+      getLocalCharacters().map((character) => [character.id, character]),
+    )
+
     return {
       campaign: {
         id: campaign.id,
@@ -46,10 +66,20 @@ export async function getCampaignSessionCharacters(
         role: campaign.role,
         isMaster: campaign.isOwner || campaign.role === "MASTER",
       },
-      characters: campaign.characters.map((character) => ({
-        ...character,
-        owner: campaign.owner,
-      })),
+      characters: campaign.characters.flatMap((character) => {
+        const source = localCharacters.get(character.id)
+        if (!source) return []
+
+        return [{
+          id: character.id,
+          name: source.name || character.name,
+          data: source.data,
+          visibility: character.visibility,
+          owner: campaign.owner,
+          addedAt: source.updatedAt,
+          domains: (source as typeof source & { domains?: UserCharacterDomain[] }).domains,
+        }]
+      }),
     }
   }
 
@@ -73,4 +103,36 @@ export async function getCampaignSessionCharacters(
   })
 
   return promise
+}
+
+/**
+ * Materializes the user/campaign character records into independent mutable
+ * session copies. The returned objects are never persisted back through the
+ * /me/characters APIs.
+ */
+export function buildSessionCharacterSnapshots(
+  data: CampaignSessionCharacters,
+): CharacterTemplateProps[] {
+  return data.characters.map((character) => {
+    const visibility = character.visibility.toLowerCase() as
+      | "private"
+      | "party"
+      | "master"
+
+    const legacyBase = CharacterTemplate.fromJSON({
+      ...(character.data as Partial<CharacterTemplateProps>),
+      id: character.id,
+      name: character.name,
+      visibility,
+      owner: {
+        id: character.owner.id,
+        name: character.owner.name,
+        role: "player",
+      },
+    }).toJSON()
+
+    return CharacterTemplate.fromJSON(
+      applyCharacterDomains(legacyBase, character.domains ?? []),
+    ).toJSON()
+  })
 }
