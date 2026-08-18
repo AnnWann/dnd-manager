@@ -1,3 +1,4 @@
+import type { CharacterAcquisitionMetadata } from "../../characters/CharacterAcquisition"
 import type { Attribute } from "../../sheet/Attribute"
 import type { SpellResourceCost } from "./Spell"
 
@@ -12,6 +13,7 @@ export type SpellGrant = {
    * habilidade/origem e os espaços normais para esta cópia da magia.
    */
   resourceCost?: SpellResourceCost
+  acquisition?: CharacterAcquisitionMetadata
 }
 
 export function getSpellGrantCastingMode(
