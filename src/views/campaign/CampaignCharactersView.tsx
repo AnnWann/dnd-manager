@@ -48,11 +48,13 @@ export function CampaignCharactersView() {
 
   const sessionCharacters = useMemo(() => {
     if (!data) return []
-    if (data.campaign.isMaster) return visibleCharacters
 
-    const ownedSourceIds = new Set(data.characters.map((character) => character.id))
+    const linkedSourceIds = new Set(
+      data.characters.map((character) => character.id),
+    )
+
     return visibleCharacters.filter((character) =>
-      ownedSourceIds.has(character.get("id")),
+      linkedSourceIds.has(character.get("id")),
     )
   }, [data, visibleCharacters])
 
@@ -155,7 +157,7 @@ function MasterSessionCharactersView({
         characters={characters}
         showOwner
         emptyTitle="Nenhum personagem carregado na sessão"
-        emptyDescription="Quando a sessão carregar suas cópias de personagem, elas aparecerão aqui."
+        emptyDescription="A sessão cria cópias apenas dos personagens atualmente vinculados à campanha."
         onOpen={(character) =>
           navigate(sessionCharacterPath(sessionId, character.get("id"), "sheet"))
         }
