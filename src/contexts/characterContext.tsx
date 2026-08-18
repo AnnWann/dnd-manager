@@ -11,6 +11,7 @@ import {
 
 import type {
   SessionAttributeOperation,
+  SessionConditionOperation,
   SessionDieSides,
   SessionSavingThrowOperation,
   SessionSkillOperation,
@@ -25,6 +26,11 @@ import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from "../models/characters/CharacterTemplate"
+import type { CharacterCondition } from "../models/characters/CharacterCondition"
+import {
+  getCharacterConditions,
+  withCharacterConditions,
+} from "../models/characters/characterConditionStorage"
 import { getCurrentMaxHp } from "../models/characters/characterHp"
 import { applyRecordedGameOperation } from "../models/game/applyGameOperation"
 import {
@@ -64,6 +70,7 @@ export type CharacterContextValue = {
   dispatchAttributeOperation: (operation: SessionAttributeOperation) => boolean
   dispatchSavingThrowOperation: (operation: SessionSavingThrowOperation) => boolean
   dispatchSkillOperation: (operation: SessionSkillOperation) => boolean
+  dispatchConditionOperation: (operation: SessionConditionOperation) => boolean
   updateCharacter: (characterId: string, updater: (c: CharacterTemplate) => CharacterTemplate) => void
   updateCharacterDomain: (characterId: string, domain: CharacterDomainName, updater: (c: CharacterTemplate) => CharacterTemplate) => void
   setCharacterCurrentHp: (characterId: string, value: number) => void
@@ -118,51 +125,64 @@ export function CharacterProvider({ children, appState, setAppState, userRole, u
 
   const characters = useMemo(
     () => sourceCharacters.map((character) => {
-      const authoritative = sessionRuntime?.hpByCharacterId[character.get("id")]
-      if (!authoritative) return character
+      const characterId = character.get("id")
+      const authoritative = sessionRuntime?.hpByCharacterId[characterId]
+      const authoritativeConditions = sessionRuntime?.conditionsByCharacterId[characterId]
+      let projected = character
 
-      const sheet = character.get("sheet")
-      const authoritativeHitDice = Object.fromEntries(
-        Object.entries(authoritative.hitDice ?? {}).flatMap(([side, pool]) =>
-          pool ? [[side, {
-            current: { quantity: pool.current, sides: side as SessionDieSides },
-            max: { quantity: pool.max, sides: side as SessionDieSides },
-          }]] : [],
-        ),
-      ) as typeof sheet.HP.hitDice
+      if (authoritative) {
+        const sheet = projected.get("sheet")
+        const authoritativeHitDice = Object.fromEntries(
+          Object.entries(authoritative.hitDice ?? {}).flatMap(([side, pool]) =>
+            pool ? [[side, {
+              current: { quantity: pool.current, sides: side as SessionDieSides },
+              max: { quantity: pool.max, sides: side as SessionDieSides },
+            }]] : [],
+          ),
+        ) as typeof sheet.HP.hitDice
 
-      return character.withPatch({
-        sheet: {
-          ...sheet,
-          attributes: authoritative.attributesInitialized ? { ...authoritative.attributes } : sheet.attributes,
-          savingThrowProficiencies: authoritative.savingThrowsInitialized
-            ? { ...authoritative.savingThrows }
-            : sheet.savingThrowProficiencies,
-          skills: authoritative.skillsInitialized
-            ? { ...authoritative.skills }
-            : sheet.skills,
-          stats: authoritative.statsInitialized ? {
-            ...sheet.stats,
-            armorClassAdjustment: authoritative.stats.armorClassAdjustment,
-            initiativeAdjustment: authoritative.stats.initiativeAdjustment,
-            mobilityAdjustment: authoritative.stats.mobilityAdjustment,
-            passivePerceptionAdjustment: authoritative.stats.passivePerceptionAdjustment,
-            exhaustion: authoritative.stats.exhaustion,
-            inspiration: authoritative.stats.inspiration,
-            experience: authoritative.stats.experience,
-          } : sheet.stats,
-          HP: {
-            ...sheet.HP,
-            current: authoritative.current,
-            temporary: authoritative.temporary,
-            max: authoritative.max,
-            currentMax: authoritative.currentMax,
-            hitDice: authoritativeHitDice,
+        projected = projected.withPatch({
+          sheet: {
+            ...sheet,
+            attributes: authoritative.attributesInitialized ? { ...authoritative.attributes } : sheet.attributes,
+            savingThrowProficiencies: authoritative.savingThrowsInitialized
+              ? { ...authoritative.savingThrows }
+              : sheet.savingThrowProficiencies,
+            skills: authoritative.skillsInitialized
+              ? { ...authoritative.skills }
+              : sheet.skills,
+            stats: authoritative.statsInitialized ? {
+              ...sheet.stats,
+              armorClassAdjustment: authoritative.stats.armorClassAdjustment,
+              initiativeAdjustment: authoritative.stats.initiativeAdjustment,
+              mobilityAdjustment: authoritative.stats.mobilityAdjustment,
+              passivePerceptionAdjustment: authoritative.stats.passivePerceptionAdjustment,
+              exhaustion: authoritative.stats.exhaustion,
+              inspiration: authoritative.stats.inspiration,
+              experience: authoritative.stats.experience,
+            } : sheet.stats,
+            HP: {
+              ...sheet.HP,
+              current: authoritative.current,
+              temporary: authoritative.temporary,
+              max: authoritative.max,
+              currentMax: authoritative.currentMax,
+              hitDice: authoritativeHitDice,
+            },
           },
-        },
-      })
+        })
+      }
+
+      if (authoritativeConditions?.initialized) {
+        projected = withCharacterConditions(
+          projected,
+          authoritativeConditions.conditions as CharacterCondition[],
+        )
+      }
+
+      return projected
     }),
-    [sessionRuntime?.hpByCharacterId, sourceCharacters],
+    [sessionRuntime?.conditionsByCharacterId, sessionRuntime?.hpByCharacterId, sourceCharacters],
   )
 
   const canAssignOwners = userRole === "master"
@@ -206,7 +226,18 @@ export function CharacterProvider({ children, appState, setAppState, userRole, u
         },
       }
     }))
-  }, [sessionRuntime?.initializeHp, sessionRuntime?.role, sessionRuntime?.status, sourceCharacters])
+
+    sessionRuntime.initializeConditions(sourceCharacters.map((character) => ({
+      characterId: character.get("id"),
+      conditions: getCharacterConditions(character),
+    })))
+  }, [
+    sessionRuntime?.initializeConditions,
+    sessionRuntime?.initializeHp,
+    sessionRuntime?.role,
+    sessionRuntime?.status,
+    sourceCharacters,
+  ])
 
   const playersById = useMemo(() => {
     const map = new Map<string, Player>()
@@ -319,6 +350,16 @@ export function CharacterProvider({ children, appState, setAppState, userRole, u
     return true
   }
 
+  function dispatchConditionOperation(operation: SessionConditionOperation): boolean {
+    if (!sessionRuntime) return false
+    if (sessionRuntime.status !== "connected") {
+      console.warn("[session-runtime] Condition change ignored while the authoritative session server is disconnected.")
+      return true
+    }
+    sessionRuntime.dispatchConditionOperation(operation)
+    return true
+  }
+
   function dispatchGameOperation(operation: GameOperation) {
     if (sessionRuntime && isAuthoritativeHpOperation(operation)) {
       if (sessionRuntime.status !== "connected") {
@@ -335,6 +376,18 @@ export function CharacterProvider({ children, appState, setAppState, userRole, u
   function updateCharacterDomain(characterId: string, domain: CharacterDomainName, updater: (c: CharacterTemplate) => CharacterTemplate) { replaceCharacter(characterId, updater, domain) }
 
   function replaceCharacter(characterId: string, updater: (c: CharacterTemplate) => CharacterTemplate, declaredDomain?: CharacterDomainName) {
+    if (sessionRuntime) {
+      const projectedCharacter = characters.find((entry) => entry.get("id") === characterId)
+      if (projectedCharacter) {
+        const projectedNext = updater(projectedCharacter)
+        const conditionOperation = deriveConditionOperation(projectedCharacter, projectedNext)
+        if (conditionOperation) {
+          dispatchConditionOperation(conditionOperation)
+          return
+        }
+      }
+    }
+
     setAppState((previous) => {
       const rawCharacter = previous.characters.find((entry) => entry.id === characterId)
       if (!rawCharacter) return previous
@@ -472,7 +525,7 @@ export function CharacterProvider({ children, appState, setAppState, userRole, u
     <CharacterContext.Provider value={{
       activeCharacter, visibleCharacters, transferCharacters,
       partyInventory: appState.partyInventory ?? [], groundInventory: appState.groundInventory ?? [], operationLog,
-      dispatchGameOperation, dispatchStatOperation, dispatchAttributeOperation, dispatchSavingThrowOperation, dispatchSkillOperation,
+      dispatchGameOperation, dispatchStatOperation, dispatchAttributeOperation, dispatchSavingThrowOperation, dispatchSkillOperation, dispatchConditionOperation,
       updateCharacter, updateCharacterDomain,
       setCharacterCurrentHp, setCharacterTemporaryHp, damageCharacter, healCharacter,
       useCharacterAbility, restoreCharacterAbility, resetCharacterAbility, completeLongRest,
@@ -483,6 +536,38 @@ export function CharacterProvider({ children, appState, setAppState, userRole, u
       knownPlayerKeys, getOwner, createOwner,
     }}>{children}</CharacterContext.Provider>
   )
+}
+
+function deriveConditionOperation(
+  before: CharacterTemplate,
+  after: CharacterTemplate,
+): SessionConditionOperation | null {
+  const beforeConditions = getCharacterConditions(before)
+  const afterConditions = getCharacterConditions(after)
+  if (JSON.stringify(beforeConditions) === JSON.stringify(afterConditions)) return null
+
+  const beforeById = new Map(beforeConditions.map((condition) => [condition.id, condition]))
+  const afterById = new Map(afterConditions.map((condition) => [condition.id, condition]))
+  const added = afterConditions.filter((condition) => !beforeById.has(condition.id))
+  const removed = beforeConditions.filter((condition) => !afterById.has(condition.id))
+  const changed = afterConditions.filter((condition) => {
+    const previous = beforeById.get(condition.id)
+    return previous && JSON.stringify(previous) !== JSON.stringify(condition)
+  })
+
+  const characterId = before.get("id")
+  if (added.length === 1 && removed.length === 0 && changed.length === 0) {
+    return { type: "character.condition.add", characterId, condition: added[0] }
+  }
+  if (removed.length === 1 && added.length === 0 && changed.length === 0) {
+    return { type: "character.condition.remove", characterId, conditionId: removed[0].id }
+  }
+  if (changed.length === 1 && added.length === 0 && removed.length === 0) {
+    return { type: "character.condition.update", characterId, condition: changed[0] }
+  }
+
+  console.warn("[session-runtime] Complex multi-condition mutation was not sent to the authoritative server.")
+  return null
 }
 
 function isAuthoritativeHpOperation(operation: GameOperation): operation is Extract<GameOperation, { type: "character.hp.set" | "character.hp.temporary.set" | "character.hp.damage" | "character.hp.heal" }> {
