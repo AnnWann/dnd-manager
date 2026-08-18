@@ -12,7 +12,7 @@ import {
   validateVisibleCreationStep,
 } from "../logic/characterCreationStepValidation"
 
-export function CreationRequiredFieldHighlighter() {
+export function CreationRequiredFieldHighlighter(_props: { resetSignal?: unknown }) {
   const [feedback, setFeedback] = useState("")
   const feedbackRef = useRef(feedback)
   feedbackRef.current = feedback
@@ -38,9 +38,6 @@ export function CreationRequiredFieldHighlighter() {
 
       const wizardRoot = findCharacterCreationRoot(button)
 
-      // Shared creation modals are rendered through portals outside the wizard
-      // root. Interacting with them is an edit, not a navigation attempt. Any
-      // previous validation feedback becomes informationally stale immediately.
       if (!wizardRoot) {
         if (event.isTrusted) clearFeedback()
         return
@@ -70,8 +67,6 @@ export function CreationRequiredFieldHighlighter() {
       const main = wizardRoot.querySelector<HTMLElement>("main")
       if (!main) return
 
-      // Navigation is decided only by this fresh validation result. The
-      // feedback state below never controls whether the user can continue.
       const error = validateVisibleCreationStep(main)
       if (!error) {
         clearFeedback()
