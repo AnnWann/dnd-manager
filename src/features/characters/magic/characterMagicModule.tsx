@@ -167,7 +167,10 @@ function buildCharacterSpellList(
   character: CharacterTemplate,
   getSpellByIndex: (index: string) => Spell | undefined,
 ): string[] {
-  const level = character.get("level")
+  const level = (character.get("sheet").classes ?? []).reduce(
+    (total, entry) => total + entry.level,
+    0,
+  )
   const name = character.get("name")
   const knownSpells = character.get("magic")?.spells.knownSpells ?? []
   const grantedSpells = getCharacterGrantedSpells(character)
@@ -200,7 +203,7 @@ function getMissingDivineClassSpells(
   const knownIndexes = new Set(knownSpells.map((entry) => entry.spells.id))
 
   const divineClasses = classes.filter((entry) =>
-    DIVINE_PREPARED_CLASSES.includes(entry.name),
+    DIVINE_PREPARED_CLASSES.includes(entry.className),
   )
 
   const missing: KnownSpellEntry[] = []
@@ -210,8 +213,8 @@ function getMissingDivineClassSpells(
     if (availableLevel <= 0) continue
 
     for (const spell of spells) {
-      if (spell.level > availableLevel) continue
-      if (!spell.classes.includes(classEntry.name)) continue
+      if (spell.slotLevel > availableLevel) continue
+      if (!spell.classes.includes(classEntry.className)) continue
       if (knownIndexes.has(spell.index)) continue
 
       knownIndexes.add(spell.index)
@@ -222,8 +225,11 @@ function getMissingDivineClassSpells(
         },
         source: {
           type: "class",
-          sourceId: classEntry.id,
-          sourceName: classEntry.name,
+          sourceId: classEntry.className,
+          name: classEntry.className,
+          attribute:
+            classEntry.castingAttribute ??
+            (classEntry.className === "paladin" ? "cha" : "wis"),
         },
       })
     }
@@ -235,7 +241,7 @@ function getMissingDivineClassSpells(
 function maximumSpellLevelForClass(classEntry: CharacterClassInterface): number {
   const level = classEntry.level
 
-  switch (classEntry.name) {
+  switch (classEntry.className) {
     case "cleric":
     case "druid":
       return Math.min(9, Math.ceil(level / 2))
