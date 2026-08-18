@@ -3,6 +3,7 @@ import { useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Modal } from "../../../components/ui/Modal"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
@@ -36,7 +37,9 @@ type HpModal = "heal" | "damage" | "maximum"
 type HealingTarget = "current" | "temporary"
 
 export function CharacterHpControls({ character, updateCharacter, compact = false }: Props) {
-  const { dispatchGameOperation } = useCharacterWorkspace()
+  const { dispatchGameOperation, mode } = useCharacterWorkspace()
+  const runtime = useOptionalSessionRuntime()
+  const authoritativeHp = mode === "campaign" ? runtime : null
   const [modal, setModal] = useState<HpModal | null>(null)
   const [amountText, setAmountText] = useState("")
   const [realMaxText, setRealMaxText] = useState("")
@@ -50,6 +53,16 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
 
   function parseAmount(value: string): number {
     return Math.max(0, Math.trunc(Number(value) || 0))
+  }
+
+  function sendAuthoritativeHp(operation: Parameters<NonNullable<typeof runtime>["dispatchHpOperation"]>[0]): boolean {
+    if (!authoritativeHp) return false
+    if (authoritativeHp.status !== "connected") {
+      console.warn("[session-runtime] HP change ignored while the authoritative session server is disconnected.")
+      return true
+    }
+    authoritativeHp.dispatchHpOperation(operation)
+    return true
   }
 
   function openModal(next: HpModal) {
@@ -71,21 +84,28 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
 
     const concentrationBeforeDamage = getConcentrationCondition(character)
     const concentrationDc = Math.max(10, Math.floor(amount / 2))
+    const runtimeHandled = sendAuthoritativeHp({
+      type: "character.hp.damage",
+      characterId,
+      amount,
+      requiresConcentrationCheck: Boolean(concentrationBeforeDamage),
+      concentrationDc: concentrationBeforeDamage ? concentrationDc : undefined,
+      concentrationSource: concentrationBeforeDamage?.source || undefined,
+    })
 
-    if (dispatchGameOperation) {
-      dispatchGameOperation({
-        type: "character.hp.damage",
-        characterId,
-        amount,
-        requiresConcentrationCheck: Boolean(concentrationBeforeDamage),
-        concentrationDc: concentrationBeforeDamage ? concentrationDc : undefined,
-        concentrationSource: concentrationBeforeDamage?.source || undefined,
-      })
-    } else {
-      // Relational/user workspaces do not use the legacy synced operation log.
-      // Persist the HP mutation directly while preserving the local
-      // concentration-check interaction below.
-      updateCharacter(characterId, (current) => current.takeDamage(amount))
+    if (!runtimeHandled) {
+      if (dispatchGameOperation) {
+        dispatchGameOperation({
+          type: "character.hp.damage",
+          characterId,
+          amount,
+          requiresConcentrationCheck: Boolean(concentrationBeforeDamage),
+          concentrationDc: concentrationBeforeDamage ? concentrationDc : undefined,
+          concentrationSource: concentrationBeforeDamage?.source || undefined,
+        })
+      } else {
+        updateCharacter(characterId, (current) => current.takeDamage(amount))
+      }
     }
     closeModal()
 
@@ -102,23 +122,41 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
     const amount = parseAmount(amountText)
     if (amount <= 0) return
 
-    updateCharacter(characterId, (current) => {
-      if (healingTarget === "temporary") {
-        return current.setTemporaryHp(current.get("sheet").HP.temporary + amount)
-      }
-      return current.heal(amount)
-    })
+    const runtimeHandled = sendAuthoritativeHp(
+      healingTarget === "temporary"
+        ? { type: "character.hp.temporary.add", characterId, amount }
+        : { type: "character.hp.heal", characterId, amount },
+    )
+
+    if (!runtimeHandled) {
+      updateCharacter(characterId, (current) => {
+        if (healingTarget === "temporary") {
+          return current.setTemporaryHp(current.get("sheet").HP.temporary + amount)
+        }
+        return current.heal(amount)
+      })
+    }
     closeModal()
   }
 
   function updateRealMaximum() {
     const nextMax = Math.max(1, Math.trunc(Number(realMaxText) || 0))
+    if (sendAuthoritativeHp({ type: "character.hp.max.set", characterId, value: nextMax })) return
     updateCharacter(characterId, (current) => setMaxHp(current, nextMax))
   }
 
   function changeCurrentMaximum(direction: "increase" | "reduce") {
     const amount = parseAmount(amountText)
     if (amount <= 0) return
+
+    if (sendAuthoritativeHp({
+      type: "character.hp.currentMax.adjust",
+      characterId,
+      amount: direction === "increase" ? amount : -amount,
+    })) {
+      setAmountText("")
+      return
+    }
 
     updateCharacter(characterId, (current) => {
       const base = getCurrentMaxHp(current)
@@ -131,7 +169,9 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
   }
 
   function restoreMaximum() {
-    updateCharacter(characterId, restoreCurrentMaxHp)
+    if (!sendAuthoritativeHp({ type: "character.hp.currentMax.restore", characterId })) {
+      updateCharacter(characterId, restoreCurrentMaxHp)
+    }
     setAmountText("")
   }
 
