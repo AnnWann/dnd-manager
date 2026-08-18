@@ -1,8 +1,10 @@
 import type {
+  SessionAuthoritativeOperation,
   SessionConnection,
   SessionHpLogRecord,
-  SessionHpOperation,
   SessionHpState,
+  SessionReverseOperation,
+  SessionRestOperation,
 } from "./protocol";
 
 export const MAX_HP_LOG_RECORDS = 100;
@@ -11,7 +13,9 @@ export type HpApplyResult =
   | { ok: true; next: SessionHpState; record: SessionHpLogRecord }
   | { ok: false; code: string; message: string };
 
-export function normalizeHpSeed(state: Omit<SessionHpState, "revision">): SessionHpState {
+export function normalizeHpSeed(
+  state: Omit<SessionHpState, "revision">,
+): SessionHpState {
   const max = Math.max(1, integer(state.max));
   const currentMax = clamp(integer(state.currentMax), 1, max);
   const maxHpBonus = integer(state.maxHpBonus);
@@ -31,7 +35,7 @@ export function normalizeHpSeed(state: Omit<SessionHpState, "revision">): Sessio
 
 export function applyHpOperation(
   previous: SessionHpState,
-  operation: SessionHpOperation,
+  operation: SessionAuthoritativeOperation,
   connection: SessionConnection,
 ): HpApplyResult {
   const permissionError = validatePermission(previous, connection);
@@ -52,11 +56,7 @@ export function applyHpOperation(
       actorId: connection.userId,
       createdAt: new Date().toISOString(),
       operation,
-      reverseOperation: {
-        type: "character.hp.restore",
-        characterId: previous.characterId,
-        hp: before,
-      },
+      reverseOperation: createReverseOperation(operation, before),
     },
   };
 }
@@ -91,7 +91,7 @@ export function applyHpUndo(
   }
 
   const beforeUndo = cloneHp(current);
-  const restored = cloneHp(source.reverseOperation.hp);
+  const restored = cloneHp(getReverseHp(source.reverseOperation));
   restored.revision = current.revision + 1;
 
   return {
@@ -115,6 +115,43 @@ export function applyHpUndo(
   };
 }
 
+function createReverseOperation(
+  operation: SessionAuthoritativeOperation,
+  before: SessionHpState,
+): SessionReverseOperation {
+  if (isRestOperation(operation)) {
+    return {
+      type: "character.rest.restore",
+      characterId: before.characterId,
+      snapshot: {
+        hp: before,
+        // Future authoritative rest domains are added to this same snapshot.
+      },
+    };
+  }
+
+  return {
+    type: "character.hp.restore",
+    characterId: before.characterId,
+    hp: before,
+  };
+}
+
+function getReverseHp(operation: SessionReverseOperation): SessionHpState {
+  return operation.type === "character.rest.restore"
+    ? operation.snapshot.hp
+    : operation.hp;
+}
+
+function isRestOperation(
+  operation: SessionAuthoritativeOperation,
+): operation is SessionRestOperation {
+  return (
+    operation.type === "character.rest.short" ||
+    operation.type === "character.rest.long"
+  );
+}
+
 function validatePermission(
   state: SessionHpState,
   connection: SessionConnection,
@@ -131,14 +168,14 @@ function validatePermission(
 }
 
 function validateOperation(
-  operation: SessionHpOperation,
+  operation: SessionAuthoritativeOperation,
   characterId: string,
 ): { ok: false; code: string; message: string } | null {
   if (operation.characterId !== characterId) {
     return {
       ok: false,
       code: "CHARACTER_MISMATCH",
-      message: "HP operation target does not match the loaded character.",
+      message: "Operation target does not match the loaded character.",
     };
   }
 
@@ -169,6 +206,7 @@ function validateOperation(
         };
       }
       break;
+
     case "character.hp.currentMax.adjust":
       if (operation.amount === 0) {
         return {
@@ -178,6 +216,7 @@ function validateOperation(
         };
       }
       break;
+
     case "character.hp.set":
     case "character.hp.temporary.set":
       if (operation.value < 0) {
@@ -188,6 +227,7 @@ function validateOperation(
         };
       }
       break;
+
     case "character.hp.max.set":
       if (operation.value < 1) {
         return {
@@ -197,12 +237,27 @@ function validateOperation(
         };
       }
       break;
-    case "character.hp.rest":
-      if (operation.fraction !== 0.5 && operation.fraction !== 1) {
+
+    case "character.rest.short":
+      if (
+        !Number.isFinite(operation.healing) ||
+        !Number.isInteger(operation.healing) ||
+        operation.healing < 0
+      ) {
         return {
           ok: false,
-          code: "INVALID_REST_FRACTION",
-          message: "HP rest recovery fraction must be 0.5 or 1.",
+          code: "INVALID_SHORT_REST_HEALING",
+          message: "Short-rest healing must be a non-negative integer.",
+        };
+      }
+      break;
+
+    case "character.rest.long":
+      if (operation.recovery !== "partial" && operation.recovery !== "full") {
+        return {
+          ok: false,
+          code: "INVALID_LONG_REST_RECOVERY",
+          message: "Long-rest recovery must be partial or full.",
         };
       }
       break;
@@ -213,7 +268,7 @@ function validateOperation(
 
 function mutateHp(
   previous: SessionHpState,
-  operation: SessionHpOperation,
+  operation: SessionAuthoritativeOperation,
 ): SessionHpState {
   const next = cloneHp(previous);
 
@@ -264,12 +319,17 @@ function mutateHp(
       next.current = Math.min(next.current, effectiveMax(next));
       break;
 
-    case "character.hp.rest": {
+    case "character.rest.short":
+      next.current = Math.min(effectiveMax(next), next.current + operation.healing);
+      break;
+
+    case "character.rest.long": {
       const maximum = effectiveMax(next);
       const missing = Math.max(0, maximum - next.current);
+      const fraction = operation.recovery === "full" ? 1 : 0.5;
       next.current = Math.min(
         maximum,
-        next.current + Math.ceil(missing * operation.fraction),
+        next.current + Math.ceil(missing * fraction),
       );
       next.temporary = 0;
       break;
