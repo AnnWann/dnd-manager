@@ -73,7 +73,7 @@ export function GroundInventoryView() {
         description="Este inventário não possui limite de peso ou capacidade."
         items={groundInventory}
         emptyMessage="Não há itens largados no chão."
-        onAddCompendiumItem={canManage ? addGroundItem : undefined}
+        onAddCompendiumItem={addGroundItem}
         onUpdateItem={canManage ? updateGroundItem : undefined}
         onRemoveItem={canManage ? removeGroundItem : undefined}
         onTransferItem={setTransferringItem}
