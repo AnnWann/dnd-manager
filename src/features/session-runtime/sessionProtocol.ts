@@ -76,7 +76,13 @@ export type SessionHpLogRecord = {
   operation: SessionAuthoritativeOperation | { type: "character.hp.undo"; characterId: string; sourceLogId: string }
   reverseOperation:
     | { type: "character.hp.restore"; characterId: string; hp: SessionHpState }
-    | { type: "character.stats.restore"; characterId: string; stats: SessionStatsState }
+    | { type: "character.stat.armorClass.restore"; characterId: string; adjustment: number }
+    | { type: "character.stat.initiative.restore"; characterId: string; adjustment: number }
+    | { type: "character.stat.mobility.restore"; characterId: string; adjustment: number }
+    | { type: "character.stat.passivePerception.restore"; characterId: string; adjustment: number }
+    | { type: "character.stat.exhaustion.restore"; characterId: string; value: number }
+    | { type: "character.stat.inspiration.restore"; characterId: string; value: boolean }
+    | { type: "character.stat.experience.restore"; characterId: string; value: number }
     | { type: "character.rest.restore"; characterId: string; snapshot: { hp: SessionHpState; stats: SessionStatsState } }
   undoneAt?: string
   undoneBy?: string
