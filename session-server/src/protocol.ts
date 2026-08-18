@@ -1,3 +1,5 @@
+import { routeForSheetOperation, type CharacterSheetRoute } from "./routes/characters/sheet";
+
 export type SessionRole = "MASTER" | "PLAYER";
 
 export type SessionConnection = {
@@ -194,6 +196,7 @@ export type SessionHpInitializeMessage = { type: "session.hp.initialize"; charac
 export type SessionHpOperationMessage = { type: "session.hp.operation"; operation: SessionAuthoritativeOperation };
 export type SessionConditionsInitializeMessage = { type: "session.conditions.initialize"; characters: SessionConditionSeed[] };
 export type SessionConditionOperationMessage = { type: "session.conditions.operation"; operation: SessionConditionOperation };
+export type SessionSheetOperationWireMessage = { type: "session.sheet.operation"; route: CharacterSheetRoute; operation: SessionLoggedOperation };
 export type SessionLogUndoMessage = { type: "session.log.undo"; logId: string };
 export type ClientSessionMessage = SessionHeartbeatMessage | SessionPingMessage | SessionHpInitializeMessage | SessionHpOperationMessage | SessionConditionsInitializeMessage | SessionConditionOperationMessage | SessionLogUndoMessage;
 
@@ -236,9 +239,25 @@ export function parseClientSessionMessage(raw: string): ClientSessionMessage | n
     if (characters.length !== value.characters.length) return null;
     return { type: "session.conditions.initialize", characters };
   }
+  if (value.type === "session.sheet.operation") return parseRoutedSheetOperation(value);
   if (value.type === "session.hp.operation" && isAuthoritativeOperation(value.operation)) return { type: "session.hp.operation", operation: value.operation };
   if (value.type === "session.conditions.operation" && isConditionOperation(value.operation)) return { type: "session.conditions.operation", operation: value.operation };
   return null;
+}
+
+function parseRoutedSheetOperation(value: Record<string, any>): SessionHpOperationMessage | SessionConditionOperationMessage | null {
+  if (typeof value.route !== "string") return null;
+  const operation = value.operation;
+  const valid = isAuthoritativeOperation(operation) || isConditionOperation(operation);
+  if (!valid) return null;
+
+  let expectedRoute: CharacterSheetRoute;
+  try { expectedRoute = routeForSheetOperation(operation); }
+  catch { return null; }
+  if (value.route !== expectedRoute) return null;
+
+  if (isConditionOperation(operation)) return { type: "session.conditions.operation", operation };
+  return { type: "session.hp.operation", operation };
 }
 
 function isHpSeed(value: unknown): value is SessionHpSeed {
