@@ -15,12 +15,7 @@ import { useUserData } from "../../features/user/UserDataProvider"
 export function UserSpellsTab() {
   const { records, loading, errorMessage, reload } = useUserMagicState()
   const { campaigns } = useUserData()
-  const {
-    savedSpells,
-    saveSpells,
-    officialSpellsLoading,
-    officialSpellsError,
-  } = useMagicContext()
+  const { savedSpells, saveSpells } = useMagicContext()
   const [sendOpen, setSendOpen] = useState(false)
   const [selectedSpellId, setSelectedSpellId] = useState("")
   const [selectedCampaignId, setSelectedCampaignId] = useState("")
@@ -111,8 +106,8 @@ export function UserSpellsTab() {
       <SpellLibraryView
         variant="user"
         records={libraryRecords}
-        loading={loading || officialSpellsLoading}
-        errorMessage={errorMessage || officialSpellsError}
+        loading={loading}
+        errorMessage={errorMessage}
       />
 
       {sendOpen ? (
@@ -131,11 +126,7 @@ export function UserSpellsTab() {
                   Mestres adicionam a magia imediatamente. Jogadores enviam uma solicitação para aprovação.
                 </p>
               </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setSendOpen(false)}
-              >
+              <Button size="sm" variant="secondary" onClick={() => setSendOpen(false)}>
                 Fechar
               </Button>
             </div>
@@ -149,9 +140,7 @@ export function UserSpellsTab() {
                   onChange={(event) => setSelectedSpellId(event.target.value)}
                 >
                   {ownedRecords.map((record) => (
-                    <option key={record.id} value={record.id}>
-                      {record.name}
-                    </option>
+                    <option key={record.id} value={record.id}>{record.name}</option>
                   ))}
                 </select>
               </label>
@@ -182,20 +171,14 @@ export function UserSpellsTab() {
             </div>
 
             <div className="mt-5 flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setSendOpen(false)}>
-                Cancelar
-              </Button>
+              <Button variant="secondary" onClick={() => setSendOpen(false)}>Cancelar</Button>
               <Button
                 loading={sending}
                 disabled={!selectedSpellId || !selectedCampaignId}
                 onClick={() => void sendToSession()}
               >
-                {availableCampaigns.find(
-                  (campaign) => campaign.id === selectedCampaignId,
-                )?.role === "MASTER" ||
-                availableCampaigns.find(
-                  (campaign) => campaign.id === selectedCampaignId,
-                )?.isOwner
+                {availableCampaigns.find((campaign) => campaign.id === selectedCampaignId)?.role === "MASTER" ||
+                availableCampaigns.find((campaign) => campaign.id === selectedCampaignId)?.isOwner
                   ? "Adicionar à sessão"
                   : "Enviar solicitação"}
               </Button>
