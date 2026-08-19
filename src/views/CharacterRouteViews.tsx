@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 
 import { useCharacterContext } from "../contexts/characterContext"
+import { CharacterSpellRuntime } from "../features/characters/workspace/CharacterSpellRuntime"
 import { SessionCharacterWorkspace } from "../features/characters/workspace/SessionCharacterWorkspace"
 import { sessionCharacterPath } from "../lib/campaignRoutes"
 import {
@@ -62,7 +63,9 @@ export function CharacterIndexView() {
 
   return (
     <SessionCharacterWorkspace>
-      <CharacterView />
+      <CharacterSpellRuntime>
+        <CharacterView />
+      </CharacterSpellRuntime>
     </SessionCharacterWorkspace>
   )
 }
@@ -83,7 +86,9 @@ export function CharacterDetailView() {
 
   return (
     <SessionCharacterWorkspace>
-      <CharacterView />
+      <CharacterSpellRuntime>
+        <CharacterView />
+      </CharacterSpellRuntime>
     </SessionCharacterWorkspace>
   )
 }
