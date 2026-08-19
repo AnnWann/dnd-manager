@@ -45,6 +45,7 @@ import type {
 } from "./sessionProtocol"
 
 const CONCENTRATION_TAG = "dnd-manager:concentrating"
+const MAX_SESSION_LOGS_IN_MEMORY = 100
 
 export type SessionRuntimeContextValue = {
   status: SessionRuntimeStatus
@@ -216,7 +217,10 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
           setInventoryState(message.state)
           return
         }
-        if (message.type === "session.hp.log") { setHpLog(message.records as SessionLogRecord[]); return }
+        if (message.type === "session.hp.log") {
+          setHpLog((current) => mergeSessionLogs(current, message.records as SessionLogRecord[]))
+          return
+        }
         if (message.type === "session.error") console.error(`[session-runtime] ${message.code}: ${message.message}`)
       },
     })
@@ -311,6 +315,14 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   ])
 
   return <SessionRuntimeContext.Provider value={value}>{children}</SessionRuntimeContext.Provider>
+}
+
+function mergeSessionLogs(current: SessionLogRecord[], incoming: SessionLogRecord[]): SessionLogRecord[] {
+  const byId = new Map(current.map((record) => [record.id, record]))
+  for (const record of incoming) byId.set(record.id, record)
+  return [...byId.values()]
+    .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+    .slice(-MAX_SESSION_LOGS_IN_MEMORY)
 }
 
 function isConcentrationCondition(condition: SessionCondition): boolean {
