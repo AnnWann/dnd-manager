@@ -1,4 +1,8 @@
 import type { SessionAbilityOperation, SessionAbilityState } from "./abilitySessionProtocol"
+import type {
+  SessionCharacterLifecycleOperation,
+  SessionCharacterLifecycleState,
+} from "./characterLifecycleSessionProtocol"
 import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
 import type { SessionInventoryOperation, SessionSharedInventoryState } from "./inventorySessionProtocol"
 import type { SessionMagicOperation } from "./magicSessionProtocol"
@@ -61,6 +65,18 @@ export type SessionProfileReverseOperation = {
   }
 }
 
+export type SessionCharacterLifecycleReverseOperation = {
+  type: "session.character.restore"
+  characterId: string
+  affectedScopes?: string[]
+  snapshot: {
+    lifecycle?: SessionCharacterLifecycleState
+    ability?: SessionAbilityState
+    hp?: SessionHpState
+    conditions?: SessionConditionsState
+  }
+}
+
 export type SessionRuntimeLogRecord = {
   id: string
   actorId: string
@@ -73,6 +89,7 @@ export type SessionRuntimeLogRecord = {
     | SessionProficiencyOperation
     | SessionRaceOperation
     | SessionProfileOperation
+    | SessionCharacterLifecycleOperation
     | { type: "character.hp.undo"; characterId: string; sourceLogId: string }
   reverseOperation:
     | SessionAbilityReverseOperation
@@ -80,6 +97,7 @@ export type SessionRuntimeLogRecord = {
     | SessionProficiencyReverseOperation
     | SessionRaceReverseOperation
     | SessionProfileReverseOperation
+    | SessionCharacterLifecycleReverseOperation
   undoneAt?: string
   undoneBy?: string
 }
@@ -93,6 +111,7 @@ export function isAbilityLogRecord(record: SessionLogRecord): record is SessionR
     || record.reverseOperation.type === "session.proficiency.restore"
     || record.reverseOperation.type === "session.race.restore"
     || record.reverseOperation.type === "session.profile.restore"
+    || record.reverseOperation.type === "session.character.restore"
 }
 
 export function sessionLogScopes(record: SessionLogRecord): string[] {
