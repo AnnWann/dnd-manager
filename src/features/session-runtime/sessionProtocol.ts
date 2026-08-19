@@ -142,9 +142,14 @@ export type SessionConcentrationOperation =
   | { type: "character.concentration.start"; characterId: string; spellIndex: string; spellName: string }
   | { type: "character.concentration.end"; characterId: string; reason?: "manual" | "failed-save" }
 
+export type SessionLongRestSupplySelection = {
+  itemId: string
+  portions: number
+}
+
 export type SessionRestOperation =
   | { type: "character.rest.short"; characterId: string; healing: number; hitDiceConsumption: Partial<Record<SessionDieSides, number>> }
-  | { type: "character.rest.long"; characterId: string; recovery: "partial" | "full" }
+  | { type: "character.rest.long"; characterId: string; recovery: "partial" | "full"; selection: SessionLongRestSupplySelection[] }
 
 export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionAttributeOperation | SessionSavingThrowOperation | SessionSkillOperation | SessionRestOperation
 export type SessionLoggedOperation = SessionAuthoritativeOperation | SessionConditionOperation | SessionConcentrationOperation
