@@ -3,6 +3,7 @@ import {
   useParams,
 } from "react-router-dom"
 
+import { CharacterSpellRuntime } from "../../features/characters/workspace/CharacterSpellRuntime"
 import { UserCharacterWorkspace } from "../../features/characters/workspace/UserCharacterWorkspace"
 import { CharacterView } from "../CharacterView"
 
@@ -25,7 +26,9 @@ export function UserCharacterDetailView() {
     <UserCharacterWorkspace
       characterId={characterId}
     >
-      <CharacterView />
+      <CharacterSpellRuntime>
+        <CharacterView />
+      </CharacterSpellRuntime>
     </UserCharacterWorkspace>
   )
 }
