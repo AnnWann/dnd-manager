@@ -18,14 +18,13 @@ export function applySessionAbilityState(
 
   let next = character.with("abilities", authoritative.get("abilities") ?? [])
 
-  // Abilities, magic and equipment now share the same authoritative snapshot.
+  // Abilities, magic, equipment, inventory and own proficiencies now share the same authoritative snapshot.
   const authoritativeMagic = authoritative.get("magic")
   if (authoritativeMagic) next = next.with("magic", authoritativeMagic)
 
   next = next.with("equipment", authoritative.get("equipment"))
-  // Equipment operations can move items back into character inventory. Keep
-  // both slices from the same revision so an unequip cannot render halfway.
   next = next.with("inventory", authoritative.get("inventory"))
+  next = next.withSheet("proficiencies", authoritative.get("sheet").proficiencies ?? [])
 
   next = withCharacterAsis(next, getCharacterAsis(authoritative))
 
