@@ -278,6 +278,11 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "ground.item.update": return `Atualizou um item no chão.`
     case "ground.item.remove": return `Removeu um item do chão.`
     case "character.equipment.move.ground": return `${characterName} colocou um equipamento no chão.`
+    case "mission.add": return `Adicionou a missão “${operation.mission.title || "Sem título"}”.`
+    case "mission.update": return `Atualizou a missão “${operation.mission.title || "Sem título"}”.`
+    case "mission.delete": return `Excluiu uma missão da sessão.`
+    case "mission.status.set": return `Moveu uma missão para ${missionStatusLabel(operation.status)}.`
+    case "mission.objective.toggle": return `Alterou o estado de um objetivo de missão.`
     case "character.proficiency.add": return `${characterName} ganhou a proficiência ${operation.proficiency.name}.`
     case "character.proficiency.remove": return `${characterName} perdeu a proficiência ${operation.proficiencyName || "selecionada"}.`
     case "character.race.replace": return `${characterName} atualizou a raça.`
@@ -349,6 +354,10 @@ function skillLabel(skill: SessionSkill): string {
     survival: "Sobrevivência",
   }
   return labels[skill]
+}
+
+function missionStatusLabel(status: "available" | "accepted" | "completed"): string {
+  return ({ available: "Disponíveis", accepted: "Aceitas", completed: "Concluídas" })[status]
 }
 
 function locationLabel(location: InventoryLocation, characterNames: ReadonlyMap<string, string>): string {
