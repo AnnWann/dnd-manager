@@ -146,9 +146,44 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
 
 function deriveEquipmentOperations(current: CharacterTemplate, next: CharacterTemplate): SessionEquipmentOperation[] {
   const characterId = current.get("id")
+  const beforeEquipment = current.get("equipment")
+  const afterEquipment = next.get("equipment")
+  const beforePockets = beforeEquipment.pockets
+  const afterPockets = afterEquipment.pockets
+
+  if (beforePockets.length === afterPockets.length + 1) {
+    const removedIndex = beforePockets.findIndex((item, index) => afterPockets[index]?.id !== item.id)
+    const index = removedIndex < 0 ? beforePockets.length - 1 : removedIndex
+    const removed = beforePockets[index]
+    if (removed) {
+      if (afterEquipment.weapons.some((weapon) => weapon.id === removed.id)) {
+        return [{ type: "character.equipment.pocket.wield", characterId, index }]
+      }
+      const inventoryChanged = JSON.stringify(current.get("inventory")) !== JSON.stringify(next.get("inventory"))
+      if (inventoryChanged) {
+        return [{ type: "character.equipment.pocket.unequip", characterId, index }]
+      }
+      if (removed.kind === "consumable" || removed.kind === "throwable" || removed.kind === "ammunition") {
+        return [{ type: "character.equipment.pocket.use", characterId, index }]
+      }
+    }
+  }
+
+  if (beforePockets.length === afterPockets.length) {
+    for (let index = 0; index < beforePockets.length; index += 1) {
+      const before = beforePockets[index]
+      const after = afterPockets[index]
+      if (!before || !after || before.id !== after.id) continue
+      const beforeQuantity = Number(before.quantity ?? 1)
+      const afterQuantity = Number(after.quantity ?? 1)
+      if (afterQuantity < beforeQuantity && (before.kind === "consumable" || before.kind === "throwable" || before.kind === "ammunition")) {
+        return [{ type: "character.equipment.pocket.use", characterId, index }]
+      }
+    }
+  }
+
   const beforeItems = collectEditableEquipmentItems(current)
   const afterItems = collectEditableEquipmentItems(next)
-
   if (beforeItems.size !== afterItems.size) return []
 
   const operations: SessionEquipmentOperation[] = []
@@ -170,7 +205,6 @@ function deriveEquipmentOperations(current: CharacterTemplate, next: CharacterTe
 function collectEditableEquipmentItems(character: CharacterTemplate): Map<string, { reference: EquippedItemReference; item: Itemmable }> {
   const equipment = character.get("equipment")
   const entries = new Map<string, { reference: EquippedItemReference; item: Itemmable }>()
-
   const add = (key: string, reference: EquippedItemReference, item: Itemmable | undefined) => {
     if (item) entries.set(key, { reference, item })
   }
@@ -183,7 +217,6 @@ function collectEditableEquipmentItems(character: CharacterTemplate): Map<string
   for (const item of equipment.heldItems ?? []) add(`held:${item.id}`, { type: "held-item", itemId: item.id }, item)
   for (const item of equipment.rings) add(`ring:${item.id}`, { type: "ring", itemId: item.id }, item)
   for (const item of equipment.necklaces ?? []) add(`necklace:${item.id}`, { type: "necklace", itemId: item.id }, item)
-
   return entries
 }
 
