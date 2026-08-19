@@ -13,10 +13,14 @@ import { parseInventoryClientMessage } from "../characters/inventory/inventoryPr
 import { parseProficiencyClientMessage } from "../characters/proficiencies/proficiencyProtocol";
 import { parseRaceClientMessage } from "../characters/race/raceProtocol";
 import { parseProfileClientMessage } from "../characters/profile/profileProtocol";
+import {
+  readSessionLog,
+  validateUndoOrdering,
+  type SessionLogRecord,
+} from "./sessionLog";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const INVENTORY_STATE_KEY = "inventory-state";
-const HP_LOG_KEY = "hp-log";
 
 type DomainActor = {
   webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void>;
@@ -29,17 +33,15 @@ type SharedInventoryState = {
   groundInventory: unknown[];
 };
 
-type UnifiedLogRecord = {
-  id: string;
-  reverseOperation?: { type?: string };
-};
-
 /**
  * The only Durable Object exported by the worker.
  *
  * Domain actor classes remain implementation containers, but their inherited
  * prototypes are deliberately stripped when bound as routes. The running actor
  * therefore has one base SessionActor plus isolated domain handlers.
+ *
+ * Undo ordering is centralized here. Domain handlers only restore the snapshot
+ * represented by their reverse operation; they no longer define global ordering.
  */
 export class SessionActor extends BaseSessionActor {
   private readonly abilityRoute = bindDomainActor(AbilitySessionActor.prototype, this.ctx);
@@ -82,11 +84,31 @@ export class SessionActor extends BaseSessionActor {
 
     const undoLogId = parseUndoLogId(raw);
     if (undoLogId) {
-      const undoRoute = await this.resolveUndoRoute(undoLogId);
+      const connection = readConnection(webSocket);
+      if (!connection) {
+        webSocket.close(1011, "Missing connection attachment");
+        return;
+      }
+      if (connection.role !== "MASTER") {
+        sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can undo session changes.");
+        return;
+      }
+
+      const log = await readSessionLog(this.ctx.storage);
+      const validation = validateUndoOrdering(log, undoLogId);
+      if (!validation.ok) {
+        sendError(webSocket, validation.code, validation.message);
+        return;
+      }
+
+      const undoRoute = this.resolveUndoRoute(validation.record);
       if (undoRoute) {
         await undoRoute.webSocketMessage(webSocket, message);
         return;
       }
+
+      // Base HP/condition/concentration reverses are restored by the base actor,
+      // but only after the centralized scope ordering check above succeeds.
       await super.webSocketMessage(webSocket, message);
       return;
     }
@@ -109,12 +131,8 @@ export class SessionActor extends BaseSessionActor {
     await super.webSocketMessage(webSocket, message);
   }
 
-  private async resolveUndoRoute(logId: string): Promise<DomainActor | null> {
-    const log = (await this.ctx.storage.get<UnifiedLogRecord[]>(HP_LOG_KEY)) ?? [];
-    const source = log.find((record) => record.id === logId);
-    const reverseType = source?.reverseOperation?.type;
-
-    switch (reverseType) {
+  private resolveUndoRoute(source: SessionLogRecord): DomainActor | null {
+    switch (source.reverseOperation.type) {
       // Ability, Magic and Equipment all use the composite ability snapshot.
       case "character.ability.restore":
         return this.abilityRoute;
@@ -162,9 +180,6 @@ function resolveMessageRoute(
     profile: DomainActor;
   },
 ): DomainActor | null {
-  // The parser is the routing contract. A route is called only after its parser
-  // accepts the message, so the legacy `super.webSocketMessage` fallbacks inside
-  // domain implementation containers are unreachable during normal dispatch.
   if (parseAbilityClientMessage(raw)) return routes.ability;
   if (parseMagicClientMessage(raw)) return routes.magic;
   if (parseEquipmentClientMessage(raw)) return routes.equipment;
@@ -176,8 +191,6 @@ function resolveMessageRoute(
 }
 
 function bindDomainActor<T extends DomainActor>(prototype: T, ctx: unknown): T {
-  // Copy only this domain's own methods. Do not retain prototype inheritance from
-  // the old incremental actor chain.
   const actor = Object.create(null) as T;
   for (const key of Reflect.ownKeys(prototype)) {
     if (key === "constructor") continue;
@@ -202,6 +215,18 @@ function parseUndoLogId(raw: string): string | null {
   } catch {
     return null;
   }
+}
+
+function readConnection(socket: WebSocket): { role?: string } | null {
+  try {
+    return socket.deserializeAttachment() as { role?: string } | null;
+  } catch {
+    return null;
+  }
+}
+
+function sendError(socket: WebSocket, code: string, message: string): void {
+  send(socket, { type: "session.error", code, message });
 }
 
 function send(socket: WebSocket, value: unknown): void {
