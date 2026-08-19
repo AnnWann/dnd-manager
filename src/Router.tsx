@@ -23,6 +23,7 @@ const UserCharacterCreateItemView = lazy(() => import("./views/user/UserCharacte
 const UserCharacterDetailView = lazy(() => import("./views/user/UserCharacterDetailView").then((module) => ({ default: module.UserCharacterDetailView })))
 const UserSpellsTab = lazy(() => import("./views/user/UserSpellsTab").then((module) => ({ default: module.UserSpellsTab })))
 const UserCampaignsRouteView = lazy(() => import("./views/user/UserCampaignsRouteView").then((module) => ({ default: module.UserCampaignsRouteView })))
+const UserMagicRouteBoundary = lazy(() => import("./features/magic/UserMagicRouteBoundary").then((module) => ({ default: module.UserMagicRouteBoundary })))
 const SessionRouteOutlet = lazy(() => import("./features/session-runtime/SessionRouteOutlet").then((module) => ({ default: module.SessionRouteOutlet })))
 const CampaignCharactersView = lazy(() => import("./views/campaign/CampaignCharactersView").then((module) => ({ default: module.CampaignCharactersView })))
 const CharacterIndexView = lazy(() => import("./views/CharacterRouteViews").then((module) => ({ default: module.CharacterIndexView })))
@@ -61,14 +62,17 @@ export function AppRouter() {
         >
           <Route index element={<Navigate to="characters" replace />} />
           <Route path="characters" element={<UserCharactersTab />} />
-          <Route path="characters/create" element={<UserCharacterCreateView />} />
-          <Route path="characters/:characterId" element={<Navigate to="sheet" replace />} />
-          <Route path="characters/:characterId/level-up" element={<UserCharacterLevelUpView />} />
-          <Route path="characters/:characterId/spells-list/add-spells" element={<UserCharacterAddSpellsView />} />
-          <Route path="characters/:characterId/inventory/add-item" element={<UserCharacterCreateItemView />} />
-          <Route path="characters/:characterId/:tab" element={<UserCharacterDetailView />} />
-          <Route path="spells" element={<UserSpellsTab />} />
           <Route path="campaigns" element={<UserCampaignsRouteView />} />
+
+          <Route element={<UserMagicRouteBoundary />}>
+            <Route path="characters/create" element={<UserCharacterCreateView />} />
+            <Route path="characters/:characterId" element={<Navigate to="sheet" replace />} />
+            <Route path="characters/:characterId/level-up" element={<UserCharacterLevelUpView />} />
+            <Route path="characters/:characterId/spells-list/add-spells" element={<UserCharacterAddSpellsView />} />
+            <Route path="characters/:characterId/inventory/add-item" element={<UserCharacterCreateItemView />} />
+            <Route path="characters/:characterId/:tab" element={<UserCharacterDetailView />} />
+            <Route path="spells" element={<UserSpellsTab />} />
+          </Route>
         </Route>
 
         <Route
