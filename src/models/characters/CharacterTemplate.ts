@@ -369,7 +369,7 @@ export class CharacterTemplate {
   updateAbility(ability: Ability): CharacterTemplate {return updateAbility(this, ability)}
   removeAbility(abilityId: string): CharacterTemplate {return removeAbility(this, abilityId)}
   saveAbility(ability: Ability): CharacterTemplate {return saveAbility(this, ability)}
-  useAbility(abilityId: string): CharacterTemplate {return useAbility(this, abilityId)}
+  useAbility(abilityId: string, activationOptionId?: string): CharacterTemplate {return useAbility(this, abilityId, activationOptionId)}
   restoreAbility(abilityId: string): CharacterTemplate {return restoreAbility(this, abilityId)}
   deactivateAbility(abilityId: string): CharacterTemplate {return deactivateAbility(this, abilityId)}
   resetAbility(abilityId: string): CharacterTemplate {return resetAbility(this, abilityId)}
@@ -480,7 +480,7 @@ export class CharacterTemplate {
   getEffectivePassivePerception(): number {return getEffectivePassivePerception(this)}
   getEffectiveMobility(): number {return getEffectiveMobility(this)}
   applyBonus(baseValue: number, bonus: Bonus): number {return applyBonus(baseValue, bonus)}
-  applyBonuses(baseValue: number, bonuses: Bonus[]): number {return applyBonuses(baseValue, bonuses)}
+  applyBonuses(baseValue: number, bonuses: Bonus[]): number {return applyBonuses(this, bonuses)}
   isSavingThrowProficient(attribute: Attribute): boolean {return isSavingThrowProficient(this, attribute)}
   getSavingThrowBonus(attribute: Attribute): number {return getSavingThrowBonus(this, attribute)}
   setSavingThrowProficiency(attribute: Attribute,proficient: boolean): CharacterTemplate {return setSavingThrowProficiency(this,attribute,proficient)}
