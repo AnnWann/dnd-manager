@@ -2,7 +2,8 @@ import { History, Undo2 } from "lucide-react"
 import { useMemo } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
-import type { SessionHpLogRecord, SessionSkill } from "../session-runtime/sessionProtocol"
+import type { SessionLogRecord } from "../session-runtime/sessionLogProtocol"
+import type { SessionSkill } from "../session-runtime/sessionProtocol"
 import { useOptionalSessionRuntime } from "../session-runtime/useSessionRuntime"
 import type {
   GameOperation,
@@ -12,13 +13,14 @@ import type {
 
 type DisplayRecord =
   | { source: "legacy"; record: GameOperationRecord }
-  | { source: "hp"; record: SessionHpLogRecord }
+  | { source: "session"; record: SessionLogRecord }
 
 const REST_LEGACY_MATCH_WINDOW_MS = 3_000
 
 export function SessionActionLog() {
   const { operationLog, visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
   const runtime = useOptionalSessionRuntime()
+  const sessionLog = (runtime?.hpLog ?? []) as SessionLogRecord[]
 
   const characterNames = useMemo(
     () => new Map(visibleCharacters.map((character) => [character.get("id"), character.get("name")])),
@@ -34,18 +36,18 @@ export function SessionActionLog() {
     return new Map(entries.map((item) => [item.id, item.name]))
   }, [groundInventory, partyInventory, visibleCharacters])
 
-  const latestUndoableHpLogByCharacter = useMemo(() => {
+  const latestUndoableLogByCharacter = useMemo(() => {
     const latest = new Map<string, string>()
-    for (const record of runtime?.hpLog ?? []) {
+    for (const record of sessionLog) {
       if (record.undoneAt || record.operation.type === "character.hp.undo") continue
       latest.set(record.operation.characterId, record.id)
     }
     return latest
-  }, [runtime?.hpLog])
+  }, [sessionLog])
 
   const visibleLegacyRecords = useMemo(() => {
     if (!runtime) return operationLog
-    const restRecords = runtime.hpLog.filter(
+    const restRecords = sessionLog.filter(
       (record) => record.operation.type === "character.rest.short" || record.operation.type === "character.rest.long",
     )
 
@@ -58,12 +60,12 @@ export function SessionActionLog() {
       }
       return true
     })
-  }, [operationLog, runtime])
+  }, [operationLog, runtime, sessionLog])
 
   const records = useMemo<DisplayRecord[]>(() => [
     ...visibleLegacyRecords.map((record) => ({ source: "legacy" as const, record })),
-    ...(runtime?.hpLog ?? []).map((record) => ({ source: "hp" as const, record })),
-  ].sort((left, right) => new Date(right.record.createdAt).getTime() - new Date(left.record.createdAt).getTime()), [runtime?.hpLog, visibleLegacyRecords])
+    ...sessionLog.map((record) => ({ source: "session" as const, record })),
+  ].sort((left, right) => new Date(right.record.createdAt).getTime() - new Date(left.record.createdAt).getTime()), [sessionLog, visibleLegacyRecords])
 
   return (
     <aside className="hidden w-80 shrink-0 flex-col border-l border-border bg-bg-elevated xl:flex">
@@ -78,16 +80,16 @@ export function SessionActionLog() {
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {records.length ? (
           <div className="flex flex-col gap-2">
-            {records.map((entry) => entry.source === "hp" ? (
-              <HpLogEntry
-                key={`hp:${entry.record.id}`}
+            {records.map((entry) => entry.source === "session" ? (
+              <SessionLogEntry
+                key={`session:${entry.record.id}`}
                 record={entry.record}
                 characterNames={characterNames}
                 canUndo={
                   runtime?.role === "MASTER" &&
                   !entry.record.undoneAt &&
                   entry.record.operation.type !== "character.hp.undo" &&
-                  latestUndoableHpLogByCharacter.get(entry.record.operation.characterId) === entry.record.id
+                  latestUndoableLogByCharacter.get(entry.record.operation.characterId) === entry.record.id
                 }
                 onUndo={() => runtime?.undoLog(entry.record.id)}
               />
@@ -111,7 +113,7 @@ export function SessionActionLog() {
 }
 
 function hasMatchingRestRecord(
-  records: SessionHpLogRecord[],
+  records: SessionLogRecord[],
   characterId: string,
   legacyCreatedAt: string,
   restType: "character.rest.short" | "character.rest.long",
@@ -125,13 +127,13 @@ function hasMatchingRestRecord(
   })
 }
 
-function HpLogEntry({ record, characterNames, canUndo, onUndo }: {
-  record: SessionHpLogRecord
+function SessionLogEntry({ record, characterNames, canUndo, onUndo }: {
+  record: SessionLogRecord
   characterNames: ReadonlyMap<string, string>
   canUndo: boolean
   onUndo: () => void
 }) {
-  const description = describeHpOperation(record.operation, characterNames)
+  const description = describeSessionOperation(record.operation, characterNames)
   const timestamp = formatTime(record.createdAt)
   return (
     <article className={`rounded-lg border border-border bg-bg px-3 py-2.5 ${record.undoneAt ? "opacity-55" : ""}`}>
@@ -169,7 +171,7 @@ function LegacyLogEntry({ record, characterNames, itemNames }: {
   )
 }
 
-function describeHpOperation(operation: SessionHpLogRecord["operation"], characterNames: ReadonlyMap<string, string>): string {
+function describeSessionOperation(operation: SessionLogRecord["operation"], characterNames: ReadonlyMap<string, string>): string {
   const characterName = characterNames.get(operation.characterId) ?? "Personagem"
   switch (operation.type) {
     case "character.hp.set": return `Definiu os PV de ${characterName} para ${operation.value}.`
@@ -212,6 +214,11 @@ function describeHpOperation(operation: SessionHpLogRecord["operation"], charact
     case "character.stat.experience.set": return `Definiu a experiência de ${characterName} para ${operation.value.toLocaleString("pt-BR")} XP.`
     case "character.rest.short": return `${characterName} concluiu um descanso curto.`
     case "character.rest.long": return `${characterName} concluiu um descanso longo${operation.recovery === "partial" ? " parcial" : ""}.`
+    case "character.ability.save": return `Atualizou ${operation.ability.name || "uma habilidade"} de ${characterName}.`
+    case "character.ability.remove": return `Removeu ${operation.abilityName || "uma habilidade"} de ${characterName}.`
+    case "character.ability.use": return `${characterName} usou ${operation.abilityName || "uma habilidade"}.`
+    case "character.ability.restore": return `Restaurou uma carga de ${operation.abilityName || "habilidade"} de ${characterName}.`
+    case "character.ability.deactivate": return `Desativou ${operation.abilityName || "uma habilidade"} de ${characterName}.`
     case "character.hp.undo": return `Desfez uma alteração de ${characterName}.`
   }
 }
