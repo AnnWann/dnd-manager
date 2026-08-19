@@ -1,4 +1,4 @@
-import type { SessionLoggedOperation } from "../../../protocol";
+import type { SessionLoggedOperation } from "../../session/protocol";
 
 export type StatSheetRoute =
   | "characters/sheet/stats/armor-class"
