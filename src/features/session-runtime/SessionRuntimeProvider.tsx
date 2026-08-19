@@ -187,9 +187,13 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
         }
         if (message.type === "session.character.removed") {
           setSessionCharactersById((current) => {
-            const next = { ...current }
-            delete next[message.characterId]
-            return next
+            const existing = current[message.characterId]
+            return {
+              ...current,
+              [message.characterId]: existing
+                ? { ...existing, active: false }
+                : { characterId: message.characterId, character: {}, active: false, revision: 0 },
+            }
           })
           setHpByCharacterId((current) => {
             const next = { ...current }
@@ -230,7 +234,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const initializeConditions = useCallback((characters: SessionConditionSeed[]) =>
     socketRef.current?.send({ type: "session.conditions.initialize", characters }) ?? false, [])
   const initializeAbilities = useCallback((characters: SessionAbilitySeed[]) => {
-    const pending = characters.filter((character) => !sessionCharactersById[character.characterId]?.active)
+    const pending = characters.filter((character) => !sessionCharactersById[character.characterId])
     if (!pending.length) return true
     return pending.every((character) => socketRef.current?.send({
       type: "session.character.operation",
