@@ -131,7 +131,7 @@ export class SessionActor extends BaseSessionActor {
     seeds: SessionAbilitySeed[],
   ): Promise<void> {
     if (connection.role !== "MASTER") {
-      this.sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can initialize authoritative ability state.");
+      this.sendAbilityError(webSocket, "MASTER_REQUIRED", "Only the MASTER can initialize authoritative ability state.");
       return;
     }
 
@@ -147,12 +147,12 @@ export class SessionActor extends BaseSessionActor {
           seed.character as Partial<CharacterTemplateProps>,
         );
       } catch {
-        this.sendError(webSocket, "INVALID_ABILITY_SEED", "The ability state seed contains an invalid character snapshot.");
+        this.sendAbilityError(webSocket, "INVALID_ABILITY_SEED", "The ability state seed contains an invalid character snapshot.");
         return;
       }
 
       if (character.get("id") !== seed.characterId) {
-        this.sendError(webSocket, "ABILITY_SEED_ID_MISMATCH", "The ability state seed does not match the target character.");
+        this.sendAbilityError(webSocket, "ABILITY_SEED_ID_MISMATCH", "The ability state seed does not match the target character.");
         return;
       }
 
@@ -183,8 +183,8 @@ export class SessionActor extends BaseSessionActor {
   ): Promise<void> {
     const [abilityState, hpState, conditionsState, log] = await Promise.all([
       this.readAbilityState(),
-      this.readHpState(),
-      this.readConditionsState(),
+      this.readAbilityHpState(),
+      this.readAbilityConditionsState(),
       this.readUnifiedLog(),
     ]);
 
@@ -193,12 +193,12 @@ export class SessionActor extends BaseSessionActor {
     const conditions = conditionsState[operation.characterId];
 
     if (!storedAbility?.initialized || !hp || !conditions?.initialized) {
-      this.sendError(webSocket, "ABILITY_STATE_NOT_INITIALIZED", "Ability state for this character has not been initialized by the MASTER.");
+      this.sendAbilityError(webSocket, "ABILITY_STATE_NOT_INITIALIZED", "Ability state for this character has not been initialized by the MASTER.");
       return;
     }
 
     if (!canMutateCharacter(connection, hp.ownerUserId)) {
-      this.sendError(webSocket, "CHARACTER_ACCESS_DENIED", "You cannot change abilities for this character.");
+      this.sendAbilityError(webSocket, "CHARACTER_ACCESS_DENIED", "You cannot change abilities for this character.");
       return;
     }
 
@@ -206,20 +206,20 @@ export class SessionActor extends BaseSessionActor {
     try {
       current = hydrateAuthoritativeCharacter(storedAbility, hp, conditions);
     } catch {
-      this.sendError(webSocket, "ABILITY_STATE_INVALID", "The authoritative ability snapshot is invalid.");
+      this.sendAbilityError(webSocket, "ABILITY_STATE_INVALID", "The authoritative ability snapshot is invalid.");
       return;
     }
 
     const next = applyAbilityOperation(current, operation);
     if (!next) {
-      this.sendError(webSocket, "ABILITY_OPERATION_INVALID", "The requested ability operation is invalid for the current character state.");
+      this.sendAbilityError(webSocket, "ABILITY_OPERATION_INVALID", "The requested ability operation is invalid for the current character state.");
       return;
     }
 
     const currentJson = current.toJSON();
     const nextJson = next.toJSON();
     if (JSON.stringify(currentJson) === JSON.stringify(nextJson)) {
-      this.sendError(webSocket, "ABILITY_OPERATION_REJECTED", "The ability could not be changed in its current state.");
+      this.sendAbilityError(webSocket, "ABILITY_OPERATION_REJECTED", "The ability could not be changed in its current state.");
       return;
     }
 
@@ -279,13 +279,13 @@ export class SessionActor extends BaseSessionActor {
     log: AnySessionLogRecord[],
   ): Promise<void> {
     if (connection.role !== "MASTER") {
-      this.sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can undo session changes.");
+      this.sendAbilityError(webSocket, "MASTER_REQUIRED", "Only the MASTER can undo session changes.");
       return;
     }
 
     const sourceIndex = log.findIndex((record) => record.id === logId);
     if (sourceIndex < 0) {
-      this.sendError(webSocket, "LOG_NOT_FOUND", "The selected log entry no longer exists.");
+      this.sendAbilityError(webSocket, "LOG_NOT_FOUND", "The selected log entry no longer exists.");
       return;
     }
 
@@ -298,7 +298,7 @@ export class SessionActor extends BaseSessionActor {
       return;
     }
     if (source.operation.type === "character.hp.undo") {
-      this.sendError(webSocket, "UNDO_OF_UNDO_NOT_SUPPORTED", "Undo records cannot be undone.");
+      this.sendAbilityError(webSocket, "UNDO_OF_UNDO_NOT_SUPPORTED", "Undo records cannot be undone.");
       return;
     }
 
@@ -310,20 +310,20 @@ export class SessionActor extends BaseSessionActor {
         record.reverseOperation.characterId === characterId,
     );
     if (newerActiveChange) {
-      this.sendError(webSocket, "UNDO_NOT_LATEST", "Undo newer changes for this character first.");
+      this.sendAbilityError(webSocket, "UNDO_NOT_LATEST", "Undo newer changes for this character first.");
       return;
     }
 
     const [abilityState, hpState, conditionsState] = await Promise.all([
       this.readAbilityState(),
-      this.readHpState(),
-      this.readConditionsState(),
+      this.readAbilityHpState(),
+      this.readAbilityConditionsState(),
     ]);
     const currentAbility = abilityState[characterId];
     const currentHp = hpState[characterId];
     const currentConditions = conditionsState[characterId];
     if (!currentAbility || !currentHp || !currentConditions) {
-      this.sendError(webSocket, "ABILITY_STATE_NOT_INITIALIZED", "The current ability state required for undo is missing.");
+      this.sendAbilityError(webSocket, "ABILITY_STATE_NOT_INITIALIZED", "The current ability state required for undo is missing.");
       return;
     }
 
@@ -386,11 +386,11 @@ export class SessionActor extends BaseSessionActor {
     return (await this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY)) ?? {};
   }
 
-  private async readHpState(): Promise<Record<string, SessionHpState>> {
+  private async readAbilityHpState(): Promise<Record<string, SessionHpState>> {
     return (await this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY)) ?? {};
   }
 
-  private async readConditionsState(): Promise<Record<string, SessionConditionsState>> {
+  private async readAbilityConditionsState(): Promise<Record<string, SessionConditionsState>> {
     return (await this.ctx.storage.get<Record<string, SessionConditionsState>>(CONDITIONS_STATE_KEY)) ?? {};
   }
 
@@ -423,7 +423,7 @@ export class SessionActor extends BaseSessionActor {
     webSocket.serializeAttachment(connection);
   }
 
-  private sendError(webSocket: WebSocket, code: string, message: string): void {
+  private sendAbilityError(webSocket: WebSocket, code: string, message: string): void {
     this.sendAbility(webSocket, { type: "session.error", code, message });
   }
 
@@ -534,11 +534,9 @@ function applyAbilityOperation(
 
     case "equipment":
       if (operation.type === "character.ability.use") {
-        return character.useEquipmentAbility(
-          source.itemId,
-          source.abilityId,
-          operation.activationOptionId,
-        );
+        // Preserve the existing equipment behavior for now: the current domain
+        // helper does not consume activationOptionId either in /user or /session.
+        return character.useEquipmentAbility(source.itemId, source.abilityId);
       }
       if (operation.type === "character.ability.restore") {
         return character.restoreEquipmentAbility(source.itemId, source.abilityId);
