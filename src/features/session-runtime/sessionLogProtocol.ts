@@ -2,7 +2,9 @@ import type { SessionAbilityOperation, SessionAbilityState } from "./abilitySess
 import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
 import type { SessionInventoryOperation, SessionSharedInventoryState } from "./inventorySessionProtocol"
 import type { SessionMagicOperation } from "./magicSessionProtocol"
+import type { SessionProfileOperation } from "./profileSessionProtocol"
 import type { SessionProficiencyOperation } from "./proficiencySessionProtocol"
+import type { SessionRaceOperation } from "./raceSessionProtocol"
 import type {
   SessionConditionsState,
   SessionHpLogRecord,
@@ -37,6 +39,24 @@ export type SessionProficiencyReverseOperation = {
   snapshot: SessionAbilityState
 }
 
+export type SessionRaceReverseOperation = {
+  type: "session.race.restore"
+  characterId: string
+  snapshot: {
+    ability: SessionAbilityState
+    hp: SessionHpState
+  }
+}
+
+export type SessionProfileReverseOperation = {
+  type: "session.profile.restore"
+  characterId: string
+  snapshot: {
+    ability: SessionAbilityState
+    hp: SessionHpState
+  }
+}
+
 export type SessionRuntimeLogRecord = {
   id: string
   actorId: string
@@ -47,11 +67,15 @@ export type SessionRuntimeLogRecord = {
     | SessionEquipmentOperation
     | SessionInventoryOperation
     | SessionProficiencyOperation
+    | SessionRaceOperation
+    | SessionProfileOperation
     | { type: "character.hp.undo"; characterId: string; sourceLogId: string }
   reverseOperation:
     | SessionAbilityReverseOperation
     | SessionInventoryReverseOperation
     | SessionProficiencyReverseOperation
+    | SessionRaceReverseOperation
+    | SessionProfileReverseOperation
   undoneAt?: string
   undoneBy?: string
 }
@@ -63,4 +87,6 @@ export function isAbilityLogRecord(record: SessionLogRecord): record is SessionR
   return record.reverseOperation.type === "character.ability.restore"
     || record.reverseOperation.type === "session.inventory.restore"
     || record.reverseOperation.type === "session.proficiency.restore"
+    || record.reverseOperation.type === "session.race.restore"
+    || record.reverseOperation.type === "session.profile.restore"
 }
