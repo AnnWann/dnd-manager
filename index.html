@@ -5,9 +5,56 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>dnd-magic-manager</title>
+    <style>
+      html,
+      body,
+      #root {
+        min-height: 100%;
+        margin: 0;
+      }
+
+      body {
+        background: #0b0d10;
+      }
+
+      #app-boot-loading {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: #0b0d10;
+        color: #c8ccd4;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      #app-boot-loading > div {
+        text-align: center;
+      }
+
+      #app-boot-loading strong {
+        display: block;
+        color: #f3f4f6;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      #app-boot-loading span {
+        display: block;
+        margin-top: 4px;
+        font-size: 12px;
+        opacity: 0.7;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="app-boot-loading" role="status" aria-live="polite">
+        <div>
+          <strong>Preparando seu ambiente...</strong>
+          <span>Carregando a aplicação.</span>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
