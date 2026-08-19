@@ -9,6 +9,7 @@ import type { Itemmable } from "../../../models/items/item"
 import { applySessionAbilityState } from "../../session-runtime/applySessionAbilityState"
 import type { SessionEquipmentOperation } from "../../session-runtime/equipmentSessionProtocol"
 import type { SessionMagicOperation } from "../../session-runtime/magicSessionProtocol"
+import type { SessionProficiencyOperation } from "../../session-runtime/proficiencySessionProtocol"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import {
   CharacterWorkspaceProvider,
@@ -62,6 +63,7 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
     const magicChanged = JSON.stringify(current.get("magic")) !== JSON.stringify(next.get("magic"))
     const equipmentChanged = JSON.stringify(current.get("equipment")) !== JSON.stringify(next.get("equipment"))
     const inventoryChanged = JSON.stringify(current.get("inventory")) !== JSON.stringify(next.get("inventory"))
+    const proficienciesChanged = JSON.stringify(current.get("sheet").proficiencies ?? []) !== JSON.stringify(next.get("sheet").proficiencies ?? [])
 
     if (equipmentChanged || inventoryChanged) {
       const equipmentOperations = deriveEquipmentOperations(current, next)
@@ -69,8 +71,6 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
         for (const operation of equipmentOperations) sessionRuntime.dispatchEquipmentOperation(operation)
         return
       }
-      // Inventory controls now dispatch explicit semantic operations. Never let
-      // an unrecognized inventory/equipment updater fall through to local state.
       console.warn("[session-runtime] blocked an unrecognized local inventory/equipment mutation", { characterId })
       return
     }
@@ -82,6 +82,16 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
         return
       }
       for (const operation of operations) sessionRuntime.dispatchMagicOperation(operation)
+      return
+    }
+
+    if (proficienciesChanged) {
+      const operations = deriveProficiencyOperations(current, next)
+      if (!operations.length) {
+        console.warn("[session-runtime] blocked an unrecognized local proficiency mutation", { characterId })
+        return
+      }
+      for (const operation of operations) sessionRuntime.dispatchProficiencyOperation(operation)
       return
     }
 
@@ -194,6 +204,26 @@ function resolveHandReference(character: CharacterTemplate, reference: HandOccup
   }
   const item = (equipment.heldItems ?? [])[reference.index]
   return item ? { type: "held-item", itemId: item.id } : null
+}
+
+function deriveProficiencyOperations(current: CharacterTemplate, next: CharacterTemplate): SessionProficiencyOperation[] {
+  const characterId = current.get("id")
+  const before = new Map((current.get("sheet").proficiencies ?? []).map((entry) => [entry.id, entry]))
+  const after = new Map((next.get("sheet").proficiencies ?? []).map((entry) => [entry.id, entry]))
+  const operations: SessionProficiencyOperation[] = []
+
+  for (const [id, proficiency] of after) {
+    const previous = before.get(id)
+    if (!previous) {
+      operations.push({ type: "character.proficiency.add", characterId, proficiency })
+      continue
+    }
+    if (JSON.stringify(previous) !== JSON.stringify(proficiency)) return []
+  }
+  for (const [id, proficiency] of before) {
+    if (!after.has(id)) operations.push({ type: "character.proficiency.remove", characterId, proficiencyId: id, proficiencyName: proficiency.name })
+  }
+  return operations
 }
 
 function deriveEquipmentOperations(current: CharacterTemplate, next: CharacterTemplate): SessionEquipmentOperation[] {
