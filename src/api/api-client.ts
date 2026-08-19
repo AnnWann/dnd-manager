@@ -4,6 +4,8 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from "axios"
 
+import { readActiveUserCharacterCacheSnapshot } from "../features/user/userPersistentCache"
+
 export const apiClient = axios.create({
   baseURL: "/api",
   withCredentials: true,
@@ -46,6 +48,18 @@ function createCharacterReadAdapter(
   originalAdapter: AxiosAdapter,
 ): AxiosAdapter {
   return async (config) => {
+    const persistent = readActiveUserCharacterCacheSnapshot<unknown>(key)
+    if (persistent?.fresh) {
+      return {
+        data: { character: persistent.data },
+        status: 200,
+        statusText: "OK (persistent cache)",
+        headers: {},
+        config,
+        request: undefined,
+      }
+    }
+
     const recent = recentCharacterReads.get(key)
     if (
       recent &&
@@ -110,16 +124,14 @@ function invalidateCharacterReadsForMutation(
     return
   }
 
-  // Creating/deleting characters can change list/detail ownership relationships.
   if (url === "/me/characters") {
     recentCharacterReads.clear()
   }
 }
 
 /**
- * User-facing stale-while-revalidate caching lives in the user data providers.
- * This hook only clears the short request-deduplication window used to protect
- * full-character reads from React remount/request storms.
+ * Clears only the in-memory request-deduplication layer. Persistent user caches
+ * intentionally survive F5 and normal navigation.
  */
 export function clearApiReadCache(): void {
   recentCharacterReads.clear()
