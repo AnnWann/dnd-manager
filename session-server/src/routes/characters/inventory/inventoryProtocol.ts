@@ -11,6 +11,8 @@ export type SessionInventoryOperation =
   | { type: "party.item.add"; characterId: string; item: Record<string, unknown> }
   | { type: "party.item.update"; characterId: string; itemId: string; item: Record<string, unknown> }
   | { type: "party.item.remove"; characterId: string; itemId: string }
+  | { type: "party.settings.carryCapacity.set"; characterId: "session"; value: number }
+  | { type: "party.settings.additionalSupplyConsumption.set"; characterId: "session"; value: number }
   | { type: "ground.item.add"; characterId: string; item: Record<string, unknown> }
   | { type: "ground.item.update"; characterId: string; itemId: string; item: Record<string, unknown> }
   | { type: "ground.item.remove"; characterId: string; itemId: string }
@@ -41,5 +43,9 @@ export function parseInventoryClientMessage(raw: string): SessionInventoryClient
   if (message.type !== "session.inventory.operation" || !message.operation || typeof message.operation !== "object") return null;
   const operation = message.operation as Record<string, unknown>;
   if (typeof operation.type !== "string" || typeof operation.characterId !== "string") return null;
+  if (
+    (operation.type === "party.settings.carryCapacity.set" || operation.type === "party.settings.additionalSupplyConsumption.set")
+    && (operation.characterId !== "session" || typeof operation.value !== "number" || !Number.isFinite(operation.value) || operation.value < 0)
+  ) return null;
   return message as SessionInventoryClientMessage;
 }
