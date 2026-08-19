@@ -35,10 +35,12 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
   }, [characterContext.groundInventory, characterContext.partyInventory, sessionRuntime?.initializeInventory, sessionRuntime?.role, sessionRuntime?.status])
 
   const projectedCharacters = useMemo(
-    () => characterContext.visibleCharacters.map((character) =>
-      applySessionAbilityState(character, sessionRuntime?.abilitiesByCharacterId[character.get("id")]),
-    ),
-    [characterContext.visibleCharacters, sessionRuntime?.abilitiesByCharacterId],
+    () => characterContext.visibleCharacters
+      .filter((character) => sessionRuntime?.sessionCharactersById[character.get("id")]?.active !== false)
+      .map((character) =>
+        applySessionAbilityState(character, sessionRuntime?.abilitiesByCharacterId[character.get("id")]),
+      ),
+    [characterContext.visibleCharacters, sessionRuntime?.abilitiesByCharacterId, sessionRuntime?.sessionCharactersById],
   )
 
   const projectedActiveCharacter = useMemo(() => {
@@ -60,10 +62,25 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
     if (!current) return
     const next = updater(current)
 
+    const ownerChanged = JSON.stringify(current.get("owner")) !== JSON.stringify(next.get("owner"))
     const magicChanged = JSON.stringify(current.get("magic")) !== JSON.stringify(next.get("magic"))
     const equipmentChanged = JSON.stringify(current.get("equipment")) !== JSON.stringify(next.get("equipment"))
     const inventoryChanged = JSON.stringify(current.get("inventory")) !== JSON.stringify(next.get("inventory"))
     const proficienciesChanged = JSON.stringify(current.get("sheet").proficiencies ?? []) !== JSON.stringify(next.get("sheet").proficiencies ?? [])
+
+    if (ownerChanged) {
+      const ownerOnly = current.withPatch({ owner: next.get("owner") })
+      if (JSON.stringify(ownerOnly.toJSON()) !== JSON.stringify(next.toJSON())) {
+        console.warn("[session-runtime] blocked a composite mutation that included owner lifecycle state", { characterId })
+        return
+      }
+      sessionRuntime.dispatchCharacterLifecycleOperation({
+        type: "character.session.owner.set",
+        characterId,
+        owner: next.get("owner"),
+      })
+      return
+    }
 
     if (equipmentChanged || inventoryChanged) {
       const equipmentOperations = deriveEquipmentOperations(current, next)
@@ -95,8 +112,18 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
       return
     }
 
-    characterContext.updateCharacter(characterId, updater)
+    if (JSON.stringify(current.toJSON()) !== JSON.stringify(next.toJSON())) {
+      console.warn("[session-runtime] blocked an unrecognized generic character mutation; use a semantic session operation or explicit MASTER resync", { characterId })
+    }
   }, [characterContext, projectedCharacters, sessionRuntime])
+
+  const deleteCharacter = useCallback((characterId: string) => {
+    if (!sessionRuntime) {
+      characterContext.deleteCharacter(characterId)
+      return
+    }
+    sessionRuntime.dispatchCharacterLifecycleOperation({ type: "character.session.remove", characterId })
+  }, [characterContext, sessionRuntime])
 
   const stowHandOccupant = useCallback((characterId: string, reference: HandOccupantReference) => {
     if (!sessionRuntime) {
@@ -146,7 +173,7 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
     dispatchSkillOperation: characterContext.dispatchSkillOperation,
     dispatchConditionOperation: characterContext.dispatchConditionOperation,
     dispatchGameOperation: characterContext.dispatchGameOperation,
-    deleteCharacter: characterContext.deleteCharacter,
+    deleteCharacter,
     importCharacter: characterContext.importCharacter,
     completeLongRest: characterContext.completeLongRest,
     partyInventory: sharedInventory?.partyInventory ?? characterContext.partyInventory,
