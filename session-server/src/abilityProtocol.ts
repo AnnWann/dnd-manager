@@ -21,17 +21,20 @@ export type SessionAbilityOperation =
       type: "character.ability.use";
       characterId: string;
       source: SessionAbilitySource;
+      abilityName: string;
       activationOptionId?: string;
     }
   | {
       type: "character.ability.restore";
       characterId: string;
       source: SessionAbilitySource;
+      abilityName: string;
     }
   | {
       type: "character.ability.deactivate";
       characterId: string;
       source: SessionAbilitySource;
+      abilityName: string;
     }
   | {
       type: "character.ability.save";
@@ -42,6 +45,7 @@ export type SessionAbilityOperation =
       type: "character.ability.remove";
       characterId: string;
       abilityId: string;
+      abilityName: string;
     };
 
 export type SessionAbilityClientMessage =
@@ -92,17 +96,22 @@ function isAbilityOperation(value: unknown): value is SessionAbilityOperation {
   switch (value.type) {
     case "character.ability.use":
       return isAbilitySource(value.source) &&
+        isAbilityName(value.abilityName) &&
         (value.activationOptionId === undefined || typeof value.activationOptionId === "string");
     case "character.ability.restore":
     case "character.ability.deactivate":
-      return isAbilitySource(value.source);
+      return isAbilitySource(value.source) && isAbilityName(value.abilityName);
     case "character.ability.save":
       return isRecord(value.ability) && typeof value.ability.id === "string" && typeof value.ability.name === "string";
     case "character.ability.remove":
-      return typeof value.abilityId === "string" && value.abilityId.trim().length > 0;
+      return typeof value.abilityId === "string" && value.abilityId.trim().length > 0 && isAbilityName(value.abilityName);
     default:
       return false;
   }
+}
+
+function isAbilityName(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0 && value.length <= 200;
 }
 
 function isAbilitySource(value: unknown): value is SessionAbilitySource {
