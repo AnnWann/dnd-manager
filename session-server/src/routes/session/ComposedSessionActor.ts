@@ -13,10 +13,13 @@ import { parseInventoryClientMessage } from "../characters/inventory/inventoryPr
 import { parseProficiencyClientMessage } from "../characters/proficiencies/proficiencyProtocol";
 import { parseRaceClientMessage } from "../characters/race/raceProtocol";
 import { parseProfileClientMessage } from "../characters/profile/profileProtocol";
-import { MAX_HP_LOG_RECORDS } from "../characters/sheet/hpState";
+import { applyHpUndo, MAX_HP_LOG_RECORDS } from "../characters/sheet/hpState";
+import { applyConditionUndo } from "../characters/sheet/conditionState";
+import { applyConcentrationUndo } from "../characters/sheet/concentrationState";
 import type {
   SessionConditionsState,
   SessionConnection,
+  SessionHpLogRecord,
   SessionHpState,
 } from "./protocol";
 import {
@@ -25,15 +28,11 @@ import {
   type SessionCharacterLifecycleState,
 } from "./characterLifecycleProtocol";
 import {
-  SESSION_LOG_KEY,
+  commitSessionMutation,
+  commitSessionUndo,
   createSessionLogRecord,
-  markLogUndone,
-  normalizeSessionLogRecordsInPlace,
-  normalizeStoredSessionLog,
   readSessionLog,
-  trimSessionLog,
   validateUndoOrdering,
-  writeSessionLog,
   type SessionLogRecord,
 } from "./sessionLog";
 import {
@@ -119,19 +118,17 @@ type CentrallyRestorableReverse =
 /**
  * The only Durable Object exported by the worker.
  *
- * Domain actors are isolated implementation containers. Message dispatch,
- * lifecycle operations, log ordering and all composite undo bookkeeping live
- * here so domains only own their forward mutation rules and snapshot shapes.
+ * Domain actors are isolated forward-operation containers. This class owns
+ * routing, lifecycle, unified timeline ordering and every undo path.
  */
 export class SessionActor extends BaseSessionActor {
-  private readonly domainContext = createDomainContext(this.ctx);
-  private readonly abilityRoute = bindDomainActor(AbilitySessionActor.prototype, this.domainContext);
-  private readonly magicRoute = bindDomainActor(MagicSessionActor.prototype, this.domainContext);
-  private readonly equipmentRoute = bindDomainActor(EquipmentSessionActor.prototype, this.domainContext);
-  private readonly inventoryRoute = bindDomainActor(InventorySessionActor.prototype, this.domainContext);
-  private readonly proficiencyRoute = bindDomainActor(ProficiencySessionActor.prototype, this.domainContext);
-  private readonly raceRoute = bindDomainActor(RaceSessionActor.prototype, this.domainContext);
-  private readonly profileRoute = bindDomainActor(ProfileSessionActor.prototype, this.domainContext);
+  private readonly abilityRoute = bindDomainActor(AbilitySessionActor.prototype, this.ctx);
+  private readonly magicRoute = bindDomainActor(MagicSessionActor.prototype, this.ctx);
+  private readonly equipmentRoute = bindDomainActor(EquipmentSessionActor.prototype, this.ctx);
+  private readonly inventoryRoute = bindDomainActor(InventorySessionActor.prototype, this.ctx);
+  private readonly proficiencyRoute = bindDomainActor(ProficiencySessionActor.prototype, this.ctx);
+  private readonly raceRoute = bindDomainActor(RaceSessionActor.prototype, this.ctx);
+  private readonly profileRoute = bindDomainActor(ProfileSessionActor.prototype, this.ctx);
 
   override async fetch(request: Request): Promise<Response> {
     const response = await super.fetch(request);
@@ -166,7 +163,7 @@ export class SessionActor extends BaseSessionActor {
 
     const undoLogId = parseUndoLogId(raw);
     if (undoLogId) {
-      await this.handleCentralUndo(webSocket, message, undoLogId);
+      await this.handleCentralUndo(webSocket, undoLogId);
       return;
     }
 
@@ -199,14 +196,9 @@ export class SessionActor extends BaseSessionActor {
     }
 
     await super.webSocketMessage(webSocket, message);
-    if (shouldNormalizeBaseMessage(raw)) await this.normalizeLog();
   }
 
-  private async handleCentralUndo(
-    webSocket: WebSocket,
-    originalMessage: string | ArrayBuffer,
-    logId: string,
-  ): Promise<void> {
+  private async handleCentralUndo(webSocket: WebSocket, logId: string): Promise<void> {
     const connection = readSessionConnection(webSocket);
     if (!connection) {
       webSocket.close(1011, "Missing connection attachment");
@@ -217,6 +209,9 @@ export class SessionActor extends BaseSessionActor {
       return;
     }
 
+    connection.lastHeartbeatAt = Date.now();
+    webSocket.serializeAttachment(connection);
+
     const log = await readSessionLog(this.ctx.storage);
     const validation = validateUndoOrdering(log, logId);
     if (!validation.ok) {
@@ -224,8 +219,9 @@ export class SessionActor extends BaseSessionActor {
       return;
     }
 
+    const reverseType = validation.record.reverseOperation.type;
     if (isCentrallyRestorable(validation.record.reverseOperation)) {
-      const restored = await this.restoreCentralSnapshot(
+      await this.restoreCentralSnapshot(
         webSocket,
         connection,
         log,
@@ -233,11 +229,106 @@ export class SessionActor extends BaseSessionActor {
         validation.record,
         validation.affectedScopes,
       );
-      if (restored) return;
+      return;
     }
 
-    await super.webSocketMessage(webSocket, originalMessage);
-    await this.normalizeLog();
+    if (
+      reverseType === "character.condition.delete"
+      || reverseType === "character.condition.restore"
+      || reverseType === "character.concentration.restore"
+    ) {
+      await this.restoreConditionState(
+        webSocket,
+        connection,
+        log,
+        validation.index,
+        validation.record,
+      );
+      return;
+    }
+
+    await this.restoreHpState(
+      webSocket,
+      connection,
+      log,
+      validation.index,
+      validation.record,
+    );
+  }
+
+  private async restoreHpState(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    log: SessionLogRecord[],
+    sourceIndex: number,
+    source: SessionLogRecord,
+  ): Promise<void> {
+    const state = await this.readHpState();
+    const characterId = source.reverseOperation.characterId;
+    const current = state[characterId];
+    if (!current) {
+      sendError(webSocket, "HP_NOT_INITIALIZED", "Authoritative state for this character is missing.");
+      return;
+    }
+
+    const result = applyHpUndo(
+      current,
+      source as unknown as SessionHpLogRecord,
+      connection,
+    );
+    if (!result.ok) {
+      sendError(webSocket, result.code, result.message);
+      return;
+    }
+
+    state[characterId] = result.next;
+    await commitSessionUndo(this.ctx.storage, this.ctx.getWebSockets(), {
+      writes: { [HP_STATE_KEY]: state },
+      currentLog: log,
+      sourceIndex,
+      userId: connection.userId,
+      undoRecord: result.record as unknown as SessionLogRecord,
+      maxRecords: MAX_HP_LOG_RECORDS,
+      undoneAt: result.record.createdAt,
+    });
+    broadcast(this.ctx.getWebSockets(), { type: "session.hp.updated", character: result.next });
+  }
+
+  private async restoreConditionState(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    log: SessionLogRecord[],
+    sourceIndex: number,
+    source: SessionLogRecord,
+  ): Promise<void> {
+    const state = await this.readConditionsState();
+    const characterId = source.reverseOperation.characterId;
+    const current = state[characterId];
+    if (!current?.initialized) {
+      sendError(webSocket, "CONDITIONS_NOT_INITIALIZED", "Authoritative conditions for this character are missing.");
+      return;
+    }
+
+    const legacySource = source as unknown as SessionHpLogRecord;
+    const result = source.reverseOperation.type === "character.concentration.restore"
+      ? applyConcentrationUndo(current, legacySource, connection)
+      : applyConditionUndo(current, legacySource, connection);
+    if (!result.ok) {
+      sendError(webSocket, result.code, result.message);
+      return;
+    }
+
+    state[characterId] = result.next;
+    await commitSessionUndo(this.ctx.storage, this.ctx.getWebSockets(), {
+      writes: { [CONDITIONS_STATE_KEY]: state },
+      currentLog: log,
+      sourceIndex,
+      userId: connection.userId,
+      undoRecord: result.record as unknown as SessionLogRecord,
+      maxRecords: MAX_HP_LOG_RECORDS,
+      undoneAt: result.record.createdAt,
+    });
+    broadcast(this.ctx.getWebSockets(), { type: "session.conditions.updated", character: result.next });
   }
 
   private async restoreCentralSnapshot(
@@ -247,7 +338,7 @@ export class SessionActor extends BaseSessionActor {
     sourceIndex: number,
     source: SessionLogRecord,
     affectedScopes: string[],
-  ): Promise<boolean> {
+  ): Promise<void> {
     const reverse = source.reverseOperation as CentrallyRestorableReverse;
     const [abilities, hp, conditions, inventory, lifecycle] = await Promise.all([
       this.readAbilitiesState(),
@@ -268,7 +359,7 @@ export class SessionActor extends BaseSessionActor {
         const currentConditions = conditions[characterId];
         if (!currentAbility || !currentHp || !currentConditions) {
           sendError(webSocket, "ABILITY_STATE_NOT_INITIALIZED", "The current ability state required for undo is missing.");
-          return true;
+          return;
         }
         inverseReverse = {
           type: reverse.type,
@@ -306,7 +397,7 @@ export class SessionActor extends BaseSessionActor {
         const currentAbility = abilities[characterId];
         if (!currentAbility) {
           sendError(webSocket, "PROFICIENCY_STATE_NOT_INITIALIZED", "The current proficiency state required for undo is missing.");
-          return true;
+          return;
         }
         inverseReverse = {
           type: reverse.type,
@@ -324,7 +415,7 @@ export class SessionActor extends BaseSessionActor {
         const currentHp = hp[characterId];
         if (!currentAbility || !currentHp) {
           sendError(webSocket, "CHARACTER_STATE_NOT_INITIALIZED", "The current character state required for undo is missing.");
-          return true;
+          return;
         }
         inverseReverse = {
           type: reverse.type,
@@ -363,20 +454,24 @@ export class SessionActor extends BaseSessionActor {
     }
 
     const now = new Date().toISOString();
-    let nextLog = markLogUndone(log, sourceIndex, connection.userId, now);
-    nextLog.push(createSessionLogRecord({
+    const undoRecord = createSessionLogRecord({
       actorId: connection.userId,
       createdAt: now,
       operation: { type: "character.hp.undo", characterId, sourceLogId: source.id },
       reverseOperation: inverseReverse,
       affectedScopes,
-    }));
-    nextLog = trimSessionLog(nextLog, MAX_HP_LOG_RECORDS);
+    });
 
-    await this.ctx.storage.put(writes);
-    await writeSessionLog(this.ctx.storage, this.ctx.getWebSockets(), nextLog);
+    await commitSessionUndo(this.ctx.storage, this.ctx.getWebSockets(), {
+      writes,
+      currentLog: log,
+      sourceIndex,
+      userId: connection.userId,
+      undoRecord,
+      maxRecords: MAX_HP_LOG_RECORDS,
+      undoneAt: now,
+    });
     await this.broadcastAuthoritativeStateForReverse(reverse);
-    return true;
   }
 
   private async handleCharacterLifecycleOperation(
@@ -489,25 +584,27 @@ export class SessionActor extends BaseSessionActor {
       };
     }
 
-    const reverse: CharacterLifecycleReverse = {
-      type: "session.character.restore",
-      characterId,
-      snapshot,
-    };
     const record = createSessionLogRecord({
       actorId: connection.userId,
       operation,
-      reverseOperation: reverse,
+      reverseOperation: {
+        type: "session.character.restore",
+        characterId,
+        snapshot,
+      },
     });
-    const nextLog = trimSessionLog([...log, record], MAX_HP_LOG_RECORDS);
 
-    await this.ctx.storage.put({
-      [CHARACTER_LIFECYCLE_STATE_KEY]: lifecycle,
-      [ABILITIES_STATE_KEY]: abilities,
-      [HP_STATE_KEY]: hp,
-      [CONDITIONS_STATE_KEY]: conditions,
+    await commitSessionMutation(this.ctx.storage, this.ctx.getWebSockets(), {
+      writes: {
+        [CHARACTER_LIFECYCLE_STATE_KEY]: lifecycle,
+        [ABILITIES_STATE_KEY]: abilities,
+        [HP_STATE_KEY]: hp,
+        [CONDITIONS_STATE_KEY]: conditions,
+      },
+      record,
+      currentLog: log,
+      maxRecords: MAX_HP_LOG_RECORDS,
     });
-    await writeSessionLog(this.ctx.storage, this.ctx.getWebSockets(), nextLog);
 
     if (operation.type === "character.session.remove") {
       broadcast(this.ctx.getWebSockets(), { type: "session.character.removed", characterId });
@@ -565,10 +662,6 @@ export class SessionActor extends BaseSessionActor {
     if ("conditions" in reverse.snapshot) {
       broadcast(this.ctx.getWebSockets(), { type: "session.conditions.updated", character: reverse.snapshot.conditions });
     }
-  }
-
-  private async normalizeLog(): Promise<void> {
-    await normalizeStoredSessionLog(this.ctx.storage);
   }
 
   private async readAbilitiesState(): Promise<Record<string, SessionAbilityState>> {
@@ -737,54 +830,6 @@ function bindDomainActor<T extends DomainActor>(prototype: T, ctx: unknown): T {
     writable: false,
   });
   return actor;
-}
-
-function createDomainContext(ctx: any): any {
-  const storage = createLogAwareStorage(ctx.storage);
-  return new Proxy(ctx, {
-    get(target, property) {
-      if (property === "storage") return storage;
-      const value = Reflect.get(target, property, target);
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-  });
-}
-
-function createLogAwareStorage(storage: DurableObjectStorage): DurableObjectStorage {
-  return new Proxy(storage, {
-    get(target, property) {
-      if (property === "put") {
-        return (...args: any[]) => {
-          normalizeLogPut(args);
-          return (target.put as any)(...args);
-        };
-      }
-      const value = Reflect.get(target, property, target);
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-  });
-}
-
-function normalizeLogPut(args: any[]): void {
-  const [keyOrEntries, value] = args;
-  if (keyOrEntries === SESSION_LOG_KEY && Array.isArray(value)) {
-    normalizeSessionLogRecordsInPlace(value as SessionLogRecord[]);
-    return;
-  }
-  if (!keyOrEntries || typeof keyOrEntries !== "object" || Array.isArray(keyOrEntries)) return;
-  const log = keyOrEntries[SESSION_LOG_KEY];
-  if (Array.isArray(log)) normalizeSessionLogRecordsInPlace(log as SessionLogRecord[]);
-}
-
-function shouldNormalizeBaseMessage(raw: string): boolean {
-  try {
-    const value = JSON.parse(raw) as { type?: unknown };
-    return value.type === "session.hp.operation"
-      || value.type === "session.conditions.operation"
-      || value.type === "session.sheet.operation";
-  } catch {
-    return false;
-  }
 }
 
 function parseUndoLogId(raw: string): string | null {
