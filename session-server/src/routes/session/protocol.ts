@@ -1,4 +1,4 @@
-import { routeForSheetOperation, type CharacterSheetRoute } from "./routes/characters/sheet";
+import { routeForSheetOperation, type CharacterSheetRoute } from "../characters/sheet";
 
 export type SessionRole = "MASTER" | "PLAYER";
 
