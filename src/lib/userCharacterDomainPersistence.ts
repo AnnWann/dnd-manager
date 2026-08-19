@@ -12,6 +12,7 @@ import {
 import type { CharacterDomainName } from "./relationalApi"
 
 const CLIENT_ID_STORAGE = "dndmm.userCharacterDomainClientId.v1"
+const VERSION_STORAGE_PREFIX = "dndmm.userCharacterDomainVersions.v1"
 
 export type UserCharacterPersistenceConflict = {
   characterId: string
@@ -22,6 +23,11 @@ export type UserCharacterPersistenceConflict = {
 export type UserCharacterPersistenceVersion =
   | { domain: "root"; version: number }
   | { domain: CharacterDomainName; version: number }
+
+type PersistedVersions = {
+  rootVersion: number
+  domains: Partial<Record<CharacterDomainName, number>>
+}
 
 export class UserCharacterDomainPersistence {
   private rootVersion: number
@@ -41,9 +47,24 @@ export class UserCharacterDomainPersistence {
       version: UserCharacterPersistenceVersion,
     ) => void,
   ) {
-    this.rootVersion = Math.max(1, Math.trunc(rootVersion || 1))
+    const persisted = readPersistedVersions(characterId)
+    this.rootVersion = Math.max(
+      1,
+      Math.trunc(rootVersion || 1),
+      Math.trunc(persisted?.rootVersion || 0),
+    )
     for (const domain of domains) {
-      this.domainVersions.set(domain.domain, domain.version)
+      this.domainVersions.set(
+        domain.domain,
+        Math.max(domain.version, persisted?.domains[domain.domain] ?? 0),
+      )
+    }
+    if (persisted) {
+      for (const [domain, version] of Object.entries(persisted.domains)) {
+        if (typeof version === "number") {
+          this.domainVersions.set(domain as CharacterDomainName, version)
+        }
+      }
     }
   }
 
@@ -164,6 +185,7 @@ export class UserCharacterDomainPersistence {
           this.rootVersion + 1,
           Number(changed.revision) || 0,
         )
+        this.persistVersions()
         this.onVersionPersisted?.({ domain: "root", version: this.rootVersion })
       } catch (error) {
         this.reportConflict("root", {
@@ -179,7 +201,17 @@ export class UserCharacterDomainPersistence {
 
   private setDomainVersion(domain: CharacterDomainName, version: number) {
     this.domainVersions.set(domain, version)
+    this.persistVersions()
     this.onVersionPersisted?.({ domain, version })
+  }
+
+  private persistVersions() {
+    writePersistedVersions(this.characterId, {
+      rootVersion: this.rootVersion,
+      domains: Object.fromEntries(this.domainVersions) as Partial<
+        Record<CharacterDomainName, number>
+      >,
+    })
   }
 
   private createMutationMetadata() {
@@ -253,4 +285,32 @@ function readClientId(): string {
   const created = crypto.randomUUID()
   window.localStorage.setItem(CLIENT_ID_STORAGE, created)
   return created
+}
+
+function readPersistedVersions(characterId: string): PersistedVersions | undefined {
+  if (typeof window === "undefined") return undefined
+  try {
+    const raw = window.localStorage.getItem(versionStorageKey(characterId))
+    if (!raw) return undefined
+    const parsed = JSON.parse(raw) as PersistedVersions
+    if (!parsed || typeof parsed.rootVersion !== "number" || !parsed.domains) {
+      return undefined
+    }
+    return parsed
+  } catch {
+    return undefined
+  }
+}
+
+function writePersistedVersions(characterId: string, value: PersistedVersions): void {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(versionStorageKey(characterId), JSON.stringify(value))
+  } catch (error) {
+    console.warn("[user-character] Could not persist domain versions.", error)
+  }
+}
+
+function versionStorageKey(characterId: string): string {
+  return `${VERSION_STORAGE_PREFIX}:${encodeURIComponent(characterId)}`
 }
