@@ -14,6 +14,11 @@ export type SessionEquipmentOperation =
       destination: Exclude<EquippedItemDestination, "ground">
     }
   | {
+      type: "character.equipment.attunement.toggle"
+      characterId: string
+      itemId: string
+    }
+  | {
       type: "character.equipment.pocket.unequip"
       characterId: string
       index: number
@@ -32,8 +37,4 @@ export type SessionEquipmentOperation =
 export type SessionEquipmentClientMessage = {
   type: "session.equipment.operation"
   operation: SessionEquipmentOperation
-}
-
-export function parseEquipmentServerMessage(_raw: string): null {
-  return null
 }
