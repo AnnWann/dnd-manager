@@ -107,14 +107,23 @@ export function UserCharacterWorkspace({
     setPersistenceError("")
 
     const cached = readUserCharacterCache<UserCharacterSummary>(userId, characterId)
+    let hasUsableCache = false
+
     if (cached?.id === characterId) {
-      const cachedCharacter = hydrateWorkspaceCharacter(cached)
-      summaryRef.current = cached
-      characterRef.current = cachedCharacter
-      persistenceRef.current = createPersistence(cached, isActive)
-      setCharacter(cachedCharacter)
-      setLoading(false)
-    } else {
+      try {
+        const cachedCharacter = hydrateWorkspaceCharacter(cached)
+        summaryRef.current = cached
+        characterRef.current = cachedCharacter
+        persistenceRef.current = createPersistence(cached, isActive)
+        setCharacter(cachedCharacter)
+        setLoading(false)
+        hasUsableCache = true
+      } catch {
+        removeUserCharacterCache(userId, characterId)
+      }
+    }
+
+    if (!hasUsableCache) {
       setCharacter(null)
       setLoading(true)
     }
@@ -125,8 +134,6 @@ export function UserCharacterWorkspace({
       try {
         const result = await getMyCharacter(characterId)
         if (!active) return
-
-        writeUserCharacterCache(userId, characterId, result)
 
         if (localMutationVersionRef.current !== mutationVersionAtRequest) {
           return
@@ -141,6 +148,7 @@ export function UserCharacterWorkspace({
           if (localMutationVersionRef.current !== mutationVersionAtRequest) return
         }
 
+        writeUserCharacterCache(userId, characterId, result)
         summaryRef.current = result
         persistenceRef.current = persistence
         characterRef.current = normalizedCharacter
@@ -148,7 +156,7 @@ export function UserCharacterWorkspace({
         setNotFound(false)
       } catch {
         if (!active) return
-        if (!cached) setNotFound(true)
+        if (!hasUsableCache) setNotFound(true)
       } finally {
         if (active) setLoading(false)
       }
