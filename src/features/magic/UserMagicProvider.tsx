@@ -15,43 +15,66 @@ import {
   updateOwnedHomebrewSpell,
   type AccessibleHomebrewSpell,
 } from "../../api/user-spells"
+import { authClient } from "../../auth/auth-client"
+import { getLocalUser, LOCAL_AUTH_BYPASS } from "../../auth/local-auth"
 import { MagicProvider } from "../../contexts/magicContext"
 import type { Spell } from "../../models/magic/spells/Spell"
+import { readUserCache, writeUserCache } from "../user/userPersistentCache"
 
 type UserMagicState = {
   records: AccessibleHomebrewSpell[]
   loading: boolean
+  refreshing: boolean
   errorMessage: string
   reload: () => Promise<void>
 }
 
 const UserMagicStateContext = createContext<UserMagicState | null>(null)
 
-export function UserMagicProvider({
-  children,
-}: {
-  children: ReactNode
-}) {
-  const [records, setRecords] = useState<AccessibleHomebrewSpell[]>([])
+export function UserMagicProvider({ children }: { children: ReactNode }) {
+  const { data: session } = authClient.useSession()
+  const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
+  const userId = session?.user?.id ?? localUser?.id ?? ""
+
+  const [records, setRecordsState] = useState<AccessibleHomebrewSpell[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
 
+  const setRecords = useCallback(
+    (next: AccessibleHomebrewSpell[] | ((current: AccessibleHomebrewSpell[]) => AccessibleHomebrewSpell[])) => {
+      setRecordsState((current) => {
+        const resolved = typeof next === "function" ? next(current) : next
+        if (userId) writeUserCache(userId, "spells", resolved)
+        return resolved
+      })
+    },
+    [userId],
+  )
+
   const reload = useCallback(async () => {
-    setLoading(true)
+    if (!userId) return
+    setRefreshing(true)
     setErrorMessage("")
 
     try {
       setRecords(await getAccessibleHomebrewSpells())
     } catch {
-      setErrorMessage("Não foi possível carregar as magias homebrew.")
+      setErrorMessage("Não foi possível atualizar as magias homebrew.")
     } finally {
+      setRefreshing(false)
       setLoading(false)
     }
-  }, [])
+  }, [setRecords, userId])
 
   useEffect(() => {
+    if (!userId) return
+
+    const cached = readUserCache<AccessibleHomebrewSpell[]>(userId, "spells")
+    setRecordsState(cached ?? [])
+    setLoading(!cached)
     void reload()
-  }, [reload])
+  }, [reload, userId])
 
   const spells = useMemo(
     () => records.map((record) => record.data),
@@ -138,7 +161,7 @@ export function UserMagicProvider({
 
   return (
     <UserMagicStateContext.Provider
-      value={{ records, loading, errorMessage, reload }}
+      value={{ records, loading, refreshing, errorMessage, reload }}
     >
       <MagicProvider
         spells={spells}
