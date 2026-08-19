@@ -2,7 +2,6 @@ import { Check } from "lucide-react"
 import { useState } from "react"
 
 import { Input } from "../../../components/ui/Input"
-import { useCharacterContext } from "../../../contexts/characterContext"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { cn } from "../../../lib/cn"
 import { formatSigned } from "../../../lib/formatSigned"
@@ -42,6 +41,7 @@ import {
 import type { Skill } from "../../../models/sheet/Skills"
 import { SelectSkillModule } from "./skills/selectCharacterSkills"
 import { MinimalCharacterActions } from "./minimalCharacterActions"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 
 type Props = {
   character: CharacterTemplate
@@ -89,7 +89,7 @@ export function MinimalCharacterSheet({
     dispatchStatOperation,
     dispatchAttributeOperation,
     dispatchSavingThrowOperation,
-  } = useCharacterContext()
+  } = useCharacterWorkspace()
   const [skillQuery, setSkillQuery] = useState("")
   const [handDialog, setHandDialog] =
     useState<HandItemActionsDialogState | null>(null)
@@ -210,7 +210,7 @@ export function MinimalCharacterSheet({
             )}
           >
             <div className="text-[10px] uppercase tracking-wide">Inspiração</div>
-            <div className="mt-1 text-sm font-bold">{sheet.stats.inspiration ? "Disponível" : "Gasta"}</div>
+            <div className="mt-1 text-sm font-bold text-textH">{sheet.stats.inspiration ? "Disponível" : "Gasta"}</div>
           </button>
         </div>
       </CompactSection>
