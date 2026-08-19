@@ -187,9 +187,7 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "character.hitDice.add": return `Adicionou ${operation.amount} ${operation.side} de vida a ${characterName}.`
     case "character.hitDice.remove": return `Removeu o pool ${operation.side} de dados de vida de ${characterName}.`
     case "character.attribute.set": return `Definiu ${attributeLabel(operation.attribute)} de ${characterName} para ${operation.value}.`
-    case "character.savingThrow.set": return operation.proficient
-      ? `${characterName} ganhou proficiência no teste de resistência de ${attributeLabel(operation.attribute)}.`
-      : `${characterName} perdeu proficiência no teste de resistência de ${attributeLabel(operation.attribute)}.`
+    case "character.savingThrow.set": return operation.proficient ? `${characterName} ganhou proficiência no teste de resistência de ${attributeLabel(operation.attribute)}.` : `${characterName} perdeu proficiência no teste de resistência de ${attributeLabel(operation.attribute)}.`
     case "character.skill.set": {
       const skill = skillLabel(operation.skill)
       if (operation.proficiency === "expertise") return `${characterName} ganhou especialização em ${skill}.`
@@ -200,9 +198,7 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "character.condition.update": return `Editou a condição ${operation.condition.name} de ${characterName}.`
     case "character.condition.remove": return `Removeu uma condição de ${characterName}.`
     case "character.concentration.start": return `${characterName} começou a concentrar em ${operation.spellName}.`
-    case "character.concentration.end": return operation.reason === "failed-save"
-      ? `${characterName} falhou no teste e perdeu a concentração.`
-      : `${characterName} encerrou a concentração.`
+    case "character.concentration.end": return operation.reason === "failed-save" ? `${characterName} falhou no teste e perdeu a concentração.` : `${characterName} encerrou a concentração.`
     case "character.stat.armorClass.set": return `Definiu a CA de ${characterName} para ${formatStat(operation.value)}.`
     case "character.stat.initiative.set": return `Definiu a iniciativa de ${characterName} para ${formatSignedStat(operation.value)}.`
     case "character.stat.mobility.set": return `Definiu a mobilidade de ${characterName} para ${formatStat(operation.value)}.`
@@ -259,6 +255,8 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "ground.item.update": return `Atualizou um item no chão.`
     case "ground.item.remove": return `Removeu um item do chão.`
     case "character.equipment.move.ground": return `${characterName} colocou um equipamento no chão.`
+    case "character.proficiency.add": return `${characterName} ganhou a proficiência ${operation.proficiency.name}.`
+    case "character.proficiency.remove": return `${characterName} perdeu a proficiência ${operation.proficiencyName || "selecionada"}.`
     case "character.hp.undo": return `Desfez uma alteração de ${characterName}.`
   }
 }
