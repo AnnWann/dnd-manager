@@ -5,7 +5,7 @@ import type {
   SessionConditionsState,
   SessionConnection,
   SessionHpLogRecord,
-} from "./protocol";
+} from "../../session/protocol";
 
 const CONCENTRATION_TAG = "dnd-manager:concentrating";
 
