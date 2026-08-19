@@ -6,13 +6,19 @@ export type UserCacheKey = "characters" | "campaigns" | "spells"
 
 type CacheEnvelope<T> = {
   savedAt: number
+  syncedAt?: number
   data: T
 }
 
 export type UserCacheSnapshot<T> = {
   data: T
   savedAt: number
+  syncedAt: number
   fresh: boolean
+}
+
+type CacheWriteOptions = {
+  synced?: boolean
 }
 
 export function readUserCache<T>(
@@ -33,8 +39,9 @@ export function writeUserCache<T>(
   userId: string,
   key: UserCacheKey,
   data: T,
+  options: CacheWriteOptions = {},
 ): void {
-  writeCacheEntry(userId, key, data)
+  writeCacheEntry(userId, key, data, options)
 }
 
 export function readUserCharacterCache<T>(
@@ -56,9 +63,10 @@ export function writeUserCharacterCache<T>(
   userId: string,
   characterId: string,
   data: T,
+  options: CacheWriteOptions = {},
 ): void {
   if (!characterId) return
-  writeCacheEntry(userId, characterCacheKey(characterId), data)
+  writeCacheEntry(userId, characterCacheKey(characterId), data, options)
 }
 
 export function removeUserCharacterCache(
@@ -108,10 +116,14 @@ function readCacheSnapshot<T>(
       return undefined
     }
 
+    const syncedAt =
+      typeof parsed.syncedAt === "number" ? parsed.syncedAt : parsed.savedAt
+
     return {
       data: parsed.data as T,
       savedAt: parsed.savedAt,
-      fresh: Date.now() - parsed.savedAt <= USER_CACHE_FRESHNESS_MS,
+      syncedAt,
+      fresh: Date.now() - syncedAt <= USER_CACHE_FRESHNESS_MS,
     }
   } catch {
     return undefined
@@ -122,12 +134,16 @@ function writeCacheEntry<T>(
   userId: string,
   key: string,
   data: T,
+  options: CacheWriteOptions,
 ): void {
   if (!userId || typeof window === "undefined") return
 
   try {
+    const now = Date.now()
+    const previous = readCacheSnapshot<T>(userId, key)
     const envelope: CacheEnvelope<T> = {
-      savedAt: Date.now(),
+      savedAt: now,
+      syncedAt: options.synced ? now : previous?.syncedAt ?? 0,
       data,
     }
     window.localStorage.setItem(
