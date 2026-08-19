@@ -1,5 +1,6 @@
 export const SESSION_LOG_KEY = "hp-log";
 export const SHARED_INVENTORY_SCOPE = "inventory:shared";
+export const SESSION_LOG_PAGE_SIZE = 20;
 
 export type SessionLogOperation = {
   type: string;
@@ -22,6 +23,13 @@ export type SessionLogRecord = {
   reverseOperation: SessionReverseOperation;
   undoneAt?: string;
   undoneBy?: string;
+};
+
+export type SessionLogPage = {
+  records: SessionLogRecord[];
+  hasMore: boolean;
+  cursor: string | null;
+  pageKind: "latest" | "older";
 };
 
 export type UndoValidationResult =
@@ -72,6 +80,35 @@ export function readSessionLog(
 
 export function trimSessionLog(records: SessionLogRecord[], maxRecords: number): SessionLogRecord[] {
   return records.slice(-maxRecords);
+}
+
+export function getSessionLogPage(
+  records: SessionLogRecord[],
+  beforeLogId?: string,
+): SessionLogPage {
+  const beforeIndex = beforeLogId
+    ? records.findIndex((record) => record.id === beforeLogId)
+    : records.length;
+  const end = beforeIndex >= 0 ? beforeIndex : records.length;
+  const start = Math.max(0, end - SESSION_LOG_PAGE_SIZE);
+  const pageRecords = records.slice(start, end);
+  return {
+    records: pageRecords,
+    hasMore: start > 0,
+    cursor: pageRecords[0]?.id ?? null,
+    pageKind: beforeLogId ? "older" : "latest",
+  };
+}
+
+export function sendSessionLogPage(
+  socket: WebSocket,
+  records: SessionLogRecord[],
+  beforeLogId?: string,
+): void {
+  const page = getSessionLogPage(records, beforeLogId);
+  try {
+    socket.send(JSON.stringify({ type: "session.hp.log", ...page }));
+  } catch {}
 }
 
 export async function writeSessionLog(
@@ -289,7 +326,8 @@ export function inferOperationScopes(
 }
 
 export function broadcastSessionLogToMasters(sockets: WebSocket[], records: SessionLogRecord[]): void {
-  const payload = JSON.stringify({ type: "session.hp.log", records });
+  const page = getSessionLogPage(records);
+  const payload = JSON.stringify({ type: "session.hp.log", ...page });
   for (const socket of sockets) {
     const connection = readConnection(socket);
     if (connection?.role !== "MASTER") continue;
