@@ -14,6 +14,11 @@ import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
 import type { SessionProficiencyClientMessage } from "./proficiencySessionProtocol"
 import type { SessionRaceClientMessage } from "./raceSessionProtocol"
 import type { SessionProfileClientMessage } from "./profileSessionProtocol"
+import {
+  parseCharacterLifecycleServerMessage,
+  type SessionCharacterLifecycleClientMessage,
+  type SessionCharacterLifecycleServerMessage,
+} from "./characterLifecycleSessionProtocol"
 import type {
   SessionInventoryClientMessage,
   SessionInventoryServerMessage,
@@ -29,7 +34,7 @@ export type SessionSocketOptions = {
   role: SessionRuntimeRole
   clientId: string
   onStatusChange: (status: SessionRuntimeStatus) => void
-  onMessage: (message: ServerSessionMessage | SessionAbilityServerMessage | SessionInventoryServerMessage) => void
+  onMessage: (message: ServerSessionMessage | SessionAbilityServerMessage | SessionInventoryServerMessage | SessionCharacterLifecycleServerMessage) => void
 }
 
 const HEARTBEAT_MIN_MS = 27_000
@@ -60,6 +65,7 @@ export class SessionSocket {
     | SessionProficiencyClientMessage
     | SessionRaceClientMessage
     | SessionProfileClientMessage
+    | SessionCharacterLifecycleClientMessage
     | { type: "session.magic.operation"; operation: SessionMagicOperation }
     | { type: "session.equipment.operation"; operation: SessionEquipmentOperation }
   ): boolean {
@@ -86,8 +92,9 @@ export class SessionSocket {
 
     socket.onmessage = (event) => {
       if (typeof event.data !== "string") return
+      const lifecycleMessage = parseCharacterLifecycleServerMessage(event.data)
       const inventoryMessage = parseInventoryServerMessage(event.data)
-      const message = inventoryMessage ?? parseAbilityServerMessage(event.data) ?? parseServerSessionMessage(event.data)
+      const message = lifecycleMessage ?? inventoryMessage ?? parseAbilityServerMessage(event.data) ?? parseServerSessionMessage(event.data)
       if (!message) return
       if (message.type === "session.ready") {
         this.hasConnectedOnce = true
