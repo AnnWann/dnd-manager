@@ -30,6 +30,18 @@ type UserMagicState = {
 }
 
 const UserMagicStateContext = createContext<UserMagicState | null>(null)
+const spellRequests = new Map<string, Promise<AccessibleHomebrewSpell[]>>()
+
+function fetchSpellsOnce(userId: string): Promise<AccessibleHomebrewSpell[]> {
+  const existing = spellRequests.get(userId)
+  if (existing) return existing
+
+  const request = getAccessibleHomebrewSpells().finally(() => {
+    if (spellRequests.get(userId) === request) spellRequests.delete(userId)
+  })
+  spellRequests.set(userId, request)
+  return request
+}
 
 export function UserMagicProvider({ children }: { children: ReactNode }) {
   const { data: session } = authClient.useSession()
@@ -58,7 +70,7 @@ export function UserMagicProvider({ children }: { children: ReactNode }) {
     setErrorMessage("")
 
     try {
-      setRecords(await getAccessibleHomebrewSpells())
+      setRecords(await fetchSpellsOnce(userId))
     } catch {
       setErrorMessage("Não foi possível atualizar as magias homebrew.")
     } finally {
