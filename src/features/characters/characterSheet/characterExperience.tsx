@@ -3,9 +3,9 @@ import { Award, Minus, Plus } from "lucide-react"
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
-import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getExperienceProgress } from "../../../models/characters/characterExperience"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 
 type Props = {
   character: CharacterTemplate
@@ -19,13 +19,13 @@ export function CharacterExperience({
   character,
   updateCharacter,
 }: Props) {
-  const sessionRuntime = useOptionalSessionRuntime()
+  const { dispatchStatOperation } = useCharacterWorkspace()
   const progress = getExperienceProgress(character)
   const characterId = character.get("id")
 
   function setExperience(value: number) {
     const nextExperience = Math.max(0, Math.trunc(value))
-    if (sessionRuntime?.dispatchSheetOperation({
+    if (dispatchStatOperation({
       type: "character.stat.experience.set",
       characterId,
       value: nextExperience,
