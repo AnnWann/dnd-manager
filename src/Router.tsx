@@ -62,9 +62,9 @@ export function AppRouter() {
         >
           <Route index element={<Navigate to="characters" replace />} />
           <Route path="characters" element={<UserCharactersTab />} />
-          <Route path="campaigns" element={<UserCampaignsRouteView />} />
 
           <Route element={<UserMagicRouteBoundary />}>
+            <Route path="campaigns" element={<UserCampaignsRouteView />} />
             <Route path="characters/create" element={<UserCharacterCreateView />} />
             <Route path="characters/:characterId" element={<Navigate to="sheet" replace />} />
             <Route path="characters/:characterId/level-up" element={<UserCharacterLevelUpView />} />
