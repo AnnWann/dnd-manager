@@ -26,6 +26,7 @@ export type SpellCompendiumSummary = Pick<
 export type SpellCompendiumQuery = {
   q?: string
   level?: number
+  maxLevel?: number
   className?: string
   school?: string
   concentration?: boolean
@@ -72,6 +73,7 @@ export async function queryOfficialSpells(
       params: {
         q: query.q || undefined,
         level: query.level,
+        maxLevel: query.maxLevel,
         class: query.className || undefined,
         school: query.school || undefined,
         concentration: query.concentration,
@@ -199,6 +201,7 @@ function filterLocalSpells(spells: Spell[], query: SpellCompendiumQuery): Spell[
 
   return spells.filter((spell) => {
     if (query.level !== undefined && spell.slotLevel !== query.level) return false
+    if (query.maxLevel !== undefined && spell.slotLevel > query.maxLevel) return false
     if (normalizedClass && !spell.classes.some((entry) => normalizeSearch(entry) === normalizedClass)) return false
     if (normalizedSchool && normalizeSearch(String(spell.school)) !== normalizedSchool) return false
     if (query.concentration !== undefined && spell.concentration !== query.concentration) return false
