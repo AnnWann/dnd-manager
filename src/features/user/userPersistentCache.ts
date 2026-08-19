@@ -1,5 +1,6 @@
 const USER_CACHE_PREFIX = "dnd-manager:user-cache:v1"
 const MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000
+export const USER_CACHE_FRESHNESS_MS = 30 * 60 * 1000
 
 export type UserCacheKey = "characters" | "campaigns" | "spells"
 
@@ -8,11 +9,24 @@ type CacheEnvelope<T> = {
   data: T
 }
 
+export type UserCacheSnapshot<T> = {
+  data: T
+  savedAt: number
+  fresh: boolean
+}
+
 export function readUserCache<T>(
   userId: string,
   key: UserCacheKey,
 ): T | undefined {
-  return readCacheEntry<T>(userId, key)
+  return readUserCacheSnapshot<T>(userId, key)?.data
+}
+
+export function readUserCacheSnapshot<T>(
+  userId: string,
+  key: UserCacheKey,
+): UserCacheSnapshot<T> | undefined {
+  return readCacheSnapshot<T>(userId, key)
 }
 
 export function writeUserCache<T>(
@@ -27,8 +41,15 @@ export function readUserCharacterCache<T>(
   userId: string,
   characterId: string,
 ): T | undefined {
+  return readUserCharacterCacheSnapshot<T>(userId, characterId)?.data
+}
+
+export function readUserCharacterCacheSnapshot<T>(
+  userId: string,
+  characterId: string,
+): UserCacheSnapshot<T> | undefined {
   if (!characterId) return undefined
-  return readCacheEntry<T>(userId, characterCacheKey(characterId))
+  return readCacheSnapshot<T>(userId, characterCacheKey(characterId))
 }
 
 export function writeUserCharacterCache<T>(
@@ -66,14 +87,15 @@ export function clearUserCache(userId: string): void {
   }
 }
 
-function readCacheEntry<T>(
+function readCacheSnapshot<T>(
   userId: string,
   key: string,
-): T | undefined {
+): UserCacheSnapshot<T> | undefined {
   if (!userId || typeof window === "undefined") return undefined
 
   try {
-    const raw = window.localStorage.getItem(storageKey(userId, key))
+    const cacheKey = storageKey(userId, key)
+    const raw = window.localStorage.getItem(cacheKey)
     if (!raw) return undefined
 
     const parsed = JSON.parse(raw) as Partial<CacheEnvelope<T>>
@@ -82,11 +104,15 @@ function readCacheEntry<T>(
       Date.now() - parsed.savedAt > MAX_CACHE_AGE_MS ||
       !("data" in parsed)
     ) {
-      window.localStorage.removeItem(storageKey(userId, key))
+      window.localStorage.removeItem(cacheKey)
       return undefined
     }
 
-    return parsed.data as T
+    return {
+      data: parsed.data as T,
+      savedAt: parsed.savedAt,
+      fresh: Date.now() - parsed.savedAt <= USER_CACHE_FRESHNESS_MS,
+    }
   } catch {
     return undefined
   }
