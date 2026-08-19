@@ -6,7 +6,19 @@
     "strict": true,
     "noEmit": true,
     "types": ["./worker-configuration.d.ts"],
-    "lib": ["ES2022"]
+    "lib": ["ES2022"],
+    "rootDirs": [
+      "src",
+      "src/routes",
+      "src/routes/session",
+      "src/routes/characters/sheet",
+      "src/routes/characters/abilities",
+      "src/routes/characters/spells",
+      "src/routes/characters/equipment",
+      "src/routes/characters/inventory",
+      "src/routes/characters/proficiencies",
+      ".."
+    ]
   },
   "include": [
     "src/**/*.ts",
