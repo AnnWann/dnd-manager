@@ -1,7 +1,7 @@
 import {
   authenticateSessionConnection,
   type SessionServerEnv,
-} from "./auth";
+} from "./session/auth";
 import { SessionActor } from "./session/ComposedSessionActor";
 
 export { SessionActor };
