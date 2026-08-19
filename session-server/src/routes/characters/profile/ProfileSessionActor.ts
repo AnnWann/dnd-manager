@@ -1,12 +1,17 @@
+import { PHB_BACKGROUND_PRESETS } from "../../src/data/characterCreation/phbPresets";
+import type { CharacterBackground } from "../../src/models/characters/CharacterBackground";
 import { CharacterTemplate, type CharacterTemplateProps } from "../../src/models/characters/CharacterTemplate";
+import {
+  withCharacterBackground,
+  withoutCharacterBackground,
+} from "../../src/models/characters/characterBackgroundStorage";
 import type { CharacterProfile } from "../../src/models/characters/characterProfile";
-import type { Itemmable } from "../../src/models/items/item";
 import type { Proficiency } from "../../src/models/sheet/Proficiency";
 import { SessionActor as RaceSessionActor } from "./RaceSessionActor";
 import { parseProfileClientMessage, type SessionProfileOperation } from "./profileProtocol";
 import { MAX_HP_LOG_RECORDS } from "./hpState";
 import type { SessionAbilityState } from "./abilityProtocol";
-import type { SessionConnection, SessionHpState, SessionSkillsState } from "./protocol";
+import type { SessionConnection, SessionHpState } from "./protocol";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
@@ -75,38 +80,27 @@ export class SessionActor extends RaceSessionActor {
       return;
     }
 
-    const profile = normalizeProfile(operation.profile);
-    const inventory = normalizeInventory(operation.inventory);
-    const skills = normalizeSkills(operation.skills, hp.skills);
-    const proficiencies = normalizeProficiencies(operation.proficiencies);
-    if (!profile || !inventory || !skills || !proficiencies) {
-      sendError(webSocket, "PROFILE_OPERATION_INVALID", "The requested profile/background state is invalid.");
+    const applied = applyProfileOperation(character, hp, operation);
+    if (!applied.ok) {
+      sendError(webSocket, applied.code, applied.message);
       return;
     }
+    if (JSON.stringify(character.toJSON()) === JSON.stringify(applied.character.toJSON())) return;
 
-    const next = character
-      .with("profile", profile)
-      .with("inventory", inventory)
-      .withSheet("skills", skills)
-      .withSheet("proficiencies", proficiencies);
-    if (JSON.stringify(character.toJSON()) === JSON.stringify(next.toJSON())) return;
-
-    const skillsChanged = JSON.stringify(hp.skills) !== JSON.stringify(skills);
-    const nextHp: SessionHpState = skillsChanged
-      ? { ...hp, skills, skillsInitialized: true, revision: hp.revision + 1 }
-      : hp;
     const nextState: SessionAbilityState = {
       ...stored,
-      character: next.toJSON() as unknown as Record<string, unknown>,
+      character: applied.character.toJSON() as unknown as Record<string, unknown>,
       revision: stored.revision + 1,
     };
     abilities[operation.characterId] = nextState;
-    if (skillsChanged) hpState[operation.characterId] = nextHp;
+    const hpChanged = JSON.stringify(hp.skills) !== JSON.stringify(applied.hp.skills);
+    if (hpChanged) hpState[operation.characterId] = applied.hp;
 
     const now = new Date().toISOString();
     const previous = log[log.length - 1];
     const canCoalesce = Boolean(
-      previous && !previous.undoneAt
+      operation.type === "character.profile.replace"
+      && previous && !previous.undoneAt
       && previous.actorId === connection.userId
       && previous.operation.type === "character.profile.replace"
       && previous.operation.characterId === operation.characterId
@@ -135,11 +129,11 @@ export class SessionActor extends RaceSessionActor {
 
     await this.ctx.storage.put({
       [ABILITIES_STATE_KEY]: abilities,
-      ...(skillsChanged ? { [HP_STATE_KEY]: hpState } : {}),
+      ...(hpChanged ? { [HP_STATE_KEY]: hpState } : {}),
       [HP_LOG_KEY]: nextLog,
     });
     broadcast(this.ctx.getWebSockets(), { type: "session.abilities.updated", character: nextState });
-    if (skillsChanged) broadcast(this.ctx.getWebSockets(), { type: "session.hp.updated", character: nextHp });
+    if (hpChanged) broadcast(this.ctx.getWebSockets(), { type: "session.hp.updated", character: applied.hp });
     broadcastToMasters(this.ctx.getWebSockets(), nextLog);
   }
 
@@ -200,6 +194,73 @@ export class SessionActor extends RaceSessionActor {
   }
 }
 
+type ProfileApplyResult =
+  | { ok: true; character: CharacterTemplate; hp: SessionHpState }
+  | { ok: false; code: string; message: string };
+
+function applyProfileOperation(
+  character: CharacterTemplate,
+  hp: SessionHpState,
+  operation: SessionProfileOperation,
+): ProfileApplyResult {
+  if (operation.type === "character.profile.replace") {
+    const profile = normalizeProfile(operation.profile);
+    if (!profile) return invalid("PROFILE_OPERATION_INVALID", "The requested profile state is invalid.");
+    const currentBackground = character.get("profile").background;
+    const { background: _incomingBackground, ...profileWithoutBackground } = profile;
+    const nextProfile = currentBackground
+      ? { ...profileWithoutBackground, background: currentBackground }
+      : profileWithoutBackground;
+    return { ok: true, character: character.with("profile", nextProfile), hp };
+  }
+
+  if (operation.type === "character.profile.background.remove") {
+    return { ok: true, character: withoutCharacterBackground(character), hp };
+  }
+
+  const background = normalizeBackground(operation.background);
+  if (!background) return invalid("BACKGROUND_INVALID", "The requested background is invalid.");
+
+  const preset = PHB_BACKGROUND_PRESETS.find((entry) => entry.id === background.id);
+  if (operation.addEquipment && !preset) {
+    return invalid("BACKGROUND_EQUIPMENT_NOT_ALLOWED", "Starting equipment can only be granted from a known background preset.");
+  }
+
+  const safeBackground: CharacterBackground = preset
+    ? {
+        ...background,
+        startingEquipment: preset.startingEquipment.map((item) => ({ ...item })),
+      }
+    : { ...background, startingEquipment: [] };
+
+  let next = withCharacterBackground(character, safeBackground);
+  const sheet = next.get("sheet");
+  const skills = { ...sheet.skills };
+  for (const skill of safeBackground.skillProficiencies) {
+    if (skills[skill] !== "expertise") skills[skill] = "proficient";
+  }
+  const proficiencies = mergeProficiencies(sheet.proficiencies ?? [], safeBackground.proficiencies);
+  const inventory = operation.addEquipment && preset
+    ? [
+        ...next.get("inventory"),
+        ...preset.startingEquipment.map((item) => ({
+          ...item,
+          id: crypto.randomUUID(),
+          desc: item.desc || `Equipamento inicial do antecedente ${safeBackground.name}.`,
+        })),
+      ]
+    : next.get("inventory");
+
+  next = next.withPatch({
+    sheet: { ...sheet, skills, proficiencies },
+    inventory,
+  });
+  const nextHp: SessionHpState = JSON.stringify(hp.skills) === JSON.stringify(skills)
+    ? hp
+    : { ...hp, skills, skillsInitialized: true, revision: hp.revision + 1 };
+  return { ok: true, character: next, hp: nextHp };
+}
+
 function normalizeProfile(profile: CharacterProfile): CharacterProfile | null {
   if (!profile || typeof profile !== "object") return null;
   if (typeof profile.traits !== "string" || typeof profile.history !== "string" || typeof profile.physicalAppearance !== "string") return null;
@@ -215,41 +276,27 @@ function normalizeProfile(profile: CharacterProfile): CharacterProfile | null {
   return structuredClone(profile);
 }
 
-function normalizeInventory(items: Itemmable[]): Itemmable[] | null {
-  if (!Array.isArray(items)) return null;
-  const ids = new Set<string>();
-  for (const item of items) {
-    if (!item || typeof item.id !== "string" || !item.id.trim() || ids.has(item.id)) return null;
-    if (typeof item.name !== "string" || !item.name.trim()) return null;
-    const quantity = Number(item.quantity ?? 1);
-    if (!Number.isFinite(quantity) || quantity <= 0) return null;
-    ids.add(item.id);
-  }
-  return structuredClone(items);
+function normalizeBackground(background: CharacterBackground): CharacterBackground | null {
+  if (!background || typeof background.id !== "string" || typeof background.name !== "string" || !background.name.trim()) return null;
+  if (!Array.isArray(background.skillProficiencies) || !Array.isArray(background.proficiencies) || !Array.isArray(background.startingEquipment)) return null;
+  return structuredClone(background);
 }
 
-function normalizeSkills(value: Record<string, string>, fallback: SessionSkillsState): SessionSkillsState | null {
-  const allowed = new Set(["none", "proficient", "expertise"]);
-  const next = { ...fallback } as Record<string, string>;
-  for (const key of Object.keys(fallback)) {
-    const candidate = value[key];
-    if (typeof candidate !== "string" || !allowed.has(candidate)) return null;
-    next[key] = candidate;
+function mergeProficiencies(current: Proficiency[], incoming: Proficiency[]): Proficiency[] {
+  const result = [...current];
+  for (const proficiency of incoming) {
+    const duplicate = result.some((entry) =>
+      entry.category === proficiency.category
+      && entry.name.trim().toLocaleLowerCase("pt-BR") === proficiency.name.trim().toLocaleLowerCase("pt-BR"),
+    );
+    if (!duplicate) result.push(structuredClone(proficiency));
   }
-  return next as SessionSkillsState;
+  return result;
 }
 
-function normalizeProficiencies(values: Proficiency[]): Proficiency[] | null {
-  if (!Array.isArray(values)) return null;
-  const ids = new Set<string>();
-  for (const value of values) {
-    if (!value || typeof value.id !== "string" || !value.id.trim() || ids.has(value.id)) return null;
-    if (typeof value.name !== "string" || !value.name.trim() || typeof value.category !== "string") return null;
-    ids.add(value.id);
-  }
-  return structuredClone(values);
+function invalid(code: string, message: string): ProfileApplyResult {
+  return { ok: false, code, message };
 }
-
 function parseUndoLogId(raw: string): string | null {
   try { const value = JSON.parse(raw) as { type?: unknown; logId?: unknown }; return value.type === "session.log.undo" && typeof value.logId === "string" ? value.logId : null; }
   catch { return null; }
