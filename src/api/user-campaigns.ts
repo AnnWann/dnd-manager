@@ -129,84 +129,65 @@ export async function createMyCampaign(input: {
     "/me/campaigns",
     input,
   )
-
   return response.data.campaign
 }
 
-export async function requestCampaignJoin(inviteCode: string): Promise<UserCampaign> {
+export async function requestCampaignJoin(inviteCode: string): Promise<void> {
   if (LOCAL_AUTH_BYPASS) {
-    const campaign = readLocalCampaigns().find(
-      (entry) => entry.inviteCode === inviteCode.trim().toUpperCase(),
-    )
-    if (!campaign) throw new Error("Campanha não encontrada.")
-    return campaign
-  }
-
-  const response = await apiClient.post<CampaignResponse>("/me/campaigns/join", {
-    inviteCode,
-  })
-  return response.data.campaign
-}
-
-export async function leaveCampaign(campaignId: string): Promise<void> {
-  if (LOCAL_AUTH_BYPASS) {
-    writeLocalCampaigns(readLocalCampaigns().filter((campaign) => campaign.id !== campaignId))
+    const normalized = inviteCode.trim().toUpperCase()
+    const campaigns = readLocalCampaigns()
+    if (!campaigns.some((campaign) => campaign.inviteCode === normalized)) {
+      throw new Error("Nenhuma campanha local foi encontrada com esse código.")
+    }
     return
   }
 
-  await apiClient.delete(`/me/campaigns/${encodeURIComponent(campaignId)}/membership`)
+  await apiClient.post("/me/campaigns/join", { inviteCode })
 }
 
 export async function linkCharacterToCampaign(
   campaignId: string,
   characterId: string,
-  visibility: CampaignCharacterVisibility,
+  visibility: CampaignCharacterVisibility = "PARTY",
 ): Promise<void> {
   if (LOCAL_AUTH_BYPASS) {
-    const character = getLocalCharacters().find((entry) => entry.id === characterId)
-    if (!character) throw new Error("Personagem não encontrado.")
-    writeLocalCampaigns(
-      readLocalCampaigns().map((campaign) =>
-        campaign.id === campaignId
-          ? {
-              ...campaign,
-              characters: [
-                ...campaign.characters.filter((entry) => entry.id !== characterId),
-                { id: characterId, name: character.name, visibility },
-              ],
-            }
-          : campaign,
-      ),
+    const character = getLocalCharacters().find(
+      (entry) => entry.id === characterId,
     )
+    if (!character) throw new Error("Personagem local não encontrado.")
+
+    const campaigns = readLocalCampaigns().map((campaign) =>
+      campaign.id === campaignId
+        ? {
+            ...campaign,
+            characters: campaign.characters.some(
+              (entry) => entry.id === characterId,
+            )
+              ? campaign.characters.map((entry) =>
+                  entry.id === characterId
+                    ? { ...entry, visibility }
+                    : entry,
+                )
+              : [
+                  ...campaign.characters,
+                  {
+                    id: character.id,
+                    name: character.name,
+                    visibility,
+                  },
+                ],
+            updatedAt: new Date().toISOString(),
+          }
+        : campaign,
+    )
+    writeLocalCampaigns(campaigns)
+    syncLocalCharacterCampaigns(campaigns)
     return
   }
 
-  await apiClient.post(`/me/campaigns/${encodeURIComponent(campaignId)}/characters`, {
-    characterId,
-    visibility,
-  })
-}
-
-export async function unlinkCharacterFromCampaign(
-  campaignId: string,
-  characterId: string,
-): Promise<void> {
-  if (LOCAL_AUTH_BYPASS) {
-    writeLocalCampaigns(
-      readLocalCampaigns().map((campaign) =>
-        campaign.id === campaignId
-          ? {
-              ...campaign,
-              characters: campaign.characters.filter((entry) => entry.id !== characterId),
-            }
-          : campaign,
-      ),
-    )
-    return
-  }
-
-  await apiClient.delete(
+  await apiClient.post(
     `/me/campaigns/${encodeURIComponent(campaignId)}/characters/${encodeURIComponent(characterId)}`,
+    { visibility },
   )
 }
 
@@ -216,18 +197,7 @@ export async function updateCharacterCampaignVisibility(
   visibility: CampaignCharacterVisibility,
 ): Promise<void> {
   if (LOCAL_AUTH_BYPASS) {
-    writeLocalCampaigns(
-      readLocalCampaigns().map((campaign) =>
-        campaign.id === campaignId
-          ? {
-              ...campaign,
-              characters: campaign.characters.map((entry) =>
-                entry.id === characterId ? { ...entry, visibility } : entry,
-              ),
-            }
-          : campaign,
-      ),
-    )
+    await linkCharacterToCampaign(campaignId, characterId, visibility)
     return
   }
 
@@ -237,12 +207,66 @@ export async function updateCharacterCampaignVisibility(
   )
 }
 
+export async function unlinkCharacterFromCampaign(
+  campaignId: string,
+  characterId: string,
+): Promise<void> {
+  if (LOCAL_AUTH_BYPASS) {
+    const campaigns = readLocalCampaigns().map((campaign) =>
+      campaign.id === campaignId
+        ? {
+            ...campaign,
+            characters: campaign.characters.filter(
+              (entry) => entry.id !== characterId,
+            ),
+            updatedAt: new Date().toISOString(),
+          }
+        : campaign,
+    )
+    writeLocalCampaigns(campaigns)
+    syncLocalCharacterCampaigns(campaigns)
+    return
+  }
+
+  await apiClient.delete(
+    `/me/campaigns/${encodeURIComponent(campaignId)}/characters/${encodeURIComponent(characterId)}`,
+  )
+}
+
+export async function leaveCampaign(campaignId: string): Promise<void> {
+  if (LOCAL_AUTH_BYPASS) {
+    const campaigns = readLocalCampaigns().filter(
+      (campaign) => campaign.id !== campaignId || campaign.isOwner,
+    )
+    writeLocalCampaigns(campaigns)
+    syncLocalCharacterCampaigns(campaigns)
+    return
+  }
+
+  await apiClient.delete(
+    `/me/campaigns/${encodeURIComponent(campaignId)}/membership`,
+  )
+}
+
 export async function reviewCampaignMember(
   campaignId: string,
   userId: string,
   status: "ACTIVE" | "REMOVED",
 ): Promise<void> {
-  if (LOCAL_AUTH_BYPASS) return
+  if (LOCAL_AUTH_BYPASS) {
+    const campaigns = readLocalCampaigns().map((campaign) =>
+      campaign.id === campaignId
+        ? {
+            ...campaign,
+            pendingMembers: campaign.pendingMembers.filter(
+              (member) => member.id !== userId,
+            ),
+          }
+        : campaign,
+    )
+    writeLocalCampaigns(campaigns)
+    return
+  }
 
   await apiClient.patch(
     `/me/campaigns/${encodeURIComponent(campaignId)}/members/${encodeURIComponent(userId)}`,
@@ -256,27 +280,102 @@ export async function reviewCampaignSpell(
   status: Exclude<CampaignSpellStatus, "PENDING">,
   note?: string,
 ): Promise<void> {
-  if (LOCAL_AUTH_BYPASS) return
+  if (LOCAL_AUTH_BYPASS) {
+    const campaigns = readLocalCampaigns().map((campaign) => {
+      if (campaign.id !== campaignId) return campaign
+
+      const homebrewSpells = campaign.homebrewSpells.map((spell) =>
+        spell.id === spellId
+          ? {
+              ...spell,
+              status,
+              note: note?.trim() || null,
+              reviewedAt: new Date().toISOString(),
+            }
+          : spell,
+      )
+
+      return {
+        ...campaign,
+        homebrewSpells,
+        homebrew: countSpellStatuses(homebrewSpells),
+      }
+    })
+    writeLocalCampaigns(campaigns)
+    return
+  }
 
   await apiClient.patch(
-    `/me/campaigns/${encodeURIComponent(campaignId)}/spells/${encodeURIComponent(spellId)}`,
+    `/campaigns/${encodeURIComponent(campaignId)}/spells/${encodeURIComponent(spellId)}`,
     { status, note },
   )
 }
 
 function readLocalCampaigns(): UserCampaign[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem(LOCAL_CAMPAIGNS_KEY) ?? "[]")
-    return Array.isArray(parsed) ? parsed : []
+    const parsed = JSON.parse(
+      window.localStorage.getItem(LOCAL_CAMPAIGNS_KEY) ?? "[]",
+    ) as unknown
+
+    if (!Array.isArray(parsed)) return []
+
+    return (parsed as UserCampaign[]).map((campaign) => ({
+      ...campaign,
+      characters: (campaign.characters ?? []).map((character) => ({
+        ...character,
+        visibility: character.visibility ?? "PARTY",
+      })),
+      pendingMembers: campaign.pendingMembers ?? [],
+      homebrew: campaign.homebrew ?? {
+        approved: 0,
+        pending: 0,
+        rejected: 0,
+        revoked: 0,
+      },
+      homebrewSpells: campaign.homebrewSpells ?? [],
+    }))
   } catch {
     return []
   }
 }
 
 function writeLocalCampaigns(campaigns: UserCampaign[]): void {
-  localStorage.setItem(LOCAL_CAMPAIGNS_KEY, JSON.stringify(campaigns))
+  window.localStorage.setItem(
+    LOCAL_CAMPAIGNS_KEY,
+    JSON.stringify(campaigns),
+  )
+}
+
+function syncLocalCharacterCampaigns(campaigns: UserCampaign[]): void {
+  const linksByCharacter = new Map<string, Array<{ id: string; name: string }>>()
+
+  for (const campaign of campaigns) {
+    for (const character of campaign.characters) {
+      const links = linksByCharacter.get(character.id) ?? []
+      links.push({ id: campaign.id, name: campaign.name })
+      linksByCharacter.set(character.id, links)
+    }
+  }
+
+  setLocalCharacters(
+    getLocalCharacters().map((character) => ({
+      ...character,
+      campaigns: linksByCharacter.get(character.id) ?? [],
+    })),
+  )
+}
+
+function countSpellStatuses(
+  spells: UserCampaign["homebrewSpells"],
+): UserCampaign["homebrew"] {
+  return {
+    approved: spells.filter((spell) => spell.status === "APPROVED").length,
+    pending: spells.filter((spell) => spell.status === "PENDING").length,
+    rejected: spells.filter((spell) => spell.status === "REJECTED").length,
+    revoked: spells.filter((spell) => spell.status === "REVOKED").length,
+  }
 }
 
 function createInviteCode(): string {
-  return crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase()
+  return crypto.randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()
 }
