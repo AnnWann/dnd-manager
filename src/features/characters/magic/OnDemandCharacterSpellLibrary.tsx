@@ -171,7 +171,11 @@ export function OnDemandCharacterSpellLibrary({
     }
 
     const spellToAdd = selectedSpell
-    const sourceType: SpellSourceType = selectedSource.startsWith("class:") ? "class" : selectedSource
+    const sourceType: SpellSourceType = selectedSource.startsWith("class:")
+      ? "class"
+      : selectedSource === "feat"
+        ? "feat"
+        : "ability"
     updateCharacter(character.get("id"), (current) => {
       const alreadyKnown = current.get("magic")?.spells.knownSpells.some((entry) => entry.spells.id === spellToAdd.index) ?? false
       if (alreadyKnown) return current
