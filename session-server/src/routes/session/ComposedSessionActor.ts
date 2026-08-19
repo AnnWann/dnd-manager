@@ -236,9 +236,6 @@ export class SessionActor extends BaseSessionActor {
       if (restored) return;
     }
 
-    // HP, stats, conditions, concentration and rests still use their existing
-    // state-specific reverse functions in the base actor. Ordering authority is
-    // nevertheless centralized here and the resulting log is normalized here.
     await super.webSocketMessage(webSocket, originalMessage);
     await this.normalizeLog();
   }
@@ -408,18 +405,27 @@ export class SessionActor extends BaseSessionActor {
     };
 
     if (operation.type === "character.session.remove") {
-      if (!lifecycle[characterId] && !abilities[characterId] && !hp[characterId]) {
+      const currentLifecycle = lifecycle[characterId];
+      const currentAbility = abilities[characterId];
+      const currentHp = hp[characterId];
+      if ((!currentLifecycle || !currentLifecycle.active) && !currentAbility && !currentHp) {
         sendError(webSocket, "CHARACTER_NOT_IN_SESSION", "The character is not active in this session.");
         return;
       }
-      delete lifecycle[characterId];
+      lifecycle[characterId] = {
+        characterId,
+        character: currentLifecycle?.character ?? currentAbility?.character ?? {},
+        ownerUserId: currentLifecycle?.ownerUserId ?? currentHp?.ownerUserId,
+        active: false,
+        revision: (currentLifecycle?.revision ?? 0) + 1,
+      };
       delete abilities[characterId];
       delete hp[characterId];
       delete conditions[characterId];
     } else if (operation.type === "character.session.owner.set") {
       const storedAbility = abilities[characterId];
       const storedHp = hp[characterId];
-      if (!storedAbility?.initialized || !storedHp) {
+      if (!storedAbility?.initialized || !storedHp || lifecycle[characterId]?.active === false) {
         sendError(webSocket, "CHARACTER_NOT_IN_SESSION", "The character is not active in this session.");
         return;
       }
@@ -439,13 +445,13 @@ export class SessionActor extends BaseSessionActor {
       abilities[characterId] = nextAbility;
       hp[characterId] = {
         ...storedHp,
-        ownerUserId: operation.owner?.id,
+        ownerUserId: operation.owner.id,
         revision: storedHp.revision + 1,
       };
       lifecycle[characterId] = {
         characterId,
         character: nextAbility.character,
-        ownerUserId: operation.owner?.id,
+        ownerUserId: operation.owner.id,
         active: true,
         revision: (lifecycle[characterId]?.revision ?? 0) + 1,
       };
@@ -463,6 +469,10 @@ export class SessionActor extends BaseSessionActor {
       }
       if (operation.type === "character.session.add" && (lifecycle[characterId]?.active || abilities[characterId]?.initialized)) {
         sendError(webSocket, "CHARACTER_ALREADY_IN_SESSION", "The character is already active in this session.");
+        return;
+      }
+      if (operation.type === "character.session.resync" && lifecycle[characterId]?.active === false) {
+        sendError(webSocket, "CHARACTER_NOT_IN_SESSION", "A removed character must be added again before it can be resynchronized.");
         return;
       }
 
@@ -526,6 +536,9 @@ export class SessionActor extends BaseSessionActor {
       const snapshot = reverse.snapshot;
       if (snapshot.lifecycle) {
         broadcast(this.ctx.getWebSockets(), { type: "session.character.updated", character: snapshot.lifecycle });
+        if (!snapshot.lifecycle.active) {
+          broadcast(this.ctx.getWebSockets(), { type: "session.character.removed", characterId: reverse.characterId });
+        }
       } else {
         broadcast(this.ctx.getWebSockets(), { type: "session.character.removed", characterId: reverse.characterId });
       }
@@ -583,7 +596,6 @@ export class SessionActor extends BaseSessionActor {
     const stored = (await this.ctx.storage.get<Record<string, SessionCharacterLifecycleState>>(CHARACTER_LIFECYCLE_STATE_KEY)) ?? {};
     if (Object.keys(stored).length) return stored;
 
-    // Migration path for sessions created before explicit lifecycle state existed.
     const [abilities, hp] = await Promise.all([this.readAbilitiesState(), this.readHpState()]);
     const migrated = Object.fromEntries(
       Object.values(abilities)
@@ -612,7 +624,7 @@ export class SessionActor extends BaseSessionActor {
 
   private async sendCharacterLifecycleSnapshot(socket: WebSocket): Promise<void> {
     const state = await this.readCharacterLifecycleState();
-    send(socket, { type: "session.characters.snapshot", characters: Object.values(state).filter((entry) => entry.active) });
+    send(socket, { type: "session.characters.snapshot", characters: Object.values(state) });
   }
 }
 
