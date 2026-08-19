@@ -14,13 +14,6 @@ import { sanitizeCharacterItemData } from "../../../../../server/character-items
 import { prisma } from "../../../../../server/prisma"
 import { requireSession } from "../../../../../server/session"
 
-type RouteContext = {
-  params: Promise<{
-    characterId: string
-    domain: string
-  }>
-}
-
 type DomainResult = {
   domain: string
   payload: unknown
@@ -38,13 +31,10 @@ const SPELL_REFERENCE_DOMAINS = new Set<CharacterDataDomain>([
   CharacterDataDomain.PROGRESSION,
 ])
 
-export async function GET(
-  request: Request,
-  context: RouteContext,
-): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const { characterId, domain: rawDomain } = await context.params
+    const { characterId, domain: rawDomain } = getRouteParams(request)
     const domain = parseDomain(rawDomain)
 
     await requireOwnedCharacter(characterId, session.user.id)
@@ -73,27 +63,18 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: Request,
-  context: RouteContext,
-): Promise<Response> {
-  return writeDomain(request, context)
+export async function PUT(request: Request): Promise<Response> {
+  return writeDomain(request)
 }
 
-export async function PATCH(
-  request: Request,
-  context: RouteContext,
-): Promise<Response> {
-  return writeDomain(request, context)
+export async function PATCH(request: Request): Promise<Response> {
+  return writeDomain(request)
 }
 
-async function writeDomain(
-  request: Request,
-  context: RouteContext,
-): Promise<Response> {
+async function writeDomain(request: Request): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const { characterId, domain: rawDomain } = await context.params
+    const { characterId, domain: rawDomain } = getRouteParams(request)
     const domain = parseDomain(rawDomain)
     const body = await readJsonObject(request)
     const expectedVersion = readExpectedVersion(body.expectedVersion)
@@ -256,6 +237,42 @@ async function writeDomain(
   } catch (error) {
     return handleApiError(error)
   }
+}
+
+function getRouteParams(request: Request): {
+  characterId: string
+  domain: string
+} {
+  const segments = new URL(request.url).pathname
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => decodeURIComponent(segment))
+
+  const charactersIndex = segments.findIndex(
+    (segment, index) =>
+      segment === "characters" &&
+      segments[index - 1] === "me" &&
+      segments[index - 2] === "api",
+  )
+
+  const characterId =
+    charactersIndex >= 0 ? segments[charactersIndex + 1]?.trim() : ""
+  const domainsSegment =
+    charactersIndex >= 0 ? segments[charactersIndex + 2] : undefined
+  const domain =
+    domainsSegment === "domains"
+      ? segments[charactersIndex + 3]?.trim() ?? ""
+      : ""
+
+  if (!characterId || !domain) {
+    throw new ApiError(
+      400,
+      "INVALID_CHARACTER_DOMAIN_ROUTE",
+      "A rota do domínio do personagem é inválida.",
+    )
+  }
+
+  return { characterId, domain }
 }
 
 async function requireOwnedCharacter(
