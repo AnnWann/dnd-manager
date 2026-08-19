@@ -37,6 +37,29 @@ export type UndoValidationResult =
       message: string;
     };
 
+export type SessionLogCoalescePredicate = (
+  previous: SessionLogRecord,
+  incoming: SessionLogRecord,
+) => boolean;
+
+export type CommitSessionMutationArgs = {
+  writes: Record<string, unknown>;
+  record: SessionLogRecord;
+  maxRecords: number;
+  currentLog?: SessionLogRecord[];
+  coalesceLatest?: SessionLogCoalescePredicate;
+};
+
+export type CommitSessionUndoArgs = {
+  writes: Record<string, unknown>;
+  currentLog: SessionLogRecord[];
+  sourceIndex: number;
+  userId: string;
+  undoRecord: SessionLogRecord;
+  maxRecords: number;
+  undoneAt?: string;
+};
+
 export function characterScope(characterId: string): string {
   return `character:${characterId}`;
 }
@@ -61,17 +84,71 @@ export async function writeSessionLog(
   broadcastSessionLogToMasters(sockets, records);
 }
 
+/**
+ * Atomic state + timeline commit used by every authoritative domain.
+ * Domain actors provide state writes and semantic/reverse operations; this
+ * function owns timeline append/coalescing, trimming, persistence and MASTER
+ * broadcast.
+ */
+export async function commitSessionMutation(
+  storage: DurableObjectStorage,
+  sockets: WebSocket[],
+  args: CommitSessionMutationArgs,
+): Promise<SessionLogRecord[]> {
+  const records = args.currentLog ? [...args.currentLog] : await readSessionLog(storage);
+  const previous = records[records.length - 1];
+
+  if (previous && args.coalesceLatest?.(previous, args.record)) {
+    records[records.length - 1] = {
+      ...args.record,
+      id: previous.id,
+      actorId: previous.actorId,
+      reverseOperation: previous.reverseOperation,
+      undoneAt: previous.undoneAt,
+      undoneBy: previous.undoneBy,
+    };
+  } else {
+    records.push(args.record);
+  }
+
+  const next = trimSessionLog(records, args.maxRecords);
+  normalizeSessionLogRecordsInPlace(next);
+  await storage.put({ ...args.writes, [SESSION_LOG_KEY]: next });
+  broadcastSessionLogToMasters(sockets, next);
+  return next;
+}
+
+/**
+ * Atomic undo commit. The composed actor is the sole caller: it marks the
+ * source record undone, appends the generated undo record, persists all
+ * restored state and broadcasts the canonical timeline to MASTER clients.
+ */
+export async function commitSessionUndo(
+  storage: DurableObjectStorage,
+  sockets: WebSocket[],
+  args: CommitSessionUndoArgs,
+): Promise<SessionLogRecord[]> {
+  const at = args.undoneAt ?? new Date().toISOString();
+  const records = markLogUndone(args.currentLog, args.sourceIndex, args.userId, at);
+  records.push(args.undoRecord);
+  const next = trimSessionLog(records, args.maxRecords);
+  normalizeSessionLogRecordsInPlace(next);
+  await storage.put({ ...args.writes, [SESSION_LOG_KEY]: next });
+  broadcastSessionLogToMasters(sockets, next);
+  return next;
+}
+
 export async function appendSessionLog(
   storage: DurableObjectStorage,
   sockets: WebSocket[],
   record: SessionLogRecord,
   maxRecords: number,
 ): Promise<SessionLogRecord[]> {
-  const records = await readSessionLog(storage);
-  records.push(record);
-  const next = trimSessionLog(records, maxRecords);
-  await writeSessionLog(storage, sockets, next);
-  return next;
+  return commitSessionMutation(storage, sockets, {
+    writes: {},
+    record,
+    maxRecords,
+  });
 }
 
 export function createSessionLogRecord(args: {
@@ -94,7 +171,7 @@ export function createSessionLogRecord(args: {
   };
 }
 
-/** Normalizes records in place so existing domain broadcasts see the same canonical data. */
+/** Normalizes records in place so old stored records follow the central scope contract. */
 export function normalizeSessionLogRecordsInPlace(records: SessionLogRecord[]): boolean {
   let changed = false;
   for (const record of records) {
