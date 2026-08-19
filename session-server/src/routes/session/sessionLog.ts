@@ -56,6 +56,7 @@ export async function writeSessionLog(
   sockets: WebSocket[],
   records: SessionLogRecord[],
 ): Promise<void> {
+  normalizeSessionLogRecordsInPlace(records);
   await storage.put(SESSION_LOG_KEY, records);
   broadcastSessionLogToMasters(sockets, records);
 }
@@ -93,32 +94,28 @@ export function createSessionLogRecord(args: {
   };
 }
 
-/**
- * Makes legacy/domain-created records conform to the central log contract.
- * No broadcast is emitted here: domain handlers already broadcast their mutation,
- * and clients can infer scopes for the just-received legacy-shaped record.
- */
+/** Normalizes records in place so existing domain broadcasts see the same canonical data. */
+export function normalizeSessionLogRecordsInPlace(records: SessionLogRecord[]): boolean {
+  let changed = false;
+  for (const record of records) {
+    const scopes = logRecordScopes(record);
+    const current = record.reverseOperation.affectedScopes ?? [];
+    if (sameScopes(current, scopes)) continue;
+    record.reverseOperation.affectedScopes = scopes;
+    changed = true;
+  }
+  return changed;
+}
+
+/** Makes older stored records conform to the central log contract. */
 export async function normalizeStoredSessionLog(
   storage: DurableObjectStorage,
 ): Promise<SessionLogRecord[]> {
   const records = await readSessionLog(storage);
-  let changed = false;
-  const normalized = records.map((record) => {
-    const scopes = logRecordScopes(record);
-    const current = record.reverseOperation.affectedScopes ?? [];
-    if (sameScopes(current, scopes)) return record;
-    changed = true;
-    return {
-      ...record,
-      reverseOperation: {
-        ...record.reverseOperation,
-        affectedScopes: scopes,
-      },
-    };
-  });
-
-  if (changed) await storage.put(SESSION_LOG_KEY, normalized);
-  return normalized;
+  if (normalizeSessionLogRecordsInPlace(records)) {
+    await storage.put(SESSION_LOG_KEY, records);
+  }
+  return records;
 }
 
 export function validateUndoOrdering(
