@@ -7,12 +7,13 @@ import {
   deleteMyCharacter,
   getMyCharacter,
 } from "../../api/user-characters"
-import { createOwnedHomebrewSpell } from "../../api/user-spells"
+import {
+  createOwnedHomebrewSpell,
+  getAccessibleHomebrewSpells,
+} from "../../api/user-spells"
 import { Button } from "../../components/ui/Button"
-import { useMagicContext } from "../../contexts/magicContext"
 import { CharacterSelectorList } from "../../features/characters/selector/CharacterSelectorList"
 import { toUserCharacterSelectorItem } from "../../features/characters/selector/userCharacterSelectorAdapter"
-import { useUserMagicState } from "../../features/magic/UserMagicProvider"
 import { useUserData } from "../../features/user/UserDataProvider"
 import type { Spell } from "../../models/magic/spells/Spell"
 
@@ -26,8 +27,6 @@ type CharacterExportBundle = {
 export function UserCharactersTab() {
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { savedSpells, spellByIndex } = useMagicContext()
-  const { reload: reloadHomebrewSpells } = useUserMagicState()
   const {
     characters,
     charactersLoading,
@@ -67,11 +66,14 @@ export function UserCharactersTab() {
     setErrorMessage("")
 
     try {
-      const selected = await getMyCharacter(selectedCharacterId)
+      const [selected, accessibleSpells] = await Promise.all([
+        getMyCharacter(selectedCharacterId),
+        getAccessibleHomebrewSpells(),
+      ])
       const indexes = collectReferencedSpellIndexes(selected.data)
-      const homebrewSpells = savedSpells.filter(
-        (spell) => spell.homebrew && indexes.has(spell.index),
-      )
+      const homebrewSpells = accessibleSpells
+        .map((record) => record.data)
+        .filter((spell) => spell.homebrew && indexes.has(spell.index))
       const bundle: CharacterExportBundle = {
         format: "dnd-manager-character",
         version: 3,
@@ -117,12 +119,19 @@ export function UserCharactersTab() {
       const parsed = JSON.parse(await file.text()) as unknown
       const bundle = parseCharacterExport(parsed)
       const indexMap = new Map<string, string>()
+      const accessibleSpells = bundle.homebrewSpells.length
+        ? await getAccessibleHomebrewSpells()
+        : []
+      const knownSpellIndexes = new Set(
+        accessibleSpells.map((record) => record.index),
+      )
 
       for (const spell of bundle.homebrewSpells) {
-        if (spellByIndex.has(spell.index)) continue
+        if (knownSpellIndexes.has(spell.index)) continue
 
         const created = await createOwnedHomebrewSpell(spell)
         indexMap.set(spell.index, created.index)
+        knownSpellIndexes.add(created.index)
       }
 
       const remappedCharacter = remapSpellIndexes(
@@ -146,8 +155,6 @@ export function UserCharactersTab() {
         visibility: "PRIVATE",
         data: characterData,
       })
-
-      if (indexMap.size) await reloadHomebrewSpells()
 
       setCharacters((current) => [
         created,
