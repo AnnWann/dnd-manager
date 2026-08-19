@@ -9,6 +9,7 @@ import {
   type SessionAbilityClientMessage,
   type SessionAbilityServerMessage,
 } from "./abilitySessionProtocol"
+import type { SessionMagicOperation } from "./magicSessionProtocol"
 import type { SessionSheetOperationMessage } from "./sheetRoutes"
 
 export type SessionRuntimeStatus = "disconnected" | "connecting" | "connected" | "reconnecting" | "error"
@@ -43,11 +44,11 @@ export class SessionSocket {
     this.openSocket()
   }
 
-  send(
-    message:
-      | ClientSessionMessage
-      | SessionSheetOperationMessage
-      | SessionAbilityClientMessage,
+  send(message:
+    | ClientSessionMessage
+    | SessionSheetOperationMessage
+    | SessionAbilityClientMessage
+    | { type: "session.magic.operation"; operation: SessionMagicOperation }
   ): boolean {
     if (this.socket?.readyState !== WebSocket.OPEN) return false
     this.socket.send(JSON.stringify(message))
@@ -72,9 +73,7 @@ export class SessionSocket {
 
     socket.onmessage = (event) => {
       if (typeof event.data !== "string") return
-      const message =
-        parseAbilityServerMessage(event.data) ??
-        parseServerSessionMessage(event.data)
+      const message = parseAbilityServerMessage(event.data) ?? parseServerSessionMessage(event.data)
       if (!message) return
       if (message.type === "session.ready") {
         this.hasConnectedOnce = true
@@ -90,7 +89,6 @@ export class SessionSocket {
       this.clearHeartbeatTimer()
       if (!this.stopped) this.scheduleReconnect()
     }
-
     socket.onerror = () => {
       if (!this.stopped) this.options.onStatusChange("error")
     }
@@ -134,7 +132,6 @@ export class SessionSocket {
     window.clearTimeout(this.heartbeatTimer)
     this.heartbeatTimer = null
   }
-
   private clearReconnectTimer(): void {
     if (this.reconnectTimer === null) return
     window.clearTimeout(this.reconnectTimer)
