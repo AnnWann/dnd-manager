@@ -1,29 +1,51 @@
 import { useEffect, useState, type ReactNode } from "react"
+import { useLocation } from "react-router-dom"
 
 import { useUserMagicState } from "../magic/UserMagicProvider"
 import { useUserData } from "./UserDataProvider"
 
-let userContextPreload: Promise<void> | null = null
+const routePreloads = new Map<string, Promise<void>>()
 
-function preloadUserContextModules(): Promise<void> {
-  if (userContextPreload) return userContextPreload
+function preloadCurrentUserRoute(pathname: string): Promise<void> {
+  const key = userRoutePreloadKey(pathname)
+  const existing = routePreloads.get(key)
+  if (existing) return existing
 
-  userContextPreload = Promise.all([
+  const routeImport = (() => {
+    if (key === "characters") return import("../../views/user/UserCharactersTab")
+    if (key === "character-create") return import("../../views/user/UserCharacterCreateView")
+    if (key === "character-level-up") return import("../../views/user/UserCharacterLevelUpView")
+    if (key === "character-add-spells") return import("../../views/user/UserCharacterAddSpellsView")
+    if (key === "character-add-item") return import("../../views/user/UserCharacterCreateItemView")
+    if (key === "character-detail") return import("../../views/user/UserCharacterDetailView")
+    if (key === "spells") return import("../../views/user/UserSpellsTab")
+    if (key === "campaigns") return import("../../views/user/UserCampaignsRouteView")
+    return Promise.resolve(undefined)
+  })()
+
+  const preload = Promise.all([
     import("../../views/user/UserDashboardView"),
-    import("../../views/user/UserCharactersTab"),
-    import("../../views/user/UserCharacterCreateView"),
-    import("../../views/user/UserCharacterLevelUpView"),
-    import("../../views/user/UserCharacterAddSpellsView"),
-    import("../../views/user/UserCharacterCreateItemView"),
-    import("../../views/user/UserCharacterDetailView"),
-    import("../../views/user/UserSpellsTab"),
-    import("../../views/user/UserCampaignsRouteView"),
+    routeImport,
   ]).then(() => undefined)
 
-  return userContextPreload
+  routePreloads.set(key, preload)
+  return preload
+}
+
+function userRoutePreloadKey(pathname: string): string {
+  if (pathname === "/user" || pathname === "/user/characters") return "characters"
+  if (pathname === "/user/characters/create") return "character-create"
+  if (/^\/user\/characters\/[^/]+\/level-up\/?$/.test(pathname)) return "character-level-up"
+  if (/^\/user\/characters\/[^/]+\/spells-list\/add-spells\/?$/.test(pathname)) return "character-add-spells"
+  if (/^\/user\/characters\/[^/]+\/inventory\/add-item\/?$/.test(pathname)) return "character-add-item"
+  if (/^\/user\/characters\/[^/]+(?:\/[^/]+)?\/?$/.test(pathname)) return "character-detail"
+  if (pathname.startsWith("/user/spells")) return "spells"
+  if (pathname.startsWith("/user/campaigns")) return "campaigns"
+  return "user-shell"
 }
 
 export function UserContextBoundary({ children }: { children: ReactNode }) {
+  const location = useLocation()
   const {
     charactersLoading,
     campaignsLoading,
@@ -41,26 +63,28 @@ export function UserContextBoundary({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true
+    setModulesReady(false)
+    setModuleError(false)
 
-    preloadUserContextModules()
+    preloadCurrentUserRoute(location.pathname)
       .then(() => {
         if (active) setModulesReady(true)
       })
       .catch((error) => {
-        console.error("[user-context] Failed to preload protected user modules.", error)
-        userContextPreload = null
+        console.error("[user-context] Failed to preload active protected user route.", error)
+        routePreloads.delete(userRoutePreloadKey(location.pathname))
         if (active) setModuleError(true)
       })
 
     return () => {
       active = false
     }
-  }, [])
+  }, [location.pathname])
 
   if (moduleError) {
     return (
       <UserContextError
-        message="Não foi possível carregar os módulos do ambiente do usuário."
+        message="Não foi possível carregar a rota da área do usuário."
         onRetry={() => window.location.reload()}
       />
     )
