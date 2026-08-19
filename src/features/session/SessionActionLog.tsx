@@ -208,9 +208,7 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "character.stat.mobility.set": return `Definiu a mobilidade de ${characterName} para ${formatStat(operation.value)}.`
     case "character.stat.passivePerception.set": return `Definiu a percepção passiva de ${characterName} para ${formatStat(operation.value)}.`
     case "character.stat.exhaustion.set": return `Definiu a exaustão de ${characterName} para ${operation.value}.`
-    case "character.stat.inspiration.set": return operation.value
-      ? `${characterName} recebeu inspiração.`
-      : `${characterName} gastou a inspiração.`
+    case "character.stat.inspiration.set": return operation.value ? `${characterName} recebeu inspiração.` : `${characterName} gastou a inspiração.`
     case "character.stat.experience.set": return `Definiu a experiência de ${characterName} para ${operation.value.toLocaleString("pt-BR")} XP.`
     case "character.rest.short": return `${characterName} concluiu um descanso curto.`
     case "character.rest.long": return `${characterName} concluiu um descanso longo${operation.recovery === "partial" ? " parcial" : ""}.`
@@ -219,6 +217,26 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "character.ability.use": return `${characterName} usou ${operation.abilityName || "uma habilidade"}.`
     case "character.ability.restore": return `Restaurou uma carga de ${operation.abilityName || "habilidade"} de ${characterName}.`
     case "character.ability.deactivate": return `Desativou ${operation.abilityName || "uma habilidade"} de ${characterName}.`
+    case "character.spell.prepare": return `${operation.prepared ? "Preparou" : "Despreparou"} ${operation.spellIndex} para ${characterName}.`
+    case "character.spell.add": return `Adicionou uma magia à lista de ${characterName}.`
+    case "character.spell.remove": return `Removeu ${operation.spellIndex} da lista de ${characterName}.`
+    case "character.spell.castingDescription.add": return `Adicionou uma descrição de conjuração para ${operation.spellIndex} de ${characterName}.`
+    case "character.spell.castingDescription.update": return `Editou uma descrição de conjuração de ${operation.spellIndex} de ${characterName}.`
+    case "character.spell.castingDescription.remove": return `Removeu uma descrição de conjuração de ${operation.spellIndex} de ${characterName}.`
+    case "character.spellSlot.spend": return `${characterName} gastou um espaço de magia de nível ${operation.level}.`
+    case "character.spellSlot.restore": return `${characterName} recuperou um espaço de magia de nível ${operation.level}.`
+    case "character.pactSlot.spend": return `${characterName} gastou um espaço de Pacto.`
+    case "character.pactSlot.restore": return `${characterName} recuperou um espaço de Pacto.`
+    case "character.customSpellSlot.spend": return `${characterName} gastou um espaço de magia customizado de nível ${operation.level}.`
+    case "character.customSpellSlot.restore": return `${characterName} recuperou um espaço de magia customizado de nível ${operation.level}.`
+    case "character.metamagic.add": return `Adicionou a metamagia ${operation.metamagicId} a ${characterName}.`
+    case "character.metamagic.remove": return `Removeu a metamagia ${operation.metamagicId} de ${characterName}.`
+    case "character.sorceryPoint.spend": return `${characterName} gastou 1 ponto de feitiçaria.`
+    case "character.sorceryPoint.restore": return `${characterName} recuperou 1 ponto de feitiçaria.`
+    case "character.ki.spend": return `${characterName} gastou 1 ponto de Ki.`
+    case "character.ki.restore": return `${characterName} recuperou 1 ponto de Ki.`
+    case "character.channelDivinity.spend": return `${characterName} gastou 1 uso de Canalizar Divindade.`
+    case "character.channelDivinity.restore": return `${characterName} recuperou 1 uso de Canalizar Divindade.`
     case "character.hp.undo": return `Desfez uma alteração de ${characterName}.`
   }
 }
