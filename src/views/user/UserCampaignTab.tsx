@@ -1,9 +1,8 @@
 import { Check, Copy, Link2, LogOut, Plus, Unlink } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 
 import {
   createMyCampaign,
-  getMyCampaigns,
   leaveCampaign,
   linkCharacterToCampaign,
   requestCampaignJoin,
@@ -15,58 +14,42 @@ import {
   type CampaignSpellStatus,
   type UserCampaign,
 } from "../../api/user-campaigns"
-import {
-  getMyCharacters,
-  type UserCharacterSummary,
-} from "../../api/user-characters"
 import { submitOwnedHomebrewSpellToCampaign } from "../../api/user-spells"
 import { Button } from "../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../components/ui/Card"
 import { Input } from "../../components/ui/Input"
 import { Textarea } from "../../components/ui/Textarea"
 import { useUserMagicState } from "../../features/magic/UserMagicProvider"
+import { useUserData } from "../../features/user/UserDataProvider"
 
 export function UserCampaignsTab() {
   const { records: spellRecords, reload: reloadSpells } = useUserMagicState()
-  const [campaigns, setCampaigns] = useState<UserCampaign[]>([])
-  const [characters, setCharacters] = useState<UserCharacterSummary[]>([])
-  const [loading, setLoading] = useState(true)
+  const {
+    campaigns,
+    characters,
+    campaignsLoading,
+    charactersLoading,
+    campaignsError,
+    charactersError,
+    setCampaigns,
+    refreshAll,
+  } = useUserData()
+  const loading = campaignsLoading || charactersLoading
   const [working, setWorking] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
   const [noticeMessage, setNoticeMessage] = useState("")
   const [campaignName, setCampaignName] = useState("")
   const [campaignDescription, setCampaignDescription] = useState("")
   const [inviteCode, setInviteCode] = useState("")
-  const [selectedCharacter, setSelectedCharacter] = useState<
-    Record<string, string>
-  >({})
-  const [selectedVisibility, setSelectedVisibility] = useState<
-    Record<string, CampaignCharacterVisibility>
-  >({})
+  const [selectedCharacter, setSelectedCharacter] = useState<Record<string, string>>({})
+  const [selectedVisibility, setSelectedVisibility] = useState<Record<string, CampaignCharacterVisibility>>({})
   const [selectedSpell, setSelectedSpell] = useState<Record<string, string>>({})
   const [copiedCode, setCopiedCode] = useState("")
 
   async function reload() {
-    setLoading(true)
     setErrorMessage("")
-
-    try {
-      const [nextCampaigns, nextCharacters] = await Promise.all([
-        getMyCampaigns(),
-        getMyCharacters(),
-      ])
-      setCampaigns(nextCampaigns)
-      setCharacters(nextCharacters)
-    } catch {
-      setErrorMessage("Não foi possível carregar as campanhas.")
-    } finally {
-      setLoading(false)
-    }
+    await refreshAll()
   }
-
-  useEffect(() => {
-    void reload()
-  }, [])
 
   const characterById = useMemo(
     () => new Map(characters.map((character) => [character.id, character])),
@@ -129,11 +112,7 @@ export function UserCampaignsTab() {
     setNoticeMessage("")
 
     try {
-      await linkCharacterToCampaign(
-        campaign.id,
-        characterId,
-        visibility,
-      )
+      await linkCharacterToCampaign(campaign.id, characterId, visibility)
 
       const needsApproval = !(campaign.isOwner || campaign.role === "MASTER")
       const character = characterById.get(characterId)
@@ -149,21 +128,13 @@ export function UserCampaignsTab() {
             entry.id === campaign.id
               ? {
                   ...entry,
-                  characters: entry.characters.some(
-                    (linked) => linked.id === characterId,
-                  )
+                  characters: entry.characters.some((linked) => linked.id === characterId)
                     ? entry.characters.map((linked) =>
-                        linked.id === characterId
-                          ? { ...linked, visibility }
-                          : linked,
+                        linked.id === characterId ? { ...linked, visibility } : linked,
                       )
                     : [
                         ...entry.characters,
-                        {
-                          id: character.id,
-                          name: character.name,
-                          visibility,
-                        },
+                        { id: character.id, name: character.name, visibility },
                       ],
                 }
               : entry,
@@ -193,38 +164,27 @@ export function UserCampaignsTab() {
     setNoticeMessage("")
 
     try {
-      await updateCharacterCampaignVisibility(
-        campaignId,
-        characterId,
-        visibility,
-      )
+      await updateCharacterCampaignVisibility(campaignId, characterId, visibility)
       setCampaigns((current) =>
         current.map((campaign) =>
           campaign.id === campaignId
             ? {
                 ...campaign,
                 characters: campaign.characters.map((character) =>
-                  character.id === characterId
-                    ? { ...character, visibility }
-                    : character,
+                  character.id === characterId ? { ...character, visibility } : character,
                 ),
               }
             : campaign,
         ),
       )
     } catch {
-      setErrorMessage(
-        "Não foi possível alterar a visibilidade do personagem.",
-      )
+      setErrorMessage("Não foi possível alterar a visibilidade do personagem.")
     } finally {
       setWorking(false)
     }
   }
 
-  async function unlinkCharacter(
-    campaignId: string,
-    characterId: string,
-  ) {
+  async function unlinkCharacter(campaignId: string, characterId: string) {
     if (working) return
     setWorking(true)
     setErrorMessage("")
@@ -252,12 +212,7 @@ export function UserCampaignsTab() {
   }
 
   async function leave(campaign: UserCampaign) {
-    if (
-      working ||
-      !window.confirm(`Sair da campanha “${campaign.name}”?`)
-    ) {
-      return
-    }
+    if (working || !window.confirm(`Sair da campanha “${campaign.name}”?`)) return
 
     setWorking(true)
     setErrorMessage("")
@@ -265,9 +220,7 @@ export function UserCampaignsTab() {
 
     try {
       await leaveCampaign(campaign.id)
-      setCampaigns((current) =>
-        current.filter((entry) => entry.id !== campaign.id),
-      )
+      setCampaigns((current) => current.filter((entry) => entry.id !== campaign.id))
     } catch {
       setErrorMessage("Não foi possível sair da campanha.")
     } finally {
@@ -313,10 +266,7 @@ export function UserCampaignsTab() {
   ) {
     if (working) return
 
-    const note = window.prompt(
-      "Observação da revisão (opcional):",
-      "",
-    )
+    const note = window.prompt("Observação da revisão (opcional):", "")
     if (note === null) return
 
     setWorking(true)
@@ -370,10 +320,7 @@ export function UserCampaignsTab() {
         name: campaign.name,
         autoApprove: campaign.isOwner || campaign.role === "MASTER",
       })
-      setSelectedSpell((current) => ({
-        ...current,
-        [campaign.id]: "",
-      }))
+      setSelectedSpell((current) => ({ ...current, [campaign.id]: "" }))
       setNoticeMessage(
         campaign.isOwner || campaign.role === "MASTER"
           ? `Magia “${record.name}” adicionada à sessão “${campaign.name}”.`
@@ -397,14 +344,14 @@ export function UserCampaignsTab() {
     window.setTimeout(() => setCopiedCode(""), 1500)
   }
 
+  const backgroundError = campaignsError || charactersError
+
   return (
     <div className="grid gap-4">
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <h1 className="text-base font-semibold text-textH">
-              Criar campanha
-            </h1>
+            <h1 className="text-base font-semibold text-textH">Criar campanha</h1>
             <p className="mt-1 text-xs leading-5 text-text">
               Você será o mestre e receberá um código para convidar jogadores.
             </p>
@@ -420,9 +367,7 @@ export function UserCampaignsTab() {
               <Textarea
                 value={campaignDescription}
                 placeholder="Descrição opcional"
-                onChange={(event) =>
-                  setCampaignDescription(event.target.value)
-                }
+                onChange={(event) => setCampaignDescription(event.target.value)}
               />
               <Button
                 disabled={!campaignName.trim() || working}
@@ -437,9 +382,7 @@ export function UserCampaignsTab() {
 
         <Card>
           <CardHeader>
-            <h2 className="text-base font-semibold text-textH">
-              Entrar em campanha
-            </h2>
+            <h2 className="text-base font-semibold text-textH">Entrar em campanha</h2>
             <p className="mt-1 text-xs leading-5 text-text">
               O código envia uma solicitação que precisa ser aceita pelo mestre.
             </p>
@@ -449,9 +392,7 @@ export function UserCampaignsTab() {
               <Input
                 value={inviteCode}
                 placeholder="Código de convite"
-                onChange={(event) =>
-                  setInviteCode(event.target.value.toUpperCase())
-                }
+                onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
               />
               <Button
                 variant="secondary"
@@ -465,9 +406,9 @@ export function UserCampaignsTab() {
         </Card>
       </div>
 
-      {errorMessage ? (
+      {errorMessage || (loading && backgroundError) ? (
         <div className="rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger">
-          {errorMessage}
+          {errorMessage || backgroundError}
         </div>
       ) : null}
 
@@ -488,21 +429,16 @@ export function UserCampaignsTab() {
       ) : (
         <div className="grid gap-4">
           {campaigns.map((campaign) => {
-            const linkedIds = new Set(
-              campaign.characters.map((character) => character.id),
-            )
+            const linkedIds = new Set(campaign.characters.map((character) => character.id))
             const availableCharacters = characters.filter(
               (character) => !linkedIds.has(character.id),
             )
-            const linkedSpellIds = new Set(
-              campaign.homebrewSpells.map((spell) => spell.id),
-            )
+            const linkedSpellIds = new Set(campaign.homebrewSpells.map((spell) => spell.id))
             const availableOwnedSpells = ownedSpellRecords.filter(
               (record) => !linkedSpellIds.has(record.id),
             )
             const active = campaign.status === "ACTIVE"
-            const canReviewSpells =
-              active && (campaign.isOwner || campaign.role === "MASTER")
+            const canReviewSpells = active && (campaign.isOwner || campaign.role === "MASTER")
             const canDirectlyAdd = campaign.isOwner || campaign.role === "MASTER"
 
             return (
@@ -511,9 +447,7 @@ export function UserCampaignsTab() {
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-lg font-semibold text-textH">
-                          {campaign.name}
-                        </h2>
+                        <h2 className="text-lg font-semibold text-textH">{campaign.name}</h2>
                         <Badge
                           label={
                             campaign.isOwner
@@ -529,9 +463,7 @@ export function UserCampaignsTab() {
                       <p className="mt-2 text-sm leading-6 text-text">
                         {campaign.description || "Sem descrição."}
                       </p>
-                      <p className="mt-1 text-xs text-textMuted">
-                        Mestre: {campaign.owner.name}
-                      </p>
+                      <p className="mt-1 text-xs text-textMuted">Mestre: {campaign.owner.name}</p>
                     </div>
 
                     {!campaign.isOwner ? (
@@ -562,27 +494,21 @@ export function UserCampaignsTab() {
                           <Button
                             size="sm"
                             variant="secondary"
-                            onClick={() =>
-                              void copyInvite(campaign.inviteCode ?? "")
-                            }
+                            onClick={() => void copyInvite(campaign.inviteCode ?? "")}
                           >
                             {copiedCode === campaign.inviteCode ? (
                               <Check className="h-4 w-4" />
                             ) : (
                               <Copy className="h-4 w-4" />
                             )}
-                            {copiedCode === campaign.inviteCode
-                              ? "Copiado"
-                              : "Copiar"}
+                            {copiedCode === campaign.inviteCode ? "Copiado" : "Copiar"}
                           </Button>
                         </div>
                       </section>
                     ) : null}
 
                     <section>
-                      <h3 className="text-sm font-semibold text-textH">
-                        Homebrew da campanha
-                      </h3>
+                      <h3 className="text-sm font-semibold text-textH">Homebrew da campanha</h3>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <Badge label={`${campaign.homebrew.approved} aprovadas`} />
                         <Badge label={`${campaign.homebrew.pending} pendentes`} />
@@ -599,9 +525,7 @@ export function UserCampaignsTab() {
                             >
                               <div className="flex flex-wrap items-start justify-between gap-2">
                                 <div>
-                                  <div className="font-medium text-textH">
-                                    {spell.name}
-                                  </div>
+                                  <div className="font-medium text-textH">{spell.name}</div>
                                   <div className="mt-1 text-xs text-textMuted">
                                     Autor: {spell.author.name} · {spell.index}
                                   </div>
@@ -614,9 +538,7 @@ export function UserCampaignsTab() {
                                 </p>
                               ) : null}
                               {spell.submittedByCurrentUser ? (
-                                <div className="mt-2 text-[11px] text-textMuted">
-                                  Enviada por você.
-                                </div>
+                                <div className="mt-2 text-[11px] text-textMuted">Enviada por você.</div>
                               ) : null}
 
                               {canReviewSpells ? (
@@ -625,13 +547,7 @@ export function UserCampaignsTab() {
                                     <Button
                                       size="sm"
                                       disabled={working}
-                                      onClick={() =>
-                                        void reviewSpell(
-                                          campaign.id,
-                                          spell.id,
-                                          "APPROVED",
-                                        )
-                                      }
+                                      onClick={() => void reviewSpell(campaign.id, spell.id, "APPROVED")}
                                     >
                                       Aprovar
                                     </Button>
@@ -641,13 +557,7 @@ export function UserCampaignsTab() {
                                       size="sm"
                                       variant="secondary"
                                       disabled={working}
-                                      onClick={() =>
-                                        void reviewSpell(
-                                          campaign.id,
-                                          spell.id,
-                                          "REJECTED",
-                                        )
-                                      }
+                                      onClick={() => void reviewSpell(campaign.id, spell.id, "REJECTED")}
                                     >
                                       Rejeitar
                                     </Button>
@@ -657,13 +567,7 @@ export function UserCampaignsTab() {
                                       size="sm"
                                       variant="secondary"
                                       disabled={working}
-                                      onClick={() =>
-                                        void reviewSpell(
-                                          campaign.id,
-                                          spell.id,
-                                          "REVOKED",
-                                        )
-                                      }
+                                      onClick={() => void reviewSpell(campaign.id, spell.id, "REVOKED")}
                                     >
                                       Revogar
                                     </Button>
@@ -693,18 +597,14 @@ export function UserCampaignsTab() {
                           >
                             <option value="">Selecione uma magia própria</option>
                             {availableOwnedSpells.map((record) => (
-                              <option key={record.id} value={record.id}>
-                                {record.name}
-                              </option>
+                              <option key={record.id} value={record.id}>{record.name}</option>
                             ))}
                           </select>
                           <Button
                             disabled={!selectedSpell[campaign.id] || working}
                             onClick={() => void submitSpell(campaign)}
                           >
-                            {canDirectlyAdd
-                              ? "Adicionar à sessão"
-                              : "Enviar para aprovação"}
+                            {canDirectlyAdd ? "Adicionar à sessão" : "Enviar para aprovação"}
                           </Button>
                         </div>
                       ) : null}
@@ -712,9 +612,7 @@ export function UserCampaignsTab() {
 
                     {campaign.isOwner && campaign.pendingMembers.length ? (
                       <section>
-                        <h3 className="text-sm font-semibold text-textH">
-                          Solicitações de entrada
-                        </h3>
+                        <h3 className="text-sm font-semibold text-textH">Solicitações de entrada</h3>
                         <div className="mt-2 grid gap-2">
                           {campaign.pendingMembers.map((member) => (
                             <div
@@ -722,26 +620,16 @@ export function UserCampaignsTab() {
                               className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
                             >
                               <div>
-                                <div className="text-sm font-medium text-textH">
-                                  {member.name}
-                                </div>
+                                <div className="text-sm font-medium text-textH">{member.name}</div>
                                 {member.email ? (
-                                  <div className="text-xs text-textMuted">
-                                    {member.email}
-                                  </div>
+                                  <div className="text-xs text-textMuted">{member.email}</div>
                                 ) : null}
                               </div>
                               <div className="flex gap-2">
                                 <Button
                                   size="sm"
                                   disabled={working}
-                                  onClick={() =>
-                                    void reviewMember(
-                                      campaign.id,
-                                      member.id,
-                                      "ACTIVE",
-                                    )
-                                  }
+                                  onClick={() => void reviewMember(campaign.id, member.id, "ACTIVE")}
                                 >
                                   Aprovar
                                 </Button>
@@ -749,13 +637,7 @@ export function UserCampaignsTab() {
                                   size="sm"
                                   variant="secondary"
                                   disabled={working}
-                                  onClick={() =>
-                                    void reviewMember(
-                                      campaign.id,
-                                      member.id,
-                                      "REMOVED",
-                                    )
-                                  }
+                                  onClick={() => void reviewMember(campaign.id, member.id, "REMOVED")}
                                 >
                                   Rejeitar
                                 </Button>
@@ -767,9 +649,7 @@ export function UserCampaignsTab() {
                     ) : null}
 
                     <section>
-                      <h3 className="text-sm font-semibold text-textH">
-                        Meus personagens vinculados
-                      </h3>
+                      <h3 className="text-sm font-semibold text-textH">Meus personagens vinculados</h3>
                       <p className="mt-1 text-xs leading-5 text-textMuted">
                         Privado mantém o vínculo sem compartilhar a ficha; Mestres limita o acesso aos mestres; Campanha permite acesso aos membros ativos.
                       </p>
@@ -781,9 +661,7 @@ export function UserCampaignsTab() {
                               key={character.id}
                               className="flex flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
                             >
-                              <span className="text-sm font-medium text-textH">
-                                {character.name}
-                              </span>
+                              <span className="text-sm font-medium text-textH">{character.name}</span>
                               <div className="flex flex-col gap-2 sm:flex-row">
                                 <select
                                   className="h-9 rounded-lg border border-border bg-bg px-3 text-xs text-textH"
@@ -803,12 +681,7 @@ export function UserCampaignsTab() {
                                   size="sm"
                                   variant="secondary"
                                   disabled={working || !active}
-                                  onClick={() =>
-                                    void unlinkCharacter(
-                                      campaign.id,
-                                      character.id,
-                                    )
-                                  }
+                                  onClick={() => void unlinkCharacter(campaign.id, character.id)}
                                 >
                                   <Unlink className="h-4 w-4" />
                                   Desvincular
@@ -818,9 +691,7 @@ export function UserCampaignsTab() {
                           ))}
                         </div>
                       ) : (
-                        <p className="mt-2 text-xs text-textMuted">
-                          Nenhum personagem vinculado.
-                        </p>
+                        <p className="mt-2 text-xs text-textMuted">Nenhum personagem vinculado.</p>
                       )}
 
                       {active && availableCharacters.length ? (
@@ -837,9 +708,7 @@ export function UserCampaignsTab() {
                           >
                             <option value="">Selecione um personagem</option>
                             {availableCharacters.map((character) => (
-                              <option key={character.id} value={character.id}>
-                                {character.name}
-                              </option>
+                              <option key={character.id} value={character.id}>{character.name}</option>
                             ))}
                           </select>
                           <select
@@ -855,9 +724,7 @@ export function UserCampaignsTab() {
                             <VisibilityOptions />
                           </select>
                           <Button
-                            disabled={
-                              !selectedCharacter[campaign.id] || working
-                            }
+                            disabled={!selectedCharacter[campaign.id] || working}
                             onClick={() => void linkCharacter(campaign)}
                           >
                             <Link2 className="h-4 w-4" />
