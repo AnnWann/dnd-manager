@@ -3,6 +3,7 @@ import { Outlet, useParams } from "react-router-dom"
 
 import { authClient } from "../../auth/auth-client"
 import { getLocalUser } from "../../auth/local-auth"
+import { SessionMissionAuthorityProvider } from "../../contexts/missionContext"
 import { useSyncContext } from "../../contexts/syncContext"
 import { rememberActiveSession } from "../../lib/activeCampaign"
 import { SessionRuntimeProvider } from "./SessionRuntimeProvider"
@@ -26,7 +27,9 @@ export function SessionRouteOutlet() {
       userId={userId}
       role={userRole === "master" ? "MASTER" : "PLAYER"}
     >
-      <Outlet />
+      <SessionMissionAuthorityProvider>
+        <Outlet />
+      </SessionMissionAuthorityProvider>
     </SessionRuntimeProvider>
   )
 }
