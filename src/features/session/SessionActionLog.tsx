@@ -2,7 +2,7 @@ import { History, Undo2 } from "lucide-react"
 import { useMemo } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
-import type { SessionLogRecord } from "../session-runtime/sessionLogProtocol"
+import { isLatestUndoableSessionLog, type SessionLogRecord } from "../session-runtime/sessionLogProtocol"
 import type { SessionSkill } from "../session-runtime/sessionProtocol"
 import { useOptionalSessionRuntime } from "../session-runtime/useSessionRuntime"
 import type {
@@ -35,15 +35,6 @@ export function SessionActionLog() {
     ]
     return new Map(entries.map((item) => [item.id, item.name]))
   }, [groundInventory, partyInventory, visibleCharacters])
-
-  const latestUndoableLogByCharacter = useMemo(() => {
-    const latest = new Map<string, string>()
-    for (const record of sessionLog) {
-      if (record.undoneAt || record.operation.type === "character.hp.undo") continue
-      latest.set(record.operation.characterId, record.id)
-    }
-    return latest
-  }, [sessionLog])
 
   const visibleLegacyRecords = useMemo(() => {
     if (!runtime) return operationLog
@@ -85,12 +76,7 @@ export function SessionActionLog() {
                 key={`session:${entry.record.id}`}
                 record={entry.record}
                 characterNames={characterNames}
-                canUndo={
-                  runtime?.role === "MASTER" &&
-                  !entry.record.undoneAt &&
-                  entry.record.operation.type !== "character.hp.undo" &&
-                  latestUndoableLogByCharacter.get(entry.record.operation.characterId) === entry.record.id
-                }
+                canUndo={runtime?.role === "MASTER" && isLatestUndoableSessionLog(sessionLog, entry.record)}
                 onUndo={() => runtime?.undoLog(entry.record.id)}
               />
             ) : (
