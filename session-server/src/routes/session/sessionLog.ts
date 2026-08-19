@@ -95,12 +95,11 @@ export function createSessionLogRecord(args: {
 
 /**
  * Makes legacy/domain-created records conform to the central log contract.
- * This lets migrations happen incrementally while every stored/broadcast record
- * still has explicit conflict scopes.
+ * No broadcast is emitted here: domain handlers already broadcast their mutation,
+ * and clients can infer scopes for the just-received legacy-shaped record.
  */
 export async function normalizeStoredSessionLog(
   storage: DurableObjectStorage,
-  sockets: WebSocket[],
 ): Promise<SessionLogRecord[]> {
   const records = await readSessionLog(storage);
   let changed = false;
@@ -118,7 +117,7 @@ export async function normalizeStoredSessionLog(
     };
   });
 
-  if (changed) await writeSessionLog(storage, sockets, normalized);
+  if (changed) await storage.put(SESSION_LOG_KEY, normalized);
   return normalized;
 }
 
