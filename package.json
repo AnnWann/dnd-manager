@@ -19,6 +19,7 @@
     "db:migrate": "node scripts/migrate-relational.mjs",
     "spells:fetch": "node scripts/build-spells-json.mjs --force",
     "prisma:generate": "prisma generate",
+    "prisma:migrate:deploy": "prisma migrate deploy",
     "postinstall": "prisma generate"
   },
   "dependencies": {
