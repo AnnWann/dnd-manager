@@ -1,13 +1,14 @@
 import type { CharacterRace } from "../../src/models/races/CharacterRace";
-import type { SkillProficiency } from "../../src/models/sheet/Skills";
+import type { CharacterSkills } from "../../src/models/sheet/CharacterSkills";
+import type { SavingThrowProficiencies } from "../../src/models/sheet/SavingThrows";
 
 export type SessionRaceOperation =
   | {
       type: "character.race.replace";
       characterId: string;
       race: CharacterRace;
-      skills: Record<string, SkillProficiency>;
-      savingThrowProficiencies: Record<string, boolean>;
+      skills: CharacterSkills;
+      savingThrowProficiencies: SavingThrowProficiencies;
     }
   | {
       type: "character.race.spells.replace";
