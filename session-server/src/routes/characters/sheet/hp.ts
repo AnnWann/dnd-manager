@@ -1,4 +1,4 @@
-import type { SessionLoggedOperation } from "../../../protocol";
+import type { SessionLoggedOperation } from "../../session/protocol";
 
 export const HP_ROUTE = "characters/sheet/hp" as const;
 
