@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react"
 
+import {
+  queryAllOfficialSpellSummaries,
+  type SpellCompendiumSummary,
+} from "../../../api/spell-compendium"
 import { Button } from "../../../components/ui/Button"
 import { Card, CardHeader } from "../../../components/ui/Card"
 import { useMagicContext } from "../../../contexts/magicContext"
@@ -30,6 +34,10 @@ type Props = {
 }
 
 type KnownSpellEntry = CharacterSpells["knownSpells"][number]
+type DivineSpellCatalog = {
+  classEntry: CharacterClassInterface
+  spells: SpellCompendiumSummary[]
+}
 
 const DIVINE_PREPARED_CLASSES: readonly ClassName[] = [
   "cleric",
@@ -42,7 +50,7 @@ export function CharacterMagicTab({
   updateCharacter,
 }: Props) {
   const { characters } = useCharacterWorkspace()
-  const { spells, getSpellByIndex } = useMagicContext()
+  const { getSpellByIndex } = useMagicContext()
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle")
   const sorcererLevel = getSorcererLevel(character)
   const hasSorcererResources = sorcererLevel >= 2
@@ -51,21 +59,53 @@ export function CharacterMagicTab({
     [characters, getSpellByIndex],
   )
   const canCopySpellList = spellListText.trim().length > 0
+  const divineClasses = (character.get("sheet").classes ?? []).filter((entry) =>
+    DIVINE_PREPARED_CLASSES.includes(entry.className),
+  )
+  const divineCatalogRequestKey = divineClasses
+    .map((entry) => `${entry.className}:${maximumSpellLevelForClass(entry)}`)
+    .sort()
+    .join("|")
 
   useEffect(() => {
-    const missingSpells = getMissingDivineClassSpells(character, spells)
-    if (missingSpells.length === 0) return
+    if (!divineCatalogRequestKey) return
 
-    updateCharacter(character.get("id"), (current) => {
-      let nextCharacter = current
+    let cancelled = false
+    void Promise.all(
+      divineClasses.map(async (classEntry): Promise<DivineSpellCatalog> => {
+        const availableLevel = maximumSpellLevelForClass(classEntry)
+        if (availableLevel <= 0) return { classEntry, spells: [] }
 
-      for (const spellEntry of missingSpells) {
-        nextCharacter = nextCharacter.addSpell(spellEntry)
-      }
+        const page = await queryAllOfficialSpellSummaries({
+          className: classEntry.className,
+          maxLevel: availableLevel,
+        })
+        return { classEntry, spells: page.spells }
+      }),
+    )
+      .then((catalogs) => {
+        if (cancelled) return
 
-      return nextCharacter
-    })
-  }, [character, spells, updateCharacter])
+        updateCharacter(character.get("id"), (current) => {
+          const missingSpells = getMissingDivineClassSpells(current, catalogs)
+          if (missingSpells.length === 0) return current
+
+          let nextCharacter = current
+          for (const spellEntry of missingSpells) {
+            nextCharacter = nextCharacter.addSpell(spellEntry)
+          }
+          return nextCharacter
+        })
+      })
+      .catch(() => {
+        // The existing character spell list remains usable if the compendium
+        // cannot be reconciled. A later navigation/retry can reconcile again.
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [divineCatalogRequestKey, updateCharacter])
 
   async function copyAllSpellLists() {
     if (!canCopySpellList) return
@@ -196,25 +236,14 @@ function buildCharacterSpellList(
 
 function getMissingDivineClassSpells(
   character: CharacterTemplate,
-  spells: Spell[],
+  catalogs: DivineSpellCatalog[],
 ): KnownSpellEntry[] {
-  const classes = character.get("sheet").classes ?? []
   const knownSpells = character.get("magic")?.spells.knownSpells ?? []
   const knownIndexes = new Set(knownSpells.map((entry) => entry.spells.id))
-
-  const divineClasses = classes.filter((entry) =>
-    DIVINE_PREPARED_CLASSES.includes(entry.className),
-  )
-
   const missing: KnownSpellEntry[] = []
 
-  for (const classEntry of divineClasses) {
-    const availableLevel = maximumSpellLevelForClass(classEntry)
-    if (availableLevel <= 0) continue
-
+  for (const { classEntry, spells } of catalogs) {
     for (const spell of spells) {
-      if (spell.slotLevel > availableLevel) continue
-      if (!spell.classes.includes(classEntry.className)) continue
       if (knownIndexes.has(spell.index)) continue
 
       knownIndexes.add(spell.index)
