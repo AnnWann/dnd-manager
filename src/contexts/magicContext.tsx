@@ -279,9 +279,7 @@ function mergeSpells(existing: Spell[], incoming: Spell[]): Spell[] {
 }
 
 function routeNeedsFullOfficialCatalog(pathname: string): boolean {
-  if (pathname === "/user/spells" || pathname === "/user/characters/create") {
-    return true
-  }
+  if (pathname === "/user/characters/create") return true
 
   if (
     /^\/user\/characters\/[^/]+\/(?:level-up|spells-list(?:\/add-spells)?|abilities|equipment)$/.test(
@@ -292,7 +290,7 @@ function routeNeedsFullOfficialCatalog(pathname: string): boolean {
   }
 
   if (
-    /^\/session\/[^/]+\/(?:creation\/magic|character\/create|character\/[^/]+\/(?:level-up|spells-list|abilities|equipment))$/.test(
+    /^\/session\/[^/]+\/(?:character\/create|character\/[^/]+\/(?:level-up|spells-list|abilities|equipment))$/.test(
       pathname,
     )
   ) {
