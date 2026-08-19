@@ -17,6 +17,7 @@ import type {
 } from "./abilitySessionProtocol"
 import type { SessionMagicOperation } from "./magicSessionProtocol"
 import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
+import type { SessionProficiencyOperation } from "./proficiencySessionProtocol"
 import type {
   SessionInventoryOperation,
   SessionSharedInventoryState,
@@ -63,6 +64,7 @@ export type SessionRuntimeContextValue = {
   dispatchMagicOperation: (operation: SessionMagicOperation) => boolean
   dispatchEquipmentOperation: (operation: SessionEquipmentOperation) => boolean
   dispatchInventoryOperation: (operation: SessionInventoryOperation) => boolean
+  dispatchProficiencyOperation: (operation: SessionProficiencyOperation) => boolean
   undoLog: (logId: string) => boolean
 }
 
@@ -201,6 +203,8 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     socketRef.current?.send({ type: "session.equipment.operation", operation }) ?? false, [])
   const dispatchInventoryOperation = useCallback((operation: SessionInventoryOperation) =>
     socketRef.current?.send({ type: "session.inventory.operation", operation }) ?? false, [])
+  const dispatchProficiencyOperation = useCallback((operation: SessionProficiencyOperation) =>
+    socketRef.current?.send({ type: "session.proficiency.operation", operation }) ?? false, [])
 
   const dispatchConditionOperation = useCallback((operation: SessionConditionOperation) => {
     if (operation.type === "character.condition.add" || operation.type === "character.condition.update") {
@@ -231,11 +235,12 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     initializeHp, initializeConditions, initializeAbilities, initializeInventory,
     dispatchSheetOperation, dispatchHpOperation, dispatchConditionOperation,
     dispatchConcentrationOperation, dispatchAbilityOperation, dispatchMagicOperation,
-    dispatchEquipmentOperation, dispatchInventoryOperation, undoLog,
+    dispatchEquipmentOperation, dispatchInventoryOperation, dispatchProficiencyOperation, undoLog,
   }), [
     abilitiesByCharacterId, clientId, conditionsByCharacterId,
     dispatchAbilityOperation, dispatchConditionOperation, dispatchConcentrationOperation,
-    dispatchEquipmentOperation, dispatchHpOperation, dispatchInventoryOperation, dispatchMagicOperation, dispatchSheetOperation,
+    dispatchEquipmentOperation, dispatchHpOperation, dispatchInventoryOperation, dispatchMagicOperation,
+    dispatchProficiencyOperation, dispatchSheetOperation,
     hpByCharacterId, hpLog, initializeAbilities, initializeConditions, initializeHp, initializeInventory,
     inventoryState, lastHeartbeatAckAt, presence, role, sessionId, status, undoLog,
   ])
