@@ -1,4 +1,4 @@
-import type { Itemmable } from "../../src/models/items/item";
+import type { Itemmable } from "../../../../../src/models/items/item";
 
 const BACKGROUND_EQUIPMENT: Record<string, string[]> = {
   acolyte: ["Símbolo sagrado", "Livro de orações", "Incenso", "Vestes", "Roupas comuns"],
