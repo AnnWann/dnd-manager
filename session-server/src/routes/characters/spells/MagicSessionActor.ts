@@ -1,33 +1,33 @@
-import type { CharacterTemplateProps } from "../../src/models/characters/CharacterTemplate";
-import { CharacterTemplate } from "../../src/models/characters/CharacterTemplate";
+import type { CharacterTemplateProps } from "../../../../../src/models/characters/CharacterTemplate";
+import { CharacterTemplate } from "../../../../../src/models/characters/CharacterTemplate";
 import {
   addSpellCastingDescription,
   removeSpellCastingDescription,
   updateSpellCastingDescription,
-} from "../../src/models/characters/characterMagic";
+} from "../../../../../src/models/characters/characterMagic";
 import {
   restoreCustomSpellSlot,
   spendCustomSpellSlot,
-} from "../../src/models/characters/customClassConfig";
+} from "../../../../../src/models/characters/customClassConfig";
 import {
   restoreSorceryPointDerived,
   spendSorceryPointDerived,
   synchronizeSorceryPointPool,
-} from "../../src/models/characters/characterSorceryPoints";
-import { restoreKi, spendKi } from "../../src/models/characters/characterKi";
+} from "../../../../../src/models/characters/characterSorceryPoints";
+import { restoreKi, spendKi } from "../../../../../src/models/characters/characterKi";
 import {
   restoreChannelDivinity,
   spendChannelDivinity,
-} from "../../src/models/characters/characterChannelDivinity";
-import { withCharacterConditions } from "../../src/models/characters/characterConditionStorage";
-import type { CharacterSpells } from "../../src/models/magic/spells/CharacterSpells";
-import type { MagicCircleLevel } from "../../src/models/magic/spells/spellDefinitions";
-import type { MetamagicId } from "../../src/models/magic/metamagic/Metamagic";
-import { SessionActor as AbilitySessionActor } from "./AbilitySessionActor";
+} from "../../../../../src/models/characters/characterChannelDivinity";
+import { withCharacterConditions } from "../../../../../src/models/characters/characterConditionStorage";
+import type { CharacterSpells } from "../../../../../src/models/magic/spells/CharacterSpells";
+import type { MagicCircleLevel } from "../../../../../src/models/magic/spells/spellDefinitions";
+import type { MetamagicId } from "../../../../../src/models/magic/metamagic/Metamagic";
+import { SessionActor as AbilitySessionActor } from "../abilities/AbilitySessionActor";
 import { parseMagicClientMessage, type SessionMagicOperation } from "./magicProtocol";
-import { MAX_HP_LOG_RECORDS } from "./hpState";
-import type { SessionConditionsState, SessionConnection, SessionHpState } from "./protocol";
-import type { SessionAbilityState } from "./abilityProtocol";
+import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
+import type { SessionConditionsState, SessionConnection, SessionHpState } from "../../session/protocol";
+import type { SessionAbilityState } from "../abilities/abilityProtocol";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
