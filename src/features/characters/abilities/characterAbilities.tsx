@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
 import { Modal } from "../../../components/ui/Modal"
 import { Select } from "../../../components/ui/Select"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
+import type { SessionAbilitySource } from "../../session-runtime/abilitySessionProtocol"
 import type { Ability } from "../../../models/abilities/Ability"
 import {
   endAbilityEffect,
@@ -13,7 +15,7 @@ import {
   restoreAbilityUse,
 } from "../../../models/abilities/abilityActivation"
 import { useAbility as useCharacterAbility } from "../../../models/characters/characterAbilities"
-import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { AbilityCard } from "./abilityCard"
 import { AbilityDialog } from "./abilityDialog"
 import { CompactAbilityCard } from "./compactAbilityCard"
@@ -63,6 +65,17 @@ type AbilityListViewMode = "detailed" | "compact"
 const ABILITY_LIST_VIEW_STORAGE_KEY = "dnd-manager:ability-list-view"
 
 export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
+  const sessionRuntime = useOptionalSessionRuntime()
+  const authoritative = sessionRuntime?.abilitiesByCharacterId[character.get("id")]
+  const displayCharacter = useMemo(() => {
+    if (!authoritative?.initialized) return character
+    try {
+      return CharacterTemplate.fromJSON(authoritative.character)
+    } catch {
+      return character
+    }
+  }, [authoritative, character])
+
   const [editingAbility, setEditingAbility] = useState<Ability | null>(null)
   const [creating, setCreating] = useState(false)
   const [sourceFilter, setSourceFilter] = useState<AbilitySourceFilter>("all")
@@ -76,7 +89,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   }, [viewMode])
 
   const raceAbilities: RaceAbility[] = (
-    character.get("sheet").race.naturalAbilities ?? []
+    displayCharacter.get("sheet").race.naturalAbilities ?? []
   ).map((ability) => ({
     ...ability,
     id: `race:${ability.id}`,
@@ -85,12 +98,12 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   }))
 
   const abilities = [
-    ...(character.getCharacterAbilities() ?? []),
+    ...(displayCharacter.getCharacterAbilities() ?? []),
     ...raceAbilities,
   ]
 
   const weaponIds = new Set(
-    character.get("equipment").weapons.map((weapon) => weapon.id),
+    displayCharacter.get("equipment").weapons.map((weapon) => weapon.id),
   )
 
   const filteredAbilities = useMemo(() => {
@@ -129,14 +142,38 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
   }, [abilities, kindFilter, search, sourceFilter, weaponIds])
 
+  function dispatchSessionAbility(
+    operation: Parameters<NonNullable<typeof sessionRuntime>["dispatchAbilityOperation"]>[0],
+  ): boolean {
+    if (!sessionRuntime) return false
+    if (sessionRuntime.status !== "connected") {
+      console.warn("[session-runtime] Ability change ignored while the authoritative session server is disconnected.")
+      return true
+    }
+    sessionRuntime.dispatchAbilityOperation(operation)
+    return true
+  }
+
   function saveAbility(ability: Ability) {
-    updateCharacter(character.get("id"), (current) => current.saveAbility(ability))
+    if (!dispatchSessionAbility({
+      type: "character.ability.save",
+      characterId: displayCharacter.get("id"),
+      ability,
+    })) {
+      updateCharacter(displayCharacter.get("id"), (current) => current.saveAbility(ability))
+    }
     setCreating(false)
     setEditingAbility(null)
   }
 
   function removeAbility(id: string) {
-    updateCharacter(character.get("id"), (current) => current.removeAbility(id))
+    if (dispatchSessionAbility({
+      type: "character.ability.remove",
+      characterId: displayCharacter.get("id"),
+      abilityId: id,
+    })) return
+
+    updateCharacter(displayCharacter.get("id"), (current) => current.removeAbility(id))
   }
 
   function requestUseAbility(ability: Ability) {
@@ -148,9 +185,21 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   }
 
   function useAbility(id: string, optionId?: string) {
-    updateCharacter(character.get("id"), (current) => {
-      const ability = abilities.find((entry) => entry.id === id)
+    const ability = abilities.find((entry) => entry.id === id)
+    if (ability) {
+      const source = toSessionAbilitySource(ability)
+      if (dispatchSessionAbility({
+        type: "character.ability.use",
+        characterId: displayCharacter.get("id"),
+        source,
+        activationOptionId: optionId,
+      })) {
+        setActivationChoice(null)
+        return
+      }
+    }
 
+    updateCharacter(displayCharacter.get("id"), (current) => {
       if (ability && isEquipmentAbility(ability)) {
         return current.useEquipmentAbility(ability.sourceItemId, ability.originalAbilityId)
       }
@@ -170,8 +219,14 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   }
 
   function deactivateAbility(id: string) {
-    updateCharacter(character.get("id"), (current) => {
-      const ability = abilities.find((entry) => entry.id === id)
+    const ability = abilities.find((entry) => entry.id === id)
+    if (ability && dispatchSessionAbility({
+      type: "character.ability.deactivate",
+      characterId: displayCharacter.get("id"),
+      source: toSessionAbilitySource(ability),
+    })) return
+
+    updateCharacter(displayCharacter.get("id"), (current) => {
       if (!ability) return current
 
       if (isEquipmentAbility(ability)) {
@@ -185,8 +240,14 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   }
 
   function restoreAbility(id: string) {
-    updateCharacter(character.get("id"), (current) => {
-      const ability = abilities.find((entry) => entry.id === id)
+    const ability = abilities.find((entry) => entry.id === id)
+    if (ability && dispatchSessionAbility({
+      type: "character.ability.restore",
+      characterId: displayCharacter.get("id"),
+      source: toSessionAbilitySource(ability),
+    })) return
+
+    updateCharacter(displayCharacter.get("id"), (current) => {
       if (ability && isEquipmentAbility(ability)) {
         return current.restoreEquipmentAbility(ability.sourceItemId, ability.originalAbilityId)
       }
@@ -250,7 +311,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
                 const raceAbility = isRaceAbility(ability)
                 const conditionAbility = isConditionAbility(ability)
                 const grantedAbility = equipmentAbility || raceAbility || conditionAbility
-                const usageMax = ability.usage ? getAbilityUsageMax(character, ability.usage) : undefined
+                const usageMax = ability.usage ? getAbilityUsageMax(displayCharacter, ability.usage) : undefined
                 const sourceLabel = getAbilitySourceLabel(
                   ability,
                   equipmentAbility,
@@ -353,6 +414,30 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       ) : null}
     </>
   )
+}
+
+function toSessionAbilitySource(ability: Ability): SessionAbilitySource {
+  if (isEquipmentAbility(ability)) {
+    return {
+      type: "equipment",
+      itemId: ability.sourceItemId,
+      abilityId: ability.originalAbilityId,
+    }
+  }
+  if (isRaceAbility(ability)) {
+    return {
+      type: "race",
+      abilityId: ability.originalAbilityId,
+    }
+  }
+  if (isConditionAbility(ability)) {
+    return {
+      type: "condition",
+      conditionId: ability.sourceConditionId,
+      abilityId: ability.originalAbilityId,
+    }
+  }
+  return { type: "character", abilityId: ability.id }
 }
 
 function getAbilitySourceLabel(
