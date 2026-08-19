@@ -1,6 +1,6 @@
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 
-import { CharacterSpellLibrary } from "../../features/characters/magic/CharacterSpellLibrary"
+import { OnDemandCharacterSpellLibrary } from "../../features/characters/magic/OnDemandCharacterSpellLibrary"
 import { useCharacterWorkspace } from "../../features/characters/workspace/CharacterWorkspaceContext"
 import { UserCharacterWorkspace } from "../../features/characters/workspace/UserCharacterWorkspace"
 
@@ -36,7 +36,7 @@ function UserCharacterAddSpellsContent({
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-4">
-      <CharacterSpellLibrary
+      <OnDemandCharacterSpellLibrary
         character={character}
         updateCharacter={updateCharacter}
         onCancel={() => navigate(spellListPath)}
