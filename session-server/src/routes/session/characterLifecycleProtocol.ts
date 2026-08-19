@@ -17,7 +17,7 @@ export type SessionCharacterLifecycleOperation =
   | {
       type: "character.session.owner.set";
       characterId: string;
-      owner?: SessionCharacterOwner;
+      owner: SessionCharacterOwner;
     }
   | {
       type: "character.session.resync";
@@ -86,7 +86,7 @@ export function parseCharacterLifecycleClientMessage(
         operation: { type: operation.type, characterId: operation.characterId },
       };
     case "character.session.owner.set":
-      if (operation.owner !== undefined && !isOwner(operation.owner)) return null;
+      if (!isOwner(operation.owner)) return null;
       return {
         type: "session.character.operation",
         operation: {
