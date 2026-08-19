@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { useLocation } from "react-router-dom"
 
-import { useUserMagicState } from "../magic/UserMagicProvider"
 import { useUserData } from "./UserDataProvider"
 
 const routePreloads = new Map<string, Promise<void>>()
@@ -9,7 +8,6 @@ const routePreloads = new Map<string, Promise<void>>()
 type UserRouteRequirements = {
   characters: boolean
   campaigns: boolean
-  magic: boolean
 }
 
 function preloadCurrentUserRoute(pathname: string): Promise<void> {
@@ -54,22 +52,22 @@ function userRouteRequirements(pathname: string): UserRouteRequirements {
   const key = userRoutePreloadKey(pathname)
 
   if (key === "characters") {
-    return { characters: true, campaigns: false, magic: false }
+    return { characters: true, campaigns: false }
   }
 
   if (key === "spells") {
-    return { characters: false, campaigns: true, magic: true }
+    return { characters: false, campaigns: true }
   }
 
   if (key === "campaigns") {
-    return { characters: true, campaigns: true, magic: true }
+    return { characters: true, campaigns: true }
   }
 
   if (key.startsWith("character-")) {
-    return { characters: true, campaigns: false, magic: true }
+    return { characters: true, campaigns: false }
   }
 
-  return { characters: false, campaigns: false, magic: false }
+  return { characters: false, campaigns: false }
 }
 
 export function UserContextBoundary({ children }: { children: ReactNode }) {
@@ -82,11 +80,6 @@ export function UserContextBoundary({ children }: { children: ReactNode }) {
     campaignsError,
     refreshAll,
   } = useUserData()
-  const {
-    loading: magicLoading,
-    errorMessage: magicError,
-    reload: reloadMagic,
-  } = useUserMagicState()
   const [modulesReady, setModulesReady] = useState(false)
   const [moduleError, setModuleError] = useState(false)
 
@@ -127,14 +120,9 @@ export function UserContextBoundary({ children }: { children: ReactNode }) {
     return <UserContextError message={campaignsError} onRetry={() => void refreshAll()} />
   }
 
-  if (requirements.magic && magicError && magicLoading) {
-    return <UserContextError message={magicError} onRetry={() => void reloadMagic()} />
-  }
-
   const routeDataLoading =
     (requirements.characters && charactersLoading) ||
-    (requirements.campaigns && campaignsLoading) ||
-    (requirements.magic && magicLoading)
+    (requirements.campaigns && campaignsLoading)
 
   if (!modulesReady || routeDataLoading) {
     return <UserContextLoading />
