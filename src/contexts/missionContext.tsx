@@ -245,18 +245,18 @@ export function MissionProvider({
 export function SessionMissionAuthorityProvider({ children }: { children: ReactNode }) {
   const seed = useContext(MissionContext)
   const runtime = useOptionalSessionRuntime()
-  if (!seed) throw new Error("SessionMissionAuthorityProvider must be used inside MissionProvider")
-  if (!runtime) return <>{children}</>
-
-  const missions = runtime.missionState?.initialized
+  const missions = runtime?.missionState?.initialized
     ? normalizeMissions(runtime.missionState.missions)
     : []
 
   useEffect(() => {
-    if (runtime.role !== "MASTER" || runtime.status !== "connected") return
+    if (!seed || !runtime || runtime.role !== "MASTER" || runtime.status !== "connected") return
     if (!runtime.missionState || runtime.missionState.initialized) return
     runtime.initializeMissions(seed.missions)
-  }, [runtime, seed.missions])
+  }, [runtime, seed])
+
+  if (!seed) throw new Error("SessionMissionAuthorityProvider must be used inside MissionProvider")
+  if (!runtime) return <>{children}</>
 
   function addMission(mission: Mission) {
     if (runtime.role !== "MASTER") return
