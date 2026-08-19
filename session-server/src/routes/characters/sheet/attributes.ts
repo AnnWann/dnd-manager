@@ -1,4 +1,4 @@
-import type { SessionLoggedOperation } from "../../../protocol";
+import type { SessionLoggedOperation } from "../../session/protocol";
 
 export const ATTRIBUTES_ROUTE = "characters/sheet/attributes" as const;
 
