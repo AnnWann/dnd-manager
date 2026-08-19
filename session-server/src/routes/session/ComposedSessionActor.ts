@@ -37,9 +37,9 @@ type UnifiedLogRecord = {
 /**
  * The only Durable Object exported by the worker.
  *
- * Domain actors are used as composed route handlers, not as an inheritance chain.
- * The central dispatcher decides which domain owns a message before invoking it,
- * so a domain handler never has to forward an unrelated message through `super`.
+ * Domain actor classes remain implementation containers, but their inherited
+ * prototypes are deliberately stripped when bound as routes. The running actor
+ * therefore has one base SessionActor plus isolated domain handlers.
  */
 export class SessionActor extends BaseSessionActor {
   private readonly abilityRoute = bindDomainActor(AbilitySessionActor.prototype, this.ctx);
@@ -162,8 +162,9 @@ function resolveMessageRoute(
     profile: DomainActor;
   },
 ): DomainActor | null {
-  // Use each domain parser as the routing contract. Malformed domain messages fall
-  // through to the base actor, which returns the normal INVALID_MESSAGE response.
+  // The parser is the routing contract. A route is called only after its parser
+  // accepts the message, so the legacy `super.webSocketMessage` fallbacks inside
+  // domain implementation containers are unreachable during normal dispatch.
   if (parseAbilityClientMessage(raw)) return routes.ability;
   if (parseMagicClientMessage(raw)) return routes.magic;
   if (parseEquipmentClientMessage(raw)) return routes.equipment;
@@ -175,7 +176,14 @@ function resolveMessageRoute(
 }
 
 function bindDomainActor<T extends DomainActor>(prototype: T, ctx: unknown): T {
-  const actor = Object.create(prototype) as T;
+  // Copy only this domain's own methods. Do not retain prototype inheritance from
+  // the old incremental actor chain.
+  const actor = Object.create(null) as T;
+  for (const key of Reflect.ownKeys(prototype)) {
+    if (key === "constructor") continue;
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, key);
+    if (descriptor) Object.defineProperty(actor, key, descriptor);
+  }
   Object.defineProperty(actor, "ctx", {
     value: ctx,
     enumerable: false,
