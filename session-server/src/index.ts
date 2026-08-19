@@ -2,7 +2,7 @@ import {
   authenticateSessionConnection,
   type SessionServerEnv,
 } from "./auth";
-import { SessionActor } from "./SessionActor";
+import { SessionActor } from "./AbilitySessionActor";
 
 export { SessionActor };
 
