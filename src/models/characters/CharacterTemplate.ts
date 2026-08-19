@@ -30,7 +30,7 @@ import {
   addToPocketItem, 
   equipInventoryItem, 
   getCarryingCapacity, 
-  getEncumbranceLimit, 
+  getEncumbranceLimit,
   getEquipmentAbilities, 
   getEquipmentSpells, 
   getHeavyEncumbranceLimit, 
@@ -480,7 +480,7 @@ export class CharacterTemplate {
   getEffectivePassivePerception(): number {return getEffectivePassivePerception(this)}
   getEffectiveMobility(): number {return getEffectiveMobility(this)}
   applyBonus(baseValue: number, bonus: Bonus): number {return applyBonus(baseValue, bonus)}
-  applyBonuses(baseValue: number, bonuses: Bonus[]): number {return applyBonuses(this, bonuses)}
+  applyBonuses(baseValue: number, bonuses: Bonus[]): number {return applyBonuses(this, baseValue, bonuses)}
   isSavingThrowProficient(attribute: Attribute): boolean {return isSavingThrowProficient(this, attribute)}
   getSavingThrowBonus(attribute: Attribute): number {return getSavingThrowBonus(this, attribute)}
   setSavingThrowProficiency(attribute: Attribute,proficient: boolean): CharacterTemplate {return setSavingThrowProficiency(this,attribute,proficient)}
