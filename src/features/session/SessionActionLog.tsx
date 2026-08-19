@@ -1,5 +1,5 @@
 import { History, Undo2 } from "lucide-react"
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
 import { isLatestUndoableSessionLog, type SessionLogRecord } from "../session-runtime/sessionLogProtocol"
@@ -16,11 +16,13 @@ type DisplayRecord =
   | { source: "session"; record: SessionLogRecord }
 
 const REST_LEGACY_MATCH_WINDOW_MS = 3_000
+const LOG_PAGE_SIZE = 20
 
 export function SessionActionLog() {
   const { operationLog, visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
   const runtime = useOptionalSessionRuntime()
   const sessionLog = (runtime?.hpLog ?? []) as SessionLogRecord[]
+  const [page, setPage] = useState(0)
 
   const characterNames = useMemo(
     () => new Map(visibleCharacters.map((character) => [character.get("id"), character.get("name")])),
@@ -58,6 +60,17 @@ export function SessionActionLog() {
     ...sessionLog.map((record) => ({ source: "session" as const, record })),
   ].sort((left, right) => new Date(right.record.createdAt).getTime() - new Date(left.record.createdAt).getTime()), [sessionLog, visibleLegacyRecords])
 
+  const pageCount = Math.max(1, Math.ceil(records.length / LOG_PAGE_SIZE))
+  const visibleRecords = useMemo(
+    () => records.slice(page * LOG_PAGE_SIZE, (page + 1) * LOG_PAGE_SIZE),
+    [page, records],
+  )
+
+  useEffect(() => {
+    if (page < pageCount) return
+    setPage(Math.max(0, pageCount - 1))
+  }, [page, pageCount])
+
   return (
     <aside className="hidden w-80 shrink-0 flex-col border-l border-border bg-bg-elevated xl:flex">
       <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4">
@@ -71,7 +84,7 @@ export function SessionActionLog() {
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {records.length ? (
           <div className="flex flex-col gap-2">
-            {records.map((entry) => entry.source === "session" ? (
+            {visibleRecords.map((entry) => entry.source === "session" ? (
               <SessionLogEntry
                 key={`session:${entry.record.id}`}
                 record={entry.record}
@@ -94,6 +107,28 @@ export function SessionActionLog() {
           </div>
         )}
       </div>
+
+      {records.length > LOG_PAGE_SIZE ? (
+        <footer className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-border p-3 text-[11px] text-textMuted">
+          <button
+            type="button"
+            disabled={page === 0}
+            onClick={() => setPage((current) => Math.max(0, current - 1))}
+            className="rounded-lg border border-border px-2 py-1.5 text-left disabled:cursor-not-allowed disabled:opacity-40 hover:bg-bg-subtle"
+          >
+            Mais recentes
+          </button>
+          <span>{page + 1}/{pageCount}</span>
+          <button
+            type="button"
+            disabled={page >= pageCount - 1}
+            onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}
+            className="rounded-lg border border-border px-2 py-1.5 text-right disabled:cursor-not-allowed disabled:opacity-40 hover:bg-bg-subtle"
+          >
+            Mais antigos
+          </button>
+        </footer>
+      ) : null}
     </aside>
   )
 }
