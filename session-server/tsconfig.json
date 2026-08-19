@@ -17,6 +17,8 @@
       "src/routes/characters/equipment",
       "src/routes/characters/inventory",
       "src/routes/characters/proficiencies",
+      "src/routes/characters/race",
+      "src/routes/characters/profile",
       ".."
     ]
   },
