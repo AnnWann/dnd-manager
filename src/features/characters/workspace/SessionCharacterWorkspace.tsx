@@ -4,6 +4,7 @@ import { useCharacterContext } from "../../../contexts/characterContext"
 import { useSyncContext } from "../../../contexts/syncContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { EquippedItemReference } from "../../../models/characters/characterEquippedItemMovement"
+import type { HandOccupantReference } from "../../../models/characters/characterHands"
 import type { Itemmable } from "../../../models/items/item"
 import { applySessionAbilityState } from "../../session-runtime/applySessionAbilityState"
 import type { SessionEquipmentOperation } from "../../session-runtime/equipmentSessionProtocol"
@@ -55,15 +56,20 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
 
     const magicChanged = JSON.stringify(current.get("magic")) !== JSON.stringify(next.get("magic"))
     const equipmentChanged = JSON.stringify(current.get("equipment")) !== JSON.stringify(next.get("equipment"))
+    const inventoryChanged = JSON.stringify(current.get("inventory")) !== JSON.stringify(next.get("inventory"))
 
-    if (equipmentChanged) {
+    if (equipmentChanged || inventoryChanged) {
       const equipmentOperations = deriveEquipmentOperations(current, next)
-      if (!equipmentOperations.length) {
+      if (equipmentOperations.length) {
+        for (const operation of equipmentOperations) sessionRuntime.dispatchEquipmentOperation(operation)
+        return
+      }
+      // Inventory is not fully migrated yet. Only equipment-owned inventory
+      // transitions (unequip/attunement) are intercepted here.
+      if (equipmentChanged) {
         console.warn("[session-runtime] blocked an unrecognized local equipment mutation", { characterId })
         return
       }
-      for (const operation of equipmentOperations) sessionRuntime.dispatchEquipmentOperation(operation)
-      return
     }
 
     if (magicChanged) {
@@ -77,6 +83,23 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
     }
 
     characterContext.updateCharacter(characterId, updater)
+  }, [characterContext, projectedCharacters, sessionRuntime])
+
+  const stowHandOccupant = useCallback((characterId: string, reference: HandOccupantReference) => {
+    if (!sessionRuntime) {
+      characterContext.stowHandOccupant(characterId, reference)
+      return
+    }
+    const character = projectedCharacters.find((entry) => entry.get("id") === characterId)
+    if (!character) return
+    const equippedReference = resolveHandReference(character, reference)
+    if (!equippedReference) return
+    sessionRuntime.dispatchEquipmentOperation({
+      type: "character.equipment.move",
+      characterId,
+      reference: equippedReference,
+      destination: "inventory",
+    })
   }, [characterContext, projectedCharacters, sessionRuntime])
 
   const owners = characterContext.knownPlayerKeys.map((key) => characterContext.getOwner(key))
@@ -101,14 +124,10 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
     importCharacter: characterContext.importCharacter,
     completeLongRest: characterContext.completeLongRest,
     partyInventory: characterContext.partyInventory,
-    stowHandOccupant: characterContext.stowHandOccupant,
+    stowHandOccupant,
     moveEquippedItem: (characterId, reference, destination) => {
       if (!sessionRuntime) {
         characterContext.moveEquippedItem(characterId, reference, destination)
-        return
-      }
-      if (destination === "ground") {
-        console.warn("[session-runtime] moving equipped items to ground is blocked until ground inventory is server-authoritative", { characterId, reference })
         return
       }
       sessionRuntime.dispatchEquipmentOperation({
@@ -118,16 +137,12 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
         destination,
       })
     },
-    dropHandOccupant: characterContext.dropHandOccupant,
-    moveEquippedItemToGround: (characterId, reference) => {
-      if (!sessionRuntime) {
-        characterContext.moveEquippedItem(characterId, reference, "ground")
-        return
-      }
-      console.warn("[session-runtime] moving equipped items to ground is blocked until ground inventory is server-authoritative", { characterId, reference })
-    },
-    addGroundItem: characterContext.addGroundItem,
-    canUseGroundInventory: true,
+    // Ground inventory is not authoritative yet. Hide these actions instead of
+    // allowing equipment mutations to fall back to the local game-operation path.
+    dropHandOccupant: undefined,
+    moveEquippedItemToGround: undefined,
+    addGroundItem: undefined,
+    canUseGroundInventory: false,
     transferCharacters: characterContext.transferCharacters,
     transferItem: characterContext.transferItem,
     canTransferFromCharacter: characterContext.canTransferFromCharacter,
@@ -144,8 +159,25 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
   return <CharacterWorkspaceProvider value={value}>{children}</CharacterWorkspaceProvider>
 }
 
+function resolveHandReference(
+  character: CharacterTemplate,
+  reference: HandOccupantReference,
+): EquippedItemReference | null {
+  const equipment = character.get("equipment")
+  if (reference.type === "shield") return equipment.shield ? { type: "shield" } : null
+  if (reference.type === "weapon") {
+    const item = equipment.weapons[reference.index]
+    return item ? { type: "weapon", itemId: item.id } : null
+  }
+  const item = (equipment.heldItems ?? [])[reference.index]
+  return item ? { type: "held-item", itemId: item.id } : null
+}
+
 function deriveEquipmentOperations(current: CharacterTemplate, next: CharacterTemplate): SessionEquipmentOperation[] {
   const characterId = current.get("id")
+  const attunementOperation = deriveAttunementOperation(current, next)
+  if (attunementOperation) return [attunementOperation]
+
   const beforeEquipment = current.get("equipment")
   const afterEquipment = next.get("equipment")
   const beforePockets = beforeEquipment.pockets
@@ -200,6 +232,60 @@ function deriveEquipmentOperations(current: CharacterTemplate, next: CharacterTe
     })
   }
   return operations
+}
+
+function deriveAttunementOperation(
+  current: CharacterTemplate,
+  next: CharacterTemplate,
+): SessionEquipmentOperation | null {
+  const before = collectCarriedItems(current)
+  const after = collectCarriedItems(next)
+  if (before.size !== after.size) return null
+
+  let changedItemId: string | null = null
+  for (const [itemId, beforeItem] of before) {
+    const afterItem = after.get(itemId)
+    if (!afterItem) return null
+    if (beforeItem.attuned === afterItem.attuned) continue
+    if (changedItemId) return null
+    changedItemId = itemId
+  }
+  if (!changedItemId) return null
+
+  // Attunement toggles may only change the attuned flag. This prevents an
+  // unrelated inventory edit from being mislabeled as an equipment operation.
+  const stripAttuned = (item: Itemmable) => {
+    const { attuned: _attuned, ...rest } = item
+    return rest
+  }
+  const beforeItem = before.get(changedItemId)
+  const afterItem = after.get(changedItemId)
+  if (!beforeItem || !afterItem || JSON.stringify(stripAttuned(beforeItem)) !== JSON.stringify(stripAttuned(afterItem))) return null
+
+  return {
+    type: "character.equipment.attunement.toggle",
+    characterId: current.get("id"),
+    itemId: changedItemId,
+  }
+}
+
+function collectCarriedItems(character: CharacterTemplate): Map<string, Itemmable> {
+  const equipment = character.get("equipment")
+  const items: Itemmable[] = [
+    ...character.get("inventory"),
+    equipment.armor,
+    equipment.boots,
+    equipment.helmet,
+    equipment.gloves,
+    equipment.cape,
+    equipment.shield,
+    ...equipment.rings,
+    ...equipment.weapons,
+    ...equipment.pockets,
+    ...(equipment.necklaces ?? []),
+    ...(equipment.heldItems ?? []),
+  ].filter((item): item is Itemmable => Boolean(item))
+  return new Map(items.map((item) => [item.id, item]))
 }
 
 function collectEditableEquipmentItems(character: CharacterTemplate): Map<string, { reference: EquippedItemReference; item: Itemmable }> {
