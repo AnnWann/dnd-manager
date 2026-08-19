@@ -1,26 +1,19 @@
 import { Download, Upload } from "lucide-react"
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
 import {
   createMyCharacter,
   deleteMyCharacter,
   getMyCharacter,
-  getMyCharacters,
-  type UserCharacterSummary,
 } from "../../api/user-characters"
-import { getApiStatus } from "../../api/api-client"
 import { createOwnedHomebrewSpell } from "../../api/user-spells"
 import { Button } from "../../components/ui/Button"
 import { useMagicContext } from "../../contexts/magicContext"
 import { CharacterSelectorList } from "../../features/characters/selector/CharacterSelectorList"
 import { toUserCharacterSelectorItem } from "../../features/characters/selector/userCharacterSelectorAdapter"
 import { useUserMagicState } from "../../features/magic/UserMagicProvider"
+import { useUserData } from "../../features/user/UserDataProvider"
 import type { Spell } from "../../models/magic/spells/Spell"
 
 type CharacterExportBundle = {
@@ -35,71 +28,24 @@ export function UserCharactersTab() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { savedSpells, spellByIndex } = useMagicContext()
   const { reload: reloadHomebrewSpells } = useUserMagicState()
+  const {
+    characters,
+    charactersLoading,
+    charactersError,
+    setCharacters,
+  } = useUserData()
 
-  const [characters, setCharacters] =
-    useState<UserCharacterSummary[]>([])
-  const [selectedCharacterId, setSelectedCharacterId] =
-    useState("")
-  const [loading, setLoading] = useState(true)
+  const [selectedCharacterId, setSelectedCharacterId] = useState("")
   const [working, setWorking] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
 
   useEffect(() => {
-    let active = true
-
-    async function loadCharacters() {
-      setLoading(true)
-      setErrorMessage("")
-
-      try {
-        const result = await getMyCharacters()
-
-        if (!active) return
-
-        const nextCharacters = Array.isArray(result) ? result : []
-        setCharacters(nextCharacters)
-        setSelectedCharacterId((current) =>
-          nextCharacters.some((character) => character.id === current)
-            ? current
-            : nextCharacters[0]?.id ?? "",
-        )
-      } catch (error) {
-        if (!active) return
-
-        const status = getApiStatus(error)
-
-        if (status === 401) {
-          navigate("/auth", {
-            replace: true,
-            state: {
-              returnTo: "/user/characters",
-            },
-          })
-          return
-        }
-
-        if (status === 403) {
-          navigate("/unauthorized", {
-            replace: true,
-          })
-          return
-        }
-
-        setCharacters([])
-        setErrorMessage(
-          "Não foi possível carregar seus personagens.",
-        )
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-
-    void loadCharacters()
-
-    return () => {
-      active = false
-    }
-  }, [navigate])
+    setSelectedCharacterId((current) =>
+      characters.some((character) => character.id === current)
+        ? current
+        : characters[0]?.id ?? "",
+    )
+  }, [characters])
 
   const selectorCharacters = useMemo(
     () => characters.map(toUserCharacterSelectorItem),
@@ -107,9 +53,7 @@ export function UserCharactersTab() {
   )
 
   function openCharacter(characterId: string) {
-    navigate(
-      `/user/characters/${encodeURIComponent(characterId)}/sheet`,
-    )
+    navigate(`/user/characters/${encodeURIComponent(characterId)}/sheet`)
   }
 
   function createCharacter() {
@@ -210,9 +154,7 @@ export function UserCharactersTab() {
         ...current.filter((entry) => entry.id !== created.id),
       ])
       setSelectedCharacterId(created.id)
-      navigate(
-        `/user/characters/${encodeURIComponent(created.id)}/profile`,
-      )
+      navigate(`/user/characters/${encodeURIComponent(created.id)}/profile`)
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -239,9 +181,7 @@ export function UserCharactersTab() {
 
     try {
       await deleteMyCharacter(characterId)
-      const remaining = characters.filter(
-        (entry) => entry.id !== characterId,
-      )
+      const remaining = characters.filter((entry) => entry.id !== characterId)
       setCharacters(remaining)
       setSelectedCharacterId((current) =>
         current === characterId ? remaining[0]?.id ?? "" : current,
@@ -260,8 +200,8 @@ export function UserCharactersTab() {
         description="Clique uma vez para selecionar e novamente para abrir a ficha."
         characters={selectorCharacters}
         selectedCharacterId={selectedCharacterId}
-        loading={loading}
-        errorMessage={errorMessage}
+        loading={charactersLoading}
+        errorMessage={errorMessage || charactersError}
         emptyMessage="Você ainda não possui personagens."
         onSelectCharacter={setSelectedCharacterId}
         onOpenCharacter={openCharacter}
@@ -296,9 +236,7 @@ export function UserCharactersTab() {
         type="file"
         accept="application/json,.json"
         className="hidden"
-        onChange={(event) =>
-          void importFromFile(event.target.files?.[0])
-        }
+        onChange={(event) => void importFromFile(event.target.files?.[0])}
       />
     </>
   )
@@ -344,9 +282,7 @@ function remapSpellIndexes(
   parentKey = "",
 ): unknown {
   if (Array.isArray(value)) {
-    return value.map((entry) =>
-      remapSpellIndexes(entry, indexMap, parentKey),
-    )
+    return value.map((entry) => remapSpellIndexes(entry, indexMap, parentKey))
   }
 
   if (!isRecord(value)) return value
