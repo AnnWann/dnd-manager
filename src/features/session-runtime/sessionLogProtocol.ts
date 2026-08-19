@@ -27,6 +27,18 @@ export type SessionAbilityReverseOperation = {
   }
 }
 
+export type SessionRestReverseOperation = {
+  type: "session.rest.restore"
+  characterId: string
+  affectedScopes?: string[]
+  snapshot: {
+    ability: SessionAbilityState
+    hp: SessionHpState
+    conditions: SessionConditionsState
+    inventory?: SessionSharedInventoryState
+  }
+}
+
 export type SessionInventoryReverseOperation = {
   type: "session.inventory.restore"
   characterId: string
@@ -95,6 +107,7 @@ export type SessionRuntimeLogRecord = {
     | { type: "character.hp.undo"; characterId: string; sourceLogId: string }
   reverseOperation:
     | SessionAbilityReverseOperation
+    | SessionRestReverseOperation
     | SessionInventoryReverseOperation
     | SessionProficiencyReverseOperation
     | SessionRaceReverseOperation
@@ -109,6 +122,7 @@ export type SessionLogRecord = SessionHpLogRecord | SessionRuntimeLogRecord
 
 export function isAbilityLogRecord(record: SessionLogRecord): record is SessionRuntimeLogRecord {
   return record.reverseOperation.type === "character.ability.restore"
+    || record.reverseOperation.type === "session.rest.restore"
     || record.reverseOperation.type === "session.inventory.restore"
     || record.reverseOperation.type === "session.proficiency.restore"
     || record.reverseOperation.type === "session.race.restore"
