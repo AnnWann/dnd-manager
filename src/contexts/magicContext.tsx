@@ -149,24 +149,18 @@ export function MagicProvider({
 
   const spellByIndex = useMemo(() => {
     const map = new Map<string, Spell>()
-
     for (const spell of officialSpells) {
       const index = spell.index?.trim()
       if (index) map.set(index, spell)
     }
-
     for (const spell of normalizedSavedSpells) {
       const index = spell.index?.trim()
       if (index) map.set(index, spell)
     }
-
     return map
   }, [normalizedSavedSpells, officialSpells])
 
-  const allSpells = useMemo(
-    () => Array.from(spellByIndex.values()),
-    [spellByIndex],
-  )
+  const allSpells = useMemo(() => Array.from(spellByIndex.values()), [spellByIndex])
   const metamagics = useMemo(() => officialMetamagics, [])
   const metamagicById = useMemo(
     () => new Map(metamagics.map((metamagic) => [metamagic.id, metamagic])),
@@ -191,10 +185,9 @@ export function MagicProvider({
   }
 
   function getMetamagicsByIds(metamagicIds: MetamagicId[]) {
-    return metamagics
-      .map((metamagic) => metamagicById.get(metamagic.id))
+    return metamagicIds
+      .map((metamagicId) => metamagicById.get(metamagicId))
       .filter((metamagic): metamagic is Metamagic => Boolean(metamagic))
-      .filter((metamagic) => metamagicIds.includes(metamagic.id))
   }
 
   function commitSavedSpells(nextSpells: Spell[]) {
@@ -268,15 +261,7 @@ function mergeSpells(existing: Spell[], incoming: Spell[]): Spell[] {
 
 function routeNeedsFullOfficialCatalog(pathname: string): boolean {
   if (pathname === "/user/characters/create") return true
-
-  if (/^\/user\/characters\/[^/]+\/level-up$/.test(pathname)) return true
-
-  if (
-    /^\/session\/[^/]+\/(?:character\/create|character\/[^/]+\/level-up)$/.test(
-      pathname,
-    )
-  ) return true
-
+  if (/^\/session\/[^/]+\/character\/create$/.test(pathname)) return true
   return false
 }
 
