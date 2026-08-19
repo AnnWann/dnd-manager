@@ -1,4 +1,4 @@
-import type { SessionLoggedOperation } from "../../../protocol";
+import type { SessionLoggedOperation } from "../../session/protocol";
 
 export const CONCENTRATION_ROUTE = "characters/sheet/concentration" as const;
 
