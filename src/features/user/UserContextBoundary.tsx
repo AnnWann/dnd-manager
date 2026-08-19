@@ -23,9 +23,13 @@ function preloadUserContextModules(): Promise<void> {
 }
 
 export function UserContextBoundary({ children }: { children: ReactNode }) {
-  const { loading: magicLoading } = useUserMagicState()
+  const {
+    loading: magicLoading,
+    errorMessage: magicError,
+    reload: reloadMagic,
+  } = useUserMagicState()
   const [modulesReady, setModulesReady] = useState(false)
-  const [loadError, setLoadError] = useState(false)
+  const [moduleError, setModuleError] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -37,7 +41,7 @@ export function UserContextBoundary({ children }: { children: ReactNode }) {
       .catch((error) => {
         console.error("[user-context] Failed to preload user modules.", error)
         userContextPreload = null
-        if (active) setLoadError(true)
+        if (active) setModuleError(true)
       })
 
     return () => {
@@ -45,30 +49,63 @@ export function UserContextBoundary({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  if (loadError) {
+  if (moduleError) {
     return (
-      <div className="grid min-h-dvh place-items-center p-4 text-center text-sm text-danger">
-        <div>
-          <p>Não foi possível carregar o contexto do usuário.</p>
-          <button
-            type="button"
-            className="mt-3 rounded-lg border border-border px-3 py-2 text-textH"
-            onClick={() => window.location.reload()}
-          >
-            Tentar novamente
-          </button>
-        </div>
-      </div>
+      <UserContextError
+        message="Não foi possível carregar os módulos do ambiente do usuário."
+        onRetry={() => window.location.reload()}
+      />
+    )
+  }
+
+  if (magicError && !magicLoading) {
+    return (
+      <UserContextError
+        message={magicError}
+        onRetry={() => void reloadMagic()}
+      />
     )
   }
 
   if (!modulesReady || magicLoading) {
-    return (
-      <div className="grid min-h-dvh place-items-center text-sm text-textMuted">
-        Carregando seu ambiente...
-      </div>
-    )
+    return <UserContextLoading />
   }
 
   return children
+}
+
+function UserContextLoading() {
+  return (
+    <div className="grid min-h-dvh place-items-center text-sm text-textMuted">
+      <div className="text-center">
+        <div className="font-medium text-textH">Preparando seu ambiente...</div>
+        <div className="mt-1 text-xs text-textMuted">
+          Carregando os recursos da área do usuário.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function UserContextError({
+  message,
+  onRetry,
+}: {
+  message: string
+  onRetry: () => void
+}) {
+  return (
+    <div className="grid min-h-dvh place-items-center p-4 text-center text-sm text-danger">
+      <div>
+        <p>{message}</p>
+        <button
+          type="button"
+          className="mt-3 rounded-lg border border-border px-3 py-2 text-textH"
+          onClick={onRetry}
+        >
+          Tentar novamente
+        </button>
+      </div>
+    </div>
+  )
 }
