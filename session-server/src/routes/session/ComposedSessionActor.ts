@@ -682,7 +682,7 @@ export class SessionActor extends BaseSessionActor {
   }
 
   private async readInventoryState(): Promise<SharedInventoryState> {
-    return (await this.ctx.storage.get<SharedInventoryState>>(INVENTORY_STATE_KEY)) ?? {
+    return (await this.ctx.storage.get<SharedInventoryState>(INVENTORY_STATE_KEY)) ?? {
       initialized: false,
       revision: 0,
       partyInventory: [],
