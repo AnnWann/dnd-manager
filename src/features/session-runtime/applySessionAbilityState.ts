@@ -18,11 +18,14 @@ export function applySessionAbilityState(
 
   let next = character.with("abilities", authoritative.get("abilities") ?? [])
 
-  // Abilities and magic now share the same authoritative character snapshot.
-  // Copy the whole magic slice so spell preparation, slots, metamagic and
-  // shared class resources cannot diverge between participants.
+  // Abilities, magic and equipment now share the same authoritative snapshot.
   const authoritativeMagic = authoritative.get("magic")
   if (authoritativeMagic) next = next.with("magic", authoritativeMagic)
+
+  next = next.with("equipment", authoritative.get("equipment"))
+  // Equipment operations can move items back into character inventory. Keep
+  // both slices from the same revision so an unequip cannot render halfway.
+  next = next.with("inventory", authoritative.get("inventory"))
 
   next = withCharacterAsis(next, getCharacterAsis(authoritative))
 
@@ -34,8 +37,6 @@ export function applySessionAbilityState(
   })
 
   // Custom spell-slot pools persist their current value in class levelChoices.
-  // Preserve local class identity/levels while copying only the authoritative
-  // levelChoices for matching class entries.
   const currentClasses = next.get("sheet").classes ?? []
   const authoritativeClasses = authoritative.get("sheet").classes ?? []
   next = next.withSheet("classes", currentClasses.map((entry, index) => {
@@ -44,42 +45,5 @@ export function applySessionAbilityState(
     return { ...entry, levelChoices: source.levelChoices ?? entry.levelChoices }
   }))
 
-  const authoritativeItems = collectEquipmentItems(authoritative)
-  next = next.with(
-    "equipment",
-    mapEquipmentItems(next.get("equipment"), (item) => {
-      const source = authoritativeItems.get(item.id)
-      if (!source || !("abilities" in source)) return item
-      return { ...item, abilities: source.abilities }
-    }),
-  )
-
   return next
-}
-
-function collectEquipmentItems(character: CharacterTemplate): Map<string, Record<string, any>> {
-  const items = new Map<string, Record<string, any>>()
-  const equipment = character.get("equipment") as Record<string, any>
-  for (const value of Object.values(equipment)) {
-    if (Array.isArray(value)) {
-      for (const item of value) if (isItem(item)) items.set(item.id, item)
-      continue
-    }
-    if (isItem(value)) items.set(value.id, value)
-  }
-  return items
-}
-
-function mapEquipmentItems<T extends Record<string, any>>(
-  equipment: T,
-  mapper: (item: Record<string, any>) => Record<string, any>,
-): T {
-  return Object.fromEntries(Object.entries(equipment).map(([key, value]) => {
-    if (Array.isArray(value)) return [key, value.map((item) => isItem(item) ? mapper(item) : item)]
-    return [key, isItem(value) ? mapper(value) : value]
-  })) as T
-}
-
-function isItem(value: unknown): value is Record<string, any> & { id: string } {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value) && typeof (value as Record<string, unknown>).id === "string"
 }
