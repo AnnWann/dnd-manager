@@ -1,4 +1,4 @@
-import { PHB_BACKGROUND_PRESETS } from "../../src/data/characterCreation/phbPresets";
+import { getBackgroundPresetStartingEquipment } from "./backgroundPresetEquipment";
 import type { CharacterBackground } from "../../src/models/characters/CharacterBackground";
 import { CharacterTemplate, type CharacterTemplateProps } from "../../src/models/characters/CharacterTemplate";
 import {
@@ -221,15 +221,15 @@ function applyProfileOperation(
   const background = normalizeBackground(operation.background);
   if (!background) return invalid("BACKGROUND_INVALID", "The requested background is invalid.");
 
-  const preset = PHB_BACKGROUND_PRESETS.find((entry) => entry.id === background.id);
-  if (operation.addEquipment && !preset) {
+  const presetEquipment = getBackgroundPresetStartingEquipment(background.id);
+  if (operation.addEquipment && !presetEquipment) {
     return invalid("BACKGROUND_EQUIPMENT_NOT_ALLOWED", "Starting equipment can only be granted from a known background preset.");
   }
 
-  const safeBackground: CharacterBackground = preset
+  const safeBackground: CharacterBackground = presetEquipment
     ? {
         ...background,
-        startingEquipment: preset.startingEquipment.map((item) => ({ ...item })),
+        startingEquipment: presetEquipment.map((item) => ({ ...item })),
       }
     : { ...background, startingEquipment: [] };
 
@@ -240,10 +240,10 @@ function applyProfileOperation(
     if (skills[skill] !== "expertise") skills[skill] = "proficient";
   }
   const proficiencies = mergeProficiencies(sheet.proficiencies ?? [], safeBackground.proficiencies);
-  const inventory = operation.addEquipment && preset
+  const inventory = operation.addEquipment && presetEquipment
     ? [
         ...next.get("inventory"),
-        ...preset.startingEquipment.map((item) => ({
+        ...presetEquipment.map((item) => ({
           ...item,
           id: crypto.randomUUID(),
           desc: item.desc || `Equipamento inicial do antecedente ${safeBackground.name}.`,
