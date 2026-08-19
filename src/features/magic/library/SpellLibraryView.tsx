@@ -1,5 +1,10 @@
-import { useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 
+import {
+  getOfficialSpell,
+  queryAllOfficialSpellSummaries,
+  type SpellCompendiumSummary,
+} from "../../../api/spell-compendium"
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
@@ -10,9 +15,9 @@ import {
   SPELL_CLASS_OPTIONS,
 } from "../../../contexts/consts"
 import { useMagicContext } from "../../../contexts/magicContext"
-import { SpellCreatorModule } from "../spellCreator/spellCreatorModule"
 import type { Spell } from "../../../models/magic/spells/Spell"
 import type { ClassName } from "../../../models/sheet/Class"
+import { SpellCreatorModule } from "../spellCreator/spellCreatorModule"
 
 export type SpellLibraryRecord = {
   index: string
@@ -22,25 +27,12 @@ export type SpellLibraryRecord = {
   characterNames?: string[]
 }
 
-type SourceFilter =
-  | "all"
-  | "official"
-  | "owned"
-  | "campaign"
-  | "character"
-  | "homebrew"
-
+type LibrarySpell = Spell | SpellCompendiumSummary
+type SourceFilter = "all" | "official" | "owned" | "campaign" | "character" | "homebrew"
 type BooleanFilter = "all" | "yes" | "no"
 type LevelFilter = "all" | `${number}`
 type ClassFilter = "all" | ClassName
-type CastingTimeFilter =
-  | "all"
-  | "action"
-  | "bonusAction"
-  | "reaction"
-  | "minute"
-  | "hour"
-  | "special"
+type CastingTimeFilter = "all" | "action" | "bonusAction" | "reaction" | "minute" | "hour" | "special"
 type SortMode = "level-name" | "name" | "recent"
 
 type Props = {
@@ -78,39 +70,94 @@ export function SpellLibraryView({
   const [creatorOpen, setCreatorOpen] = useState(false)
   const [editingSpell, setEditingSpell] = useState<Spell | null>(null)
   const [viewingSpell, setViewingSpell] = useState<Spell | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState("")
+  const [officialSummaries, setOfficialSummaries] = useState<SpellCompendiumSummary[]>([])
+  const [officialTotal, setOfficialTotal] = useState(0)
+  const [officialLoading, setOfficialLoading] = useState(false)
+  const [officialError, setOfficialError] = useState("")
 
   const isSession = variant === "session"
   const recordByIndex = useMemo(
     () => new Map(records.map((record) => [record.index, record])),
     [records],
   )
-
-  const availableSchools = useMemo(
-    () =>
-      Array.from(new Set(spells.map((spell) => spell.school).filter(Boolean)))
-        .map((school) => ({
-          value: String(school),
-          label: MAGIC_SCHOOLS_MAP[school] ?? String(school),
-        }))
-        .sort((left, right) => left.label.localeCompare(right.label, "pt-BR")),
+  const homebrewSpells = useMemo(
+    () => spells.filter((spell) => spell.homebrew),
     [spells],
   )
 
-  const filteredSpells = useMemo(() => {
+  useEffect(() => {
+    if (sourceFilter !== "all" && sourceFilter !== "official") {
+      setOfficialSummaries([])
+      setOfficialTotal(0)
+      setOfficialLoading(false)
+      return
+    }
+
+    let cancelled = false
+    const timeout = window.setTimeout(() => {
+      setOfficialLoading(true)
+      setOfficialError("")
+      void queryAllOfficialSpellSummaries({
+        q: query.trim() || undefined,
+        level: levelFilter === "all" ? undefined : Number(levelFilter),
+        className: classFilter === "all" ? undefined : classFilter,
+        school: schoolFilter === "all" ? undefined : schoolFilter,
+        concentration: booleanFilterValue(concentrationFilter),
+        ritual: booleanFilterValue(ritualFilter),
+        attack: booleanFilterValue(attackFilter),
+        save: booleanFilterValue(saveFilter),
+        castingTime: castingTimeFilter === "all" ? undefined : castingTimeFilter,
+      })
+        .then((page) => {
+          if (cancelled) return
+          setOfficialSummaries(page.spells)
+          setOfficialTotal(page.total)
+        })
+        .catch(() => {
+          if (cancelled) return
+          setOfficialSummaries([])
+          setOfficialTotal(0)
+          setOfficialError("Não foi possível consultar o compêndio oficial de magias.")
+        })
+        .finally(() => {
+          if (!cancelled) setOfficialLoading(false)
+        })
+    }, 180)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
+  }, [
+    attackFilter,
+    castingTimeFilter,
+    classFilter,
+    concentrationFilter,
+    levelFilter,
+    query,
+    ritualFilter,
+    saveFilter,
+    schoolFilter,
+    sourceFilter,
+  ])
+
+  const filteredHomebrew = useMemo(() => {
     const normalizedQuery = normalizeSearch(query)
-    const result = spells.filter((spell) => {
+    return homebrewSpells.filter((spell) => {
       const record = recordByIndex.get(spell.index)
       const campaignNames = record?.campaignNames ?? []
       const characterNames = record?.characterNames ?? []
       const owned = Boolean(record?.owned)
       const sourceMatches = (() => {
-        if (sourceFilter === "all") return true
-        if (sourceFilter === "official") return !spell.homebrew
-        if (sourceFilter === "homebrew") return spell.homebrew
+        if (sourceFilter === "official") return false
+        if (sourceFilter === "all" || sourceFilter === "homebrew") return true
         if (sourceFilter === "owned") return owned
         if (sourceFilter === "campaign") return campaignNames.length > 0
         return characterNames.length > 0
       })()
+      if (!sourceMatches) return false
 
       const searchableText = normalizeSearch(
         [
@@ -122,11 +169,12 @@ export function SpellLibraryView({
           ...spell.classes.map((className) => CLASS_NAMES[className]),
           ...campaignNames,
           ...characterNames,
-        ].filter(Boolean).join(" "),
+        ]
+          .filter(Boolean)
+          .join(" "),
       )
 
       return (
-        sourceMatches &&
         (!normalizedQuery || searchableText.includes(normalizedQuery)) &&
         (levelFilter === "all" || spell.slotLevel === Number(levelFilter)) &&
         (schoolFilter === "all" || spell.school === schoolFilter) &&
@@ -138,15 +186,29 @@ export function SpellLibraryView({
         (castingTimeFilter === "all" || spell.castingTime.type === castingTimeFilter)
       )
     })
+  }, [
+    attackFilter,
+    castingTimeFilter,
+    classFilter,
+    concentrationFilter,
+    homebrewSpells,
+    levelFilter,
+    query,
+    recordByIndex,
+    ritualFilter,
+    saveFilter,
+    schoolFilter,
+    sourceFilter,
+  ])
 
+  const filteredSpells = useMemo<LibrarySpell[]>(() => {
+    const result: LibrarySpell[] = [...officialSummaries, ...filteredHomebrew]
     return result.sort((left, right) => {
-      if (sortMode === "name") {
-        return spellName(left).localeCompare(spellName(right), "pt-BR")
-      }
+      if (sortMode === "name") return spellName(left).localeCompare(spellName(right), "pt-BR")
       if (sortMode === "recent") {
-        const leftDate = recordByIndex.get(left.index)?.updatedAt ?? ""
-        const rightDate = recordByIndex.get(right.index)?.updatedAt ?? ""
-        const dateDifference = rightDate.localeCompare(leftDate)
+        const dateDifference = (recordByIndex.get(right.index)?.updatedAt ?? "").localeCompare(
+          recordByIndex.get(left.index)?.updatedAt ?? "",
+        )
         if (dateDifference !== 0) return dateDifference
       }
       const levelDifference = left.slotLevel - right.slotLevel
@@ -154,11 +216,20 @@ export function SpellLibraryView({
         ? levelDifference
         : spellName(left).localeCompare(spellName(right), "pt-BR")
     })
-  }, [attackFilter, castingTimeFilter, classFilter, concentrationFilter, levelFilter, query, recordByIndex, ritualFilter, saveFilter, schoolFilter, sortMode, sourceFilter, spells])
+  }, [filteredHomebrew, officialSummaries, recordByIndex, sortMode])
+
+  const availableSchools = useMemo(
+    () =>
+      Object.keys(MAGIC_SCHOOLS_MAP)
+        .map((school) => ({ value: school, label: MAGIC_SCHOOLS_MAP[school] ?? school }))
+        .sort((left, right) => left.label.localeCompare(right.label, "pt-BR")),
+    [],
+  )
 
   const ownedCount = records.filter((record) => record.owned).length
   const campaignCount = records.filter((record) => record.campaignNames?.length).length
   const characterCount = records.filter((record) => record.characterNames?.length).length
+  const visibleTotal = officialTotal + filteredHomebrew.length
 
   function clearFilters() {
     setQuery("")
@@ -198,10 +269,28 @@ export function SpellLibraryView({
     const consequence = isSession
       ? "Ela deixará de fazer parte da biblioteca desta sessão."
       : "A magia deixará de aparecer na biblioteca, mas o histórico será preservado."
-    if (window.confirm(`${verb} “${spellName(spell)}”? ${consequence}`)) {
-      deleteSpell(spell.index)
+    if (window.confirm(`${verb} “${spellName(spell)}”? ${consequence}`)) deleteSpell(spell.index)
+  }
+
+  async function openDetails(spell: LibrarySpell) {
+    setDetailError("")
+    if (isFullSpell(spell)) {
+      setViewingSpell(spell)
+      return
+    }
+
+    setDetailLoading(true)
+    try {
+      setViewingSpell(await getOfficialSpell(spell.index))
+    } catch {
+      setDetailError("Não foi possível carregar os detalhes desta magia.")
+    } finally {
+      setDetailLoading(false)
     }
   }
+
+  const combinedError = [errorMessage, officialError, detailError].filter(Boolean).join(" ")
+  const combinedLoading = loading || officialLoading
 
   return (
     <div className="grid gap-4">
@@ -221,15 +310,15 @@ export function SpellLibraryView({
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <LibraryBadge label={`${spells.length} disponíveis`} />
+          <LibraryBadge label={`${visibleTotal} disponíveis`} />
           <LibraryBadge label={`${ownedCount} ${isSession ? "da sessão" : "próprias"}`} />
           {!isSession ? <LibraryBadge label={`${campaignCount} de campanhas`} /> : null}
           {!isSession ? <LibraryBadge label={`${characterCount} em personagens`} /> : null}
         </div>
 
-        {loading ? <p className="mt-3 text-xs text-textMuted">Carregando magias...</p> : null}
-        {errorMessage ? (
-          <p className="mt-3 rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">{errorMessage}</p>
+        {combinedLoading ? <p className="mt-3 text-xs text-textMuted">Carregando magias...</p> : null}
+        {combinedError ? (
+          <p className="mt-3 rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">{combinedError}</p>
         ) : null}
       </section>
 
@@ -238,7 +327,7 @@ export function SpellLibraryView({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-textH">Filtros</div>
-              <div className="mt-1 text-xs text-textMuted">{filteredSpells.length} de {spells.length} magias exibidas.</div>
+              <div className="mt-1 text-xs text-textMuted">{filteredSpells.length} de {visibleTotal} magias exibidas.</div>
             </div>
             <div className="flex gap-2">
               <Button size="sm" variant="secondary" onClick={clearFilters}>Limpar</Button>
@@ -302,20 +391,21 @@ export function SpellLibraryView({
       </Card>
 
       <div className="grid gap-3">
-        {!filteredSpells.length ? (
+        {!filteredSpells.length && !combinedLoading ? (
           <div className="rounded-xl border border-dashed border-border bg-bg p-6 text-center text-sm text-textMuted">Nenhuma magia corresponde aos filtros.</div>
         ) : null}
         {filteredSpells.map((spell) => {
           const record = recordByIndex.get(spell.index)
           const owned = Boolean(record?.owned)
+          const fullSpell = isFullSpell(spell) ? spell : null
           return (
             <article key={spell.index} className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setViewingSpell(spell)}>
+                <button type="button" className="min-w-0 flex-1 text-left" onClick={() => void openDetails(spell)}>
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-base font-semibold text-textH">{spellName(spell)}</h2>
                     <LibraryBadge label={formatLevel(spell.slotLevel)} />
-                    <LibraryBadge label={schoolLabel(spell.school)} />
+                    <LibraryBadge label={schoolLabel(String(spell.school))} />
                     {!spell.homebrew ? <LibraryBadge label="Oficial" /> : owned ? <LibraryBadge label={isSession ? "Homebrew da sessão" : "Sua homebrew"} /> : <LibraryBadge label="Homebrew compartilhada" />}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-textMuted">
@@ -333,9 +423,9 @@ export function SpellLibraryView({
                   <p className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-text">{spell.description?.trim() || "Sem descrição."}</p>
                 </button>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  <Button size="sm" variant="secondary" onClick={() => setViewingSpell(spell)}>Ver detalhes</Button>
-                  {owned ? <Button size="sm" variant="secondary" onClick={() => openEdit(spell)}>Editar</Button> : null}
-                  {owned ? <Button size="sm" variant="danger" onClick={() => removeSpell(spell)}>{isSession ? "Remover" : "Arquivar"}</Button> : null}
+                  <Button size="sm" variant="secondary" loading={detailLoading} onClick={() => void openDetails(spell)}>Ver detalhes</Button>
+                  {owned && fullSpell ? <Button size="sm" variant="secondary" onClick={() => openEdit(fullSpell)}>Editar</Button> : null}
+                  {owned && fullSpell ? <Button size="sm" variant="danger" onClick={() => removeSpell(fullSpell)}>{isSession ? "Remover" : "Arquivar"}</Button> : null}
                 </div>
               </div>
             </article>
@@ -368,7 +458,7 @@ export function SpellLibraryView({
 function SpellDetails({ spell }: { spell: Spell }) {
   return (
     <div className="grid gap-5 text-sm text-text">
-      <div className="flex flex-wrap gap-2 text-xs"><LibraryBadge label={formatLevel(spell.slotLevel)} /><LibraryBadge label={schoolLabel(spell.school)} />{spell.concentration ? <LibraryBadge label="Concentração" /> : null}{spell.ritual ? <LibraryBadge label="Ritual" /> : null}</div>
+      <div className="flex flex-wrap gap-2 text-xs"><LibraryBadge label={formatLevel(spell.slotLevel)} /><LibraryBadge label={schoolLabel(String(spell.school))} />{spell.concentration ? <LibraryBadge label="Concentração" /> : null}{spell.ritual ? <LibraryBadge label="Ritual" /> : null}</div>
       <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         <Info label="Tempo de conjuração" value={formatCastingTime(spell)} /><Info label="Alcance" value={formatRange(spell)} /><Info label="Duração" value={formatDuration(spell)} /><Info label="Componentes" value={formatComponents(spell)} /><Info label="Classes" value={spell.classes.map((entry) => CLASS_NAMES[entry]).join(", ") || "Nenhuma"} /><Info label="Alvo" value={formatTargeting(spell)} /><Info label="Área" value={formatArea(spell)} /><Info label="Rolagens" value={spell.rollMode.join(", ") || "Nenhuma"} /><Info label="Dano" value={spell.damageDice ? `${spell.damageDice.quantity}${spell.damageDice.sides}` : "Nenhum"} />
       </section>
@@ -380,30 +470,22 @@ function SpellDetails({ spell }: { spell: Spell }) {
   )
 }
 
-function ModalFrame({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true">
-      <div className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-bg shadow-xl">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-bg p-4"><h2 className="text-lg font-semibold text-textH">{title}</h2><Button size="sm" variant="secondary" onClick={onClose}>Fechar</Button></div>
-        <div className="grid gap-4 p-4">{children}</div>
-      </div>
-    </div>
-  )
+function isFullSpell(spell: LibrarySpell): spell is Spell {
+  return "higherLevelText" in spell && "effects" in spell
 }
-
-function FilterSelect<T extends string>({ value, onChange, children }: { value: T; onChange: (value: T) => void; children: ReactNode }) {
-  return <select className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent" value={value} onChange={(event) => onChange(event.target.value as T)}>{children}</select>
-}
+function booleanFilterValue(filter: BooleanFilter): boolean | undefined { return filter === "all" ? undefined : filter === "yes" }
+function ModalFrame({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) { return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true"><div className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-bg shadow-xl"><div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-bg p-4"><h2 className="text-lg font-semibold text-textH">{title}</h2><Button size="sm" variant="secondary" onClick={onClose}>Fechar</Button></div><div className="grid gap-4 p-4">{children}</div></div></div> }
+function FilterSelect<T extends string>({ value, onChange, children }: { value: T; onChange: (value: T) => void; children: ReactNode }) { return <select className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent" value={value} onChange={(event) => onChange(event.target.value as T)}>{children}</select> }
 function LibraryBadge({ label }: { label: string }) { return <span className="rounded-full border border-accentBorder bg-accentBg px-2.5 py-1 text-textH">{label}</span> }
 function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border border-border bg-bg-subtle p-3"><div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">{label}</div><div className="mt-1 text-sm text-textH">{value}</div></div> }
 function matchesBoolean(filter: BooleanFilter, value: boolean): boolean { return filter === "all" || (filter === "yes" ? value : !value) }
 function normalizeSearch(value: string): string { return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim() }
-function spellName(spell: Spell): string { return spell.displayName?.trim() || spell.name }
+function spellName(spell: LibrarySpell): string { return spell.displayName?.trim() || spell.name }
 function schoolLabel(school: string): string { return MAGIC_SCHOOLS_MAP[school] ?? school }
 function formatLevel(level: number): string { return level === 0 ? "Truque" : `${level}º nível` }
-function formatCastingTime(spell: Spell): string { const label = CASTING_TIME_NAMES[spell.castingTime.type] ?? spell.castingTime.type; const amount = spell.castingTime.value || 1; if (spell.castingTime.type === "reaction" && spell.castingTime.reactionWhen) return `${label}: ${spell.castingTime.reactionWhen}`; if (spell.castingTime.type === "special" && spell.castingTime.special) return spell.castingTime.special; return amount === 1 ? label : `${amount} ${label.toLocaleLowerCase("pt-BR")}` }
-function formatRange(spell: Spell): string { const labels: Record<string, string> = { self: "Pessoal", touch: "Toque", point: "Ponto", target: "Alvo", ally: "Aliado", enemy: "Inimigo" }; const origin = labels[spell.range.origin] ?? spell.range.origin; return spell.range.distance > 0 ? `${origin}, ${spell.range.distance} m` : origin }
-function formatDuration(spell: Spell): string { const labels: Record<string, string> = { instantaneous: "Instantânea", round: "rodada", minute: "minuto", hour: "hora", day: "dia", permanent: "Permanente", special: "Especial" }; const label = labels[spell.duration.unit] ?? spell.duration.unit; return spell.duration.value <= 0 ? label : `${spell.duration.value} ${label}${spell.duration.value === 1 ? "" : "s"}` }
-function formatComponents(spell: Spell): string { if (!spell.components.length) return "Sem componentes"; const components = spell.components.join(", "); return spell.material?.trim() ? `${components} (${spell.material})` : components }
+function formatCastingTime(spell: LibrarySpell): string { const label = CASTING_TIME_NAMES[spell.castingTime.type] ?? spell.castingTime.type; const amount = spell.castingTime.value || 1; if (spell.castingTime.type === "reaction" && spell.castingTime.reactionWhen) return `${label}: ${spell.castingTime.reactionWhen}`; if (spell.castingTime.type === "special" && spell.castingTime.special) return spell.castingTime.special; return amount === 1 ? label : `${amount} ${label.toLocaleLowerCase("pt-BR")}` }
+function formatRange(spell: LibrarySpell): string { const labels: Record<string, string> = { self: "Pessoal", touch: "Toque", point: "Ponto", target: "Alvo", ally: "Aliado", enemy: "Inimigo" }; const origin = labels[spell.range.origin] ?? spell.range.origin; return spell.range.distance > 0 ? `${origin}, ${spell.range.distance} m` : origin }
+function formatDuration(spell: LibrarySpell): string { const labels: Record<string, string> = { instantaneous: "Instantânea", round: "rodada", minute: "minuto", hour: "hora", day: "dia", permanent: "Permanente", special: "Especial" }; const label = labels[spell.duration.unit] ?? spell.duration.unit; return spell.duration.value <= 0 ? label : `${spell.duration.value} ${label}${spell.duration.value === 1 ? "" : "s"}` }
+function formatComponents(spell: LibrarySpell): string { if (!spell.components.length) return "Sem componentes"; const components = spell.components.join(", "); return spell.material?.trim() ? `${components} (${spell.material})` : components }
 function formatTargeting(spell: Spell): string { const labels: Record<string, string> = { self: "Pessoal", "single-creature": "Uma criatura", "multiple-creatures": "Múltiplas criaturas", area: "Área", object: "Objeto", special: "Especial" }; const base = labels[spell.targeting.kind] ?? spell.targeting.kind; return spell.targeting.targetCount && spell.targeting.targetCount > 1 ? `${base} (${spell.targeting.targetCount})` : base }
 function formatArea(spell: Spell): string { const area = spell.range.area; if (!area && !spell.targeting.affectsArea) return "Nenhuma"; const shape = area?.shape ?? spell.targeting.areaShape ?? "área"; const size = area?.size ?? spell.targeting.areaSize; const labels: Record<string, string> = { circle: "Círculo", square: "Quadrado", cone: "Cone", line: "Linha" }; return size ? `${labels[shape] ?? shape}, ${size} m` : labels[shape] ?? shape }
