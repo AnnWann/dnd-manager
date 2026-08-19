@@ -272,6 +272,8 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "party.item.add": return `Adicionou um item ao inventário do grupo.`
     case "party.item.update": return `Atualizou um item do inventário do grupo.`
     case "party.item.remove": return `Removeu um item do inventário do grupo.`
+    case "party.settings.carryCapacity.set": return `Definiu a capacidade de transporte do grupo para ${formatStat(operation.value)}.`
+    case "party.settings.additionalSupplyConsumption.set": return `Definiu o consumo adicional do grupo para ${formatStat(operation.value)} porções por descanso.`
     case "ground.item.add": return `Adicionou um item ao chão.`
     case "ground.item.update": return `Atualizou um item no chão.`
     case "ground.item.remove": return `Removeu um item do chão.`
