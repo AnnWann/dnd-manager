@@ -19,6 +19,10 @@ export type UserCharacterPersistenceConflict = {
   current: unknown
 }
 
+export type UserCharacterPersistenceVersion =
+  | { domain: "root"; version: number }
+  | { domain: CharacterDomainName; version: number }
+
 export class UserCharacterDomainPersistence {
   private rootVersion: number
   private readonly domainVersions = new Map<CharacterDomainName, number>()
@@ -33,6 +37,9 @@ export class UserCharacterDomainPersistence {
       conflict: UserCharacterPersistenceConflict,
     ) => void,
     private readonly onError?: (error: unknown) => void,
+    private readonly onVersionPersisted?: (
+      version: UserCharacterPersistenceVersion,
+    ) => void,
   ) {
     this.rootVersion = Math.max(1, Math.trunc(rootVersion || 1))
     for (const domain of domains) {
@@ -58,11 +65,11 @@ export class UserCharacterDomainPersistence {
               0,
               this.createMutationMetadata(),
             )
-            this.domainVersions.set(domain, created.version)
+            this.setDomainVersion(domain, created.version)
           } catch (error) {
             if (error instanceof UserCharacterDomainConflictError) {
               if (error.current) {
-                this.domainVersions.set(domain, error.current.version)
+                this.setDomainVersion(domain, error.current.version)
                 return
               }
               this.reportConflict(domain, error.current)
@@ -101,7 +108,7 @@ export class UserCharacterDomainPersistence {
             expectedVersion,
             metadata,
           )
-          this.domainVersions.set(domain, changed.version)
+          this.setDomainVersion(domain, changed.version)
         } catch (error) {
           if (error instanceof UserCharacterDomainConflictError) {
             const current = error.current
@@ -117,7 +124,7 @@ export class UserCharacterDomainPersistence {
                   current.version,
                   metadata,
                 )
-                this.domainVersions.set(domain, retried.version)
+                this.setDomainVersion(domain, retried.version)
                 return
               } catch (retryError) {
                 if (retryError instanceof UserCharacterDomainConflictError) {
@@ -157,6 +164,7 @@ export class UserCharacterDomainPersistence {
           this.rootVersion + 1,
           Number(changed.revision) || 0,
         )
+        this.onVersionPersisted?.({ domain: "root", version: this.rootVersion })
       } catch (error) {
         this.reportConflict("root", {
           previous: {
@@ -167,6 +175,11 @@ export class UserCharacterDomainPersistence {
         })
       }
     })
+  }
+
+  private setDomainVersion(domain: CharacterDomainName, version: number) {
+    this.domainVersions.set(domain, version)
+    this.onVersionPersisted?.({ domain, version })
   }
 
   private createMutationMetadata() {
