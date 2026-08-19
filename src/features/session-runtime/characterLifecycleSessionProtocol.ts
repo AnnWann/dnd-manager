@@ -13,7 +13,7 @@ export type SessionCharacterLifecycleOperation =
   | {
       type: "character.session.owner.set"
       characterId: string
-      owner?: Player
+      owner: Player
     }
   | {
       type: "character.session.resync"
