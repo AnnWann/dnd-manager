@@ -11,6 +11,10 @@ import {
 } from "./abilitySessionProtocol"
 import type { SessionMagicOperation } from "./magicSessionProtocol"
 import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
+import type {
+  SessionInventoryClientMessage,
+  SessionInventoryServerMessage,
+} from "./inventorySessionProtocol"
 import type { SessionSheetOperationMessage } from "./sheetRoutes"
 
 export type SessionRuntimeStatus = "disconnected" | "connecting" | "connected" | "reconnecting" | "error"
@@ -22,7 +26,7 @@ export type SessionSocketOptions = {
   role: SessionRuntimeRole
   clientId: string
   onStatusChange: (status: SessionRuntimeStatus) => void
-  onMessage: (message: ServerSessionMessage | SessionAbilityServerMessage) => void
+  onMessage: (message: ServerSessionMessage | SessionAbilityServerMessage | SessionInventoryServerMessage) => void
 }
 
 const HEARTBEAT_MIN_MS = 27_000
@@ -49,6 +53,7 @@ export class SessionSocket {
     | ClientSessionMessage
     | SessionSheetOperationMessage
     | SessionAbilityClientMessage
+    | SessionInventoryClientMessage
     | { type: "session.magic.operation"; operation: SessionMagicOperation }
     | { type: "session.equipment.operation"; operation: SessionEquipmentOperation }
   ): boolean {
@@ -75,7 +80,8 @@ export class SessionSocket {
 
     socket.onmessage = (event) => {
       if (typeof event.data !== "string") return
-      const message = parseAbilityServerMessage(event.data) ?? parseServerSessionMessage(event.data)
+      const inventoryMessage = parseInventoryServerMessage(event.data)
+      const message = inventoryMessage ?? parseAbilityServerMessage(event.data) ?? parseServerSessionMessage(event.data)
       if (!message) return
       if (message.type === "session.ready") {
         this.hasConnectedOnce = true
@@ -138,5 +144,16 @@ export class SessionSocket {
     if (this.reconnectTimer === null) return
     window.clearTimeout(this.reconnectTimer)
     this.reconnectTimer = null
+  }
+}
+
+function parseInventoryServerMessage(raw: string): SessionInventoryServerMessage | null {
+  try {
+    const value = JSON.parse(raw) as Record<string, unknown>
+    if (value?.type !== "session.inventory.snapshot" && value?.type !== "session.inventory.updated") return null
+    if (!value.state || typeof value.state !== "object") return null
+    return value as SessionInventoryServerMessage
+  } catch {
+    return null
   }
 }
