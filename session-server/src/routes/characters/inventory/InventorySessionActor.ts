@@ -18,42 +18,25 @@ import { parseInventoryClientMessage, type SessionInventoryOperation } from "./i
 import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
 import type { SessionAbilityState } from "../abilities/abilityProtocol";
 import type { SessionConditionsState, SessionConnection, SessionHpState } from "../../session/protocol";
+import {
+  SHARED_INVENTORY_SCOPE,
+  characterScope,
+  commitSessionMutation,
+  createSessionLogRecord,
+  readSessionLog,
+} from "../../session/sessionLog";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
 const INVENTORY_STATE_KEY = "inventory-state";
-const HP_LOG_KEY = "hp-log";
 const BAG_CAPACITY_EPSILON = 0.000001;
-const SHARED_INVENTORY_SCOPE = "inventory:shared";
 
 type SharedInventoryState = {
   initialized: boolean;
   revision: number;
   partyInventory: Itemmable[];
   groundInventory: Itemmable[];
-};
-
-type InventoryReverseOperation = {
-  type: "session.inventory.restore";
-  characterId: string;
-  affectedScopes?: string[];
-  snapshot: {
-    abilities: Record<string, SessionAbilityState>;
-    hp: Record<string, SessionHpState>;
-    conditions: Record<string, SessionConditionsState>;
-    inventory: SharedInventoryState;
-  };
-};
-
-type UnifiedLogRecord = {
-  id: string;
-  actorId: string;
-  createdAt: string;
-  operation: { type: string; characterId: string; [key: string]: unknown };
-  reverseOperation: { type: string; characterId: string; affectedScopes?: string[]; [key: string]: unknown };
-  undoneAt?: string;
-  undoneBy?: string;
 };
 
 type TransferRequest = Extract<SessionInventoryOperation, { type: "inventory.item.transfer" }>["request"];
@@ -72,9 +55,6 @@ export class SessionActor extends EquipmentSessionActor {
 
   override async webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const raw = typeof message === "string" ? message : new TextDecoder().decode(message);
-    const undoId = parseUndoLogId(raw);
-    if (undoId && await this.tryInventoryUndo(webSocket, undoId)) return;
-
     const parsed = parseInventoryClientMessage(raw);
     if (!parsed) {
       await super.webSocketMessage(webSocket, message);
@@ -110,13 +90,17 @@ export class SessionActor extends EquipmentSessionActor {
     await this.handleInventoryOperation(webSocket, connection, parsed.operation);
   }
 
-  private async handleInventoryOperation(webSocket: WebSocket, connection: SessionConnection, operation: SessionInventoryOperation): Promise<void> {
+  private async handleInventoryOperation(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    operation: SessionInventoryOperation,
+  ): Promise<void> {
     const [abilities, hp, conditions, inventory, log] = await Promise.all([
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((v) => v ?? {}),
       this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY).then((v) => v ?? {}),
       this.ctx.storage.get<Record<string, SessionConditionsState>>(CONDITIONS_STATE_KEY).then((v) => v ?? {}),
       this.readInventoryState(),
-      this.ctx.storage.get<UnifiedLogRecord[]>(HP_LOG_KEY).then((v) => v ?? []),
+      readSessionLog(this.ctx.storage),
     ]);
     if (!inventory.initialized) return sendError(webSocket, "INVENTORY_STATE_NOT_INITIALIZED", "Inventory state has not been initialized by the MASTER.");
 
@@ -135,7 +119,8 @@ export class SessionActor extends EquipmentSessionActor {
     const beforeInventory = structuredClone(inventory);
 
     let result: ApplyResult | null = null;
-    try { result = applyInventoryOperation(operation, abilities, hp, conditions, inventory); } catch { result = null; }
+    try { result = applyInventoryOperation(operation, abilities, hp, conditions, inventory); }
+    catch { result = null; }
     if (!result || !result.changed) return sendError(webSocket, "INVENTORY_OPERATION_REJECTED", "The requested inventory operation is invalid for the current state.");
 
     const capacityViolation = findBagCapacityViolation(touchedIds, beforeAbilities, abilities);
@@ -148,27 +133,32 @@ export class SessionActor extends EquipmentSessionActor {
     }
 
     const affectedScopes = inventoryOperationScopes(operation);
-    const record: UnifiedLogRecord = {
-      id: crypto.randomUUID(),
+    const record = createSessionLogRecord({
       actorId: connection.userId,
-      createdAt: new Date().toISOString(),
-      operation: operation as unknown as UnifiedLogRecord["operation"],
+      operation,
+      affectedScopes,
       reverseOperation: {
         type: "session.inventory.restore",
         characterId: operation.characterId,
-        affectedScopes,
-        snapshot: { abilities: beforeAbilities, hp: beforeHp, conditions: beforeConditions, inventory: beforeInventory },
-      } as unknown as UnifiedLogRecord["reverseOperation"],
-    };
-    log.push(record);
-    const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
+        snapshot: {
+          abilities: beforeAbilities,
+          hp: beforeHp,
+          conditions: beforeConditions,
+          inventory: beforeInventory,
+        },
+      },
+    });
 
-    await this.ctx.storage.put({
-      [ABILITIES_STATE_KEY]: abilities,
-      [HP_STATE_KEY]: hp,
-      [CONDITIONS_STATE_KEY]: conditions,
-      [INVENTORY_STATE_KEY]: inventory,
-      [HP_LOG_KEY]: nextLog,
+    await commitSessionMutation(this.ctx.storage, this.ctx.getWebSockets(), {
+      writes: {
+        [ABILITIES_STATE_KEY]: abilities,
+        [HP_STATE_KEY]: hp,
+        [CONDITIONS_STATE_KEY]: conditions,
+        [INVENTORY_STATE_KEY]: inventory,
+      },
+      record,
+      currentLog: log,
+      maxRecords: MAX_HP_LOG_RECORDS,
     });
 
     for (const id of result.changedCharacters) {
@@ -177,87 +167,15 @@ export class SessionActor extends EquipmentSessionActor {
       if (result.conditionsChanged.has(id)) broadcast(this.ctx.getWebSockets(), { type: "session.conditions.updated", character: conditions[id] });
     }
     if (result.sharedChanged) broadcast(this.ctx.getWebSockets(), { type: "session.inventory.updated", state: inventory });
-    broadcastToMasters(this.ctx.getWebSockets(), nextLog);
-  }
-
-  private async tryInventoryUndo(webSocket: WebSocket, logId: string): Promise<boolean> {
-    const log = (await this.ctx.storage.get<UnifiedLogRecord[]>(HP_LOG_KEY)) ?? [];
-    const index = log.findIndex((entry) => entry.id === logId);
-    if (index < 0) return false;
-    const sourceRecord = log[index];
-    const reverse = sourceRecord.reverseOperation as unknown as InventoryReverseOperation;
-    if (reverse.type !== "session.inventory.restore" || !reverse.snapshot) return false;
-    const connection = readConnection(webSocket);
-    if (!connection) return true;
-    if (connection.role !== "MASTER") { sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can undo session changes."); return true; }
-
-    const sourceScopes = logRecordScopes(sourceRecord);
-    const newer = log.slice(index + 1).some((entry) =>
-      !entry.undoneAt &&
-      entry.operation.type !== "character.hp.undo" &&
-      scopesOverlap(sourceScopes, logRecordScopes(entry)),
-    );
-    if (newer) {
-      sendError(
-        webSocket,
-        "UNDO_NOT_LATEST",
-        "Undo newer changes affecting the same character or shared inventory first.",
-      );
-      return true;
-    }
-
-    const [abilities, hp, conditions, inventory] = await Promise.all([
-      this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((v) => v ?? {}),
-      this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY).then((v) => v ?? {}),
-      this.ctx.storage.get<Record<string, SessionConditionsState>>(CONDITIONS_STATE_KEY).then((v) => v ?? {}),
-      this.readInventoryState(),
-    ]);
-    const currentIds = Object.keys(reverse.snapshot.abilities);
-    const currentSnapshot = {
-      abilities: pick(abilities, currentIds),
-      hp: pick(hp, currentIds),
-      conditions: pick(conditions, currentIds),
-      inventory: structuredClone(inventory),
-    };
-    Object.assign(abilities, reverse.snapshot.abilities);
-    Object.assign(hp, reverse.snapshot.hp);
-    Object.assign(conditions, reverse.snapshot.conditions);
-    const restoredInventory = reverse.snapshot.inventory;
-
-    const now = new Date().toISOString();
-    log[index] = { ...sourceRecord, undoneAt: now, undoneBy: connection.userId };
-    log.push({
-      id: crypto.randomUUID(),
-      actorId: connection.userId,
-      createdAt: now,
-      operation: { type: "character.hp.undo", characterId: reverse.characterId, sourceLogId: sourceRecord.id },
-      reverseOperation: {
-        type: "session.inventory.restore",
-        characterId: reverse.characterId,
-        affectedScopes: sourceScopes,
-        snapshot: currentSnapshot,
-      } as unknown as UnifiedLogRecord["reverseOperation"],
-    });
-    const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
-    await this.ctx.storage.put({
-      [ABILITIES_STATE_KEY]: abilities,
-      [HP_STATE_KEY]: hp,
-      [CONDITIONS_STATE_KEY]: conditions,
-      [INVENTORY_STATE_KEY]: restoredInventory,
-      [HP_LOG_KEY]: nextLog,
-    });
-    for (const id of currentIds) {
-      broadcast(this.ctx.getWebSockets(), { type: "session.abilities.updated", character: abilities[id] });
-      broadcast(this.ctx.getWebSockets(), { type: "session.hp.updated", character: hp[id] });
-      broadcast(this.ctx.getWebSockets(), { type: "session.conditions.updated", character: conditions[id] });
-    }
-    broadcast(this.ctx.getWebSockets(), { type: "session.inventory.updated", state: restoredInventory });
-    broadcastToMasters(this.ctx.getWebSockets(), nextLog);
-    return true;
   }
 
   private async readInventoryState(): Promise<SharedInventoryState> {
-    return (await this.ctx.storage.get<SharedInventoryState>(INVENTORY_STATE_KEY)) ?? { initialized: false, revision: 0, partyInventory: [], groundInventory: [] };
+    return (await this.ctx.storage.get<SharedInventoryState>(INVENTORY_STATE_KEY)) ?? {
+      initialized: false,
+      revision: 0,
+      partyInventory: [],
+      groundInventory: [],
+    };
   }
 
   private async sendInventorySnapshot(socket: WebSocket): Promise<void> {
@@ -302,7 +220,10 @@ function applyInventoryOperation(
     };
     const nextHp = extractHp(after, beforeHp);
     const nextConditions = extractConditions(after, beforeConditions);
-    if (!sameHp(beforeHp, nextHp)) { hp[id] = nextHp; hpChanged.add(id); }
+    if (!sameHp(beforeHp, nextHp)) {
+      hp[id] = nextHp;
+      hpChanged.add(id);
+    }
     if (JSON.stringify(beforeConditions.conditions) !== JSON.stringify(nextConditions.conditions)) {
       conditions[id] = nextConditions;
       conditionsChanged.add(id);
@@ -586,30 +507,11 @@ function inventoryOperationScopes(operation: SessionInventoryOperation): string[
   return [...scopes];
 }
 
-function logRecordScopes(record: UnifiedLogRecord): string[] {
-  const explicit = record.reverseOperation.affectedScopes;
-  if (Array.isArray(explicit) && explicit.length > 0) return explicit;
-
-  if (record.reverseOperation.type === "session.inventory.restore") {
-    const operation = record.operation as unknown as SessionInventoryOperation;
-    if (typeof operation.type === "string") return inventoryOperationScopes(operation);
-  }
-
-  const characterId = record.reverseOperation.characterId;
-  return characterId && characterId !== "session" ? [characterScope(characterId)] : [];
-}
-
-function characterScope(characterId: string): string {
-  return `character:${characterId}`;
-}
-
-function scopesOverlap(first: string[], second: string[]): boolean {
-  if (first.length === 0 || second.length === 0) return false;
-  const lookup = new Set(first);
-  return second.some((scope) => lookup.has(scope));
-}
-
-function hydrate(state: SessionAbilityState, hp: SessionHpState, conditions: SessionConditionsState): CharacterTemplate {
+function hydrate(
+  state: SessionAbilityState,
+  hp: SessionHpState,
+  conditions: SessionConditionsState,
+): CharacterTemplate {
   let character = CharacterTemplate.fromJSON(state.character as Partial<CharacterTemplateProps>);
   const sheet = character.get("sheet");
   character = character.withPatch({
@@ -689,17 +591,9 @@ function pick<T>(source: Record<string, T>, ids: string[]): Record<string, T> {
   return Object.fromEntries(ids.flatMap((id) => source[id] ? [[id, structuredClone(source[id])]] : []));
 }
 
-function parseUndoLogId(raw: string): string | null {
-  try {
-    const value = JSON.parse(raw);
-    return value?.type === "session.log.undo" && typeof value.logId === "string" ? value.logId : null;
-  } catch {
-    return null;
-  }
-}
-
 function readConnection(webSocket: WebSocket): SessionConnection | null {
-  try { return webSocket.deserializeAttachment() as SessionConnection; } catch { return null; }
+  try { return webSocket.deserializeAttachment() as SessionConnection; }
+  catch { return null; }
 }
 
 function send(webSocket: WebSocket, value: unknown): void {
@@ -713,14 +607,6 @@ function sendError(webSocket: WebSocket, code: string, message: string): void {
 function broadcast(sockets: WebSocket[], value: unknown): void {
   const payload = JSON.stringify(value);
   for (const webSocket of sockets) {
-    try { webSocket.send(payload); } catch {}
-  }
-}
-
-function broadcastToMasters(sockets: WebSocket[], records: UnifiedLogRecord[]): void {
-  const payload = JSON.stringify({ type: "session.hp.log", records });
-  for (const webSocket of sockets) {
-    if (readConnection(webSocket)?.role !== "MASTER") continue;
     try { webSocket.send(payload); } catch {}
   }
 }
