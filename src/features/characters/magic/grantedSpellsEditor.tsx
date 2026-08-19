@@ -1,6 +1,11 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Plus, Search, Trash2, X } from "lucide-react"
 
+import {
+  getOfficialSpell,
+  queryOfficialSpells,
+  type SpellCompendiumSummary,
+} from "../../../api/spell-compendium"
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
@@ -23,6 +28,8 @@ type Props = {
   variant: "ability" | "equipment"
   abilityHasUsage?: boolean
 }
+
+type PickerSpell = Spell | SpellCompendiumSummary
 
 const ATTRIBUTE_OPTIONS: Array<{ value: Attribute; label: string }> = [
   { value: "str", label: "FOR" },
@@ -306,29 +313,86 @@ function SpellPickerDialog({
   onClose: () => void
   onSelect: (spell: Spell) => void
 }) {
-  const { spells } = useMagicContext()
+  const { savedSpells } = useMagicContext()
   const [search, setSearch] = useState("")
   const [level, setLevel] = useState("all")
+  const [officialSpells, setOfficialSpells] = useState<SpellCompendiumSummary[]>([])
+  const [loading, setLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState("")
+  const [selectingIndex, setSelectingIndex] = useState("")
 
-  const filteredSpells = useMemo(() => {
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    const timeout = window.setTimeout(() => {
+      setLoading(true)
+      setErrorMessage("")
+      void queryOfficialSpells({
+        q: search.trim() || undefined,
+        level: level === "all" ? undefined : Number(level),
+        page: 1,
+        pageSize: 100,
+      })
+        .then((page) => {
+          if (!cancelled) setOfficialSpells(page.spells)
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setOfficialSpells([])
+            setErrorMessage("Não foi possível consultar as magias oficiais.")
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
+    }, 150)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
+  }, [level, open, search])
+
+  const filteredSpells = useMemo<PickerSpell[]>(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase()
-    return spells
+    const homebrew = savedSpells
+      .filter((spell) => spell.homebrew)
       .filter((spell) => !excludedIndexes.has(spell.index))
       .filter((spell) => {
         const matchesSearch = !normalizedSearch || spell.name.toLocaleLowerCase().includes(normalizedSearch) || spell.displayName?.toLocaleLowerCase().includes(normalizedSearch)
         const matchesLevel = level === "all" || spell.slotLevel === Number(level)
         return matchesSearch && matchesLevel
       })
+
+    return [...officialSpells.filter((spell) => !excludedIndexes.has(spell.index)), ...homebrew]
       .sort((left, right) => left.slotLevel !== right.slotLevel ? left.slotLevel - right.slotLevel : (left.displayName || left.name).localeCompare(right.displayName || right.name, "pt-BR"))
       .slice(0, 100)
-  }, [excludedIndexes, level, search, spells])
+  }, [excludedIndexes, level, officialSpells, savedSpells, search])
 
   if (!open) return null
 
   function close() {
     setSearch("")
     setLevel("all")
+    setErrorMessage("")
     onClose()
+  }
+
+  async function selectSpell(spell: PickerSpell) {
+    if (isFullSpell(spell)) {
+      onSelect(spell)
+      return
+    }
+
+    setSelectingIndex(spell.index)
+    setErrorMessage("")
+    try {
+      onSelect(await getOfficialSpell(spell.index))
+    } catch {
+      setErrorMessage("Não foi possível carregar os detalhes desta magia.")
+    } finally {
+      setSelectingIndex("")
+    }
   }
 
   return (
@@ -356,20 +420,33 @@ function SpellPickerDialog({
           </Select>
         </div>
 
+        {errorMessage ? <div className="border-b border-border px-4 py-2 text-xs text-danger">{errorMessage}</div> : null}
+        {loading ? <div className="border-b border-border px-4 py-2 text-xs text-textMuted">Consultando magias...</div> : null}
+
         <div className="grid min-h-0 flex-1 gap-2 overflow-y-auto p-4">
           {filteredSpells.length > 0 ? filteredSpells.map((spell) => (
-            <button key={spell.index} type="button" onClick={() => onSelect(spell)} className="rounded-lg border border-border bg-bg p-3 text-left transition-colors hover:border-accentBorder hover:bg-accentBg">
+            <button
+              key={spell.index}
+              type="button"
+              disabled={Boolean(selectingIndex)}
+              onClick={() => void selectSpell(spell)}
+              className="rounded-lg border border-border bg-bg p-3 text-left transition-colors hover:border-accentBorder hover:bg-accentBg disabled:opacity-60"
+            >
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-semibold text-textH">{spell.displayName || spell.name}</span>
-                <span className="text-[11px] text-textMuted">{spell.slotLevel === 0 ? "Truque" : `${spell.slotLevel}º círculo`}</span>
+                <span className="text-[11px] text-textMuted">{selectingIndex === spell.index ? "Carregando..." : spell.slotLevel === 0 ? "Truque" : `${spell.slotLevel}º círculo`}</span>
               </div>
               {spell.description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-textMuted">{spell.description}</p> : null}
             </button>
-          )) : (
+          )) : !loading ? (
             <div className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-textMuted">Nenhuma magia encontrada.</div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
   )
+}
+
+function isFullSpell(spell: PickerSpell): spell is Spell {
+  return "higherLevelText" in spell && "effects" in spell
 }
