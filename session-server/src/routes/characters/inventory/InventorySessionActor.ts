@@ -1,23 +1,23 @@
-import { CharacterTemplate, type CharacterTemplateProps } from "../../src/models/characters/CharacterTemplate";
-import { consumeCharacterInventoryItem } from "../../src/models/characters/characterConsumables";
-import { equipInventoryItemWithRules, type EquipmentDestination } from "../../src/models/characters/characterEquipmentInteractions";
-import { equipInventoryStackWithRules } from "../../src/models/characters/characterInventoryStacks";
-import { toggleInventoryItemAttunement } from "../../src/models/characters/characterInventory";
-import { removeEquippedItem, type EquippedItemReference } from "../../src/models/characters/characterEquippedItemMovement";
-import { getCharacterConditions, withCharacterConditions } from "../../src/models/characters/characterConditionStorage";
-import { getCurrentMaxHp } from "../../src/models/characters/characterHp";
+import { CharacterTemplate, type CharacterTemplateProps } from "../../../../../src/models/characters/CharacterTemplate";
+import { consumeCharacterInventoryItem } from "../../../../../src/models/characters/characterConsumables";
+import { equipInventoryItemWithRules, type EquipmentDestination } from "../../../../../src/models/characters/characterEquipmentInteractions";
+import { equipInventoryStackWithRules } from "../../../../../src/models/characters/characterInventoryStacks";
+import { toggleInventoryItemAttunement } from "../../../../../src/models/characters/characterInventory";
+import { removeEquippedItem, type EquippedItemReference } from "../../../../../src/models/characters/characterEquippedItemMovement";
+import { getCharacterConditions, withCharacterConditions } from "../../../../../src/models/characters/characterConditionStorage";
+import { getCurrentMaxHp } from "../../../../../src/models/characters/characterHp";
 import {
   BAG_OF_HOLDING_CAPACITY_KG,
   getBagOfHoldingWeightKg,
-} from "../../src/models/items/bagOfHolding";
-import { areAllCurrenciesInBagOfHolding, setCurrenciesInsideBagOfHolding } from "../../src/models/items/Currency";
-import { isBagOfHoldingItem, type Itemmable } from "../../src/models/items/item";
-import { normalizeItemText } from "../../src/lib/textNormalization";
-import { SessionActor as EquipmentSessionActor } from "./EquipmentSessionActor";
+} from "../../../../../src/models/items/bagOfHolding";
+import { areAllCurrenciesInBagOfHolding, setCurrenciesInsideBagOfHolding } from "../../../../../src/models/items/Currency";
+import { isBagOfHoldingItem, type Itemmable } from "../../../../../src/models/items/item";
+import { normalizeItemText } from "../../../../../src/lib/textNormalization";
+import { SessionActor as EquipmentSessionActor } from "../equipment/EquipmentSessionActor";
 import { parseInventoryClientMessage, type SessionInventoryOperation } from "./inventoryProtocol";
-import { MAX_HP_LOG_RECORDS } from "./hpState";
-import type { SessionAbilityState } from "./abilityProtocol";
-import type { SessionConditionsState, SessionConnection, SessionHpState } from "./protocol";
+import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
+import type { SessionAbilityState } from "../abilities/abilityProtocol";
+import type { SessionConditionsState, SessionConnection, SessionHpState } from "../../session/protocol";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
