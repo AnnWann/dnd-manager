@@ -4,7 +4,10 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from "axios"
 
-import { readActiveUserCharacterCacheSnapshot } from "../features/user/userPersistentCache"
+import {
+  readActiveUserCharacterCacheSnapshot,
+  writeActiveUserCharacterCache,
+} from "../features/user/userPersistentCache"
 
 export const apiClient = axios.create({
   baseURL: "/api",
@@ -75,6 +78,10 @@ function createCharacterReadAdapter(
 
     const request = originalAdapter(config)
       .then((response) => {
+        const character = readCharacterFromResponse(response)
+        if (character) {
+          writeActiveUserCharacterCache(key, character, { synced: true })
+        }
         recentCharacterReads.set(key, {
           response,
           resolvedAt: Date.now(),
@@ -90,6 +97,12 @@ function createCharacterReadAdapter(
     inFlightCharacterReads.set(key, request)
     return cloneResponseForRequest(await request, config)
   }
+}
+
+function readCharacterFromResponse(response: AxiosResponse): unknown | undefined {
+  const data = response.data
+  if (!data || typeof data !== "object" || !("character" in data)) return undefined
+  return (data as { character?: unknown }).character
 }
 
 function cloneResponseForRequest(
