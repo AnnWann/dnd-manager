@@ -1,4 +1,4 @@
-import { useCharacterContext } from "../../../../contexts/characterContext"
+import { useCharacterWorkspace } from "../../workspace/CharacterWorkspaceContext"
 import { attributeShort } from "../../../../lib/attributeShorts"
 import { formatSigned } from "../../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
@@ -26,7 +26,7 @@ export function SelectSkillModule({
   ability,
   profBonus,
 }: Props) {
-  const { dispatchSkillOperation } = useCharacterContext()
+  const { dispatchSkillOperation } = useCharacterWorkspace()
   const sheet = character.get("sheet")
   const proficiency = sheet.skills[skillKey] ?? "none"
   const grantedProficiency =
