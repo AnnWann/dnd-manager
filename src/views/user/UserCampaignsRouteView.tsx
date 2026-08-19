@@ -1,36 +1,15 @@
 import { ArrowRight } from "lucide-react"
-import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
-import { getMyCampaigns, type UserCampaign } from "../../api/user-campaigns"
 import { Button } from "../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../components/ui/Card"
+import { useUserData } from "../../features/user/UserDataProvider"
 import { sessionPath } from "../../lib/campaignRoutes"
 import { UserCampaignsTab } from "./UserCampaignTab"
 
 export function UserCampaignsRouteView() {
   const navigate = useNavigate()
-  const [campaigns, setCampaigns] = useState<UserCampaign[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadCampaigns() {
-      try {
-        const nextCampaigns = await getMyCampaigns()
-        if (!cancelled) setCampaigns(nextCampaigns)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    void loadCampaigns()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const { campaigns, campaignsLoading } = useUserData()
 
   const activeCampaigns = campaigns.filter(
     (campaign) => campaign.status === "ACTIVE",
@@ -46,7 +25,7 @@ export function UserCampaignsRouteView() {
           </p>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {campaignsLoading ? (
             <div className="text-sm text-textMuted">Carregando campanhas...</div>
           ) : activeCampaigns.length === 0 ? (
             <div className="text-sm text-textMuted">
@@ -72,9 +51,7 @@ export function UserCampaignsRouteView() {
 
                   <Button
                     size="sm"
-                    onClick={() =>
-                      navigate(sessionPath(campaign.id, "characters"))
-                    }
+                    onClick={() => navigate(sessionPath(campaign.id, "characters"))}
                   >
                     Entrar
                     <ArrowRight className="h-4 w-4" />
