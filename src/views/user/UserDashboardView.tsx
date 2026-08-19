@@ -1,4 +1,5 @@
 import { LogOut } from "lucide-react"
+import { Suspense } from "react"
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom"
 
 import {
@@ -96,10 +97,20 @@ export function UserDashboardView() {
 
         <main className="min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto">
           <div className="mx-auto w-full min-w-0 max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
-            <Outlet />
+            <Suspense fallback={<UserRouteLoading />}>
+              <Outlet />
+            </Suspense>
           </div>
         </main>
       </div>
+    </div>
+  )
+}
+
+function UserRouteLoading() {
+  return (
+    <div className="grid min-h-64 place-items-center text-sm text-textMuted">
+      Carregando...
     </div>
   )
 }
