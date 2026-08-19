@@ -1,12 +1,14 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
   type Dispatch,
   type ReactNode,
   type SetStateAction,
 } from "react"
 
+import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
 import type { AppStateV1 } from "../lib/remoteState"
 import {
   normalizeMission,
@@ -49,16 +51,39 @@ export function MissionProvider({
   userRole,
   userKey,
 }: Props) {
-  const missions = useMemo(
+  const runtime = useOptionalSessionRuntime()
+  const localMissions = useMemo(
     () => normalizeMissions(state.missions),
     [state.missions],
   )
-  const canManageMissions = userRole === "master"
+  const missions = useMemo(
+    () => runtime
+      ? runtime.missionState?.initialized
+        ? normalizeMissions(runtime.missionState.missions)
+        : []
+      : localMissions,
+    [localMissions, runtime],
+  )
+  const canManageMissions = runtime ? runtime.role === "MASTER" : userRole === "master"
+
+  useEffect(() => {
+    if (!runtime || runtime.role !== "MASTER" || runtime.status !== "connected") return
+    if (!runtime.missionState || runtime.missionState.initialized) return
+    runtime.initializeMissions(localMissions)
+  }, [localMissions, runtime])
 
   function addMission(mission: Mission) {
     if (!canManageMissions) return
-
     const normalized = normalizeMission(mission)
+
+    if (runtime) {
+      runtime.dispatchMissionOperation({
+        type: "mission.add",
+        characterId: "session",
+        mission: normalized,
+      })
+      return
+    }
 
     setState((previous) => ({
       ...previous,
@@ -80,13 +105,30 @@ export function MissionProvider({
     updater: (mission: Mission) => Mission,
   ) {
     if (!canManageMissions) return
+    const current = missions.find((mission) => mission.id === missionId)
+    if (!current) return
+    const next = normalizeMission({
+      ...updater(current),
+      id: current.id,
+      createdAt: current.createdAt,
+    })
+
+    if (runtime) {
+      runtime.dispatchMissionOperation({
+        type: "mission.update",
+        characterId: "session",
+        missionId,
+        mission: next,
+      })
+      return
+    }
 
     setState((previous) => ({
       ...previous,
       missions: normalizeMissions(previous.missions).map((mission) =>
         mission.id === missionId
           ? normalizeMission({
-              ...updater(mission),
+              ...next,
               id: mission.id,
               createdAt: mission.createdAt,
               updatedAt: new Date().toISOString(),
@@ -99,6 +141,15 @@ export function MissionProvider({
   function deleteMission(missionId: string) {
     if (!canManageMissions) return
 
+    if (runtime) {
+      runtime.dispatchMissionOperation({
+        type: "mission.delete",
+        characterId: "session",
+        missionId,
+      })
+      return
+    }
+
     setState((previous) => ({
       ...previous,
       missions: normalizeMissions(previous.missions).filter(
@@ -108,13 +159,21 @@ export function MissionProvider({
   }
 
   function moveMission(missionId: string, status: MissionStatus) {
-    const now = new Date().toISOString()
+    if (runtime) {
+      runtime.dispatchMissionOperation({
+        type: "mission.status.set",
+        characterId: "session",
+        missionId,
+        status,
+      })
+      return
+    }
 
+    const now = new Date().toISOString()
     setState((previous) => ({
       ...previous,
       missions: normalizeMissions(previous.missions).map((mission) => {
         if (mission.id !== missionId) return mission
-
         return {
           ...mission,
           status,
@@ -138,6 +197,16 @@ export function MissionProvider({
   }
 
   function toggleObjective(missionId: string, objectiveId: string) {
+    if (runtime) {
+      runtime.dispatchMissionOperation({
+        type: "mission.objective.toggle",
+        characterId: "session",
+        missionId,
+        objectiveId,
+      })
+      return
+    }
+
     setState((previous) => ({
       ...previous,
       missions: normalizeMissions(previous.missions).map((mission) =>
