@@ -11,7 +11,7 @@ import { SessionActor as RaceSessionActor } from "./RaceSessionActor";
 import { parseProfileClientMessage, type SessionProfileOperation } from "./profileProtocol";
 import { MAX_HP_LOG_RECORDS } from "./hpState";
 import type { SessionAbilityState } from "./abilityProtocol";
-import type { SessionConnection, SessionHpState } from "./protocol";
+import type { SessionConnection, SessionHpState, SessionSkillsState } from "./protocol";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
@@ -53,10 +53,10 @@ export class SessionActor extends RaceSessionActor {
     }
     connection.lastHeartbeatAt = Date.now();
     webSocket.serializeAttachment(connection);
-    await this.handleOperation(webSocket, connection, parsed.operation);
+    await this.handleProfileOperation(webSocket, connection, parsed.operation);
   }
 
-  private async handleOperation(webSocket: WebSocket, connection: SessionConnection, operation: SessionProfileOperation): Promise<void> {
+  private async handleProfileOperation(webSocket: WebSocket, connection: SessionConnection, operation: SessionProfileOperation): Promise<void> {
     const [abilities, hpState, log] = await Promise.all([
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
       this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY).then((value) => value ?? {}),
@@ -235,7 +235,7 @@ function applyProfileOperation(
 
   let next = withCharacterBackground(character, safeBackground);
   const sheet = next.get("sheet");
-  const skills = { ...sheet.skills };
+  const skills: SessionSkillsState = { ...hp.skills };
   for (const skill of safeBackground.skillProficiencies) {
     if (skills[skill] !== "expertise") skills[skill] = "proficient";
   }
