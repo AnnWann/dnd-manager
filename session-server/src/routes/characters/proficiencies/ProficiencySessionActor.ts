@@ -1,11 +1,11 @@
-import { CharacterTemplate, type CharacterTemplateProps } from "../../src/models/characters/CharacterTemplate";
-import { getAbilityGrantedProficiencies } from "../../src/models/characters/characterProficiencies";
-import type { Proficiency } from "../../src/models/sheet/Proficiency";
-import { SessionActor as InventorySessionActor } from "./InventorySessionActor";
+import { CharacterTemplate, type CharacterTemplateProps } from "../../../../../src/models/characters/CharacterTemplate";
+import { getAbilityGrantedProficiencies } from "../../../../../src/models/characters/characterProficiencies";
+import type { Proficiency } from "../../../../../src/models/sheet/Proficiency";
+import { SessionActor as InventorySessionActor } from "../inventory/InventorySessionActor";
 import { parseProficiencyClientMessage, type SessionProficiencyOperation } from "./proficiencyProtocol";
-import { MAX_HP_LOG_RECORDS } from "./hpState";
-import type { SessionAbilityState } from "./abilityProtocol";
-import type { SessionConnection, SessionHpState } from "./protocol";
+import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
+import type { SessionAbilityState } from "../abilities/abilityProtocol";
+import type { SessionConnection, SessionHpState } from "../../session/protocol";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
