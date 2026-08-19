@@ -20,6 +20,27 @@ import {
   normalizeSkillsSeed,
   normalizeStatsSeed,
 } from "../characters/sheet/hpState";
+import type { SessionAbilityState } from "../characters/abilities/abilityProtocol";
+import {
+  CharacterTemplate,
+  type CharacterTemplateProps,
+} from "../../../../src/models/characters/CharacterTemplate";
+import { getCurrentMaxHp } from "../../../../src/models/characters/characterHp";
+import {
+  getCharacterConditions,
+  withCharacterConditions,
+} from "../../../../src/models/characters/characterConditionStorage";
+import { takeShortRest } from "../../../../src/models/characters/characterRest";
+import {
+  takeLongRest,
+  takePartialLongRest,
+} from "../../../../src/models/characters/characterRestWithSorcery";
+import type { Itemmable } from "../../../../src/models/items/item";
+import {
+  consumeSelectedSupplies,
+  getRequiredSupplyForRace,
+  type LongRestSupplySelection,
+} from "../../../../src/models/supplies/partySupply";
 import {
   encodeServerSessionMessage,
   parseClientSessionMessage,
@@ -34,9 +55,13 @@ import {
   type SessionHpSeed,
   type SessionHpState,
   type SessionPresenceUser,
+  type SessionRestOperation,
 } from "./protocol";
 import {
+  SHARED_INVENTORY_SCOPE,
+  characterScope,
   commitSessionMutation,
+  createSessionLogRecord,
   readSessionLog,
   type SessionLogRecord,
 } from "./sessionLog";
@@ -46,10 +71,23 @@ const CLOSE_CODE_TIMEOUT = 4000;
 const CLOSE_CODE_REPLACED = 4001;
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
+const ABILITIES_STATE_KEY = "abilities-state";
+const INVENTORY_STATE_KEY = "inventory-state";
 
 type StoredSessionHpState = SessionHpState & {
   /** Distinguishes an old HP-only state from an intentionally empty hit-dice state. */
   hitDiceInitialized?: boolean;
+};
+
+type SharedInventoryState = {
+  initialized: boolean;
+  revision: number;
+  partyInventory: unknown[];
+  groundInventory: unknown[];
+};
+
+type LongRestOperationWithSelection = Extract<SessionRestOperation, { type: "character.rest.long" }> & {
+  selection?: LongRestSupplySelection[];
 };
 
 export class SessionActor extends DurableObject<Env> {
@@ -237,6 +275,11 @@ export class SessionActor extends DurableObject<Env> {
     connection: SessionConnection,
     operation: Parameters<typeof applyHpOperation>[1],
   ): Promise<void> {
+    if (operation.type === "character.rest.short" || operation.type === "character.rest.long") {
+      await this.handleRestOperation(webSocket, connection, operation);
+      return;
+    }
+
     const [state, conditionsState, log] = await Promise.all([
       this.readHpState(),
       this.readConditionsState(),
@@ -278,6 +321,148 @@ export class SessionActor extends DurableObject<Env> {
       maxRecords: MAX_HP_LOG_RECORDS,
     });
     this.broadcast({ type: "session.hp.updated", character: result.next });
+  }
+
+  private async handleRestOperation(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    operation: SessionRestOperation,
+  ): Promise<void> {
+    const [abilities, hpState, conditionsState, inventory, log] = await Promise.all([
+      this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
+      this.readHpState(),
+      this.readConditionsState(),
+      this.readInventoryState(),
+      readSessionLog(this.ctx.storage),
+    ]);
+
+    const storedAbility = abilities[operation.characterId];
+    const currentHp = hpState[operation.characterId];
+    const currentConditions = conditionsState[operation.characterId];
+    if (!storedAbility?.initialized || !currentHp || !currentConditions?.initialized) {
+      this.sendError(webSocket, "REST_STATE_NOT_INITIALIZED", "All authoritative character state must be initialized before resting.");
+      return;
+    }
+    if (connection.role !== "MASTER" && currentHp.ownerUserId !== connection.userId) {
+      this.sendError(webSocket, "CHARACTER_ACCESS_DENIED", "You cannot rest this character.");
+      return;
+    }
+
+    let current: CharacterTemplate;
+    try {
+      current = hydrateCharacterForRest(storedAbility, currentHp, currentConditions);
+    } catch {
+      this.sendError(webSocket, "REST_STATE_INVALID", "The authoritative character snapshot is invalid.");
+      return;
+    }
+
+    let next: CharacterTemplate;
+    let nextInventory = inventory;
+    let canonicalOperation: SessionLogRecord["operation"] = operation;
+    let reverseOperation: SessionLogRecord["reverseOperation"];
+    let affectedScopes: string[] | undefined;
+
+    if (operation.type === "character.rest.short") {
+      if (!Number.isInteger(operation.healing) || operation.healing < 0) {
+        this.sendError(webSocket, "INVALID_SHORT_REST_HEALING", "Short-rest healing must be a non-negative integer.");
+        return;
+      }
+      for (const [side, requested] of Object.entries(operation.hitDiceConsumption)) {
+        const amount = Math.trunc(Number(requested) || 0);
+        const pool = currentHp.hitDice[side as SessionDieSides];
+        if (amount < 0 || amount > (pool?.current ?? 0)) {
+          this.sendError(webSocket, "INSUFFICIENT_HIT_DICE", `Invalid ${side} hit-dice consumption for this short rest.`);
+          return;
+        }
+      }
+      next = takeShortRest(current, operation.healing, operation.hitDiceConsumption as any);
+      reverseOperation = {
+        type: "character.ability.restore",
+        characterId: operation.characterId,
+        snapshot: {
+          ability: structuredClone(storedAbility),
+          hp: structuredClone(currentHp),
+          conditions: structuredClone(currentConditions),
+        },
+      };
+    } else {
+      const supplied = (operation as LongRestOperationWithSelection).selection;
+      if (!isLongRestSelection(supplied)) {
+        this.sendError(webSocket, "INVALID_LONG_REST_SUPPLIES", "Long rests require a valid server-verifiable supply selection.");
+        return;
+      }
+      const consumption = consumeSelectedSupplies(inventory.partyInventory as Itemmable[], supplied);
+      if (!consumption.valid) {
+        this.sendError(webSocket, "INVALID_LONG_REST_SUPPLIES", "The selected supplies are no longer available in the shared inventory.");
+        return;
+      }
+      const required = getRequiredSupplyForRace(current.get("sheet").race);
+      const recovery = consumption.selectedPortions + 0.000001 < required ? "partial" : "full";
+      next = recovery === "partial" ? takePartialLongRest(current) : takeLongRest(current);
+      nextInventory = {
+        ...inventory,
+        initialized: true,
+        revision: inventory.revision + 1,
+        partyInventory: consumption.items,
+      };
+      canonicalOperation = { ...operation, recovery, selection: supplied };
+      reverseOperation = {
+        type: "session.inventory.restore",
+        characterId: operation.characterId,
+        snapshot: {
+          abilities: structuredClone(abilities),
+          hp: structuredClone(hpState),
+          conditions: structuredClone(conditionsState),
+          inventory: structuredClone(inventory),
+        },
+      };
+      affectedScopes = [characterScope(operation.characterId), SHARED_INVENTORY_SCOPE];
+    }
+
+    const nextAbility: SessionAbilityState = {
+      characterId: operation.characterId,
+      character: next.toJSON() as unknown as Record<string, unknown>,
+      initialized: true,
+      revision: storedAbility.revision + 1,
+    };
+    const nextHp = sessionHpFromCharacter(next, currentHp);
+    const nextConditions: SessionConditionsState = {
+      characterId: operation.characterId,
+      conditions: getCharacterConditions(next) as any,
+      initialized: true,
+      revision: currentConditions.revision + 1,
+    };
+
+    abilities[operation.characterId] = nextAbility;
+    hpState[operation.characterId] = { ...nextHp, hitDiceInitialized: true };
+    conditionsState[operation.characterId] = nextConditions;
+
+    const record = createSessionLogRecord({
+      actorId: connection.userId,
+      operation: canonicalOperation,
+      reverseOperation,
+      affectedScopes,
+    });
+    const writes: Record<string, unknown> = {
+      [ABILITIES_STATE_KEY]: abilities,
+      [HP_STATE_KEY]: hpState,
+      [CONDITIONS_STATE_KEY]: conditionsState,
+    };
+    if (operation.type === "character.rest.long") writes[INVENTORY_STATE_KEY] = nextInventory;
+
+    await commitSessionMutation(this.ctx.storage, this.ctx.getWebSockets(), {
+      writes,
+      record,
+      currentLog: log,
+      maxRecords: MAX_HP_LOG_RECORDS,
+    });
+
+    this.broadcastRaw({ type: "session.abilities.updated", character: nextAbility });
+    this.broadcast({ type: "session.hp.updated", character: nextHp });
+    this.broadcast({ type: "session.conditions.updated", character: nextConditions });
+    if (operation.type === "character.rest.long") {
+      this.broadcastRaw({ type: "session.inventory.updated", state: nextInventory });
+    }
   }
 
   private async handleConditionOperation(
@@ -339,6 +524,15 @@ export class SessionActor extends DurableObject<Env> {
 
   private async readConditionsState(): Promise<Record<string, SessionConditionsState>> {
     return (await this.ctx.storage.get<Record<string, SessionConditionsState>>(CONDITIONS_STATE_KEY)) ?? {};
+  }
+
+  private async readInventoryState(): Promise<SharedInventoryState> {
+    return (await this.ctx.storage.get<SharedInventoryState>(INVENTORY_STATE_KEY)) ?? {
+      initialized: false,
+      revision: 0,
+      partyInventory: [],
+      groundInventory: [],
+    };
   }
 
   private async sendHpSnapshot(webSocket: WebSocket): Promise<void> {
@@ -407,6 +601,13 @@ export class SessionActor extends DurableObject<Env> {
     }
   }
 
+  private broadcastRaw(message: unknown): void {
+    const payload = JSON.stringify(message);
+    for (const webSocket of this.activeSockets()) {
+      try { webSocket.send(payload); } catch {}
+    }
+  }
+
   private activeSockets(now = Date.now()): WebSocket[] {
     return this.ctx.getWebSockets().filter((webSocket) => {
       const connection = this.getConnection(webSocket);
@@ -441,4 +642,94 @@ export class SessionActor extends DurableObject<Env> {
     }
     await this.ctx.storage.setAlarm(nextDeadline);
   }
+}
+
+function hydrateCharacterForRest(
+  state: SessionAbilityState,
+  hp: SessionHpState,
+  conditions: SessionConditionsState,
+): CharacterTemplate {
+  let character = CharacterTemplate.fromJSON(state.character as Partial<CharacterTemplateProps>);
+  const sheet = character.get("sheet");
+  const hitDice = Object.fromEntries(
+    Object.entries(hp.hitDice).flatMap(([side, pool]) => pool ? [[side, {
+      current: { quantity: pool.current, sides: side },
+      max: { quantity: pool.max, sides: side },
+    }]] : []),
+  ) as typeof sheet.HP.hitDice;
+
+  character = character.withPatch({
+    sheet: {
+      ...sheet,
+      attributes: hp.attributesInitialized ? { ...hp.attributes } : sheet.attributes,
+      savingThrowProficiencies: hp.savingThrowsInitialized ? { ...hp.savingThrows } : sheet.savingThrowProficiencies,
+      skills: hp.skillsInitialized ? { ...hp.skills } : sheet.skills,
+      stats: hp.statsInitialized ? {
+        ...sheet.stats,
+        armorClassAdjustment: hp.stats.armorClassAdjustment,
+        initiativeAdjustment: hp.stats.initiativeAdjustment,
+        mobilityAdjustment: hp.stats.mobilityAdjustment,
+        passivePerceptionAdjustment: hp.stats.passivePerceptionAdjustment,
+        exhaustion: hp.stats.exhaustion,
+        inspiration: hp.stats.inspiration,
+        experience: hp.stats.experience,
+      } : sheet.stats,
+      HP: {
+        ...sheet.HP,
+        current: hp.current,
+        temporary: hp.temporary,
+        max: hp.max,
+        currentMax: hp.currentMax,
+        hitDice,
+      },
+    },
+  });
+  return withCharacterConditions(character, conditions.conditions as any);
+}
+
+function sessionHpFromCharacter(character: CharacterTemplate, previous: SessionHpState): SessionHpState {
+  const sheet = character.get("sheet");
+  const rawHp = sheet.HP;
+  const currentMax = getCurrentMaxHp(character);
+  const hitDice = Object.fromEntries(
+    Object.entries(rawHp.hitDice).flatMap(([side, pool]) =>
+      pool ? [[side, { current: pool.current.quantity, max: pool.max.quantity }]] : [],
+    ),
+  ) as SessionHpState["hitDice"];
+
+  return {
+    ...previous,
+    current: rawHp.current,
+    temporary: rawHp.temporary,
+    max: rawHp.max,
+    currentMax,
+    maxHpBonus: character.getEffectiveMaxHp() - currentMax,
+    hitDice,
+    stats: {
+      armorClassAdjustment: sheet.stats.armorClassAdjustment ?? 0,
+      initiativeAdjustment: sheet.stats.initiativeAdjustment ?? 0,
+      mobilityAdjustment: sheet.stats.mobilityAdjustment ?? 0,
+      passivePerceptionAdjustment: sheet.stats.passivePerceptionAdjustment ?? 0,
+      exhaustion: sheet.stats.exhaustion ?? 0,
+      inspiration: sheet.stats.inspiration ?? false,
+      experience: sheet.stats.experience ?? 0,
+    },
+    statsInitialized: true,
+    attributes: { ...previous.attributes },
+    savingThrows: { ...previous.savingThrows },
+    skills: { ...previous.skills },
+    revision: previous.revision + 1,
+  };
+}
+
+function isLongRestSelection(value: unknown): value is LongRestSupplySelection[] {
+  return Array.isArray(value) && value.every((entry) =>
+    Boolean(entry)
+    && typeof entry === "object"
+    && typeof (entry as { itemId?: unknown }).itemId === "string"
+    && (entry as { itemId: string }).itemId.trim().length > 0
+    && typeof (entry as { portions?: unknown }).portions === "number"
+    && Number.isFinite((entry as { portions: number }).portions)
+    && (entry as { portions: number }).portions > 0,
+  );
 }
