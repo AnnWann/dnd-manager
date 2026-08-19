@@ -1,27 +1,28 @@
+export type SessionEquipmentReference =
+  | { type: "weapon"; itemId: string }
+  | { type: "shield" }
+  | { type: "held-item"; itemId: string }
+  | { type: "slot"; slot: "armor" | "helmet" | "gloves" | "boots" | "cape" }
+  | { type: "ring"; itemId: string }
+  | { type: "necklace"; itemId: string };
+
 export type SessionEquipmentOperation =
   | {
       type: "character.equipment.item.update";
       characterId: string;
-      reference:
-        | { type: "weapon"; itemId: string }
-        | { type: "shield" }
-        | { type: "held-item"; itemId: string }
-        | { type: "slot"; slot: "armor" | "helmet" | "gloves" | "boots" | "cape" }
-        | { type: "ring"; itemId: string }
-        | { type: "necklace"; itemId: string };
+      reference: SessionEquipmentReference;
       item: Record<string, unknown>;
     }
   | {
       type: "character.equipment.move";
       characterId: string;
-      reference:
-        | { type: "weapon"; itemId: string }
-        | { type: "shield" }
-        | { type: "held-item"; itemId: string }
-        | { type: "slot"; slot: "armor" | "helmet" | "gloves" | "boots" | "cape" }
-        | { type: "ring"; itemId: string }
-        | { type: "necklace"; itemId: string };
+      reference: SessionEquipmentReference;
       destination: "inventory" | "pocket";
+    }
+  | {
+      type: "character.equipment.attunement.toggle";
+      characterId: string;
+      itemId: string;
     }
   | {
       type: "character.equipment.pocket.unequip";
@@ -44,6 +45,15 @@ export type SessionEquipmentClientMessage = {
   operation: SessionEquipmentOperation;
 };
 
+const OPERATION_TYPES = new Set<SessionEquipmentOperation["type"]>([
+  "character.equipment.item.update",
+  "character.equipment.move",
+  "character.equipment.attunement.toggle",
+  "character.equipment.pocket.unequip",
+  "character.equipment.pocket.wield",
+  "character.equipment.pocket.use",
+]);
+
 export function parseEquipmentClientMessage(raw: string): SessionEquipmentClientMessage | null {
   let value: unknown;
   try { value = JSON.parse(raw); } catch { return null; }
@@ -52,6 +62,11 @@ export function parseEquipmentClientMessage(raw: string): SessionEquipmentClient
   if (message.type !== "session.equipment.operation") return null;
   if (!message.operation || typeof message.operation !== "object") return null;
   const operation = message.operation as Record<string, unknown>;
-  if (typeof operation.type !== "string" || typeof operation.characterId !== "string") return null;
+  if (
+    typeof operation.type !== "string" ||
+    !OPERATION_TYPES.has(operation.type as SessionEquipmentOperation["type"]) ||
+    typeof operation.characterId !== "string" ||
+    !operation.characterId.trim()
+  ) return null;
   return message as SessionEquipmentClientMessage;
 }
