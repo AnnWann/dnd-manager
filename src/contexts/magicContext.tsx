@@ -2,20 +2,15 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react"
-import { useLocation } from "react-router-dom"
 import type { Spell } from "../models/magic/spells/Spell"
 import type { AppStateV1 } from "../lib/remoteState"
 import { normalizeSpellText } from "../lib/textNormalization"
-import {
-  getAllOfficialSpells,
-  getOfficialSpellsByIndexes,
-} from "../api/spell-compendium"
+import { getOfficialSpellsByIndexes } from "../api/spell-compendium"
 import metamagicData from "../data/metamagics.v1.json"
 import type {
   Metamagic,
@@ -33,7 +28,6 @@ type MagicContextValue = {
   getSpellByIndex: (spellIndex: string) => Spell | undefined
   getSpellsByIndexes: (spellIndexes: string[]) => Spell[]
   ensureOfficialSpells: (spellIndexes: readonly string[]) => Promise<void>
-  loadOfficialCatalog: () => Promise<void>
   officialSpellsLoading: boolean
   officialSpellsError: string
   metamagics: Metamagic[]
@@ -64,7 +58,6 @@ export function MagicProvider({
   onSaveSpell,
   onDeleteSpell,
 }: MagicProviderProps) {
-  const location = useLocation()
   const [officialSpells, setOfficialSpells] = useState<Spell[]>([])
   const [officialSpellsLoading, setOfficialSpellsLoading] = useState(false)
   const [officialSpellsError, setOfficialSpellsError] = useState("")
@@ -100,17 +93,6 @@ export function MagicProvider({
     if (pendingLoadsRef.current === 0) setOfficialSpellsLoading(false)
   }, [])
 
-  const loadOfficialCatalog = useCallback(async () => {
-    beginOfficialLoad()
-    try {
-      mergeOfficialSpells(await getAllOfficialSpells())
-    } catch {
-      setOfficialSpellsError("Não foi possível carregar o compêndio oficial de magias.")
-    } finally {
-      finishOfficialLoad()
-    }
-  }, [beginOfficialLoad, finishOfficialLoad, mergeOfficialSpells])
-
   const ensureOfficialSpells = useCallback(async (
     spellIndexes: readonly string[],
   ) => {
@@ -141,11 +123,6 @@ export function MagicProvider({
     normalizedSavedSpells,
     officialSpells,
   ])
-
-  useEffect(() => {
-    if (!routeNeedsFullOfficialCatalog(location.pathname)) return
-    void loadOfficialCatalog()
-  }, [loadOfficialCatalog, location.pathname])
 
   const spellByIndex = useMemo(() => {
     const map = new Map<string, Spell>()
@@ -237,7 +214,6 @@ export function MagicProvider({
       getSpellByIndex,
       getSpellsByIndexes,
       ensureOfficialSpells,
-      loadOfficialCatalog,
       officialSpellsLoading,
       officialSpellsError,
       metamagics,
@@ -257,12 +233,6 @@ function mergeSpells(existing: Spell[], incoming: Spell[]): Spell[] {
   const byIndex = new Map(existing.map((spell) => [spell.index, spell]))
   for (const spell of incoming) byIndex.set(spell.index, spell)
   return Array.from(byIndex.values())
-}
-
-function routeNeedsFullOfficialCatalog(pathname: string): boolean {
-  if (pathname === "/user/characters/create") return true
-  if (/^\/session\/[^/]+\/character\/create$/.test(pathname)) return true
-  return false
 }
 
 export function useMagicContext() {
