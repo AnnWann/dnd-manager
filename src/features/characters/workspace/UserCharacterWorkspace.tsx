@@ -24,7 +24,10 @@ import {
   getChangedCharacterDomains,
 } from "../../../lib/characterDomains"
 import type { CharacterDomainName } from "../../../lib/relationalApi"
-import { UserCharacterDomainPersistence } from "../../../lib/userCharacterDomainPersistence"
+import {
+  UserCharacterDomainPersistence,
+  type UserCharacterPersistenceConflict,
+} from "../../../lib/userCharacterDomainPersistence"
 import { moveEquippedItemToCharacterStorage } from "../../../models/characters/characterEquippedItemMovement"
 import { stowHandOccupant as stowCharacterHandOccupant } from "../../../models/characters/characterHands"
 import { takeLongRest } from "../../../models/characters/characterRest"
@@ -45,6 +48,24 @@ import {
   type CharacterWorkspaceValue,
 } from "./CharacterWorkspaceContext"
 
+type CharacterRuntimeHandlers = {
+  onConflict: (conflict: UserCharacterPersistenceConflict) => void
+  onError: (error: unknown) => void
+}
+
+type CharacterRuntimeEntry = {
+  persistence: UserCharacterDomainPersistence | null
+  reconcilePromise: Promise<UserCharacterSummary> | null
+  reconciled: boolean
+}
+
+const characterRuntimeEntries = new Map<string, CharacterRuntimeEntry>()
+const characterRuntimeHandlers = new Map<string, CharacterRuntimeHandlers>()
+
+function characterRuntimeKey(userId: string, characterId: string): string {
+  return `${userId}:${characterId}`
+}
+
 export function UserCharacterWorkspace({
   characterId,
   children,
@@ -56,6 +77,7 @@ export function UserCharacterWorkspace({
   const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
   const user = session?.user ?? localUser
   const userId = user?.id ?? ""
+  const runtimeKey = characterRuntimeKey(userId, characterId)
 
   const [character, setCharacter] =
     useState<CharacterTemplate | null>(null)
@@ -69,7 +91,7 @@ export function UserCharacterWorkspace({
 
   const createPersistence = useCallback((
     summary: UserCharacterSummary,
-    active: () => boolean,
+    key: string,
   ) => {
     if (LOCAL_AUTH_BYPASS) return null
 
@@ -78,18 +100,10 @@ export function UserCharacterWorkspace({
       summary.revision ?? 1,
       summary.domains ?? [],
       (conflict) => {
-        if (!active()) return
-        setPersistenceError(
-          `Conflito de edição em ${formatDomainName(conflict.domain)}. Recarregue a ficha antes de continuar editando esse campo.`,
-        )
+        characterRuntimeHandlers.get(key)?.onConflict(conflict)
       },
       (error) => {
-        if (!active()) return
-        setPersistenceError(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível persistir uma alteração da ficha.",
-        )
+        characterRuntimeHandlers.get(key)?.onError(error)
       },
     )
   }, [])
@@ -98,13 +112,30 @@ export function UserCharacterWorkspace({
     if (!userId) return
 
     let active = true
-    const isActive = () => active
     characterRef.current = null
     summaryRef.current = null
     persistenceRef.current = null
     localMutationVersionRef.current = 0
     setNotFound(false)
     setPersistenceError("")
+
+    const handlers: CharacterRuntimeHandlers = {
+      onConflict: (conflict) => {
+        if (!active) return
+        setPersistenceError(
+          `Conflito de edição em ${formatDomainName(conflict.domain)}. Recarregue a ficha antes de continuar editando esse campo.`,
+        )
+      },
+      onError: (error) => {
+        if (!active) return
+        setPersistenceError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível persistir uma alteração da ficha.",
+        )
+      },
+    }
+    characterRuntimeHandlers.set(runtimeKey, handlers)
 
     const cached = readUserCharacterCache<UserCharacterSummary>(userId, characterId)
     let hasUsableCache = false
@@ -114,7 +145,6 @@ export function UserCharacterWorkspace({
         const cachedCharacter = hydrateWorkspaceCharacter(cached)
         summaryRef.current = cached
         characterRef.current = cachedCharacter
-        persistenceRef.current = createPersistence(cached, isActive)
         setCharacter(cachedCharacter)
         setLoading(false)
         hasUsableCache = true
@@ -128,49 +158,95 @@ export function UserCharacterWorkspace({
       setLoading(true)
     }
 
+    let runtime = characterRuntimeEntries.get(runtimeKey)
+    if (!runtime) {
+      runtime = {
+        persistence: null,
+        reconcilePromise: null,
+        reconciled: false,
+      }
+      characterRuntimeEntries.set(runtimeKey, runtime)
+    }
+
+    if (runtime.reconciled) {
+      persistenceRef.current = runtime.persistence
+      if (!hasUsableCache) {
+        // A reconciled runtime should normally always have a persistent cache.
+        // If storage was cleared mid-session, reconcile once again.
+        runtime.reconciled = false
+      } else {
+        return () => {
+          active = false
+          if (characterRuntimeHandlers.get(runtimeKey) === handlers) {
+            characterRuntimeHandlers.delete(runtimeKey)
+          }
+          characterRef.current = null
+          summaryRef.current = null
+          persistenceRef.current = null
+        }
+      }
+    }
+
     const mutationVersionAtRequest = localMutationVersionRef.current
 
-    async function revalidate() {
-      try {
+    if (!runtime.reconcilePromise) {
+      runtime.reconcilePromise = (async () => {
         const result = await getMyCharacter(characterId)
-        if (!active) return
+        const normalizedCharacter = hydrateWorkspaceCharacter(result)
+        const persistence = createPersistence(result, runtimeKey)
 
+        if (persistence) {
+          await persistence.bootstrapMissingDomains(normalizedCharacter.toJSON())
+        }
+
+        writeUserCharacterCache(userId, characterId, result)
+        const currentRuntime = characterRuntimeEntries.get(runtimeKey)
+        if (currentRuntime) {
+          currentRuntime.persistence = persistence
+          currentRuntime.reconciled = true
+        }
+        return result
+      })().finally(() => {
+        const currentRuntime = characterRuntimeEntries.get(runtimeKey)
+        if (currentRuntime) currentRuntime.reconcilePromise = null
+      })
+    }
+
+    void runtime.reconcilePromise
+      .then((result) => {
+        if (!active) return
         if (localMutationVersionRef.current !== mutationVersionAtRequest) {
+          persistenceRef.current = characterRuntimeEntries.get(runtimeKey)?.persistence ?? null
           return
         }
 
         const normalizedCharacter = hydrateWorkspaceCharacter(result)
-        const persistence = createPersistence(result, isActive)
-
-        if (persistence) {
-          await persistence.bootstrapMissingDomains(normalizedCharacter.toJSON())
-          if (!active) return
-          if (localMutationVersionRef.current !== mutationVersionAtRequest) return
-        }
-
-        writeUserCharacterCache(userId, characterId, result)
         summaryRef.current = result
-        persistenceRef.current = persistence
+        persistenceRef.current = characterRuntimeEntries.get(runtimeKey)?.persistence ?? null
         characterRef.current = normalizedCharacter
         setCharacter(normalizedCharacter)
         setNotFound(false)
-      } catch {
+      })
+      .catch(() => {
         if (!active) return
+        const currentRuntime = characterRuntimeEntries.get(runtimeKey)
+        if (currentRuntime) currentRuntime.reconciled = false
         if (!hasUsableCache) setNotFound(true)
-      } finally {
+      })
+      .finally(() => {
         if (active) setLoading(false)
-      }
-    }
-
-    void revalidate()
+      })
 
     return () => {
       active = false
+      if (characterRuntimeHandlers.get(runtimeKey) === handlers) {
+        characterRuntimeHandlers.delete(runtimeKey)
+      }
       characterRef.current = null
       summaryRef.current = null
       persistenceRef.current = null
     }
-  }, [characterId, createPersistence, userId])
+  }, [characterId, createPersistence, runtimeKey, userId])
 
   const cacheCharacter = useCallback((updated: CharacterTemplate) => {
     if (!userId) return
@@ -293,7 +369,12 @@ export function UserCharacterWorkspace({
     summaryRef.current = null
     persistenceRef.current = null
     setCharacter(null)
-    if (userId) removeUserCharacterCache(userId, targetId)
+    if (userId) {
+      removeUserCharacterCache(userId, targetId)
+      const key = characterRuntimeKey(userId, targetId)
+      characterRuntimeEntries.delete(key)
+      characterRuntimeHandlers.delete(key)
+    }
 
     void deleteMyCharacter(targetId).catch(() => {
       setNotFound(false)
