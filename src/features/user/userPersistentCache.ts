@@ -34,6 +34,15 @@ export function readActiveUserCharacterCacheSnapshot<T>(
   return readUserCharacterCacheSnapshot<T>(activeUserCacheId, characterId)
 }
 
+export function writeActiveUserCharacterCache<T>(
+  characterId: string,
+  data: T,
+  options: CacheWriteOptions = {},
+): void {
+  if (!activeUserCacheId) return
+  writeUserCharacterCache(activeUserCacheId, characterId, data, options)
+}
+
 export function readUserCache<T>(
   userId: string,
   key: UserCacheKey,
