@@ -23,6 +23,11 @@ import type {
   SessionInventoryClientMessage,
   SessionInventoryServerMessage,
 } from "./inventorySessionProtocol"
+import {
+  parseMissionServerMessage,
+  type SessionMissionClientMessage,
+  type SessionMissionServerMessage,
+} from "./missionSessionProtocol"
 import type { SessionSheetOperationMessage } from "./sheetRoutes"
 
 export type SessionRuntimeStatus = "disconnected" | "connecting" | "connected" | "reconnecting" | "error"
@@ -34,7 +39,7 @@ export type SessionSocketOptions = {
   role: SessionRuntimeRole
   clientId: string
   onStatusChange: (status: SessionRuntimeStatus) => void
-  onMessage: (message: ServerSessionMessage | SessionAbilityServerMessage | SessionInventoryServerMessage | SessionCharacterLifecycleServerMessage) => void
+  onMessage: (message: ServerSessionMessage | SessionAbilityServerMessage | SessionInventoryServerMessage | SessionCharacterLifecycleServerMessage | SessionMissionServerMessage) => void
 }
 
 const HEARTBEAT_MIN_MS = 27_000
@@ -62,6 +67,7 @@ export class SessionSocket {
     | SessionSheetOperationMessage
     | SessionAbilityClientMessage
     | SessionInventoryClientMessage
+    | SessionMissionClientMessage
     | SessionProficiencyClientMessage
     | SessionRaceClientMessage
     | SessionProfileClientMessage
@@ -94,7 +100,8 @@ export class SessionSocket {
       if (typeof event.data !== "string") return
       const lifecycleMessage = parseCharacterLifecycleServerMessage(event.data)
       const inventoryMessage = parseInventoryServerMessage(event.data)
-      const message = lifecycleMessage ?? inventoryMessage ?? parseAbilityServerMessage(event.data) ?? parseServerSessionMessage(event.data)
+      const missionMessage = parseMissionServerMessage(event.data)
+      const message = lifecycleMessage ?? inventoryMessage ?? missionMessage ?? parseAbilityServerMessage(event.data) ?? parseServerSessionMessage(event.data)
       if (!message) return
       if (message.type === "session.ready") {
         this.hasConnectedOnce = true
