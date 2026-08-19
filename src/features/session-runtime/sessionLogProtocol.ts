@@ -13,6 +13,7 @@ import type {
   SessionConditionsState,
   SessionHpLogRecord,
   SessionHpState,
+  SessionRestOperation,
 } from "./sessionProtocol"
 
 export type SessionAbilityReverseOperation = {
@@ -90,6 +91,7 @@ export type SessionRuntimeLogRecord = {
     | SessionRaceOperation
     | SessionProfileOperation
     | SessionCharacterLifecycleOperation
+    | SessionRestOperation
     | { type: "character.hp.undo"; characterId: string; sourceLogId: string }
   reverseOperation:
     | SessionAbilityReverseOperation
