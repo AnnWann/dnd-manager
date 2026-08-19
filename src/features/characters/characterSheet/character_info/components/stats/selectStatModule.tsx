@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
 
 import { Input } from "../../../../../../components/ui/Input"
-import { useOptionalSessionRuntime } from "../../../../../session-runtime/useSessionRuntime"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
 import {
   getCalculatedArmorClass,
@@ -12,6 +11,7 @@ import {
   getStatAdjustmentKey,
   type CalculatedStatKey,
 } from "../../../../../../models/characters/characterStats"
+import { useCharacterWorkspace } from "../../../../workspace/CharacterWorkspaceContext"
 
 type Props = {
   name: string
@@ -37,7 +37,7 @@ export function SelectStatModule({
   fallback = 0,
   readOnly = false,
 }: Props) {
-  const sessionRuntime = useOptionalSessionRuntime()
+  const { dispatchStatOperation } = useCharacterWorkspace()
   const effectiveValue = finiteOr(getValue(character), fallback)
   const adjustmentKey = getStatAdjustmentKey(statKey)
   const adjustment = getStatAdjustment(character, adjustmentKey)
@@ -84,33 +84,33 @@ export function SelectStatModule({
     const characterId = character.get("id")
     switch (statKey) {
       case "armorClass":
-        return sessionRuntime?.dispatchSheetOperation({
+        return dispatchStatOperation({
           type: "character.stat.armorClass.set",
           characterId,
           value,
           calculatedValue,
-        }) ?? false
+        })
       case "initiative":
-        return sessionRuntime?.dispatchSheetOperation({
+        return dispatchStatOperation({
           type: "character.stat.initiative.set",
           characterId,
           value,
           calculatedValue,
-        }) ?? false
+        })
       case "mobility":
-        return sessionRuntime?.dispatchSheetOperation({
+        return dispatchStatOperation({
           type: "character.stat.mobility.set",
           characterId,
           value,
           calculatedValue,
-        }) ?? false
+        })
       case "passive_perception":
-        return sessionRuntime?.dispatchSheetOperation({
+        return dispatchStatOperation({
           type: "character.stat.passivePerception.set",
           characterId,
           value,
           calculatedValue,
-        }) ?? false
+        })
     }
   }
 
