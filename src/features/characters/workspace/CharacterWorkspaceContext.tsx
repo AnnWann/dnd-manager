@@ -5,6 +5,13 @@ import {
 } from "react"
 
 import type { TransferItemRequest } from "../../../contexts/characterContext"
+import type {
+  SessionAttributeOperation,
+  SessionConditionOperation,
+  SessionSavingThrowOperation,
+  SessionSkillOperation,
+  SessionStatOperation,
+} from "../../session-runtime/sessionProtocol"
 import type { CharacterDomainName } from "../../../lib/relationalApi"
 import type {
   EquippedItemDestination,
@@ -27,7 +34,6 @@ export type CharacterWorkspaceValue = {
   selectedCharacterId?: string
 
   setSelectedCharacterId: (characterId: string) => void
-  /** Compatibility/cross-domain mutation. Prefer updateCharacterDomain. */
   updateCharacter: (
     characterId: string,
     updater: (character: CharacterTemplate) => CharacterTemplate,
@@ -37,10 +43,19 @@ export type CharacterWorkspaceValue = {
     domain: CharacterDomainName,
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) => void
+
   /**
-   * Shared semantic operation channel. Campaign workspaces can broadcast these;
-   * relational/user workspaces may omit it and let controls persist directly.
+   * Transport boundary for sheet domains already owned by the session server.
+   * Campaign workspaces consume the operation even when the socket is offline,
+   * preventing an authoritative action from falling through to local mutation.
+   * User workspaces return false so controls persist through HTTPS instead.
    */
+  dispatchStatOperation: (operation: SessionStatOperation) => boolean
+  dispatchAttributeOperation: (operation: SessionAttributeOperation) => boolean
+  dispatchSavingThrowOperation: (operation: SessionSavingThrowOperation) => boolean
+  dispatchSkillOperation: (operation: SessionSkillOperation) => boolean
+  dispatchConditionOperation: (operation: SessionConditionOperation) => boolean
+
   dispatchGameOperation?: (operation: GameOperation) => void
   deleteCharacter: (characterId: string) => void
   importCharacter?: (rawCharacter: unknown) => CharacterTemplate
