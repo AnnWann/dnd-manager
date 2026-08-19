@@ -7,12 +7,18 @@ export type SpellCompendiumSummary = Pick<
   | "index"
   | "name"
   | "displayName"
+  | "description"
+  | "homebrew"
   | "slotLevel"
   | "school"
   | "classes"
   | "concentration"
   | "ritual"
   | "castingTime"
+  | "range"
+  | "duration"
+  | "components"
+  | "material"
 > & {
   targeting: Pick<Spell["targeting"], "hasAttackRoll" | "hasSavingThrow">
 }
@@ -24,6 +30,9 @@ export type SpellCompendiumQuery = {
   school?: string
   concentration?: boolean
   ritual?: boolean
+  attack?: boolean
+  save?: boolean
+  castingTime?: string
   page?: number
   pageSize?: number
 }
@@ -67,12 +76,36 @@ export async function queryOfficialSpells(
         school: query.school || undefined,
         concentration: query.concentration,
         ritual: query.ritual,
+        attack: query.attack,
+        save: query.save,
+        castingTime: query.castingTime || undefined,
         page: query.page,
         pageSize: query.pageSize,
       },
     },
   )
   return response.data
+}
+
+export async function queryAllOfficialSpellSummaries(
+  query: Omit<SpellCompendiumQuery, "page" | "pageSize"> = {},
+): Promise<SpellCompendiumPage<SpellCompendiumSummary>> {
+  const pageSize = 250
+  const first = await queryOfficialSpells({ ...query, page: 1, pageSize })
+  if (first.totalPages <= 1) return first
+
+  const remaining = await Promise.all(
+    Array.from({ length: first.totalPages - 1 }, (_, index) =>
+      queryOfficialSpells({ ...query, page: index + 2, pageSize }),
+    ),
+  )
+
+  return {
+    ...first,
+    spells: [first, ...remaining].flatMap((page) => page.spells),
+    page: 1,
+    pageSize: first.total,
+  }
 }
 
 export async function getOfficialSpell(index: string): Promise<Spell> {
@@ -121,9 +154,7 @@ export async function getOfficialSpellsByIndexes(
     loaded = response.data.spells
   }
 
-  for (const spell of loaded) {
-    spellDetailCache.set(spell.index, spell)
-  }
+  for (const spell of loaded) spellDetailCache.set(spell.index, spell)
 
   const byIndex = new Map([...cached, ...loaded].map((spell) => [spell.index, spell]))
   return normalizedIndexes
@@ -131,31 +162,18 @@ export async function getOfficialSpellsByIndexes(
     .filter((spell): spell is Spell => Boolean(spell))
 }
 
-/**
- * Compatibility loader for routes that still need to browse the entire
- * official catalog. Character display routes should prefer batched detail
- * reads through getOfficialSpellsByIndexes().
- */
+/** Compatibility loader kept only for legacy consumers still being migrated. */
 export function getAllOfficialSpells(): Promise<Spell[]> {
   if (officialSpellsPromise) return officialSpellsPromise
 
   officialSpellsPromise = (async () => {
-    if (import.meta.env.DEV && LOCAL_AUTH_BYPASS) {
-      return loadLocalOfficialSpells()
-    }
+    if (import.meta.env.DEV && LOCAL_AUTH_BYPASS) return loadLocalOfficialSpells()
 
     const response = await apiClient.get<SpellCompendiumPage<Spell>>(
       "/compendium/spells",
-      {
-        params: {
-          includeDetails: true,
-          pageSize: 1000,
-        },
-      },
+      { params: { includeDetails: true, pageSize: 1000 } },
     )
-    for (const spell of response.data.spells) {
-      spellDetailCache.set(spell.index, spell)
-    }
+    for (const spell of response.data.spells) spellDetailCache.set(spell.index, spell)
     return response.data.spells
   })().catch((error) => {
     officialSpellsPromise = null
@@ -174,43 +192,24 @@ async function loadLocalOfficialSpells(): Promise<Spell[]> {
   })
 }
 
-function filterLocalSpells(
-  spells: Spell[],
-  query: SpellCompendiumQuery,
-): Spell[] {
+function filterLocalSpells(spells: Spell[], query: SpellCompendiumQuery): Spell[] {
   const normalizedQuery = normalizeSearch(query.q ?? "")
   const normalizedClass = normalizeSearch(query.className ?? "")
   const normalizedSchool = normalizeSearch(query.school ?? "")
 
   return spells.filter((spell) => {
     if (query.level !== undefined && spell.slotLevel !== query.level) return false
-    if (
-      normalizedClass &&
-      !spell.classes.some((entry) => normalizeSearch(entry) === normalizedClass)
-    ) {
-      return false
-    }
-    if (normalizedSchool && normalizeSearch(String(spell.school)) !== normalizedSchool) {
-      return false
-    }
-    if (
-      query.concentration !== undefined &&
-      spell.concentration !== query.concentration
-    ) {
-      return false
-    }
+    if (normalizedClass && !spell.classes.some((entry) => normalizeSearch(entry) === normalizedClass)) return false
+    if (normalizedSchool && normalizeSearch(String(spell.school)) !== normalizedSchool) return false
+    if (query.concentration !== undefined && spell.concentration !== query.concentration) return false
     if (query.ritual !== undefined && spell.ritual !== query.ritual) return false
+    if (query.attack !== undefined && spell.targeting.hasAttackRoll !== query.attack) return false
+    if (query.save !== undefined && spell.targeting.hasSavingThrow !== query.save) return false
+    if (query.castingTime && spell.castingTime.type !== query.castingTime) return false
     if (!normalizedQuery) return true
 
     return normalizeSearch(
-      [
-        spell.displayName,
-        spell.name,
-        spell.description,
-        spell.higherLevelText,
-        spell.school,
-        ...spell.classes,
-      ]
+      [spell.displayName, spell.name, spell.description, spell.higherLevelText, spell.school, ...spell.classes]
         .filter(Boolean)
         .join(" "),
     ).includes(normalizedQuery)
@@ -222,12 +221,18 @@ function toSummary(spell: Spell): SpellCompendiumSummary {
     index: spell.index,
     name: spell.name,
     displayName: spell.displayName,
+    description: spell.description,
+    homebrew: false,
     slotLevel: spell.slotLevel,
     school: spell.school,
     classes: spell.classes,
     concentration: spell.concentration,
     ritual: spell.ritual,
     castingTime: spell.castingTime,
+    range: spell.range,
+    duration: spell.duration,
+    components: spell.components,
+    material: spell.material,
     targeting: {
       hasAttackRoll: spell.targeting.hasAttackRoll,
       hasSavingThrow: spell.targeting.hasSavingThrow,
@@ -236,9 +241,5 @@ function toSummary(spell: Spell): SpellCompendiumSummary {
 }
 
 function normalizeSearch(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("pt-BR")
-    .trim()
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim()
 }
