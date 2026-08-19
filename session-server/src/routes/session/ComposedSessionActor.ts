@@ -167,7 +167,7 @@ export class SessionActor extends BaseSessionActor {
   }
 
   private async sendInventorySnapshot(socket: WebSocket): Promise<void> {
-    const state = (await this.ctx.storage.get<SharedInventoryState>>(INVENTORY_STATE_KEY)) ?? {
+    const state = (await this.ctx.storage.get<SharedInventoryState>(INVENTORY_STATE_KEY)) ?? {
       initialized: false,
       revision: 0,
       partyInventory: [],
