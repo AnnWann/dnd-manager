@@ -191,31 +191,26 @@ export function MagicProvider({
   }
 
   function getMetamagicsByIds(metamagicIds: MetamagicId[]) {
-    return metamagicIds
-      .map((metamagicId) => metamagicById.get(metamagicId))
+    return metamagics
+      .map((metamagic) => metamagicById.get(metamagic.id))
       .filter((metamagic): metamagic is Metamagic => Boolean(metamagic))
+      .filter((metamagic) => metamagicIds.includes(metamagic.id))
   }
 
   function commitSavedSpells(nextSpells: Spell[]) {
     if (setAppState) {
-      setAppState((previous) => ({
-        ...previous,
-        spells: nextSpells,
-      }))
+      setAppState((previous) => ({ ...previous, spells: nextSpells }))
     }
-
     onSpellsChange?.(nextSpells)
   }
 
   function saveSpells(incoming: Spell[]) {
     const normalizedIncoming = incoming.map(normalizeSpellText)
     if (!normalizedIncoming.length) return
-
     if (onSaveSpell) {
       for (const spell of normalizedIncoming) onSaveSpell(spell)
       return
     }
-
     if (setAppState) {
       setAppState((previous) => ({
         ...previous,
@@ -223,7 +218,6 @@ export function MagicProvider({
       }))
       return
     }
-
     commitSavedSpells(mergeSpells(normalizedSavedSpells, normalizedIncoming))
   }
 
@@ -233,40 +227,34 @@ export function MagicProvider({
 
   function deleteSpell(spellIndex: string) {
     const normalizedIndex = spellIndex.trim()
-
     if (onDeleteSpell) {
       onDeleteSpell(normalizedIndex)
       return
     }
-
     commitSavedSpells(
-      normalizedSavedSpells.filter(
-        (existing) => existing.index !== normalizedIndex,
-      ),
+      normalizedSavedSpells.filter((existing) => existing.index !== normalizedIndex),
     )
   }
 
   return (
-    <MagicContext.Provider
-      value={{
-        spells: allSpells,
-        savedSpells: normalizedSavedSpells,
-        spellByIndex,
-        getSpellByIndex,
-        getSpellsByIndexes,
-        ensureOfficialSpells,
-        loadOfficialCatalog,
-        officialSpellsLoading,
-        officialSpellsError,
-        metamagics,
-        metamagicById,
-        getMetamagicById,
-        getMetamagicsByIds,
-        saveSpell,
-        saveSpells,
-        deleteSpell,
-      }}
-    >
+    <MagicContext.Provider value={{
+      spells: allSpells,
+      savedSpells: normalizedSavedSpells,
+      spellByIndex,
+      getSpellByIndex,
+      getSpellsByIndexes,
+      ensureOfficialSpells,
+      loadOfficialCatalog,
+      officialSpellsLoading,
+      officialSpellsError,
+      metamagics,
+      metamagicById,
+      getMetamagicById,
+      getMetamagicsByIds,
+      saveSpell,
+      saveSpells,
+      deleteSpell,
+    }}>
       {children}
     </MagicContext.Provider>
   )
@@ -281,29 +269,19 @@ function mergeSpells(existing: Spell[], incoming: Spell[]): Spell[] {
 function routeNeedsFullOfficialCatalog(pathname: string): boolean {
   if (pathname === "/user/characters/create") return true
 
-  if (
-    /^\/user\/characters\/[^/]+\/(?:level-up|spells-list\/add-spells)$/.test(
-      pathname,
-    )
-  ) {
-    return true
-  }
+  if (/^\/user\/characters\/[^/]+\/level-up$/.test(pathname)) return true
 
   if (
     /^\/session\/[^/]+\/(?:character\/create|character\/[^/]+\/level-up)$/.test(
       pathname,
     )
-  ) {
-    return true
-  }
+  ) return true
 
   return false
 }
 
 export function useMagicContext() {
   const context = useContext(MagicContext)
-  if (!context) {
-    throw new Error("useMagicContext must be used inside MagicProvider")
-  }
+  if (!context) throw new Error("useMagicContext must be used inside MagicProvider")
   return context
 }
