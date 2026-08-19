@@ -20,6 +20,7 @@ import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
 import type { SessionProficiencyOperation } from "./proficiencySessionProtocol"
 import type { SessionRaceOperation } from "./raceSessionProtocol"
 import type { SessionProfileOperation } from "./profileSessionProtocol"
+import type { SessionLogRecord } from "./sessionLogProtocol"
 import type {
   SessionInventoryOperation,
   SessionSharedInventoryState,
@@ -32,7 +33,6 @@ import type {
   SessionConditionSeed,
   SessionConcentrationOperation,
   SessionConditionsState,
-  SessionHpLogRecord,
   SessionHpSeed,
   SessionHpState,
   SessionLoggedOperation,
@@ -53,7 +53,7 @@ export type SessionRuntimeContextValue = {
   conditionsByCharacterId: Readonly<Record<string, SessionConditionsState>>
   abilitiesByCharacterId: Readonly<Record<string, SessionAbilityState>>
   inventoryState: SessionSharedInventoryState | null
-  hpLog: SessionHpLogRecord[]
+  hpLog: SessionLogRecord[]
   initializeHp: (characters: SessionHpSeed[]) => boolean
   initializeConditions: (characters: SessionConditionSeed[]) => boolean
   initializeAbilities: (characters: SessionAbilitySeed[]) => boolean
@@ -114,7 +114,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const [conditionsByCharacterId, setConditionsByCharacterId] = useState<Record<string, SessionConditionsState>>({})
   const [abilitiesByCharacterId, setAbilitiesByCharacterId] = useState<Record<string, SessionAbilityState>>({})
   const [inventoryState, setInventoryState] = useState<SessionSharedInventoryState | null>(null)
-  const [hpLog, setHpLog] = useState<SessionHpLogRecord[]>([])
+  const [hpLog, setHpLog] = useState<SessionLogRecord[]>([])
   const socketRef = useRef<SessionSocket | null>(null)
   const clientId = useMemo(() => getOrCreateClientId(sessionId), [sessionId])
   const baseUrl = resolveSessionServerUrl()
@@ -172,7 +172,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
           setInventoryState(message.state)
           return
         }
-        if (message.type === "session.hp.log") { setHpLog(message.records); return }
+        if (message.type === "session.hp.log") { setHpLog(message.records as SessionLogRecord[]); return }
         if (message.type === "session.error") console.error(`[session-runtime] ${message.code}: ${message.message}`)
       },
     })
