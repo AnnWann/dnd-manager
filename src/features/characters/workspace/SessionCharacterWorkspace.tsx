@@ -28,6 +28,11 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
     })))
   }, [characterContext.visibleCharacters, sessionRuntime?.initializeAbilities, sessionRuntime?.role, sessionRuntime?.status])
 
+  useEffect(() => {
+    if (!sessionRuntime || sessionRuntime.status !== "connected" || sessionRuntime.role !== "MASTER") return
+    sessionRuntime.initializeInventory(characterContext.partyInventory, characterContext.groundInventory)
+  }, [characterContext.groundInventory, characterContext.partyInventory, sessionRuntime?.initializeInventory, sessionRuntime?.role, sessionRuntime?.status])
+
   const projectedCharacters = useMemo(
     () => characterContext.visibleCharacters.map((character) =>
       applySessionAbilityState(character, sessionRuntime?.abilitiesByCharacterId[character.get("id")]),
@@ -64,12 +69,10 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
         for (const operation of equipmentOperations) sessionRuntime.dispatchEquipmentOperation(operation)
         return
       }
-      // Inventory is not fully migrated yet. Only equipment-owned inventory
-      // transitions (unequip/attunement) are intercepted here.
-      if (equipmentChanged) {
-        console.warn("[session-runtime] blocked an unrecognized local equipment mutation", { characterId })
-        return
-      }
+      // Inventory controls now dispatch explicit semantic operations. Never let
+      // an unrecognized inventory/equipment updater fall through to local state.
+      console.warn("[session-runtime] blocked an unrecognized local inventory/equipment mutation", { characterId })
+      return
     }
 
     if (magicChanged) {
@@ -102,9 +105,22 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
     })
   }, [characterContext, projectedCharacters, sessionRuntime])
 
+  const moveHandToGround = useCallback((characterId: string, reference: HandOccupantReference) => {
+    if (!sessionRuntime) {
+      characterContext.dropHandOccupant?.(characterId, reference)
+      return
+    }
+    const character = projectedCharacters.find((entry) => entry.get("id") === characterId)
+    if (!character) return
+    const equippedReference = resolveHandReference(character, reference)
+    if (!equippedReference) return
+    sessionRuntime.dispatchInventoryOperation({ type: "character.equipment.move.ground", characterId, reference: equippedReference })
+  }, [characterContext, projectedCharacters, sessionRuntime])
+
   const owners = characterContext.knownPlayerKeys.map((key) => characterContext.getOwner(key))
   const normalizedUserKey = userKey.trim()
   const currentOwner = normalizedUserKey ? characterContext.getOwner(normalizedUserKey) : undefined
+  const sharedInventory = sessionRuntime?.inventoryState?.initialized ? sessionRuntime.inventoryState : null
 
   const value: CharacterWorkspaceValue = {
     mode: "campaign",
@@ -123,28 +139,38 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
     deleteCharacter: characterContext.deleteCharacter,
     importCharacter: characterContext.importCharacter,
     completeLongRest: characterContext.completeLongRest,
-    partyInventory: characterContext.partyInventory,
+    partyInventory: sharedInventory?.partyInventory ?? characterContext.partyInventory,
     stowHandOccupant,
     moveEquippedItem: (characterId, reference, destination) => {
       if (!sessionRuntime) {
         characterContext.moveEquippedItem(characterId, reference, destination)
         return
       }
-      sessionRuntime.dispatchEquipmentOperation({
-        type: "character.equipment.move",
-        characterId,
-        reference,
-        destination,
-      })
+      sessionRuntime.dispatchEquipmentOperation({ type: "character.equipment.move", characterId, reference, destination })
     },
-    // Ground inventory is not authoritative yet. Hide these actions instead of
-    // allowing equipment mutations to fall back to the local game-operation path.
-    dropHandOccupant: undefined,
-    moveEquippedItemToGround: undefined,
-    addGroundItem: undefined,
-    canUseGroundInventory: false,
-    transferCharacters: characterContext.transferCharacters,
-    transferItem: characterContext.transferItem,
+    dropHandOccupant: moveHandToGround,
+    moveEquippedItemToGround: (characterId, reference) => {
+      if (!sessionRuntime) {
+        characterContext.moveEquippedItem(characterId, reference, "ground")
+        return
+      }
+      sessionRuntime.dispatchInventoryOperation({ type: "character.equipment.move.ground", characterId, reference })
+    },
+    addGroundItem: sessionRuntime ? undefined : characterContext.addGroundItem,
+    canUseGroundInventory: Boolean(sharedInventory),
+    transferCharacters: projectedCharacters,
+    transferItem: (request) => {
+      if (!sessionRuntime) {
+        characterContext.transferItem?.(request)
+        return
+      }
+      const characterId = request.from.type === "character"
+        ? request.from.characterId
+        : request.to.type === "character"
+          ? request.to.characterId
+          : "session"
+      sessionRuntime.dispatchInventoryOperation({ type: "inventory.item.transfer", characterId, request })
+    },
     canTransferFromCharacter: characterContext.canTransferFromCharacter,
     canViewCharacterDetails: characterContext.canViewCharacterDetails,
     canAssignOwners: characterContext.canAssignOwners,
@@ -159,10 +185,7 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
   return <CharacterWorkspaceProvider value={value}>{children}</CharacterWorkspaceProvider>
 }
 
-function resolveHandReference(
-  character: CharacterTemplate,
-  reference: HandOccupantReference,
-): EquippedItemReference | null {
+function resolveHandReference(character: CharacterTemplate, reference: HandOccupantReference): EquippedItemReference | null {
   const equipment = character.get("equipment")
   if (reference.type === "shield") return equipment.shield ? { type: "shield" } : null
   if (reference.type === "weapon") {
@@ -191,10 +214,8 @@ function deriveEquipmentOperations(current: CharacterTemplate, next: CharacterTe
       if (afterEquipment.weapons.some((weapon) => weapon.id === removed.id)) {
         return [{ type: "character.equipment.pocket.wield", characterId, index }]
       }
-      const inventoryChanged = JSON.stringify(current.get("inventory")) !== JSON.stringify(next.get("inventory"))
-      if (inventoryChanged) {
-        return [{ type: "character.equipment.pocket.unequip", characterId, index }]
-      }
+      const changedInventory = JSON.stringify(current.get("inventory")) !== JSON.stringify(next.get("inventory"))
+      if (changedInventory) return [{ type: "character.equipment.pocket.unequip", characterId, index }]
       if (removed.kind === "consumable" || removed.kind === "throwable" || removed.kind === "ammunition") {
         return [{ type: "character.equipment.pocket.use", characterId, index }]
       }
@@ -206,9 +227,7 @@ function deriveEquipmentOperations(current: CharacterTemplate, next: CharacterTe
       const before = beforePockets[index]
       const after = afterPockets[index]
       if (!before || !after || before.id !== after.id) continue
-      const beforeQuantity = Number(before.quantity ?? 1)
-      const afterQuantity = Number(after.quantity ?? 1)
-      if (afterQuantity < beforeQuantity && (before.kind === "consumable" || before.kind === "throwable" || before.kind === "ammunition")) {
+      if (Number(after.quantity ?? 1) < Number(before.quantity ?? 1) && (before.kind === "consumable" || before.kind === "throwable" || before.kind === "ammunition")) {
         return [{ type: "character.equipment.pocket.use", characterId, index }]
       }
     }
@@ -217,31 +236,21 @@ function deriveEquipmentOperations(current: CharacterTemplate, next: CharacterTe
   const beforeItems = collectEditableEquipmentItems(current)
   const afterItems = collectEditableEquipmentItems(next)
   if (beforeItems.size !== afterItems.size) return []
-
   const operations: SessionEquipmentOperation[] = []
   for (const [key, before] of beforeItems) {
     const after = afterItems.get(key)
     if (!after) return []
     if (JSON.stringify(before.item) === JSON.stringify(after.item)) continue
     if (before.item.id !== after.item.id) return []
-    operations.push({
-      type: "character.equipment.item.update",
-      characterId,
-      reference: before.reference,
-      item: after.item as unknown as Record<string, unknown>,
-    })
+    operations.push({ type: "character.equipment.item.update", characterId, reference: before.reference, item: after.item as unknown as Record<string, unknown> })
   }
   return operations
 }
 
-function deriveAttunementOperation(
-  current: CharacterTemplate,
-  next: CharacterTemplate,
-): SessionEquipmentOperation | null {
+function deriveAttunementOperation(current: CharacterTemplate, next: CharacterTemplate): SessionEquipmentOperation | null {
   const before = collectCarriedItems(current)
   const after = collectCarriedItems(next)
   if (before.size !== after.size) return null
-
   let changedItemId: string | null = null
   for (const [itemId, beforeItem] of before) {
     const afterItem = after.get(itemId)
@@ -251,38 +260,19 @@ function deriveAttunementOperation(
     changedItemId = itemId
   }
   if (!changedItemId) return null
-
-  // Attunement toggles may only change the attuned flag. This prevents an
-  // unrelated inventory edit from being mislabeled as an equipment operation.
-  const stripAttuned = (item: Itemmable) => {
-    const { attuned: _attuned, ...rest } = item
-    return rest
-  }
+  const stripAttuned = (item: Itemmable) => { const { attuned: _attuned, ...rest } = item; return rest }
   const beforeItem = before.get(changedItemId)
   const afterItem = after.get(changedItemId)
   if (!beforeItem || !afterItem || JSON.stringify(stripAttuned(beforeItem)) !== JSON.stringify(stripAttuned(afterItem))) return null
-
-  return {
-    type: "character.equipment.attunement.toggle",
-    characterId: current.get("id"),
-    itemId: changedItemId,
-  }
+  return { type: "character.equipment.attunement.toggle", characterId: current.get("id"), itemId: changedItemId }
 }
 
 function collectCarriedItems(character: CharacterTemplate): Map<string, Itemmable> {
   const equipment = character.get("equipment")
   const items: Itemmable[] = [
-    ...character.get("inventory"),
-    equipment.armor,
-    equipment.boots,
-    equipment.helmet,
-    equipment.gloves,
-    equipment.cape,
-    equipment.shield,
-    ...equipment.rings,
-    ...equipment.weapons,
-    ...equipment.pockets,
-    ...(equipment.necklaces ?? []),
+    ...character.get("inventory"), equipment.armor, equipment.boots, equipment.helmet,
+    equipment.gloves, equipment.cape, equipment.shield, ...equipment.rings,
+    ...equipment.weapons, ...equipment.pockets, ...(equipment.necklaces ?? []),
     ...(equipment.heldItems ?? []),
   ].filter((item): item is Itemmable => Boolean(item))
   return new Map(items.map((item) => [item.id, item]))
@@ -291,14 +281,9 @@ function collectCarriedItems(character: CharacterTemplate): Map<string, Itemmabl
 function collectEditableEquipmentItems(character: CharacterTemplate): Map<string, { reference: EquippedItemReference; item: Itemmable }> {
   const equipment = character.get("equipment")
   const entries = new Map<string, { reference: EquippedItemReference; item: Itemmable }>()
-  const add = (key: string, reference: EquippedItemReference, item: Itemmable | undefined) => {
-    if (item) entries.set(key, { reference, item })
-  }
-
+  const add = (key: string, reference: EquippedItemReference, item: Itemmable | undefined) => { if (item) entries.set(key, { reference, item }) }
   add("shield", { type: "shield" }, equipment.shield)
-  for (const slot of ["armor", "helmet", "gloves", "boots", "cape"] as const) {
-    add(`slot:${slot}`, { type: "slot", slot }, equipment[slot])
-  }
+  for (const slot of ["armor", "helmet", "gloves", "boots", "cape"] as const) add(`slot:${slot}`, { type: "slot", slot }, equipment[slot])
   for (const item of equipment.weapons) add(`weapon:${item.id}`, { type: "weapon", itemId: item.id }, item)
   for (const item of equipment.heldItems ?? []) add(`held:${item.id}`, { type: "held-item", itemId: item.id }, item)
   for (const item of equipment.rings) add(`ring:${item.id}`, { type: "ring", itemId: item.id }, item)
@@ -311,51 +296,22 @@ function deriveMagicOperations(current: CharacterTemplate, next: CharacterTempla
   const before = current.getOrCreateMagic()
   const after = next.getOrCreateMagic()
   const operations: SessionMagicOperation[] = []
-
   const beforeKnown = new Map(before.spells.knownSpells.map((entry) => [entry.spells.id, entry]))
   const afterKnown = new Map(after.spells.knownSpells.map((entry) => [entry.spells.id, entry]))
-
   for (const [spellIndex, entry] of afterKnown) {
     const previous = beforeKnown.get(spellIndex)
-    if (!previous) {
-      operations.push({ type: "character.spell.add", characterId, spellEntry: entry as unknown as Record<string, unknown> })
-      continue
-    }
-    if (previous.spells.prepared !== entry.spells.prepared) {
-      operations.push({ type: "character.spell.prepare", characterId, spellIndex, prepared: entry.spells.prepared })
-    }
+    if (!previous) { operations.push({ type: "character.spell.add", characterId, spellEntry: entry as unknown as Record<string, unknown> }); continue }
+    if (previous.spells.prepared !== entry.spells.prepared) operations.push({ type: "character.spell.prepare", characterId, spellIndex, prepared: entry.spells.prepared })
   }
-  for (const spellIndex of beforeKnown.keys()) {
-    if (!afterKnown.has(spellIndex)) operations.push({ type: "character.spell.remove", characterId, spellIndex })
-  }
-
+  for (const spellIndex of beforeKnown.keys()) if (!afterKnown.has(spellIndex)) operations.push({ type: "character.spell.remove", characterId, spellIndex })
   const beforeDescriptions = before.spells.castingDescriptions ?? {}
   const afterDescriptions = after.spells.castingDescriptions ?? {}
-  const descriptionSpellIds = new Set([...Object.keys(beforeDescriptions), ...Object.keys(afterDescriptions)])
-  for (const spellIndex of descriptionSpellIds) {
+  for (const spellIndex of new Set([...Object.keys(beforeDescriptions), ...Object.keys(afterDescriptions)])) {
     const oldList = beforeDescriptions[spellIndex] ?? []
     const newList = afterDescriptions[spellIndex] ?? []
-    if (oldList.length + 1 === newList.length && oldList.every((value, index) => value === newList[index])) {
-      operations.push({ type: "character.spell.castingDescription.add", characterId, spellIndex })
-      continue
-    }
-    if (oldList.length - 1 === newList.length) {
-      const removedIndex = oldList.findIndex((value, index) => newList[index] !== value)
-      operations.push({ type: "character.spell.castingDescription.remove", characterId, spellIndex, descriptionIndex: removedIndex < 0 ? oldList.length - 1 : removedIndex })
-      continue
-    }
-    if (oldList.length === newList.length) {
-      for (let index = 0; index < newList.length; index += 1) {
-        if (oldList[index] !== newList[index]) operations.push({
-          type: "character.spell.castingDescription.update",
-          characterId,
-          spellIndex,
-          descriptionIndex: index,
-          description: newList[index] ?? "",
-        })
-      }
-    }
+    if (oldList.length + 1 === newList.length && oldList.every((value, index) => value === newList[index])) { operations.push({ type: "character.spell.castingDescription.add", characterId, spellIndex }); continue }
+    if (oldList.length - 1 === newList.length) { const removedIndex = oldList.findIndex((value, index) => newList[index] !== value); operations.push({ type: "character.spell.castingDescription.remove", characterId, spellIndex, descriptionIndex: removedIndex < 0 ? oldList.length - 1 : removedIndex }); continue }
+    if (oldList.length === newList.length) for (let index = 0; index < newList.length; index += 1) if (oldList[index] !== newList[index]) operations.push({ type: "character.spell.castingDescription.update", characterId, spellIndex, descriptionIndex: index, description: newList[index] ?? "" })
   }
-
   return operations
 }
