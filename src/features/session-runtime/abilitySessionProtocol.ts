@@ -24,17 +24,20 @@ export type SessionAbilityOperation =
       type: "character.ability.use"
       characterId: string
       source: SessionAbilitySource
+      abilityName: string
       activationOptionId?: string
     }
   | {
       type: "character.ability.restore"
       characterId: string
       source: SessionAbilitySource
+      abilityName: string
     }
   | {
       type: "character.ability.deactivate"
       characterId: string
       source: SessionAbilitySource
+      abilityName: string
     }
   | {
       type: "character.ability.save"
@@ -45,6 +48,7 @@ export type SessionAbilityOperation =
       type: "character.ability.remove"
       characterId: string
       abilityId: string
+      abilityName: string
     }
 
 export type SessionAbilityClientMessage =
