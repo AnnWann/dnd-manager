@@ -1,5 +1,5 @@
 import type { CharacterTemplate } from "./CharacterTemplate"
-import type { Itemmable } from "../items/item"
+import { isBagOfHoldingItem, type Itemmable } from "../items/item"
 import {
   prepareInventoryItemForInsert,
   removeSingleInventoryItem,
@@ -66,9 +66,20 @@ export function removeInventoryItem(
   character: CharacterTemplate,
   itemId: string,
 ): CharacterTemplate {
+  const inventory = character.get("inventory")
+  const removed = inventory.find((item) => item.id === itemId)
+  const nextInventory = removeSingleInventoryItem(inventory, itemId)
+
+  if (!removed || !isBagOfHoldingItem(removed)) {
+    return character.with("inventory", nextInventory)
+  }
+
   return character.with(
     "inventory",
-    removeSingleInventoryItem(character.get("inventory"), itemId),
+    nextInventory.map((item) => ({
+      ...item,
+      insideBagOfHolding: false,
+    })),
   )
 }
 
