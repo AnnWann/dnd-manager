@@ -45,10 +45,10 @@ export class SessionActor extends ProficiencySessionActor {
     }
     connection.lastHeartbeatAt = Date.now();
     webSocket.serializeAttachment(connection);
-    await this.handleOperation(webSocket, connection, parsed.operation);
+    await this.handleRaceOperation(webSocket, connection, parsed.operation);
   }
 
-  private async handleOperation(webSocket: WebSocket, connection: SessionConnection, operation: SessionRaceOperation): Promise<void> {
+  private async handleRaceOperation(webSocket: WebSocket, connection: SessionConnection, operation: SessionRaceOperation): Promise<void> {
     const [abilities, hpState, log] = await Promise.all([
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
       this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY).then((value) => value ?? {}),
