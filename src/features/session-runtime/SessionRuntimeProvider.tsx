@@ -20,6 +20,10 @@ import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
 import type { SessionProficiencyOperation } from "./proficiencySessionProtocol"
 import type { SessionRaceOperation } from "./raceSessionProtocol"
 import type { SessionProfileOperation } from "./profileSessionProtocol"
+import type {
+  SessionCharacterLifecycleOperation,
+  SessionCharacterLifecycleState,
+} from "./characterLifecycleSessionProtocol"
 import type { SessionLogRecord } from "./sessionLogProtocol"
 import type {
   SessionInventoryOperation,
@@ -52,6 +56,7 @@ export type SessionRuntimeContextValue = {
   hpByCharacterId: Readonly<Record<string, SessionHpState>>
   conditionsByCharacterId: Readonly<Record<string, SessionConditionsState>>
   abilitiesByCharacterId: Readonly<Record<string, SessionAbilityState>>
+  sessionCharactersById: Readonly<Record<string, SessionCharacterLifecycleState>>
   inventoryState: SessionSharedInventoryState | null
   hpLog: SessionLogRecord[]
   initializeHp: (characters: SessionHpSeed[]) => boolean
@@ -69,6 +74,7 @@ export type SessionRuntimeContextValue = {
   dispatchProficiencyOperation: (operation: SessionProficiencyOperation) => boolean
   dispatchRaceOperation: (operation: SessionRaceOperation) => boolean
   dispatchProfileOperation: (operation: SessionProfileOperation) => boolean
+  dispatchCharacterLifecycleOperation: (operation: SessionCharacterLifecycleOperation) => boolean
   undoLog: (logId: string) => boolean
 }
 
@@ -113,6 +119,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const [hpByCharacterId, setHpByCharacterId] = useState<Record<string, SessionHpState>>({})
   const [conditionsByCharacterId, setConditionsByCharacterId] = useState<Record<string, SessionConditionsState>>({})
   const [abilitiesByCharacterId, setAbilitiesByCharacterId] = useState<Record<string, SessionAbilityState>>({})
+  const [sessionCharactersById, setSessionCharactersById] = useState<Record<string, SessionCharacterLifecycleState>>({})
   const [inventoryState, setInventoryState] = useState<SessionSharedInventoryState | null>(null)
   const [hpLog, setHpLog] = useState<SessionLogRecord[]>([])
   const socketRef = useRef<SessionSocket | null>(null)
@@ -125,6 +132,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     setHpByCharacterId({})
     setConditionsByCharacterId({})
     setAbilitiesByCharacterId({})
+    setSessionCharactersById({})
     setInventoryState(null)
     setHpLog([])
 
@@ -166,6 +174,37 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
         }
         if (message.type === "session.abilities.updated") {
           setAbilitiesByCharacterId((current) => ({ ...current, [message.character.characterId]: message.character }))
+          return
+        }
+        if (message.type === "session.characters.snapshot") {
+          setSessionCharactersById(Object.fromEntries(message.characters.map((character) => [character.characterId, character])))
+          return
+        }
+        if (message.type === "session.character.updated") {
+          setSessionCharactersById((current) => ({ ...current, [message.character.characterId]: message.character }))
+          return
+        }
+        if (message.type === "session.character.removed") {
+          setSessionCharactersById((current) => {
+            const next = { ...current }
+            delete next[message.characterId]
+            return next
+          })
+          setHpByCharacterId((current) => {
+            const next = { ...current }
+            delete next[message.characterId]
+            return next
+          })
+          setConditionsByCharacterId((current) => {
+            const next = { ...current }
+            delete next[message.characterId]
+            return next
+          })
+          setAbilitiesByCharacterId((current) => {
+            const next = { ...current }
+            delete next[message.characterId]
+            return next
+          })
           return
         }
         if (message.type === "session.inventory.snapshot" || message.type === "session.inventory.updated") {
@@ -213,6 +252,8 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     socketRef.current?.send({ type: "session.race.operation", operation }) ?? false, [])
   const dispatchProfileOperation = useCallback((operation: SessionProfileOperation) =>
     socketRef.current?.send({ type: "session.profile.operation", operation }) ?? false, [])
+  const dispatchCharacterLifecycleOperation = useCallback((operation: SessionCharacterLifecycleOperation) =>
+    socketRef.current?.send({ type: "session.character.operation", operation }) ?? false, [])
 
   const dispatchConditionOperation = useCallback((operation: SessionConditionOperation) => {
     if (operation.type === "character.condition.add" || operation.type === "character.condition.update") {
@@ -239,19 +280,19 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
 
   const value = useMemo<SessionRuntimeContextValue>(() => ({
     status, sessionId, clientId, role, presence, lastHeartbeatAckAt,
-    hpByCharacterId, conditionsByCharacterId, abilitiesByCharacterId, inventoryState, hpLog,
+    hpByCharacterId, conditionsByCharacterId, abilitiesByCharacterId, sessionCharactersById, inventoryState, hpLog,
     initializeHp, initializeConditions, initializeAbilities, initializeInventory,
     dispatchSheetOperation, dispatchHpOperation, dispatchConditionOperation,
     dispatchConcentrationOperation, dispatchAbilityOperation, dispatchMagicOperation,
     dispatchEquipmentOperation, dispatchInventoryOperation, dispatchProficiencyOperation,
-    dispatchRaceOperation, dispatchProfileOperation, undoLog,
+    dispatchRaceOperation, dispatchProfileOperation, dispatchCharacterLifecycleOperation, undoLog,
   }), [
     abilitiesByCharacterId, clientId, conditionsByCharacterId,
-    dispatchAbilityOperation, dispatchConditionOperation, dispatchConcentrationOperation,
+    dispatchAbilityOperation, dispatchCharacterLifecycleOperation, dispatchConditionOperation, dispatchConcentrationOperation,
     dispatchEquipmentOperation, dispatchHpOperation, dispatchInventoryOperation, dispatchMagicOperation,
     dispatchProficiencyOperation, dispatchProfileOperation, dispatchRaceOperation, dispatchSheetOperation,
     hpByCharacterId, hpLog, initializeAbilities, initializeConditions, initializeHp, initializeInventory,
-    inventoryState, lastHeartbeatAckAt, presence, role, sessionId, status, undoLog,
+    inventoryState, lastHeartbeatAckAt, presence, role, sessionCharactersById, sessionId, status, undoLog,
   ])
 
   return <SessionRuntimeContext.Provider value={value}>{children}</SessionRuntimeContext.Provider>
