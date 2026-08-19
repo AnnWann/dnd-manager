@@ -87,6 +87,18 @@ type AbilityReverse = {
   };
 };
 
+type RestReverse = {
+  type: "session.rest.restore";
+  characterId: string;
+  affectedScopes?: string[];
+  snapshot: {
+    ability: SessionAbilityState;
+    hp: SessionHpState;
+    conditions: SessionConditionsState;
+    inventory?: SharedInventoryState;
+  };
+};
+
 type InventoryReverse = {
   type: "session.inventory.restore";
   characterId: string;
@@ -116,6 +128,7 @@ type RaceOrProfileReverse = {
 type CentrallyRestorableReverse =
   | CharacterLifecycleReverse
   | AbilityReverse
+  | RestReverse
   | InventoryReverse
   | ProficiencyReverse
   | RaceOrProfileReverse;
@@ -380,6 +393,34 @@ export class SessionActor extends BaseSessionActor {
         writes[CONDITIONS_STATE_KEY] = conditions;
         break;
       }
+      case "session.rest.restore": {
+        const currentAbility = abilities[characterId];
+        const currentHp = hp[characterId];
+        const currentConditions = conditions[characterId];
+        if (!currentAbility || !currentHp || !currentConditions) {
+          sendError(webSocket, "REST_STATE_NOT_INITIALIZED", "The current rest state required for undo is missing.");
+          return;
+        }
+        inverseReverse = {
+          type: reverse.type,
+          characterId,
+          affectedScopes,
+          snapshot: {
+            ability: currentAbility,
+            hp: currentHp,
+            conditions: currentConditions,
+            inventory: reverse.snapshot.inventory ? structuredClone(inventory) : undefined,
+          },
+        };
+        abilities[characterId] = reverse.snapshot.ability;
+        hp[characterId] = reverse.snapshot.hp;
+        conditions[characterId] = reverse.snapshot.conditions;
+        writes[ABILITIES_STATE_KEY] = abilities;
+        writes[HP_STATE_KEY] = hp;
+        writes[CONDITIONS_STATE_KEY] = conditions;
+        if (reverse.snapshot.inventory) writes[INVENTORY_STATE_KEY] = reverse.snapshot.inventory;
+        break;
+      }
       case "session.inventory.restore": {
         inverseReverse = {
           type: reverse.type,
@@ -626,6 +667,16 @@ export class SessionActor extends BaseSessionActor {
   }
 
   private async broadcastAuthoritativeStateForReverse(reverse: CentrallyRestorableReverse): Promise<void> {
+    if (reverse.type === "session.rest.restore") {
+      broadcast(this.ctx.getWebSockets(), { type: "session.abilities.updated", character: reverse.snapshot.ability });
+      broadcast(this.ctx.getWebSockets(), { type: "session.hp.updated", character: reverse.snapshot.hp });
+      broadcast(this.ctx.getWebSockets(), { type: "session.conditions.updated", character: reverse.snapshot.conditions });
+      if (reverse.snapshot.inventory) {
+        broadcast(this.ctx.getWebSockets(), { type: "session.inventory.updated", state: reverse.snapshot.inventory });
+      }
+      return;
+    }
+
     if (reverse.type === "session.inventory.restore") {
       broadcast(this.ctx.getWebSockets(), { type: "session.abilities.snapshot", characters: Object.values(reverse.snapshot.abilities) });
       broadcast(this.ctx.getWebSockets(), { type: "session.hp.snapshot", characters: Object.values(reverse.snapshot.hp) });
@@ -792,6 +843,7 @@ function restoreOptionalEntry<T>(state: Record<string, T>, characterId: string, 
 
 function isCentrallyRestorable(reverse: SessionLogRecord["reverseOperation"]): reverse is CentrallyRestorableReverse {
   return reverse.type === "character.ability.restore"
+    || reverse.type === "session.rest.restore"
     || reverse.type === "session.inventory.restore"
     || reverse.type === "session.proficiency.restore"
     || reverse.type === "session.race.restore"
