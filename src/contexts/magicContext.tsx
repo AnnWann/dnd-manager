@@ -282,7 +282,7 @@ function routeNeedsFullOfficialCatalog(pathname: string): boolean {
   if (pathname === "/user/characters/create") return true
 
   if (
-    /^\/user\/characters\/[^/]+\/(?:level-up|spells-list(?:\/add-spells)?|abilities|equipment)$/.test(
+    /^\/user\/characters\/[^/]+\/(?:level-up|spells-list(?:\/add-spells)?)$/.test(
       pathname,
     )
   ) {
@@ -290,7 +290,7 @@ function routeNeedsFullOfficialCatalog(pathname: string): boolean {
   }
 
   if (
-    /^\/session\/[^/]+\/(?:character\/create|character\/[^/]+\/(?:level-up|spells-list|abilities|equipment))$/.test(
+    /^\/session\/[^/]+\/(?:character\/create|character\/[^/]+\/(?:level-up|spells-list))$/.test(
       pathname,
     )
   ) {
