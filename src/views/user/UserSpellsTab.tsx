@@ -15,7 +15,12 @@ import { useUserData } from "../../features/user/UserDataProvider"
 export function UserSpellsTab() {
   const { records, loading, errorMessage, reload } = useUserMagicState()
   const { campaigns } = useUserData()
-  const { savedSpells, saveSpells } = useMagicContext()
+  const {
+    savedSpells,
+    saveSpells,
+    officialSpellsLoading,
+    officialSpellsError,
+  } = useMagicContext()
   const [sendOpen, setSendOpen] = useState(false)
   const [selectedSpellId, setSelectedSpellId] = useState("")
   const [selectedCampaignId, setSelectedCampaignId] = useState("")
@@ -106,8 +111,8 @@ export function UserSpellsTab() {
       <SpellLibraryView
         variant="user"
         records={libraryRecords}
-        loading={loading}
-        errorMessage={errorMessage}
+        loading={loading || officialSpellsLoading}
+        errorMessage={errorMessage || officialSpellsError}
       />
 
       {sendOpen ? (
