@@ -2,7 +2,7 @@ import { useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
-import { useCharacterContext } from "../../../contexts/characterContext"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatSigned } from "../../../lib/formatSigned"
 import { clampInt } from "../../../lib/numberFormat"
@@ -23,7 +23,7 @@ type Props = {
 }
 
 export function Attributes({ character, updateCharacter }: Props) {
-  const { dispatchAttributeOperation } = useCharacterContext()
+  const sessionRuntime = useOptionalSessionRuntime()
   const [showRawValues, setShowRawValues] = useState(false)
   const asis = getCharacterAsis(character)
 
@@ -67,7 +67,7 @@ export function Attributes({ character, updateCharacter }: Props) {
               ? requestedScore
               : clampInt(baseScore + requestedScore - effectiveScore, 1, 30)
 
-            if (dispatchAttributeOperation({
+            if (sessionRuntime?.dispatchSheetOperation({
               type: "character.attribute.set",
               characterId: character.get("id"),
               attribute,
