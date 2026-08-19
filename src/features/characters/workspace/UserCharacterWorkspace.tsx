@@ -292,6 +292,11 @@ export function UserCharacterWorkspace({
     setSelectedCharacterId: () => {},
     updateCharacter,
     updateCharacterDomain,
+    dispatchStatOperation: () => false,
+    dispatchAttributeOperation: () => false,
+    dispatchSavingThrowOperation: () => false,
+    dispatchSkillOperation: () => false,
+    dispatchConditionOperation: () => false,
     deleteCharacter,
     completeLongRest: (targetId) => {
       updateCharacter(targetId, takeLongRest)
