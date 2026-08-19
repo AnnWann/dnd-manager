@@ -1,7 +1,7 @@
 import { Sparkles } from "lucide-react"
 
 import { Input } from "../../../../../../components/ui/Input"
-import { useCharacterContext } from "../../../../../../contexts/characterContext"
+import { useOptionalSessionRuntime } from "../../../../../session-runtime/useSessionRuntime"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
 import {
   getCalculatedArmorClassWithShield,
@@ -21,7 +21,7 @@ export function GroupStats({
   character,
   updateCharacter,
 }: Props) {
-  const { dispatchStatOperation } = useCharacterContext()
+  const sessionRuntime = useOptionalSessionRuntime()
   const proficiency = character.getProficiencyBonus()
   const exhaustion = character.get("sheet").stats.exhaustion ?? 0
   const inspiration = character.get("sheet").stats.inspiration ?? false
@@ -29,7 +29,7 @@ export function GroupStats({
 
   function setExhaustion(value: number) {
     const nextExhaustion = Math.max(0, Math.min(6, Math.trunc(value) || 0))
-    if (dispatchStatOperation({
+    if (sessionRuntime?.dispatchSheetOperation({
       type: "character.stat.exhaustion.set",
       characterId,
       value: nextExhaustion,
@@ -41,7 +41,7 @@ export function GroupStats({
   }
 
   function setInspiration(value: boolean) {
-    if (dispatchStatOperation({
+    if (sessionRuntime?.dispatchSheetOperation({
       type: "character.stat.inspiration.set",
       characterId,
       value,
