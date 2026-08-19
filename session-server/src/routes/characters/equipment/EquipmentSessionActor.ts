@@ -1,23 +1,23 @@
-import type { CharacterTemplateProps } from "../../src/models/characters/CharacterTemplate";
-import { CharacterTemplate } from "../../src/models/characters/CharacterTemplate";
+import type { CharacterTemplateProps } from "../../../../../src/models/characters/CharacterTemplate";
+import { CharacterTemplate } from "../../../../../src/models/characters/CharacterTemplate";
 import {
   getEquippedItem,
   moveEquippedItemToCharacterStorage,
   type EquippedItemReference,
-} from "../../src/models/characters/characterEquippedItemMovement";
-import { wieldPocketWeaponWithRules } from "../../src/models/characters/characterEquipmentInteractions";
-import { unequipPocketStack } from "../../src/models/characters/characterInventoryStacks";
-import { toggleInventoryItemAttunement } from "../../src/models/characters/characterInventory";
-import { applyConsumableEffect } from "../../src/models/characters/characterConsumables";
-import { consumeItemQuantity, isConsumableItemKind } from "../../src/models/items/itemConsumption";
-import type { Itemmable } from "../../src/models/items/item";
-import { getCharacterConditions, withCharacterConditions } from "../../src/models/characters/characterConditionStorage";
-import { getCurrentMaxHp } from "../../src/models/characters/characterHp";
-import { SessionActor as MagicSessionActor } from "./MagicSessionActor";
+} from "../../../../../src/models/characters/characterEquippedItemMovement";
+import { wieldPocketWeaponWithRules } from "../../../../../src/models/characters/characterEquipmentInteractions";
+import { unequipPocketStack } from "../../../../../src/models/characters/characterInventoryStacks";
+import { toggleInventoryItemAttunement } from "../../../../../src/models/characters/characterInventory";
+import { applyConsumableEffect } from "../../../../../src/models/characters/characterConsumables";
+import { consumeItemQuantity, isConsumableItemKind } from "../../../../../src/models/items/itemConsumption";
+import type { Itemmable } from "../../../../../src/models/items/item";
+import { getCharacterConditions, withCharacterConditions } from "../../../../../src/models/characters/characterConditionStorage";
+import { getCurrentMaxHp } from "../../../../../src/models/characters/characterHp";
+import { SessionActor as MagicSessionActor } from "../spells/MagicSessionActor";
 import { parseEquipmentClientMessage, type SessionEquipmentOperation } from "./equipmentProtocol";
-import { MAX_HP_LOG_RECORDS } from "./hpState";
-import type { SessionAbilityState } from "./abilityProtocol";
-import type { SessionConditionsState, SessionConnection, SessionHpState } from "./protocol";
+import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
+import type { SessionAbilityState } from "../abilities/abilityProtocol";
+import type { SessionConditionsState, SessionConnection, SessionHpState } from "../../session/protocol";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
