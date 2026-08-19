@@ -1,4 +1,5 @@
 import type { SessionAbilityOperation, SessionAbilityState } from "./abilitySessionProtocol"
+import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
 import type { SessionMagicOperation } from "./magicSessionProtocol"
 import type {
   SessionConditionsState,
@@ -23,6 +24,7 @@ export type SessionRuntimeLogRecord = {
   operation:
     | SessionAbilityOperation
     | SessionMagicOperation
+    | SessionEquipmentOperation
     | { type: "character.hp.undo"; characterId: string; sourceLogId: string }
   reverseOperation: SessionAbilityReverseOperation
   undoneAt?: string
