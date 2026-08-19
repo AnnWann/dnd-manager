@@ -1,6 +1,6 @@
 import { Check } from "lucide-react"
 
-import { useCharacterContext } from "../../../contexts/characterContext"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import { cn } from "../../../lib/cn"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatSigned } from "../../../lib/formatSigned"
@@ -33,13 +33,13 @@ export function SavingThrows({
   character,
   updateCharacter,
 }: Props) {
-  const { dispatchSavingThrowOperation } = useCharacterContext()
+  const sessionRuntime = useOptionalSessionRuntime()
   const characterId = character.get("id")
 
   function toggleProficiency(attribute: Attribute) {
     const proficient = character.isSavingThrowProficient(attribute)
 
-    if (dispatchSavingThrowOperation({
+    if (sessionRuntime?.dispatchSheetOperation({
       type: "character.savingThrow.set",
       characterId,
       attribute,
