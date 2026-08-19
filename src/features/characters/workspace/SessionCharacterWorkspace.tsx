@@ -1,7 +1,8 @@
-import { useEffect, type ReactNode } from "react"
+import { useEffect, useMemo, type ReactNode } from "react"
 
 import { useCharacterContext } from "../../../contexts/characterContext"
 import { useSyncContext } from "../../../contexts/syncContext"
+import { applySessionAbilityState } from "../../session-runtime/applySessionAbilityState"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import {
   CharacterWorkspaceProvider,
@@ -47,6 +48,22 @@ export function SessionCharacterWorkspace({
     sessionRuntime?.status,
   ])
 
+  const projectedCharacters = useMemo(
+    () => characterContext.visibleCharacters.map((character) =>
+      applySessionAbilityState(
+        character,
+        sessionRuntime?.abilitiesByCharacterId[character.get("id")],
+      ),
+    ),
+    [characterContext.visibleCharacters, sessionRuntime?.abilitiesByCharacterId],
+  )
+
+  const projectedActiveCharacter = useMemo(() => {
+    const activeId = characterContext.activeCharacter?.get("id")
+    if (!activeId) return undefined
+    return projectedCharacters.find((character) => character.get("id") === activeId)
+  }, [characterContext.activeCharacter, projectedCharacters])
+
   const owners = characterContext.knownPlayerKeys.map((key) =>
     characterContext.getOwner(key),
   )
@@ -58,9 +75,9 @@ export function SessionCharacterWorkspace({
 
   const value: CharacterWorkspaceValue = {
     mode: "campaign",
-    characters: characterContext.visibleCharacters,
-    activeCharacter: characterContext.activeCharacter,
-    selectedCharacterId: characterContext.activeCharacter?.get("id"),
+    characters: projectedCharacters,
+    activeCharacter: projectedActiveCharacter,
+    selectedCharacterId: projectedActiveCharacter?.get("id"),
     setSelectedCharacterId: characterContext.setSelectedCharacterId,
     updateCharacter: characterContext.updateCharacter,
     updateCharacterDomain: characterContext.updateCharacterDomain,
