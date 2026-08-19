@@ -16,19 +16,10 @@ import { sanitizeCharacterItemData } from "../../../server/character-items"
 import { prisma } from "../../../server/prisma"
 import { requireSession } from "../../../server/session"
 
-type RouteContext = {
-  params: Promise<{
-    characterId: string
-  }>
-}
-
-export async function GET(
-  request: Request,
-  context: RouteContext,
-): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const { characterId } = await context.params
+    const characterId = getCharacterId(request)
 
     const character = await prisma.character.findFirst({
       where: {
@@ -95,13 +86,10 @@ export async function GET(
   }
 }
 
-export async function PATCH(
-  request: Request,
-  context: RouteContext,
-): Promise<Response> {
+export async function PATCH(request: Request): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const { characterId } = await context.params
+    const characterId = getCharacterId(request)
     const body = await readJsonObject(request)
 
     const existing = await prisma.character.findFirst({
@@ -275,13 +263,10 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  request: Request,
-  context: RouteContext,
-): Promise<Response> {
+export async function DELETE(request: Request): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const { characterId } = await context.params
+    const characterId = getCharacterId(request)
 
     const existing = await prisma.character.findFirst({
       where: {
@@ -311,6 +296,22 @@ export async function DELETE(
   } catch (error) {
     return handleApiError(error)
   }
+}
+
+function getCharacterId(request: Request): string {
+  const url = new URL(request.url)
+  const match = url.pathname.match(/^\/api\/me\/characters\/([^/]+)\/?$/)
+  const characterId = match?.[1] ? decodeURIComponent(match[1]).trim() : ""
+
+  if (!characterId) {
+    throw new ApiError(
+      400,
+      "CHARACTER_ID_REQUIRED",
+      "O identificador do personagem é obrigatório.",
+    )
+  }
+
+  return characterId
 }
 
 function parseVisibility(value: unknown): CharacterVisibility | undefined {
