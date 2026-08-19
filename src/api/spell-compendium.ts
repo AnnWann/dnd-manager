@@ -80,25 +80,61 @@ export async function getOfficialSpell(index: string): Promise<Spell> {
   const cached = spellDetailCache.get(normalizedIndex)
   if (cached) return cached
 
+  const [spell] = await getOfficialSpellsByIndexes([normalizedIndex])
+  if (!spell) throw new Error("Magia oficial não encontrada.")
+  return spell
+}
+
+export async function getOfficialSpellsByIndexes(
+  indexes: readonly string[],
+): Promise<Spell[]> {
+  const normalizedIndexes = Array.from(
+    new Set(indexes.map((entry) => entry.trim()).filter(Boolean)),
+  )
+  if (!normalizedIndexes.length) return []
+
+  const cached: Spell[] = []
+  const missing: string[] = []
+  for (const index of normalizedIndexes) {
+    const spell = spellDetailCache.get(index)
+    if (spell) cached.push(spell)
+    else missing.push(index)
+  }
+  if (!missing.length) return cached
+
+  let loaded: Spell[]
   if (import.meta.env.DEV && LOCAL_AUTH_BYPASS) {
-    const spells = await loadLocalOfficialSpells()
-    const spell = spells.find((entry) => entry.index === normalizedIndex)
-    if (!spell) throw new Error("Magia oficial não encontrada.")
-    spellDetailCache.set(normalizedIndex, spell)
-    return spell
+    const local = await loadLocalOfficialSpells()
+    const wanted = new Set(missing)
+    loaded = local.filter((spell) => wanted.has(spell.index))
+  } else {
+    const response = await apiClient.get<SpellCompendiumPage<Spell>>(
+      "/compendium/spells",
+      {
+        params: {
+          indexes: missing.join(","),
+          includeDetails: true,
+          pageSize: Math.min(100, missing.length),
+        },
+      },
+    )
+    loaded = response.data.spells
   }
 
-  const response = await apiClient.get<{ spell: Spell }>(
-    `/compendium/spells/${encodeURIComponent(normalizedIndex)}`,
-  )
-  spellDetailCache.set(normalizedIndex, response.data.spell)
-  return response.data.spell
+  for (const spell of loaded) {
+    spellDetailCache.set(spell.index, spell)
+  }
+
+  const byIndex = new Map([...cached, ...loaded].map((spell) => [spell.index, spell]))
+  return normalizedIndexes
+    .map((index) => byIndex.get(index))
+    .filter((spell): spell is Spell => Boolean(spell))
 }
 
 /**
- * Compatibility loader for existing MagicContext consumers. This keeps the
- * official compendium out of the JavaScript bundle while the UI migrates to
- * query/detail reads incrementally.
+ * Compatibility loader for routes that still need to browse the entire
+ * official catalog. Character display routes should prefer batched detail
+ * reads through getOfficialSpellsByIndexes().
  */
 export function getAllOfficialSpells(): Promise<Spell[]> {
   if (officialSpellsPromise) return officialSpellsPromise
