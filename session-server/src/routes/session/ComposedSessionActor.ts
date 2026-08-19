@@ -62,6 +62,8 @@ type SharedInventoryState = {
   revision: number;
   partyInventory: unknown[];
   groundInventory: unknown[];
+  carryCapacity?: number;
+  additionalSupplyConsumption?: number;
 };
 
 type CharacterLifecycleReverse = {
@@ -433,9 +435,12 @@ export class SessionActor extends BaseSessionActor {
             inventory: structuredClone(inventory),
           },
         };
-        writes[ABILITIES_STATE_KEY] = reverse.snapshot.abilities;
-        writes[HP_STATE_KEY] = reverse.snapshot.hp;
-        writes[CONDITIONS_STATE_KEY] = reverse.snapshot.conditions;
+        Object.assign(abilities, reverse.snapshot.abilities);
+        Object.assign(hp, reverse.snapshot.hp);
+        Object.assign(conditions, reverse.snapshot.conditions);
+        writes[ABILITIES_STATE_KEY] = abilities;
+        writes[HP_STATE_KEY] = hp;
+        writes[CONDITIONS_STATE_KEY] = conditions;
         writes[INVENTORY_STATE_KEY] = reverse.snapshot.inventory;
         break;
       }
@@ -678,10 +683,16 @@ export class SessionActor extends BaseSessionActor {
     }
 
     if (reverse.type === "session.inventory.restore") {
-      broadcast(this.ctx.getWebSockets(), { type: "session.abilities.snapshot", characters: Object.values(reverse.snapshot.abilities) });
-      broadcast(this.ctx.getWebSockets(), { type: "session.hp.snapshot", characters: Object.values(reverse.snapshot.hp) });
-      broadcast(this.ctx.getWebSockets(), { type: "session.conditions.snapshot", characters: Object.values(reverse.snapshot.conditions) });
-      broadcast(this.ctx.getWebSockets(), { type: "session.inventory.updated", state: reverse.snapshot.inventory });
+      const [abilities, hp, conditions, inventory] = await Promise.all([
+        this.readAbilitiesState(),
+        this.readComposedHpState(),
+        this.readComposedConditionsState(),
+        this.readInventoryState(),
+      ]);
+      broadcast(this.ctx.getWebSockets(), { type: "session.abilities.snapshot", characters: Object.values(abilities) });
+      broadcast(this.ctx.getWebSockets(), { type: "session.hp.snapshot", characters: Object.values(hp) });
+      broadcast(this.ctx.getWebSockets(), { type: "session.conditions.snapshot", characters: Object.values(conditions) });
+      broadcast(this.ctx.getWebSockets(), { type: "session.inventory.updated", state: inventory });
       return;
     }
 
