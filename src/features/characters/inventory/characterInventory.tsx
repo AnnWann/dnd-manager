@@ -180,7 +180,7 @@ export function CharacterInventoryTab({
   }
 
   function equipItem(destination: Parameters<typeof equipInventoryItemWithRules>[2]) {
-    if (!equippingItem) return
+    if (!equippingItem || !destination) return
     if (authoritative) {
       runtime?.dispatchInventoryOperation({ type: "character.inventory.item.equip", characterId, itemId: equippingItem.id, destination })
       return
