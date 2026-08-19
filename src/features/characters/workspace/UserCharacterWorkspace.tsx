@@ -12,6 +12,7 @@ import {
   getMyCharacter,
   updateMyCharacter,
   type CharacterVisibility,
+  type UserCharacterSummary,
 } from "../../../api/user-characters"
 import { authClient } from "../../../auth/auth-client"
 import {
@@ -35,6 +36,11 @@ import { ensureCharacterAcquisitionMetadata } from "../../../models/characters/c
 import type { Player } from "../../../models/player/Player"
 import { normalizeStandardItemsInValue } from "../../items/standardItemCompendium"
 import {
+  readUserCharacterCache,
+  removeUserCharacterCache,
+  writeUserCharacterCache,
+} from "../../user/userPersistentCache"
+import {
   CharacterWorkspaceProvider,
   type CharacterWorkspaceValue,
 } from "./CharacterWorkspaceContext"
@@ -49,6 +55,7 @@ export function UserCharacterWorkspace({
   const { data: session } = authClient.useSession()
   const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
   const user = session?.user ?? localUser
+  const userId = user?.id ?? ""
 
   const [character, setCharacter] =
     useState<CharacterTemplate | null>(null)
@@ -56,88 +63,131 @@ export function UserCharacterWorkspace({
   const [notFound, setNotFound] = useState(false)
   const [persistenceError, setPersistenceError] = useState("")
   const characterRef = useRef<CharacterTemplate | null>(null)
+  const summaryRef = useRef<UserCharacterSummary | null>(null)
   const persistenceRef = useRef<UserCharacterDomainPersistence | null>(null)
+  const localMutationVersionRef = useRef(0)
+
+  const createPersistence = useCallback((
+    summary: UserCharacterSummary,
+    active: () => boolean,
+  ) => {
+    if (LOCAL_AUTH_BYPASS) return null
+
+    return new UserCharacterDomainPersistence(
+      summary.id,
+      summary.revision ?? 1,
+      summary.domains ?? [],
+      (conflict) => {
+        if (!active()) return
+        setPersistenceError(
+          `Conflito de edição em ${formatDomainName(conflict.domain)}. Recarregue a ficha antes de continuar editando esse campo.`,
+        )
+      },
+      (error) => {
+        if (!active()) return
+        setPersistenceError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível persistir uma alteração da ficha.",
+        )
+      },
+    )
+  }, [])
 
   useEffect(() => {
+    if (!userId) return
+
     let active = true
+    const isActive = () => active
     characterRef.current = null
+    summaryRef.current = null
     persistenceRef.current = null
+    localMutationVersionRef.current = 0
+    setNotFound(false)
+    setPersistenceError("")
 
-    async function load() {
+    const cached = readUserCharacterCache<UserCharacterSummary>(userId, characterId)
+    if (cached?.id === characterId) {
+      const cachedCharacter = hydrateWorkspaceCharacter(cached)
+      summaryRef.current = cached
+      characterRef.current = cachedCharacter
+      persistenceRef.current = createPersistence(cached, isActive)
+      setCharacter(cachedCharacter)
+      setLoading(false)
+    } else {
+      setCharacter(null)
       setLoading(true)
-      setNotFound(false)
-      setPersistenceError("")
+    }
 
+    const mutationVersionAtRequest = localMutationVersionRef.current
+
+    async function revalidate() {
       try {
         const result = await getMyCharacter(characterId)
-
         if (!active) return
 
-        const legacyBase = normalizeStandardItemsInValue({
-          ...result.data,
-          id: result.id,
-          name: result.name,
-          visibility: fromApiVisibility(result.visibility),
-        }) as CharacterTemplateProps
-        const hydratedData = applyCharacterDomains(
-          legacyBase,
-          result.domains ?? [],
-        )
-        const parsed = CharacterTemplate.fromJSON(hydratedData)
-        const normalizedCharacter = ensureCharacterAcquisitionMetadata(parsed, {
-          reason: "import",
-          sourceType: "import",
-          sourceName: "Compatibilidade de ficha existente",
-        })
+        writeUserCharacterCache(userId, characterId, result)
 
-        if (!LOCAL_AUTH_BYPASS) {
-          const persistence = new UserCharacterDomainPersistence(
-            result.id,
-            result.revision ?? 1,
-            result.domains ?? [],
-            (conflict) => {
-              if (!active) return
-              setPersistenceError(
-                `Conflito de edição em ${formatDomainName(conflict.domain)}. Recarregue a ficha antes de continuar editando esse campo.`,
-              )
-            },
-            (error) => {
-              if (!active) return
-              setPersistenceError(
-                error instanceof Error
-                  ? error.message
-                  : "Não foi possível persistir uma alteração da ficha.",
-              )
-            },
-          )
-          persistenceRef.current = persistence
-          await persistence.bootstrapMissingDomains(normalizedCharacter.toJSON())
+        if (localMutationVersionRef.current !== mutationVersionAtRequest) {
+          return
         }
 
-        if (!active) return
+        const normalizedCharacter = hydrateWorkspaceCharacter(result)
+        const persistence = createPersistence(result, isActive)
+
+        if (persistence) {
+          await persistence.bootstrapMissingDomains(normalizedCharacter.toJSON())
+          if (!active) return
+          if (localMutationVersionRef.current !== mutationVersionAtRequest) return
+        }
+
+        summaryRef.current = result
+        persistenceRef.current = persistence
         characterRef.current = normalizedCharacter
         setCharacter(normalizedCharacter)
+        setNotFound(false)
       } catch {
-        if (active) setNotFound(true)
+        if (!active) return
+        if (!cached) setNotFound(true)
       } finally {
         if (active) setLoading(false)
       }
     }
 
-    void load()
+    void revalidate()
 
     return () => {
       active = false
       characterRef.current = null
+      summaryRef.current = null
       persistenceRef.current = null
     }
-  }, [characterId])
+  }, [characterId, createPersistence, userId])
+
+  const cacheCharacter = useCallback((updated: CharacterTemplate) => {
+    if (!userId) return
+    const currentSummary = summaryRef.current
+    if (!currentSummary) return
+
+    const nextSummary: UserCharacterSummary = {
+      ...currentSummary,
+      name: updated.get("name"),
+      visibility: toApiVisibility(updated.get("visibility")),
+      data: updated.toJSON() as unknown as Record<string, unknown>,
+      updatedAt: new Date().toISOString(),
+    }
+
+    summaryRef.current = nextSummary
+    writeUserCharacterCache(userId, updated.get("id"), nextSummary)
+  }, [userId])
 
   const persistCharacter = useCallback(
     (
       previous: CharacterTemplate,
       updated: CharacterTemplate,
     ) => {
+      cacheCharacter(updated)
+
       if (LOCAL_AUTH_BYPASS) {
         const data = normalizeStandardItemsInValue(
           updated.toJSON(),
@@ -150,7 +200,10 @@ export function UserCharacterWorkspace({
             name: updated.get("name"),
             visibility: toApiVisibility(updated.get("visibility")),
           },
-        )
+        ).then((fresh) => {
+          summaryRef.current = fresh
+          if (userId) writeUserCharacterCache(userId, fresh.id, fresh)
+        })
         return
       }
 
@@ -159,7 +212,7 @@ export function UserCharacterWorkspace({
         updated.toJSON(),
       )
     },
-    [],
+    [cacheCharacter, userId],
   )
 
   const applyCharacterUpdate = useCallback(
@@ -198,6 +251,7 @@ export function UserCharacterWorkspace({
         }
       }
 
+      localMutationVersionRef.current += 1
       setPersistenceError("")
       characterRef.current = withMetadata
       setCharacter(withMetadata)
@@ -228,13 +282,15 @@ export function UserCharacterWorkspace({
     if (!current || current.get("id") !== targetId) return
 
     characterRef.current = null
+    summaryRef.current = null
     persistenceRef.current = null
     setCharacter(null)
+    if (userId) removeUserCharacterCache(userId, targetId)
 
     void deleteMyCharacter(targetId).catch(() => {
       setNotFound(false)
     })
-  }, [])
+  }, [userId])
 
   const currentOwner = useMemo<Player | undefined>(() => {
     if (!user) return undefined
@@ -336,6 +392,27 @@ export function UserCharacterWorkspace({
       {children}
     </CharacterWorkspaceProvider>
   )
+}
+
+function hydrateWorkspaceCharacter(
+  result: UserCharacterSummary,
+): CharacterTemplate {
+  const legacyBase = normalizeStandardItemsInValue({
+    ...result.data,
+    id: result.id,
+    name: result.name,
+    visibility: fromApiVisibility(result.visibility),
+  }) as CharacterTemplateProps
+  const hydratedData = applyCharacterDomains(
+    legacyBase,
+    result.domains ?? [],
+  )
+  const parsed = CharacterTemplate.fromJSON(hydratedData)
+  return ensureCharacterAcquisitionMetadata(parsed, {
+    reason: "import",
+    sourceType: "import",
+    sourceName: "Compatibilidade de ficha existente",
+  })
 }
 
 function toApiVisibility(
