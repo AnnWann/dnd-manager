@@ -74,18 +74,50 @@ export class SessionActor extends ProficiencySessionActor {
       return;
     }
 
-    const race = normalizeRace(operation.race);
-    const skills = normalizeSkills(operation.skills, hp.skills);
-    const savingThrows = normalizeSavingThrows(operation.savingThrowProficiencies, hp.savingThrows);
-    if (!race || !skills || !savingThrows) {
-      sendError(webSocket, "RACE_OPERATION_INVALID", "The requested race state is invalid.");
-      return;
-    }
+    let next: CharacterTemplate;
+    let nextHp = hp;
+    let hpChanged = false;
 
-    const next = character
-      .withSheet("race", race)
-      .withSheet("skills", skills)
-      .withSheet("savingThrowProficiencies", savingThrows);
+    if (operation.type === "character.race.spells.replace") {
+      const magic = character.getOrCreateMagic();
+      const nonRacial = magic.spells.knownSpells.filter((entry) => entry.source.type !== "race");
+      const racialSpells = operation.racialSpells as unknown as typeof magic.spells.knownSpells;
+      if (racialSpells.some((entry) => entry.source.type !== "race" || !entry.spells?.id)) {
+        sendError(webSocket, "RACE_SPELLS_INVALID", "All racial spell entries must belong to the race source.");
+        return;
+      }
+      const ids = racialSpells.map((entry) => entry.spells.id);
+      if (new Set(ids).size !== ids.length) {
+        sendError(webSocket, "RACE_SPELLS_DUPLICATED", "Racial spell entries cannot contain duplicate spell ids.");
+        return;
+      }
+      next = character.with("magic", {
+        ...magic,
+        spells: { ...magic.spells, knownSpells: [...nonRacial, ...racialSpells] },
+      });
+    } else {
+      const race = normalizeRace(operation.race);
+      const skills = normalizeSkills(operation.skills, hp.skills);
+      const savingThrows = normalizeSavingThrows(operation.savingThrowProficiencies, hp.savingThrows);
+      if (!race || !skills || !savingThrows) {
+        sendError(webSocket, "RACE_OPERATION_INVALID", "The requested race state is invalid.");
+        return;
+      }
+
+      next = character
+        .withSheet("race", race)
+        .withSheet("skills", skills)
+        .withSheet("savingThrowProficiencies", savingThrows);
+      nextHp = {
+        ...hp,
+        skills,
+        skillsInitialized: true,
+        savingThrows,
+        savingThrowsInitialized: true,
+        revision: hp.revision + 1,
+      };
+      hpChanged = true;
+    }
 
     if (JSON.stringify(character.toJSON()) === JSON.stringify(next.toJSON())) {
       sendError(webSocket, "RACE_OPERATION_REJECTED", "The requested race operation did not change the character.");
@@ -97,16 +129,8 @@ export class SessionActor extends ProficiencySessionActor {
       character: next.toJSON() as unknown as Record<string, unknown>,
       revision: stored.revision + 1,
     };
-    const nextHp: SessionHpState = {
-      ...hp,
-      skills,
-      skillsInitialized: true,
-      savingThrows,
-      savingThrowsInitialized: true,
-      revision: hp.revision + 1,
-    };
     abilities[operation.characterId] = nextAbility;
-    hpState[operation.characterId] = nextHp;
+    if (hpChanged) hpState[operation.characterId] = nextHp;
 
     log.push({
       id: crypto.randomUUID(),
@@ -123,11 +147,11 @@ export class SessionActor extends ProficiencySessionActor {
 
     await this.ctx.storage.put({
       [ABILITIES_STATE_KEY]: abilities,
-      [HP_STATE_KEY]: hpState,
+      ...(hpChanged ? { [HP_STATE_KEY]: hpState } : {}),
       [HP_LOG_KEY]: nextLog,
     });
     broadcast(this.ctx.getWebSockets(), { type: "session.abilities.updated", character: nextAbility });
-    broadcast(this.ctx.getWebSockets(), { type: "session.hp.updated", character: nextHp });
+    if (hpChanged) broadcast(this.ctx.getWebSockets(), { type: "session.hp.updated", character: nextHp });
     broadcastToMasters(this.ctx.getWebSockets(), nextLog);
   }
 
