@@ -34,6 +34,30 @@ type UserDataState = {
 }
 
 const UserDataContext = createContext<UserDataState | null>(null)
+const charactersRequests = new Map<string, Promise<UserCharacterSummary[]>>()
+const campaignsRequests = new Map<string, Promise<UserCampaign[]>>()
+
+function fetchCharactersOnce(userId: string): Promise<UserCharacterSummary[]> {
+  const existing = charactersRequests.get(userId)
+  if (existing) return existing
+
+  const request = getMyCharacters().finally(() => {
+    if (charactersRequests.get(userId) === request) charactersRequests.delete(userId)
+  })
+  charactersRequests.set(userId, request)
+  return request
+}
+
+function fetchCampaignsOnce(userId: string): Promise<UserCampaign[]> {
+  const existing = campaignsRequests.get(userId)
+  if (existing) return existing
+
+  const request = getMyCampaigns().finally(() => {
+    if (campaignsRequests.get(userId) === request) campaignsRequests.delete(userId)
+  })
+  campaignsRequests.set(userId, request)
+  return request
+}
 
 export function UserDataProvider({ children }: { children: ReactNode }) {
   const { data: session } = authClient.useSession()
@@ -76,7 +100,7 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     setCharactersRefreshing(true)
     setCharactersError("")
     try {
-      const next = await getMyCharacters()
+      const next = await fetchCharactersOnce(userId)
       setCharacters(next)
     } catch {
       setCharactersError("Não foi possível atualizar seus personagens.")
@@ -91,7 +115,7 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     setCampaignsRefreshing(true)
     setCampaignsError("")
     try {
-      const next = await getMyCampaigns()
+      const next = await fetchCampaignsOnce(userId)
       setCampaigns(next)
     } catch {
       setCampaignsError("Não foi possível atualizar suas campanhas.")
