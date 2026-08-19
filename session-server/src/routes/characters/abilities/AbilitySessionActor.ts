@@ -1,19 +1,19 @@
-import type { Ability } from "../../src/models/abilities/Ability";
+import type { Ability } from "../../../../../src/models/abilities/Ability";
 import {
   endAbilityEffect,
   restoreAbilityUse,
   useAbilityEffect,
-} from "../../src/models/abilities/abilityActivation";
+} from "../../../../../src/models/abilities/abilityActivation";
 import {
   getCharacterConditions,
   withCharacterConditions,
-} from "../../src/models/characters/characterConditionStorage";
-import { getCurrentMaxHp } from "../../src/models/characters/characterHp";
+} from "../../../../../src/models/characters/characterConditionStorage";
+import { getCurrentMaxHp } from "../../../../../src/models/characters/characterHp";
 import {
   CharacterTemplate,
   type CharacterTemplateProps,
-} from "../../src/models/characters/CharacterTemplate";
-import { SessionActor as BaseSessionActor } from "./SessionActor";
+} from "../../../../../src/models/characters/CharacterTemplate";
+import { SessionActor as BaseSessionActor } from "../../session/SessionActor";
 import {
   parseAbilityClientMessage,
   type SessionAbilityOperation,
@@ -21,12 +21,12 @@ import {
   type SessionAbilitySource,
   type SessionAbilityState,
 } from "./abilityProtocol";
-import { MAX_HP_LOG_RECORDS } from "./hpState";
+import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
 import type {
   SessionConditionsState,
   SessionConnection,
   SessionHpState,
-} from "./protocol";
+} from "../../session/protocol";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
