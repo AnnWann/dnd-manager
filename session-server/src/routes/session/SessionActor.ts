@@ -377,7 +377,7 @@ export class SessionActor extends DurableObject<Env> {
       }
       next = takeShortRest(current, operation.healing, operation.hitDiceConsumption as any);
       reverseOperation = {
-        type: "character.ability.restore",
+        type: "session.rest.restore",
         characterId: operation.characterId,
         snapshot: {
           ability: structuredClone(storedAbility),
@@ -407,12 +407,12 @@ export class SessionActor extends DurableObject<Env> {
       };
       canonicalOperation = { ...operation, recovery, selection: supplied };
       reverseOperation = {
-        type: "session.inventory.restore",
+        type: "session.rest.restore",
         characterId: operation.characterId,
         snapshot: {
-          abilities: structuredClone(abilities),
-          hp: structuredClone(hpState),
-          conditions: structuredClone(conditionsState),
+          ability: structuredClone(storedAbility),
+          hp: structuredClone(currentHp),
+          conditions: structuredClone(currentConditions),
           inventory: structuredClone(inventory),
         },
       };
