@@ -1,4 +1,4 @@
-import type { Proficiency, ProficiencyCategory } from "../../src/models/sheet/Proficiency";
+import type { Proficiency, ProficiencyCategory } from "../../../../../src/models/sheet/Proficiency";
 
 export type SessionProficiencyOperation =
   | { type: "character.proficiency.add"; characterId: string; proficiency: Proficiency }
