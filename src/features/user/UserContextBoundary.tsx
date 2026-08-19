@@ -6,6 +6,12 @@ import { useUserData } from "./UserDataProvider"
 
 const routePreloads = new Map<string, Promise<void>>()
 
+type UserRouteRequirements = {
+  characters: boolean
+  campaigns: boolean
+  magic: boolean
+}
+
 function preloadCurrentUserRoute(pathname: string): Promise<void> {
   const key = userRoutePreloadKey(pathname)
   const existing = routePreloads.get(key)
@@ -44,8 +50,31 @@ function userRoutePreloadKey(pathname: string): string {
   return "user-shell"
 }
 
+function userRouteRequirements(pathname: string): UserRouteRequirements {
+  const key = userRoutePreloadKey(pathname)
+
+  if (key === "characters") {
+    return { characters: true, campaigns: false, magic: false }
+  }
+
+  if (key === "spells") {
+    return { characters: false, campaigns: true, magic: true }
+  }
+
+  if (key === "campaigns") {
+    return { characters: true, campaigns: true, magic: true }
+  }
+
+  if (key.startsWith("character-")) {
+    return { characters: true, campaigns: false, magic: true }
+  }
+
+  return { characters: false, campaigns: false, magic: false }
+}
+
 export function UserContextBoundary({ children }: { children: ReactNode }) {
   const location = useLocation()
+  const requirements = userRouteRequirements(location.pathname)
   const {
     charactersLoading,
     campaignsLoading,
@@ -90,19 +119,24 @@ export function UserContextBoundary({ children }: { children: ReactNode }) {
     )
   }
 
-  if (charactersError && charactersLoading) {
+  if (requirements.characters && charactersError && charactersLoading) {
     return <UserContextError message={charactersError} onRetry={() => void refreshAll()} />
   }
 
-  if (campaignsError && campaignsLoading) {
+  if (requirements.campaigns && campaignsError && campaignsLoading) {
     return <UserContextError message={campaignsError} onRetry={() => void refreshAll()} />
   }
 
-  if (magicError && magicLoading) {
+  if (requirements.magic && magicError && magicLoading) {
     return <UserContextError message={magicError} onRetry={() => void reloadMagic()} />
   }
 
-  if (!modulesReady || charactersLoading || campaignsLoading || magicLoading) {
+  const routeDataLoading =
+    (requirements.characters && charactersLoading) ||
+    (requirements.campaigns && campaignsLoading) ||
+    (requirements.magic && magicLoading)
+
+  if (!modulesReady || routeDataLoading) {
     return <UserContextLoading />
   }
 
