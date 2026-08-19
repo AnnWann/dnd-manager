@@ -6,10 +6,9 @@ import { toggleInventoryItemAttunement } from "../../src/models/characters/chara
 import { removeEquippedItem, type EquippedItemReference } from "../../src/models/characters/characterEquippedItemMovement";
 import { getCharacterConditions, withCharacterConditions } from "../../src/models/characters/characterConditionStorage";
 import { getCurrentMaxHp } from "../../src/models/characters/characterHp";
-import { setCurrenciesInsideBagOfHolding } from "../../src/models/items/Currency";
+import { areAllCurrenciesInBagOfHolding, setCurrenciesInsideBagOfHolding } from "../../src/models/items/Currency";
 import type { Itemmable } from "../../src/models/items/item";
-import { applyGameOperation } from "../../src/models/game/applyGameOperation";
-import type { AppStateV1 } from "../../src/lib/remoteState";
+import { normalizeItemText } from "../../src/lib/textNormalization";
 import { SessionActor as EquipmentSessionActor } from "./EquipmentSessionActor";
 import { parseInventoryClientMessage, type SessionInventoryOperation } from "./inventoryProtocol";
 import { MAX_HP_LOG_RECORDS } from "./hpState";
@@ -49,6 +48,9 @@ type UnifiedLogRecord = {
   undoneAt?: string;
   undoneBy?: string;
 };
+
+type TransferRequest = Extract<SessionInventoryOperation, { type: "inventory.item.transfer" }>["request"];
+type InventoryLocation = TransferRequest["from"];
 
 export class SessionActor extends EquipmentSessionActor {
   override async fetch(request: Request): Promise<Response> {
@@ -249,18 +251,156 @@ function applyInventoryOperation(operation: SessionInventoryOperation, abilities
     case "ground.item.update": { const i = inventory.groundInventory.findIndex((x) => x.id === operation.itemId); if (i < 0) return result(false); inventory.groundInventory[i] = operation.item as Itemmable; sharedChanged = true; inventory.revision += 1; return result(true); }
     case "ground.item.remove": { const n = inventory.groundInventory.filter((x) => x.id !== operation.itemId); if (n.length === inventory.groundInventory.length) return result(false); inventory.groundInventory = n; sharedChanged = true; inventory.revision += 1; return result(true); }
     case "inventory.item.transfer": {
-      const appState: AppStateV1 = { version: 1, activeCharacterId: "", characters: Object.values(abilities).filter((x) => x.initialized).map((x) => x.character as unknown as CharacterTemplateProps), partyInventory: inventory.partyInventory, groundInventory: inventory.groundInventory };
-      const next = applyGameOperation(appState, { type: "inventory.item.transfer", request: operation.request });
-      if (JSON.stringify(appState) === JSON.stringify(next)) return result(false);
-      for (const raw of next.characters) {
-        const old = abilities[raw.id]; if (!old || JSON.stringify(old.character) === JSON.stringify(raw)) continue;
-        abilities[raw.id] = { ...old, character: raw as unknown as Record<string, unknown>, revision: old.revision + 1 }; changedCharacters.add(raw.id);
-      }
-      inventory.partyInventory = next.partyInventory ?? []; inventory.groundInventory = next.groundInventory ?? []; inventory.revision += 1; sharedChanged = true; return result(true);
+      const transferred = transferInventoryItem(abilities, inventory, operation.request);
+      if (!transferred) return result(false);
+      for (const id of transferred) changedCharacters.add(id);
+      inventory.revision += 1;
+      sharedChanged = operation.request.from.type !== "character" || operation.request.to.type !== "character";
+      return result(true);
     }
   }
 
   function result(changed: boolean): ApplyResult { return { changed, changedCharacters, hpChanged, conditionsChanged, sharedChanged }; }
+}
+
+function transferInventoryItem(
+  abilities: Record<string, SessionAbilityState>,
+  shared: SharedInventoryState,
+  request: TransferRequest,
+): Set<string> | null {
+  if (locationKey(request.from) === locationKey(request.to)) return null;
+
+  const partyInventory = [...shared.partyInventory];
+  const groundInventory = [...shared.groundInventory];
+  const inventoryByCharacterId = new Map<string, Itemmable[]>();
+
+  for (const state of Object.values(abilities)) {
+    if (!state.initialized) continue;
+    const raw = state.character as unknown as CharacterTemplateProps;
+    inventoryByCharacterId.set(raw.id, [...(raw.inventory ?? [])]);
+  }
+
+  const sourceInventory = getLocationInventory(request.from, partyInventory, groundInventory, inventoryByCharacterId);
+  const destinationInventory = getLocationInventory(request.to, partyInventory, groundInventory, inventoryByCharacterId);
+  if (!sourceInventory || !destinationInventory) return null;
+
+  const itemIndex = sourceInventory.findIndex((item) => item.id === request.itemId);
+  if (itemIndex < 0) return null;
+
+  const sourceItem = sourceInventory[itemIndex];
+  const availableQuantity = Math.max(0, Number(sourceItem.quantity) || 0);
+  if (availableQuantity <= 0) return null;
+
+  const requestedQuantity = Math.max(1, Math.trunc(Number(request.quantity) || availableQuantity));
+  const movedQuantity = Math.min(availableQuantity, requestedQuantity);
+
+  if (movedQuantity >= availableQuantity) {
+    sourceInventory.splice(itemIndex, 1);
+  } else {
+    sourceInventory[itemIndex] = normalizeItemText({
+      ...sourceItem,
+      quantity: availableQuantity - movedQuantity,
+    });
+  }
+
+  const destinationKeepsCurrencyInBag =
+    request.to.type === "character" &&
+    sourceItem.kind === "currency" &&
+    areAllCurrenciesInBagOfHolding(destinationInventory);
+
+  const movedItem = normalizeItemText({
+    ...sourceItem,
+    id: request.destinationItemId ?? crypto.randomUUID(),
+    quantity: movedQuantity,
+    heldHands: undefined,
+    wieldedTwoHanded: undefined,
+    insideBagOfHolding: destinationKeepsCurrencyInBag,
+  });
+  addOrMergeStack(destinationInventory, movedItem);
+
+  const changedCharacters = new Set<string>();
+  for (const [characterId, nextInventory] of inventoryByCharacterId) {
+    const state = abilities[characterId];
+    if (!state) continue;
+    const raw = state.character as unknown as CharacterTemplateProps;
+    if (JSON.stringify(raw.inventory ?? []) === JSON.stringify(nextInventory)) continue;
+    abilities[characterId] = {
+      ...state,
+      character: { ...raw, inventory: nextInventory } as unknown as Record<string, unknown>,
+      revision: state.revision + 1,
+    };
+    changedCharacters.add(characterId);
+  }
+
+  shared.partyInventory = partyInventory;
+  shared.groundInventory = groundInventory;
+  return changedCharacters;
+}
+
+function getLocationInventory(
+  location: InventoryLocation,
+  partyInventory: Itemmable[],
+  groundInventory: Itemmable[],
+  inventoryByCharacterId: Map<string, Itemmable[]>,
+): Itemmable[] | null {
+  if (location.type === "party") return partyInventory;
+  if (location.type === "ground") return groundInventory;
+  return inventoryByCharacterId.get(location.characterId) ?? null;
+}
+
+function locationKey(location: InventoryLocation): string {
+  return location.type === "character" ? `character:${location.characterId}` : location.type;
+}
+
+function addOrMergeStack(inventory: Itemmable[], movedItem: Itemmable): void {
+  const existingIndex = inventory.findIndex((item) => areItemsStackCompatible(item, movedItem));
+  if (existingIndex < 0) {
+    inventory.push(movedItem);
+    return;
+  }
+  const existing = inventory[existingIndex];
+  inventory[existingIndex] = normalizeItemText({
+    ...existing,
+    quantity: Math.max(0, Number(existing.quantity) || 0) + Math.max(0, Number(movedItem.quantity) || 0),
+    insideBagOfHolding: movedItem.kind === "currency" ? movedItem.insideBagOfHolding === true : false,
+  });
+}
+
+function areItemsStackCompatible(first: Itemmable, second: Itemmable): boolean {
+  if (first.kind !== second.kind) return false;
+  if (first.kind === "currency" && first.insideBagOfHolding !== second.insideBagOfHolding) return false;
+  if (first.name.trim().toLocaleLowerCase("pt-BR") !== second.name.trim().toLocaleLowerCase("pt-BR")) return false;
+  return stableStringify(stackComparableItem(first)) === stableStringify(stackComparableItem(second));
+}
+
+function stackComparableItem(item: Itemmable): Record<string, unknown> {
+  const {
+    id: _id,
+    quantity: _quantity,
+    version: _version,
+    updatedAt: _updatedAt,
+    updatedBy: _updatedBy,
+    insideBagOfHolding: _insideBagOfHolding,
+    heldHands: _heldHands,
+    wieldedTwoHanded: _wieldedTwoHanded,
+    ...comparable
+  } = item as Itemmable & {
+    version?: number;
+    updatedAt?: string;
+    updatedBy?: string;
+    heldHands?: unknown;
+    wieldedTwoHanded?: unknown;
+  };
+  return comparable;
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    const object = value as Record<string, unknown>;
+    return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(object[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function hydrate(state: SessionAbilityState, hp: SessionHpState, conditions: SessionConditionsState): CharacterTemplate {
