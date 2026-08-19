@@ -237,6 +237,12 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "character.ki.restore": return `${characterName} recuperou 1 ponto de Ki.`
     case "character.channelDivinity.spend": return `${characterName} gastou 1 uso de Canalizar Divindade.`
     case "character.channelDivinity.restore": return `${characterName} recuperou 1 uso de Canalizar Divindade.`
+    case "character.equipment.item.update": return `Atualizou um equipamento de ${characterName}.`
+    case "character.equipment.move": return `Moveu um equipamento de ${characterName} para ${operation.destination === "pocket" ? "o bolso" : "o inventário"}.`
+    case "character.equipment.attunement.toggle": return `Alterou a sintonia de um item de ${characterName}.`
+    case "character.equipment.pocket.unequip": return `${characterName} tirou um item do bolso.`
+    case "character.equipment.pocket.wield": return `${characterName} empunhou uma arma do bolso.`
+    case "character.equipment.pocket.use": return `${characterName} usou um item do bolso.`
     case "character.hp.undo": return `Desfez uma alteração de ${characterName}.`
   }
 }
