@@ -22,6 +22,7 @@ import {
 import {
   applyCharacterDomains,
   getChangedCharacterDomains,
+  splitCharacterIntoDomains,
 } from "../../../lib/characterDomains"
 import type { CharacterDomainName } from "../../../lib/relationalApi"
 import {
@@ -171,8 +172,6 @@ export function UserCharacterWorkspace({
     if (runtime.reconciled) {
       persistenceRef.current = runtime.persistence
       if (!hasUsableCache) {
-        // A reconciled runtime should normally always have a persistent cache.
-        // If storage was cleared mid-session, reconcile once again.
         runtime.reconciled = false
       } else {
         return () => {
@@ -248,16 +247,38 @@ export function UserCharacterWorkspace({
     }
   }, [characterId, createPersistence, runtimeKey, userId])
 
-  const cacheCharacter = useCallback((updated: CharacterTemplate) => {
+  const cacheCharacter = useCallback((
+    previous: CharacterTemplate,
+    updated: CharacterTemplate,
+  ) => {
     if (!userId) return
     const currentSummary = summaryRef.current
     if (!currentSummary) return
+
+    const previousJson = previous.toJSON()
+    const updatedJson = updated.toJSON()
+    const changedDomains = getChangedCharacterDomains(previousJson, updatedJson)
+    const nextDomainPayloads = splitCharacterIntoDomains(updatedJson)
+    const existingDomains = currentSummary.domains ?? []
+    const domainsByName = new Map(existingDomains.map((domain) => [domain.domain, domain]))
+
+    for (const domain of changedDomains) {
+      const existing = domainsByName.get(domain)
+      domainsByName.set(domain, {
+        domain,
+        payload: nextDomainPayloads[domain],
+        version: existing?.version ?? 0,
+        updatedBy: existing?.updatedBy ?? null,
+        updatedAt: new Date().toISOString(),
+      })
+    }
 
     const nextSummary: UserCharacterSummary = {
       ...currentSummary,
       name: updated.get("name"),
       visibility: toApiVisibility(updated.get("visibility")),
-      data: updated.toJSON() as unknown as Record<string, unknown>,
+      data: updatedJson as unknown as Record<string, unknown>,
+      domains: Array.from(domainsByName.values()),
       updatedAt: new Date().toISOString(),
     }
 
@@ -270,7 +291,7 @@ export function UserCharacterWorkspace({
       previous: CharacterTemplate,
       updated: CharacterTemplate,
     ) => {
-      cacheCharacter(updated)
+      cacheCharacter(previous, updated)
 
       if (LOCAL_AUTH_BYPASS) {
         const data = normalizeStandardItemsInValue(
