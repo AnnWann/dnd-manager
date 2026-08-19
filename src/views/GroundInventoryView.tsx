@@ -7,14 +7,16 @@ import { useCharacterContext } from "../contexts/characterContext"
 import { useSyncContext } from "../contexts/syncContext"
 import { InventoryEditor } from "../features/characters/inventory/inventoryEditor"
 import { TransferItemDialog } from "../features/characters/inventory/transferItemDialog"
+import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
 import { ItemCreationDialog } from "../features/items/ItemCreationDialog"
 import { itemJsonTemplate } from "../features/items/itemJsonGuide"
 import type { Itemmable } from "../models/items/item"
 
 export function GroundInventoryView() {
   const { userRole } = useSyncContext()
+  const runtime = useOptionalSessionRuntime()
   const {
-    groundInventory,
+    groundInventory: localGroundInventory,
     transferCharacters,
     canViewCharacterDetails,
     addGroundItem,
@@ -22,9 +24,45 @@ export function GroundInventoryView() {
     removeGroundItem,
     transferItem,
   } = useCharacterContext()
+  const groundInventory = runtime?.inventoryState?.initialized
+    ? runtime.inventoryState.groundInventory
+    : localGroundInventory
   const [transferringItem, setTransferringItem] = useState<Itemmable | null>(null)
   const [creatingItem, setCreatingItem] = useState(false)
   const canManage = userRole === "master"
+
+  const addItem = (item: Itemmable) => {
+    if (runtime) {
+      runtime.dispatchInventoryOperation({ type: "ground.item.add", characterId: "session", item })
+      return
+    }
+    addGroundItem(item)
+  }
+  const updateItem = (itemId: string, updater: (item: Itemmable) => Itemmable) => {
+    const item = groundInventory.find((entry) => entry.id === itemId)
+    if (!item) return
+    const next = updater(item)
+    if (runtime) {
+      runtime.dispatchInventoryOperation({ type: "ground.item.update", characterId: "session", itemId, item: next })
+      return
+    }
+    updateGroundItem(itemId, updater)
+  }
+  const removeItem = (itemId: string) => {
+    if (runtime) {
+      runtime.dispatchInventoryOperation({ type: "ground.item.remove", characterId: "session", itemId })
+      return
+    }
+    removeGroundItem(itemId)
+  }
+  const transfer = (request: Parameters<NonNullable<typeof transferItem>>[0]) => {
+    if (runtime) {
+      const characterId = request.to.type === "character" ? request.to.characterId : "session"
+      runtime.dispatchInventoryOperation({ type: "inventory.item.transfer", characterId, request })
+      return
+    }
+    transferItem?.(request)
+  }
 
   return (
     <div className="grid w-full min-w-0 max-w-full gap-4 overflow-hidden">
@@ -42,12 +80,7 @@ export function GroundInventoryView() {
             </div>
 
             {canManage ? (
-              <Button
-                className="w-full sm:w-auto"
-                size="sm"
-                variant="primary"
-                onClick={() => setCreatingItem(true)}
-              >
+              <Button className="w-full sm:w-auto" size="sm" variant="primary" onClick={() => setCreatingItem(true)}>
                 <Plus className="h-4 w-4" />
                 Adicionar item
               </Button>
@@ -57,13 +90,7 @@ export function GroundInventoryView() {
         <CardContent>
           <div className="grid grid-cols-2 gap-3 sm:max-w-md">
             <Summary label="Itens diferentes" value={groundInventory.length} />
-            <Summary
-              label="Quantidade total"
-              value={groundInventory.reduce(
-                (total, item) => total + Math.max(0, item.quantity ?? 0),
-                0,
-              )}
-            />
+            <Summary label="Quantidade total" value={groundInventory.reduce((total, item) => total + Math.max(0, item.quantity ?? 0), 0)} />
           </div>
         </CardContent>
       </Card>
@@ -73,9 +100,9 @@ export function GroundInventoryView() {
         description="Este inventário não possui limite de peso ou capacidade."
         items={groundInventory}
         emptyMessage="Não há itens largados no chão."
-        onAddCompendiumItem={addGroundItem}
-        onUpdateItem={canManage ? updateGroundItem : undefined}
-        onRemoveItem={canManage ? removeGroundItem : undefined}
+        onAddCompendiumItem={addItem}
+        onUpdateItem={canManage ? updateItem : undefined}
+        onRemoveItem={canManage ? removeItem : undefined}
         onTransferItem={setTransferringItem}
         transferLabel="Pegar ou transferir"
       />
@@ -88,7 +115,7 @@ export function GroundInventoryView() {
         saveLabel="Adicionar ao chão"
         onClose={() => setCreatingItem(false)}
         onSave={(item) => {
-          addGroundItem(item)
+          addItem(item)
           setCreatingItem(false)
         }}
       />
@@ -100,7 +127,7 @@ export function GroundInventoryView() {
         characters={transferCharacters}
         canViewCharacterDetails={canViewCharacterDetails}
         onClose={() => setTransferringItem(null)}
-        onTransfer={transferItem}
+        onTransfer={transfer}
       />
     </div>
   )
@@ -123,28 +150,17 @@ function buildItemAiGuide() {
       "Magias de efeitos temporários desaparecem quando a condição é removida. Magias de efeitos permanentes permanecem na ficha.",
       "Remova `consumptionEffect` quando o consumível possuir apenas um efeito narrativo ou manual que o sistema não precisa aplicar automaticamente.",
     ],
-    enums: {
-      ...guide.enums,
-      consumableEffectPersistence: ["temporary", "permanent"],
-    },
+    enums: { ...guide.enums, consumableEffectPersistence: ["temporary", "permanent"] },
     fieldGuide: {
       ...guide.fieldGuide,
-      consumptionEffect:
-        "Objeto opcional usado somente por kind=consumable para aplicar benefícios automaticamente ao personagem quando uma unidade for consumida.",
-      "consumptionEffect.id":
-        "string recomendada, estável e exclusiva. Identifica o efeito para atualização e prevenção de duplicatas.",
-      "consumptionEffect.name":
-        "string exibida como nome da condição temporária ou característica permanente.",
-      "consumptionEffect.description":
-        "string com a explicação narrativa e mecânica dos benefícios concedidos.",
-      "consumptionEffect.persistence":
-        "obrigatório: temporary cria uma condição removível; permanent incorpora os benefícios à ficha.",
-      "consumptionEffect.durationText":
-        "string recomendada para temporary. Descreve a duração, por exemplo `1 hora`, `10 minutos` ou `até o próximo descanso longo`.",
-      "consumptionEffect.bonuses":
-        "BonusCollection opcional com a mesma estrutura do campo bonuses. Pode afetar CA, iniciativa, HP, ataques, dano, CDs, velocidade e atributos.",
-      "consumptionEffect.grantedSpells":
-        "lista opcional de {index, castingMode?, attribute?}. Use castingMode=known para conceder a magia usando espaços normais; index deve existir no catálogo.",
+      consumptionEffect: "Objeto opcional usado somente por kind=consumable para aplicar benefícios automaticamente ao personagem quando uma unidade for consumida.",
+      "consumptionEffect.id": "string recomendada, estável e exclusiva. Identifica o efeito para atualização e prevenção de duplicatas.",
+      "consumptionEffect.name": "string exibida como nome da condição temporária ou característica permanente.",
+      "consumptionEffect.description": "string com a explicação narrativa e mecânica dos benefícios concedidos.",
+      "consumptionEffect.persistence": "obrigatório: temporary cria uma condição removível; permanent incorpora os benefícios à ficha.",
+      "consumptionEffect.durationText": "string recomendada para temporary. Descreve a duração, por exemplo `1 hora`, `10 minutos` ou `até o próximo descanso longo`.",
+      "consumptionEffect.bonuses": "BonusCollection opcional com a mesma estrutura do campo bonuses. Pode afetar CA, iniciativa, HP, ataques, dano, CDs, velocidade e atributos.",
+      "consumptionEffect.grantedSpells": "lista opcional de {index, castingMode?, attribute?}. Use castingMode=known para conceder a magia usando espaços normais; index deve existir no catálogo.",
     },
     examples: {
       ...guide.examples,
@@ -159,25 +175,8 @@ function buildItemAiGuide() {
           description: "O corpo do personagem é fortalecido magicamente.",
           persistence: "temporary",
           durationText: "1 hora",
-          bonuses: {
-            attribute: [
-              {
-                attribute: "str",
-                bonus: {
-                  type: "flat",
-                  value: 21,
-                  label: "Elixir da força arcana",
-                },
-              },
-            ],
-          },
-          grantedSpells: [
-            {
-              index: "jump",
-              castingMode: "known",
-              attribute: "int",
-            },
-          ],
+          bonuses: { attribute: [{ attribute: "str", bonus: { type: "flat", value: 21, label: "Elixir da força arcana" } }] },
+          grantedSpells: [{ index: "jump", castingMode: "known", attribute: "int" }],
         },
       },
       permanentConsumable: {
@@ -199,22 +198,8 @@ function buildItemAiGuide() {
           name: "Visão interior",
           description: "O conhecimento do tomo permanece incorporado ao personagem.",
           persistence: "permanent",
-          bonuses: {
-            passivePerception: [
-              {
-                type: "add",
-                value: 1,
-                label: "Tomo da visão interior",
-              },
-            ],
-          },
-          grantedSpells: [
-            {
-              index: "detect-magic",
-              castingMode: "known",
-              attribute: "wis",
-            },
-          ],
+          bonuses: { passivePerception: [{ type: "add", value: 1, label: "Tomo da visão interior" }] },
+          grantedSpells: [{ index: "detect-magic", castingMode: "known", attribute: "wis" }],
         },
       },
     },
@@ -224,9 +209,7 @@ function buildItemAiGuide() {
 function Summary({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-xl border border-border bg-bg-subtle p-3">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-        {label}
-      </div>
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">{label}</div>
       <div className="mt-1 text-lg font-bold text-textH">{value}</div>
     </div>
   )
