@@ -39,13 +39,15 @@ export function PartyInventoryView() {
     ? runtime.inventoryState.partyInventory
     : localPartyInventory
   const {
-    carryCapacity,
+    carryCapacity: localCarryCapacity,
     canEditCarryCapacity,
-    setCarryCapacity,
-    additionalSupplyConsumption,
+    setCarryCapacity: setLocalCarryCapacity,
+    additionalSupplyConsumption: localAdditionalSupplyConsumption,
     canEditAdditionalSupplyConsumption,
-    setAdditionalSupplyConsumption,
+    setAdditionalSupplyConsumption: setLocalAdditionalSupplyConsumption,
   } = usePartyInventorySettings()
+  const carryCapacity = runtime?.inventoryState?.carryCapacity ?? localCarryCapacity
+  const additionalSupplyConsumption = runtime?.inventoryState?.additionalSupplyConsumption ?? localAdditionalSupplyConsumption
   const [transferringItem, setTransferringItem] = useState<Itemmable | null>(null)
 
   const supplyCalculation = useMemo(
@@ -69,6 +71,40 @@ export function PartyInventoryView() {
   const loadPercentage = hasCapacity
     ? Math.min(100, Math.max(0, (totalWeight / carryCapacity) * 100))
     : 0
+
+  function setAuthoritativeCarryCapacity(value: number) {
+    const next = Number.isFinite(value) ? Math.max(0, value) : 0
+    if (runtime) {
+      if (runtime.status !== "connected") {
+        console.warn("[session-runtime] Carry-capacity change ignored while the authoritative session server is disconnected.")
+        return
+      }
+      runtime.dispatchInventoryOperation({
+        type: "party.settings.carryCapacity.set",
+        characterId: "session",
+        value: next,
+      })
+      return
+    }
+    setLocalCarryCapacity(next)
+  }
+
+  function setAuthoritativeAdditionalSupplyConsumption(value: number) {
+    const next = Number.isFinite(value) ? Math.max(0, value) : 0
+    if (runtime) {
+      if (runtime.status !== "connected") {
+        console.warn("[session-runtime] Additional supply-consumption change ignored while the authoritative session server is disconnected.")
+        return
+      }
+      runtime.dispatchInventoryOperation({
+        type: "party.settings.additionalSupplyConsumption.set",
+        characterId: "session",
+        value: next,
+      })
+      return
+    }
+    setLocalAdditionalSupplyConsumption(next)
+  }
 
   function addItem(item: Itemmable) {
     if (runtime) {
@@ -167,7 +203,7 @@ export function PartyInventoryView() {
                 min={0}
                 step="any"
                 value={carryCapacity}
-                onChange={(event) => setCarryCapacity(Math.max(0, Number(event.target.value) || 0))}
+                onChange={(event) => setAuthoritativeCarryCapacity(Number(event.target.value) || 0)}
               />
               <span className="text-[11px] leading-4 text-textMuted">Use 0 enquanto a capacidade ainda não estiver definida.</span>
             </label>
@@ -238,7 +274,7 @@ export function PartyInventoryView() {
                     min={0}
                     step="any"
                     value={additionalSupplyConsumption}
-                    onChange={(event) => setAdditionalSupplyConsumption(Math.max(0, Number(event.target.value) || 0))}
+                    onChange={(event) => setAuthoritativeAdditionalSupplyConsumption(Number(event.target.value) || 0)}
                   />
                 </label>
               </div>
