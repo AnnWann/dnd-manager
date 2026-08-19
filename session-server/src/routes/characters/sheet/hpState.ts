@@ -13,7 +13,7 @@ import type {
   SessionSkillsState,
   SessionStatOperation,
   SessionStatsState,
-} from "./protocol";
+} from "../../session/protocol";
 
 export const MAX_HP_LOG_RECORDS = 100;
 
