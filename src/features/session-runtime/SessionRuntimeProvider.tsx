@@ -11,6 +11,11 @@ import {
 import { SessionSocket, type SessionRuntimeStatus } from "./sessionSocket"
 import { toSheetOperationMessage } from "./sheetRoutes"
 import type {
+  SessionAbilityOperation,
+  SessionAbilitySeed,
+  SessionAbilityState,
+} from "./abilitySessionProtocol"
+import type {
   SessionAuthoritativeOperation,
   SessionCondition,
   SessionConditionOperation,
@@ -36,13 +41,16 @@ export type SessionRuntimeContextValue = {
   lastHeartbeatAckAt: number | null
   hpByCharacterId: Readonly<Record<string, SessionHpState>>
   conditionsByCharacterId: Readonly<Record<string, SessionConditionsState>>
+  abilitiesByCharacterId: Readonly<Record<string, SessionAbilityState>>
   hpLog: SessionHpLogRecord[]
   initializeHp: (characters: SessionHpSeed[]) => boolean
   initializeConditions: (characters: SessionConditionSeed[]) => boolean
+  initializeAbilities: (characters: SessionAbilitySeed[]) => boolean
   dispatchSheetOperation: (operation: SessionLoggedOperation) => boolean
   dispatchHpOperation: (operation: SessionAuthoritativeOperation) => boolean
   dispatchConditionOperation: (operation: SessionConditionOperation) => boolean
   dispatchConcentrationOperation: (operation: SessionConcentrationOperation) => boolean
+  dispatchAbilityOperation: (operation: SessionAbilityOperation) => boolean
   undoLog: (logId: string) => boolean
 }
 
@@ -96,6 +104,7 @@ function SessionRuntimeProviderInner({
   const [lastHeartbeatAckAt, setLastHeartbeatAckAt] = useState<number | null>(null)
   const [hpByCharacterId, setHpByCharacterId] = useState<Record<string, SessionHpState>>({})
   const [conditionsByCharacterId, setConditionsByCharacterId] = useState<Record<string, SessionConditionsState>>({})
+  const [abilitiesByCharacterId, setAbilitiesByCharacterId] = useState<Record<string, SessionAbilityState>>({})
   const [hpLog, setHpLog] = useState<SessionHpLogRecord[]>([])
   const socketRef = useRef<SessionSocket | null>(null)
   const clientId = useMemo(() => getOrCreateClientId(sessionId), [sessionId])
@@ -106,6 +115,7 @@ function SessionRuntimeProviderInner({
     setLastHeartbeatAckAt(null)
     setHpByCharacterId({})
     setConditionsByCharacterId({})
+    setAbilitiesByCharacterId({})
     setHpLog([])
 
     if (!baseUrl) {
@@ -146,6 +156,14 @@ function SessionRuntimeProviderInner({
           setConditionsByCharacterId((current) => ({ ...current, [message.character.characterId]: message.character }))
           return
         }
+        if (message.type === "session.abilities.snapshot") {
+          setAbilitiesByCharacterId(Object.fromEntries(message.characters.map((character) => [character.characterId, character])))
+          return
+        }
+        if (message.type === "session.abilities.updated") {
+          setAbilitiesByCharacterId((current) => ({ ...current, [message.character.characterId]: message.character }))
+          return
+        }
         if (message.type === "session.hp.log") {
           setHpLog(message.records)
           return
@@ -172,6 +190,10 @@ function SessionRuntimeProviderInner({
     socketRef.current?.send({ type: "session.conditions.initialize", characters }) ?? false,
   [])
 
+  const initializeAbilities = useCallback((characters: SessionAbilitySeed[]) =>
+    socketRef.current?.send({ type: "session.abilities.initialize", characters }) ?? false,
+  [])
+
   const dispatchSheetOperation = useCallback((operation: SessionLoggedOperation) =>
     socketRef.current?.send(toSheetOperationMessage(operation)) ?? false,
   [])
@@ -183,6 +205,10 @@ function SessionRuntimeProviderInner({
   const dispatchConcentrationOperation = useCallback((operation: SessionConcentrationOperation) =>
     dispatchSheetOperation(operation),
   [dispatchSheetOperation])
+
+  const dispatchAbilityOperation = useCallback((operation: SessionAbilityOperation) =>
+    socketRef.current?.send({ type: "session.abilities.operation", operation }) ?? false,
+  [])
 
   // Legacy condition call sites are translated here so the concentration condition
   // cannot bypass the dedicated concentration domain while those call sites migrate.
@@ -227,23 +253,29 @@ function SessionRuntimeProviderInner({
     lastHeartbeatAckAt,
     hpByCharacterId,
     conditionsByCharacterId,
+    abilitiesByCharacterId,
     hpLog,
     initializeHp,
     initializeConditions,
+    initializeAbilities,
     dispatchSheetOperation,
     dispatchHpOperation,
     dispatchConditionOperation,
     dispatchConcentrationOperation,
+    dispatchAbilityOperation,
     undoLog,
   }), [
+    abilitiesByCharacterId,
     clientId,
     conditionsByCharacterId,
+    dispatchAbilityOperation,
     dispatchConditionOperation,
     dispatchConcentrationOperation,
     dispatchHpOperation,
     dispatchSheetOperation,
     hpByCharacterId,
     hpLog,
+    initializeAbilities,
     initializeConditions,
     initializeHp,
     lastHeartbeatAckAt,
