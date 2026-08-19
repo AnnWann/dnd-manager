@@ -1,12 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react"
 
-import { getMyCampaigns } from "../../api/user-campaigns"
-import { getMyCharacters } from "../../api/user-characters"
 import { useUserMagicState } from "../magic/UserMagicProvider"
+import { useUserData } from "./UserDataProvider"
 
 let userContextPreload: Promise<void> | null = null
 
-function preloadUserContext(): Promise<void> {
+function preloadUserContextModules(): Promise<void> {
   if (userContextPreload) return userContextPreload
 
   userContextPreload = Promise.all([
@@ -19,8 +18,6 @@ function preloadUserContext(): Promise<void> {
     import("../../views/user/UserCharacterDetailView"),
     import("../../views/user/UserSpellsTab"),
     import("../../views/user/UserCampaignsRouteView"),
-    getMyCharacters(),
-    getMyCampaigns(),
   ]).then(() => undefined)
 
   return userContextPreload
@@ -28,24 +25,31 @@ function preloadUserContext(): Promise<void> {
 
 export function UserContextBoundary({ children }: { children: ReactNode }) {
   const {
+    charactersLoading,
+    campaignsLoading,
+    charactersError,
+    campaignsError,
+    refreshAll,
+  } = useUserData()
+  const {
     loading: magicLoading,
     errorMessage: magicError,
     reload: reloadMagic,
   } = useUserMagicState()
-  const [contextReady, setContextReady] = useState(false)
-  const [contextError, setContextError] = useState(false)
+  const [modulesReady, setModulesReady] = useState(false)
+  const [moduleError, setModuleError] = useState(false)
 
   useEffect(() => {
     let active = true
 
-    preloadUserContext()
+    preloadUserContextModules()
       .then(() => {
-        if (active) setContextReady(true)
+        if (active) setModulesReady(true)
       })
       .catch((error) => {
-        console.error("[user-context] Failed to preload protected user context.", error)
+        console.error("[user-context] Failed to preload protected user modules.", error)
         userContextPreload = null
-        if (active) setContextError(true)
+        if (active) setModuleError(true)
       })
 
     return () => {
@@ -53,25 +57,28 @@ export function UserContextBoundary({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  if (contextError) {
+  if (moduleError) {
     return (
       <UserContextError
-        message="Não foi possível carregar os dados iniciais do ambiente do usuário."
+        message="Não foi possível carregar os módulos do ambiente do usuário."
         onRetry={() => window.location.reload()}
       />
     )
   }
 
-  if (magicError && !magicLoading) {
-    return (
-      <UserContextError
-        message={magicError}
-        onRetry={() => void reloadMagic()}
-      />
-    )
+  if (charactersError && charactersLoading) {
+    return <UserContextError message={charactersError} onRetry={() => void refreshAll()} />
   }
 
-  if (!contextReady || magicLoading) {
+  if (campaignsError && campaignsLoading) {
+    return <UserContextError message={campaignsError} onRetry={() => void refreshAll()} />
+  }
+
+  if (magicError && magicLoading) {
+    return <UserContextError message={magicError} onRetry={() => void reloadMagic()} />
+  }
+
+  if (!modulesReady || charactersLoading || campaignsLoading || magicLoading) {
     return <UserContextLoading />
   }
 
@@ -84,7 +91,7 @@ function UserContextLoading() {
       <div className="text-center">
         <div className="font-medium text-textH">Preparando seu ambiente...</div>
         <div className="mt-1 text-xs text-textMuted">
-          Carregando personagens, campanhas, magias e módulos da área do usuário.
+          Usando dados locais quando disponíveis e sincronizando com o servidor.
         </div>
       </div>
     </div>
