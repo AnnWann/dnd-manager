@@ -1,4 +1,5 @@
 import { CharacterTemplate, type CharacterTemplateProps } from "../../src/models/characters/CharacterTemplate";
+import { getAbilityGrantedProficiencies } from "../../src/models/characters/characterProficiencies";
 import type { Proficiency } from "../../src/models/sheet/Proficiency";
 import { SessionActor as InventorySessionActor } from "./InventorySessionActor";
 import { parseProficiencyClientMessage, type SessionProficiencyOperation } from "./proficiencyProtocol";
@@ -176,6 +177,15 @@ function applyProficiencyOperation(
   if (operation.type === "character.proficiency.add") {
     const proficiency = normalizeProficiency(operation.proficiency);
     if (!proficiency || current.some((entry) => entry.id === proficiency.id)) return null;
+
+    const racial = character.get("sheet").race.proficiencies ?? [];
+    const abilityGranted = getAbilityGrantedProficiencies(character).map((entry) => entry.proficiency);
+    const duplicate = [...current, ...racial, ...abilityGranted].some(
+      (entry) => entry.category === proficiency.category
+        && entry.name.trim().toLocaleLowerCase("pt-BR") === proficiency.name.toLocaleLowerCase("pt-BR"),
+    );
+    if (duplicate) return null;
+
     return character.withSheet("proficiencies", [...current, proficiency]);
   }
 
