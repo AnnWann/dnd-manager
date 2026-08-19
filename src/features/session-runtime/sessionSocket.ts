@@ -10,6 +10,7 @@ import {
   type SessionAbilityServerMessage,
 } from "./abilitySessionProtocol"
 import type { SessionMagicOperation } from "./magicSessionProtocol"
+import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
 import type { SessionSheetOperationMessage } from "./sheetRoutes"
 
 export type SessionRuntimeStatus = "disconnected" | "connecting" | "connected" | "reconnecting" | "error"
@@ -49,6 +50,7 @@ export class SessionSocket {
     | SessionSheetOperationMessage
     | SessionAbilityClientMessage
     | { type: "session.magic.operation"; operation: SessionMagicOperation }
+    | { type: "session.equipment.operation"; operation: SessionEquipmentOperation }
   ): boolean {
     if (this.socket?.readyState !== WebSocket.OPEN) return false
     this.socket.send(JSON.stringify(message))
