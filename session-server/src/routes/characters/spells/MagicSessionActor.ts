@@ -28,29 +28,15 @@ import { parseMagicClientMessage, type SessionMagicOperation } from "./magicProt
 import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
 import type { SessionConditionsState, SessionConnection, SessionHpState } from "../../session/protocol";
 import type { SessionAbilityState } from "../abilities/abilityProtocol";
+import {
+  commitSessionMutation,
+  createSessionLogRecord,
+  readSessionLog,
+} from "../../session/sessionLog";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
-const HP_LOG_KEY = "hp-log";
-
-type UnifiedLogRecord = {
-  id: string;
-  actorId: string;
-  createdAt: string;
-  operation: { type: string; characterId: string; [key: string]: unknown };
-  reverseOperation: {
-    type: "character.ability.restore";
-    characterId: string;
-    snapshot: {
-      ability: SessionAbilityState;
-      hp: SessionHpState;
-      conditions: SessionConditionsState;
-    };
-  } | { type: string; characterId: string; [key: string]: unknown };
-  undoneAt?: string;
-  undoneBy?: string;
-};
 
 export class SessionActor extends AbilitySessionActor {
   override async webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void> {
@@ -81,7 +67,7 @@ export class SessionActor extends AbilitySessionActor {
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
       this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY).then((value) => value ?? {}),
       this.ctx.storage.get<Record<string, SessionConditionsState>>(CONDITIONS_STATE_KEY).then((value) => value ?? {}),
-      this.ctx.storage.get<UnifiedLogRecord[]>(HP_LOG_KEY).then((value) => value ?? []),
+      readSessionLog(this.ctx.storage),
     ]);
 
     const storedAbility = abilityState[operation.characterId];
@@ -118,10 +104,8 @@ export class SessionActor extends AbilitySessionActor {
     };
     abilityState[operation.characterId] = nextState;
 
-    log.push({
-      id: crypto.randomUUID(),
+    const record = createSessionLogRecord({
       actorId: connection.userId,
-      createdAt: new Date().toISOString(),
       operation,
       reverseOperation: {
         type: "character.ability.restore",
@@ -129,15 +113,15 @@ export class SessionActor extends AbilitySessionActor {
         snapshot: { ability: storedAbility, hp, conditions },
       },
     });
-    const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
 
-    await this.ctx.storage.put({
-      [ABILITIES_STATE_KEY]: abilityState,
-      [HP_LOG_KEY]: nextLog,
+    await commitSessionMutation(this.ctx.storage, this.ctx.getWebSockets(), {
+      writes: { [ABILITIES_STATE_KEY]: abilityState },
+      record,
+      currentLog: log,
+      maxRecords: MAX_HP_LOG_RECORDS,
     });
 
     broadcast(this.ctx.getWebSockets(), { type: "session.abilities.updated", character: nextState });
-    broadcastToMasters(this.ctx.getWebSockets(), nextLog);
   }
 }
 
@@ -186,7 +170,11 @@ function applyMagicOperation(character: CharacterTemplate, operation: SessionMag
   }
 }
 
-function hydrateCharacter(state: SessionAbilityState, hp: SessionHpState, conditions: SessionConditionsState): CharacterTemplate {
+function hydrateCharacter(
+  state: SessionAbilityState,
+  hp: SessionHpState,
+  conditions: SessionConditionsState,
+): CharacterTemplate {
   let character = CharacterTemplate.fromJSON(state.character as Partial<CharacterTemplateProps>);
   const sheet = character.get("sheet");
   character = character.withPatch({
@@ -195,26 +183,28 @@ function hydrateCharacter(state: SessionAbilityState, hp: SessionHpState, condit
       attributes: hp.attributesInitialized ? { ...hp.attributes } : sheet.attributes,
       savingThrowProficiencies: hp.savingThrowsInitialized ? { ...hp.savingThrows } : sheet.savingThrowProficiencies,
       skills: hp.skillsInitialized ? { ...hp.skills } : sheet.skills,
-      HP: { ...sheet.HP, current: hp.current, temporary: hp.temporary, max: hp.max, currentMax: hp.currentMax },
+      HP: {
+        ...sheet.HP,
+        current: hp.current,
+        temporary: hp.temporary,
+        max: hp.max,
+        currentMax: hp.currentMax,
+      },
     },
   });
   return withCharacterConditions(character, conditions.conditions as any);
 }
 
 function readConnection(webSocket: WebSocket): SessionConnection | null {
-  try { return webSocket.deserializeAttachment() as SessionConnection; } catch { return null; }
+  try { return webSocket.deserializeAttachment() as SessionConnection; }
+  catch { return null; }
 }
 function sendError(webSocket: WebSocket, code: string, message: string): void {
   try { webSocket.send(JSON.stringify({ type: "session.error", code, message })); } catch {}
 }
 function broadcast(sockets: WebSocket[], message: unknown): void {
   const payload = JSON.stringify(message);
-  for (const socket of sockets) { try { socket.send(payload); } catch {} }
-}
-function broadcastToMasters(sockets: WebSocket[], records: UnifiedLogRecord[]): void {
-  const payload = JSON.stringify({ type: "session.hp.log", records });
   for (const socket of sockets) {
-    const connection = readConnection(socket);
-    if (connection?.role === "MASTER") { try { socket.send(payload); } catch {} }
+    try { socket.send(payload); } catch {}
   }
 }
