@@ -15,6 +15,7 @@ import type {
   SessionAbilitySeed,
   SessionAbilityState,
 } from "./abilitySessionProtocol"
+import type { SessionMagicOperation } from "./magicSessionProtocol"
 import type {
   SessionAuthoritativeOperation,
   SessionCondition,
@@ -51,6 +52,7 @@ export type SessionRuntimeContextValue = {
   dispatchConditionOperation: (operation: SessionConditionOperation) => boolean
   dispatchConcentrationOperation: (operation: SessionConcentrationOperation) => boolean
   dispatchAbilityOperation: (operation: SessionAbilityOperation) => boolean
+  dispatchMagicOperation: (operation: SessionMagicOperation) => boolean
   undoLog: (logId: string) => boolean
 }
 
@@ -60,7 +62,6 @@ function getOrCreateClientId(sessionId: string): string {
   const key = `dnd-manager.session-runtime.client-id.${sessionId}`
   const existing = window.sessionStorage.getItem(key)
   if (existing) return existing
-
   const clientId = crypto.randomUUID()
   window.sessionStorage.setItem(key, clientId)
   return clientId
@@ -80,20 +81,11 @@ export function SessionRuntimeProvider(props: {
   children: ReactNode
 }) {
   const parent = useContext(SessionRuntimeContext)
-
-  if (parent?.sessionId === props.sessionId) {
-    return <>{props.children}</>
-  }
-
+  if (parent?.sessionId === props.sessionId) return <>{props.children}</>
   return <SessionRuntimeProviderInner {...props} />
 }
 
-function SessionRuntimeProviderInner({
-  sessionId,
-  userId,
-  role,
-  children,
-}: {
+function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   sessionId: string
   userId: string
   role: SessionRuntimeRole
@@ -132,14 +124,8 @@ function SessionRuntimeProviderInner({
       clientId,
       onStatusChange: setStatus,
       onMessage: (message) => {
-        if (message.type === "session.presence") {
-          setPresence(message.users)
-          return
-        }
-        if (message.type === "session.heartbeat.ack") {
-          setLastHeartbeatAckAt(Date.now())
-          return
-        }
+        if (message.type === "session.presence") { setPresence(message.users); return }
+        if (message.type === "session.heartbeat.ack") { setLastHeartbeatAckAt(Date.now()); return }
         if (message.type === "session.hp.snapshot") {
           setHpByCharacterId(Object.fromEntries(message.characters.map((character) => [character.characterId, character])))
           return
@@ -164,13 +150,8 @@ function SessionRuntimeProviderInner({
           setAbilitiesByCharacterId((current) => ({ ...current, [message.character.characterId]: message.character }))
           return
         }
-        if (message.type === "session.hp.log") {
-          setHpLog(message.records)
-          return
-        }
-        if (message.type === "session.error") {
-          console.error(`[session-runtime] ${message.code}: ${message.message}`)
-        }
+        if (message.type === "session.hp.log") { setHpLog(message.records); return }
+        if (message.type === "session.error") console.error(`[session-runtime] ${message.code}: ${message.message}`)
       },
     })
 
@@ -183,35 +164,22 @@ function SessionRuntimeProviderInner({
   }, [baseUrl, clientId, role, sessionId, userId])
 
   const initializeHp = useCallback((characters: SessionHpSeed[]) =>
-    socketRef.current?.send({ type: "session.hp.initialize", characters }) ?? false,
-  [])
-
+    socketRef.current?.send({ type: "session.hp.initialize", characters }) ?? false, [])
   const initializeConditions = useCallback((characters: SessionConditionSeed[]) =>
-    socketRef.current?.send({ type: "session.conditions.initialize", characters }) ?? false,
-  [])
-
+    socketRef.current?.send({ type: "session.conditions.initialize", characters }) ?? false, [])
   const initializeAbilities = useCallback((characters: SessionAbilitySeed[]) =>
-    socketRef.current?.send({ type: "session.abilities.initialize", characters }) ?? false,
-  [])
-
+    socketRef.current?.send({ type: "session.abilities.initialize", characters }) ?? false, [])
   const dispatchSheetOperation = useCallback((operation: SessionLoggedOperation) =>
-    socketRef.current?.send(toSheetOperationMessage(operation)) ?? false,
-  [])
-
+    socketRef.current?.send(toSheetOperationMessage(operation)) ?? false, [])
   const dispatchHpOperation = useCallback((operation: SessionAuthoritativeOperation) =>
-    dispatchSheetOperation(operation),
-  [dispatchSheetOperation])
-
+    dispatchSheetOperation(operation), [dispatchSheetOperation])
   const dispatchConcentrationOperation = useCallback((operation: SessionConcentrationOperation) =>
-    dispatchSheetOperation(operation),
-  [dispatchSheetOperation])
-
+    dispatchSheetOperation(operation), [dispatchSheetOperation])
   const dispatchAbilityOperation = useCallback((operation: SessionAbilityOperation) =>
-    socketRef.current?.send({ type: "session.abilities.operation", operation }) ?? false,
-  [])
+    socketRef.current?.send({ type: "session.abilities.operation", operation }) ?? false, [])
+  const dispatchMagicOperation = useCallback((operation: SessionMagicOperation) =>
+    socketRef.current?.send({ type: "session.magic.operation", operation }) ?? false, [])
 
-  // Legacy condition call sites are translated here so the concentration condition
-  // cannot bypass the dedicated concentration domain while those call sites migrate.
   const dispatchConditionOperation = useCallback((operation: SessionConditionOperation) => {
     if (operation.type === "character.condition.add" || operation.type === "character.condition.update") {
       if (isConcentrationCondition(operation.condition)) {
@@ -223,89 +191,42 @@ function SessionRuntimeProviderInner({
         })
       }
     }
-
     if (operation.type === "character.condition.remove") {
-      const condition = conditionsByCharacterId[operation.characterId]?.conditions.find(
-        (entry) => entry.id === operation.conditionId,
-      )
+      const condition = conditionsByCharacterId[operation.characterId]?.conditions.find((entry) => entry.id === operation.conditionId)
       if (condition && isConcentrationCondition(condition)) {
-        return dispatchConcentrationOperation({
-          type: "character.concentration.end",
-          characterId: operation.characterId,
-          reason: "manual",
-        })
+        return dispatchConcentrationOperation({ type: "character.concentration.end", characterId: operation.characterId, reason: "manual" })
       }
     }
-
     return dispatchSheetOperation(operation)
   }, [conditionsByCharacterId, dispatchConcentrationOperation, dispatchSheetOperation])
 
   const undoLog = useCallback((logId: string) =>
-    socketRef.current?.send({ type: "session.log.undo", logId }) ?? false,
-  [])
+    socketRef.current?.send({ type: "session.log.undo", logId }) ?? false, [])
 
   const value = useMemo<SessionRuntimeContextValue>(() => ({
-    status,
-    sessionId,
-    clientId,
-    role,
-    presence,
-    lastHeartbeatAckAt,
-    hpByCharacterId,
-    conditionsByCharacterId,
-    abilitiesByCharacterId,
-    hpLog,
-    initializeHp,
-    initializeConditions,
-    initializeAbilities,
-    dispatchSheetOperation,
-    dispatchHpOperation,
-    dispatchConditionOperation,
-    dispatchConcentrationOperation,
-    dispatchAbilityOperation,
-    undoLog,
+    status, sessionId, clientId, role, presence, lastHeartbeatAckAt,
+    hpByCharacterId, conditionsByCharacterId, abilitiesByCharacterId, hpLog,
+    initializeHp, initializeConditions, initializeAbilities,
+    dispatchSheetOperation, dispatchHpOperation, dispatchConditionOperation,
+    dispatchConcentrationOperation, dispatchAbilityOperation, dispatchMagicOperation, undoLog,
   }), [
-    abilitiesByCharacterId,
-    clientId,
-    conditionsByCharacterId,
-    dispatchAbilityOperation,
-    dispatchConditionOperation,
-    dispatchConcentrationOperation,
-    dispatchHpOperation,
-    dispatchSheetOperation,
-    hpByCharacterId,
-    hpLog,
-    initializeAbilities,
-    initializeConditions,
-    initializeHp,
-    lastHeartbeatAckAt,
-    presence,
-    role,
-    sessionId,
-    status,
-    undoLog,
+    abilitiesByCharacterId, clientId, conditionsByCharacterId,
+    dispatchAbilityOperation, dispatchConditionOperation, dispatchConcentrationOperation,
+    dispatchHpOperation, dispatchMagicOperation, dispatchSheetOperation,
+    hpByCharacterId, hpLog, initializeAbilities, initializeConditions, initializeHp,
+    lastHeartbeatAckAt, presence, role, sessionId, status, undoLog,
   ])
 
-  return (
-    <SessionRuntimeContext.Provider value={value}>
-      {children}
-    </SessionRuntimeContext.Provider>
-  )
+  return <SessionRuntimeContext.Provider value={value}>{children}</SessionRuntimeContext.Provider>
 }
 
 function isConcentrationCondition(condition: SessionCondition): boolean {
   return condition.tags.includes(CONCENTRATION_TAG) || normalize(condition.name) === "concentrando"
 }
-
 function concentrationSpellIndex(condition: SessionCondition): string {
   const notes = condition.notes.trim()
   return notes.startsWith("spell:") ? notes.slice("spell:".length).trim() || "unknown" : "unknown"
 }
-
 function normalize(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLocaleLowerCase("pt-BR")
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR")
 }
