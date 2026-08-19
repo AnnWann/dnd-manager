@@ -1,45 +1,31 @@
 import { getBackgroundPresetStartingEquipment } from "./backgroundPresetEquipment";
-import type { CharacterBackground } from "../../src/models/characters/CharacterBackground";
-import { CharacterTemplate, type CharacterTemplateProps } from "../../src/models/characters/CharacterTemplate";
+import type { CharacterBackground } from "../../../../../src/models/characters/CharacterBackground";
+import { CharacterTemplate, type CharacterTemplateProps } from "../../../../../src/models/characters/CharacterTemplate";
 import {
   withCharacterBackground,
   withoutCharacterBackground,
-} from "../../src/models/characters/characterBackgroundStorage";
-import type { CharacterProfile } from "../../src/models/characters/characterProfile";
-import type { Proficiency } from "../../src/models/sheet/Proficiency";
-import { SessionActor as RaceSessionActor } from "./RaceSessionActor";
+} from "../../../../../src/models/characters/characterBackgroundStorage";
+import type { CharacterProfile } from "../../../../../src/models/characters/characterProfile";
+import type { Proficiency } from "../../../../../src/models/sheet/Proficiency";
+import { SessionActor as RaceSessionActor } from "../race/RaceSessionActor";
 import { parseProfileClientMessage, type SessionProfileOperation } from "./profileProtocol";
-import { MAX_HP_LOG_RECORDS } from "./hpState";
-import type { SessionAbilityState } from "./abilityProtocol";
-import type { SessionConnection, SessionHpState, SessionSkillsState } from "./protocol";
+import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
+import type { SessionAbilityState } from "../abilities/abilityProtocol";
+import type { SessionConnection, SessionHpState, SessionSkillsState } from "../../session/protocol";
+import {
+  commitSessionMutation,
+  createSessionLogRecord,
+  readSessionLog,
+  type SessionLogRecord,
+} from "../../session/sessionLog";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
-const HP_LOG_KEY = "hp-log";
 const PROFILE_LOG_COALESCE_MS = 1500;
-
-type ProfileReverseOperation = {
-  type: "session.profile.restore";
-  characterId: string;
-  snapshot: { ability: SessionAbilityState; hp: SessionHpState };
-};
-
-type UnifiedLogRecord = {
-  id: string;
-  actorId: string;
-  createdAt: string;
-  operation: { type: string; characterId: string; [key: string]: unknown };
-  reverseOperation: { type: string; characterId: string; [key: string]: unknown };
-  undoneAt?: string;
-  undoneBy?: string;
-};
 
 export class SessionActor extends RaceSessionActor {
   override async webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const raw = typeof message === "string" ? message : new TextDecoder().decode(message);
-    const undoId = parseUndoLogId(raw);
-    if (undoId && await this.tryProfileUndo(webSocket, undoId)) return;
-
     const parsed = parseProfileClientMessage(raw);
     if (!parsed) {
       await super.webSocketMessage(webSocket, message);
@@ -56,11 +42,15 @@ export class SessionActor extends RaceSessionActor {
     await this.handleProfileOperation(webSocket, connection, parsed.operation);
   }
 
-  private async handleProfileOperation(webSocket: WebSocket, connection: SessionConnection, operation: SessionProfileOperation): Promise<void> {
+  private async handleProfileOperation(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    operation: SessionProfileOperation,
+  ): Promise<void> {
     const [abilities, hpState, log] = await Promise.all([
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
       this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY).then((value) => value ?? {}),
-      this.ctx.storage.get<UnifiedLogRecord[]>(HP_LOG_KEY).then((value) => value ?? []),
+      readSessionLog(this.ctx.storage),
     ]);
     const stored = abilities[operation.characterId];
     const hp = hpState[operation.characterId];
@@ -74,8 +64,9 @@ export class SessionActor extends RaceSessionActor {
     }
 
     let character: CharacterTemplate;
-    try { character = CharacterTemplate.fromJSON(stored.character as Partial<CharacterTemplateProps>); }
-    catch {
+    try {
+      character = CharacterTemplate.fromJSON(stored.character as Partial<CharacterTemplateProps>);
+    } catch {
       sendError(webSocket, "PROFILE_STATE_INVALID", "The authoritative character snapshot is invalid.");
       return;
     }
@@ -97,101 +88,52 @@ export class SessionActor extends RaceSessionActor {
     if (hpChanged) hpState[operation.characterId] = applied.hp;
 
     const now = new Date().toISOString();
-    const previous = log[log.length - 1];
-    const canCoalesce = Boolean(
-      operation.type === "character.profile.replace"
-      && previous && !previous.undoneAt
-      && previous.actorId === connection.userId
-      && previous.operation.type === "character.profile.replace"
-      && previous.operation.characterId === operation.characterId
-      && Date.now() - new Date(previous.createdAt).getTime() <= PROFILE_LOG_COALESCE_MS
-      && previous.reverseOperation.type === "session.profile.restore",
-    );
-
-    if (canCoalesce) {
-      log[log.length - 1] = {
-        ...previous,
-        createdAt: now,
-        operation: operation as unknown as UnifiedLogRecord["operation"],
-      };
-    } else {
-      log.push({
-        id: crypto.randomUUID(), actorId: connection.userId, createdAt: now,
-        operation: operation as unknown as UnifiedLogRecord["operation"],
-        reverseOperation: {
-          type: "session.profile.restore",
-          characterId: operation.characterId,
-          snapshot: { ability: structuredClone(stored), hp: structuredClone(hp) },
-        } as unknown as UnifiedLogRecord["reverseOperation"],
-      });
-    }
-    const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
-
-    await this.ctx.storage.put({
-      [ABILITIES_STATE_KEY]: abilities,
-      ...(hpChanged ? { [HP_STATE_KEY]: hpState } : {}),
-      [HP_LOG_KEY]: nextLog,
+    const record = createSessionLogRecord({
+      actorId: connection.userId,
+      createdAt: now,
+      operation,
+      reverseOperation: {
+        type: "session.profile.restore",
+        characterId: operation.characterId,
+        snapshot: {
+          ability: structuredClone(stored),
+          hp: structuredClone(hp),
+        },
+      },
     });
+
+    await commitSessionMutation(this.ctx.storage, this.ctx.getWebSockets(), {
+      writes: {
+        [ABILITIES_STATE_KEY]: abilities,
+        ...(hpChanged ? { [HP_STATE_KEY]: hpState } : {}),
+      },
+      record,
+      currentLog: log,
+      maxRecords: MAX_HP_LOG_RECORDS,
+      coalesceLatest: (previous, incoming) => canCoalesceProfileLog(previous, incoming, now),
+    });
+
     broadcast(this.ctx.getWebSockets(), { type: "session.abilities.updated", character: nextState });
     if (hpChanged) broadcast(this.ctx.getWebSockets(), { type: "session.hp.updated", character: applied.hp });
-    broadcastToMasters(this.ctx.getWebSockets(), nextLog);
   }
+}
 
-  private async tryProfileUndo(webSocket: WebSocket, logId: string): Promise<boolean> {
-    const log = (await this.ctx.storage.get<UnifiedLogRecord[]>(HP_LOG_KEY)) ?? [];
-    const index = log.findIndex((entry) => entry.id === logId);
-    if (index < 0) return false;
-    const reverse = log[index].reverseOperation as unknown as ProfileReverseOperation;
-    if (reverse.type !== "session.profile.restore" || !reverse.snapshot) return false;
-
-    const connection = readConnection(webSocket);
-    if (!connection) return true;
-    if (connection.role !== "MASTER") {
-      sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can undo session changes.");
-      return true;
-    }
-    if (log[index].undoneAt || log[index].operation.type === "character.hp.undo") {
-      sendError(webSocket, "UNDO_NOT_AVAILABLE", "This profile change cannot be undone.");
-      return true;
-    }
-    const newer = log.slice(index + 1).some((entry) =>
-      !entry.undoneAt && entry.operation.type !== "character.hp.undo" && entry.reverseOperation.characterId === reverse.characterId,
-    );
-    if (newer) {
-      sendError(webSocket, "UNDO_NOT_LATEST", "Undo newer changes for this character first.");
-      return true;
-    }
-
-    const [abilities, hpState] = await Promise.all([
-      this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
-      this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY).then((value) => value ?? {}),
-    ]);
-    const currentAbility = abilities[reverse.characterId];
-    const currentHp = hpState[reverse.characterId];
-    if (!currentAbility || !currentHp) {
-      sendError(webSocket, "PROFILE_STATE_NOT_INITIALIZED", "The current profile state required for undo is missing.");
-      return true;
-    }
-
-    const now = new Date().toISOString();
-    log[index] = { ...log[index], undoneAt: now, undoneBy: connection.userId };
-    log.push({
-      id: crypto.randomUUID(), actorId: connection.userId, createdAt: now,
-      operation: { type: "character.hp.undo", characterId: reverse.characterId, sourceLogId: log[index].id },
-      reverseOperation: {
-        type: "session.profile.restore", characterId: reverse.characterId,
-        snapshot: { ability: structuredClone(currentAbility), hp: structuredClone(currentHp) },
-      } as unknown as UnifiedLogRecord["reverseOperation"],
-    });
-    const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
-    abilities[reverse.characterId] = reverse.snapshot.ability;
-    hpState[reverse.characterId] = reverse.snapshot.hp;
-    await this.ctx.storage.put({ [ABILITIES_STATE_KEY]: abilities, [HP_STATE_KEY]: hpState, [HP_LOG_KEY]: nextLog });
-    broadcast(this.ctx.getWebSockets(), { type: "session.abilities.updated", character: reverse.snapshot.ability });
-    broadcast(this.ctx.getWebSockets(), { type: "session.hp.updated", character: reverse.snapshot.hp });
-    broadcastToMasters(this.ctx.getWebSockets(), nextLog);
-    return true;
-  }
+function canCoalesceProfileLog(
+  previous: SessionLogRecord,
+  incoming: SessionLogRecord,
+  now: string,
+): boolean {
+  if (incoming.operation.type !== "character.profile.replace") return false;
+  if (previous.undoneAt) return false;
+  if (previous.actorId !== incoming.actorId) return false;
+  if (previous.operation.type !== "character.profile.replace") return false;
+  if (previous.operation.characterId !== incoming.operation.characterId) return false;
+  if (previous.reverseOperation.type !== "session.profile.restore") return false;
+  const previousTime = new Date(previous.createdAt).getTime();
+  const nextTime = new Date(now).getTime();
+  return Number.isFinite(previousTime)
+    && Number.isFinite(nextTime)
+    && nextTime - previousTime <= PROFILE_LOG_COALESCE_MS;
 }
 
 type ProfileApplyResult =
@@ -297,15 +239,17 @@ function mergeProficiencies(current: Proficiency[], incoming: Proficiency[]): Pr
 function invalid(code: string, message: string): ProfileApplyResult {
   return { ok: false, code, message };
 }
-function parseUndoLogId(raw: string): string | null {
-  try { const value = JSON.parse(raw) as { type?: unknown; logId?: unknown }; return value.type === "session.log.undo" && typeof value.logId === "string" ? value.logId : null; }
+function readConnection(ws: WebSocket): SessionConnection | null {
+  try { return ws.deserializeAttachment() as SessionConnection; }
   catch { return null; }
 }
-function readConnection(ws: WebSocket): SessionConnection | null { try { return ws.deserializeAttachment() as SessionConnection; } catch { return null; } }
-function send(ws: WebSocket, value: unknown): void { try { ws.send(JSON.stringify(value)); } catch {} }
-function sendError(ws: WebSocket, code: string, message: string): void { send(ws, { type: "session.error", code, message }); }
-function broadcast(sockets: WebSocket[], value: unknown): void { const payload = JSON.stringify(value); for (const ws of sockets) try { ws.send(payload); } catch {} }
-function broadcastToMasters(sockets: WebSocket[], records: UnifiedLogRecord[]): void {
-  const payload = JSON.stringify({ type: "session.hp.log", records });
-  for (const ws of sockets) if (readConnection(ws)?.role === "MASTER") try { ws.send(payload); } catch {}
+function send(ws: WebSocket, value: unknown): void {
+  try { ws.send(JSON.stringify(value)); } catch {}
+}
+function sendError(ws: WebSocket, code: string, message: string): void {
+  send(ws, { type: "session.error", code, message });
+}
+function broadcast(sockets: WebSocket[], value: unknown): void {
+  const payload = JSON.stringify(value);
+  for (const ws of sockets) try { ws.send(payload); } catch {}
 }
