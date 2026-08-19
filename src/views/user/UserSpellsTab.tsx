@@ -1,10 +1,6 @@
 import { Send } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 
-import {
-  getMyCampaigns,
-  type UserCampaign,
-} from "../../api/user-campaigns"
 import { submitOwnedHomebrewSpellToCampaign } from "../../api/user-spells"
 import { Button } from "../../components/ui/Button"
 import { useMagicContext } from "../../contexts/magicContext"
@@ -14,11 +10,12 @@ import {
   type SpellLibraryRecord,
 } from "../../features/magic/library/SpellLibraryView"
 import { useUserMagicState } from "../../features/magic/UserMagicProvider"
+import { useUserData } from "../../features/user/UserDataProvider"
 
 export function UserSpellsTab() {
   const { records, loading, errorMessage, reload } = useUserMagicState()
+  const { campaigns } = useUserData()
   const { savedSpells, saveSpells } = useMagicContext()
-  const [campaigns, setCampaigns] = useState<UserCampaign[]>([])
   const [sendOpen, setSendOpen] = useState(false)
   const [selectedSpellId, setSelectedSpellId] = useState("")
   const [selectedCampaignId, setSelectedCampaignId] = useState("")
@@ -47,20 +44,6 @@ export function UserSpellsTab() {
     () => campaigns.filter((campaign) => campaign.status === "ACTIVE"),
     [campaigns],
   )
-
-  useEffect(() => {
-    let cancelled = false
-    void getMyCampaigns()
-      .then((result) => {
-        if (!cancelled) setCampaigns(result)
-      })
-      .catch(() => {
-        if (!cancelled) setCampaigns([])
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   function openSendDialog() {
     setSelectedSpellId(ownedRecords[0]?.id ?? "")
