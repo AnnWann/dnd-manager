@@ -7,6 +7,7 @@ import {
 } from "../../src/models/characters/characterEquippedItemMovement";
 import { wieldPocketWeaponWithRules } from "../../src/models/characters/characterEquipmentInteractions";
 import { unequipPocketStack } from "../../src/models/characters/characterInventoryStacks";
+import { toggleInventoryItemAttunement } from "../../src/models/characters/characterInventory";
 import { applyConsumableEffect } from "../../src/models/characters/characterConsumables";
 import { consumeItemQuantity, isConsumableItemKind } from "../../src/models/items/itemConsumption";
 import type { Itemmable } from "../../src/models/items/item";
@@ -152,6 +153,8 @@ function applyEquipmentOperation(character: CharacterTemplate, operation: Sessio
       return updateEquippedItem(character, operation.reference as EquippedItemReference, operation.item as Itemmable);
     case "character.equipment.move":
       return moveEquippedItemToCharacterStorage(character, operation.reference as EquippedItemReference, operation.destination);
+    case "character.equipment.attunement.toggle":
+      return toggleInventoryItemAttunement(character, operation.itemId);
     case "character.equipment.pocket.unequip":
       return unequipPocketStack(character, operation.index);
     case "character.equipment.pocket.wield":
