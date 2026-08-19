@@ -59,9 +59,10 @@ export type SessionRuntimeContextValue = {
   sessionCharactersById: Readonly<Record<string, SessionCharacterLifecycleState>>
   inventoryState: SessionSharedInventoryState | null
   hpLog: SessionLogRecord[]
+  /** Legacy name retained as the bootstrap boundary; it now initializes the full session character. */
+  initializeAbilities: (characters: SessionAbilitySeed[]) => boolean
   initializeHp: (characters: SessionHpSeed[]) => boolean
   initializeConditions: (characters: SessionConditionSeed[]) => boolean
-  initializeAbilities: (characters: SessionAbilitySeed[]) => boolean
   initializeInventory: (partyInventory: Itemmable[], groundInventory: Itemmable[]) => boolean
   dispatchSheetOperation: (operation: SessionLoggedOperation) => boolean
   dispatchHpOperation: (operation: SessionAuthoritativeOperation) => boolean
@@ -228,8 +229,18 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     socketRef.current?.send({ type: "session.hp.initialize", characters }) ?? false, [])
   const initializeConditions = useCallback((characters: SessionConditionSeed[]) =>
     socketRef.current?.send({ type: "session.conditions.initialize", characters }) ?? false, [])
-  const initializeAbilities = useCallback((characters: SessionAbilitySeed[]) =>
-    socketRef.current?.send({ type: "session.abilities.initialize", characters }) ?? false, [])
+  const initializeAbilities = useCallback((characters: SessionAbilitySeed[]) => {
+    const pending = characters.filter((character) => !sessionCharactersById[character.characterId]?.active)
+    if (!pending.length) return true
+    return pending.every((character) => socketRef.current?.send({
+      type: "session.character.operation",
+      operation: {
+        type: "character.session.add",
+        characterId: character.characterId,
+        character: character.character,
+      },
+    }) ?? false)
+  }, [sessionCharactersById])
   const initializeInventory = useCallback((partyInventory: Itemmable[], groundInventory: Itemmable[]) =>
     socketRef.current?.send({ type: "session.inventory.initialize", partyInventory, groundInventory }) ?? false, [])
   const dispatchSheetOperation = useCallback((operation: SessionLoggedOperation) =>
