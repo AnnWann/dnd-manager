@@ -14,6 +14,7 @@ import { parseProficiencyClientMessage } from "../characters/proficiencies/profi
 import { parseRaceClientMessage } from "../characters/race/raceProtocol";
 import { parseProfileClientMessage } from "../characters/profile/profileProtocol";
 import {
+  normalizeStoredSessionLog,
   readSessionLog,
   validateUndoOrdering,
   type SessionLogRecord,
@@ -40,8 +41,8 @@ type SharedInventoryState = {
  * prototypes are deliberately stripped when bound as routes. The running actor
  * therefore has one base SessionActor plus isolated domain handlers.
  *
- * Undo ordering is centralized here. Domain handlers only restore the snapshot
- * represented by their reverse operation; they no longer define global ordering.
+ * Log scope normalization and undo ordering are centralized here. Domain
+ * handlers are responsible only for applying/reversing their own state changes.
  */
 export class SessionActor extends BaseSessionActor {
   private readonly abilityRoute = bindDomainActor(AbilitySessionActor.prototype, this.ctx);
@@ -104,12 +105,12 @@ export class SessionActor extends BaseSessionActor {
       const undoRoute = this.resolveUndoRoute(validation.record);
       if (undoRoute) {
         await undoRoute.webSocketMessage(webSocket, message);
-        return;
+      } else {
+        // Base HP/condition/concentration reverses are restored by the base actor,
+        // but only after the centralized scope ordering check above succeeds.
+        await super.webSocketMessage(webSocket, message);
       }
-
-      // Base HP/condition/concentration reverses are restored by the base actor,
-      // but only after the centralized scope ordering check above succeeds.
-      await super.webSocketMessage(webSocket, message);
+      await this.normalizeLog();
       return;
     }
 
@@ -125,10 +126,12 @@ export class SessionActor extends BaseSessionActor {
 
     if (route) {
       await route.webSocketMessage(webSocket, message);
+      await this.normalizeLog();
       return;
     }
 
     await super.webSocketMessage(webSocket, message);
+    if (shouldNormalizeBaseMessage(raw)) await this.normalizeLog();
   }
 
   private resolveUndoRoute(source: SessionLogRecord): DomainActor | null {
@@ -147,6 +150,10 @@ export class SessionActor extends BaseSessionActor {
       default:
         return null;
     }
+  }
+
+  private async normalizeLog(): Promise<void> {
+    await normalizeStoredSessionLog(this.ctx.storage, this.ctx.getWebSockets());
   }
 
   private async sendAbilitySnapshot(socket: WebSocket): Promise<void> {
@@ -204,6 +211,17 @@ function bindDomainActor<T extends DomainActor>(prototype: T, ctx: unknown): T {
     writable: false,
   });
   return actor;
+}
+
+function shouldNormalizeBaseMessage(raw: string): boolean {
+  try {
+    const value = JSON.parse(raw) as { type?: unknown };
+    return value.type === "session.hp.operation"
+      || value.type === "session.conditions.operation"
+      || value.type === "session.sheet.operation";
+  } catch {
+    return false;
+  }
 }
 
 function parseUndoLogId(raw: string): string | null {
