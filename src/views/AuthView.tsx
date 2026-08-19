@@ -1,10 +1,14 @@
 import { useState, type FormEvent } from "react"
 
 import { authClient } from "../auth/auth-client"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import { createLocalDevelopmentSession, LOCAL_AUTH_BYPASS } from "../auth/local-auth"
 
 type AuthMode = "sign-in" | "sign-up"
+
+type AuthLocationState = {
+  returnTo?: unknown
+}
 
 export function AuthView() {
   const [mode, setMode] = useState<AuthMode>("sign-in")
@@ -13,6 +17,14 @@ export function AuthView() {
   const [password, setPassword] = useState("")
   const [message, setMessage] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  const requestedReturnTo = (location.state as AuthLocationState | null)?.returnTo
+  const returnTo =
+    typeof requestedReturnTo === "string" && requestedReturnTo.startsWith("/")
+      ? requestedReturnTo
+      : "/user/characters"
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -32,7 +44,7 @@ export function AuthView() {
           return
         }
 
-        setMessage("Conta criada com sucesso.")
+        navigate(returnTo, { replace: true })
         return
       }
 
@@ -46,7 +58,7 @@ export function AuthView() {
         return
       }
 
-      setMessage("Login realizado com sucesso.")
+      navigate(returnTo, { replace: true })
     } catch {
       setMessage(
         "Não foi possível acessar o servidor de autenticação.",
@@ -56,12 +68,10 @@ export function AuthView() {
     }
   }
 
-  const navigate = useNavigate()
-
   function enterLocalDevelopmentMode() {
     createLocalDevelopmentSession()
 
-    navigate("/user/characters", {
+    navigate(returnTo, {
       replace: true,
     })
   }
