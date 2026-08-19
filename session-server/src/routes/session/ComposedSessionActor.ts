@@ -13,7 +13,12 @@ import { parseInventoryClientMessage } from "../characters/inventory/inventoryPr
 import { parseProficiencyClientMessage } from "../characters/proficiencies/proficiencyProtocol";
 import { parseRaceClientMessage } from "../characters/race/raceProtocol";
 import { parseProfileClientMessage } from "../characters/profile/profileProtocol";
-import { applyHpUndo, MAX_HP_LOG_RECORDS } from "../characters/sheet/hpState";
+import {
+  applyHpUndo,
+  defaultSavingThrows,
+  defaultSkills,
+  MAX_HP_LOG_RECORDS,
+} from "../characters/sheet/hpState";
 import { applyConditionUndo } from "../characters/sheet/conditionState";
 import { applyConcentrationUndo } from "../characters/sheet/concentrationState";
 import type {
@@ -263,7 +268,7 @@ export class SessionActor extends BaseSessionActor {
     sourceIndex: number,
     source: SessionLogRecord,
   ): Promise<void> {
-    const state = await this.readHpState();
+    const state = await this.readComposedHpState();
     const characterId = source.reverseOperation.characterId;
     const current = state[characterId];
     if (!current) {
@@ -301,7 +306,7 @@ export class SessionActor extends BaseSessionActor {
     sourceIndex: number,
     source: SessionLogRecord,
   ): Promise<void> {
-    const state = await this.readConditionsState();
+    const state = await this.readComposedConditionsState();
     const characterId = source.reverseOperation.characterId;
     const current = state[characterId];
     if (!current?.initialized) {
@@ -342,8 +347,8 @@ export class SessionActor extends BaseSessionActor {
     const reverse = source.reverseOperation as CentrallyRestorableReverse;
     const [abilities, hp, conditions, inventory, lifecycle] = await Promise.all([
       this.readAbilitiesState(),
-      this.readHpState(),
-      this.readConditionsState(),
+      this.readComposedHpState(),
+      this.readComposedConditionsState(),
       this.readInventoryState(),
       this.readCharacterLifecycleState(),
     ]);
@@ -487,8 +492,8 @@ export class SessionActor extends BaseSessionActor {
     const [lifecycle, abilities, hp, conditions, log] = await Promise.all([
       this.readCharacterLifecycleState(),
       this.readAbilitiesState(),
-      this.readHpState(),
-      this.readConditionsState(),
+      this.readComposedHpState(),
+      this.readComposedConditionsState(),
       readSessionLog(this.ctx.storage),
     ]);
     const characterId = operation.characterId;
@@ -641,8 +646,8 @@ export class SessionActor extends BaseSessionActor {
       }
       const [abilities, hp, conditions] = await Promise.all([
         this.readAbilitiesState(),
-        this.readHpState(),
-        this.readConditionsState(),
+        this.readComposedHpState(),
+        this.readComposedConditionsState(),
       ]);
       broadcast(this.ctx.getWebSockets(), { type: "session.abilities.snapshot", characters: Object.values(abilities) });
       broadcast(this.ctx.getWebSockets(), { type: "session.hp.snapshot", characters: Object.values(hp) });
@@ -668,16 +673,16 @@ export class SessionActor extends BaseSessionActor {
     return (await this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY)) ?? {};
   }
 
-  private async readHpState(): Promise<Record<string, SessionHpState>> {
+  private async readComposedHpState(): Promise<Record<string, SessionHpState>> {
     return (await this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY)) ?? {};
   }
 
-  private async readConditionsState(): Promise<Record<string, SessionConditionsState>> {
+  private async readComposedConditionsState(): Promise<Record<string, SessionConditionsState>> {
     return (await this.ctx.storage.get<Record<string, SessionConditionsState>>(CONDITIONS_STATE_KEY)) ?? {};
   }
 
   private async readInventoryState(): Promise<SharedInventoryState> {
-    return (await this.ctx.storage.get<SharedInventoryState>(INVENTORY_STATE_KEY)) ?? {
+    return (await this.ctx.storage.get<SharedInventoryState>>(INVENTORY_STATE_KEY)) ?? {
       initialized: false,
       revision: 0,
       partyInventory: [],
@@ -689,7 +694,7 @@ export class SessionActor extends BaseSessionActor {
     const stored = (await this.ctx.storage.get<Record<string, SessionCharacterLifecycleState>>(CHARACTER_LIFECYCLE_STATE_KEY)) ?? {};
     if (Object.keys(stored).length) return stored;
 
-    const [abilities, hp] = await Promise.all([this.readAbilitiesState(), this.readHpState()]);
+    const [abilities, hp] = await Promise.all([this.readAbilitiesState(), this.readComposedHpState()]);
     const migrated = Object.fromEntries(
       Object.values(abilities)
         .filter((entry) => entry.initialized)
@@ -765,9 +770,9 @@ function runtimeStateFromCharacter(
       statsInitialized: true,
       attributes: { ...sheet.attributes },
       attributesInitialized: true,
-      savingThrows: { ...sheet.savingThrowProficiencies },
+      savingThrows: { ...defaultSavingThrows(), ...sheet.savingThrowProficiencies },
       savingThrowsInitialized: true,
-      skills: { ...sheet.skills },
+      skills: { ...defaultSkills(), ...sheet.skills },
       skillsInitialized: true,
       revision: (previousHp?.revision ?? -1) + 1,
     },
