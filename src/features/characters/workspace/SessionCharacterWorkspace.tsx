@@ -1,7 +1,8 @@
-import type { ReactNode } from "react"
+import { useEffect, type ReactNode } from "react"
 
 import { useCharacterContext } from "../../../contexts/characterContext"
 import { useSyncContext } from "../../../contexts/syncContext"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import {
   CharacterWorkspaceProvider,
   type CharacterWorkspaceValue,
@@ -20,7 +21,31 @@ export function SessionCharacterWorkspace({
   children: ReactNode
 }) {
   const characterContext = useCharacterContext()
+  const sessionRuntime = useOptionalSessionRuntime()
   const { userKey } = useSyncContext()
+
+  useEffect(() => {
+    if (
+      !sessionRuntime ||
+      sessionRuntime.status !== "connected" ||
+      sessionRuntime.role !== "MASTER" ||
+      characterContext.visibleCharacters.length === 0
+    ) {
+      return
+    }
+
+    sessionRuntime.initializeAbilities(
+      characterContext.visibleCharacters.map((character) => ({
+        characterId: character.get("id"),
+        character: character.toJSON(),
+      })),
+    )
+  }, [
+    characterContext.visibleCharacters,
+    sessionRuntime?.initializeAbilities,
+    sessionRuntime?.role,
+    sessionRuntime?.status,
+  ])
 
   const owners = characterContext.knownPlayerKeys.map((key) =>
     characterContext.getOwner(key),
