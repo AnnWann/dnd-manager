@@ -27,43 +27,15 @@ import type {
   SessionConnection,
   SessionHpState,
 } from "../../session/protocol";
+import {
+  commitSessionMutation,
+  createSessionLogRecord,
+  readSessionLog,
+} from "../../session/sessionLog";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
-const HP_LOG_KEY = "hp-log";
-
-type AbilityReverseOperation = {
-  type: "character.ability.restore";
-  characterId: string;
-  snapshot: {
-    ability: SessionAbilityState;
-    hp: SessionHpState;
-    conditions: SessionConditionsState;
-  };
-};
-
-type AbilityLogRecord = {
-  id: string;
-  actorId: string;
-  createdAt: string;
-  operation:
-    | SessionAbilityOperation
-    | { type: "character.hp.undo"; characterId: string; sourceLogId: string };
-  reverseOperation: AbilityReverseOperation;
-  undoneAt?: string;
-  undoneBy?: string;
-};
-
-type AnySessionLogRecord = AbilityLogRecord | {
-  id: string;
-  actorId: string;
-  createdAt: string;
-  operation: { type: string; characterId?: string; [key: string]: unknown };
-  reverseOperation: { type: string; characterId: string; [key: string]: unknown };
-  undoneAt?: string;
-  undoneBy?: string;
-};
 
 export class SessionActor extends BaseSessionActor {
   override async fetch(request: Request): Promise<Response> {
@@ -87,22 +59,6 @@ export class SessionActor extends BaseSessionActor {
     const raw = typeof message === "string"
       ? message
       : new TextDecoder().decode(message);
-
-    const undoLogId = parseUndoLogId(raw);
-    if (undoLogId) {
-      const log = await this.readUnifiedLog();
-      const source = log.find((record) => record.id === undoLogId);
-      if (source && isAbilityReverseOperation(source.reverseOperation)) {
-        const connection = this.readConnection(webSocket);
-        if (!connection) {
-          webSocket.close(1011, "Missing connection attachment");
-          return;
-        }
-        this.touchConnection(webSocket, connection);
-        await this.handleAbilityUndo(webSocket, connection, undoLogId, log);
-        return;
-      }
-    }
 
     const parsed = parseAbilityClientMessage(raw);
     if (!parsed) {
@@ -185,7 +141,7 @@ export class SessionActor extends BaseSessionActor {
       this.readAbilityState(),
       this.readAbilityHpState(),
       this.readAbilityConditionsState(),
-      this.readUnifiedLog(),
+      readSessionLog(this.ctx.storage),
     ]);
 
     const storedAbility = abilityState[operation.characterId];
@@ -239,10 +195,8 @@ export class SessionActor extends BaseSessionActor {
     if (hpChanged) hpState[operation.characterId] = nextHp;
     if (conditionsChanged) conditionsState[operation.characterId] = nextConditions;
 
-    const record: AbilityLogRecord = {
-      id: crypto.randomUUID(),
+    const record = createSessionLogRecord({
       actorId: connection.userId,
-      createdAt: new Date().toISOString(),
       operation,
       reverseOperation: {
         type: "character.ability.restore",
@@ -253,15 +207,17 @@ export class SessionActor extends BaseSessionActor {
           conditions,
         },
       },
-    };
-    log.push(record);
-    const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
+    });
 
-    await this.ctx.storage.put({
-      [ABILITIES_STATE_KEY]: abilityState,
-      ...(hpChanged ? { [HP_STATE_KEY]: hpState } : {}),
-      ...(conditionsChanged ? { [CONDITIONS_STATE_KEY]: conditionsState } : {}),
-      [HP_LOG_KEY]: nextLog,
+    await commitSessionMutation(this.ctx.storage, this.ctx.getWebSockets(), {
+      writes: {
+        [ABILITIES_STATE_KEY]: abilityState,
+        ...(hpChanged ? { [HP_STATE_KEY]: hpState } : {}),
+        ...(conditionsChanged ? { [CONDITIONS_STATE_KEY]: conditionsState } : {}),
+      },
+      record,
+      currentLog: log,
+      maxRecords: MAX_HP_LOG_RECORDS,
     });
 
     this.broadcastAbility({ type: "session.abilities.updated", character: nextAbilityState });
@@ -269,117 +225,6 @@ export class SessionActor extends BaseSessionActor {
     if (conditionsChanged) {
       this.broadcastRaw({ type: "session.conditions.updated", character: nextConditions });
     }
-    this.broadcastLogToMasters(nextLog);
-  }
-
-  private async handleAbilityUndo(
-    webSocket: WebSocket,
-    connection: SessionConnection,
-    logId: string,
-    log: AnySessionLogRecord[],
-  ): Promise<void> {
-    if (connection.role !== "MASTER") {
-      this.sendAbilityError(webSocket, "MASTER_REQUIRED", "Only the MASTER can undo session changes.");
-      return;
-    }
-
-    const sourceIndex = log.findIndex((record) => record.id === logId);
-    if (sourceIndex < 0) {
-      this.sendAbilityError(webSocket, "LOG_NOT_FOUND", "The selected log entry no longer exists.");
-      return;
-    }
-
-    const source = log[sourceIndex];
-    if (!isAbilityReverseOperation(source.reverseOperation)) {
-      await super.webSocketMessage(
-        webSocket,
-        JSON.stringify({ type: "session.log.undo", logId }),
-      );
-      return;
-    }
-    if (source.operation.type === "character.hp.undo") {
-      this.sendAbilityError(webSocket, "UNDO_OF_UNDO_NOT_SUPPORTED", "Undo records cannot be undone.");
-      return;
-    }
-
-    const characterId = source.reverseOperation.characterId;
-    const newerActiveChange = log.slice(sourceIndex + 1).some(
-      (record) =>
-        !record.undoneAt &&
-        record.operation.type !== "character.hp.undo" &&
-        record.reverseOperation.characterId === characterId,
-    );
-    if (newerActiveChange) {
-      this.sendAbilityError(webSocket, "UNDO_NOT_LATEST", "Undo newer changes for this character first.");
-      return;
-    }
-
-    const [abilityState, hpState, conditionsState] = await Promise.all([
-      this.readAbilityState(),
-      this.readAbilityHpState(),
-      this.readAbilityConditionsState(),
-    ]);
-    const currentAbility = abilityState[characterId];
-    const currentHp = hpState[characterId];
-    const currentConditions = conditionsState[characterId];
-    if (!currentAbility || !currentHp || !currentConditions) {
-      this.sendAbilityError(webSocket, "ABILITY_STATE_NOT_INITIALIZED", "The current ability state required for undo is missing.");
-      return;
-    }
-
-    const now = new Date().toISOString();
-    log[sourceIndex] = {
-      ...source,
-      undoneAt: now,
-      undoneBy: connection.userId,
-    };
-
-    const undoRecord: AbilityLogRecord = {
-      id: crypto.randomUUID(),
-      actorId: connection.userId,
-      createdAt: now,
-      operation: {
-        type: "character.hp.undo",
-        characterId,
-        sourceLogId: source.id,
-      },
-      reverseOperation: {
-        type: "character.ability.restore",
-        characterId,
-        snapshot: {
-          ability: currentAbility,
-          hp: currentHp,
-          conditions: currentConditions,
-        },
-      },
-    };
-    log.push(undoRecord);
-    const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
-
-    abilityState[characterId] = source.reverseOperation.snapshot.ability;
-    hpState[characterId] = source.reverseOperation.snapshot.hp;
-    conditionsState[characterId] = source.reverseOperation.snapshot.conditions;
-
-    await this.ctx.storage.put({
-      [ABILITIES_STATE_KEY]: abilityState,
-      [HP_STATE_KEY]: hpState,
-      [CONDITIONS_STATE_KEY]: conditionsState,
-      [HP_LOG_KEY]: nextLog,
-    });
-
-    this.broadcastAbility({
-      type: "session.abilities.updated",
-      character: source.reverseOperation.snapshot.ability,
-    });
-    this.broadcastRaw({
-      type: "session.hp.updated",
-      character: source.reverseOperation.snapshot.hp,
-    });
-    this.broadcastRaw({
-      type: "session.conditions.updated",
-      character: source.reverseOperation.snapshot.conditions,
-    });
-    this.broadcastLogToMasters(nextLog);
   }
 
   private async readAbilityState(): Promise<Record<string, SessionAbilityState>> {
@@ -392,10 +237,6 @@ export class SessionActor extends BaseSessionActor {
 
   private async readAbilityConditionsState(): Promise<Record<string, SessionConditionsState>> {
     return (await this.ctx.storage.get<Record<string, SessionConditionsState>>(CONDITIONS_STATE_KEY)) ?? {};
-  }
-
-  private async readUnifiedLog(): Promise<AnySessionLogRecord[]> {
-    return (await this.ctx.storage.get<AnySessionLogRecord[]>(HP_LOG_KEY)) ?? [];
   }
 
   private async sendAbilitiesSnapshot(webSocket: WebSocket): Promise<void> {
@@ -442,16 +283,8 @@ export class SessionActor extends BaseSessionActor {
   private broadcastRaw(message: unknown): void {
     const encoded = JSON.stringify(message);
     for (const socket of this.ctx.getWebSockets()) {
-      try { socket.send(encoded); } catch { /* base actor handles stale sockets */ }
-    }
-  }
-
-  private broadcastLogToMasters(records: AnySessionLogRecord[]): void {
-    const encoded = JSON.stringify({ type: "session.hp.log", records });
-    for (const socket of this.ctx.getWebSockets()) {
-      const connection = this.readConnection(socket);
-      if (connection?.role !== "MASTER") continue;
-      try { socket.send(encoded); } catch { /* base actor handles stale sockets */ }
+      try { socket.send(encoded); }
+      catch { /* base actor handles stale sockets */ }
     }
   }
 }
@@ -534,8 +367,6 @@ function applyAbilityOperation(
 
     case "equipment":
       if (operation.type === "character.ability.use") {
-        // Preserve the existing equipment behavior for now: the current domain
-        // helper does not consume activationOptionId either in /user or /session.
         return character.useEquipmentAbility(source.itemId, source.abilityId);
       }
       if (operation.type === "character.ability.restore") {
@@ -642,23 +473,4 @@ function sameHpRuntime(left: SessionHpState, right: SessionHpState): boolean {
     left.currentMax === right.currentMax &&
     left.maxHpBonus === right.maxHpBonus
   );
-}
-
-function parseUndoLogId(raw: string): string | null {
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return parsed?.type === "session.log.undo" && typeof parsed.logId === "string"
-      ? parsed.logId
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function isAbilityReverseOperation(
-  value: AnySessionLogRecord["reverseOperation"],
-): value is AbilityReverseOperation {
-  return value?.type === "character.ability.restore" &&
-    typeof value.characterId === "string" &&
-    typeof (value as AbilityReverseOperation).snapshot === "object";
 }
