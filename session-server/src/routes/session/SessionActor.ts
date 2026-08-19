@@ -86,10 +86,6 @@ type SharedInventoryState = {
   groundInventory: unknown[];
 };
 
-type LongRestOperationWithSelection = Extract<SessionRestOperation, { type: "character.rest.long" }> & {
-  selection?: LongRestSupplySelection[];
-};
-
 export class SessionActor extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
@@ -332,7 +328,7 @@ export class SessionActor extends DurableObject<Env> {
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
       this.readHpState(),
       this.readConditionsState(),
-      this.readInventoryState(),
+      this.readRestInventoryState(),
       readSessionLog(this.ctx.storage),
     ]);
 
@@ -386,7 +382,7 @@ export class SessionActor extends DurableObject<Env> {
         },
       };
     } else {
-      const supplied = (operation as LongRestOperationWithSelection).selection;
+      const supplied = operation.selection;
       if (!isLongRestSelection(supplied)) {
         this.sendError(webSocket, "INVALID_LONG_REST_SUPPLIES", "Long rests require a valid server-verifiable supply selection.");
         return;
@@ -405,7 +401,7 @@ export class SessionActor extends DurableObject<Env> {
         revision: inventory.revision + 1,
         partyInventory: consumption.items,
       };
-      canonicalOperation = { ...operation, recovery, selection: supplied };
+      canonicalOperation = { ...operation, recovery };
       reverseOperation = {
         type: "session.rest.restore",
         characterId: operation.characterId,
@@ -457,11 +453,11 @@ export class SessionActor extends DurableObject<Env> {
       maxRecords: MAX_HP_LOG_RECORDS,
     });
 
-    this.broadcastRaw({ type: "session.abilities.updated", character: nextAbility });
+    this.broadcastSessionRaw({ type: "session.abilities.updated", character: nextAbility });
     this.broadcast({ type: "session.hp.updated", character: nextHp });
     this.broadcast({ type: "session.conditions.updated", character: nextConditions });
     if (operation.type === "character.rest.long") {
-      this.broadcastRaw({ type: "session.inventory.updated", state: nextInventory });
+      this.broadcastSessionRaw({ type: "session.inventory.updated", state: nextInventory });
     }
   }
 
@@ -482,7 +478,7 @@ export class SessionActor extends DurableObject<Env> {
     }
     const current = conditionsState[operation.characterId];
     if (!current?.initialized) {
-      this.sendError(webSocket, "CONDITIONS_NOT_INITIALIZED", "Conditions for this character have not been initialized by the MASTER.");
+      this.sendError(webSocket, "CONDITIONS_NOT_INITIALIZED", "Authoritative conditions for this character are missing.");
       return;
     }
 
@@ -526,7 +522,7 @@ export class SessionActor extends DurableObject<Env> {
     return (await this.ctx.storage.get<Record<string, SessionConditionsState>>(CONDITIONS_STATE_KEY)) ?? {};
   }
 
-  private async readInventoryState(): Promise<SharedInventoryState> {
+  private async readRestInventoryState(): Promise<SharedInventoryState> {
     return (await this.ctx.storage.get<SharedInventoryState>(INVENTORY_STATE_KEY)) ?? {
       initialized: false,
       revision: 0,
@@ -601,7 +597,7 @@ export class SessionActor extends DurableObject<Env> {
     }
   }
 
-  private broadcastRaw(message: unknown): void {
+  private broadcastSessionRaw(message: unknown): void {
     const payload = JSON.stringify(message);
     for (const webSocket of this.activeSockets()) {
       try { webSocket.send(payload); } catch {}
