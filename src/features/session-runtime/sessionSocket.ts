@@ -4,6 +4,11 @@ import {
   type ServerSessionMessage,
   type SessionRuntimeRole,
 } from "./sessionProtocol"
+import {
+  parseAbilityServerMessage,
+  type SessionAbilityClientMessage,
+  type SessionAbilityServerMessage,
+} from "./abilitySessionProtocol"
 import type { SessionSheetOperationMessage } from "./sheetRoutes"
 
 export type SessionRuntimeStatus = "disconnected" | "connecting" | "connected" | "reconnecting" | "error"
@@ -15,7 +20,7 @@ export type SessionSocketOptions = {
   role: SessionRuntimeRole
   clientId: string
   onStatusChange: (status: SessionRuntimeStatus) => void
-  onMessage: (message: ServerSessionMessage) => void
+  onMessage: (message: ServerSessionMessage | SessionAbilityServerMessage) => void
 }
 
 const HEARTBEAT_MIN_MS = 27_000
@@ -38,7 +43,12 @@ export class SessionSocket {
     this.openSocket()
   }
 
-  send(message: ClientSessionMessage | SessionSheetOperationMessage): boolean {
+  send(
+    message:
+      | ClientSessionMessage
+      | SessionSheetOperationMessage
+      | SessionAbilityClientMessage,
+  ): boolean {
     if (this.socket?.readyState !== WebSocket.OPEN) return false
     this.socket.send(JSON.stringify(message))
     return true
@@ -62,7 +72,9 @@ export class SessionSocket {
 
     socket.onmessage = (event) => {
       if (typeof event.data !== "string") return
-      const message = parseServerSessionMessage(event.data)
+      const message =
+        parseAbilityServerMessage(event.data) ??
+        parseServerSessionMessage(event.data)
       if (!message) return
       if (message.type === "session.ready") {
         this.hasConnectedOnce = true
