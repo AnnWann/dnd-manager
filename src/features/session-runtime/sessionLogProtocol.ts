@@ -21,6 +21,8 @@ export type SessionAbilityReverseOperation = {
 export type SessionInventoryReverseOperation = {
   type: "session.inventory.restore"
   characterId: string
+  /** Conflict scopes touched by the operation, e.g. character:a, character:b or inventory:shared. */
+  affectedScopes?: string[]
   snapshot: {
     abilities: Record<string, SessionAbilityState>
     hp: Record<string, SessionHpState>
