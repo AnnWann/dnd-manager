@@ -257,6 +257,11 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "character.equipment.move.ground": return `${characterName} colocou um equipamento no chão.`
     case "character.proficiency.add": return `${characterName} ganhou a proficiência ${operation.proficiency.name}.`
     case "character.proficiency.remove": return `${characterName} perdeu a proficiência ${operation.proficiencyName || "selecionada"}.`
+    case "character.race.replace": return `${characterName} atualizou a raça.`
+    case "character.race.spells.replace": return `${characterName} atualizou as magias raciais.`
+    case "character.profile.replace": return `${characterName} atualizou o perfil.`
+    case "character.profile.background.save": return `${characterName} atualizou o antecedente.`
+    case "character.profile.background.remove": return `${characterName} removeu o antecedente.`
     case "character.hp.undo": return `Desfez uma alteração de ${characterName}.`
   }
 }
