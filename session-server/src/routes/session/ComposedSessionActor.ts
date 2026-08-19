@@ -14,6 +14,8 @@ import { parseProficiencyClientMessage } from "../characters/proficiencies/profi
 import { parseRaceClientMessage } from "../characters/race/raceProtocol";
 import { parseProfileClientMessage } from "../characters/profile/profileProtocol";
 import {
+  SESSION_LOG_KEY,
+  normalizeSessionLogRecordsInPlace,
   normalizeStoredSessionLog,
   readSessionLog,
   validateUndoOrdering,
@@ -41,17 +43,19 @@ type SharedInventoryState = {
  * prototypes are deliberately stripped when bound as routes. The running actor
  * therefore has one base SessionActor plus isolated domain handlers.
  *
- * Log scope normalization and undo ordering are centralized here. Domain
- * handlers are responsible only for applying/reversing their own state changes.
+ * The domain context wraps Durable Object storage so every write to the unified
+ * log is normalized by sessionLog.ts before persistence and before the domain's
+ * existing MASTER broadcast. Undo ordering is validated only here.
  */
 export class SessionActor extends BaseSessionActor {
-  private readonly abilityRoute = bindDomainActor(AbilitySessionActor.prototype, this.ctx);
-  private readonly magicRoute = bindDomainActor(MagicSessionActor.prototype, this.ctx);
-  private readonly equipmentRoute = bindDomainActor(EquipmentSessionActor.prototype, this.ctx);
-  private readonly inventoryRoute = bindDomainActor(InventorySessionActor.prototype, this.ctx);
-  private readonly proficiencyRoute = bindDomainActor(ProficiencySessionActor.prototype, this.ctx);
-  private readonly raceRoute = bindDomainActor(RaceSessionActor.prototype, this.ctx);
-  private readonly profileRoute = bindDomainActor(ProfileSessionActor.prototype, this.ctx);
+  private readonly domainContext = createDomainContext(this.ctx);
+  private readonly abilityRoute = bindDomainActor(AbilitySessionActor.prototype, this.domainContext);
+  private readonly magicRoute = bindDomainActor(MagicSessionActor.prototype, this.domainContext);
+  private readonly equipmentRoute = bindDomainActor(EquipmentSessionActor.prototype, this.domainContext);
+  private readonly inventoryRoute = bindDomainActor(InventorySessionActor.prototype, this.domainContext);
+  private readonly proficiencyRoute = bindDomainActor(ProficiencySessionActor.prototype, this.domainContext);
+  private readonly raceRoute = bindDomainActor(RaceSessionActor.prototype, this.domainContext);
+  private readonly profileRoute = bindDomainActor(ProfileSessionActor.prototype, this.domainContext);
 
   override async fetch(request: Request): Promise<Response> {
     const response = await super.fetch(request);
@@ -126,7 +130,6 @@ export class SessionActor extends BaseSessionActor {
 
     if (route) {
       await route.webSocketMessage(webSocket, message);
-      await this.normalizeLog();
       return;
     }
 
@@ -136,7 +139,6 @@ export class SessionActor extends BaseSessionActor {
 
   private resolveUndoRoute(source: SessionLogRecord): DomainActor | null {
     switch (source.reverseOperation.type) {
-      // Ability, Magic and Equipment all use the composite ability snapshot.
       case "character.ability.restore":
         return this.abilityRoute;
       case "session.inventory.restore":
@@ -211,6 +213,43 @@ function bindDomainActor<T extends DomainActor>(prototype: T, ctx: unknown): T {
     writable: false,
   });
   return actor;
+}
+
+function createDomainContext(ctx: any): any {
+  const storage = createLogAwareStorage(ctx.storage);
+  return new Proxy(ctx, {
+    get(target, property) {
+      if (property === "storage") return storage;
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+function createLogAwareStorage(storage: DurableObjectStorage): DurableObjectStorage {
+  return new Proxy(storage, {
+    get(target, property) {
+      if (property === "put") {
+        return (...args: any[]) => {
+          normalizeLogPut(args);
+          return (target.put as any)(...args);
+        };
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+function normalizeLogPut(args: any[]): void {
+  const [keyOrEntries, value] = args;
+  if (keyOrEntries === SESSION_LOG_KEY && Array.isArray(value)) {
+    normalizeSessionLogRecordsInPlace(value as SessionLogRecord[]);
+    return;
+  }
+  if (!keyOrEntries || typeof keyOrEntries !== "object" || Array.isArray(keyOrEntries)) return;
+  const log = keyOrEntries[SESSION_LOG_KEY];
+  if (Array.isArray(log)) normalizeSessionLogRecordsInPlace(log as SessionLogRecord[]);
 }
 
 function shouldNormalizeBaseMessage(raw: string): boolean {
