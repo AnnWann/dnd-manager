@@ -12,20 +12,10 @@ import {
 import { prisma } from "../../../../../server/prisma"
 import { requireSession } from "../../../../../server/session"
 
-type RouteContext = {
-  params: Promise<{
-    campaignId: string
-    characterId: string
-  }>
-}
-
-export async function POST(
-  request: Request,
-  context: RouteContext,
-): Promise<Response> {
+export async function POST(request: Request): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const { campaignId, characterId } = await context.params
+    const { campaignId, characterId } = getRouteParams(request)
     const body = await readJsonObject(request)
     const visibility = parseVisibility(body.visibility)
 
@@ -126,13 +116,10 @@ export async function POST(
   }
 }
 
-export async function PATCH(
-  request: Request,
-  context: RouteContext,
-): Promise<Response> {
+export async function PATCH(request: Request): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const { campaignId, characterId } = await context.params
+    const { campaignId, characterId } = getRouteParams(request)
     const body = await readJsonObject(request)
     const visibility = parseVisibility(body.visibility)
 
@@ -168,13 +155,10 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  request: Request,
-  context: RouteContext,
-): Promise<Response> {
+export async function DELETE(request: Request): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const { campaignId, characterId } = await context.params
+    const { campaignId, characterId } = getRouteParams(request)
 
     await requireCampaignAccess(campaignId, session.user.id)
     await requireOwnedCharacter(characterId, session.user.id)
@@ -198,6 +182,38 @@ export async function DELETE(
     return new Response(null, { status: 204 })
   } catch (error) {
     return handleApiError(error)
+  }
+}
+
+function getRouteParams(request: Request): {
+  campaignId: string
+  characterId: string
+} {
+  const segments = new URL(request.url).pathname
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => decodeURIComponent(segment))
+
+  const campaignsIndex = segments.findIndex(
+    (segment, index) => segment === "campaigns" && segments[index - 1] === "me",
+  )
+
+  if (
+    campaignsIndex < 0 ||
+    segments[campaignsIndex + 2] !== "characters" ||
+    !segments[campaignsIndex + 1] ||
+    !segments[campaignsIndex + 3]
+  ) {
+    throw new ApiError(
+      400,
+      "INVALID_CAMPAIGN_CHARACTER_ROUTE",
+      "A URL do vínculo entre campanha e personagem é inválida.",
+    )
+  }
+
+  return {
+    campaignId: segments[campaignsIndex + 1],
+    characterId: segments[campaignsIndex + 3],
   }
 }
 
