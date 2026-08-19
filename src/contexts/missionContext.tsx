@@ -242,6 +242,85 @@ export function MissionProvider({
   )
 }
 
+export function SessionMissionAuthorityProvider({ children }: { children: ReactNode }) {
+  const seed = useContext(MissionContext)
+  const runtime = useOptionalSessionRuntime()
+  if (!seed) throw new Error("SessionMissionAuthorityProvider must be used inside MissionProvider")
+  if (!runtime) return <>{children}</>
+
+  const missions = runtime.missionState?.initialized
+    ? normalizeMissions(runtime.missionState.missions)
+    : []
+
+  useEffect(() => {
+    if (runtime.role !== "MASTER" || runtime.status !== "connected") return
+    if (!runtime.missionState || runtime.missionState.initialized) return
+    runtime.initializeMissions(seed.missions)
+  }, [runtime, seed.missions])
+
+  function addMission(mission: Mission) {
+    if (runtime.role !== "MASTER") return
+    runtime.dispatchMissionOperation({
+      type: "mission.add",
+      characterId: "session",
+      mission: normalizeMission(mission),
+    })
+  }
+
+  function updateMission(missionId: string, updater: (mission: Mission) => Mission) {
+    if (runtime.role !== "MASTER") return
+    const current = missions.find((mission) => mission.id === missionId)
+    if (!current) return
+    runtime.dispatchMissionOperation({
+      type: "mission.update",
+      characterId: "session",
+      missionId,
+      mission: normalizeMission({
+        ...updater(current),
+        id: current.id,
+        createdAt: current.createdAt,
+      }),
+    })
+  }
+
+  function deleteMission(missionId: string) {
+    if (runtime.role !== "MASTER") return
+    runtime.dispatchMissionOperation({ type: "mission.delete", characterId: "session", missionId })
+  }
+
+  function moveMission(missionId: string, status: MissionStatus) {
+    runtime.dispatchMissionOperation({
+      type: "mission.status.set",
+      characterId: "session",
+      missionId,
+      status,
+    })
+  }
+
+  function toggleObjective(missionId: string, objectiveId: string) {
+    runtime.dispatchMissionOperation({
+      type: "mission.objective.toggle",
+      characterId: "session",
+      missionId,
+      objectiveId,
+    })
+  }
+
+  return (
+    <MissionContext.Provider value={{
+      missions,
+      canManageMissions: runtime.role === "MASTER",
+      addMission,
+      updateMission,
+      deleteMission,
+      moveMission,
+      toggleObjective,
+    }}>
+      {children}
+    </MissionContext.Provider>
+  )
+}
+
 export function useMissions() {
   const context = useContext(MissionContext)
 
