@@ -1,4 +1,4 @@
-import type { SessionLoggedOperation } from "../../../protocol";
+import type { SessionLoggedOperation } from "../../session/protocol";
 import { ATTRIBUTES_ROUTE, isAttributesRouteOperation } from "./attributes";
 import { CONCENTRATION_ROUTE, isConcentrationRouteOperation } from "./concentration";
 import { CONDITIONS_ROUTE, isConditionsRouteOperation } from "./conditions";
