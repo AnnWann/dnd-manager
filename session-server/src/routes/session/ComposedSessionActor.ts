@@ -153,7 +153,7 @@ export class SessionActor extends BaseSessionActor {
   }
 
   private async normalizeLog(): Promise<void> {
-    await normalizeStoredSessionLog(this.ctx.storage, this.ctx.getWebSockets());
+    await normalizeStoredSessionLog(this.ctx.storage);
   }
 
   private async sendAbilitySnapshot(socket: WebSocket): Promise<void> {
@@ -165,7 +165,7 @@ export class SessionActor extends BaseSessionActor {
   }
 
   private async sendInventorySnapshot(socket: WebSocket): Promise<void> {
-    const state = (await this.ctx.storage.get<SharedInventoryState>(INVENTORY_STATE_KEY)) ?? {
+    const state = (await this.ctx.storage.get<SharedInventoryState>>(INVENTORY_STATE_KEY)) ?? {
       initialized: false,
       revision: 0,
       partyInventory: [],
