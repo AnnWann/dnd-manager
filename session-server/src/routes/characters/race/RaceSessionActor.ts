@@ -225,22 +225,21 @@ function normalizeRace(value: CharacterRace): CharacterRace | null {
   return structuredClone(value);
 }
 
-function normalizeSkills(value: Record<string, string>, fallback: SessionSkillsState): SessionSkillsState | null {
+function normalizeSkills(value: Partial<Record<string, string>>, fallback: SessionSkillsState): SessionSkillsState | null {
   const allowed = new Set(["none", "proficient", "expertise"]);
   const next = { ...fallback } as Record<string, string>;
-  for (const key of Object.keys(fallback)) {
-    const candidate = value[key];
-    if (typeof candidate !== "string" || !allowed.has(candidate)) return null;
+  for (const [key, candidate] of Object.entries(value)) {
+    if (!(key in fallback) || typeof candidate !== "string" || !allowed.has(candidate)) return null;
     next[key] = candidate;
   }
   return next as SessionSkillsState;
 }
 
-function normalizeSavingThrows(value: Record<string, boolean>, fallback: SessionSavingThrowsState): SessionSavingThrowsState | null {
+function normalizeSavingThrows(value: Partial<Record<string, boolean>>, fallback: SessionSavingThrowsState): SessionSavingThrowsState | null {
   const next = { ...fallback };
-  for (const key of Object.keys(fallback) as Array<keyof SessionSavingThrowsState>) {
-    if (typeof value[key] !== "boolean") return null;
-    next[key] = value[key];
+  for (const [key, candidate] of Object.entries(value)) {
+    if (!(key in fallback) || typeof candidate !== "boolean") return null;
+    next[key as keyof SessionSavingThrowsState] = candidate;
   }
   return next;
 }
