@@ -19,7 +19,10 @@ import { authClient } from "../../auth/auth-client"
 import { getLocalUser, LOCAL_AUTH_BYPASS } from "../../auth/local-auth"
 import { MagicProvider } from "../../contexts/magicContext"
 import type { Spell } from "../../models/magic/spells/Spell"
-import { readUserCache, writeUserCache } from "../user/userPersistentCache"
+import {
+  readUserCacheSnapshot,
+  writeUserCache,
+} from "../user/userPersistentCache"
 
 type UserMagicState = {
   records: AccessibleHomebrewSpell[]
@@ -70,22 +73,24 @@ export function UserMagicProvider({ children }: { children: ReactNode }) {
     setErrorMessage("")
 
     try {
-      setRecords(await fetchSpellsOnce(userId))
+      const next = await fetchSpellsOnce(userId)
+      setRecordsState(next)
+      writeUserCache(userId, "spells", next, { synced: true })
     } catch {
       setErrorMessage("Não foi possível atualizar as magias homebrew.")
     } finally {
       setRefreshing(false)
       setLoading(false)
     }
-  }, [setRecords, userId])
+  }, [userId])
 
   useEffect(() => {
     if (!userId) return
 
-    const cached = readUserCache<AccessibleHomebrewSpell[]>(userId, "spells")
-    setRecordsState(cached ?? [])
+    const cached = readUserCacheSnapshot<AccessibleHomebrewSpell[]>(userId, "spells")
+    setRecordsState(cached?.data ?? [])
     setLoading(!cached)
-    void reload()
+    if (!cached || !cached.fresh) void reload()
   }, [reload, userId])
 
   const spells = useMemo(
