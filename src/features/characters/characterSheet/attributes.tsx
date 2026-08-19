@@ -2,7 +2,6 @@ import { useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
-import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatSigned } from "../../../lib/formatSigned"
 import { clampInt } from "../../../lib/numberFormat"
@@ -13,6 +12,7 @@ import {
 } from "../../../models/characters/CharacterAsi"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { ATTRIBUTE_KEYS, type Attribute } from "../../../models/sheet/Attribute"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 
 type Props = {
   character: CharacterTemplate
@@ -23,7 +23,7 @@ type Props = {
 }
 
 export function Attributes({ character, updateCharacter }: Props) {
-  const sessionRuntime = useOptionalSessionRuntime()
+  const { dispatchAttributeOperation } = useCharacterWorkspace()
   const [showRawValues, setShowRawValues] = useState(false)
   const asis = getCharacterAsis(character)
 
@@ -67,7 +67,7 @@ export function Attributes({ character, updateCharacter }: Props) {
               ? requestedScore
               : clampInt(baseScore + requestedScore - effectiveScore, 1, 30)
 
-            if (sessionRuntime?.dispatchSheetOperation({
+            if (dispatchAttributeOperation({
               type: "character.attribute.set",
               characterId: character.get("id"),
               attribute,
