@@ -8,6 +8,8 @@ export type SessionSharedInventoryState = {
   revision: number
   partyInventory: Itemmable[]
   groundInventory: Itemmable[]
+  carryCapacity?: number
+  additionalSupplyConsumption?: number
 }
 
 export type SessionInventoryOperation =
@@ -23,6 +25,8 @@ export type SessionInventoryOperation =
   | { type: "party.item.add"; characterId: string; item: Itemmable }
   | { type: "party.item.update"; characterId: string; itemId: string; item: Itemmable }
   | { type: "party.item.remove"; characterId: string; itemId: string }
+  | { type: "party.settings.carryCapacity.set"; characterId: "session"; value: number }
+  | { type: "party.settings.additionalSupplyConsumption.set"; characterId: "session"; value: number }
   | { type: "ground.item.add"; characterId: string; item: Itemmable }
   | { type: "ground.item.update"; characterId: string; itemId: string; item: Itemmable }
   | { type: "ground.item.remove"; characterId: string; itemId: string }
