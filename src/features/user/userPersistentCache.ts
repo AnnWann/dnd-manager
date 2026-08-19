@@ -12,6 +12,64 @@ export function readUserCache<T>(
   userId: string,
   key: UserCacheKey,
 ): T | undefined {
+  return readCacheEntry<T>(userId, key)
+}
+
+export function writeUserCache<T>(
+  userId: string,
+  key: UserCacheKey,
+  data: T,
+): void {
+  writeCacheEntry(userId, key, data)
+}
+
+export function readUserCharacterCache<T>(
+  userId: string,
+  characterId: string,
+): T | undefined {
+  if (!characterId) return undefined
+  return readCacheEntry<T>(userId, characterCacheKey(characterId))
+}
+
+export function writeUserCharacterCache<T>(
+  userId: string,
+  characterId: string,
+  data: T,
+): void {
+  if (!characterId) return
+  writeCacheEntry(userId, characterCacheKey(characterId), data)
+}
+
+export function removeUserCharacterCache(
+  userId: string,
+  characterId: string,
+): void {
+  if (!userId || !characterId || typeof window === "undefined") return
+  window.localStorage.removeItem(
+    storageKey(userId, characterCacheKey(characterId)),
+  )
+}
+
+export function clearUserCache(userId: string): void {
+  if (!userId || typeof window === "undefined") return
+
+  const prefix = `${USER_CACHE_PREFIX}:${encodeURIComponent(userId)}:`
+  const keysToRemove: string[] = []
+
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index)
+    if (key?.startsWith(prefix)) keysToRemove.push(key)
+  }
+
+  for (const key of keysToRemove) {
+    window.localStorage.removeItem(key)
+  }
+}
+
+function readCacheEntry<T>(
+  userId: string,
+  key: string,
+): T | undefined {
   if (!userId || typeof window === "undefined") return undefined
 
   try {
@@ -34,9 +92,9 @@ export function readUserCache<T>(
   }
 }
 
-export function writeUserCache<T>(
+function writeCacheEntry<T>(
   userId: string,
-  key: UserCacheKey,
+  key: string,
   data: T,
 ): void {
   if (!userId || typeof window === "undefined") return
@@ -55,14 +113,10 @@ export function writeUserCache<T>(
   }
 }
 
-export function clearUserCache(userId: string): void {
-  if (!userId || typeof window === "undefined") return
-
-  for (const key of ["characters", "campaigns", "spells"] as const) {
-    window.localStorage.removeItem(storageKey(userId, key))
-  }
+function characterCacheKey(characterId: string): string {
+  return `character:${encodeURIComponent(characterId)}`
 }
 
-function storageKey(userId: string, key: UserCacheKey): string {
+function storageKey(userId: string, key: string): string {
   return `${USER_CACHE_PREFIX}:${encodeURIComponent(userId)}:${key}`
 }
