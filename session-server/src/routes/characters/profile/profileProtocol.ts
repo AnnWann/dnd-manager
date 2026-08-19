@@ -1,6 +1,6 @@
-import type { CharacterBackground } from "../../src/models/characters/CharacterBackground";
-import type { CharacterProfile, CharacterRelationship } from "../../src/models/characters/characterProfile";
-import type { ProficiencyCategory } from "../../src/models/sheet/Proficiency";
+import type { CharacterBackground } from "../../../../../src/models/characters/CharacterBackground";
+import type { CharacterProfile, CharacterRelationship } from "../../../../../src/models/characters/characterProfile";
+import type { ProficiencyCategory } from "../../../../../src/models/sheet/Proficiency";
 
 export type SessionProfileOperation =
   | {
