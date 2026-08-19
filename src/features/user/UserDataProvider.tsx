@@ -15,7 +15,10 @@ import { getMyCampaigns, type UserCampaign } from "../../api/user-campaigns"
 import { getMyCharacters, type UserCharacterSummary } from "../../api/user-characters"
 import { authClient } from "../../auth/auth-client"
 import { getLocalUser, LOCAL_AUTH_BYPASS } from "../../auth/local-auth"
-import { readUserCache, writeUserCache } from "./userPersistentCache"
+import {
+  readUserCacheSnapshot,
+  writeUserCache,
+} from "./userPersistentCache"
 
 type UserDataState = {
   userId: string
@@ -42,13 +45,10 @@ type UserDataRequirements = {
 const UserDataContext = createContext<UserDataState | null>(null)
 const charactersRequests = new Map<string, Promise<UserCharacterSummary[]>>()
 const campaignsRequests = new Map<string, Promise<UserCampaign[]>>()
-const charactersAutoReconciled = new Set<string>()
-const campaignsAutoReconciled = new Set<string>()
 
 function fetchCharactersOnce(userId: string): Promise<UserCharacterSummary[]> {
   const existing = charactersRequests.get(userId)
   if (existing) return existing
-
   const request = getMyCharacters().finally(() => {
     if (charactersRequests.get(userId) === request) charactersRequests.delete(userId)
   })
@@ -59,7 +59,6 @@ function fetchCharactersOnce(userId: string): Promise<UserCharacterSummary[]> {
 function fetchCampaignsOnce(userId: string): Promise<UserCampaign[]> {
   const existing = campaignsRequests.get(userId)
   if (existing) return existing
-
   const request = getMyCampaigns().finally(() => {
     if (campaignsRequests.get(userId) === request) campaignsRequests.delete(userId)
   })
@@ -71,15 +70,12 @@ function requirementsForPath(pathname: string): UserDataRequirements {
   if (pathname === "/user" || pathname.startsWith("/user/characters")) {
     return { characters: true, campaigns: false }
   }
-
   if (pathname.startsWith("/user/campaigns")) {
     return { characters: true, campaigns: true }
   }
-
   if (pathname.startsWith("/user/spells")) {
     return { characters: false, campaigns: true }
   }
-
   return { characters: false, campaigns: false }
 }
 
@@ -99,27 +95,21 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
   const [charactersError, setCharactersError] = useState("")
   const [campaignsError, setCampaignsError] = useState("")
 
-  const setCharacters: Dispatch<SetStateAction<UserCharacterSummary[]>> = useCallback(
-    (next) => {
-      setCharactersState((current) => {
-        const resolved = typeof next === "function" ? next(current) : next
-        if (userId) writeUserCache(userId, "characters", resolved)
-        return resolved
-      })
-    },
-    [userId],
-  )
+  const setCharacters: Dispatch<SetStateAction<UserCharacterSummary[]>> = useCallback((next) => {
+    setCharactersState((current) => {
+      const resolved = typeof next === "function" ? next(current) : next
+      if (userId) writeUserCache(userId, "characters", resolved)
+      return resolved
+    })
+  }, [userId])
 
-  const setCampaigns: Dispatch<SetStateAction<UserCampaign[]>> = useCallback(
-    (next) => {
-      setCampaignsState((current) => {
-        const resolved = typeof next === "function" ? next(current) : next
-        if (userId) writeUserCache(userId, "campaigns", resolved)
-        return resolved
-      })
-    },
-    [userId],
-  )
+  const setCampaigns: Dispatch<SetStateAction<UserCampaign[]>> = useCallback((next) => {
+    setCampaignsState((current) => {
+      const resolved = typeof next === "function" ? next(current) : next
+      if (userId) writeUserCache(userId, "campaigns", resolved)
+      return resolved
+    })
+  }, [userId])
 
   const refreshCharacters = useCallback(async () => {
     if (!userId) return
@@ -127,14 +117,15 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     setCharactersError("")
     try {
       const next = await fetchCharactersOnce(userId)
-      setCharacters(next)
+      setCharactersState(next)
+      writeUserCache(userId, "characters", next, { synced: true })
     } catch {
       setCharactersError("Não foi possível atualizar seus personagens.")
     } finally {
       setCharactersRefreshing(false)
       setCharactersLoading(false)
     }
-  }, [setCharacters, userId])
+  }, [userId])
 
   const refreshCampaigns = useCallback(async () => {
     if (!userId) return
@@ -142,14 +133,15 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     setCampaignsError("")
     try {
       const next = await fetchCampaignsOnce(userId)
-      setCampaigns(next)
+      setCampaignsState(next)
+      writeUserCache(userId, "campaigns", next, { synced: true })
     } catch {
       setCampaignsError("Não foi possível atualizar suas campanhas.")
     } finally {
       setCampaignsRefreshing(false)
       setCampaignsLoading(false)
     }
-  }, [setCampaigns, userId])
+  }, [userId])
 
   const refreshAll = useCallback(async () => {
     await Promise.all([refreshCharacters(), refreshCampaigns()])
@@ -157,26 +149,18 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!userId) return
+    const cachedCharacters = readUserCacheSnapshot<UserCharacterSummary[]>(userId, "characters")
+    const cachedCampaigns = readUserCacheSnapshot<UserCampaign[]>(userId, "campaigns")
 
-    const cachedCharacters = readUserCache<UserCharacterSummary[]>(userId, "characters")
-    const cachedCampaigns = readUserCache<UserCampaign[]>(userId, "campaigns")
-
-    setCharactersState(cachedCharacters ?? [])
-    setCampaignsState(cachedCampaigns ?? [])
+    setCharactersState(cachedCharacters?.data ?? [])
+    setCampaignsState(cachedCampaigns?.data ?? [])
     setCharactersLoading(!cachedCharacters)
     setCampaignsLoading(!cachedCampaigns)
-  }, [userId])
 
-  useEffect(() => {
-    if (!userId) return
-
-    if (requirements.characters && !charactersAutoReconciled.has(userId)) {
-      charactersAutoReconciled.add(userId)
+    if (requirements.characters && (!cachedCharacters || !cachedCharacters.fresh)) {
       void refreshCharacters()
     }
-
-    if (requirements.campaigns && !campaignsAutoReconciled.has(userId)) {
-      campaignsAutoReconciled.add(userId)
+    if (requirements.campaigns && (!cachedCampaigns || !cachedCampaigns.fresh)) {
       void refreshCampaigns()
     }
   }, [
@@ -187,48 +171,43 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     userId,
   ])
 
-  const value = useMemo<UserDataState>(
-    () => ({
-      userId,
-      characters,
-      campaigns,
-      charactersLoading,
-      campaignsLoading,
-      charactersRefreshing,
-      campaignsRefreshing,
-      charactersError,
-      campaignsError,
-      setCharacters,
-      setCampaigns,
-      refreshCharacters,
-      refreshCampaigns,
-      refreshAll,
-    }),
-    [
-      campaigns,
-      campaignsError,
-      campaignsLoading,
-      campaignsRefreshing,
-      characters,
-      charactersError,
-      charactersLoading,
-      charactersRefreshing,
-      refreshAll,
-      refreshCampaigns,
-      refreshCharacters,
-      setCampaigns,
-      setCharacters,
-      userId,
-    ],
-  )
+  const value = useMemo<UserDataState>(() => ({
+    userId,
+    characters,
+    campaigns,
+    charactersLoading,
+    campaignsLoading,
+    charactersRefreshing,
+    campaignsRefreshing,
+    charactersError,
+    campaignsError,
+    setCharacters,
+    setCampaigns,
+    refreshCharacters,
+    refreshCampaigns,
+    refreshAll,
+  }), [
+    campaigns,
+    campaignsError,
+    campaignsLoading,
+    campaignsRefreshing,
+    characters,
+    charactersError,
+    charactersLoading,
+    charactersRefreshing,
+    refreshAll,
+    refreshCampaigns,
+    refreshCharacters,
+    setCampaigns,
+    setCharacters,
+    userId,
+  ])
 
   return <UserDataContext.Provider value={value}>{children}</UserDataContext.Provider>
 }
 
 export function useUserData(): UserDataState {
   const context = useContext(UserDataContext)
-  if (!context) {
-    throw new Error("useUserData precisa estar dentro de UserDataProvider.")
-  }
+  if (!context) throw new Error("useUserData precisa estar dentro de UserDataProvider.")
   return context
 }
