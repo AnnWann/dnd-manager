@@ -21,6 +21,19 @@ type CacheWriteOptions = {
   synced?: boolean
 }
 
+let activeUserCacheId = ""
+
+export function setActiveUserCacheId(userId: string): void {
+  activeUserCacheId = userId
+}
+
+export function readActiveUserCharacterCacheSnapshot<T>(
+  characterId: string,
+): UserCacheSnapshot<T> | undefined {
+  if (!activeUserCacheId) return undefined
+  return readUserCharacterCacheSnapshot<T>(activeUserCacheId, characterId)
+}
+
 export function readUserCache<T>(
   userId: string,
   key: UserCacheKey,
