@@ -1,18 +1,20 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react"
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react"
 import type { Spell } from "../models/magic/spells/Spell"
 import type { AppStateV1 } from "../lib/remoteState"
 import { normalizeSpellText } from "../lib/textNormalization"
-import spellData from "../data/spells.v1.json"
+import { getAllOfficialSpells } from "../api/spell-compendium"
 import metamagicData from "../data/metamagics.v1.json"
 import type {
   Metamagic,
   MetamagicId,
 } from "../models/magic/metamagic/Metamagic"
-
-const officialSpells = (spellData.spells as unknown[]).map((rawSpell) => {
-  const { source: _source, ...spell } = rawSpell as Record<string, unknown>
-  return spell as unknown as Spell
-})
 
 const officialMetamagics = Object.values(
   metamagicData as Record<MetamagicId, Metamagic>,
@@ -24,6 +26,8 @@ type MagicContextValue = {
   spellByIndex: Map<string, Spell>
   getSpellByIndex: (spellIndex: string) => Spell | undefined
   getSpellsByIndexes: (spellIndexes: string[]) => Spell[]
+  officialSpellsLoading: boolean
+  officialSpellsError: string
   metamagics: Metamagic[]
   metamagicById: Map<string, Metamagic>
   getMetamagicById: (metamagicId: MetamagicId) => Metamagic | undefined
@@ -52,6 +56,33 @@ export function MagicProvider({
   onSaveSpell,
   onDeleteSpell,
 }: MagicProviderProps) {
+  const [officialSpells, setOfficialSpells] = useState<Spell[]>([])
+  const [officialSpellsLoading, setOfficialSpellsLoading] = useState(true)
+  const [officialSpellsError, setOfficialSpellsError] = useState("")
+
+  useEffect(() => {
+    let active = true
+    setOfficialSpellsLoading(true)
+    setOfficialSpellsError("")
+
+    void getAllOfficialSpells()
+      .then((loaded) => {
+        if (!active) return
+        setOfficialSpells(loaded)
+      })
+      .catch(() => {
+        if (!active) return
+        setOfficialSpellsError("Não foi possível carregar o compêndio oficial de magias.")
+      })
+      .finally(() => {
+        if (active) setOfficialSpellsLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
   const normalizedSavedSpells = useMemo(
     () => spells.map(normalizeSpellText),
     [spells],
@@ -71,7 +102,7 @@ export function MagicProvider({
     }
 
     return map
-  }, [normalizedSavedSpells])
+  }, [normalizedSavedSpells, officialSpells])
 
   const allSpells = useMemo(
     () => Array.from(spellByIndex.values()),
@@ -161,6 +192,8 @@ export function MagicProvider({
         spellByIndex,
         getSpellByIndex,
         getSpellsByIndexes,
+        officialSpellsLoading,
+        officialSpellsError,
         metamagics,
         metamagicById,
         getMetamagicById,
