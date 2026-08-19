@@ -21,20 +21,20 @@ export type SessionAbilityOperation =
       type: "character.ability.use";
       characterId: string;
       source: SessionAbilitySource;
-      abilityName: string;
+      abilityName?: string;
       activationOptionId?: string;
     }
   | {
       type: "character.ability.restore";
       characterId: string;
       source: SessionAbilitySource;
-      abilityName: string;
+      abilityName?: string;
     }
   | {
       type: "character.ability.deactivate";
       characterId: string;
       source: SessionAbilitySource;
-      abilityName: string;
+      abilityName?: string;
     }
   | {
       type: "character.ability.save";
@@ -45,7 +45,7 @@ export type SessionAbilityOperation =
       type: "character.ability.remove";
       characterId: string;
       abilityId: string;
-      abilityName: string;
+      abilityName?: string;
     };
 
 export type SessionAbilityClientMessage =
@@ -93,18 +93,21 @@ function isAbilityOperation(value: unknown): value is SessionAbilityOperation {
     return false;
   }
 
+  const hasValidOptionalName =
+    value.abilityName === undefined || isAbilityName(value.abilityName);
+
   switch (value.type) {
     case "character.ability.use":
       return isAbilitySource(value.source) &&
-        isAbilityName(value.abilityName) &&
+        hasValidOptionalName &&
         (value.activationOptionId === undefined || typeof value.activationOptionId === "string");
     case "character.ability.restore":
     case "character.ability.deactivate":
-      return isAbilitySource(value.source) && isAbilityName(value.abilityName);
+      return isAbilitySource(value.source) && hasValidOptionalName;
     case "character.ability.save":
       return isRecord(value.ability) && typeof value.ability.id === "string" && typeof value.ability.name === "string";
     case "character.ability.remove":
-      return typeof value.abilityId === "string" && value.abilityId.trim().length > 0 && isAbilityName(value.abilityName);
+      return typeof value.abilityId === "string" && value.abilityId.trim().length > 0 && hasValidOptionalName;
     default:
       return false;
   }
