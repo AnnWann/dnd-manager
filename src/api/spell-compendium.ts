@@ -46,7 +46,6 @@ export type SpellCompendiumPage<T> = {
   totalPages: number
 }
 
-let officialSpellsPromise: Promise<Spell[]> | null = null
 const spellDetailCache = new Map<string, Spell>()
 
 export async function queryOfficialSpells(
@@ -175,27 +174,6 @@ export async function getOfficialSpellsByIndexes(
   return normalizedIndexes
     .map((index) => byIndex.get(index))
     .filter((spell): spell is Spell => Boolean(spell))
-}
-
-/** Compatibility loader kept only for legacy consumers still being migrated. */
-export function getAllOfficialSpells(): Promise<Spell[]> {
-  if (officialSpellsPromise) return officialSpellsPromise
-
-  officialSpellsPromise = (async () => {
-    if (import.meta.env.DEV && LOCAL_AUTH_BYPASS) return loadLocalOfficialSpells()
-
-    const response = await apiClient.get<SpellCompendiumPage<Spell>>(
-      "/compendium/spells",
-      { params: { includeDetails: true, pageSize: 1000 } },
-    )
-    for (const spell of response.data.spells) spellDetailCache.set(spell.index, spell)
-    return response.data.spells
-  })().catch((error) => {
-    officialSpellsPromise = null
-    throw error
-  })
-
-  return officialSpellsPromise
 }
 
 async function loadLocalOfficialSpells(): Promise<Spell[]> {
