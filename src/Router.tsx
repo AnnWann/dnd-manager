@@ -1,162 +1,142 @@
-import { useEffect } from "react"
+import { lazy, Suspense } from "react"
 import {
   Navigate,
-  Outlet,
   Route,
   Routes,
   useLocation,
   useParams,
 } from "react-router-dom"
 
-import { authClient } from "./auth/auth-client"
-import { getLocalUser } from "./auth/local-auth"
 import { RequireAuth } from "./auth/requireAuth"
-import { useSyncContext } from "./contexts/syncContext"
-import { SessionRuntimeProvider } from "./features/session-runtime/SessionRuntimeProvider"
-import { readActiveSession, rememberActiveSession } from "./lib/activeCampaign"
+import { readActiveSession } from "./lib/activeCampaign"
 import { sessionPath } from "./lib/campaignRoutes"
-import { CharacterCreateView } from "./views/CharacterCreateView"
-import {
-  CharacterDetailView,
-  CharacterIndexView,
-} from "./views/CharacterRouteViews"
-import { CreaturesCompendiumView } from "./views/CreaturesCompendiumView"
-import { CustomSystemEditorView } from "./views/CustomSystemEditorView"
-import { CustomSystemsListView } from "./views/CustomSystemsListView"
-import { GroundInventoryView } from "./views/GroundInventoryView"
-import { InitiativePlayerView } from "./views/InitiativePlayerView"
-import { InitiativeView } from "./views/InitiativeView"
-import { ItemsCompendiumView } from "./views/ItemsCompendiumView"
-import { MagicView } from "./views/MagicView"
-import { MissionsView } from "./views/MissionsView"
-import { NotFoundView } from "./views/NotFoundView"
-import { PartyInventoryView } from "./views/PartyInventoryView"
-import { AuthView } from "./views/AuthView"
-import { UnauthorizedView } from "./views/UnauthorisedView"
-import { CampaignCharactersView } from "./views/campaign/CampaignCharactersView"
-import { SessionCharacterLevelUpView } from "./views/session/SessionCharacterLevelUpView"
-import { SessionCreationRequestsView } from "./views/session/SessionCreationRequestsView"
-import { SessionCreationSettingsView } from "./views/session/SessionCreationSettingsView"
-import { SessionHomebrewView } from "./views/session/SessionHomebrewView"
-import { UserCampaignsRouteView } from "./views/user/UserCampaignsRouteView"
-import { UserCharacterAddSpellsView } from "./views/user/UserCharacterAddSpellsView"
-import { UserCharacterCreateItemView } from "./views/user/UserCharacterCreateItemView"
-import { UserCharacterCreateView } from "./views/user/UserCharacterCreateView"
-import { UserCharacterDetailView } from "./views/user/UserCharacterDetailView"
-import { UserCharacterLevelUpView } from "./views/user/UserCharacterLevelUpView"
-import { UserCharactersTab } from "./views/user/UserCharactersTab"
-import { UserDashboardView } from "./views/user/UserDashboardView"
-import { UserSpellsTab } from "./views/user/UserSpellsTab"
+
+const AuthView = lazy(() => import("./views/AuthView").then((module) => ({ default: module.AuthView })))
+const NotFoundView = lazy(() => import("./views/NotFoundView").then((module) => ({ default: module.NotFoundView })))
+const UnauthorizedView = lazy(() => import("./views/UnauthorisedView").then((module) => ({ default: module.UnauthorizedView })))
+const UserDashboardView = lazy(() => import("./views/user/UserDashboardView").then((module) => ({ default: module.UserDashboardView })))
+const UserCharactersTab = lazy(() => import("./views/user/UserCharactersTab").then((module) => ({ default: module.UserCharactersTab })))
+const UserCharacterCreateView = lazy(() => import("./views/user/UserCharacterCreateView").then((module) => ({ default: module.UserCharacterCreateView })))
+const UserCharacterLevelUpView = lazy(() => import("./views/user/UserCharacterLevelUpView").then((module) => ({ default: module.UserCharacterLevelUpView })))
+const UserCharacterAddSpellsView = lazy(() => import("./views/user/UserCharacterAddSpellsView").then((module) => ({ default: module.UserCharacterAddSpellsView })))
+const UserCharacterCreateItemView = lazy(() => import("./views/user/UserCharacterCreateItemView").then((module) => ({ default: module.UserCharacterCreateItemView })))
+const UserCharacterDetailView = lazy(() => import("./views/user/UserCharacterDetailView").then((module) => ({ default: module.UserCharacterDetailView })))
+const UserSpellsTab = lazy(() => import("./views/user/UserSpellsTab").then((module) => ({ default: module.UserSpellsTab })))
+const UserCampaignsRouteView = lazy(() => import("./views/user/UserCampaignsRouteView").then((module) => ({ default: module.UserCampaignsRouteView })))
+const SessionRouteOutlet = lazy(() => import("./features/session-runtime/SessionRouteOutlet").then((module) => ({ default: module.SessionRouteOutlet })))
+const CampaignCharactersView = lazy(() => import("./views/campaign/CampaignCharactersView").then((module) => ({ default: module.CampaignCharactersView })))
+const CharacterIndexView = lazy(() => import("./views/CharacterRouteViews").then((module) => ({ default: module.CharacterIndexView })))
+const CharacterDetailView = lazy(() => import("./views/CharacterRouteViews").then((module) => ({ default: module.CharacterDetailView })))
+const CharacterCreateView = lazy(() => import("./views/CharacterCreateView").then((module) => ({ default: module.CharacterCreateView })))
+const SessionCharacterLevelUpView = lazy(() => import("./views/session/SessionCharacterLevelUpView").then((module) => ({ default: module.SessionCharacterLevelUpView })))
+const PartyInventoryView = lazy(() => import("./views/PartyInventoryView").then((module) => ({ default: module.PartyInventoryView })))
+const GroundInventoryView = lazy(() => import("./views/GroundInventoryView").then((module) => ({ default: module.GroundInventoryView })))
+const MissionsView = lazy(() => import("./views/MissionsView").then((module) => ({ default: module.MissionsView })))
+const InitiativeRoleView = lazy(() => import("./views/InitiativeRoleView").then((module) => ({ default: module.InitiativeRoleView })))
+const SessionCreationSettingsView = lazy(() => import("./views/session/SessionCreationSettingsView").then((module) => ({ default: module.SessionCreationSettingsView })))
+const SessionCreationRequestsView = lazy(() => import("./views/session/SessionCreationRequestsView").then((module) => ({ default: module.SessionCreationRequestsView })))
+const SessionHomebrewView = lazy(() => import("./views/session/SessionHomebrewView").then((module) => ({ default: module.SessionHomebrewView })))
+const ItemsCompendiumView = lazy(() => import("./views/ItemsCompendiumView").then((module) => ({ default: module.ItemsCompendiumView })))
+const CreaturesCompendiumView = lazy(() => import("./views/CreaturesCompendiumView").then((module) => ({ default: module.CreaturesCompendiumView })))
+const CustomSystemsListView = lazy(() => import("./views/CustomSystemsListView").then((module) => ({ default: module.CustomSystemsListView })))
+const CustomSystemEditorView = lazy(() => import("./views/CustomSystemEditorView").then((module) => ({ default: module.CustomSystemEditorView })))
+const MagicView = lazy(() => import("./views/MagicView").then((module) => ({ default: module.MagicView })))
 
 export function AppRouter() {
   return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/user" replace />} />
-      <Route path="/auth" element={<AuthView />} />
-      <Route path="/not-found" element={<NotFoundView />} />
-      <Route path="/unauthorized" element={<UnauthorizedView />} />
+    <Suspense fallback={<RouteLoading />}>
+      <Routes>
+        <Route path="/" element={<Navigate to="/user" replace />} />
+        <Route path="/auth" element={<AuthView />} />
+        <Route path="/not-found" element={<NotFoundView />} />
+        <Route path="/unauthorized" element={<UnauthorizedView />} />
 
-      <Route
-        path="/user"
-        element={
-          <RequireAuth>
-            <UserDashboardView />
-          </RequireAuth>
-        }
-      >
-        <Route index element={<Navigate to="characters" replace />} />
-        <Route path="characters" element={<UserCharactersTab />} />
-        <Route path="characters/create" element={<UserCharacterCreateView />} />
-        <Route path="characters/:characterId" element={<Navigate to="sheet" replace />} />
-        <Route path="characters/:characterId/level-up" element={<UserCharacterLevelUpView />} />
-        <Route path="characters/:characterId/spells-list/add-spells" element={<UserCharacterAddSpellsView />} />
-        <Route path="characters/:characterId/inventory/add-item" element={<UserCharacterCreateItemView />} />
-        <Route path="characters/:characterId/:tab" element={<UserCharacterDetailView />} />
-        <Route path="spells" element={<UserSpellsTab />} />
-        <Route path="campaigns" element={<UserCampaignsRouteView />} />
-      </Route>
+        <Route
+          path="/user"
+          element={
+            <RequireAuth>
+              <UserDashboardView />
+            </RequireAuth>
+          }
+        >
+          <Route index element={<Navigate to="characters" replace />} />
+          <Route path="characters" element={<UserCharactersTab />} />
+          <Route path="characters/create" element={<UserCharacterCreateView />} />
+          <Route path="characters/:characterId" element={<Navigate to="sheet" replace />} />
+          <Route path="characters/:characterId/level-up" element={<UserCharacterLevelUpView />} />
+          <Route path="characters/:characterId/spells-list/add-spells" element={<UserCharacterAddSpellsView />} />
+          <Route path="characters/:characterId/inventory/add-item" element={<UserCharacterCreateItemView />} />
+          <Route path="characters/:characterId/:tab" element={<UserCharacterDetailView />} />
+          <Route path="spells" element={<UserSpellsTab />} />
+          <Route path="campaigns" element={<UserCampaignsRouteView />} />
+        </Route>
 
-      <Route
-        path="/session/:campaignId"
-        element={
-          <RequireAuth>
-            <SessionRouteOutlet />
-          </RequireAuth>
-        }
-      >
-        <Route index element={<Navigate to="characters" replace />} />
+        <Route
+          path="/session/:campaignId"
+          element={
+            <RequireAuth>
+              <SessionRouteOutlet />
+            </RequireAuth>
+          }
+        >
+          <Route index element={<Navigate to="characters" replace />} />
 
-        <Route path="characters" element={<CampaignCharactersView />} />
-        <Route path="character" element={<CharacterIndexView />} />
-        <Route path="character/create" element={<CharacterCreateView />} />
-        <Route path="character/:characterId" element={<CharacterDetailView />} />
-        <Route path="character/:characterId/level-up" element={<SessionCharacterLevelUpView />} />
-        <Route path="character/:characterId/:tab" element={<CharacterDetailView />} />
-        <Route path="party-inventory" element={<PartyInventoryView />} />
-        <Route path="ground-inventory" element={<GroundInventoryView />} />
-        <Route path="missions" element={<MissionsView />} />
-        <Route path="initiative" element={<InitiativeRoute />} />
+          <Route path="characters" element={<CampaignCharactersView />} />
+          <Route path="character" element={<CharacterIndexView />} />
+          <Route path="character/create" element={<CharacterCreateView />} />
+          <Route path="character/:characterId" element={<CharacterDetailView />} />
+          <Route path="character/:characterId/level-up" element={<SessionCharacterLevelUpView />} />
+          <Route path="character/:characterId/:tab" element={<CharacterDetailView />} />
+          <Route path="party-inventory" element={<PartyInventoryView />} />
+          <Route path="ground-inventory" element={<GroundInventoryView />} />
+          <Route path="missions" element={<MissionsView />} />
+          <Route path="initiative" element={<InitiativeRoleView />} />
 
-        <Route path="creation" element={<Navigate to="settings" replace />} />
-        <Route path="creation/settings" element={<SessionCreationSettingsView />} />
-        <Route path="creation/requests" element={<SessionCreationRequestsView />} />
-        <Route path="creation/homebrew" element={<SessionHomebrewView />} />
-        <Route path="creation/items-compendium" element={<ItemsCompendiumView />} />
-        <Route path="creation/creatures-compendium" element={<CreaturesCompendiumView />} />
-        <Route path="creation/custom-systems" element={<CustomSystemsListView />} />
-        <Route path="creation/custom-systems/:systemId" element={<CustomSystemEditorView />} />
-        <Route path="creation/custom-systems/:systemId/:tab" element={<CustomSystemEditorView />} />
-        <Route path="creation/magic" element={<MagicView />} />
+          <Route path="creation" element={<Navigate to="settings" replace />} />
+          <Route path="creation/settings" element={<SessionCreationSettingsView />} />
+          <Route path="creation/requests" element={<SessionCreationRequestsView />} />
+          <Route path="creation/homebrew" element={<SessionHomebrewView />} />
+          <Route path="creation/items-compendium" element={<ItemsCompendiumView />} />
+          <Route path="creation/creatures-compendium" element={<CreaturesCompendiumView />} />
+          <Route path="creation/custom-systems" element={<CustomSystemsListView />} />
+          <Route path="creation/custom-systems/:systemId" element={<CustomSystemEditorView />} />
+          <Route path="creation/custom-systems/:systemId/:tab" element={<CustomSystemEditorView />} />
+          <Route path="creation/magic" element={<MagicView />} />
 
-        <Route path="requests" element={<LegacyCreationRouteRedirect suffix="requests" />} />
-        <Route path="homebrew" element={<LegacyCreationRouteRedirect suffix="homebrew" />} />
-        <Route path="items-compendium" element={<LegacyCreationRouteRedirect suffix="items-compendium" />} />
-        <Route path="creatures-compendium" element={<LegacyCreationRouteRedirect suffix="creatures-compendium" />} />
-        <Route path="custom-systems" element={<LegacyCreationRouteRedirect suffix="custom-systems" />} />
-        <Route path="custom-systems/:systemId" element={<LegacyCreationCustomSystemRedirect />} />
-        <Route path="custom-systems/:systemId/:tab" element={<LegacyCreationCustomSystemRedirect />} />
-        <Route path="magic" element={<LegacyCreationRouteRedirect suffix="magic" />} />
-      </Route>
+          <Route path="requests" element={<LegacyCreationRouteRedirect suffix="requests" />} />
+          <Route path="homebrew" element={<LegacyCreationRouteRedirect suffix="homebrew" />} />
+          <Route path="items-compendium" element={<LegacyCreationRouteRedirect suffix="items-compendium" />} />
+          <Route path="creatures-compendium" element={<LegacyCreationRouteRedirect suffix="creatures-compendium" />} />
+          <Route path="custom-systems" element={<LegacyCreationRouteRedirect suffix="custom-systems" />} />
+          <Route path="custom-systems/:systemId" element={<LegacyCreationCustomSystemRedirect />} />
+          <Route path="custom-systems/:systemId/:tab" element={<LegacyCreationCustomSystemRedirect />} />
+          <Route path="magic" element={<LegacyCreationRouteRedirect suffix="magic" />} />
+        </Route>
 
-      <Route path="/campaign/:campaignId/*" element={<LegacyCampaignNamespaceRedirect />} />
-      <Route path="/character/*" element={<LegacySessionRedirect />} />
-      <Route path="/party-inventory" element={<LegacySessionRedirect />} />
-      <Route path="/ground-inventory" element={<LegacySessionRedirect />} />
-      <Route path="/items-compendium" element={<LegacyCreationRootRedirect suffix="items-compendium" />} />
-      <Route path="/missions" element={<LegacySessionRedirect />} />
-      <Route path="/creatures-compendium" element={<LegacyCreationRootRedirect suffix="creatures-compendium" />} />
-      <Route path="/custom-systems/*" element={<LegacyCreationRootRedirect suffix="custom-systems" preserveTail />} />
-      <Route path="/initiative" element={<LegacySessionRedirect />} />
-      <Route path="/magic" element={<LegacyCreationRootRedirect suffix="magic" />} />
-      <Route path="/requests" element={<LegacyCreationRootRedirect suffix="requests" />} />
-      <Route path="/homebrew" element={<LegacyCreationRootRedirect suffix="homebrew" />} />
+        <Route path="/campaign/:campaignId/*" element={<LegacyCampaignNamespaceRedirect />} />
+        <Route path="/character/*" element={<LegacySessionRedirect />} />
+        <Route path="/party-inventory" element={<LegacySessionRedirect />} />
+        <Route path="/ground-inventory" element={<LegacySessionRedirect />} />
+        <Route path="/items-compendium" element={<LegacyCreationRootRedirect suffix="items-compendium" />} />
+        <Route path="/missions" element={<LegacySessionRedirect />} />
+        <Route path="/creatures-compendium" element={<LegacyCreationRootRedirect suffix="creatures-compendium" />} />
+        <Route path="/custom-systems/*" element={<LegacyCreationRootRedirect suffix="custom-systems" preserveTail />} />
+        <Route path="/initiative" element={<LegacySessionRedirect />} />
+        <Route path="/magic" element={<LegacyCreationRootRedirect suffix="magic" />} />
+        <Route path="/requests" element={<LegacyCreationRootRedirect suffix="requests" />} />
+        <Route path="/homebrew" element={<LegacyCreationRootRedirect suffix="homebrew" />} />
 
-      <Route path="*" element={<Navigate to="/not-found" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/not-found" replace />} />
+      </Routes>
+    </Suspense>
   )
 }
 
-function SessionRouteOutlet() {
-  const { campaignId } = useParams<{ campaignId?: string }>()
-  const { userRole } = useSyncContext()
-  const { data: authSession } = authClient.useSession()
-  const localUser = getLocalUser()
-  const userId = authSession?.user?.id ?? localUser?.id
-
-  useEffect(() => {
-    if (campaignId) rememberActiveSession(campaignId)
-  }, [campaignId])
-
-  if (!campaignId || !userId) return <Outlet />
-
+function RouteLoading() {
   return (
-    <SessionRuntimeProvider
-      sessionId={campaignId}
-      userId={userId}
-      role={userRole === "master" ? "MASTER" : "PLAYER"}
-    >
-      <Outlet />
-    </SessionRuntimeProvider>
+    <div className="grid min-h-dvh place-items-center text-sm text-textMuted">
+      Carregando...
+    </div>
   )
 }
 
@@ -238,9 +218,4 @@ function LegacyCreationRootRedirect({
       replace
     />
   )
-}
-
-function InitiativeRoute() {
-  const { userRole } = useSyncContext()
-  return userRole === "master" ? <InitiativeView /> : <InitiativePlayerView />
 }
