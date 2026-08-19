@@ -3,6 +3,7 @@ import type { Spell } from "../../src/models/magic/spells/Spell"
 
 const CACHE_CONTROL = "public, max-age=86400, stale-while-revalidate=604800"
 const MAX_PAGE_SIZE = 1000
+const MAX_INDEX_FILTER_SIZE = 100
 
 const officialSpells = (spellData.spells as unknown[]).map((rawSpell) => {
   const { source: _source, ...spell } = rawSpell as Record<string, unknown>
@@ -17,6 +18,7 @@ export async function GET(request: Request): Promise<Response> {
   const school = normalizeSearch(url.searchParams.get("school") ?? "")
   const concentration = parseOptionalBoolean(url.searchParams.get("concentration"))
   const ritual = parseOptionalBoolean(url.searchParams.get("ritual"))
+  const indexes = parseIndexes(url.searchParams.get("indexes"))
   const page = Math.max(1, parsePositiveInteger(url.searchParams.get("page"), 1))
   const pageSize = Math.min(
     MAX_PAGE_SIZE,
@@ -25,6 +27,7 @@ export async function GET(request: Request): Promise<Response> {
   const includeDetails = url.searchParams.get("includeDetails") === "true"
 
   const filtered = officialSpells.filter((spell) => {
+    if (indexes && !indexes.has(spell.index)) return false
     if (level !== null && spell.slotLevel !== level) return false
     if (className && !spell.classes.some((entry) => normalizeSearch(entry) === className)) {
       return false
@@ -114,4 +117,16 @@ function parseOptionalBoolean(value: string | null): boolean | null {
 function parsePositiveInteger(value: string | null, fallback: number): number {
   const parsed = Number(value)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function parseIndexes(value: string | null): Set<string> | null {
+  if (!value?.trim()) return null
+
+  const indexes = value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .slice(0, MAX_INDEX_FILTER_SIZE)
+
+  return indexes.length ? new Set(indexes) : null
 }
