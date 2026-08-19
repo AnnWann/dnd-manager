@@ -37,6 +37,8 @@ type SharedInventoryState = {
   revision: number;
   partyInventory: Itemmable[];
   groundInventory: Itemmable[];
+  carryCapacity?: number;
+  additionalSupplyConsumption?: number;
 };
 
 type TransferRequest = Extract<SessionInventoryOperation, { type: "inventory.item.transfer" }>["request"];
@@ -113,9 +115,10 @@ export class SessionActor extends EquipmentSessionActor {
     }
     if (!canPerform(connection, operation, hp)) return sendError(webSocket, "CHARACTER_ACCESS_DENIED", "You cannot perform this inventory operation.");
 
-    const beforeAbilities = pick(abilities, touchedIds);
-    const beforeHp = pick(hp, touchedIds);
-    const beforeConditions = pick(conditions, touchedIds);
+    const snapshotsAllCharacters = isPartySettingsOperation(operation);
+    const beforeAbilities = snapshotsAllCharacters ? structuredClone(abilities) : pick(abilities, touchedIds);
+    const beforeHp = snapshotsAllCharacters ? structuredClone(hp) : pick(hp, touchedIds);
+    const beforeConditions = snapshotsAllCharacters ? structuredClone(conditions) : pick(conditions, touchedIds);
     const beforeInventory = structuredClone(inventory);
 
     let result: ApplyResult | null = null;
@@ -132,7 +135,9 @@ export class SessionActor extends EquipmentSessionActor {
       );
     }
 
-    const affectedScopes = inventoryOperationScopes(operation);
+    const affectedScopes = snapshotsAllCharacters
+      ? [SHARED_INVENTORY_SCOPE, ...Object.keys(abilities).map(characterScope)]
+      : inventoryOperationScopes(operation);
     const record = createSessionLogRecord({
       actorId: connection.userId,
       operation,
@@ -284,6 +289,22 @@ function applyInventoryOperation(
       inventory.partyInventory = next;
       sharedChanged = true;
       inventory.revision += 1;
+      return result(true);
+    }
+    case "party.settings.carryCapacity.set": {
+      const value = Math.max(0, operation.value);
+      if (inventory.carryCapacity === value) return result(false);
+      inventory.carryCapacity = value;
+      inventory.revision += 1;
+      sharedChanged = true;
+      return result(true);
+    }
+    case "party.settings.additionalSupplyConsumption.set": {
+      const value = Math.max(0, operation.value);
+      if (inventory.additionalSupplyConsumption === value) return result(false);
+      inventory.additionalSupplyConsumption = value;
+      inventory.revision += 1;
+      sharedChanged = true;
       return result(true);
     }
     case "ground.item.add":
@@ -505,6 +526,11 @@ function inventoryOperationScopes(operation: SessionInventoryOperation): string[
   }
 
   return [...scopes];
+}
+
+function isPartySettingsOperation(operation: SessionInventoryOperation): boolean {
+  return operation.type === "party.settings.carryCapacity.set"
+    || operation.type === "party.settings.additionalSupplyConsumption.set";
 }
 
 function hydrate(
