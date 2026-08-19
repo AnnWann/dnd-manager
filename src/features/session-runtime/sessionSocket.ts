@@ -11,6 +11,7 @@ import {
 } from "./abilitySessionProtocol"
 import type { SessionMagicOperation } from "./magicSessionProtocol"
 import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
+import type { SessionProficiencyClientMessage } from "./proficiencySessionProtocol"
 import type {
   SessionInventoryClientMessage,
   SessionInventoryServerMessage,
@@ -54,6 +55,7 @@ export class SessionSocket {
     | SessionSheetOperationMessage
     | SessionAbilityClientMessage
     | SessionInventoryClientMessage
+    | SessionProficiencyClientMessage
     | { type: "session.magic.operation"; operation: SessionMagicOperation }
     | { type: "session.equipment.operation"; operation: SessionEquipmentOperation }
   ): boolean {
