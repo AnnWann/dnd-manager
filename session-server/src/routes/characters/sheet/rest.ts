@@ -1,4 +1,4 @@
-import type { SessionLoggedOperation } from "../../../protocol";
+import type { SessionLoggedOperation } from "../../session/protocol";
 
 export const REST_ROUTE = "characters/sheet/rest" as const;
 
