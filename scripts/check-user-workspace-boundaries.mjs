@@ -21,11 +21,6 @@ const campaignOnlyAllowlist = new Set([
   "src/features/characters/workspace/SessionCharacterWorkspace.tsx",
 ])
 
-const forbiddenPatterns = [
-  /from\s+["'][^"']*contexts\/characterContext["']/,
-  /from\s+["'][^"']*contexts\\characterContext["']/,
-]
-
 const candidates = new Set(explicitSharedFiles)
 for (const scanRoot of scanRoots) {
   await collectSourceFiles(path.join(root, scanRoot), scanRoot, candidates)
@@ -36,14 +31,17 @@ for (const relativePath of [...candidates].sort()) {
   if (campaignOnlyAllowlist.has(relativePath)) continue
 
   const source = await readFile(path.join(root, relativePath), "utf8")
-  if (forbiddenPatterns.some((pattern) => pattern.test(source))) {
+  const importsCharacterContext = /contexts[\\/]characterContext/.test(source)
+  const usesLegacyHook = /\buseCharacterContext\b/.test(source)
+
+  if (importsCharacterContext && usesLegacyHook) {
     violations.push(relativePath)
   }
 }
 
 if (violations.length > 0) {
   console.error(
-    "Shared character UI must use CharacterWorkspace instead of CharacterContext.",
+    "Shared character UI must use CharacterWorkspace instead of useCharacterContext.",
   )
   for (const violation of violations) {
     console.error(` - ${violation}`)
