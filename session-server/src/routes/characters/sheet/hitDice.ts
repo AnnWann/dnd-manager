@@ -1,4 +1,4 @@
-import type { SessionLoggedOperation } from "../../../protocol";
+import type { SessionLoggedOperation } from "../../session/protocol";
 
 export const HIT_DICE_ROUTE = "characters/sheet/hitdice" as const;
 
