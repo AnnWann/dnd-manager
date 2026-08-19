@@ -12,6 +12,7 @@ import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRunti
 import type {
   SessionDieSides,
   SessionHitDiceState,
+  SessionRestOperation,
 } from "../../session-runtime/sessionProtocol"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
@@ -83,12 +84,6 @@ export function CharacterRestControls({
     hitDiceConsumption: HitDiceConsumption,
   ) {
     if (runtime) {
-      // Non-migrated short-rest resources still use the legacy reducer. HP and
-      // hit dice are deliberately excluded and applied atomically by the DO.
-      updateCharacter(characterId, (current) =>
-        takeShortRest(current, 0, {}),
-      )
-
       if (runtime.status === "connected") {
         runtime.dispatchHpOperation({
           type: "character.rest.short",
@@ -115,25 +110,29 @@ export function CharacterRestControls({
 
   function confirmLongRest(selection: LongRestSupplySelection[]) {
     if (runtime) {
-      const requiredSupply = getRequiredSupplyForRace(character.get("sheet").race)
-      const totals = getSupplySelectionTotals(partyInventory, selection)
-      const recovery =
-        totals.selectedPortions + PORTION_EPSILON < requiredSupply
-          ? "partial" as const
-          : "full" as const
-
       if (runtime.status === "connected") {
-        runtime.dispatchHpOperation({
-          type: "character.rest.long",
+        const requiredSupply = getRequiredSupplyForRace(character.get("sheet").race)
+        const totals = getSupplySelectionTotals(partyInventory, selection)
+        const recovery =
+          totals.selectedPortions + PORTION_EPSILON < requiredSupply
+            ? "partial" as const
+            : "full" as const
+        const operation = {
+          type: "character.rest.long" as const,
           characterId,
           recovery,
-        })
+          selection,
+        } satisfies SessionRestOperation & {
+          type: "character.rest.long"
+          selection: LongRestSupplySelection[]
+        }
+        runtime.dispatchHpOperation(operation)
       } else {
         console.warn("[session-runtime] Long rest ignored by the authoritative session server while disconnected.")
       }
+    } else {
+      completeLongRest(characterId, selection)
     }
-
-    completeLongRest(characterId, selection)
     setLongRestOpen(false)
   }
 
