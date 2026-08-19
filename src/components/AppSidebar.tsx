@@ -26,6 +26,7 @@ type SidebarItem = {
   icon: ReactNode
   active: boolean
   onClick: () => void
+  onIntent?: () => void
 }
 
 type AppSidebarProps = {
@@ -244,6 +245,9 @@ function SidebarNavigation({
           type="button"
           title={collapsed ? item.label : undefined}
           aria-current={item.active ? "page" : undefined}
+          onPointerEnter={item.onIntent}
+          onFocus={item.onIntent}
+          onTouchStart={item.onIntent}
           onClick={() => onItemClick(item)}
           className={cn(
             "group relative flex h-11 w-full items-center rounded-lg border",
