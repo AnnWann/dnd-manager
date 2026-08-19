@@ -9,6 +9,7 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react"
+import { useLocation } from "react-router-dom"
 
 import { getMyCampaigns, type UserCampaign } from "../../api/user-campaigns"
 import { getMyCharacters, type UserCharacterSummary } from "../../api/user-characters"
@@ -33,9 +34,16 @@ type UserDataState = {
   refreshAll: () => Promise<void>
 }
 
+type UserDataRequirements = {
+  characters: boolean
+  campaigns: boolean
+}
+
 const UserDataContext = createContext<UserDataState | null>(null)
 const charactersRequests = new Map<string, Promise<UserCharacterSummary[]>>()
 const campaignsRequests = new Map<string, Promise<UserCampaign[]>>()
+const charactersAutoReconciled = new Set<string>()
+const campaignsAutoReconciled = new Set<string>()
 
 function fetchCharactersOnce(userId: string): Promise<UserCharacterSummary[]> {
   const existing = charactersRequests.get(userId)
@@ -59,7 +67,25 @@ function fetchCampaignsOnce(userId: string): Promise<UserCampaign[]> {
   return request
 }
 
+function requirementsForPath(pathname: string): UserDataRequirements {
+  if (pathname === "/user" || pathname.startsWith("/user/characters")) {
+    return { characters: true, campaigns: false }
+  }
+
+  if (pathname.startsWith("/user/campaigns")) {
+    return { characters: true, campaigns: true }
+  }
+
+  if (pathname.startsWith("/user/spells")) {
+    return { characters: false, campaigns: true }
+  }
+
+  return { characters: false, campaigns: false }
+}
+
 export function UserDataProvider({ children }: { children: ReactNode }) {
+  const location = useLocation()
+  const requirements = requirementsForPath(location.pathname)
   const { data: session } = authClient.useSession()
   const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
   const userId = session?.user?.id ?? localUser?.id ?? ""
@@ -139,9 +165,27 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     setCampaignsState(cachedCampaigns ?? [])
     setCharactersLoading(!cachedCharacters)
     setCampaignsLoading(!cachedCampaigns)
+  }, [userId])
 
-    void refreshAll()
-  }, [refreshAll, userId])
+  useEffect(() => {
+    if (!userId) return
+
+    if (requirements.characters && !charactersAutoReconciled.has(userId)) {
+      charactersAutoReconciled.add(userId)
+      void refreshCharacters()
+    }
+
+    if (requirements.campaigns && !campaignsAutoReconciled.has(userId)) {
+      campaignsAutoReconciled.add(userId)
+      void refreshCampaigns()
+    }
+  }, [
+    refreshCampaigns,
+    refreshCharacters,
+    requirements.campaigns,
+    requirements.characters,
+    userId,
+  ])
 
   const value = useMemo<UserDataState>(
     () => ({
