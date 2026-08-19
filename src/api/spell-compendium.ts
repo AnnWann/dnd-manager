@@ -69,23 +69,36 @@ export async function queryOfficialSpells(
 
   const response = await apiClient.get<SpellCompendiumPage<SpellCompendiumSummary>>(
     "/compendium/spells",
-    {
-      params: {
-        q: query.q || undefined,
-        level: query.level,
-        maxLevel: query.maxLevel,
-        class: query.className || undefined,
-        school: query.school || undefined,
-        concentration: query.concentration,
-        ritual: query.ritual,
-        attack: query.attack,
-        save: query.save,
-        castingTime: query.castingTime || undefined,
-        page: query.page,
-        pageSize: query.pageSize,
-      },
-    },
+    { params: toQueryParams(query) },
   )
+  return response.data
+}
+
+export async function queryOfficialSpellDetails(
+  query: SpellCompendiumQuery = {},
+): Promise<SpellCompendiumPage<Spell>> {
+  if (import.meta.env.DEV && LOCAL_AUTH_BYPASS) {
+    const spells = await loadLocalOfficialSpells()
+    const filtered = filterLocalSpells(spells, query)
+    const page = Math.max(1, query.page ?? 1)
+    const pageSize = Math.max(1, query.pageSize ?? 100)
+    const start = (page - 1) * pageSize
+    const selected = filtered.slice(start, start + pageSize)
+    for (const spell of selected) spellDetailCache.set(spell.index, spell)
+    return {
+      spells: selected,
+      page,
+      pageSize,
+      total: filtered.length,
+      totalPages: Math.max(1, Math.ceil(filtered.length / pageSize)),
+    }
+  }
+
+  const response = await apiClient.get<SpellCompendiumPage<Spell>>(
+    "/compendium/spells",
+    { params: { ...toQueryParams(query), includeDetails: true } },
+  )
+  for (const spell of response.data.spells) spellDetailCache.set(spell.index, spell)
   return response.data
 }
 
@@ -192,6 +205,23 @@ async function loadLocalOfficialSpells(): Promise<Spell[]> {
     const { source: _source, ...spell } = rawSpell as Record<string, unknown>
     return spell as unknown as Spell
   })
+}
+
+function toQueryParams(query: SpellCompendiumQuery) {
+  return {
+    q: query.q || undefined,
+    level: query.level,
+    maxLevel: query.maxLevel,
+    class: query.className || undefined,
+    school: query.school || undefined,
+    concentration: query.concentration,
+    ritual: query.ritual,
+    attack: query.attack,
+    save: query.save,
+    castingTime: query.castingTime || undefined,
+    page: query.page,
+    pageSize: query.pageSize,
+  }
 }
 
 function filterLocalSpells(spells: Spell[], query: SpellCompendiumQuery): Spell[] {
