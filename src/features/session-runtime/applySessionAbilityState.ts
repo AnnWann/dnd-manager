@@ -18,22 +18,17 @@ export function applySessionAbilityState(
 
   let next = character.with("abilities", authoritative.get("abilities") ?? [])
 
-  // Abilities, magic, equipment, inventory and own proficiencies now share the same authoritative snapshot.
+  // These tabs share the same authoritative character snapshot.
   const authoritativeMagic = authoritative.get("magic")
   if (authoritativeMagic) next = next.with("magic", authoritativeMagic)
 
   next = next.with("equipment", authoritative.get("equipment"))
   next = next.with("inventory", authoritative.get("inventory"))
+  next = next.with("profile", authoritative.get("profile"))
   next = next.withSheet("proficiencies", authoritative.get("sheet").proficiencies ?? [])
+  next = next.withSheet("race", authoritative.get("sheet").race)
 
   next = withCharacterAsis(next, getCharacterAsis(authoritative))
-
-  const currentRace = next.get("sheet").race
-  const authoritativeRace = authoritative.get("sheet").race
-  next = next.withSheet("race", {
-    ...currentRace,
-    naturalAbilities: authoritativeRace.naturalAbilities ?? currentRace.naturalAbilities,
-  })
 
   // Custom spell-slot pools persist their current value in class levelChoices.
   const currentClasses = next.get("sheet").classes ?? []
