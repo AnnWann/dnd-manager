@@ -18,6 +18,9 @@ export async function GET(request: Request): Promise<Response> {
   const school = normalizeSearch(url.searchParams.get("school") ?? "")
   const concentration = parseOptionalBoolean(url.searchParams.get("concentration"))
   const ritual = parseOptionalBoolean(url.searchParams.get("ritual"))
+  const attack = parseOptionalBoolean(url.searchParams.get("attack"))
+  const save = parseOptionalBoolean(url.searchParams.get("save"))
+  const castingTime = url.searchParams.get("castingTime")?.trim() ?? ""
   const indexes = parseIndexes(url.searchParams.get("indexes"))
   const page = Math.max(1, parsePositiveInteger(url.searchParams.get("page"), 1))
   const pageSize = Math.min(
@@ -35,6 +38,9 @@ export async function GET(request: Request): Promise<Response> {
     if (school && normalizeSearch(String(spell.school)) !== school) return false
     if (concentration !== null && spell.concentration !== concentration) return false
     if (ritual !== null && spell.ritual !== ritual) return false
+    if (attack !== null && spell.targeting.hasAttackRoll !== attack) return false
+    if (save !== null && spell.targeting.hasSavingThrow !== save) return false
+    if (castingTime && spell.castingTime.type !== castingTime) return false
 
     if (query) {
       const searchable = normalizeSearch(
@@ -72,12 +78,18 @@ function toSpellSummary(spell: Spell) {
     index: spell.index,
     name: spell.name,
     displayName: spell.displayName,
+    description: spell.description,
+    homebrew: false,
     slotLevel: spell.slotLevel,
     school: spell.school,
     classes: spell.classes,
     concentration: spell.concentration,
     ritual: spell.ritual,
     castingTime: spell.castingTime,
+    range: spell.range,
+    duration: spell.duration,
+    components: spell.components,
+    material: spell.material,
     targeting: {
       hasAttackRoll: spell.targeting.hasAttackRoll,
       hasSavingThrow: spell.targeting.hasSavingThrow,
