@@ -14,6 +14,7 @@ export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url)
   const query = normalizeSearch(url.searchParams.get("q") ?? "")
   const level = parseOptionalNumber(url.searchParams.get("level"))
+  const minLevel = parseOptionalNumber(url.searchParams.get("minLevel"))
   const maxLevel = parseOptionalNumber(url.searchParams.get("maxLevel"))
   const className = normalizeSearch(url.searchParams.get("class") ?? "")
   const school = normalizeSearch(url.searchParams.get("school") ?? "")
@@ -33,6 +34,7 @@ export async function GET(request: Request): Promise<Response> {
   const filtered = officialSpells.filter((spell) => {
     if (indexes && !indexes.has(spell.index)) return false
     if (level !== null && spell.slotLevel !== level) return false
+    if (minLevel !== null && spell.slotLevel < minLevel) return false
     if (maxLevel !== null && spell.slotLevel > maxLevel) return false
     if (className && !spell.classes.some((entry) => normalizeSearch(entry) === className)) return false
     if (school && normalizeSearch(String(spell.school)) !== school) return false
