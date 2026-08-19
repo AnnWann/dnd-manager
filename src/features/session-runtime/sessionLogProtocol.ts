@@ -1,4 +1,5 @@
 import type { SessionAbilityOperation, SessionAbilityState } from "./abilitySessionProtocol"
+import type { SessionMagicOperation } from "./magicSessionProtocol"
 import type {
   SessionConditionsState,
   SessionHpLogRecord,
@@ -15,27 +16,22 @@ export type SessionAbilityReverseOperation = {
   }
 }
 
-export type SessionAbilityLogRecord = {
+export type SessionRuntimeLogRecord = {
   id: string
   actorId: string
   createdAt: string
   operation:
     | SessionAbilityOperation
+    | SessionMagicOperation
     | { type: "character.hp.undo"; characterId: string; sourceLogId: string }
   reverseOperation: SessionAbilityReverseOperation
   undoneAt?: string
   undoneBy?: string
 }
 
-/**
- * One chronological session timeline. The old name `hpLog` is kept in the
- * runtime transport for compatibility while domains are migrated, but records
- * may now belong to any authoritative sheet domain.
- */
-export type SessionLogRecord = SessionHpLogRecord | SessionAbilityLogRecord
+/** One chronological session timeline. `hpLog` remains only as a transport name. */
+export type SessionLogRecord = SessionHpLogRecord | SessionRuntimeLogRecord
 
-export function isAbilityLogRecord(
-  record: SessionLogRecord,
-): record is SessionAbilityLogRecord {
+export function isAbilityLogRecord(record: SessionLogRecord): record is SessionRuntimeLogRecord {
   return record.reverseOperation.type === "character.ability.restore"
 }
