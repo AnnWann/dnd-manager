@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 
 import { Input } from "../../../../../../components/ui/Input"
-import { useCharacterContext } from "../../../../../../contexts/characterContext"
+import { useOptionalSessionRuntime } from "../../../../../session-runtime/useSessionRuntime"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
 import {
   getCalculatedArmorClass,
@@ -37,7 +37,7 @@ export function SelectStatModule({
   fallback = 0,
   readOnly = false,
 }: Props) {
-  const { dispatchStatOperation } = useCharacterContext()
+  const sessionRuntime = useOptionalSessionRuntime()
   const effectiveValue = finiteOr(getValue(character), fallback)
   const adjustmentKey = getStatAdjustmentKey(statKey)
   const adjustment = getStatAdjustment(character, adjustmentKey)
@@ -84,33 +84,33 @@ export function SelectStatModule({
     const characterId = character.get("id")
     switch (statKey) {
       case "armorClass":
-        return dispatchStatOperation({
+        return sessionRuntime?.dispatchSheetOperation({
           type: "character.stat.armorClass.set",
           characterId,
           value,
           calculatedValue,
-        })
+        }) ?? false
       case "initiative":
-        return dispatchStatOperation({
+        return sessionRuntime?.dispatchSheetOperation({
           type: "character.stat.initiative.set",
           characterId,
           value,
           calculatedValue,
-        })
+        }) ?? false
       case "mobility":
-        return dispatchStatOperation({
+        return sessionRuntime?.dispatchSheetOperation({
           type: "character.stat.mobility.set",
           characterId,
           value,
           calculatedValue,
-        })
+        }) ?? false
       case "passive_perception":
-        return dispatchStatOperation({
+        return sessionRuntime?.dispatchSheetOperation({
           type: "character.stat.passivePerception.set",
           characterId,
           value,
           calculatedValue,
-        })
+        }) ?? false
     }
   }
 
