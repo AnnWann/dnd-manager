@@ -6,8 +6,12 @@ import { toggleInventoryItemAttunement } from "../../src/models/characters/chara
 import { removeEquippedItem, type EquippedItemReference } from "../../src/models/characters/characterEquippedItemMovement";
 import { getCharacterConditions, withCharacterConditions } from "../../src/models/characters/characterConditionStorage";
 import { getCurrentMaxHp } from "../../src/models/characters/characterHp";
+import {
+  BAG_OF_HOLDING_CAPACITY_KG,
+  getBagOfHoldingWeightKg,
+} from "../../src/models/items/bagOfHolding";
 import { areAllCurrenciesInBagOfHolding, setCurrenciesInsideBagOfHolding } from "../../src/models/items/Currency";
-import type { Itemmable } from "../../src/models/items/item";
+import { isBagOfHoldingItem, type Itemmable } from "../../src/models/items/item";
 import { normalizeItemText } from "../../src/lib/textNormalization";
 import { SessionActor as EquipmentSessionActor } from "./EquipmentSessionActor";
 import { parseInventoryClientMessage, type SessionInventoryOperation } from "./inventoryProtocol";
@@ -20,6 +24,8 @@ const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
 const INVENTORY_STATE_KEY = "inventory-state";
 const HP_LOG_KEY = "hp-log";
+const BAG_CAPACITY_EPSILON = 0.000001;
+const SHARED_INVENTORY_SCOPE = "inventory:shared";
 
 type SharedInventoryState = {
   initialized: boolean;
@@ -31,6 +37,7 @@ type SharedInventoryState = {
 type InventoryReverseOperation = {
   type: "session.inventory.restore";
   characterId: string;
+  affectedScopes?: string[];
   snapshot: {
     abilities: Record<string, SessionAbilityState>;
     hp: Record<string, SessionHpState>;
@@ -44,7 +51,7 @@ type UnifiedLogRecord = {
   actorId: string;
   createdAt: string;
   operation: { type: string; characterId: string; [key: string]: unknown };
-  reverseOperation: { type: string; characterId: string; [key: string]: unknown };
+  reverseOperation: { type: string; characterId: string; affectedScopes?: string[]; [key: string]: unknown };
   undoneAt?: string;
   undoneBy?: string;
 };
@@ -131,6 +138,16 @@ export class SessionActor extends EquipmentSessionActor {
     try { result = applyInventoryOperation(operation, abilities, hp, conditions, inventory); } catch { result = null; }
     if (!result || !result.changed) return sendError(webSocket, "INVENTORY_OPERATION_REJECTED", "The requested inventory operation is invalid for the current state.");
 
+    const capacityViolation = findBagCapacityViolation(touchedIds, beforeAbilities, abilities);
+    if (capacityViolation) {
+      return sendError(
+        webSocket,
+        "BAG_OF_HOLDING_CAPACITY_EXCEEDED",
+        `The requested operation would increase ${capacityViolation}'s Bag of Holding beyond ${BAG_OF_HOLDING_CAPACITY_KG} kg.`,
+      );
+    }
+
+    const affectedScopes = inventoryOperationScopes(operation);
     const record: UnifiedLogRecord = {
       id: crypto.randomUUID(),
       actorId: connection.userId,
@@ -139,6 +156,7 @@ export class SessionActor extends EquipmentSessionActor {
       reverseOperation: {
         type: "session.inventory.restore",
         characterId: operation.characterId,
+        affectedScopes,
         snapshot: { abilities: beforeAbilities, hp: beforeHp, conditions: beforeConditions, inventory: beforeInventory },
       } as unknown as UnifiedLogRecord["reverseOperation"],
     };
@@ -166,13 +184,27 @@ export class SessionActor extends EquipmentSessionActor {
     const log = (await this.ctx.storage.get<UnifiedLogRecord[]>(HP_LOG_KEY)) ?? [];
     const index = log.findIndex((entry) => entry.id === logId);
     if (index < 0) return false;
-    const reverse = log[index].reverseOperation as unknown as InventoryReverseOperation;
+    const sourceRecord = log[index];
+    const reverse = sourceRecord.reverseOperation as unknown as InventoryReverseOperation;
     if (reverse.type !== "session.inventory.restore" || !reverse.snapshot) return false;
     const connection = readConnection(webSocket);
     if (!connection) return true;
     if (connection.role !== "MASTER") { sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can undo session changes."); return true; }
-    const newer = log.slice(index + 1).some((entry) => !entry.undoneAt && entry.operation.type !== "character.hp.undo" && entry.reverseOperation.characterId === reverse.characterId);
-    if (newer) { sendError(webSocket, "UNDO_NOT_LATEST", "Undo newer changes for this character first."); return true; }
+
+    const sourceScopes = logRecordScopes(sourceRecord);
+    const newer = log.slice(index + 1).some((entry) =>
+      !entry.undoneAt &&
+      entry.operation.type !== "character.hp.undo" &&
+      scopesOverlap(sourceScopes, logRecordScopes(entry)),
+    );
+    if (newer) {
+      sendError(
+        webSocket,
+        "UNDO_NOT_LATEST",
+        "Undo newer changes affecting the same character or shared inventory first.",
+      );
+      return true;
+    }
 
     const [abilities, hp, conditions, inventory] = await Promise.all([
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((v) => v ?? {}),
@@ -182,7 +214,10 @@ export class SessionActor extends EquipmentSessionActor {
     ]);
     const currentIds = Object.keys(reverse.snapshot.abilities);
     const currentSnapshot = {
-      abilities: pick(abilities, currentIds), hp: pick(hp, currentIds), conditions: pick(conditions, currentIds), inventory: structuredClone(inventory),
+      abilities: pick(abilities, currentIds),
+      hp: pick(hp, currentIds),
+      conditions: pick(conditions, currentIds),
+      inventory: structuredClone(inventory),
     };
     Object.assign(abilities, reverse.snapshot.abilities);
     Object.assign(hp, reverse.snapshot.hp);
@@ -190,14 +225,27 @@ export class SessionActor extends EquipmentSessionActor {
     const restoredInventory = reverse.snapshot.inventory;
 
     const now = new Date().toISOString();
-    log[index] = { ...log[index], undoneAt: now, undoneBy: connection.userId };
+    log[index] = { ...sourceRecord, undoneAt: now, undoneBy: connection.userId };
     log.push({
-      id: crypto.randomUUID(), actorId: connection.userId, createdAt: now,
-      operation: { type: "character.hp.undo", characterId: reverse.characterId, sourceLogId: log[index].id },
-      reverseOperation: { type: "session.inventory.restore", characterId: reverse.characterId, snapshot: currentSnapshot } as unknown as UnifiedLogRecord["reverseOperation"],
+      id: crypto.randomUUID(),
+      actorId: connection.userId,
+      createdAt: now,
+      operation: { type: "character.hp.undo", characterId: reverse.characterId, sourceLogId: sourceRecord.id },
+      reverseOperation: {
+        type: "session.inventory.restore",
+        characterId: reverse.characterId,
+        affectedScopes: sourceScopes,
+        snapshot: currentSnapshot,
+      } as unknown as UnifiedLogRecord["reverseOperation"],
     });
     const nextLog = log.slice(-MAX_HP_LOG_RECORDS);
-    await this.ctx.storage.put({ [ABILITIES_STATE_KEY]: abilities, [HP_STATE_KEY]: hp, [CONDITIONS_STATE_KEY]: conditions, [INVENTORY_STATE_KEY]: restoredInventory, [HP_LOG_KEY]: nextLog });
+    await this.ctx.storage.put({
+      [ABILITIES_STATE_KEY]: abilities,
+      [HP_STATE_KEY]: hp,
+      [CONDITIONS_STATE_KEY]: conditions,
+      [INVENTORY_STATE_KEY]: restoredInventory,
+      [HP_LOG_KEY]: nextLog,
+    });
     for (const id of currentIds) {
       broadcast(this.ctx.getWebSockets(), { type: "session.abilities.updated", character: abilities[id] });
       broadcast(this.ctx.getWebSockets(), { type: "session.hp.updated", character: hp[id] });
@@ -211,45 +259,133 @@ export class SessionActor extends EquipmentSessionActor {
   private async readInventoryState(): Promise<SharedInventoryState> {
     return (await this.ctx.storage.get<SharedInventoryState>(INVENTORY_STATE_KEY)) ?? { initialized: false, revision: 0, partyInventory: [], groundInventory: [] };
   }
-  private async sendInventorySnapshot(socket: WebSocket): Promise<void> { send(socket, { type: "session.inventory.snapshot", state: await this.readInventoryState() }); }
+
+  private async sendInventorySnapshot(socket: WebSocket): Promise<void> {
+    send(socket, { type: "session.inventory.snapshot", state: await this.readInventoryState() });
+  }
 }
 
-type ApplyResult = { changed: boolean; changedCharacters: Set<string>; hpChanged: Set<string>; conditionsChanged: Set<string>; sharedChanged: boolean };
+type ApplyResult = {
+  changed: boolean;
+  changedCharacters: Set<string>;
+  hpChanged: Set<string>;
+  conditionsChanged: Set<string>;
+  sharedChanged: boolean;
+};
 
-function applyInventoryOperation(operation: SessionInventoryOperation, abilities: Record<string, SessionAbilityState>, hp: Record<string, SessionHpState>, conditions: Record<string, SessionConditionsState>, inventory: SharedInventoryState): ApplyResult {
-  const changedCharacters = new Set<string>(); const hpChanged = new Set<string>(); const conditionsChanged = new Set<string>(); let sharedChanged = false;
+function applyInventoryOperation(
+  operation: SessionInventoryOperation,
+  abilities: Record<string, SessionAbilityState>,
+  hp: Record<string, SessionHpState>,
+  conditions: Record<string, SessionConditionsState>,
+  inventory: SharedInventoryState,
+): ApplyResult {
+  const changedCharacters = new Set<string>();
+  const hpChanged = new Set<string>();
+  const conditionsChanged = new Set<string>();
+  let sharedChanged = false;
+
   const updateCharacter = (id: string, updater: (c: CharacterTemplate) => CharacterTemplate | null) => {
-    const beforeState = abilities[id]; const beforeHp = hp[id]; const beforeConditions = conditions[id];
+    const beforeState = abilities[id];
+    const beforeHp = hp[id];
+    const beforeConditions = conditions[id];
     if (!beforeState || !beforeHp || !beforeConditions) return false;
-    const before = hydrate(beforeState, beforeHp, beforeConditions); const after = updater(before); if (!after || JSON.stringify(before.toJSON()) === JSON.stringify(after.toJSON())) return false;
-    abilities[id] = { characterId: id, character: after.toJSON() as unknown as Record<string, unknown>, initialized: true, revision: beforeState.revision + 1 };
-    const nextHp = extractHp(after, beforeHp); const nextConditions = extractConditions(after, beforeConditions);
+    const before = hydrate(beforeState, beforeHp, beforeConditions);
+    const after = updater(before);
+    if (!after || JSON.stringify(before.toJSON()) === JSON.stringify(after.toJSON())) return false;
+
+    abilities[id] = {
+      characterId: id,
+      character: after.toJSON() as unknown as Record<string, unknown>,
+      initialized: true,
+      revision: beforeState.revision + 1,
+    };
+    const nextHp = extractHp(after, beforeHp);
+    const nextConditions = extractConditions(after, beforeConditions);
     if (!sameHp(beforeHp, nextHp)) { hp[id] = nextHp; hpChanged.add(id); }
-    if (JSON.stringify(beforeConditions.conditions) !== JSON.stringify(nextConditions.conditions)) { conditions[id] = nextConditions; conditionsChanged.add(id); }
-    changedCharacters.add(id); return true;
+    if (JSON.stringify(beforeConditions.conditions) !== JSON.stringify(nextConditions.conditions)) {
+      conditions[id] = nextConditions;
+      conditionsChanged.add(id);
+    }
+    changedCharacters.add(id);
+    return true;
   };
 
   switch (operation.type) {
-    case "character.inventory.item.add": return result(updateCharacter(operation.characterId, (c) => c.addInventoryItem(operation.item as Itemmable)));
-    case "character.inventory.item.update": return result(updateCharacter(operation.characterId, (c) => c.updateInventoryItem(operation.itemId, () => operation.item as Itemmable)));
-    case "character.inventory.item.remove": return result(updateCharacter(operation.characterId, (c) => c.removeInventoryItem(operation.itemId)));
-    case "character.inventory.item.consume": return result(updateCharacter(operation.characterId, (c) => consumeCharacterInventoryItem(c, operation.itemId)));
-    case "character.inventory.item.equip": return result(updateCharacter(operation.characterId, (c) => equipInventoryStackWithRules(c, operation.itemId, operation.destination as EquipmentDestination) ?? equipInventoryItemWithRules(c, operation.itemId, operation.destination as EquipmentDestination)));
-    case "character.inventory.bag.toggle": return result(updateCharacter(operation.characterId, (c) => c.toggleInventoryItemBagOfHolding(operation.itemId)));
-    case "character.inventory.currenciesBag.set": return result(updateCharacter(operation.characterId, (c) => c.with("inventory", setCurrenciesInsideBagOfHolding(c.get("inventory"), operation.insideBagOfHolding))));
-    case "character.inventory.attunement.toggle": return result(updateCharacter(operation.characterId, (c) => toggleInventoryItemAttunement(c, operation.itemId)));
+    case "character.inventory.item.add":
+      return result(updateCharacter(operation.characterId, (c) => c.addInventoryItem(operation.item as Itemmable)));
+    case "character.inventory.item.update":
+      return result(updateCharacter(operation.characterId, (c) => c.updateInventoryItem(operation.itemId, () => operation.item as Itemmable)));
+    case "character.inventory.item.remove":
+      return result(updateCharacter(operation.characterId, (c) => c.removeInventoryItem(operation.itemId)));
+    case "character.inventory.item.consume":
+      return result(updateCharacter(operation.characterId, (c) => consumeCharacterInventoryItem(c, operation.itemId)));
+    case "character.inventory.item.equip":
+      return result(updateCharacter(operation.characterId, (c) =>
+        equipInventoryStackWithRules(c, operation.itemId, operation.destination as EquipmentDestination) ??
+        equipInventoryItemWithRules(c, operation.itemId, operation.destination as EquipmentDestination),
+      ));
+    case "character.inventory.bag.toggle":
+      return result(updateCharacter(operation.characterId, (c) => c.toggleInventoryItemBagOfHolding(operation.itemId)));
+    case "character.inventory.currenciesBag.set":
+      return result(updateCharacter(operation.characterId, (c) =>
+        c.with("inventory", setCurrenciesInsideBagOfHolding(c.get("inventory"), operation.insideBagOfHolding)),
+      ));
+    case "character.inventory.attunement.toggle":
+      return result(updateCharacter(operation.characterId, (c) => toggleInventoryItemAttunement(c, operation.itemId)));
     case "character.equipment.move.ground": {
       const did = updateCharacter(operation.characterId, (c) => {
-        const removed = removeEquippedItem(c, operation.reference as EquippedItemReference); if (!removed.item) return c;
-        inventory.groundInventory.push({ ...removed.item, heldHands: undefined, insideBagOfHolding: false }); sharedChanged = true; inventory.revision += 1; return removed.character;
-      }); return result(did);
+        const removed = removeEquippedItem(c, operation.reference as EquippedItemReference);
+        if (!removed.item) return c;
+        inventory.groundInventory.push({ ...removed.item, heldHands: undefined, insideBagOfHolding: false });
+        sharedChanged = true;
+        inventory.revision += 1;
+        return removed.character;
+      });
+      return result(did);
     }
-    case "party.item.add": inventory.partyInventory.push(operation.item as Itemmable); sharedChanged = true; inventory.revision += 1; return result(true);
-    case "party.item.update": { const i = inventory.partyInventory.findIndex((x) => x.id === operation.itemId); if (i < 0) return result(false); inventory.partyInventory[i] = operation.item as Itemmable; sharedChanged = true; inventory.revision += 1; return result(true); }
-    case "party.item.remove": { const n = inventory.partyInventory.filter((x) => x.id !== operation.itemId); if (n.length === inventory.partyInventory.length) return result(false); inventory.partyInventory = n; sharedChanged = true; inventory.revision += 1; return result(true); }
-    case "ground.item.add": inventory.groundInventory.push(operation.item as Itemmable); sharedChanged = true; inventory.revision += 1; return result(true);
-    case "ground.item.update": { const i = inventory.groundInventory.findIndex((x) => x.id === operation.itemId); if (i < 0) return result(false); inventory.groundInventory[i] = operation.item as Itemmable; sharedChanged = true; inventory.revision += 1; return result(true); }
-    case "ground.item.remove": { const n = inventory.groundInventory.filter((x) => x.id !== operation.itemId); if (n.length === inventory.groundInventory.length) return result(false); inventory.groundInventory = n; sharedChanged = true; inventory.revision += 1; return result(true); }
+    case "party.item.add":
+      inventory.partyInventory.push(operation.item as Itemmable);
+      sharedChanged = true;
+      inventory.revision += 1;
+      return result(true);
+    case "party.item.update": {
+      const index = inventory.partyInventory.findIndex((item) => item.id === operation.itemId);
+      if (index < 0) return result(false);
+      inventory.partyInventory[index] = operation.item as Itemmable;
+      sharedChanged = true;
+      inventory.revision += 1;
+      return result(true);
+    }
+    case "party.item.remove": {
+      const next = inventory.partyInventory.filter((item) => item.id !== operation.itemId);
+      if (next.length === inventory.partyInventory.length) return result(false);
+      inventory.partyInventory = next;
+      sharedChanged = true;
+      inventory.revision += 1;
+      return result(true);
+    }
+    case "ground.item.add":
+      inventory.groundInventory.push(operation.item as Itemmable);
+      sharedChanged = true;
+      inventory.revision += 1;
+      return result(true);
+    case "ground.item.update": {
+      const index = inventory.groundInventory.findIndex((item) => item.id === operation.itemId);
+      if (index < 0) return result(false);
+      inventory.groundInventory[index] = operation.item as Itemmable;
+      sharedChanged = true;
+      inventory.revision += 1;
+      return result(true);
+    }
+    case "ground.item.remove": {
+      const next = inventory.groundInventory.filter((item) => item.id !== operation.itemId);
+      if (next.length === inventory.groundInventory.length) return result(false);
+      inventory.groundInventory = next;
+      sharedChanged = true;
+      inventory.revision += 1;
+      return result(true);
+    }
     case "inventory.item.transfer": {
       const transferred = transferInventoryItem(abilities, inventory, operation.request);
       if (!transferred) return result(false);
@@ -260,7 +396,9 @@ function applyInventoryOperation(operation: SessionInventoryOperation, abilities
     }
   }
 
-  function result(changed: boolean): ApplyResult { return { changed, changedCharacters, hpChanged, conditionsChanged, sharedChanged }; }
+  function result(changed: boolean): ApplyResult {
+    return { changed, changedCharacters, hpChanged, conditionsChanged, sharedChanged };
+  }
 }
 
 function transferInventoryItem(
@@ -403,25 +541,186 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function findBagCapacityViolation(
+  characterIds: string[],
+  before: Record<string, SessionAbilityState>,
+  after: Record<string, SessionAbilityState>,
+): string | null {
+  for (const characterId of characterIds) {
+    const beforeState = before[characterId];
+    const afterState = after[characterId];
+    if (!beforeState || !afterState) continue;
+
+    const beforeRaw = beforeState.character as unknown as CharacterTemplateProps;
+    const afterRaw = afterState.character as unknown as CharacterTemplateProps;
+    const beforeInventory = beforeRaw.inventory ?? [];
+    const afterInventory = afterRaw.inventory ?? [];
+
+    if (!afterInventory.some(isBagOfHoldingItem)) continue;
+
+    const beforeWeight = getBagOfHoldingWeightKg(beforeInventory);
+    const afterWeight = getBagOfHoldingWeightKg(afterInventory);
+    const exceedsCapacity = afterWeight > BAG_OF_HOLDING_CAPACITY_KG + BAG_CAPACITY_EPSILON;
+    const increasedLoad = afterWeight > beforeWeight + BAG_CAPACITY_EPSILON;
+    if (exceedsCapacity && increasedLoad) return characterId;
+  }
+  return null;
+}
+
+function inventoryOperationScopes(operation: SessionInventoryOperation): string[] {
+  const scopes = new Set<string>();
+  for (const characterId of touchedCharacterIds(operation)) {
+    scopes.add(characterScope(characterId));
+  }
+
+  if (
+    operation.type.startsWith("party.") ||
+    operation.type.startsWith("ground.") ||
+    operation.type === "character.equipment.move.ground" ||
+    (operation.type === "inventory.item.transfer" &&
+      (operation.request.from.type !== "character" || operation.request.to.type !== "character"))
+  ) {
+    scopes.add(SHARED_INVENTORY_SCOPE);
+  }
+
+  return [...scopes];
+}
+
+function logRecordScopes(record: UnifiedLogRecord): string[] {
+  const explicit = record.reverseOperation.affectedScopes;
+  if (Array.isArray(explicit) && explicit.length > 0) return explicit;
+
+  if (record.reverseOperation.type === "session.inventory.restore") {
+    const operation = record.operation as unknown as SessionInventoryOperation;
+    if (typeof operation.type === "string") return inventoryOperationScopes(operation);
+  }
+
+  const characterId = record.reverseOperation.characterId;
+  return characterId && characterId !== "session" ? [characterScope(characterId)] : [];
+}
+
+function characterScope(characterId: string): string {
+  return `character:${characterId}`;
+}
+
+function scopesOverlap(first: string[], second: string[]): boolean {
+  if (first.length === 0 || second.length === 0) return false;
+  const lookup = new Set(first);
+  return second.some((scope) => lookup.has(scope));
+}
+
 function hydrate(state: SessionAbilityState, hp: SessionHpState, conditions: SessionConditionsState): CharacterTemplate {
-  let c = CharacterTemplate.fromJSON(state.character as Partial<CharacterTemplateProps>); const sheet = c.get("sheet");
-  c = c.withPatch({ sheet: { ...sheet, attributes: hp.attributesInitialized ? { ...hp.attributes } : sheet.attributes, savingThrowProficiencies: hp.savingThrowsInitialized ? { ...hp.savingThrows } : sheet.savingThrowProficiencies, skills: hp.skillsInitialized ? { ...hp.skills } : sheet.skills, HP: { ...sheet.HP, current: hp.current, temporary: hp.temporary, max: hp.max, currentMax: hp.currentMax } } });
-  return withCharacterConditions(c, conditions.conditions as any);
+  let character = CharacterTemplate.fromJSON(state.character as Partial<CharacterTemplateProps>);
+  const sheet = character.get("sheet");
+  character = character.withPatch({
+    sheet: {
+      ...sheet,
+      attributes: hp.attributesInitialized ? { ...hp.attributes } : sheet.attributes,
+      savingThrowProficiencies: hp.savingThrowsInitialized ? { ...hp.savingThrows } : sheet.savingThrowProficiencies,
+      skills: hp.skillsInitialized ? { ...hp.skills } : sheet.skills,
+      HP: {
+        ...sheet.HP,
+        current: hp.current,
+        temporary: hp.temporary,
+        max: hp.max,
+        currentMax: hp.currentMax,
+      },
+    },
+  });
+  return withCharacterConditions(character, conditions.conditions as any);
 }
-function extractHp(c: CharacterTemplate, previous: SessionHpState): SessionHpState { const v = c.get("sheet").HP; const currentMax = getCurrentMaxHp(c); return { ...previous, current: v.current, temporary: v.temporary, max: v.max, currentMax, maxHpBonus: c.getEffectiveMaxHp() - currentMax, revision: previous.revision + 1 }; }
-function extractConditions(c: CharacterTemplate, previous: SessionConditionsState): SessionConditionsState { return { ...previous, conditions: getCharacterConditions(c) as any, revision: previous.revision + 1 }; }
-function sameHp(a: SessionHpState, b: SessionHpState): boolean { return a.current === b.current && a.temporary === b.temporary && a.max === b.max && a.currentMax === b.currentMax && a.maxHpBonus === b.maxHpBonus; }
-function touchedCharacterIds(op: SessionInventoryOperation): string[] { if (op.type !== "inventory.item.transfer") return op.characterId && op.characterId !== "session" ? [op.characterId] : []; const ids = new Set<string>(); if (op.request.from.type === "character") ids.add(op.request.from.characterId); if (op.request.to.type === "character") ids.add(op.request.to.characterId); return [...ids]; }
-function canPerform(connection: SessionConnection, op: SessionInventoryOperation, hp: Record<string, SessionHpState>): boolean {
+
+function extractHp(character: CharacterTemplate, previous: SessionHpState): SessionHpState {
+  const value = character.get("sheet").HP;
+  const currentMax = getCurrentMaxHp(character);
+  return {
+    ...previous,
+    current: value.current,
+    temporary: value.temporary,
+    max: value.max,
+    currentMax,
+    maxHpBonus: character.getEffectiveMaxHp() - currentMax,
+    revision: previous.revision + 1,
+  };
+}
+
+function extractConditions(character: CharacterTemplate, previous: SessionConditionsState): SessionConditionsState {
+  return {
+    ...previous,
+    conditions: getCharacterConditions(character) as any,
+    revision: previous.revision + 1,
+  };
+}
+
+function sameHp(first: SessionHpState, second: SessionHpState): boolean {
+  return first.current === second.current &&
+    first.temporary === second.temporary &&
+    first.max === second.max &&
+    first.currentMax === second.currentMax &&
+    first.maxHpBonus === second.maxHpBonus;
+}
+
+function touchedCharacterIds(operation: SessionInventoryOperation): string[] {
+  if (operation.type !== "inventory.item.transfer") {
+    return operation.characterId && operation.characterId !== "session" ? [operation.characterId] : [];
+  }
+
+  const ids = new Set<string>();
+  if (operation.request.from.type === "character") ids.add(operation.request.from.characterId);
+  if (operation.request.to.type === "character") ids.add(operation.request.to.characterId);
+  return [...ids];
+}
+
+function canPerform(
+  connection: SessionConnection,
+  operation: SessionInventoryOperation,
+  hp: Record<string, SessionHpState>,
+): boolean {
   if (connection.role === "MASTER") return true;
-  if (op.type.startsWith("party.") || op.type.startsWith("ground.")) return false;
-  if (op.type === "inventory.item.transfer") return op.request.from.type !== "character" || hp[op.request.from.characterId]?.ownerUserId === connection.userId;
-  return hp[op.characterId]?.ownerUserId === connection.userId;
+  if (operation.type.startsWith("party.") || operation.type.startsWith("ground.")) return false;
+  if (operation.type === "inventory.item.transfer") {
+    return operation.request.from.type !== "character" ||
+      hp[operation.request.from.characterId]?.ownerUserId === connection.userId;
+  }
+  return hp[operation.characterId]?.ownerUserId === connection.userId;
 }
-function pick<T>(source: Record<string, T>, ids: string[]): Record<string, T> { return Object.fromEntries(ids.flatMap((id) => source[id] ? [[id, structuredClone(source[id])]] : [])); }
-function parseUndoLogId(raw: string): string | null { try { const v = JSON.parse(raw); return v?.type === "session.log.undo" && typeof v.logId === "string" ? v.logId : null; } catch { return null; } }
-function readConnection(ws: WebSocket): SessionConnection | null { try { return ws.deserializeAttachment() as SessionConnection; } catch { return null; } }
-function send(ws: WebSocket, value: unknown): void { try { ws.send(JSON.stringify(value)); } catch {} }
-function sendError(ws: WebSocket, code: string, message: string): void { send(ws, { type: "session.error", code, message }); }
-function broadcast(sockets: WebSocket[], value: unknown): void { const payload = JSON.stringify(value); for (const ws of sockets) try { ws.send(payload); } catch {} }
-function broadcastToMasters(sockets: WebSocket[], records: UnifiedLogRecord[]): void { const payload = JSON.stringify({ type: "session.hp.log", records }); for (const ws of sockets) if (readConnection(ws)?.role === "MASTER") try { ws.send(payload); } catch {} }
+
+function pick<T>(source: Record<string, T>, ids: string[]): Record<string, T> {
+  return Object.fromEntries(ids.flatMap((id) => source[id] ? [[id, structuredClone(source[id])]] : []));
+}
+
+function parseUndoLogId(raw: string): string | null {
+  try {
+    const value = JSON.parse(raw);
+    return value?.type === "session.log.undo" && typeof value.logId === "string" ? value.logId : null;
+  } catch {
+    return null;
+  }
+}
+
+function readConnection(webSocket: WebSocket): SessionConnection | null {
+  try { return webSocket.deserializeAttachment() as SessionConnection; } catch { return null; }
+}
+
+function send(webSocket: WebSocket, value: unknown): void {
+  try { webSocket.send(JSON.stringify(value)); } catch {}
+}
+
+function sendError(webSocket: WebSocket, code: string, message: string): void {
+  send(webSocket, { type: "session.error", code, message });
+}
+
+function broadcast(sockets: WebSocket[], value: unknown): void {
+  const payload = JSON.stringify(value);
+  for (const webSocket of sockets) {
+    try { webSocket.send(payload); } catch {}
+  }
+}
+
+function broadcastToMasters(sockets: WebSocket[], records: UnifiedLogRecord[]): void {
+  const payload = JSON.stringify({ type: "session.hp.log", records });
+  for (const webSocket of sockets) {
+    if (readConnection(webSocket)?.role !== "MASTER") continue;
+    try { webSocket.send(payload); } catch {}
+  }
+}
