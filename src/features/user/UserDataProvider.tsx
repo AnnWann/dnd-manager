@@ -17,6 +17,7 @@ import { authClient } from "../../auth/auth-client"
 import { getLocalUser, LOCAL_AUTH_BYPASS } from "../../auth/local-auth"
 import {
   readUserCacheSnapshot,
+  setActiveUserCacheId,
   writeUserCache,
 } from "./userPersistentCache"
 
@@ -85,6 +86,8 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
   const { data: session } = authClient.useSession()
   const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
   const userId = session?.user?.id ?? localUser?.id ?? ""
+
+  setActiveUserCacheId(userId)
 
   const [characters, setCharactersState] = useState<UserCharacterSummary[]>([])
   const [campaigns, setCampaignsState] = useState<UserCampaign[]>([])
