@@ -243,6 +243,22 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "character.equipment.pocket.unequip": return `${characterName} tirou um item do bolso.`
     case "character.equipment.pocket.wield": return `${characterName} empunhou uma arma do bolso.`
     case "character.equipment.pocket.use": return `${characterName} usou um item do bolso.`
+    case "character.inventory.item.add": return `Adicionou um item ao inventário de ${characterName}.`
+    case "character.inventory.item.update": return `Atualizou um item do inventário de ${characterName}.`
+    case "character.inventory.item.remove": return `Removeu um item do inventário de ${characterName}.`
+    case "character.inventory.item.consume": return `${characterName} consumiu um item.`
+    case "character.inventory.item.equip": return `${characterName} equipou um item do inventário.`
+    case "character.inventory.bag.toggle": return `${characterName} moveu um item para dentro/fora da Bolsa Mágica.`
+    case "character.inventory.currenciesBag.set": return `${characterName} ${operation.insideBagOfHolding ? "guardou" : "retirou"} as moedas da Bolsa Mágica.`
+    case "character.inventory.attunement.toggle": return `${characterName} alterou a sintonia de um item.`
+    case "inventory.item.transfer": return `Transferiu ${operation.request.quantity}× item de ${locationLabel(operation.request.from, characterNames)} para ${locationLabel(operation.request.to, characterNames)}.`
+    case "party.item.add": return `Adicionou um item ao inventário do grupo.`
+    case "party.item.update": return `Atualizou um item do inventário do grupo.`
+    case "party.item.remove": return `Removeu um item do inventário do grupo.`
+    case "ground.item.add": return `Adicionou um item ao chão.`
+    case "ground.item.update": return `Atualizou um item no chão.`
+    case "ground.item.remove": return `Removeu um item do chão.`
+    case "character.equipment.move.ground": return `${characterName} colocou um equipamento no chão.`
     case "character.hp.undo": return `Desfez uma alteração de ${characterName}.`
   }
 }
