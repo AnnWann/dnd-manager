@@ -93,6 +93,35 @@ export function createSessionLogRecord(args: {
   };
 }
 
+/**
+ * Makes legacy/domain-created records conform to the central log contract.
+ * This lets migrations happen incrementally while every stored/broadcast record
+ * still has explicit conflict scopes.
+ */
+export async function normalizeStoredSessionLog(
+  storage: DurableObjectStorage,
+  sockets: WebSocket[],
+): Promise<SessionLogRecord[]> {
+  const records = await readSessionLog(storage);
+  let changed = false;
+  const normalized = records.map((record) => {
+    const scopes = logRecordScopes(record);
+    const current = record.reverseOperation.affectedScopes ?? [];
+    if (sameScopes(current, scopes)) return record;
+    changed = true;
+    return {
+      ...record,
+      reverseOperation: {
+        ...record.reverseOperation,
+        affectedScopes: scopes,
+      },
+    };
+  });
+
+  if (changed) await writeSessionLog(storage, sockets, normalized);
+  return normalized;
+}
+
 export function validateUndoOrdering(
   records: SessionLogRecord[],
   logId: string,
@@ -197,6 +226,12 @@ export function broadcastSessionLogToMasters(sockets: WebSocket[], records: Sess
 
 function normalizeScopes(scopes: string[]): string[] {
   return [...new Set(scopes.filter((scope) => typeof scope === "string" && scope.trim()).map((scope) => scope.trim()))];
+}
+
+function sameScopes(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  const values = new Set(left);
+  return right.every((scope) => values.has(scope));
 }
 
 function readConnection(socket: WebSocket): { role?: string } | null {
