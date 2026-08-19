@@ -1,6 +1,6 @@
-import type { CharacterRace } from "../../src/models/races/CharacterRace";
-import type { CharacterSkills } from "../../src/models/sheet/CharacterSkills";
-import type { SavingThrowProficiencies } from "../../src/models/sheet/SavingThrows";
+import type { CharacterRace } from "../../../../../src/models/races/CharacterRace";
+import type { CharacterSkills } from "../../../../../src/models/sheet/CharacterSkills";
+import type { SavingThrowProficiencies } from "../../../../../src/models/sheet/SavingThrows";
 
 export type SessionRaceOperation =
   | {
