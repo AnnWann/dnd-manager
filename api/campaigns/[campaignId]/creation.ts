@@ -20,6 +20,7 @@ import type {
   CreationState,
 } from "../../../src/shared/creation/creation.types"
 import type { CustomSystemDefinition } from "../../../src/models/customSystems/CustomSystemDefinition"
+import type { CompendiumCreature } from "../../../src/models/creatures/CompendiumCreature"
 import type { Itemmable } from "../../../src/models/items/item"
 import type { Spell } from "../../../src/models/magic/spells/Spell"
 
@@ -30,6 +31,16 @@ type RouteContext = {
 }
 
 type JsonRecord = Record<string, unknown>
+
+type CreationAsset = {
+  type: string
+  sourceId: string
+  data: unknown
+  updatedAt: Date
+}
+
+const CREATION_META_TYPE = "CREATION_STATE"
+const CREATION_META_SOURCE = "v1"
 
 export async function GET(
   request: Request,
@@ -72,9 +83,7 @@ export async function PATCH(
             select: {
               characterId: true,
               character: {
-                select: {
-                  data: true,
-                },
+                select: { data: true },
               },
             },
           },
@@ -165,20 +174,12 @@ export async function PATCH(
 
       const itemEntries = data.itemCompendium.map(readCreationItemEntry)
       const templateIds = itemEntries.map((entry) => entry.templateId)
-      if (new Set(templateIds).size !== templateIds.length) {
-        throw new ApiError(
-          400,
-          "CREATION_ITEM_DUPLICATE",
-          "O compêndio contém ids de item duplicados.",
-        )
-      }
+      ensureUniqueIds(templateIds, "CREATION_ITEM_DUPLICATE", "O compêndio contém ids de item duplicados.")
 
       await tx.campaignItemCompendium.deleteMany({
         where: {
           campaignId,
-          ...(templateIds.length
-            ? { templateId: { notIn: templateIds } }
-            : {}),
+          ...(templateIds.length ? { templateId: { notIn: templateIds } } : {}),
         },
       })
 
@@ -207,6 +208,72 @@ export async function PATCH(
           },
         })
       }
+
+      const spells = data.spells.map(readCreationSpell)
+      const creatures = data.creatureCompendium.map(readCreationCreature)
+      const systems = data.customSystems.map(readCreationCustomSystem)
+
+      await replaceCreationAssets(tx, {
+        campaignId,
+        userId: session.user.id,
+        type: "SPELL",
+        entries: spells.map((spell) => ({
+          sourceId: spell.index,
+          name: spell.name,
+          data: spell,
+        })),
+      })
+      await replaceCreationAssets(tx, {
+        campaignId,
+        userId: session.user.id,
+        type: "CREATURE",
+        entries: creatures.map((creature) => ({
+          sourceId: creature.id,
+          name: creature.name,
+          data: creature,
+        })),
+      })
+      await replaceCreationAssets(tx, {
+        campaignId,
+        userId: session.user.id,
+        type: "SYSTEM",
+        entries: systems.map((system) => ({
+          sourceId: system.id,
+          name: system.name,
+          data: system,
+        })),
+      })
+
+      await tx.campaignHomebrewAsset.upsert({
+        where: {
+          campaignId_type_sourceId: {
+            campaignId,
+            type: CREATION_META_TYPE,
+            sourceId: CREATION_META_SOURCE,
+          },
+        },
+        create: {
+          id: crypto.randomUUID(),
+          campaignId,
+          type: CREATION_META_TYPE,
+          sourceId: CREATION_META_SOURCE,
+          name: "Creation State v1",
+          data: {
+            spells: true,
+            creatureCompendium: true,
+            customSystems: true,
+          },
+          addedById: session.user.id,
+        },
+        update: {
+          data: {
+            spells: true,
+            creatureCompendium: true,
+            customSystems: true,
+          },
+          addedById: session.user.id,
+        },
+      })
 
       const revisionUpdate = await tx.campaign.updateMany({
         where: {
@@ -282,7 +349,7 @@ async function buildCreationSnapshot(campaignId: string) {
     throw new ApiError(404, "CAMPAIGN_NOT_FOUND", "Campanha não encontrada.")
   }
 
-  const [characterLinks, spellLinks, itemRows, systemRows] = await Promise.all([
+  const [characterLinks, spellLinks, itemRows, assets] = await Promise.all([
     prisma.campaignCharacter.findMany({
       where: { campaignId },
       select: {
@@ -328,17 +395,22 @@ async function buildCreationSnapshot(campaignId: string) {
     prisma.campaignHomebrewAsset.findMany({
       where: {
         campaignId,
-        type: "SYSTEM",
+        type: { in: ["SPELL", "CREATURE", "SYSTEM", CREATION_META_TYPE] },
       },
       select: {
+        type: true,
+        sourceId: true,
         data: true,
         updatedAt: true,
       },
       orderBy: { createdAt: "asc" },
-    }),
+    }) as unknown as Promise<CreationAsset[]>,
   ])
 
   let updatedAt = campaign.updatedAt
+  const managed = assets.some(
+    (asset) => asset.type === CREATION_META_TYPE && asset.sourceId === CREATION_META_SOURCE,
+  )
 
   const characters = characterLinks.map((link) => {
     updatedAt = laterDate(updatedAt, link.character.updatedAt)
@@ -350,10 +422,15 @@ async function buildCreationSnapshot(campaignId: string) {
     )
   })
 
-  const spells = spellLinks.map((link) => {
-    updatedAt = laterDate(updatedAt, link.spell.updatedAt)
-    return link.spell.data as unknown as Spell
-  })
+  for (const asset of assets) updatedAt = laterDate(updatedAt, asset.updatedAt)
+
+  const spellAssets = assets.filter((asset) => asset.type === "SPELL")
+  const spells = managed
+    ? spellAssets.map((asset) => asset.data as Spell)
+    : spellLinks.map((link) => {
+        updatedAt = laterDate(updatedAt, link.spell.updatedAt)
+        return link.spell.data as unknown as Spell
+      })
 
   const itemCompendium: CreationItemCompendiumEntry[] = itemRows.map((entry) => {
     updatedAt = laterDate(updatedAt, entry.updatedAt)
@@ -365,19 +442,22 @@ async function buildCreationSnapshot(campaignId: string) {
     }
   })
 
-  const customSystems = systemRows.map((entry) => {
-    updatedAt = laterDate(updatedAt, entry.updatedAt)
-    return entry.data as unknown as CustomSystemDefinition
-  })
+  const creatureCompendium = managed
+    ? assets
+        .filter((asset) => asset.type === "CREATURE")
+        .map((asset) => asset.data as CompendiumCreature)
+    : []
+
+  const customSystems = assets
+    .filter((asset) => asset.type === "SYSTEM")
+    .map((asset) => asset.data as CustomSystemDefinition)
 
   const data: CreationState = {
     version: 1,
     characters,
     spells,
     itemCompendium,
-    // The creature compendium still uses its legacy local repository. It
-    // joins this snapshot when that persistence is migrated.
-    creatureCompendium: [],
+    creatureCompendium,
     customSystems,
   }
 
@@ -385,6 +465,61 @@ async function buildCreationSnapshot(campaignId: string) {
     revision: Math.max(1, campaign.creationRevision),
     updatedAt: updatedAt.toISOString(),
     data,
+  }
+}
+
+async function replaceCreationAssets(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  input: {
+    campaignId: string
+    userId: string
+    type: "SPELL" | "CREATURE" | "SYSTEM"
+    entries: Array<{
+      sourceId: string
+      name: string
+      data: unknown
+    }>
+  },
+): Promise<void> {
+  const sourceIds = input.entries.map((entry) => entry.sourceId)
+  ensureUniqueIds(
+    sourceIds,
+    "CREATION_ASSET_DUPLICATE",
+    `A Criação contém ids duplicados no domínio ${input.type}.`,
+  )
+
+  await tx.campaignHomebrewAsset.deleteMany({
+    where: {
+      campaignId: input.campaignId,
+      type: input.type,
+      ...(sourceIds.length ? { sourceId: { notIn: sourceIds } } : {}),
+    },
+  })
+
+  for (const entry of input.entries) {
+    await tx.campaignHomebrewAsset.upsert({
+      where: {
+        campaignId_type_sourceId: {
+          campaignId: input.campaignId,
+          type: input.type,
+          sourceId: entry.sourceId,
+        },
+      },
+      create: {
+        id: crypto.randomUUID(),
+        campaignId: input.campaignId,
+        type: input.type,
+        sourceId: entry.sourceId,
+        name: entry.name,
+        data: entry.data as never,
+        addedById: input.userId,
+      },
+      update: {
+        name: entry.name,
+        data: entry.data as never,
+        addedById: input.userId,
+      },
+    })
   }
 }
 
@@ -485,6 +620,36 @@ function readCreationItemEntry(value: unknown): CreationItemCompendiumEntry {
     custom: entry.custom === true,
     visibility: entry.visibility === "MASTER" ? "MASTER" : "PUBLIC",
   }
+}
+
+function readCreationSpell(value: unknown): Spell {
+  const spell = asRecord(value)
+  if (!spell) {
+    throw new ApiError(400, "CREATION_SPELL_INVALID", "Magia de Criação inválida.")
+  }
+  readRequiredString(spell.index)
+  readRequiredString(spell.name)
+  return spell as unknown as Spell
+}
+
+function readCreationCreature(value: unknown): CompendiumCreature {
+  const creature = asRecord(value)
+  if (!creature) {
+    throw new ApiError(400, "CREATION_CREATURE_INVALID", "Criatura de Criação inválida.")
+  }
+  readRequiredString(creature.id)
+  readRequiredString(creature.name)
+  return creature as unknown as CompendiumCreature
+}
+
+function readCreationCustomSystem(value: unknown): CustomSystemDefinition {
+  const system = asRecord(value)
+  if (!system) {
+    throw new ApiError(400, "CREATION_SYSTEM_INVALID", "Sistema de Criação inválido.")
+  }
+  readRequiredString(system.id)
+  readRequiredString(system.name)
+  return system as unknown as CustomSystemDefinition
 }
 
 function mergeCharacterCreationConfiguration(
@@ -618,6 +783,16 @@ function toDatabaseVisibility(
   if (value === "private") return CharacterVisibility.PRIVATE
   if (value === "master") return CharacterVisibility.MASTER
   return CharacterVisibility.PARTY
+}
+
+function ensureUniqueIds(
+  ids: string[],
+  code: string,
+  message: string,
+): void {
+  if (new Set(ids).size !== ids.length) {
+    throw new ApiError(400, code, message)
+  }
 }
 
 function readRequiredString(value: unknown): string {
