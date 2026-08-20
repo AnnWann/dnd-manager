@@ -1,5 +1,6 @@
 import type { Ability } from "../../models/abilities/Ability"
 import type { CharacterTemplateProps } from "../../models/characters/CharacterTemplate"
+import type { SessionCustomSystemOperation } from "./customSystemSessionProtocol"
 
 export type SessionAbilitySource =
   | { type: "character"; abilityId: string }
@@ -50,6 +51,7 @@ export type SessionAbilityOperation =
       abilityId: string
       abilityName?: string
     }
+  | SessionCustomSystemOperation
 
 export type SessionAbilityClientMessage =
   | { type: "session.abilities.initialize"; characters: SessionAbilitySeed[] }
