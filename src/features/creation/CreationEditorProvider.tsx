@@ -14,11 +14,18 @@ import {
 } from "../../api/creation"
 import { getApiStatus } from "../../api/api-client"
 import type {
+  CreationManagedDomains,
   CreationSnapshot,
   CreationState,
 } from "../../shared/creation/creation.types"
 
 type CreationEditorStatus = "loading" | "ready" | "error"
+
+const DEFAULT_MANAGED_DOMAINS: CreationManagedDomains = {
+  spells: false,
+  creatureCompendium: false,
+  customSystems: false,
+}
 
 type CreationEditorContextValue = {
   campaignId: string
@@ -28,6 +35,7 @@ type CreationEditorContextValue = {
   draft: CreationState | null
   baseRevision: number | null
   updatedAt: string | null
+  managedDomains: CreationManagedDomains
   dirty: boolean
   saving: boolean
   updateDraft: (updater: (draft: CreationState) => CreationState) => void
@@ -51,6 +59,9 @@ export function CreationEditorProvider({
   const [draft, setDraft] = useState<CreationState | null>(null)
   const [baseRevision, setBaseRevision] = useState<number | null>(null)
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
+  const [managedDomains, setManagedDomains] = useState<CreationManagedDomains>(
+    DEFAULT_MANAGED_DOMAINS,
+  )
   const [saving, setSaving] = useState(false)
 
   const applySnapshot = useCallback((snapshot: CreationSnapshot) => {
@@ -59,6 +70,7 @@ export function CreationEditorProvider({
     setDraft(structuredClone(canonical))
     setBaseRevision(snapshot.revision)
     setUpdatedAt(snapshot.updatedAt)
+    setManagedDomains(snapshot.managedDomains ?? DEFAULT_MANAGED_DOMAINS)
     setError("")
     setStatus("ready")
   }, [])
@@ -163,6 +175,7 @@ export function CreationEditorProvider({
       draft,
       baseRevision,
       updatedAt,
+      managedDomains,
       dirty,
       saving,
       updateDraft,
@@ -178,6 +191,7 @@ export function CreationEditorProvider({
       dirty,
       draft,
       error,
+      managedDomains,
       reload,
       save,
       saving,
