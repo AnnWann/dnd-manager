@@ -246,6 +246,9 @@ function resolveHandReference(character: CharacterTemplate, reference: HandOccup
 }
 
 function deriveCustomSystemOperations(current: CharacterTemplate, next: CharacterTemplate): SessionCustomSystemOperation[] {
+  const activation = deriveCustomAbilityActivation(current, next)
+  if (activation) return [activation]
+
   const characterId = current.get("id")
   const beforeStates = current.get("sheet").customSystems ?? []
   const afterStates = next.get("sheet").customSystems ?? []
@@ -259,16 +262,13 @@ function deriveCustomSystemOperations(current: CharacterTemplate, next: Characte
   if (changed.length !== 1) return []
 
   const { before, after } = changed[0]
-  if (
-    before.systemVersion !== after.systemVersion
-    || before.enabled !== after.enabled
-    || JSON.stringify(before.abilities) !== JSON.stringify(after.abilities)
-  ) return []
+  if (before.systemVersion !== after.systemVersion || before.enabled !== after.enabled) return []
 
   const fieldsEqual = JSON.stringify(before.fields) === JSON.stringify(after.fields)
   const resourcesEqual = JSON.stringify(before.resources) === JSON.stringify(after.resources)
+  const abilitiesEqual = JSON.stringify(before.abilities) === JSON.stringify(after.abilities)
 
-  if (!fieldsEqual && resourcesEqual) {
+  if (!fieldsEqual && resourcesEqual && abilitiesEqual) {
     const fieldIds = new Set([...Object.keys(before.fields), ...Object.keys(after.fields)])
     const changedFields = [...fieldIds].filter((fieldId) => JSON.stringify(before.fields[fieldId]) !== JSON.stringify(after.fields[fieldId]))
     if (changedFields.length !== 1) return []
@@ -279,7 +279,7 @@ function deriveCustomSystemOperations(current: CharacterTemplate, next: Characte
       : [{ type: "character.customSystem.field.set", characterId, systemId: before.systemId, fieldId, value }]
   }
 
-  if (fieldsEqual && !resourcesEqual) {
+  if (fieldsEqual && !resourcesEqual && abilitiesEqual) {
     const resourceIds = new Set([...Object.keys(before.resources), ...Object.keys(after.resources)])
     const changedResources = [...resourceIds].filter((resourceId) => JSON.stringify(before.resources[resourceId]) !== JSON.stringify(after.resources[resourceId]))
     if (changedResources.length !== 1) return []
@@ -308,7 +308,115 @@ function deriveCustomSystemOperations(current: CharacterTemplate, next: Characte
     }]
   }
 
+  if (fieldsEqual && resourcesEqual && !abilitiesEqual) {
+    return deriveSingleAbilityOperation(characterId, before.systemId, before.abilities, after.abilities)
+  }
+
   return []
+}
+
+function deriveSingleAbilityOperation(
+  characterId: string,
+  systemId: string,
+  beforeAbilities: NonNullable<ReturnType<CharacterTemplate["get"]>["customSystems"]>[number]["abilities"],
+  afterAbilities: NonNullable<ReturnType<CharacterTemplate["get"]>["customSystems"]>[number]["abilities"],
+): SessionCustomSystemOperation[] {
+  const beforeById = new Map(beforeAbilities.map((ability) => [ability.id, ability]))
+  const afterById = new Map(afterAbilities.map((ability) => [ability.id, ability]))
+
+  const added = afterAbilities.filter((ability) => !beforeById.has(ability.id))
+  const removed = beforeAbilities.filter((ability) => !afterById.has(ability.id))
+  if (added.length === 1 && removed.length === 0 && beforeAbilities.length + 1 === afterAbilities.length) {
+    return [{ type: "character.customSystem.ability.add", characterId, systemId, ability: added[0] }]
+  }
+  if (removed.length === 1 && added.length === 0 && beforeAbilities.length - 1 === afterAbilities.length) {
+    return [{ type: "character.customSystem.ability.remove", characterId, systemId, abilityId: removed[0].id }]
+  }
+  if (added.length || removed.length || beforeAbilities.length !== afterAbilities.length) return []
+
+  const changed = beforeAbilities.flatMap((before) => {
+    const after = afterById.get(before.id)
+    return after && JSON.stringify(before) !== JSON.stringify(after) ? [{ before, after }] : []
+  })
+  if (changed.length !== 1) return []
+  const { before, after } = changed[0]
+
+  const baseBefore = { ...before, values: undefined, learned: undefined, prepared: undefined, usage: undefined }
+  const baseAfter = { ...after, values: undefined, learned: undefined, prepared: undefined, usage: undefined }
+  if (JSON.stringify(baseBefore) !== JSON.stringify(baseAfter)) return []
+
+  if (JSON.stringify(before.values) !== JSON.stringify(after.values)) {
+    if (before.learned !== after.learned || before.prepared !== after.prepared || JSON.stringify(before.usage) !== JSON.stringify(after.usage)) return []
+    const fieldIds = new Set([...Object.keys(before.values), ...Object.keys(after.values)])
+    const changedFields = [...fieldIds].filter((fieldId) => JSON.stringify(before.values[fieldId]) !== JSON.stringify(after.values[fieldId]))
+    if (changedFields.length !== 1) return []
+    const fieldId = changedFields[0]
+    const value = after.values[fieldId]
+    if (value === undefined) return []
+    return [{ type: "character.customSystem.ability.field.set", characterId, systemId, abilityId: before.id, fieldId, value }]
+  }
+
+  if (before.learned !== after.learned && before.prepared === after.prepared && JSON.stringify(before.usage) === JSON.stringify(after.usage)) {
+    return [{ type: "character.customSystem.ability.learned.set", characterId, systemId, abilityId: before.id, learned: after.learned !== false }]
+  }
+  if (before.prepared !== after.prepared && before.learned === after.learned && JSON.stringify(before.usage) === JSON.stringify(after.usage)) {
+    return [{ type: "character.customSystem.ability.prepared.set", characterId, systemId, abilityId: before.id, prepared: after.prepared === true }]
+  }
+  if (JSON.stringify(before.usage) !== JSON.stringify(after.usage) && before.learned === after.learned && before.prepared === after.prepared) {
+    if (!after.usage || !Number.isInteger(after.usage.used) || after.usage.used < 0) return []
+    if (before.usage?.maximum !== after.usage.maximum) return []
+    return [{ type: "character.customSystem.ability.usage.set", characterId, systemId, abilityId: before.id, used: after.usage.used }]
+  }
+
+  return []
+}
+
+function deriveCustomAbilityActivation(
+  current: CharacterTemplate,
+  next: CharacterTemplate,
+): Extract<SessionCustomSystemOperation, { type: "character.customSystem.ability.activate" }> | null {
+  const beforeStates = current.get("sheet").customSystems ?? []
+  const afterStates = next.get("sheet").customSystems ?? []
+  const afterBySystem = new Map(afterStates.map((state) => [state.systemId, state]))
+  const candidates: Array<{ systemId: string; abilityId: string }> = []
+
+  for (const beforeState of beforeStates) {
+    const afterState = afterBySystem.get(beforeState.systemId)
+    if (!afterState) continue
+    const afterAbilities = new Map(afterState.abilities.map((ability) => [ability.id, ability]))
+    for (const beforeAbility of beforeState.abilities) {
+      const afterAbility = afterAbilities.get(beforeAbility.id)
+      if (!afterAbility) continue
+      const beforeUsed = beforeAbility.usage?.used
+      const afterUsed = afterAbility.usage?.used
+      if (beforeUsed !== undefined && afterUsed === beforeUsed + 1) {
+        const withoutUsageBefore = { ...beforeAbility, usage: beforeAbility.usage ? { ...beforeAbility.usage, used: afterUsed } : undefined }
+        if (JSON.stringify(withoutUsageBefore) === JSON.stringify(afterAbility)) {
+          candidates.push({ systemId: beforeState.systemId, abilityId: beforeAbility.id })
+        }
+      }
+    }
+  }
+
+  if (candidates.length !== 1 || !hasActivationSideEffects(current, next)) return null
+  return {
+    type: "character.customSystem.ability.activate",
+    characterId: current.get("id"),
+    systemId: candidates[0].systemId,
+    abilityId: candidates[0].abilityId,
+  }
+}
+
+function hasActivationSideEffects(current: CharacterTemplate, next: CharacterTemplate): boolean {
+  const beforeStates = current.get("sheet").customSystems ?? []
+  const afterStates = next.get("sheet").customSystems ?? []
+  const beforeResources = beforeStates.map((state) => [state.systemId, state.resources])
+  const afterResources = afterStates.map((state) => [state.systemId, state.resources])
+  if (JSON.stringify(beforeResources) !== JSON.stringify(afterResources)) return true
+
+  const { customSystems: _beforeCustomSystems, ...beforeSheet } = current.get("sheet")
+  const { customSystems: _afterCustomSystems, ...afterSheet } = next.get("sheet")
+  return JSON.stringify(beforeSheet) !== JSON.stringify(afterSheet)
 }
 
 function deriveProficiencyOperations(current: CharacterTemplate, next: CharacterTemplate): SessionProficiencyOperation[] {
