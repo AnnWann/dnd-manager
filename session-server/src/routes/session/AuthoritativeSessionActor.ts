@@ -1,6 +1,8 @@
 import { SessionActor as ComposedSessionActor } from "./ComposedSessionActor";
 import { SessionActor as MissionSessionActor, MISSIONS_SHARED_SCOPE, MISSIONS_STATE_KEY, readMissionState } from "../missions/MissionSessionActor";
 import { parseMissionClientMessage, type SessionMissionState } from "../missions/missionProtocol";
+import { SessionActor as InitiativeSessionActor, INITIATIVE_SHARED_SCOPE, INITIATIVE_STATE_KEY, readInitiativeState } from "../initiative/InitiativeSessionActor";
+import { parseInitiativeClientMessage, type SessionInitiativeState } from "../initiative/initiativeProtocol";
 import { MAX_HP_LOG_RECORDS } from "../characters/sheet/hpState";
 import type { SessionConnection } from "./protocol";
 import {
@@ -8,27 +10,30 @@ import {
   createSessionLogRecord,
   readSessionLog,
   validateUndoOrdering,
-  type SessionLogRecord,
 } from "./sessionLog";
 
-type MissionDomainActor = {
+type SharedDomainActor = {
   webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void>;
 };
 
-type MissionReverse = {
-  type: "session.missions.restore";
-  characterId: "session";
-  affectedScopes?: string[];
-  snapshot: SessionMissionState;
-};
+type SharedReverse =
+  | {
+      type: "session.missions.restore";
+      characterId: "session";
+      affectedScopes?: string[];
+      snapshot: SessionMissionState;
+    }
+  | {
+      type: "session.initiative.restore";
+      characterId: "session";
+      affectedScopes?: string[];
+      snapshot: SessionInitiativeState;
+    };
 
-/**
- * Final session actor boundary. Existing character domains remain composed by
- * ComposedSessionActor; shared mission state is layered here so its undo can
- * participate in the same unified session timeline without local fallback.
- */
+/** Final shared-domain boundary layered over the composed character authority. */
 export class SessionActor extends ComposedSessionActor {
-  private readonly missionRoute = bindMissionActor(MissionSessionActor.prototype, this.ctx);
+  private readonly missionRoute = bindDomainActor(MissionSessionActor.prototype, this.ctx);
+  private readonly initiativeRoute = bindDomainActor(InitiativeSessionActor.prototype, this.ctx);
 
   override async fetch(request: Request): Promise<Response> {
     const response = await super.fetch(request);
@@ -44,32 +49,52 @@ export class SessionActor extends ComposedSessionActor {
         return false;
       }
     });
-    if (socket) send(socket, { type: "session.missions.snapshot", state: await readMissionState(this.ctx.storage) });
+    if (socket) {
+      const [missions, initiative] = await Promise.all([
+        readMissionState(this.ctx.storage),
+        readInitiativeState(this.ctx.storage),
+      ]);
+      send(socket, { type: "session.missions.snapshot", state: missions });
+      send(socket, { type: "session.initiative.snapshot", state: initiative });
+    }
     return response;
   }
 
   override async webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const raw = typeof message === "string" ? message : new TextDecoder().decode(message);
     const undoLogId = parseUndoLogId(raw);
-    if (undoLogId && await this.isMissionUndo(undoLogId)) {
-      await this.handleMissionUndo(webSocket, undoLogId);
-      return;
+    if (undoLogId) {
+      const reverseType = await this.sharedUndoType(undoLogId);
+      if (reverseType) {
+        await this.handleSharedUndo(webSocket, undoLogId, reverseType);
+        return;
+      }
     }
 
     if (parseMissionClientMessage(raw)) {
       await this.missionRoute.webSocketMessage(webSocket, message);
       return;
     }
+    if (parseInitiativeClientMessage(raw)) {
+      await this.initiativeRoute.webSocketMessage(webSocket, message);
+      return;
+    }
 
     await super.webSocketMessage(webSocket, message);
   }
 
-  private async isMissionUndo(logId: string): Promise<boolean> {
+  private async sharedUndoType(logId: string): Promise<SharedReverse["type"] | null> {
     const log = await readSessionLog(this.ctx.storage);
-    return log.some((record) => record.id === logId && record.reverseOperation.type === "session.missions.restore");
+    const record = log.find((entry) => entry.id === logId);
+    const type = record?.reverseOperation.type;
+    return type === "session.missions.restore" || type === "session.initiative.restore" ? type : null;
   }
 
-  private async handleMissionUndo(webSocket: WebSocket, logId: string): Promise<void> {
+  private async handleSharedUndo(
+    webSocket: WebSocket,
+    logId: string,
+    reverseType: SharedReverse["type"],
+  ): Promise<void> {
     const connection = readConnection(webSocket);
     if (!connection) {
       webSocket.close(1011, "Missing connection attachment");
@@ -88,30 +113,43 @@ export class SessionActor extends ComposedSessionActor {
       sendError(webSocket, validation.code, validation.message);
       return;
     }
-    if (validation.record.reverseOperation.type !== "session.missions.restore") {
+    if (validation.record.reverseOperation.type !== reverseType) {
       await super.webSocketMessage(webSocket, JSON.stringify({ type: "session.log.undo", logId }));
       return;
     }
 
-    const reverse = validation.record.reverseOperation as unknown as MissionReverse;
-    const current = await readMissionState(this.ctx.storage);
+    const reverse = validation.record.reverseOperation as unknown as SharedReverse;
     const now = new Date().toISOString();
-    const affectedScopes = validation.affectedScopes.length ? validation.affectedScopes : [MISSIONS_SHARED_SCOPE];
+    const isMissions = reverse.type === "session.missions.restore";
+    const current = isMissions
+      ? await readMissionState(this.ctx.storage)
+      : await readInitiativeState(this.ctx.storage);
+    const scope = isMissions ? MISSIONS_SHARED_SCOPE : INITIATIVE_SHARED_SCOPE;
+    const stateKey = isMissions ? MISSIONS_STATE_KEY : INITIATIVE_STATE_KEY;
+    const affectedScopes = validation.affectedScopes.length ? validation.affectedScopes : [scope];
+    const inverseReverse: SharedReverse = isMissions
+      ? {
+          type: "session.missions.restore",
+          characterId: "session",
+          affectedScopes,
+          snapshot: structuredClone(current as SessionMissionState),
+        }
+      : {
+          type: "session.initiative.restore",
+          characterId: "session",
+          affectedScopes,
+          snapshot: structuredClone(current as SessionInitiativeState),
+        };
     const undoRecord = createSessionLogRecord({
       actorId: connection.userId,
       createdAt: now,
       operation: { type: "character.hp.undo", characterId: "session", sourceLogId: validation.record.id },
       affectedScopes,
-      reverseOperation: {
-        type: "session.missions.restore",
-        characterId: "session",
-        affectedScopes,
-        snapshot: structuredClone(current),
-      },
+      reverseOperation: inverseReverse,
     });
 
     await commitSessionUndo(this.ctx.storage, this.ctx.getWebSockets(), {
-      writes: { [MISSIONS_STATE_KEY]: reverse.snapshot },
+      writes: { [stateKey]: reverse.snapshot },
       currentLog: log,
       sourceIndex: validation.index,
       userId: connection.userId,
@@ -119,11 +157,13 @@ export class SessionActor extends ComposedSessionActor {
       maxRecords: MAX_HP_LOG_RECORDS,
       undoneAt: now,
     });
-    broadcast(this.ctx.getWebSockets(), { type: "session.missions.updated", state: reverse.snapshot });
+    broadcast(this.ctx.getWebSockets(), isMissions
+      ? { type: "session.missions.updated", state: reverse.snapshot }
+      : { type: "session.initiative.updated", state: reverse.snapshot });
   }
 }
 
-function bindMissionActor<T extends MissionDomainActor>(prototype: T, ctx: DurableObjectState): T {
+function bindDomainActor<T extends SharedDomainActor>(prototype: T, ctx: DurableObjectState): T {
   const actor = Object.create(null) as T;
   for (const key of Reflect.ownKeys(prototype)) {
     if (key === "constructor") continue;
