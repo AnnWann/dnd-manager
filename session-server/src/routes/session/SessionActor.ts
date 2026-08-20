@@ -65,6 +65,12 @@ import {
   readSessionLog,
   type SessionLogRecord,
 } from "./sessionLog";
+import { readRuntimeConfig } from "./runtimeConfigAccess";
+import {
+  broadcastVisibilityFiltered,
+  refreshConnectionVisibility,
+  sendVisibilityFiltered,
+} from "./visibilityDelivery";
 
 const CONNECTION_TIMEOUT_MS = 90_000;
 const CLOSE_CODE_TIMEOUT = 4000;
@@ -99,6 +105,7 @@ export class SessionActor extends DurableObject<Env> {
     const [client, server] = Object.values(pair);
     server.serializeAttachment(connection);
     this.ctx.acceptWebSocket(server);
+    refreshConnectionVisibility(server, await readRuntimeConfig(this.ctx.storage));
 
     this.send(server, { type: "session.ready", sessionId: connection.sessionId, clientId: connection.clientId, serverTime: Date.now() });
     await Promise.all([this.sendHpSnapshot(server), this.sendConditionsSnapshot(server)]);
@@ -587,21 +594,15 @@ export class SessionActor extends DurableObject<Env> {
   }
 
   private send(webSocket: WebSocket, message: ServerSessionMessage): void {
-    try { webSocket.send(encodeServerSessionMessage(message)); } catch {}
+    sendVisibilityFiltered(webSocket, message);
   }
 
   private broadcast(message: ServerSessionMessage): void {
-    const payload = encodeServerSessionMessage(message);
-    for (const webSocket of this.activeSockets()) {
-      try { webSocket.send(payload); } catch {}
-    }
+    broadcastVisibilityFiltered(this.activeSockets(), message);
   }
 
   private broadcastSessionRaw(message: unknown): void {
-    const payload = JSON.stringify(message);
-    for (const webSocket of this.activeSockets()) {
-      try { webSocket.send(payload); } catch {}
-    }
+    broadcastVisibilityFiltered(this.activeSockets(), message);
   }
 
   private activeSockets(now = Date.now()): WebSocket[] {
