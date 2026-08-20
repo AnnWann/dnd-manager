@@ -18,6 +18,7 @@ export type SessionCustomSystemOperation =
   | { type: "character.customSystem.ability.usage.set"; characterId: string; systemId: string; abilityId: string; used: number }
   | { type: "character.customSystem.ability.activate"; characterId: string; systemId: string; abilityId: string }
   | { type: "character.customSystem.action.execute"; characterId: string; systemId: string; actionId: string }
+  | { type: "character.customSystem.automation.execute"; characterId: string; systemId: string; automationId: string }
 
 export type SessionCustomSystemClientMessage = {
   type: "session.customSystem.operation"
