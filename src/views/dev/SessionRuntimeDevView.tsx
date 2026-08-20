@@ -195,8 +195,8 @@ function SessionRuntimeDevPanel({
           <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.stat.inspiration.set", characterId: DEV_CHARACTER_ID, value: !(state?.stats.inspiration ?? false) })}>Toggle inspiration</DevButton>
           <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.stat.experience.set", characterId: DEV_CHARACTER_ID, value: (state?.stats.experience ?? 0) + 500 })}>XP +500</DevButton>
           <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.rest.short", characterId: DEV_CHARACTER_ID, healing: 4, hitDiceConsumption: { d8: 1 } })}>Short rest: +4 HP, -1d8</DevButton>
-          <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.rest.long", characterId: DEV_CHARACTER_ID, recovery: "full" })}>Full long rest</DevButton>
-          <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.rest.long", characterId: DEV_CHARACTER_ID, recovery: "partial" })}>Partial long rest</DevButton>
+          <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.rest.long", characterId: DEV_CHARACTER_ID, recovery: "full", selection: [] })}>Full long rest</DevButton>
+          <DevButton disabled={!state} onClick={() => runtime.dispatchHpOperation({ type: "character.rest.long", characterId: DEV_CHARACTER_ID, recovery: "partial", selection: [] })}>Partial long rest</DevButton>
         </div>
       </section>
 
