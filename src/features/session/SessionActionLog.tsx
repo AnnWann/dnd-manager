@@ -283,6 +283,17 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "mission.delete": return `Excluiu uma missão da sessão.`
     case "mission.status.set": return `Moveu uma missão para ${missionStatusLabel(operation.status)}.`
     case "mission.objective.toggle": return `Alterou o estado de um objetivo de missão.`
+    case "initiative.entries.add": return operation.entries.length === 1 ? `Adicionou um participante à iniciativa.` : `Adicionou ${operation.entries.length} participantes à iniciativa.`
+    case "initiative.entry.update": return `Atualizou um participante da iniciativa.`
+    case "initiative.entry.remove": return `Removeu um participante da iniciativa.`
+    case "initiative.sort": return `Ordenou a iniciativa.`
+    case "initiative.combat.start": return `Iniciou o combate.`
+    case "initiative.combat.end": return `Encerrou o combate.`
+    case "initiative.turn.next": return `Avançou para o próximo turno da iniciativa.`
+    case "initiative.turn.previous": return `Voltou para o turno anterior da iniciativa.`
+    case "initiative.allies.trade": return `Trocou a ordem de dois aliados na iniciativa.`
+    case "initiative.viewMode.set": return `Alterou a visualização da iniciativa para ${operation.viewMode === "cards" ? "cartões" : "tabela"}.`
+    case "initiative.reset": return `Limpou o combate atual.`
     case "character.proficiency.add": return `${characterName} ganhou a proficiência ${operation.proficiency.name}.`
     case "character.proficiency.remove": return `${characterName} perdeu a proficiência ${operation.proficiencyName || "selecionada"}.`
     case "character.race.replace": return `${characterName} atualizou a raça.`
