@@ -1,6 +1,8 @@
-import type { CreationState } from "../creation/creation.types"
+import type {
+  CreationCharacterCustomSystemConfiguration,
+  CreationState,
+} from "../creation/creation.types"
 import type { CharacterType } from "../../models/characters/CharacterType"
-import type { CharacterCustomSystemState } from "../../models/customSystems/CustomSystem"
 import type { CustomSystemDefinition } from "../../models/customSystems/CustomSystemDefinition"
 import type { Spell } from "../../models/magic/spells/Spell"
 
@@ -21,7 +23,7 @@ export type SessionRuntimeCharacterConfig = {
   visibility: "private" | "party" | "master"
   unique: boolean
   ownerId: string
-  customSystems: CharacterCustomSystemState[]
+  customSystems: CreationCharacterCustomSystemConfiguration[]
 }
 
 export function toSessionRuntimeConfig(
