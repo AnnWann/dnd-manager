@@ -1,0 +1,2 @@
+ALTER TABLE "campaign"
+ADD COLUMN "creationRevision" INTEGER NOT NULL DEFAULT 1;
