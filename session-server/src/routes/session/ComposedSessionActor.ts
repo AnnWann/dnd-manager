@@ -46,6 +46,11 @@ import {
 } from "../../../../src/models/characters/CharacterTemplate";
 import { getCurrentMaxHp } from "../../../../src/models/characters/characterHp";
 import { getCharacterConditions } from "../../../../src/models/characters/characterConditionStorage";
+import {
+  broadcastVisibilityFiltered,
+  createVisibilityFilteredContext,
+  sendVisibilityFiltered,
+} from "./visibilityDelivery";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
@@ -884,7 +889,7 @@ function resolveMessageRoute(
   return null;
 }
 
-function bindDomainActor<T extends DomainActor>(prototype: T, ctx: unknown): T {
+function bindDomainActor<T extends DomainActor>(prototype: T, ctx: DurableObjectState): T {
   const actor = Object.create(null) as T;
   for (const key of Reflect.ownKeys(prototype)) {
     if (key === "constructor") continue;
@@ -892,7 +897,7 @@ function bindDomainActor<T extends DomainActor>(prototype: T, ctx: unknown): T {
     if (descriptor) Object.defineProperty(actor, key, descriptor);
   }
   Object.defineProperty(actor, "ctx", {
-    value: ctx,
+    value: createVisibilityFilteredContext(ctx),
     enumerable: false,
     configurable: false,
     writable: false,
@@ -924,16 +929,9 @@ function sendError(socket: WebSocket, code: string, message: string): void {
 }
 
 function send(socket: WebSocket, value: unknown): void {
-  try {
-    socket.send(JSON.stringify(value));
-  } catch {
-    // Stale sockets are cleaned up by the base SessionActor.
-  }
+  sendVisibilityFiltered(socket, value);
 }
 
 function broadcast(sockets: WebSocket[], value: unknown): void {
-  const payload = JSON.stringify(value);
-  for (const socket of sockets) {
-    try { socket.send(payload); } catch {}
-  }
+  broadcastVisibilityFiltered(sockets, value);
 }
