@@ -24,16 +24,14 @@ import {
   createSessionLogRecord,
   readSessionLog,
 } from "../../session/sessionLog";
-import {
-  findRuntimeCustomSystem,
-  getRuntimeCharacterConfig,
-  readRuntimeConfig,
-} from "../../session/runtimeConfigAccess";
+import { readRuntimeConfig } from "../../session/runtimeConfigAccess";
+import { broadcastVisibilityFiltered } from "../../session/visibilityDelivery";
 import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
 import {
   parseCustomSystemClientMessage,
   type SessionCustomSystemOperation,
 } from "./customSystemProtocol";
+import { validateRuntimeCustomSystemAccess } from "./runtimeCustomSystemAccess";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
@@ -75,36 +73,16 @@ export class SessionActor extends BaseSessionActor {
       readSessionLog(this.ctx.storage),
     ]);
 
-    if (!runtimeConfig) {
-      sendError(webSocket, "RUNTIME_CONFIG_NOT_INITIALIZED", "The MASTER must publish saved Creation configuration before custom systems can be changed.");
+    const access = validateRuntimeCustomSystemAccess(
+      runtimeConfig,
+      operation.characterId,
+      operation.systemId,
+    );
+    if (!access.ok) {
+      sendError(webSocket, access.code, access.message);
       return;
     }
-
-    const characterConfig = getRuntimeCharacterConfig(runtimeConfig, operation.characterId);
-    if (!characterConfig) {
-      sendError(webSocket, "CHARACTER_NOT_IN_CREATION", "This character is not part of the active Creation configuration.");
-      return;
-    }
-
-    const installation = characterConfig.customSystems.find((entry) => entry.systemId === operation.systemId);
-    if (!installation) {
-      sendError(webSocket, "CUSTOM_SYSTEM_NOT_INSTALLED", "This custom system is not installed for the character in the active Creation configuration.");
-      return;
-    }
-    if (!installation.enabled) {
-      sendError(webSocket, "CUSTOM_SYSTEM_DISABLED", "This custom system is disabled for the character in the active Creation configuration.");
-      return;
-    }
-
-    const definition = findRuntimeCustomSystem(runtimeConfig, operation.systemId);
-    if (!definition) {
-      sendError(webSocket, "CUSTOM_SYSTEM_DEFINITION_NOT_FOUND", "The installed custom-system definition is missing from the active Creation configuration.");
-      return;
-    }
-    if (definition.version !== installation.systemVersion) {
-      sendError(webSocket, "CUSTOM_SYSTEM_VERSION_MISMATCH", "The character custom-system installation does not match the active definition version.");
-      return;
-    }
+    const { definition, installation } = access.value;
 
     const storedAbility = abilityState[operation.characterId];
     const hp = hpState[operation.characterId];
@@ -191,7 +169,7 @@ export class SessionActor extends BaseSessionActor {
       maxRecords: MAX_HP_LOG_RECORDS,
     });
 
-    broadcast(this.ctx.getWebSockets(), {
+    broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
       type: "session.abilities.updated",
       character: nextAbility,
     });
@@ -225,11 +203,4 @@ function readConnection(webSocket: WebSocket): SessionConnection | null {
 
 function sendError(webSocket: WebSocket, code: string, message: string): void {
   try { webSocket.send(JSON.stringify({ type: "session.error", code, message })); } catch {}
-}
-
-function broadcast(sockets: WebSocket[], message: unknown): void {
-  const payload = JSON.stringify(message);
-  for (const socket of sockets) {
-    try { socket.send(payload); } catch {}
-  }
 }
