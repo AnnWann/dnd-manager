@@ -7,6 +7,7 @@ import type { EquippedItemReference } from "../../../models/characters/character
 import type { HandOccupantReference } from "../../../models/characters/characterHands"
 import type { Itemmable } from "../../../models/items/item"
 import { applySessionAbilityState } from "../../session-runtime/applySessionAbilityState"
+import type { SessionCustomSystemOperation } from "../../session-runtime/customSystemSessionProtocol"
 import type { SessionEquipmentOperation } from "../../session-runtime/equipmentSessionProtocol"
 import type { SessionMagicOperation } from "../../session-runtime/magicSessionProtocol"
 import type { SessionProficiencyOperation } from "../../session-runtime/proficiencySessionProtocol"
@@ -67,6 +68,7 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
     const equipmentChanged = JSON.stringify(current.get("equipment")) !== JSON.stringify(next.get("equipment"))
     const inventoryChanged = JSON.stringify(current.get("inventory")) !== JSON.stringify(next.get("inventory"))
     const proficienciesChanged = JSON.stringify(current.get("sheet").proficiencies ?? []) !== JSON.stringify(next.get("sheet").proficiencies ?? [])
+    const customSystemsChanged = JSON.stringify(current.get("sheet").customSystems ?? []) !== JSON.stringify(next.get("sheet").customSystems ?? [])
 
     if (ownerChanged) {
       const ownerOnly = current.withPatch({ owner: next.get("owner") })
@@ -109,6 +111,16 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
         return
       }
       for (const operation of operations) sessionRuntime.dispatchProficiencyOperation(operation)
+      return
+    }
+
+    if (customSystemsChanged) {
+      const operations = deriveCustomSystemOperations(current, next)
+      if (!operations.length) {
+        console.warn("[session-runtime] blocked an unrecognized local custom-system mutation", { characterId })
+        return
+      }
+      for (const operation of operations) sessionRuntime.dispatchAbilityOperation(operation)
       return
     }
 
@@ -231,6 +243,72 @@ function resolveHandReference(character: CharacterTemplate, reference: HandOccup
   }
   const item = (equipment.heldItems ?? [])[reference.index]
   return item ? { type: "held-item", itemId: item.id } : null
+}
+
+function deriveCustomSystemOperations(current: CharacterTemplate, next: CharacterTemplate): SessionCustomSystemOperation[] {
+  const characterId = current.get("id")
+  const beforeStates = current.get("sheet").customSystems ?? []
+  const afterStates = next.get("sheet").customSystems ?? []
+  if (beforeStates.length !== afterStates.length) return []
+
+  const afterById = new Map(afterStates.map((state) => [state.systemId, state]))
+  const changed = beforeStates.flatMap((before) => {
+    const after = afterById.get(before.systemId)
+    return after && JSON.stringify(before) !== JSON.stringify(after) ? [{ before, after }] : []
+  })
+  if (changed.length !== 1) return []
+
+  const { before, after } = changed[0]
+  if (
+    before.systemVersion !== after.systemVersion
+    || before.enabled !== after.enabled
+    || JSON.stringify(before.abilities) !== JSON.stringify(after.abilities)
+  ) return []
+
+  const fieldsEqual = JSON.stringify(before.fields) === JSON.stringify(after.fields)
+  const resourcesEqual = JSON.stringify(before.resources) === JSON.stringify(after.resources)
+
+  if (!fieldsEqual && resourcesEqual) {
+    const fieldIds = new Set([...Object.keys(before.fields), ...Object.keys(after.fields)])
+    const changedFields = [...fieldIds].filter((fieldId) => JSON.stringify(before.fields[fieldId]) !== JSON.stringify(after.fields[fieldId]))
+    if (changedFields.length !== 1) return []
+    const fieldId = changedFields[0]
+    const value = after.fields[fieldId]
+    return value === undefined
+      ? [{ type: "character.customSystem.field.remove", characterId, systemId: before.systemId, fieldId }]
+      : [{ type: "character.customSystem.field.set", characterId, systemId: before.systemId, fieldId, value }]
+  }
+
+  if (fieldsEqual && !resourcesEqual) {
+    const resourceIds = new Set([...Object.keys(before.resources), ...Object.keys(after.resources)])
+    const changedResources = [...resourceIds].filter((resourceId) => JSON.stringify(before.resources[resourceId]) !== JSON.stringify(after.resources[resourceId]))
+    if (changedResources.length !== 1) return []
+    const resourceId = changedResources[0]
+    const beforeResource = before.resources[resourceId]
+    const afterResource = after.resources[resourceId]
+    if (!beforeResource || !afterResource) return []
+
+    if (
+      beforeResource.maximum === afterResource.maximum
+      && beforeResource.temporary === afterResource.temporary
+      && beforeResource.current !== afterResource.current
+    ) {
+      const amount = afterResource.current - beforeResource.current
+      if (Number.isFinite(amount) && amount !== 0) {
+        return [{ type: "character.customSystem.resource.adjust", characterId, systemId: before.systemId, resourceId, amount }]
+      }
+    }
+
+    return [{
+      type: "character.customSystem.resource.set",
+      characterId,
+      systemId: before.systemId,
+      resourceId,
+      state: afterResource,
+    }]
+  }
+
+  return []
 }
 
 function deriveProficiencyOperations(current: CharacterTemplate, next: CharacterTemplate): SessionProficiencyOperation[] {
