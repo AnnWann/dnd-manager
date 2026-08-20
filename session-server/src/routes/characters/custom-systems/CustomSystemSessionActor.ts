@@ -17,6 +17,7 @@ import {
   setCustomAbilityPrepared,
 } from "../../../../../src/lib/customSystems/CustomAbilityManagement";
 import { activateCustomAbility } from "../../../../../src/lib/customSystems/CustomAbilityActivation";
+import { activateCustomSystemAction } from "../../../../../src/lib/customSystems/CustomSystemActions";
 import {
   CharacterTemplate,
   type CharacterTemplateProps,
@@ -54,6 +55,10 @@ const CONDITIONS_STATE_KEY = "conditions-state";
 
 type RuntimeConfigSnapshot = NonNullable<Awaited<ReturnType<typeof readRuntimeConfig>>>;
 type AccessError = { ok: false; code: string; message: string };
+type AggregateCustomSystemOperation = Extract<
+  SessionCustomSystemOperation,
+  { type: "character.customSystem.ability.activate" | "character.customSystem.action.execute" }
+>;
 
 export class SessionActor extends BaseSessionActor {
   override async webSocketMessage(
@@ -143,6 +148,13 @@ export class SessionActor extends BaseSessionActor {
           operation.systemId,
           operation.abilityId,
         );
+      } else if (operation.type === "character.customSystem.action.execute") {
+        nextCharacter = activateCustomSystemAction(
+          character,
+          activeRuntimeConfig.config.customSystems,
+          operation.systemId,
+          operation.actionId,
+        );
       } else {
         const nextState = applyOperation(
           definition,
@@ -172,8 +184,9 @@ export class SessionActor extends BaseSessionActor {
       return;
     }
 
-    if (operation.type === "character.customSystem.ability.activate") {
-      const validation = validateActivationSystemChanges(
+    const aggregateOperation = isAggregateOperation(operation);
+    if (aggregateOperation) {
+      const validation = validateRuntimeSystemChanges(
         activeRuntimeConfig,
         operation.characterId,
         character,
@@ -198,11 +211,11 @@ export class SessionActor extends BaseSessionActor {
     };
     abilityState[operation.characterId] = nextAbility;
 
-    const nextHp = operation.type === "character.customSystem.ability.activate"
-      ? projectActivationHp(hp, nextCharacter)
+    const nextHp = aggregateOperation
+      ? projectAggregateHp(hp, nextCharacter)
       : hp;
-    const nextConditions = operation.type === "character.customSystem.ability.activate"
-      ? projectActivationConditions(conditions, nextCharacter)
+    const nextConditions = aggregateOperation
+      ? projectAggregateConditions(conditions, nextCharacter)
       : conditions;
     const hpChanged = JSON.stringify(nextHp) !== JSON.stringify(hp);
     const conditionsChanged = JSON.stringify(nextConditions) !== JSON.stringify(conditions);
@@ -257,7 +270,7 @@ export class SessionActor extends BaseSessionActor {
 function applyOperation(
   definition: CustomSystemDefinition,
   state: CharacterCustomSystemState,
-  operation: Exclude<SessionCustomSystemOperation, { type: "character.customSystem.ability.activate" }>,
+  operation: Exclude<SessionCustomSystemOperation, AggregateCustomSystemOperation>,
   actor: CustomSystemActor,
   character: CharacterTemplate,
 ): CharacterCustomSystemState {
@@ -348,7 +361,7 @@ function normalizeAddedAbility(
   };
 }
 
-function validateActivationSystemChanges(
+function validateRuntimeSystemChanges(
   runtimeConfig: RuntimeConfigSnapshot,
   characterId: string,
   before: CharacterTemplate,
@@ -362,8 +375,8 @@ function validateActivationSystemChanges(
   if (beforeStates.some((state) => !afterIds.has(state.systemId))) {
     return {
       ok: false,
-      code: "CUSTOM_SYSTEM_ACTIVATION_INVALID_STATE_CHANGE",
-      message: "Custom ability activation cannot install or remove custom systems.",
+      code: "CUSTOM_SYSTEM_EFFECT_INVALID_STATE_CHANGE",
+      message: "Custom-system runtime effects cannot install or remove custom systems.",
     };
   }
 
@@ -372,8 +385,8 @@ function validateActivationSystemChanges(
     if (!previous) {
       return {
         ok: false,
-        code: "CUSTOM_SYSTEM_ACTIVATION_INVALID_STATE_CHANGE",
-        message: "Custom ability activation cannot install or remove custom systems.",
+        code: "CUSTOM_SYSTEM_EFFECT_INVALID_STATE_CHANGE",
+        message: "Custom-system runtime effects cannot install or remove custom systems.",
       };
     }
     if (JSON.stringify(previous) === JSON.stringify(nextState)) continue;
@@ -388,14 +401,14 @@ function validateActivationSystemChanges(
       return {
         ok: false,
         code: "CUSTOM_SYSTEM_RUNTIME_DISABLED",
-        message: `Custom system “${nextState.systemId}” changed by this activation is disabled at runtime.`,
+        message: `Custom system “${nextState.systemId}” changed by this effect is disabled at runtime.`,
       };
     }
     if (nextState.systemVersion !== access.value.installation.systemVersion) {
       return {
         ok: false,
         code: "CUSTOM_SYSTEM_RUNTIME_VERSION_MISMATCH",
-        message: `Custom system “${nextState.systemId}” changed by this activation does not match its saved Creation version.`,
+        message: `Custom system “${nextState.systemId}” changed by this effect does not match its saved Creation version.`,
       };
     }
   }
@@ -403,7 +416,7 @@ function validateActivationSystemChanges(
   return { ok: true };
 }
 
-function projectActivationHp(
+function projectAggregateHp(
   previous: SessionHpState,
   character: CharacterTemplate,
 ): SessionHpState {
@@ -431,7 +444,7 @@ function projectActivationHp(
   };
 }
 
-function projectActivationConditions(
+function projectAggregateConditions(
   previous: SessionConditionsState,
   character: CharacterTemplate,
 ): SessionConditionsState {
@@ -443,6 +456,13 @@ function projectActivationConditions(
     initialized: true,
     revision: previous.revision + 1,
   };
+}
+
+function isAggregateOperation(
+  operation: SessionCustomSystemOperation,
+): operation is AggregateCustomSystemOperation {
+  return operation.type === "character.customSystem.ability.activate"
+    || operation.type === "character.customSystem.action.execute";
 }
 
 function readConnection(webSocket: WebSocket): SessionConnection | null {
