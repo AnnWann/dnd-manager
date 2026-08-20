@@ -5,15 +5,14 @@ import { SessionActor as InitiativeSessionActor, INITIATIVE_SHARED_SCOPE, INITIA
 import { parseInitiativeClientMessage, type SessionInitiativeState } from "../initiative/initiativeProtocol";
 import { MAX_HP_LOG_RECORDS } from "../characters/sheet/hpState";
 import type { SessionConnection } from "./protocol";
-import {
-  parseRuntimeConfigPublishMessage,
-} from "./runtimeConfigProtocol";
+import { parseRuntimeConfigPublishMessage } from "./runtimeConfigProtocol";
 import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/session-runtime/sessionRuntimeConfig";
 import {
   RUNTIME_CONFIG_STATE_KEY,
   authorizeCharacterMutation,
   extractOperationCharacterId,
   readRuntimeConfig,
+  visibleRuntimeConfigSnapshot,
 } from "./runtimeConfigAccess";
 import {
   commitSessionUndo,
@@ -62,6 +61,7 @@ export class SessionActor extends ComposedSessionActor {
       }
     });
     if (socket) {
+      const connection = readConnection(socket);
       const [missions, initiative, runtimeConfig] = await Promise.all([
         readMissionState(this.ctx.storage),
         readInitiativeState(this.ctx.storage),
@@ -69,7 +69,12 @@ export class SessionActor extends ComposedSessionActor {
       ]);
       send(socket, { type: "session.missions.snapshot", state: missions });
       send(socket, { type: "session.initiative.snapshot", state: initiative });
-      send(socket, { type: "session.config.snapshot", snapshot: runtimeConfig });
+      send(socket, {
+        type: "session.config.snapshot",
+        snapshot: connection
+          ? visibleRuntimeConfigSnapshot(connection, runtimeConfig)
+          : null,
+      });
     }
     return response;
   }
@@ -147,7 +152,10 @@ export class SessionActor extends ComposedSessionActor {
         "CREATION_CONFIG_STALE",
         `Creation revision ${snapshot.creationRevision} is older than active revision ${current.creationRevision}.`,
       );
-      send(webSocket, { type: "session.config.snapshot", snapshot: current });
+      send(webSocket, {
+        type: "session.config.snapshot",
+        snapshot: visibleRuntimeConfigSnapshot(connection, current),
+      });
       return;
     }
 
@@ -161,21 +169,24 @@ export class SessionActor extends ComposedSessionActor {
         "CREATION_CONFIG_REVISION_COLLISION",
         "A different runtime configuration already exists for this Creation revision.",
       );
-      send(webSocket, { type: "session.config.snapshot", snapshot: current });
+      send(webSocket, {
+        type: "session.config.snapshot",
+        snapshot: visibleRuntimeConfigSnapshot(connection, current),
+      });
       return;
     }
 
     if (!current || snapshot.creationRevision > current.creationRevision) {
       await this.ctx.storage.put(RUNTIME_CONFIG_STATE_KEY, structuredClone(snapshot));
-      broadcast(this.ctx.getWebSockets(), {
-        type: "session.config.snapshot",
-        snapshot,
-      });
+      broadcastRuntimeConfig(this.ctx.getWebSockets(), snapshot);
       return;
     }
 
     // Equal revision + equal content is an idempotent republish after reconnect.
-    send(webSocket, { type: "session.config.snapshot", snapshot: current });
+    send(webSocket, {
+      type: "session.config.snapshot",
+      snapshot: visibleRuntimeConfigSnapshot(connection, current),
+    });
   }
 
   private async sharedUndoType(logId: string): Promise<SharedReverse["type"] | null> {
@@ -295,5 +306,18 @@ function broadcast(sockets: WebSocket[], value: unknown): void {
   const payload = JSON.stringify(value);
   for (const socket of sockets) {
     try { socket.send(payload); } catch {}
+  }
+}
+function broadcastRuntimeConfig(
+  sockets: WebSocket[],
+  snapshot: SessionRuntimeConfigSnapshot,
+): void {
+  for (const socket of sockets) {
+    const connection = readConnection(socket);
+    if (!connection) continue;
+    send(socket, {
+      type: "session.config.snapshot",
+      snapshot: visibleRuntimeConfigSnapshot(connection, snapshot),
+    });
   }
 }
