@@ -5,6 +5,7 @@ import { SessionActor as InitiativeSessionActor, INITIATIVE_SHARED_SCOPE, INITIA
 import { parseInitiativeClientMessage, type SessionInitiativeState } from "../initiative/initiativeProtocol";
 import { SessionActor as CustomSystemSessionActor } from "../characters/custom-systems/CustomSystemSessionActor";
 import { parseCustomSystemClientMessage } from "../characters/custom-systems/customSystemProtocol";
+import type { SessionAbilityState } from "../characters/abilities/abilityProtocol";
 import { MAX_HP_LOG_RECORDS } from "../characters/sheet/hpState";
 import type { SessionConnection } from "./protocol";
 import { parseRuntimeConfigPublishMessage } from "./runtimeConfigProtocol";
@@ -18,6 +19,7 @@ import {
 } from "./runtimeConfigAccess";
 import {
   broadcastAllVisibleCharacterSnapshots,
+  broadcastVisibilityFiltered,
   refreshAllConnectionVisibility,
 } from "./visibilityDelivery";
 import {
@@ -29,23 +31,28 @@ import {
 
 export { RUNTIME_CONFIG_STATE_KEY } from "./runtimeConfigAccess";
 
+const ABILITIES_STATE_KEY = "abilities-state";
+
 type SharedDomainActor = {
   webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void>;
 };
 
-type SharedReverse =
-  | {
-      type: "session.missions.restore";
-      characterId: "session";
-      affectedScopes?: string[];
-      snapshot: SessionMissionState;
-    }
-  | {
-      type: "session.initiative.restore";
-      characterId: "session";
-      affectedScopes?: string[];
-      snapshot: SessionInitiativeState;
-    };
+type MissionReverse = {
+  type: "session.missions.restore";
+  characterId: "session";
+  affectedScopes?: string[];
+  snapshot: SessionMissionState;
+};
+
+type InitiativeReverse = {
+  type: "session.initiative.restore";
+  characterId: "session";
+  affectedScopes?: string[];
+  snapshot: SessionInitiativeState;
+  abilities?: Record<string, SessionAbilityState>;
+};
+
+type SharedReverse = MissionReverse | InitiativeReverse;
 
 /** Final shared-domain boundary layered over the composed character authority. */
 export class SessionActor extends ComposedSessionActor {
@@ -240,47 +247,116 @@ export class SessionActor extends ComposedSessionActor {
     }
 
     const reverse = validation.record.reverseOperation as unknown as SharedReverse;
+    if (reverse.type === "session.missions.restore") {
+      await this.restoreMissionUndo(webSocket, connection, log, validation.index, validation.affectedScopes, reverse);
+      return;
+    }
+    await this.restoreInitiativeUndo(webSocket, connection, log, validation.index, validation.affectedScopes, reverse);
+  }
+
+  private async restoreMissionUndo(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    log: Awaited<ReturnType<typeof readSessionLog>>,
+    sourceIndex: number,
+    scopes: string[],
+    reverse: MissionReverse,
+  ): Promise<void> {
+    const current = await readMissionState(this.ctx.storage);
+    const affectedScopes = scopes.length ? scopes : [MISSIONS_SHARED_SCOPE];
     const now = new Date().toISOString();
-    const isMissions = reverse.type === "session.missions.restore";
-    const current = isMissions
-      ? await readMissionState(this.ctx.storage)
-      : await readInitiativeState(this.ctx.storage);
-    const scope = isMissions ? MISSIONS_SHARED_SCOPE : INITIATIVE_SHARED_SCOPE;
-    const stateKey = isMissions ? MISSIONS_STATE_KEY : INITIATIVE_STATE_KEY;
-    const affectedScopes = validation.affectedScopes.length ? validation.affectedScopes : [scope];
-    const inverseReverse: SharedReverse = isMissions
-      ? {
-          type: "session.missions.restore",
-          characterId: "session",
-          affectedScopes,
-          snapshot: structuredClone(current as SessionMissionState),
-        }
-      : {
-          type: "session.initiative.restore",
-          characterId: "session",
-          affectedScopes,
-          snapshot: structuredClone(current as SessionInitiativeState),
-        };
+    const inverseReverse: MissionReverse = {
+      type: "session.missions.restore",
+      characterId: "session",
+      affectedScopes,
+      snapshot: structuredClone(current),
+    };
     const undoRecord = createSessionLogRecord({
       actorId: connection.userId,
       createdAt: now,
-      operation: { type: "character.hp.undo", characterId: "session", sourceLogId: validation.record.id },
+      operation: { type: "character.hp.undo", characterId: "session", sourceLogId: log[sourceIndex].id },
       affectedScopes,
       reverseOperation: inverseReverse,
     });
 
     await commitSessionUndo(this.ctx.storage, this.ctx.getWebSockets(), {
-      writes: { [stateKey]: reverse.snapshot },
+      writes: { [MISSIONS_STATE_KEY]: reverse.snapshot },
       currentLog: log,
-      sourceIndex: validation.index,
+      sourceIndex,
       userId: connection.userId,
       undoRecord,
       maxRecords: MAX_HP_LOG_RECORDS,
       undoneAt: now,
     });
-    broadcast(this.ctx.getWebSockets(), isMissions
-      ? { type: "session.missions.updated", state: reverse.snapshot }
-      : { type: "session.initiative.updated", state: reverse.snapshot });
+    broadcast(this.ctx.getWebSockets(), { type: "session.missions.updated", state: reverse.snapshot });
+  }
+
+  private async restoreInitiativeUndo(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    log: Awaited<ReturnType<typeof readSessionLog>>,
+    sourceIndex: number,
+    scopes: string[],
+    reverse: InitiativeReverse,
+  ): Promise<void> {
+    const [currentInitiative, abilities] = await Promise.all([
+      readInitiativeState(this.ctx.storage),
+      this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
+    ]);
+    const affectedScopes = scopes.length ? scopes : [INITIATIVE_SHARED_SCOPE];
+    const now = new Date().toISOString();
+    const restoredAbilityIds = Object.keys(reverse.abilities ?? {});
+    const inverseAbilities = Object.fromEntries(
+      restoredAbilityIds.flatMap((characterId) => {
+        const current = abilities[characterId];
+        return current ? [[characterId, structuredClone(current)]] : [];
+      }),
+    ) as Record<string, SessionAbilityState>;
+    const inverseReverse: InitiativeReverse = {
+      type: "session.initiative.restore",
+      characterId: "session",
+      affectedScopes,
+      snapshot: structuredClone(currentInitiative),
+      ...(restoredAbilityIds.length ? { abilities: inverseAbilities } : {}),
+    };
+
+    for (const [characterId, snapshot] of Object.entries(reverse.abilities ?? {})) {
+      abilities[characterId] = structuredClone(snapshot);
+    }
+
+    const writes: Record<string, unknown> = {
+      [INITIATIVE_STATE_KEY]: reverse.snapshot,
+    };
+    if (restoredAbilityIds.length) writes[ABILITIES_STATE_KEY] = abilities;
+
+    const undoRecord = createSessionLogRecord({
+      actorId: connection.userId,
+      createdAt: now,
+      operation: { type: "character.hp.undo", characterId: "session", sourceLogId: log[sourceIndex].id },
+      affectedScopes,
+      reverseOperation: inverseReverse,
+    });
+
+    await commitSessionUndo(this.ctx.storage, this.ctx.getWebSockets(), {
+      writes,
+      currentLog: log,
+      sourceIndex,
+      userId: connection.userId,
+      undoRecord,
+      maxRecords: MAX_HP_LOG_RECORDS,
+      undoneAt: now,
+    });
+
+    const sockets = this.ctx.getWebSockets();
+    broadcast(sockets, { type: "session.initiative.updated", state: reverse.snapshot });
+    for (const characterId of restoredAbilityIds) {
+      const snapshot = abilities[characterId];
+      if (!snapshot) continue;
+      broadcastVisibilityFiltered(sockets, {
+        type: "session.abilities.updated",
+        character: snapshot,
+      });
+    }
   }
 }
 
