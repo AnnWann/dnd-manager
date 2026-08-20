@@ -19,6 +19,8 @@ import {
   getEffectiveCustomAbilityActivation,
 } from "../../../../../../lib/customSystems/CustomSystemActions"
 import { useCustomSystemDefinitions } from "../../../../../../lib/customSystems/CustomSystemRegistry"
+import type { SessionCustomSystemOperation } from "../../../../../session-runtime/customSystemSessionProtocol"
+import { useOptionalSessionRuntime } from "../../../../../session-runtime/useSessionRuntime"
 
 type Props = {
   character: CharacterTemplate
@@ -36,6 +38,7 @@ type SheetActionEntry = {
   actionKind: AbilityActionKind
   disabled?: boolean
   status?: string
+  operation?: SessionCustomSystemOperation
   activate: (character: CharacterTemplate) => CharacterTemplate
 }
 
@@ -71,6 +74,7 @@ export function CustomSystemActionsPanel({
   updateCharacter,
 }: Props) {
   const definitions = useCustomSystemDefinitions()
+  const sessionRuntime = useOptionalSessionRuntime()
   const [error, setError] = useState("")
   const entries = useMemo(
     () => buildEntries(character, definitions),
@@ -82,6 +86,10 @@ export function CustomSystemActionsPanel({
   function activate(entry: SheetActionEntry) {
     try {
       setError("")
+      if (sessionRuntime && entry.operation) {
+        sessionRuntime.dispatchAbilityOperation(entry.operation)
+        return
+      }
       updateCharacter(character.get("id"), (current) => entry.activate(current))
     } catch (caught) {
       setError(
@@ -168,6 +176,7 @@ function buildEntries(
 ): SheetActionEntry[] {
   const states = (character.get("sheet").customSystems ?? []) as CharacterCustomSystemState[]
   const entries: SheetActionEntry[] = []
+  const characterId = character.get("id")
 
   for (const state of states) {
     if (state.enabled === false) continue
@@ -182,6 +191,12 @@ function buildEntries(
         description: action.description,
         source: definition.name,
         actionKind: action.actionKind,
+        operation: {
+          type: "character.customSystem.action.execute",
+          characterId,
+          systemId: definition.id,
+          actionId: action.id,
+        },
         activate: (current) =>
           activateCustomSystemAction(
             current,
@@ -259,6 +274,12 @@ function abilityEntry(
       : usage.maximum === undefined
         ? undefined
         : `${usage.remaining}/${usage.maximum} usos`,
+    operation: {
+      type: "character.customSystem.ability.activate",
+      characterId: character.get("id"),
+      systemId: definition.id,
+      abilityId: ability.id,
+    },
     activate: (current) =>
       activateCustomAbility(current, definitions, definition.id, ability.id),
   }
