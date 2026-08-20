@@ -8,7 +8,11 @@ import {
   type ReactNode,
 } from "react"
 
-import { getCreationSnapshot } from "../../api/creation"
+import {
+  getCreationSnapshot,
+  saveCreationSnapshot,
+} from "../../api/creation"
+import { getApiStatus } from "../../api/api-client"
 import type {
   CreationSnapshot,
   CreationState,
@@ -47,7 +51,7 @@ export function CreationEditorProvider({
   const [draft, setDraft] = useState<CreationState | null>(null)
   const [baseRevision, setBaseRevision] = useState<number | null>(null)
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
-  const [saving] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   const applySnapshot = useCallback((snapshot: CreationSnapshot) => {
     const canonical = structuredClone(snapshot.data)
@@ -85,30 +89,70 @@ export function CreationEditorProvider({
         const editable = structuredClone(current)
         return structuredClone(updater(editable))
       })
+      setError("")
     },
     [],
   )
 
   const cancel = useCallback(() => {
-    if (!base) return
+    if (!base || saving) return
     setDraft(structuredClone(base))
-  }, [base])
+    setError("")
+  }, [base, saving])
 
   const dirty = useMemo(
     () => Boolean(base && draft && !creationStatesEqual(base, draft)),
     [base, draft],
   )
 
-  const save = useCallback(async () => {
+  useEffect(() => {
     if (!dirty) return
 
-    // The atomic PATCH contract is intentionally introduced later. Exposing
-    // the method now stabilizes the editor API without silently falling back
-    // to any of the legacy per-domain persistence paths.
-    throw new Error(
-      "O salvamento atômico de Criação ainda não está disponível nesta etapa.",
-    )
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ""
+    }
+
+    window.addEventListener("beforeunload", beforeUnload)
+    return () => window.removeEventListener("beforeunload", beforeUnload)
   }, [dirty])
+
+  const save = useCallback(async () => {
+    if (!dirty || !draft || baseRevision === null || saving) return
+
+    setSaving(true)
+    setError("")
+    try {
+      const snapshot = await saveCreationSnapshot(
+        campaignId,
+        baseRevision,
+        draft,
+      )
+      applySnapshot(snapshot)
+    } catch (cause) {
+      if (getApiStatus(cause) === 409) {
+        setError(
+          "A Criação foi alterada em outra janela ou por outro mestre. Recarregue antes de salvar novamente.",
+        )
+      } else {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Não foi possível salvar as alterações de Criação.",
+        )
+      }
+      throw cause
+    } finally {
+      setSaving(false)
+    }
+  }, [
+    applySnapshot,
+    baseRevision,
+    campaignId,
+    dirty,
+    draft,
+    saving,
+  ])
 
   const value = useMemo<CreationEditorContextValue>(
     () => ({
