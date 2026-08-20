@@ -611,7 +611,7 @@ export class SessionActor extends DurableObject<Env> {
   }
 
   private async readRestInventoryState(): Promise<SharedInventoryState> {
-    return (await this.ctx.storage.get<SharedInventoryState>>(INVENTORY_STATE_KEY)) ?? {
+    return (await this.ctx.storage.get<SharedInventoryState>(INVENTORY_STATE_KEY)) ?? {
       initialized: false,
       revision: 0,
       partyInventory: [],
