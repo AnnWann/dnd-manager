@@ -122,7 +122,7 @@ export async function readInitiativeState(storage: DurableObjectStorage): Promis
   return (await storage.get<SessionInitiativeState>(INITIATIVE_STATE_KEY)) ?? {
     initialized: false,
     revision: 0,
-    session: createInitiativeSession("Combate da sessão") as unknown as Record<string, unknown>,
+    session: emptyInitiativeSession() as unknown as Record<string, unknown>,
   };
 }
 
@@ -135,10 +135,19 @@ function applyInitiativeOperation(
       if (!operation.entries.length || operation.entries.length > 50) return invalid("INITIATIVE_ENTRIES_INVALID", "Add between 1 and 50 initiative entries at a time.");
       const inputs = operation.entries.flatMap((entry) => normalizeEntryInput(entry));
       if (inputs.length !== operation.entries.length) return invalid("INITIATIVE_ENTRY_INVALID", "One or more initiative entries are invalid.");
+      const existingIds = new Set(current.entries.map((entry) => entry.id));
       const session = current.started
         ? addEntriesDuringCombat(current, inputs)
         : addInitiativeEntries(current, inputs);
-      return { ok: true, session, operation: { ...operation, entries: session.entries.slice(-inputs.length) as unknown as Record<string, unknown>[] } };
+      const addedEntries = session.entries.filter((entry) => !existingIds.has(entry.id));
+      return {
+        ok: true,
+        session,
+        operation: {
+          ...operation,
+          entries: addedEntries as unknown as Record<string, unknown>[],
+        },
+      };
     }
     case "initiative.entry.update": {
       const existing = current.entries.find((entry) => entry.id === operation.entryId);
@@ -188,23 +197,39 @@ function applyInitiativeOperation(
 }
 
 /**
- * Inserts reinforcements into the canonical initiative order without changing
- * the active turn or round anchor. The existing anchor remains position 0.
- * A creature whose initiative position has already passed waits until the next
- * round; one whose position is still ahead can act this round.
+ * Inserts reinforcements without re-sorting existing combatants. Existing
+ * manual trades and the current turn therefore remain intact. The round anchor
+ * stays at the front of the cycle; a reinforcement inserted before the current
+ * actor naturally waits until the next cycle, while one inserted after it can
+ * still act this round.
  */
 function addEntriesDuringCombat(current: InitiativeSession, inputs: NewInitiativeEntry[]): InitiativeSession {
-  const anchor = current.entries.find((entry) => entry.id === current.roundAnchorEntryId) ?? current.entries[0];
-  const added = addInitiativeEntries({ ...current, started: false }, inputs).entries.slice(current.entries.length);
-  const all = [...current.entries, ...added];
-  const sorted = [...all].sort(compareInitiative);
-  const withoutAnchor = sorted.filter((entry) => entry.id !== anchor.id);
-  const ordered = [anchor, ...withoutAnchor].map((entry, order) => ({ ...entry, order }));
+  const seeded = addInitiativeEntries({ ...current, started: false }, inputs);
+  const additions = seeded.entries
+    .slice(current.entries.length)
+    .sort(compareInitiative);
+  const entries = [...current.entries];
+  const anchorIndex = current.roundAnchorEntryId
+    ? Math.max(0, entries.findIndex((entry) => entry.id === current.roundAnchorEntryId))
+    : 0;
+  const minimumInsertIndex = Math.min(entries.length, anchorIndex + 1);
+
+  for (const addition of additions) {
+    let insertAt = entries.length;
+    for (let index = minimumInsertIndex; index < entries.length; index += 1) {
+      if (compareInitiative(addition, entries[index]) < 0) {
+        insertAt = index;
+        break;
+      }
+    }
+    entries.splice(insertAt, 0, addition);
+  }
+
   return {
     ...current,
-    entries: ordered,
+    entries: entries.map((entry, order) => ({ ...entry, order })),
     activeEntryId: current.activeEntryId,
-    roundAnchorEntryId: anchor.id,
+    roundAnchorEntryId: current.roundAnchorEntryId,
     updatedAt: Date.now(),
   };
 }
@@ -259,6 +284,19 @@ function normalizeEntryPatch(value: Record<string, unknown>): Partial<Initiative
   return patch;
 }
 
+function emptyInitiativeSession(): InitiativeSession {
+  return {
+    version: 1,
+    id: "session-initiative",
+    name: "Combate da sessão",
+    entries: [],
+    round: 1,
+    started: false,
+    viewMode: "table",
+    createdAt: 0,
+    updatedAt: 0,
+  };
+}
 function finite(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
