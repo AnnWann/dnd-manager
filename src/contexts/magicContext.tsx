@@ -7,15 +7,16 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import type { Spell } from "../models/magic/spells/Spell"
-import type { AppStateV1 } from "../lib/remoteState"
-import { normalizeSpellText } from "../lib/textNormalization"
 import { getOfficialSpellsByIndexes } from "../api/spell-compendium"
 import metamagicData from "../data/metamagics.v1.json"
+import { useOptionalCreationEditor } from "../features/creation/CreationEditorProvider"
+import type { AppStateV1 } from "../lib/remoteState"
+import { normalizeSpellText } from "../lib/textNormalization"
 import type {
   Metamagic,
   MetamagicId,
 } from "../models/magic/metamagic/Metamagic"
+import type { Spell } from "../models/magic/spells/Spell"
 
 const officialMetamagics = Object.values(
   metamagicData as Record<MetamagicId, Metamagic>,
@@ -235,8 +236,58 @@ function mergeSpells(existing: Spell[], incoming: Spell[]): Spell[] {
   return Array.from(byIndex.values())
 }
 
-export function useMagicContext() {
+export function useMagicContext(): MagicContextValue {
   const context = useContext(MagicContext)
-  if (!context) throw new Error("useMagicContext must be used inside MagicProvider")
-  return context
+  const editor = useOptionalCreationEditor()
+
+  return useMemo(() => {
+    if (!context) throw new Error("useMagicContext must be used inside MagicProvider")
+    if (!editor?.draft) return context
+
+    const savedSpells = editor.draft.spells.map(normalizeSpellText)
+    const spellByIndex = new Map<string, Spell>()
+
+    for (const spell of context.spells) {
+      if (spell.homebrew) continue
+      const index = spell.index?.trim()
+      if (index) spellByIndex.set(index, spell)
+    }
+    for (const spell of savedSpells) {
+      const index = spell.index?.trim()
+      if (index) spellByIndex.set(index, spell)
+    }
+
+    const updateSavedSpells = (updater: (current: Spell[]) => Spell[]) => {
+      editor.updateDraft((draft) => ({
+        ...draft,
+        spells: updater(draft.spells.map(normalizeSpellText)),
+      }))
+    }
+
+    const saveSpells = (incoming: Spell[]) => {
+      const normalizedIncoming = incoming.map(normalizeSpellText)
+      if (!normalizedIncoming.length) return
+      updateSavedSpells((current) => mergeSpells(current, normalizedIncoming))
+    }
+
+    return {
+      ...context,
+      spells: Array.from(spellByIndex.values()),
+      savedSpells,
+      spellByIndex,
+      getSpellByIndex: (spellIndex) => spellByIndex.get(spellIndex.trim()),
+      getSpellsByIndexes: (spellIndexes) =>
+        spellIndexes
+          .map((spellIndex) => spellByIndex.get(spellIndex.trim()))
+          .filter((spell): spell is Spell => Boolean(spell)),
+      saveSpell: (spell) => saveSpells([spell]),
+      saveSpells,
+      deleteSpell: (spellIndex) => {
+        const normalizedIndex = spellIndex.trim()
+        updateSavedSpells((current) =>
+          current.filter((spell) => spell.index !== normalizedIndex),
+        )
+      },
+    }
+  }, [context, editor])
 }
