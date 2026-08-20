@@ -9,15 +9,17 @@ export type SessionCustomSystemOperation =
   | { type: "character.customSystem.resource.reset"; characterId: string; systemId: string; resourceId: string };
 
 export type SessionCustomSystemClientMessage = {
-  type: "session.customSystem.operation";
+  type: "session.customSystem.operation" | "session.abilities.operation";
   operation: SessionCustomSystemOperation;
 };
 
 export function parseCustomSystemClientMessage(raw: string): SessionCustomSystemClientMessage | null {
   let value: unknown;
   try { value = JSON.parse(raw); } catch { return null; }
-  if (!isRecord(value) || value.type !== "session.customSystem.operation" || !isOperation(value.operation)) return null;
-  return { type: "session.customSystem.operation", operation: value.operation };
+  if (!isRecord(value)) return null;
+  if (value.type !== "session.customSystem.operation" && value.type !== "session.abilities.operation") return null;
+  if (!isOperation(value.operation)) return null;
+  return { type: value.type, operation: value.operation };
 }
 
 function isOperation(value: unknown): value is SessionCustomSystemOperation {
