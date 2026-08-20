@@ -2,6 +2,7 @@ import {
   CampaignMemberStatus,
   CampaignRole,
   CampaignSpellApprovalStatus,
+  CharacterVisibility,
   HomebrewSpellStatus,
 } from "../../../generated/prisma/client"
 import {
@@ -11,6 +12,15 @@ import {
 } from "../../../server/api"
 import { prisma } from "../../../server/prisma"
 import { requireSession } from "../../../server/session"
+import type {
+  CreationCharacterConfiguration,
+  CreationCharacterCustomSystemConfiguration,
+  CreationItemCompendiumEntry,
+  CreationState,
+} from "../../../src/shared/creation/creation.types"
+import type { CustomSystemDefinition } from "../../../src/models/customSystems/CustomSystemDefinition"
+import type { Itemmable } from "../../../src/models/items/item"
+import type { Spell } from "../../../src/models/magic/spells/Spell"
 
 type RouteContext = {
   params?:
@@ -19,23 +29,6 @@ type RouteContext = {
 }
 
 type JsonRecord = Record<string, unknown>
-
-type CreationRevisionRow = {
-  creationRevision: number
-}
-
-type RawItemCompendiumEntry = {
-  templateId: string
-  item: unknown
-  custom: boolean
-  visibility: string
-  updatedAt: Date
-}
-
-type RawSystemAsset = {
-  data: unknown
-  updatedAt: Date
-}
 
 export async function GET(
   request: Request,
@@ -50,6 +43,7 @@ export async function GET(
       select: {
         id: true,
         ownerId: true,
+        creationRevision: true,
         updatedAt: true,
         members: {
           where: {
@@ -77,68 +71,66 @@ export async function GET(
       )
     }
 
-    const [revisionRows, characterLinks, spellLinks, itemRows, systemRows] =
-      await Promise.all([
-        prisma.$queryRaw<CreationRevisionRow[]>`
-          SELECT "creationRevision"
-          FROM "campaign"
-          WHERE "id" = ${campaignId}
-        `,
-        prisma.campaignCharacter.findMany({
-          where: { campaignId },
-          select: {
-            visibility: true,
-            character: {
-              select: {
-                id: true,
-                data: true,
-                ownerId: true,
-                updatedAt: true,
-              },
+    const [characterLinks, spellLinks, itemRows, systemRows] = await Promise.all([
+      prisma.campaignCharacter.findMany({
+        where: { campaignId },
+        select: {
+          visibility: true,
+          character: {
+            select: {
+              id: true,
+              data: true,
+              ownerId: true,
+              updatedAt: true,
             },
           },
-          orderBy: { addedAt: "asc" },
-        }),
-        prisma.campaignHomebrewSpell.findMany({
-          where: {
-            campaignId,
-            status: CampaignSpellApprovalStatus.APPROVED,
-            spell: { status: HomebrewSpellStatus.ACTIVE },
-          },
-          select: {
-            spell: {
-              select: {
-                data: true,
-                updatedAt: true,
-              },
+        },
+        orderBy: { addedAt: "asc" },
+      }),
+      prisma.campaignHomebrewSpell.findMany({
+        where: {
+          campaignId,
+          status: CampaignSpellApprovalStatus.APPROVED,
+          spell: { status: HomebrewSpellStatus.ACTIVE },
+        },
+        select: {
+          spell: {
+            select: {
+              data: true,
+              updatedAt: true,
             },
           },
-          orderBy: { submittedAt: "asc" },
-        }),
-        prisma.$queryRaw<RawItemCompendiumEntry[]>`
-          SELECT
-            "templateId",
-            "item",
-            "custom",
-            "visibility",
-            "updatedAt"
-          FROM "campaign_item_compendium"
-          WHERE "campaignId" = ${campaignId}
-          ORDER BY "createdAt" ASC
-        `,
-        prisma.$queryRaw<RawSystemAsset[]>`
-          SELECT "data", "updatedAt"
-          FROM "campaign_homebrew_asset"
-          WHERE "campaignId" = ${campaignId}
-            AND "type" = 'SYSTEM'
-          ORDER BY "createdAt" ASC
-        `,
-      ])
+        },
+        orderBy: { submittedAt: "asc" },
+      }),
+      prisma.campaignItemCompendium.findMany({
+        where: { campaignId },
+        select: {
+          templateId: true,
+          item: true,
+          custom: true,
+          visibility: true,
+          updatedAt: true,
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.campaignHomebrewAsset.findMany({
+        where: {
+          campaignId,
+          type: "SYSTEM",
+        },
+        select: {
+          data: true,
+          updatedAt: true,
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+    ])
 
-    const updatedAtCandidates: Date[] = [campaign.updatedAt]
+    let updatedAt = campaign.updatedAt
 
     const characters = characterLinks.map((link) => {
-      updatedAtCandidates.push(link.character.updatedAt)
+      updatedAt = laterDate(updatedAt, link.character.updatedAt)
       return toCreationCharacter(
         link.character.id,
         link.character.ownerId,
@@ -147,48 +139,41 @@ export async function GET(
       )
     })
 
-    const spells = spellLinks
-      .map((link) => {
-        updatedAtCandidates.push(link.spell.updatedAt)
-        return asRecord(link.spell.data)
-      })
-      .filter((spell): spell is JsonRecord => Boolean(spell))
+    const spells = spellLinks.map((link) => {
+      updatedAt = laterDate(updatedAt, link.spell.updatedAt)
+      return link.spell.data as unknown as Spell
+    })
 
-    const itemCompendium = itemRows.map((entry) => {
-      updatedAtCandidates.push(entry.updatedAt)
+    const itemCompendium: CreationItemCompendiumEntry[] = itemRows.map((entry) => {
+      updatedAt = laterDate(updatedAt, entry.updatedAt)
       return {
         templateId: entry.templateId,
-        item: entry.item ?? null,
+        item: entry.item as unknown as Itemmable,
         custom: entry.custom,
         visibility: entry.visibility === "MASTER" ? "MASTER" : "PUBLIC",
       }
     })
 
-    const customSystems = systemRows
-      .map((entry) => {
-        updatedAtCandidates.push(entry.updatedAt)
-        return asRecord(entry.data)
-      })
-      .filter((definition): definition is JsonRecord => Boolean(definition))
+    const customSystems = systemRows.map((entry) => {
+      updatedAt = laterDate(updatedAt, entry.updatedAt)
+      return entry.data as unknown as CustomSystemDefinition
+    })
 
-    const updatedAt = updatedAtCandidates.reduce(
-      (latest, candidate) => candidate > latest ? candidate : latest,
-      updatedAtCandidates[0],
-    )
+    const data: CreationState = {
+      version: 1,
+      characters,
+      spells,
+      itemCompendium,
+      // The creature compendium still uses its legacy local repository. It
+      // joins this snapshot when that persistence is migrated.
+      creatureCompendium: [],
+      customSystems,
+    }
 
     return jsonResponse({
-      revision: Math.max(1, Number(revisionRows[0]?.creationRevision) || 1),
+      revision: Math.max(1, campaign.creationRevision),
       updatedAt: updatedAt.toISOString(),
-      data: {
-        version: 1,
-        characters,
-        spells,
-        itemCompendium,
-        // The creature compendium still uses its legacy local repository. It
-        // joins this snapshot when that persistence is migrated.
-        creatureCompendium: [],
-        customSystems,
-      },
+      data,
     })
   } catch (error) {
     return handleApiError(error)
@@ -198,33 +183,46 @@ export async function GET(
 function toCreationCharacter(
   characterId: string,
   ownerId: string,
-  visibility: string,
+  visibility: CharacterVisibility,
   rawData: unknown,
-) {
+): CreationCharacterConfiguration {
   const data = asRecord(rawData) ?? {}
   const sheet = asRecord(data.sheet) ?? {}
   const customSystems = Array.isArray(sheet.customSystems)
-    ? sheet.customSystems.map(toCustomSystemConfiguration).filter(Boolean)
+    ? sheet.customSystems
+        .map(toCustomSystemConfiguration)
+        .filter(
+          (
+            entry,
+          ): entry is CreationCharacterCustomSystemConfiguration => Boolean(entry),
+        )
     : []
 
   return {
     characterId,
-    type: typeof sheet.type === "string" ? sheet.type : "pc",
+    type:
+      typeof sheet.type === "string"
+        ? sheet.type as CreationCharacterConfiguration["type"]
+        : "pc",
     visibility: toCreationVisibility(visibility),
     unique: typeof data.unique === "boolean" ? data.unique : false,
     ownerId,
     hiddenCharacterTabs: Array.isArray(sheet.hiddenCharacterTabs)
-      ? sheet.hiddenCharacterTabs.filter((entry): entry is string => typeof entry === "string")
+      ? sheet.hiddenCharacterTabs.filter(
+          (entry): entry is string => typeof entry === "string",
+        )
       : [],
     customSystems,
   }
 }
 
-function toCustomSystemConfiguration(value: unknown) {
+function toCustomSystemConfiguration(
+  value: unknown,
+): CreationCharacterCustomSystemConfiguration | null {
   const state = asRecord(value)
   if (!state || typeof state.systemId !== "string") return null
 
-  const configuration: JsonRecord = {
+  const configuration: CreationCharacterCustomSystemConfiguration = {
     systemId: state.systemId,
     systemVersion:
       typeof state.systemVersion === "number" ? state.systemVersion : 1,
@@ -236,7 +234,8 @@ function toCustomSystemConfiguration(value: unknown) {
     typeof state.abilityAcquisitionExceptions === "object" &&
     !Array.isArray(state.abilityAcquisitionExceptions)
   ) {
-    configuration.abilityAcquisitionExceptions = state.abilityAcquisitionExceptions
+    configuration.abilityAcquisitionExceptions =
+      state.abilityAcquisitionExceptions as CreationCharacterCustomSystemConfiguration["abilityAcquisitionExceptions"]
   }
 
   if (
@@ -249,9 +248,11 @@ function toCustomSystemConfiguration(value: unknown) {
   return configuration
 }
 
-function toCreationVisibility(value: string): "private" | "party" | "master" {
-  if (value === "PRIVATE") return "private"
-  if (value === "MASTER") return "master"
+function toCreationVisibility(
+  value: CharacterVisibility,
+): CreationCharacterConfiguration["visibility"] {
+  if (value === CharacterVisibility.PRIVATE) return "private"
+  if (value === CharacterVisibility.MASTER) return "master"
   return "party"
 }
 
@@ -259,6 +260,10 @@ function asRecord(value: unknown): JsonRecord | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as JsonRecord
     : null
+}
+
+function laterDate(left: Date, right: Date): Date {
+  return right > left ? right : left
 }
 
 async function resolveCampaignId(
