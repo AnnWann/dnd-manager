@@ -6,11 +6,17 @@ import { parseInitiativeClientMessage, type SessionInitiativeState } from "../in
 import { MAX_HP_LOG_RECORDS } from "../characters/sheet/hpState";
 import type { SessionConnection } from "./protocol";
 import {
+  parseRuntimeConfigPublishMessage,
+} from "./runtimeConfigProtocol";
+import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/session-runtime/sessionRuntimeConfig";
+import {
   commitSessionUndo,
   createSessionLogRecord,
   readSessionLog,
   validateUndoOrdering,
 } from "./sessionLog";
+
+export const RUNTIME_CONFIG_STATE_KEY = "runtime-config-state";
 
 type SharedDomainActor = {
   webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void>;
@@ -50,18 +56,27 @@ export class SessionActor extends ComposedSessionActor {
       }
     });
     if (socket) {
-      const [missions, initiative] = await Promise.all([
+      const [missions, initiative, runtimeConfig] = await Promise.all([
         readMissionState(this.ctx.storage),
         readInitiativeState(this.ctx.storage),
+        this.readRuntimeConfig(),
       ]);
       send(socket, { type: "session.missions.snapshot", state: missions });
       send(socket, { type: "session.initiative.snapshot", state: initiative });
+      send(socket, { type: "session.config.snapshot", snapshot: runtimeConfig });
     }
     return response;
   }
 
   override async webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const raw = typeof message === "string" ? message : new TextDecoder().decode(message);
+
+    const runtimeConfig = parseRuntimeConfigPublishMessage(raw);
+    if (runtimeConfig) {
+      await this.handleRuntimeConfigPublish(webSocket, runtimeConfig.snapshot);
+      return;
+    }
+
     const undoLogId = parseUndoLogId(raw);
     if (undoLogId) {
       const reverseType = await this.sharedUndoType(undoLogId);
@@ -81,6 +96,67 @@ export class SessionActor extends ComposedSessionActor {
     }
 
     await super.webSocketMessage(webSocket, message);
+  }
+
+  private async handleRuntimeConfigPublish(
+    webSocket: WebSocket,
+    snapshot: SessionRuntimeConfigSnapshot,
+  ): Promise<void> {
+    const connection = readConnection(webSocket);
+    if (!connection) {
+      webSocket.close(1011, "Missing connection attachment");
+      return;
+    }
+    if (connection.role !== "MASTER") {
+      sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can publish session configuration.");
+      return;
+    }
+
+    connection.lastHeartbeatAt = Date.now();
+    webSocket.serializeAttachment(connection);
+
+    const current = await this.readRuntimeConfig();
+    if (current && snapshot.creationRevision < current.creationRevision) {
+      sendError(
+        webSocket,
+        "CREATION_CONFIG_STALE",
+        `Creation revision ${snapshot.creationRevision} is older than active revision ${current.creationRevision}.`,
+      );
+      send(webSocket, { type: "session.config.snapshot", snapshot: current });
+      return;
+    }
+
+    if (
+      current
+      && snapshot.creationRevision === current.creationRevision
+      && JSON.stringify(snapshot.config) !== JSON.stringify(current.config)
+    ) {
+      sendError(
+        webSocket,
+        "CREATION_CONFIG_REVISION_COLLISION",
+        "A different runtime configuration already exists for this Creation revision.",
+      );
+      send(webSocket, { type: "session.config.snapshot", snapshot: current });
+      return;
+    }
+
+    if (!current || snapshot.creationRevision > current.creationRevision) {
+      await this.ctx.storage.put(RUNTIME_CONFIG_STATE_KEY, structuredClone(snapshot));
+      broadcast(this.ctx.getWebSockets(), {
+        type: "session.config.snapshot",
+        snapshot,
+      });
+      return;
+    }
+
+    // Equal revision + equal content is an idempotent republish after reconnect.
+    send(webSocket, { type: "session.config.snapshot", snapshot: current });
+  }
+
+  private async readRuntimeConfig(): Promise<SessionRuntimeConfigSnapshot | null> {
+    return (
+      await this.ctx.storage.get<SessionRuntimeConfigSnapshot>(RUNTIME_CONFIG_STATE_KEY)
+    ) ?? null;
   }
 
   private async sharedUndoType(logId: string): Promise<SharedReverse["type"] | null> {
