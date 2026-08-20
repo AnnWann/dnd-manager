@@ -1,17 +1,32 @@
 import {
+  addCustomAbility,
   adjustCustomResource,
   CustomSystemOperationError,
+  removeCustomAbility,
   removeCustomFieldValue,
   resetCustomResource,
+  setCustomAbilityUsage,
   setCustomFieldValue,
   setCustomResourceState,
+  updateCustomAbilityField,
   type CustomSystemActor,
 } from "../../../../../src/lib/customSystems/CustomSystemState";
+import {
+  initializeCustomAbilityProgress,
+  setCustomAbilityLearned,
+  setCustomAbilityPrepared,
+} from "../../../../../src/lib/customSystems/CustomAbilityManagement";
+import { activateCustomAbility } from "../../../../../src/lib/customSystems/CustomAbilityActivation";
 import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from "../../../../../src/models/characters/CharacterTemplate";
-import type { CharacterCustomSystemState } from "../../../../../src/models/customSystems/CustomSystemDefinition";
+import { getCharacterConditions } from "../../../../../src/models/characters/characterConditionStorage";
+import type {
+  CharacterCustomSystemState,
+  CustomAbilityInstance,
+  CustomSystemDefinition,
+} from "../../../../../src/models/customSystems/CustomSystemDefinition";
 import { SessionActor as BaseSessionActor } from "../../session/SessionActor";
 import type { SessionAbilityState } from "../abilities/abilityProtocol";
 import type {
@@ -115,31 +130,49 @@ export class SessionActor extends BaseSessionActor {
       return;
     }
 
-    let nextState: CharacterCustomSystemState;
+    let nextCharacter: CharacterTemplate;
     try {
-      nextState = applyOperation(
-        definition,
-        currentState,
-        operation,
-        connection.role === "MASTER" ? "master" : "owner",
-      );
+      if (operation.type === "character.customSystem.ability.activate") {
+        nextCharacter = activateCustomAbility(
+          character,
+          runtimeConfig!.config.customSystems,
+          operation.systemId,
+          operation.abilityId,
+        );
+      } else {
+        const nextState = applyOperation(
+          definition,
+          currentState,
+          operation,
+          connection.role === "MASTER" ? "master" : "owner",
+          character,
+        );
+        if (JSON.stringify(currentState) === JSON.stringify(nextState)) {
+          sendError(webSocket, "CUSTOM_SYSTEM_OPERATION_NO_CHANGE", "The requested custom-system operation does not change the current state.");
+          return;
+        }
+        const nextStates = states.map((state) => state.systemId === operation.systemId ? nextState : state);
+        nextCharacter = character.withSheet("customSystems", nextStates);
+      }
     } catch (error) {
       if (error instanceof CustomSystemOperationError) {
         const first = error.errors[0];
         sendError(webSocket, `CUSTOM_SYSTEM_${(first?.code ?? "OPERATION_REJECTED").toUpperCase()}`, first?.message ?? error.message);
         return;
       }
-      sendError(webSocket, "CUSTOM_SYSTEM_OPERATION_REJECTED", "The custom-system operation is invalid for the current state.");
+      sendError(
+        webSocket,
+        "CUSTOM_SYSTEM_OPERATION_REJECTED",
+        error instanceof Error ? error.message : "The custom-system operation is invalid for the current state.",
+      );
       return;
     }
 
-    if (JSON.stringify(currentState) === JSON.stringify(nextState)) {
+    if (JSON.stringify(character.toJSON()) === JSON.stringify(nextCharacter.toJSON())) {
       sendError(webSocket, "CUSTOM_SYSTEM_OPERATION_NO_CHANGE", "The requested custom-system operation does not change the current state.");
       return;
     }
 
-    const nextStates = states.map((state) => state.systemId === operation.systemId ? nextState : state);
-    const nextCharacter = character.withSheet("customSystems", nextStates);
     const nextAbility: SessionAbilityState = {
       characterId: operation.characterId,
       character: nextCharacter.toJSON() as unknown as Record<string, unknown>,
@@ -147,6 +180,17 @@ export class SessionActor extends BaseSessionActor {
       revision: storedAbility.revision + 1,
     };
     abilityState[operation.characterId] = nextAbility;
+
+    const nextHp = operation.type === "character.customSystem.ability.activate"
+      ? projectActivationHp(hp, nextCharacter)
+      : hp;
+    const nextConditions = operation.type === "character.customSystem.ability.activate"
+      ? projectActivationConditions(conditions, nextCharacter)
+      : conditions;
+    const hpChanged = JSON.stringify(nextHp) !== JSON.stringify(hp);
+    const conditionsChanged = JSON.stringify(nextConditions) !== JSON.stringify(conditions);
+    if (hpChanged) hpState[operation.characterId] = nextHp;
+    if (conditionsChanged) conditionsState[operation.characterId] = nextConditions;
 
     const record = createSessionLogRecord({
       actorId: connection.userId,
@@ -162,25 +206,43 @@ export class SessionActor extends BaseSessionActor {
       },
     });
 
+    const writes: Record<string, unknown> = { [ABILITIES_STATE_KEY]: abilityState };
+    if (hpChanged) writes[HP_STATE_KEY] = hpState;
+    if (conditionsChanged) writes[CONDITIONS_STATE_KEY] = conditionsState;
+
     await commitSessionMutation(this.ctx.storage, this.ctx.getWebSockets(), {
-      writes: { [ABILITIES_STATE_KEY]: abilityState },
+      writes,
       record,
       currentLog: log,
       maxRecords: MAX_HP_LOG_RECORDS,
     });
 
-    broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
+    const sockets = this.ctx.getWebSockets();
+    broadcastVisibilityFiltered(sockets, {
       type: "session.abilities.updated",
       character: nextAbility,
     });
+    if (hpChanged) {
+      broadcastVisibilityFiltered(sockets, {
+        type: "session.hp.updated",
+        character: nextHp,
+      });
+    }
+    if (conditionsChanged) {
+      broadcastVisibilityFiltered(sockets, {
+        type: "session.conditions.updated",
+        character: nextConditions,
+      });
+    }
   }
 }
 
 function applyOperation(
-  definition: Parameters<typeof setCustomFieldValue>[0],
+  definition: CustomSystemDefinition,
   state: CharacterCustomSystemState,
-  operation: SessionCustomSystemOperation,
+  operation: Exclude<SessionCustomSystemOperation, { type: "character.customSystem.ability.activate" }>,
   actor: CustomSystemActor,
+  character: CharacterTemplate,
 ): CharacterCustomSystemState {
   switch (operation.type) {
     case "character.customSystem.field.set":
@@ -193,7 +255,122 @@ function applyOperation(
       return adjustCustomResource(definition, state, operation.resourceId, operation.amount, actor);
     case "character.customSystem.resource.reset":
       return resetCustomResource(definition, state, operation.resourceId, actor);
+    case "character.customSystem.ability.add":
+      return addCustomAbility(
+        definition,
+        state,
+        normalizeAddedAbility(definition, operation.ability),
+        actor,
+      );
+    case "character.customSystem.ability.remove":
+      return removeCustomAbility(definition, state, operation.abilityId, actor);
+    case "character.customSystem.ability.field.set":
+      return updateCustomAbilityField(
+        definition,
+        state,
+        operation.abilityId,
+        operation.fieldId,
+        operation.value,
+        actor,
+      );
+    case "character.customSystem.ability.learned.set":
+      return setCustomAbilityLearned(
+        definition,
+        state,
+        operation.abilityId,
+        operation.learned,
+        character,
+      );
+    case "character.customSystem.ability.prepared.set":
+      return setCustomAbilityPrepared(
+        definition,
+        state,
+        operation.abilityId,
+        operation.prepared,
+        character,
+      );
+    case "character.customSystem.ability.usage.set":
+      return setCustomAbilityUsage(
+        definition,
+        state,
+        operation.abilityId,
+        operation.used,
+        actor,
+      );
   }
+}
+
+function normalizeAddedAbility(
+  definition: CustomSystemDefinition,
+  submitted: CustomAbilityInstance,
+): CustomAbilityInstance {
+  const type = definition.abilityTypes.find((entry) => entry.id === submitted.abilityTypeId);
+  if (!type) throw new Error(`Tipo de habilidade “${submitted.abilityTypeId}” não encontrado.`);
+  const preset = submitted.predefinedAbilityId
+    ? type.predefinedAbilities?.find((entry) => entry.id === submitted.predefinedAbilityId)
+    : undefined;
+  if (submitted.predefinedAbilityId && !preset) {
+    throw new Error(`Habilidade predefinida “${submitted.predefinedAbilityId}” não encontrada.`);
+  }
+
+  const effectiveType = preset?.acquisition
+    ? { ...type, acquisition: { ...type.acquisition, ...preset.acquisition } }
+    : type;
+  const progress = initializeCustomAbilityProgress(effectiveType, {
+    ...submitted,
+    enabled: submitted.enabled !== false,
+  });
+  const usageDefinition = preset?.activation?.usage ?? type.activation?.usage;
+  const usage = usageDefinition && (usageDefinition.mode ?? "limited") === "limited"
+    ? { used: 0, maximum: usageDefinition.maximum }
+    : undefined;
+
+  return {
+    ...progress,
+    usage,
+  };
+}
+
+function projectActivationHp(
+  previous: SessionHpState,
+  character: CharacterTemplate,
+): SessionHpState {
+  const sheet = character.get("sheet");
+  const hp = sheet.HP;
+  const inspiration = sheet.stats.inspiration ?? false;
+  const exhaustion = sheet.stats.exhaustion ?? 0;
+  const changed = previous.current !== hp.current
+    || previous.temporary !== hp.temporary
+    || previous.stats.inspiration !== inspiration
+    || previous.stats.exhaustion !== exhaustion;
+  if (!changed) return previous;
+
+  return {
+    ...previous,
+    current: hp.current,
+    temporary: hp.temporary,
+    stats: {
+      ...previous.stats,
+      inspiration,
+      exhaustion,
+    },
+    statsInitialized: true,
+    revision: previous.revision + 1,
+  };
+}
+
+function projectActivationConditions(
+  previous: SessionConditionsState,
+  character: CharacterTemplate,
+): SessionConditionsState {
+  const conditions = getCharacterConditions(character);
+  if (JSON.stringify(previous.conditions) === JSON.stringify(conditions)) return previous;
+  return {
+    ...previous,
+    conditions,
+    initialized: true,
+    revision: previous.revision + 1,
+  };
 }
 
 function readConnection(webSocket: WebSocket): SessionConnection | null {
