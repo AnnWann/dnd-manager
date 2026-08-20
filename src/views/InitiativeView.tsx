@@ -254,14 +254,14 @@ export function InitiativeView() {
   }
 
   async function clearCombat() {
-    if (!window.confirm("Apagar todo o combate salvo localmente?")) return
+    if (!window.confirm("Apagar todo o combate atual?")) return
     await resetSession()
   }
 
   if (!hydrated) {
     return (
       <div className="rounded-xl border border-border bg-bg p-6 text-sm text-text">
-        Carregando iniciativa local…
+        Carregando iniciativa compartilhada…
       </div>
     )
   }
@@ -320,7 +320,6 @@ export function InitiativeView() {
               className={selectClassName}
               value={selectedCharacterId}
               onChange={(event) => setSelectedCharacterId(event.target.value)}
-              disabled={session.started}
             >
               <option value="">Selecione uma ficha</option>
               {visibleCharacters.map((character) => {
@@ -347,7 +346,6 @@ export function InitiativeView() {
               onChange={(event) =>
                 setSelectedCharacterSide(event.target.value as InitiativeSide)
               }
-              disabled={session.started}
             >
               <option value="ally">Aliado</option>
               <option value="enemy">Inimigo</option>
@@ -356,7 +354,7 @@ export function InitiativeView() {
             <Button
               variant="primary"
               onClick={addSelectedCharacter}
-              disabled={!selectedCharacter || session.started}
+              disabled={!selectedCharacter}
             >
               <CirclePlus className="h-4 w-4" />
               Adicionar
@@ -374,7 +372,6 @@ export function InitiativeView() {
               className={selectClassName}
               value={selectedCreatureId}
               onChange={(event) => setSelectedCreatureId(event.target.value)}
-              disabled={session.started}
             >
               <option value="">Selecione uma criatura</option>
               {creatures.map((creature) => {
@@ -401,7 +398,7 @@ export function InitiativeView() {
               min={1}
               max={50}
               value={selectedCreature?.unique ? 1 : creatureQuantity}
-              disabled={session.started || selectedCreature?.unique}
+              disabled={selectedCreature?.unique}
               onChange={(event) => setCreatureQuantity(Number(event.target.value))}
               title="Quantidade"
             />
@@ -409,7 +406,6 @@ export function InitiativeView() {
               <input
                 type="checkbox"
                 checked={sharedCreatureInitiative}
-                disabled={session.started}
                 onChange={(event) =>
                   setSharedCreatureInitiative(event.target.checked)
                 }
@@ -419,7 +415,7 @@ export function InitiativeView() {
             <Button
               variant="primary"
               onClick={addSelectedCreature}
-              disabled={!selectedCreature || session.started}
+              disabled={!selectedCreature}
             >
               <CirclePlus className="h-4 w-4" />
               Adicionar
@@ -429,7 +425,7 @@ export function InitiativeView() {
       </section>
 
       <section className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
-        <Button onClick={() => setCustomOpen(true)} disabled={session.started}>
+        <Button onClick={() => setCustomOpen(true)}>
           <Swords className="h-4 w-4" />
           Entrada rápida
         </Button>
@@ -554,7 +550,7 @@ function InitiativeHeader({
               Iniciativa
             </h1>
             <span className="rounded-full border border-border bg-bg-subtle px-2.5 py-1 text-xs font-medium text-textMuted">
-              Apenas neste dispositivo
+              Compartilhada na sessão
             </span>
             <span className="rounded-full border border-accentBorder bg-accentBg px-2.5 py-1 text-xs font-semibold text-accent">
               Rodada {round}
@@ -604,7 +600,7 @@ function MasterOnlyMessage() {
             Iniciativa do mestre
           </h1>
           <p className="mt-1 text-sm text-text">
-            Este modo é local e só pode ser controlado com o perfil de mestre.
+            O combate compartilhado só pode ser controlado pelo mestre.
           </p>
         </div>
       </div>
