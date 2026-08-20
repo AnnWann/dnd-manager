@@ -56,6 +56,16 @@ export type CharacterWorkspaceValue = {
   dispatchSkillOperation: (operation: SessionSkillOperation) => boolean
   dispatchConditionOperation: (operation: SessionConditionOperation) => boolean
 
+  /**
+   * Executes a saved custom-system action through the authoritative session
+   * runtime. User/offline workspaces omit this and keep using local mutation.
+   */
+  executeCustomSystemAction?: (
+    characterId: string,
+    systemId: string,
+    actionId: string,
+  ) => void
+
   dispatchGameOperation?: (operation: GameOperation) => void
   deleteCharacter: (characterId: string) => void
   importCharacter?: (rawCharacter: unknown) => CharacterTemplate
