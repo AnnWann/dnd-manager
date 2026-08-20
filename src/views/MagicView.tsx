@@ -2,10 +2,8 @@ import { BookPlus } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { useParams } from "react-router-dom"
 
-import { getSessionHomebrew } from "../api/session-homebrew"
 import {
   getAccessibleHomebrewSpells,
-  submitOwnedHomebrewSpellToCampaign,
   type AccessibleHomebrewSpell,
 } from "../api/user-spells"
 import { Button } from "../components/ui/Button"
@@ -45,22 +43,12 @@ export function MagicView() {
   )
 
   useEffect(() => {
-    if (!campaignId) return
     let cancelled = false
 
     async function loadLibraries() {
       try {
-        const [accessible, catalog] = await Promise.all([
-          getAccessibleHomebrewSpells(),
-          getSessionHomebrew(campaignId!),
-        ])
-        if (cancelled) return
-        setUserRecords(accessible)
-
-        const approved = catalog.spells
-          .filter((entry) => entry.status === "APPROVED")
-          .map((entry) => ({ ...entry.data, homebrew: true } as Spell))
-        if (approved.length) saveSpells(approved)
+        const accessible = await getAccessibleHomebrewSpells()
+        if (!cancelled) setUserRecords(accessible)
       } catch {
         if (!cancelled) setUserRecords([])
       }
@@ -70,7 +58,7 @@ export function MagicView() {
     return () => {
       cancelled = true
     }
-  }, [campaignId])
+  }, [])
 
   function beginEditor(spell: Spell | null) {
     setResourceType(spell?.resourceCost?.resource ?? "slot")
@@ -107,7 +95,7 @@ export function MagicView() {
   }
 
   async function addFromUserLibrary() {
-    if (!campaignId || !selectedUserSpellIds.length || libraryLoading) return
+    if (!selectedUserSpellIds.length || libraryLoading) return
     const selected = userRecords.filter((record) =>
       selectedUserSpellIds.includes(record.id),
     )
@@ -116,17 +104,8 @@ export function MagicView() {
     setLibraryLoading(true)
     setLibraryMessage("")
     try {
-      for (const record of selected) {
-        if (!record.ownedByCurrentUser) continue
-        await submitOwnedHomebrewSpellToCampaign(record, {
-          id: campaignId,
-          name: "Sessão",
-          autoApprove: true,
-        })
-      }
-
       saveSpells(selected.map((record) => ({ ...record.data, homebrew: true })))
-      setLibraryMessage(`${selected.length} magia(s) adicionada(s) à sessão.`)
+      setLibraryMessage(`${selected.length} magia(s) adicionada(s) ao rascunho.`)
       setSelectedUserSpellIds([])
     } catch (error) {
       setLibraryMessage(
@@ -226,7 +205,7 @@ export function MagicView() {
                   Biblioteca do usuário
                 </h2>
                 <p className="mt-1 text-xs leading-5 text-textMuted">
-                  Selecione magias homebrew acessíveis pela sua conta para criar cópias na sessão.
+                  Selecione magias homebrew acessíveis pela sua conta para criar cópias no rascunho da sessão.
                 </p>
               </div>
               <Button
@@ -297,7 +276,7 @@ export function MagicView() {
                 disabled={!selectedUserSpellIds.length}
                 onClick={() => void addFromUserLibrary()}
               >
-                Adicionar selecionadas
+                Adicionar ao rascunho
               </Button>
             </footer>
           </div>
