@@ -28,6 +28,11 @@ import {
   type SessionMissionClientMessage,
   type SessionMissionServerMessage,
 } from "./missionSessionProtocol"
+import {
+  parseInitiativeServerMessage,
+  type SessionInitiativeClientMessage,
+  type SessionInitiativeServerMessage,
+} from "./initiativeSessionProtocol"
 import type { SessionSheetOperationMessage } from "./sheetRoutes"
 
 export type SessionRuntimeStatus = "disconnected" | "connecting" | "connected" | "reconnecting" | "error"
@@ -39,7 +44,7 @@ export type SessionSocketOptions = {
   role: SessionRuntimeRole
   clientId: string
   onStatusChange: (status: SessionRuntimeStatus) => void
-  onMessage: (message: ServerSessionMessage | SessionAbilityServerMessage | SessionInventoryServerMessage | SessionCharacterLifecycleServerMessage | SessionMissionServerMessage) => void
+  onMessage: (message: ServerSessionMessage | SessionAbilityServerMessage | SessionInventoryServerMessage | SessionCharacterLifecycleServerMessage | SessionMissionServerMessage | SessionInitiativeServerMessage) => void
 }
 
 const HEARTBEAT_MIN_MS = 27_000
@@ -68,6 +73,7 @@ export class SessionSocket {
     | SessionAbilityClientMessage
     | SessionInventoryClientMessage
     | SessionMissionClientMessage
+    | SessionInitiativeClientMessage
     | SessionProficiencyClientMessage
     | SessionRaceClientMessage
     | SessionProfileClientMessage
@@ -101,7 +107,8 @@ export class SessionSocket {
       const lifecycleMessage = parseCharacterLifecycleServerMessage(event.data)
       const inventoryMessage = parseInventoryServerMessage(event.data)
       const missionMessage = parseMissionServerMessage(event.data)
-      const message = lifecycleMessage ?? inventoryMessage ?? missionMessage ?? parseAbilityServerMessage(event.data) ?? parseServerSessionMessage(event.data)
+      const initiativeMessage = parseInitiativeServerMessage(event.data)
+      const message = lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? parseAbilityServerMessage(event.data) ?? parseServerSessionMessage(event.data)
       if (!message) return
       if (message.type === "session.ready") {
         this.hasConnectedOnce = true
