@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -142,6 +143,24 @@ export function CreatureCompendiumProvider({
 export function useCreatureCompendium(): CreatureCompendiumContextValue {
   const context = useContext(CreatureCompendiumContext)
   const editor = useOptionalCreationEditor()
+  const legacySeededRef = useRef(false)
+
+  useEffect(() => {
+    if (legacySeededRef.current) return
+    if (!context?.hydrated || !editor?.draft || !editor.base) return
+    legacySeededRef.current = true
+
+    if (editor.base.creatureCompendium.length) return
+    if (editor.draft.creatureCompendium.length) return
+    if (!context.creatures.length) return
+
+    editor.updateDraft((draft) => ({
+      ...draft,
+      creatureCompendium: context.creatures.map((creature) =>
+        structuredClone(creature),
+      ),
+    }))
+  }, [context, editor])
 
   return useMemo(() => {
     if (!context) {
