@@ -234,6 +234,20 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "character.ability.use": return `${characterName} usou ${operation.abilityName || "uma habilidade"}.`
     case "character.ability.restore": return `Restaurou uma carga de ${operation.abilityName || "habilidade"} de ${characterName}.`
     case "character.ability.deactivate": return `Desativou ${operation.abilityName || "uma habilidade"} de ${characterName}.`
+    case "character.customSystem.field.set": return `${characterName} alterou um campo do sistema ${operation.systemId}.`
+    case "character.customSystem.field.remove": return `${characterName} removeu o valor de um campo do sistema ${operation.systemId}.`
+    case "character.customSystem.resource.set": return `${characterName} definiu o recurso ${operation.resourceId} do sistema ${operation.systemId}.`
+    case "character.customSystem.resource.adjust": return `${characterName} ${operation.amount > 0 ? "aumentou" : "reduziu"} ${operation.resourceId} em ${Math.abs(operation.amount)}.`
+    case "character.customSystem.resource.reset": return `${characterName} restaurou o recurso ${operation.resourceId}.`
+    case "character.customSystem.ability.add": return `${characterName} adicionou uma habilidade do sistema ${operation.systemId}.`
+    case "character.customSystem.ability.remove": return `${characterName} removeu uma habilidade do sistema ${operation.systemId}.`
+    case "character.customSystem.ability.field.set": return `${characterName} editou uma habilidade do sistema ${operation.systemId}.`
+    case "character.customSystem.ability.learned.set": return `${characterName} ${operation.learned ? "aprendeu" : "desaprendeu"} uma habilidade do sistema ${operation.systemId}.`
+    case "character.customSystem.ability.prepared.set": return `${characterName} ${operation.prepared ? "preparou" : "despreparou"} uma habilidade do sistema ${operation.systemId}.`
+    case "character.customSystem.ability.usage.set": return `Definiu os usos de uma habilidade de ${characterName} para ${operation.used}.`
+    case "character.customSystem.ability.activate": return `${characterName} usou uma habilidade do sistema ${operation.systemId}.`
+    case "character.customSystem.action.execute": return `${characterName} executou uma ação do sistema ${operation.systemId}.`
+    case "character.customSystem.automation.execute": return `${characterName} executou uma automação manual do sistema ${operation.systemId}.`
     case "character.spell.prepare": return `${operation.prepared ? "Preparou" : "Despreparou"} ${operation.spellIndex} para ${characterName}.`
     case "character.spell.add": return `Adicionou uma magia à lista de ${characterName}.`
     case "character.spell.remove": return `Removeu ${operation.spellIndex} da lista de ${characterName}.`
