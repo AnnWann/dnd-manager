@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react"
 
+import { useOptionalCreationEditor } from "../features/creation/CreationEditorProvider"
 import {
   LocalCreatureCompendiumRepository,
   type CreatureCompendiumRepository,
@@ -138,14 +139,69 @@ export function CreatureCompendiumProvider({
   )
 }
 
-export function useCreatureCompendium() {
+export function useCreatureCompendium(): CreatureCompendiumContextValue {
   const context = useContext(CreatureCompendiumContext)
+  const editor = useOptionalCreationEditor()
 
-  if (!context) {
-    throw new Error(
-      "useCreatureCompendium must be used inside CreatureCompendiumProvider",
-    )
-  }
+  return useMemo(() => {
+    if (!context) {
+      throw new Error(
+        "useCreatureCompendium must be used inside CreatureCompendiumProvider",
+      )
+    }
+    if (!editor?.draft) return context
 
-  return context
+    const updateCreatures = (
+      updater: (current: CompendiumCreature[]) => CompendiumCreature[],
+    ) => {
+      editor.updateDraft((draft) => ({
+        ...draft,
+        creatureCompendium: updater(draft.creatureCompendium).sort(
+          (left, right) => left.name.localeCompare(right.name),
+        ),
+      }))
+    }
+
+    const upsertCreatures = (incoming: CompendiumCreature[]) => {
+      if (!incoming.length) return
+      updateCreatures((current) => {
+        const byId = new Map(current.map((creature) => [creature.id, creature]))
+        for (const creature of incoming) {
+          byId.set(creature.id, {
+            ...structuredClone(creature),
+            updatedAt: Date.now(),
+          })
+        }
+        return [...byId.values()]
+      })
+    }
+
+    const upsertCreature = (creature: CompendiumCreature) => {
+      upsertCreatures([creature])
+    }
+
+    return {
+      creatures: editor.draft.creatureCompendium,
+      hydrated: true,
+      upsertCreature,
+      upsertCreatures,
+      deleteCreature: (creatureId) => {
+        updateCreatures((current) =>
+          current.filter((entry) => entry.id !== creatureId),
+        )
+      },
+      duplicateCreature: (creatureId) => {
+        const source = editor.draft?.creatureCompendium.find(
+          (entry) => entry.id === creatureId,
+        )
+        if (!source) return undefined
+        const duplicate = duplicateCompendiumCreature(source)
+        upsertCreature(duplicate)
+        return duplicate
+      },
+      clearCompendium: async () => {
+        updateCreatures(() => [])
+      },
+    }
+  }, [context, editor])
 }
