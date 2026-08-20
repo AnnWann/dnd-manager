@@ -95,12 +95,16 @@ This means authorization no longer depends only on mutable live HP/character sna
 
 Runtime config visibility is participant-specific. MASTER receives every character configuration. A PLAYER receives their own characters plus characters marked `party`; other players' `private` characters and MASTER-only characters are removed from the config snapshot sent to that client.
 
+The same visibility rule now applies to live authoritative character state. Each WebSocket attachment stores the character ids visible to that participant for the active Creation revision. HP, conditions, abilities and character-lifecycle snapshots and incremental updates are filtered per recipient before they are written to the socket. Domain actors use a visibility-filtered Durable Object context for outbound broadcasts, so equipment, magic, proficiency, race and profile operations cannot bypass the same boundary when they emit character state.
+
+When a newer Creation revision is accepted, the server recalculates every connection's visible character set and immediately re-sends filtered HP, conditions, abilities and lifecycle snapshots. This is important when a character changes from `party` to `private` or `master`, or is removed from Creation: clients replace their local authoritative maps with the newly filtered snapshots instead of retaining stale character data until reconnect.
+
 Homebrew spell installation is also validated against Creation. `character.spell.add` with `homebrew: true` is accepted only when its spell index exists in the active saved runtime config. Official spells are intentionally not subject to this lookup because official definitions are not owned by Creation.
 
 The runtime-config wire parser validates revision shape, character configuration, spell identifiers, custom-system identifiers and duplicate ids before the Durable Object accepts a publish.
 
 ## Next migration work
 
-The remaining authorization work is to extend visibility filtering from the runtime-config document to the live character-domain snapshots themselves (HP, abilities, conditions and lifecycle), so a private or MASTER-only character is not merely non-editable/non-discoverable through config but also absent from player-facing authoritative state broadcasts.
+Custom-system definitions are available through the runtime-config lookup boundary, but custom-system gameplay operations still need definition-level validation. Operations that mutate a custom-system resource/field should expose or resolve their `systemId`, validate that the system exists in the active runtime config, and validate that it is enabled for the target character before mutation.
 
-Custom-system definitions are now available through the runtime-config lookup boundary. Domain operations that mutate a specific custom-system resource/field should expose the `systemId` in their protocol where necessary, allowing those operations to validate the referenced definition and per-character installation configuration before mutation.
+After that boundary is in place, server-side validation can be expanded from ownership/definition existence into rule-specific constraints such as resource ranges, editable fields, automatic-only fields and ability acquisition restrictions without loading the full Creation document.
