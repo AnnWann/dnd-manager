@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { useOptionalCreationEditor } from '../features/creation/CreationEditorProvider'
 import type { CustomSystemDefinition } from '../models/customSystems/CustomSystemDefinition'
 import { setCustomSystemDefinitions } from '../lib/customSystems'
 import { readLocalStorageJson, writeLocalStorageJson } from '../lib/storage'
@@ -308,8 +309,71 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
 
 export function useCustomSystemsContext(): CustomSystemsContextValue {
   const context = useContext(CustomSystemsContext)
-  if (!context) throw new Error('useCustomSystemsContext must be used inside CustomSystemsProvider.')
-  return context
+  const editor = useOptionalCreationEditor()
+
+  return useMemo(() => {
+    if (!context) {
+      throw new Error('useCustomSystemsContext must be used inside CustomSystemsProvider.')
+    }
+    if (!editor?.draft) return context
+
+    const updateCreationDefinitions = (
+      updater: (current: CustomSystemDefinition[]) => CustomSystemDefinition[],
+    ) => {
+      if (!context.canManage) return
+      editor.updateDraft((draft) => ({
+        ...draft,
+        customSystems: normalizeDefinitions(updater(draft.customSystems)),
+      }))
+    }
+
+    return {
+      definitions: normalizeDefinitions(editor.draft.customSystems),
+      status: editor.saving
+        ? { kind: 'saving' as const }
+        : { kind: 'idle' as const },
+      canManage: context.canManage,
+      createDefinition: () => {
+        const definition = createEmptyDefinition()
+        updateCreationDefinitions((current) => [...current, definition])
+        return definition
+      },
+      saveDefinition: (definition, previousId) => {
+        updateCreationDefinitions((current) => {
+          const withoutPrevious = previousId && previousId !== definition.id
+            ? current.filter((entry) => entry.id !== previousId)
+            : current
+          const exists = withoutPrevious.some((entry) => entry.id === definition.id)
+          return exists
+            ? withoutPrevious.map((entry) => entry.id === definition.id ? definition : entry)
+            : [...withoutPrevious, definition]
+        })
+      },
+      saveDefinitions: (incoming) => {
+        updateCreationDefinitions((current) => {
+          const merged = new Map(current.map((definition) => [definition.id, definition]))
+          for (const definition of incoming) merged.set(definition.id, definition)
+          return [...merged.values()]
+        })
+      },
+      removeDefinition: (systemId) => {
+        updateCreationDefinitions((current) => current.filter((entry) => entry.id !== systemId))
+      },
+      duplicateDefinition: (systemId) => {
+        const source = editor.draft?.customSystems.find((entry) => entry.id === systemId)
+        if (!source) return undefined
+        const copy: CustomSystemDefinition = {
+          ...structuredClone(source),
+          id: `${source.id}-copy-${Date.now().toString(36)}`,
+          name: `${source.name} (cópia)`,
+          version: 1,
+        }
+        updateCreationDefinitions((current) => [...current, copy])
+        return copy
+      },
+      reload: editor.reload,
+    }
+  }, [context, editor])
 }
 
 function createEmptyDefinition(): CustomSystemDefinition {
