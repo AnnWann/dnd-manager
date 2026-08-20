@@ -55,22 +55,66 @@ function isRuntimeConfigSnapshot(
     return false;
   }
 
-  return config.characters.every(isCharacterConfig);
+  if (!config.characters.every(isCharacterConfig)) return false;
+  if (!config.spells.every(isSpellConfig)) return false;
+  if (!config.customSystems.every(isCustomSystemConfig)) return false;
+
+  const characterIds = config.characters.map((entry) =>
+    (entry as Record<string, unknown>).characterId as string,
+  );
+  const spellIds = config.spells.map((entry) =>
+    (entry as Record<string, unknown>).index as string,
+  );
+  const systemIds = config.customSystems.map((entry) =>
+    (entry as Record<string, unknown>).id as string,
+  );
+
+  return unique(characterIds) && unique(spellIds) && unique(systemIds);
 }
 
 function isCharacterConfig(value: unknown): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const character = value as Record<string, unknown>;
   return (
-    typeof character.characterId === "string"
-    && character.characterId.trim().length > 0
-    && typeof character.ownerId === "string"
-    && character.ownerId.trim().length > 0
-    && typeof character.type === "string"
+    nonEmpty(character.characterId)
+    && nonEmpty(character.ownerId)
+    && nonEmpty(character.type)
     && (character.visibility === "private"
       || character.visibility === "party"
       || character.visibility === "master")
     && typeof character.unique === "boolean"
     && Array.isArray(character.customSystems)
+    && character.customSystems.every(isCharacterCustomSystemConfig)
   );
+}
+
+function isCharacterCustomSystemConfig(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const system = value as Record<string, unknown>;
+  return (
+    nonEmpty(system.systemId)
+    && Number.isInteger(system.systemVersion)
+    && Number(system.systemVersion) >= 1
+    && typeof system.enabled === "boolean"
+  );
+}
+
+function isSpellConfig(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const spell = value as Record<string, unknown>;
+  return nonEmpty(spell.index) && nonEmpty(spell.name);
+}
+
+function isCustomSystemConfig(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const system = value as Record<string, unknown>;
+  return nonEmpty(system.id) && nonEmpty(system.name);
+}
+
+function nonEmpty(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function unique(values: string[]): boolean {
+  return new Set(values).size === values.length;
 }
