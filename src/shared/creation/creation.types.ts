@@ -1,6 +1,8 @@
 import type { CharacterType } from "../../models/characters/CharacterType"
-import type { CharacterCustomSystemState } from "../../models/customSystems/CustomSystem"
-import type { CustomSystemDefinition } from "../../models/customSystems/CustomSystemDefinition"
+import type {
+  CustomAbilityAcquisitionExceptionState,
+  CustomSystemDefinition,
+} from "../../models/customSystems/CustomSystemDefinition"
 import type { CompendiumCreature } from "../../models/creatures/CompendiumCreature"
 import type { Itemmable } from "../../models/items/item"
 import type { Spell } from "../../models/magic/spells/Spell"
@@ -23,8 +25,8 @@ export type CreationState = {
 
 /**
  * Creation-owned character settings only. Live character state (HP, slots,
- * inventory, conditions, initiative, etc.) must not be copied into
- * CreationState.
+ * inventory, conditions, initiative, custom resource counters, etc.) must not
+ * be copied into CreationState.
  */
 export type CreationCharacterConfiguration = {
   characterId: string
@@ -33,7 +35,23 @@ export type CreationCharacterConfiguration = {
   unique: boolean
   ownerId: string
   hiddenCharacterTabs: string[]
-  customSystems: CharacterCustomSystemState[]
+  customSystems: CreationCharacterCustomSystemConfiguration[]
+}
+
+/**
+ * Configuration aspects of an installed character custom system. Runtime
+ * values such as fields/resources/ability usage remain part of live character
+ * state and are deliberately excluded.
+ */
+export type CreationCharacterCustomSystemConfiguration = {
+  systemId: string
+  systemVersion: number
+  enabled: boolean
+  abilityAcquisitionExceptions?: Record<
+    string,
+    CustomAbilityAcquisitionExceptionState
+  >
+  installationSource?: "master" | "automatic"
 }
 
 export type CreationItemCompendiumVisibility = "PUBLIC" | "MASTER"
