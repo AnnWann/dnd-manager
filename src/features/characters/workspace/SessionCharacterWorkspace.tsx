@@ -5,6 +5,7 @@ import { useSyncContext } from "../../../contexts/syncContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { EquippedItemReference } from "../../../models/characters/characterEquippedItemMovement"
 import type { HandOccupantReference } from "../../../models/characters/characterHands"
+import type { CustomAbilityInstance } from "../../../models/customSystems/CustomSystemDefinition"
 import type { Itemmable } from "../../../models/items/item"
 import { applySessionAbilityState } from "../../session-runtime/applySessionAbilityState"
 import type { SessionCustomSystemOperation } from "../../session-runtime/customSystemSessionProtocol"
@@ -318,8 +319,8 @@ function deriveCustomSystemOperations(current: CharacterTemplate, next: Characte
 function deriveSingleAbilityOperation(
   characterId: string,
   systemId: string,
-  beforeAbilities: NonNullable<ReturnType<CharacterTemplate["get"]>["customSystems"]>[number]["abilities"],
-  afterAbilities: NonNullable<ReturnType<CharacterTemplate["get"]>["customSystems"]>[number]["abilities"],
+  beforeAbilities: CustomAbilityInstance[],
+  afterAbilities: CustomAbilityInstance[],
 ): SessionCustomSystemOperation[] {
   const beforeById = new Map(beforeAbilities.map((ability) => [ability.id, ability]))
   const afterById = new Map(afterAbilities.map((ability) => [ability.id, ability]))
@@ -356,7 +357,11 @@ function deriveSingleAbilityOperation(
     return [{ type: "character.customSystem.ability.field.set", characterId, systemId, abilityId: before.id, fieldId, value }]
   }
 
-  if (before.learned !== after.learned && before.prepared === after.prepared && JSON.stringify(before.usage) === JSON.stringify(after.usage)) {
+  if (
+    before.learned !== after.learned
+    && JSON.stringify(before.usage) === JSON.stringify(after.usage)
+    && (before.prepared === after.prepared || (after.learned === false && after.prepared === false))
+  ) {
     return [{ type: "character.customSystem.ability.learned.set", characterId, systemId, abilityId: before.id, learned: after.learned !== false }]
   }
   if (before.prepared !== after.prepared && before.learned === after.learned && JSON.stringify(before.usage) === JSON.stringify(after.usage)) {
