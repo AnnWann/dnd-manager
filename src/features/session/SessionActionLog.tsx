@@ -276,7 +276,7 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "party.settings.additionalSupplyConsumption.set": return `Definiu o consumo adicional do grupo para ${formatStat(operation.value)} porções por descanso.`
     case "ground.item.add": return `Adicionou um item ao chão.`
     case "ground.item.update": return `Atualizou um item no chão.`
-    case "ground.item.remove": return `Removeu um item do chão.`
+    case "ground.item.remove": return `Removeu um item no chão.`
     case "character.equipment.move.ground": return `${characterName} colocou um equipamento no chão.`
     case "mission.add": return `Adicionou a missão “${operation.mission.title || "Sem título"}”.`
     case "mission.update": return `Atualizou a missão “${operation.mission.title || "Sem título"}”.`
@@ -301,6 +301,10 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "character.profile.replace": return `${characterName} atualizou o perfil.`
     case "character.profile.background.save": return `${characterName} atualizou o antecedente.`
     case "character.profile.background.remove": return `${characterName} removeu o antecedente.`
+    case "character.session.add": return `Adicionou ${characterName} à sessão.`
+    case "character.session.remove": return `Removeu ${characterName} da sessão.`
+    case "character.session.owner.set": return `Alterou o jogador responsável por ${characterName}.`
+    case "character.session.resync": return `Ressincronizou ${characterName} com a sessão.`
     case "character.hp.undo": return `Desfez uma alteração de ${characterName}.`
   }
 }
