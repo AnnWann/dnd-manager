@@ -42,29 +42,76 @@ export function runCustomSystemAutomations(
 
     for (const automation of definition.automations ?? []) {
       if (automation.enabled === false || automation.event !== event) continue
-
-      const currentState = findEnabledState(nextCharacter, definition.id)
-      if (!currentState) continue
-      if (!conditionsPass(automation, definition, currentState, nextCharacter)) continue
-
-      const nextState = applyEffects(
-        automation,
-        definition,
-        currentState,
-        nextCharacter,
-      )
-      if (JSON.stringify(nextState) === JSON.stringify(currentState)) continue
-
-      nextCharacter = replaceState(nextCharacter, nextState)
-      applied.push({
-        systemId: definition.id,
-        automationId: automation.id,
-        automationName: automation.name,
-      })
+      const result = runAutomation(nextCharacter, definition, automation)
+      nextCharacter = result.character
+      if (result.applied) {
+        applied.push({
+          systemId: definition.id,
+          automationId: automation.id,
+          automationName: automation.name,
+        })
+      }
     }
   }
 
   return { character: nextCharacter, applied }
+}
+
+export function runCustomSystemAutomation(
+  character: CharacterTemplate,
+  definitions: CustomSystemDefinition[],
+  systemId: string,
+  automationId: string,
+): CustomAutomationRunResult {
+  const definition = definitions.find((entry) => entry.id === systemId)
+  if (!definition) throw new Error(`Custom system “${systemId}” was not found.`)
+  const automation = (definition.automations ?? []).find(
+    (entry) => entry.id === automationId,
+  )
+  if (!automation) throw new Error(`Automation “${automationId}” was not found.`)
+  if (automation.enabled === false) throw new Error("This automation is disabled.")
+  if (automation.event !== "manual") {
+    throw new Error("Only manual automations can be executed directly.")
+  }
+
+  const result = runAutomation(character, definition, automation)
+  return {
+    character: result.character,
+    applied: result.applied
+      ? [{
+          systemId,
+          automationId,
+          automationName: automation.name,
+        }]
+      : [],
+  }
+}
+
+function runAutomation(
+  character: CharacterTemplate,
+  definition: CustomSystemDefinition,
+  automation: CustomAutomationDefinition,
+): { character: CharacterTemplate; applied: boolean } {
+  const state = findEnabledState(character, definition.id)
+  if (!state) return { character, applied: false }
+  if (!conditionsPass(automation, definition, state, character)) {
+    return { character, applied: false }
+  }
+
+  const nextState = applyEffects(
+    automation,
+    definition,
+    state,
+    character,
+  )
+  if (JSON.stringify(nextState) === JSON.stringify(state)) {
+    return { character, applied: false }
+  }
+
+  return {
+    character: replaceState(character, nextState),
+    applied: true,
+  }
 }
 
 function conditionsPass(
