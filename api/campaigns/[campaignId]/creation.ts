@@ -5,6 +5,7 @@ import {
   CharacterVisibility,
   HomebrewSpellStatus,
 } from "../../../generated/prisma/client"
+import type { Prisma } from "../../../generated/prisma/client"
 import {
   ApiError,
   handleApiError,
@@ -469,7 +470,7 @@ async function buildCreationSnapshot(campaignId: string) {
 }
 
 async function replaceCreationAssets(
-  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  tx: Prisma.TransactionClient,
   input: {
     campaignId: string
     userId: string
