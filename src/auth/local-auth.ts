@@ -17,12 +17,20 @@ export type LocalCharacter = {
   }>
 }
 
+type OptionalViteImportMeta = ImportMeta & {
+  env?: {
+    DEV?: boolean
+    VITE_LOCAL_AUTH_BYPASS?: string
+  }
+}
+
 const LOCAL_USER_KEY = "dnd-manager.local-user"
 const LOCAL_CHARACTERS_KEY = "dnd-manager.local-characters"
+const viteEnv = (import.meta as OptionalViteImportMeta).env
 
 export const LOCAL_AUTH_BYPASS =
-  import.meta.env.DEV &&
-  import.meta.env.VITE_LOCAL_AUTH_BYPASS === "true"
+  viteEnv?.DEV === true &&
+  viteEnv.VITE_LOCAL_AUTH_BYPASS === "true"
 
 export function createLocalDevelopmentSession(): LocalUser {
   const existingUser = getLocalUser()
@@ -49,7 +57,7 @@ export function createLocalDevelopmentSession(): LocalUser {
 }
 
 export function getLocalUser(): LocalUser | null {
-  if (!LOCAL_AUTH_BYPASS) return null
+  if (!LOCAL_AUTH_BYPASS || typeof window === "undefined") return null
 
   try {
     const raw = window.localStorage.getItem(LOCAL_USER_KEY)
@@ -63,7 +71,7 @@ export function getLocalUser(): LocalUser | null {
 }
 
 export function getLocalCharacters(): LocalCharacter[] {
-  if (!LOCAL_AUTH_BYPASS) return []
+  if (!LOCAL_AUTH_BYPASS || typeof window === "undefined") return []
 
   try {
     const raw = window.localStorage.getItem(
@@ -85,7 +93,7 @@ export function getLocalCharacters(): LocalCharacter[] {
 export function setLocalCharacters(
   characters: LocalCharacter[],
 ): void {
-  if (!LOCAL_AUTH_BYPASS) return
+  if (!LOCAL_AUTH_BYPASS || typeof window === "undefined") return
 
   window.localStorage.setItem(
     LOCAL_CHARACTERS_KEY,
@@ -94,6 +102,7 @@ export function setLocalCharacters(
 }
 
 export function clearLocalDevelopmentSession(): void {
+  if (typeof window === "undefined") return
   window.localStorage.removeItem(LOCAL_USER_KEY)
   window.localStorage.removeItem(LOCAL_CHARACTERS_KEY)
 }
