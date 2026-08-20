@@ -1,10 +1,22 @@
 import { MAX_HP_LOG_RECORDS } from "../characters/sheet/hpState";
-import type { SessionConnection } from "../session/protocol";
+import type { SessionAbilityState } from "../characters/abilities/abilityProtocol";
+import type { SessionConnection, SessionHpState } from "../session/protocol";
 import {
+  characterScope,
   commitSessionMutation,
   createSessionLogRecord,
   readSessionLog,
 } from "../session/sessionLog";
+import { readRuntimeConfig } from "../session/runtimeConfigAccess";
+import { broadcastVisibilityFiltered } from "../session/visibilityDelivery";
+import { runCustomSystemAutomations } from "../../../../src/lib/customSystems/CustomAutomationRuntime";
+import type { CustomSystemEventType } from "../../../../src/models/customSystems/CustomAutomationDefinition";
+import type { CustomSystemDefinition } from "../../../../src/models/customSystems/CustomSystemDefinition";
+import {
+  CharacterTemplate,
+  type CharacterTemplateProps,
+} from "../../../../src/models/characters/CharacterTemplate";
+import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/session-runtime/sessionRuntimeConfig";
 import {
   addInitiativeEntries,
   advanceInitiativeTurn,
@@ -30,6 +42,13 @@ import {
 
 export const INITIATIVE_STATE_KEY = "initiative-state";
 export const INITIATIVE_SHARED_SCOPE = "initiative:shared";
+const ABILITIES_STATE_KEY = "abilities-state";
+const HP_STATE_KEY = "hp-state";
+
+type InitiativeAutomationEvent = {
+  event: CustomSystemEventType;
+  characterIds: string[];
+};
 
 export class SessionActor {
   declare protected readonly ctx: DurableObjectState;
@@ -77,8 +96,11 @@ export class SessionActor {
     connection: SessionConnection,
     operation: SessionInitiativeOperation,
   ): Promise<void> {
-    const [state, log] = await Promise.all([
+    const [state, abilities, hp, runtimeConfig, log] = await Promise.all([
       readInitiativeState(this.ctx.storage),
+      this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
+      this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY).then((value) => value ?? {}),
+      readRuntimeConfig(this.ctx.storage),
       readSessionLog(this.ctx.storage),
     ]);
     if (!state.initialized) {
@@ -94,27 +116,89 @@ export class SessionActor {
       return;
     }
 
+    const previousAbilities: Record<string, SessionAbilityState> = {};
+    const changedAbilityIds = new Set<string>();
+    if (runtimeConfig) {
+      try {
+        const events = initiativeAutomationEvents(current, result.session, operation);
+        for (const { event, characterIds } of events) {
+          for (const characterId of characterIds) {
+            const storedAbility = abilities[characterId];
+            const storedHp = hp[characterId];
+            if (!storedAbility?.initialized || !storedHp) continue;
+
+            if (!previousAbilities[characterId]) {
+              previousAbilities[characterId] = structuredClone(storedAbility);
+            }
+
+            const character = hydrateCharacterForAutomation(storedAbility, storedHp);
+            const definitions = runtimeDefinitionsForCharacter(character, runtimeConfig, characterId);
+            if (!definitions.length) continue;
+            const automation = runCustomSystemAutomations(character, definitions, event);
+            if (!automation.applied.length) continue;
+
+            abilities[characterId] = {
+              characterId,
+              character: automation.character.toJSON() as unknown as Record<string, unknown>,
+              initialized: true,
+              revision: storedAbility.revision + 1,
+            };
+            changedAbilityIds.add(characterId);
+          }
+        }
+      } catch (error) {
+        sendError(
+          webSocket,
+          "CUSTOM_AUTOMATION_REJECTED",
+          error instanceof Error ? error.message : "An initiative custom automation failed.",
+        );
+        return;
+      }
+    }
+
     state.session = result.session as unknown as Record<string, unknown>;
     state.revision += 1;
+    const affectedScopes = [
+      INITIATIVE_SHARED_SCOPE,
+      ...Array.from(changedAbilityIds, characterScope),
+    ];
     const record = createSessionLogRecord({
       actorId: connection.userId,
       operation: result.operation,
-      affectedScopes: [INITIATIVE_SHARED_SCOPE],
+      affectedScopes,
       reverseOperation: {
         type: "session.initiative.restore",
         characterId: "session",
-        affectedScopes: [INITIATIVE_SHARED_SCOPE],
+        affectedScopes,
         snapshot: before,
+        ...(changedAbilityIds.size
+          ? {
+              abilities: Object.fromEntries(
+                Array.from(changedAbilityIds).map((characterId) => [
+                  characterId,
+                  previousAbilities[characterId],
+                ]),
+              ),
+            }
+          : {}),
       },
     });
 
+    const writes: Record<string, unknown> = { [INITIATIVE_STATE_KEY]: state };
+    if (changedAbilityIds.size) writes[ABILITIES_STATE_KEY] = abilities;
     await commitSessionMutation(this.ctx.storage, this.ctx.getWebSockets(), {
-      writes: { [INITIATIVE_STATE_KEY]: state },
+      writes,
       record,
       currentLog: log,
       maxRecords: MAX_HP_LOG_RECORDS,
     });
     broadcast(this.ctx.getWebSockets(), { type: "session.initiative.updated", state });
+    for (const characterId of changedAbilityIds) {
+      broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
+        type: "session.abilities.updated",
+        character: abilities[characterId],
+      });
+    }
   }
 }
 
@@ -124,6 +208,131 @@ export async function readInitiativeState(storage: DurableObjectStorage): Promis
     revision: 0,
     session: emptyInitiativeSession() as unknown as Record<string, unknown>,
   };
+}
+
+function initiativeAutomationEvents(
+  before: InitiativeSession,
+  after: InitiativeSession,
+  operation: SessionInitiativeOperation,
+): InitiativeAutomationEvent[] {
+  const beforeParticipants = characterSourceIds(before.entries);
+  const afterParticipants = characterSourceIds(after.entries);
+  const events: InitiativeAutomationEvent[] = [];
+
+  if (operation.type === "initiative.combat.start") {
+    if (afterParticipants.length) {
+      events.push({ event: "combatStarted", characterIds: afterParticipants });
+      events.push({ event: "roundStarted", characterIds: afterParticipants });
+    }
+    const active = activeCharacterId(after);
+    if (active) events.push({ event: "turnStarted", characterIds: [active] });
+    return events;
+  }
+
+  if (operation.type === "initiative.combat.end") {
+    const active = activeCharacterId(before);
+    if (active) events.push({ event: "turnEnded", characterIds: [active] });
+    if (beforeParticipants.length) {
+      events.push({ event: "combatEnded", characterIds: beforeParticipants });
+    }
+    return events;
+  }
+
+  if (operation.type === "initiative.turn.next") {
+    const ending = activeCharacterId(before);
+    if (ending) events.push({ event: "turnEnded", characterIds: [ending] });
+    if (after.round > before.round && beforeParticipants.length) {
+      events.push({ event: "roundEnded", characterIds: beforeParticipants });
+      events.push({ event: "roundStarted", characterIds: afterParticipants });
+    }
+    const starting = activeCharacterId(after);
+    if (starting) events.push({ event: "turnStarted", characterIds: [starting] });
+  }
+
+  // Rewinding/resetting initiative is administrative state correction. It must
+  // not replay gameplay automations and duplicate their effects.
+  return events;
+}
+
+function activeCharacterId(session: InitiativeSession): string | null {
+  const entry = session.entries.find((candidate) => candidate.id === session.activeEntryId);
+  return entry?.sourceType === "character" && entry.sourceId?.trim()
+    ? entry.sourceId.trim()
+    : null;
+}
+
+function characterSourceIds(entries: InitiativeEntry[]): string[] {
+  return Array.from(new Set(
+    entries.flatMap((entry) =>
+      entry.sourceType === "character" && entry.sourceId?.trim()
+        ? [entry.sourceId.trim()]
+        : [],
+    ),
+  ));
+}
+
+function hydrateCharacterForAutomation(
+  state: SessionAbilityState,
+  hp: SessionHpState,
+): CharacterTemplate {
+  const character = CharacterTemplate.fromJSON(state.character as Partial<CharacterTemplateProps>);
+  const sheet = character.get("sheet");
+  return character.withPatch({
+    sheet: {
+      ...sheet,
+      attributes: hp.attributesInitialized ? { ...hp.attributes } : sheet.attributes,
+      savingThrowProficiencies: hp.savingThrowsInitialized
+        ? { ...hp.savingThrows }
+        : sheet.savingThrowProficiencies,
+      skills: hp.skillsInitialized ? { ...hp.skills } : sheet.skills,
+      stats: hp.statsInitialized
+        ? {
+            ...sheet.stats,
+            armorClassAdjustment: hp.stats.armorClassAdjustment,
+            initiativeAdjustment: hp.stats.initiativeAdjustment,
+            mobilityAdjustment: hp.stats.mobilityAdjustment,
+            passivePerceptionAdjustment: hp.stats.passivePerceptionAdjustment,
+            exhaustion: hp.stats.exhaustion,
+            inspiration: hp.stats.inspiration,
+            experience: hp.stats.experience,
+          }
+        : sheet.stats,
+      HP: {
+        ...sheet.HP,
+        current: hp.current,
+        temporary: hp.temporary,
+        max: hp.max,
+        currentMax: hp.currentMax,
+      },
+    },
+  });
+}
+
+function runtimeDefinitionsForCharacter(
+  character: CharacterTemplate,
+  runtimeConfig: SessionRuntimeConfigSnapshot,
+  characterId: string,
+): CustomSystemDefinition[] {
+  const configured = runtimeConfig.config.characters.find((entry) => entry.characterId === characterId);
+  if (!configured) return [];
+  const installations = new Map(
+    configured.customSystems
+      .filter((entry) => entry.enabled)
+      .map((entry) => [entry.systemId, entry]),
+  );
+  const states = new Map(
+    (character.get("sheet").customSystems ?? []).map((state) => [state.systemId, state]),
+  );
+  return runtimeConfig.config.customSystems.filter((definition) => {
+    const installation = installations.get(definition.id);
+    const state = states.get(definition.id);
+    return Boolean(
+      installation
+      && state?.enabled
+      && installation.systemVersion === definition.version
+      && state.systemVersion === installation.systemVersion,
+    );
+  });
 }
 
 function applyInitiativeOperation(
