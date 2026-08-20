@@ -19,6 +19,10 @@ import {
 import { activateCustomAbility } from "../../../../../src/lib/customSystems/CustomAbilityActivation";
 import { activateCustomSystemAction } from "../../../../../src/lib/customSystems/CustomSystemActions";
 import {
+  runCustomSystemAutomation,
+  runCustomSystemAutomations,
+} from "../../../../../src/lib/customSystems/CustomAutomationRuntime";
+import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from "../../../../../src/models/characters/CharacterTemplate";
@@ -57,7 +61,12 @@ type RuntimeConfigSnapshot = NonNullable<Awaited<ReturnType<typeof readRuntimeCo
 type AccessError = { ok: false; code: string; message: string };
 type AggregateCustomSystemOperation = Extract<
   SessionCustomSystemOperation,
-  { type: "character.customSystem.ability.activate" | "character.customSystem.action.execute" }
+  {
+    type:
+      | "character.customSystem.ability.activate"
+      | "character.customSystem.action.execute"
+      | "character.customSystem.automation.execute";
+  }
 >;
 
 export class SessionActor extends BaseSessionActor {
@@ -148,6 +157,11 @@ export class SessionActor extends BaseSessionActor {
           operation.systemId,
           operation.abilityId,
         );
+        nextCharacter = runCustomSystemAutomations(
+          nextCharacter,
+          activeRuntimeConfig.config.customSystems,
+          "abilityUsed",
+        ).character;
       } else if (operation.type === "character.customSystem.action.execute") {
         nextCharacter = activateCustomSystemAction(
           character,
@@ -155,6 +169,13 @@ export class SessionActor extends BaseSessionActor {
           operation.systemId,
           operation.actionId,
         );
+      } else if (operation.type === "character.customSystem.automation.execute") {
+        nextCharacter = runCustomSystemAutomation(
+          character,
+          activeRuntimeConfig.config.customSystems,
+          operation.systemId,
+          operation.automationId,
+        ).character;
       } else {
         const nextState = applyOperation(
           definition,
@@ -462,7 +483,8 @@ function isAggregateOperation(
   operation: SessionCustomSystemOperation,
 ): operation is AggregateCustomSystemOperation {
   return operation.type === "character.customSystem.ability.activate"
-    || operation.type === "character.customSystem.action.execute";
+    || operation.type === "character.customSystem.action.execute"
+    || operation.type === "character.customSystem.automation.execute";
 }
 
 function readConnection(webSocket: WebSocket): SessionConnection | null {
