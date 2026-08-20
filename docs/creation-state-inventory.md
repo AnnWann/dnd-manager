@@ -35,7 +35,7 @@ The `creation/*` route subtree owns exactly one `CreationEditorProvider`. It loa
 - `baseRevision` — the revision used for optimistic concurrency;
 - `managedDomains` — migration metadata for domains that previously lived in independent stores.
 
-All Creation-owned editor mutations are now expected to target `draft`. The explicit Save action sends the complete draft and `baseRevision` to the canonical PATCH endpoint. Discard restores the draft from `base` without performing persistence.
+All Creation-owned editor mutations target `draft`. The explicit Save action sends the complete draft and `baseRevision` to the canonical PATCH endpoint. Discard restores the draft from `base` without performing persistence.
 
 The migrated editor domains are:
 
@@ -76,8 +76,31 @@ The runtime projection includes only configuration needed by authoritative gamep
 
 It excludes hidden tabs, item/creature authoring compendia, workflow records and all live gameplay state.
 
-`SessionRuntimeConfigSnapshot` carries the saved `creationRevision` with that projection. This establishes the versioned boundary the Session Server can cache; the database remains authoritative for `CreationState` and the Session Server must reject or ignore stale configuration revisions rather than becoming another owner of Creation data.
+`SessionRuntimeConfigSnapshot` carries the saved `creationRevision` with that projection. The database remains authoritative for Creation. The Session Server stores only the latest published revision as a validation cache.
 
-## Remaining migration work
+## Session Server runtime-config integration
 
-The next integration should make the Session Server consume the versioned `SessionRuntimeConfigSnapshot` and refresh its cache when a newer Creation revision is saved. Once that is in place, authoritative gameplay validators can depend on the cached configuration revision without loading the full Creation document or its authoring-only domains.
+The final authoritative Durable Object boundary owns the cached `runtime-config-state`.
+
+The MASTER publishes saved configuration with `session.config.publish`. Dirty editor state is never published. The server rejects stale revisions and rejects different payloads claiming the same revision. Every participant receives `session.config.snapshot` when connecting and whenever a newer revision is accepted.
+
+Character mutation authorization is performed before routing into gameplay domain actors:
+
+- MASTER remains authoritative and can operate any character;
+- PLAYER operations require a published runtime config;
+- the target character must exist in the active Creation configuration;
+- the PLAYER must match the saved `ownerId` from Creation.
+
+This means authorization no longer depends only on mutable live HP/character snapshots.
+
+Runtime config visibility is participant-specific. MASTER receives every character configuration. A PLAYER receives their own characters plus characters marked `party`; other players' `private` characters and MASTER-only characters are removed from the config snapshot sent to that client.
+
+Homebrew spell installation is also validated against Creation. `character.spell.add` with `homebrew: true` is accepted only when its spell index exists in the active saved runtime config. Official spells are intentionally not subject to this lookup because official definitions are not owned by Creation.
+
+The runtime-config wire parser validates revision shape, character configuration, spell identifiers, custom-system identifiers and duplicate ids before the Durable Object accepts a publish.
+
+## Next migration work
+
+The remaining authorization work is to extend visibility filtering from the runtime-config document to the live character-domain snapshots themselves (HP, abilities, conditions and lifecycle), so a private or MASTER-only character is not merely non-editable/non-discoverable through config but also absent from player-facing authoritative state broadcasts.
+
+Custom-system definitions are now available through the runtime-config lookup boundary. Domain operations that mutate a specific custom-system resource/field should expose the `systemId` in their protocol where necessary, allowing those operations to validate the referenced definition and per-character installation configuration before mutation.
