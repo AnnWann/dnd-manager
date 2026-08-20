@@ -1,5 +1,6 @@
 import type {
   CreationCharacterCustomSystemConfiguration,
+  CreationSnapshot,
   CreationState,
 } from "../creation/creation.types"
 import type { CharacterType } from "../../models/characters/CharacterType"
@@ -15,6 +16,11 @@ export type SessionRuntimeConfig = {
   characters: SessionRuntimeCharacterConfig[]
   spells: Spell[]
   customSystems: CustomSystemDefinition[]
+}
+
+export type SessionRuntimeConfigSnapshot = {
+  creationRevision: number
+  config: SessionRuntimeConfig
 }
 
 export type SessionRuntimeCharacterConfig = {
@@ -40,5 +46,14 @@ export function toSessionRuntimeConfig(
     })),
     spells: creation.spells,
     customSystems: creation.customSystems,
+  }
+}
+
+export function toSessionRuntimeConfigSnapshot(
+  creation: CreationSnapshot,
+): SessionRuntimeConfigSnapshot {
+  return {
+    creationRevision: creation.revision,
+    config: toSessionRuntimeConfig(creation.data),
   }
 }
