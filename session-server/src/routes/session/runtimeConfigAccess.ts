@@ -73,6 +73,22 @@ export function canViewRuntimeCharacter(
   return character.visibility === "party";
 }
 
+export function visibleRuntimeConfigSnapshot(
+  connection: SessionConnection,
+  snapshot: SessionRuntimeConfigSnapshot | null,
+): SessionRuntimeConfigSnapshot | null {
+  if (!snapshot || connection.role === "MASTER") return snapshot;
+  return {
+    creationRevision: snapshot.creationRevision,
+    config: {
+      ...snapshot.config,
+      characters: snapshot.config.characters.filter((character) =>
+        canViewRuntimeCharacter(connection, character),
+      ),
+    },
+  };
+}
+
 export function findRuntimeSpell(
   snapshot: SessionRuntimeConfigSnapshot | null,
   spellIndex: string,
@@ -96,9 +112,10 @@ export function extractOperationCharacterId(raw: string): string | null {
     const operation = value.operation;
     if (!operation || typeof operation !== "object" || Array.isArray(operation)) return null;
     const characterId = (operation as Record<string, unknown>).characterId;
-    return typeof characterId === "string" && characterId.trim()
-      ? characterId.trim()
-      : null;
+    if (typeof characterId !== "string") return null;
+    const normalized = characterId.trim();
+    if (!normalized || normalized === "session") return null;
+    return normalized;
   } catch {
     return null;
   }
