@@ -3,6 +3,8 @@ import { SessionActor as MissionSessionActor, MISSIONS_SHARED_SCOPE, MISSIONS_ST
 import { parseMissionClientMessage, type SessionMissionState } from "../missions/missionProtocol";
 import { SessionActor as InitiativeSessionActor, INITIATIVE_SHARED_SCOPE, INITIATIVE_STATE_KEY, readInitiativeState } from "../initiative/InitiativeSessionActor";
 import { parseInitiativeClientMessage, type SessionInitiativeState } from "../initiative/initiativeProtocol";
+import { SessionActor as CustomSystemSessionActor } from "../characters/custom-systems/CustomSystemSessionActor";
+import { parseCustomSystemClientMessage } from "../characters/custom-systems/customSystemProtocol";
 import { MAX_HP_LOG_RECORDS } from "../characters/sheet/hpState";
 import type { SessionConnection } from "./protocol";
 import { parseRuntimeConfigPublishMessage } from "./runtimeConfigProtocol";
@@ -49,6 +51,7 @@ type SharedReverse =
 export class SessionActor extends ComposedSessionActor {
   private readonly missionRoute = bindDomainActor(MissionSessionActor.prototype, this.ctx);
   private readonly initiativeRoute = bindDomainActor(InitiativeSessionActor.prototype, this.ctx);
+  private readonly customSystemRoute = bindDomainActor(CustomSystemSessionActor.prototype, this.ctx);
 
   override async fetch(request: Request): Promise<Response> {
     const response = await super.fetch(request);
@@ -109,6 +112,11 @@ export class SessionActor extends ComposedSessionActor {
         sendError(webSocket, authorization.code, authorization.message);
         return;
       }
+    }
+
+    if (parseCustomSystemClientMessage(raw)) {
+      await this.customSystemRoute.webSocketMessage(webSocket, message);
+      return;
     }
 
     const undoLogId = parseUndoLogId(raw);
