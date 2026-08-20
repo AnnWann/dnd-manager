@@ -18,16 +18,22 @@ import {
 import { Button } from "../../components/ui/Button"
 import { useCharacterContext } from "../../contexts/characterContext"
 import { CharacterSettingsModal } from "../../features/characters/settings/CharacterSettingsModal"
+import { useCreationEditor } from "../../features/creation/CreationEditorProvider"
 import { sessionPath } from "../../lib/campaignRoutes"
 import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
+import type { CharacterCustomSystemState } from "../../models/customSystems/CustomSystemDefinition"
 import type { Player } from "../../models/player/Player"
+import type {
+  CreationCharacterConfiguration,
+  CreationCharacterCustomSystemConfiguration,
+} from "../../shared/creation/creation.types"
 
 export function SessionCreationSettingsView() {
   const { campaignId } = useParams<{ campaignId?: string }>()
   const navigate = useNavigate()
+  const editor = useCreationEditor()
   const {
-    visibleCharacters,
-    updateCharacter,
+    visibleCharacters: sessionCharacters,
     canAssignOwners,
     canEditCharacterType,
     knownPlayerKeys,
@@ -69,6 +75,26 @@ export function SessionCreationSettingsView() {
       cancelled = true
     }
   }, [campaignId])
+
+  const creationConfigurationById = useMemo(
+    () => new Map(
+      (editor.draft?.characters ?? []).map((configuration) => [
+        configuration.characterId,
+        configuration,
+      ]),
+    ),
+    [editor.draft?.characters],
+  )
+
+  const visibleCharacters = useMemo(
+    () => sessionCharacters.map((character) => {
+      const configuration = creationConfigurationById.get(character.get("id"))
+      return configuration
+        ? applyCreationConfiguration(character, configuration)
+        : character
+    }),
+    [creationConfigurationById, sessionCharacters],
+  )
 
   const selectedCharacter = useMemo(
     () => visibleCharacters.find((entry) => entry.get("id") === selectedCharacterId),
@@ -150,6 +176,33 @@ export function SessionCreationSettingsView() {
     }
   }
 
+  function updateCreationCharacter(
+    characterId: string,
+    updater: (character: CharacterTemplate) => CharacterTemplate,
+  ) {
+    const source = sessionCharacters.find(
+      (character) => character.get("id") === characterId,
+    )
+    const currentConfiguration = creationConfigurationById.get(characterId)
+    if (!source || !currentConfiguration) return
+
+    const current = applyCreationConfiguration(source, currentConfiguration)
+    const updated = updater(current)
+    const nextConfiguration = toCreationConfiguration(
+      updated,
+      currentConfiguration,
+    )
+
+    editor.updateDraft((draft) => ({
+      ...draft,
+      characters: draft.characters.map((configuration) =>
+        configuration.characterId === characterId
+          ? nextConfiguration
+          : configuration,
+      ),
+    }))
+  }
+
   return (
     <div className="mx-auto grid w-full max-w-7xl gap-5">
       <header className="rounded-xl border border-border bg-bg p-4 sm:p-5">
@@ -176,7 +229,7 @@ export function SessionCreationSettingsView() {
         <header className="border-b border-border p-4">
           <h2 className="font-semibold text-textH">Personagens da sessão</h2>
           <p className="mt-1 text-xs text-textMuted">
-            Estas configurações afetam apenas a cópia usada nesta sessão.
+            Alterações de personagem ficam no rascunho de Criação até você salvar.
           </p>
         </header>
 
@@ -205,7 +258,7 @@ export function SessionCreationSettingsView() {
               <h2 className="font-semibold text-textH">Usuários da sessão</h2>
             </div>
             <p className="mt-1 text-xs text-textMuted">
-              Gerencie papéis e acesso dos membros já aprovados.
+              Gerencie papéis e acesso dos membros já aprovados. Esta administração continua sendo aplicada imediatamente e não faz parte do rascunho de Criação.
             </p>
           </div>
 
@@ -279,7 +332,7 @@ export function SessionCreationSettingsView() {
           open
           onClose={() => setSelectedCharacterId("")}
           character={selectedCharacter}
-          updateCharacter={updateCharacter}
+          updateCharacter={updateCreationCharacter}
           canAssignOwners={canAssignOwners}
           canEditCharacterType={canEditCharacterType}
           playerKeys={configuredPlayerKeys}
@@ -377,4 +430,78 @@ function MemberRow({
       )}
     </div>
   )
+}
+
+function applyCreationConfiguration(
+  character: CharacterTemplate,
+  configuration: CreationCharacterConfiguration,
+): CharacterTemplate {
+  const currentOwner = character.get("owner")
+  const currentSystems = (character.get("sheet").customSystems ?? []) as CharacterCustomSystemState[]
+  const configuredSystems = new Map(
+    configuration.customSystems.map((state) => [state.systemId, state]),
+  )
+
+  const mergedSystems = currentSystems.map((state) => {
+    const configured = configuredSystems.get(state.systemId)
+    if (!configured) return state
+    configuredSystems.delete(state.systemId)
+    return {
+      ...state,
+      systemVersion: configured.systemVersion,
+      enabled: configured.enabled,
+      abilityAcquisitionExceptions: configured.abilityAcquisitionExceptions,
+      installationSource: configured.installationSource,
+    }
+  })
+
+  for (const configured of configuredSystems.values()) {
+    mergedSystems.push({
+      ...configured,
+      fields: {},
+      resources: {},
+      abilities: [],
+    })
+  }
+
+  return character
+    .with("visibility", configuration.visibility)
+    .with("unique", configuration.unique)
+    .with("owner", {
+      ...currentOwner,
+      id: configuration.ownerId,
+    })
+    .withSheet("type", configuration.type)
+    .withSheet("hiddenCharacterTabs", [...configuration.hiddenCharacterTabs])
+    .withSheet("customSystems", mergedSystems)
+}
+
+function toCreationConfiguration(
+  character: CharacterTemplate,
+  previous: CreationCharacterConfiguration,
+): CreationCharacterConfiguration {
+  const sheet = character.get("sheet")
+  const states = (sheet.customSystems ?? []) as CharacterCustomSystemState[]
+
+  return {
+    characterId: character.get("id"),
+    type: sheet.type,
+    visibility: character.get("visibility"),
+    unique: character.get("unique"),
+    ownerId: character.get("owner")?.id || previous.ownerId,
+    hiddenCharacterTabs: [...(sheet.hiddenCharacterTabs ?? [])],
+    customSystems: states.map(toCreationCustomSystemConfiguration),
+  }
+}
+
+function toCreationCustomSystemConfiguration(
+  state: CharacterCustomSystemState,
+): CreationCharacterCustomSystemConfiguration {
+  return {
+    systemId: state.systemId,
+    systemVersion: state.systemVersion,
+    enabled: state.enabled,
+    abilityAcquisitionExceptions: state.abilityAcquisitionExceptions,
+    installationSource: state.installationSource,
+  }
 }
