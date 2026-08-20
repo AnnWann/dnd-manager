@@ -4,6 +4,7 @@ import type {
   SessionCharacterLifecycleState,
 } from "./characterLifecycleSessionProtocol"
 import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
+import type { SessionInitiativeOperation, SessionInitiativeState } from "./initiativeSessionProtocol"
 import type { SessionInventoryOperation, SessionSharedInventoryState } from "./inventorySessionProtocol"
 import type { SessionMagicOperation } from "./magicSessionProtocol"
 import type { SessionMissionOperation, SessionMissionState } from "./missionSessionProtocol"
@@ -59,6 +60,13 @@ export type SessionMissionReverseOperation = {
   snapshot: SessionMissionState
 }
 
+export type SessionInitiativeReverseOperation = {
+  type: "session.initiative.restore"
+  characterId: "session"
+  affectedScopes?: string[]
+  snapshot: SessionInitiativeState
+}
+
 export type SessionProficiencyReverseOperation = {
   type: "session.proficiency.restore"
   characterId: string
@@ -108,6 +116,7 @@ export type SessionRuntimeLogRecord = {
     | SessionEquipmentOperation
     | SessionInventoryOperation
     | SessionMissionOperation
+    | SessionInitiativeOperation
     | SessionProficiencyOperation
     | SessionRaceOperation
     | SessionProfileOperation
@@ -119,6 +128,7 @@ export type SessionRuntimeLogRecord = {
     | SessionRestReverseOperation
     | SessionInventoryReverseOperation
     | SessionMissionReverseOperation
+    | SessionInitiativeReverseOperation
     | SessionProficiencyReverseOperation
     | SessionRaceReverseOperation
     | SessionProfileReverseOperation
@@ -135,6 +145,7 @@ export function isAbilityLogRecord(record: SessionLogRecord): record is SessionR
     || record.reverseOperation.type === "session.rest.restore"
     || record.reverseOperation.type === "session.inventory.restore"
     || record.reverseOperation.type === "session.missions.restore"
+    || record.reverseOperation.type === "session.initiative.restore"
     || record.reverseOperation.type === "session.proficiency.restore"
     || record.reverseOperation.type === "session.race.restore"
     || record.reverseOperation.type === "session.profile.restore"
@@ -154,6 +165,7 @@ export function sessionLogScopes(record: SessionLogRecord): string[] {
   }
 
   if (operation.type.startsWith("mission.")) scopes.push("missions:shared")
+  if (operation.type.startsWith("initiative.")) scopes.push("initiative:shared")
 
   if (
     operation.type.startsWith("party.")
