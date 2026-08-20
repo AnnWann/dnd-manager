@@ -35,6 +35,8 @@ import {
   takeLongRest,
   takePartialLongRest,
 } from "../../../../src/models/characters/characterRestWithSorcery";
+import { runCustomSystemAutomations } from "../../../../src/lib/customSystems/CustomAutomationRuntime";
+import type { CustomSystemDefinition } from "../../../../src/models/customSystems/CustomSystemDefinition";
 import type { Itemmable } from "../../../../src/models/items/item";
 import {
   consumeSelectedSupplies,
@@ -66,6 +68,7 @@ import {
   type SessionLogRecord,
 } from "./sessionLog";
 import { readRuntimeConfig } from "./runtimeConfigAccess";
+import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/session-runtime/sessionRuntimeConfig";
 import {
   broadcastVisibilityFiltered,
   refreshConnectionVisibility,
@@ -283,9 +286,11 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
 
-    const [state, conditionsState, log] = await Promise.all([
+    const [state, conditionsState, abilities, runtimeConfig, log] = await Promise.all([
       this.readHpState(),
       this.readConditionsState(),
+      this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
+      readRuntimeConfig(this.ctx.storage),
       readSessionLog(this.ctx.storage),
     ]);
     const current = state[operation.characterId];
@@ -317,13 +322,70 @@ export class SessionActor extends DurableObject<Env> {
     };
     state[operation.characterId] = storedNext;
 
+    const event = operation.type === "character.hp.damage"
+      ? "damageTaken"
+      : operation.type === "character.hp.heal"
+        ? "healingReceived"
+        : null;
+    const storedAbility = abilities[operation.characterId];
+    const currentConditions = conditionsState[operation.characterId];
+    let automationAbility: SessionAbilityState | null = null;
+    let record = result.record as unknown as SessionLogRecord;
+
+    if (event && storedAbility?.initialized && currentConditions?.initialized && runtimeConfig) {
+      try {
+        const hydrated = hydrateCharacterForRest(storedAbility, storedNext, currentConditions);
+        const definitions = runtimeDefinitionsForCharacter(
+          hydrated,
+          runtimeConfig,
+          operation.characterId,
+        );
+        const automationResult = runCustomSystemAutomations(hydrated, definitions, event);
+        if (automationResult.applied.length) {
+          const nextCharacter = automationResult.character;
+          automationAbility = {
+            characterId: operation.characterId,
+            character: nextCharacter.toJSON() as unknown as Record<string, unknown>,
+            initialized: true,
+            revision: storedAbility.revision + 1,
+          };
+          abilities[operation.characterId] = automationAbility;
+          record = createSessionLogRecord({
+            actorId: connection.userId,
+            operation: result.record.operation as unknown as SessionLogRecord["operation"],
+            reverseOperation: {
+              type: "character.ability.restore",
+              characterId: operation.characterId,
+              snapshot: {
+                ability: structuredClone(storedAbility),
+                hp: structuredClone(current),
+                conditions: structuredClone(currentConditions),
+              },
+            },
+          });
+        }
+      } catch (error) {
+        this.sendError(
+          webSocket,
+          "CUSTOM_AUTOMATION_REJECTED",
+          error instanceof Error ? error.message : "A custom automation triggered by this HP operation failed.",
+        );
+        return;
+      }
+    }
+
+    const writes: Record<string, unknown> = { [HP_STATE_KEY]: state };
+    if (automationAbility) writes[ABILITIES_STATE_KEY] = abilities;
     await commitSessionMutation(this.ctx.storage, this.ctx.getWebSockets(), {
-      writes: { [HP_STATE_KEY]: state },
-      record: result.record as unknown as SessionLogRecord,
+      writes,
+      record,
       currentLog: log,
       maxRecords: MAX_HP_LOG_RECORDS,
     });
     this.broadcast({ type: "session.hp.updated", character: result.next });
+    if (automationAbility) {
+      this.broadcastSessionRaw({ type: "session.abilities.updated", character: automationAbility });
+    }
   }
 
   private async handleRestOperation(
@@ -331,11 +393,12 @@ export class SessionActor extends DurableObject<Env> {
     connection: SessionConnection,
     operation: SessionRestOperation,
   ): Promise<void> {
-    const [abilities, hpState, conditionsState, inventory, log] = await Promise.all([
+    const [abilities, hpState, conditionsState, inventory, runtimeConfig, log] = await Promise.all([
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
       this.readHpState(),
       this.readConditionsState(),
       this.readRestInventoryState(),
+      readRuntimeConfig(this.ctx.storage),
       readSessionLog(this.ctx.storage),
     ]);
 
@@ -420,6 +483,24 @@ export class SessionActor extends DurableObject<Env> {
         },
       };
       affectedScopes = [characterScope(operation.characterId), SHARED_INVENTORY_SCOPE];
+    }
+
+    if (runtimeConfig) {
+      try {
+        const definitions = runtimeDefinitionsForCharacter(next, runtimeConfig, operation.characterId);
+        next = runCustomSystemAutomations(
+          next,
+          definitions,
+          operation.type === "character.rest.short" ? "shortRestCompleted" : "longRestCompleted",
+        ).character;
+      } catch (error) {
+        this.sendError(
+          webSocket,
+          "CUSTOM_AUTOMATION_REJECTED",
+          error instanceof Error ? error.message : "A custom automation triggered by this rest failed.",
+        );
+        return;
+      }
     }
 
     const nextAbility: SessionAbilityState = {
@@ -530,7 +611,7 @@ export class SessionActor extends DurableObject<Env> {
   }
 
   private async readRestInventoryState(): Promise<SharedInventoryState> {
-    return (await this.ctx.storage.get<SharedInventoryState>(INVENTORY_STATE_KEY)) ?? {
+    return (await this.ctx.storage.get<SharedInventoryState>>(INVENTORY_STATE_KEY)) ?? {
       initialized: false,
       revision: 0,
       partyInventory: [],
@@ -717,6 +798,34 @@ function sessionHpFromCharacter(character: CharacterTemplate, previous: SessionH
     skills: { ...previous.skills },
     revision: previous.revision + 1,
   };
+}
+
+function runtimeDefinitionsForCharacter(
+  character: CharacterTemplate,
+  runtimeConfig: SessionRuntimeConfigSnapshot,
+  characterId: string,
+): CustomSystemDefinition[] {
+  const configured = runtimeConfig.config.characters.find((entry) => entry.characterId === characterId);
+  if (!configured) return [];
+  const installations = new Map(
+    configured.customSystems
+      .filter((entry) => entry.enabled)
+      .map((entry) => [entry.systemId, entry]),
+  );
+  const states = new Map(
+    (character.get("sheet").customSystems ?? []).map((state) => [state.systemId, state]),
+  );
+
+  return runtimeConfig.config.customSystems.filter((definition) => {
+    const installation = installations.get(definition.id);
+    const state = states.get(definition.id);
+    return Boolean(
+      installation
+      && state?.enabled
+      && installation.systemVersion === definition.version
+      && state.systemVersion === installation.systemVersion,
+    );
+  });
 }
 
 function isLongRestSelection(value: unknown): value is LongRestSupplySelection[] {
