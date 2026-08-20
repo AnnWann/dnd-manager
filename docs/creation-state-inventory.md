@@ -101,10 +101,14 @@ When a newer Creation revision is accepted, the server recalculates every connec
 
 Homebrew spell installation is also validated against Creation. `character.spell.add` with `homebrew: true` is accepted only when its spell index exists in the active saved runtime config. Official spells are intentionally not subject to this lookup because official definitions are not owned by Creation.
 
+Custom-system field and resource mutations are now authoritative as well. The session workspace derives semantic operations from local UI changes instead of persisting whole-character mutations. The Session Server requires the referenced `systemId` to exist in the active runtime config, requires that exact system/version to be installed and enabled for the target character in Creation, and requires matching enabled live runtime state. It then delegates field/resource validation to the existing `CustomSystemState` rules, including edit permissions, required fields, value constraints, resource min/max rules and manual-adjustment permissions. Accepted mutations produce one semantic log record, an undo snapshot and a visibility-filtered authoritative character update.
+
+Custom-system installation/enabling remains Creation configuration, not gameplay. A session operation cannot install a system or change its configured version/enabled flag.
+
 The runtime-config wire parser validates revision shape, character configuration, spell identifiers, custom-system identifiers and duplicate ids before the Durable Object accepts a publish.
 
 ## Next migration work
 
-Custom-system definitions are available through the runtime-config lookup boundary, but custom-system gameplay operations still need definition-level validation. Operations that mutate a custom-system resource/field should expose or resolve their `systemId`, validate that the system exists in the active runtime config, and validate that it is enabled for the target character before mutation.
+The next custom-system live-state boundary is custom abilities. Ability creation/removal, custom ability fields, learned/prepared state, usage counters and activation currently need semantic Session Server operations rather than generic character mutation.
 
-After that boundary is in place, server-side validation can be expanded from ownership/definition existence into rule-specific constraints such as resource ranges, editable fields, automatic-only fields and ability acquisition restrictions without loading the full Creation document.
+Those operations should reuse the same `validateRuntimeCustomSystemAccess()` boundary, then delegate rule enforcement to the existing custom-system ability/acquisition/activation helpers. Ability activation may also touch custom resources, HP, conditions or other character state, so its reverse snapshot should capture every affected domain while still producing one aggregate semantic log record.
