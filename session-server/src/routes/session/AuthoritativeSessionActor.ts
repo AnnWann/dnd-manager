@@ -15,6 +15,10 @@ import {
   visibleRuntimeConfigSnapshot,
 } from "./runtimeConfigAccess";
 import {
+  broadcastAllVisibleCharacterSnapshots,
+  refreshAllConnectionVisibility,
+} from "./visibilityDelivery";
+import {
   commitSessionUndo,
   createSessionLogRecord,
   readSessionLog,
@@ -178,7 +182,10 @@ export class SessionActor extends ComposedSessionActor {
 
     if (!current || snapshot.creationRevision > current.creationRevision) {
       await this.ctx.storage.put(RUNTIME_CONFIG_STATE_KEY, structuredClone(snapshot));
-      broadcastRuntimeConfig(this.ctx.getWebSockets(), snapshot);
+      const sockets = this.ctx.getWebSockets();
+      refreshAllConnectionVisibility(sockets, snapshot);
+      broadcastRuntimeConfig(sockets, snapshot);
+      await broadcastAllVisibleCharacterSnapshots(this.ctx.storage, sockets);
       return;
     }
 
