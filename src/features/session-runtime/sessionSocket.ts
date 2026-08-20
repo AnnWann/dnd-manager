@@ -14,6 +14,7 @@ import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
 import type { SessionProficiencyClientMessage } from "./proficiencySessionProtocol"
 import type { SessionRaceClientMessage } from "./raceSessionProtocol"
 import type { SessionProfileClientMessage } from "./profileSessionProtocol"
+import type { SessionCustomSystemClientMessage } from "./customSystemSessionProtocol"
 import {
   parseCharacterLifecycleServerMessage,
   type SessionCharacterLifecycleClientMessage,
@@ -93,6 +94,7 @@ export class SessionSocket {
     | SessionProfileClientMessage
     | SessionCharacterLifecycleClientMessage
     | SessionRuntimeConfigClientMessage
+    | SessionCustomSystemClientMessage
     | { type: "session.magic.operation"; operation: SessionMagicOperation }
     | { type: "session.equipment.operation"; operation: SessionEquipmentOperation }
   ): boolean {
