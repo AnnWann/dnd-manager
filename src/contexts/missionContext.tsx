@@ -258,9 +258,11 @@ export function SessionMissionAuthorityProvider({ children }: { children: ReactN
   if (!seed) throw new Error("SessionMissionAuthorityProvider must be used inside MissionProvider")
   if (!runtime) return <>{children}</>
 
+  const sessionRuntime = runtime
+
   function addMission(mission: Mission) {
-    if (runtime.role !== "MASTER") return
-    runtime.dispatchMissionOperation({
+    if (sessionRuntime.role !== "MASTER") return
+    sessionRuntime.dispatchMissionOperation({
       type: "mission.add",
       characterId: "session",
       mission: normalizeMission(mission),
@@ -268,10 +270,10 @@ export function SessionMissionAuthorityProvider({ children }: { children: ReactN
   }
 
   function updateMission(missionId: string, updater: (mission: Mission) => Mission) {
-    if (runtime.role !== "MASTER") return
+    if (sessionRuntime.role !== "MASTER") return
     const current = missions.find((mission) => mission.id === missionId)
     if (!current) return
-    runtime.dispatchMissionOperation({
+    sessionRuntime.dispatchMissionOperation({
       type: "mission.update",
       characterId: "session",
       missionId,
@@ -284,12 +286,12 @@ export function SessionMissionAuthorityProvider({ children }: { children: ReactN
   }
 
   function deleteMission(missionId: string) {
-    if (runtime.role !== "MASTER") return
-    runtime.dispatchMissionOperation({ type: "mission.delete", characterId: "session", missionId })
+    if (sessionRuntime.role !== "MASTER") return
+    sessionRuntime.dispatchMissionOperation({ type: "mission.delete", characterId: "session", missionId })
   }
 
   function moveMission(missionId: string, status: MissionStatus) {
-    runtime.dispatchMissionOperation({
+    sessionRuntime.dispatchMissionOperation({
       type: "mission.status.set",
       characterId: "session",
       missionId,
@@ -298,7 +300,7 @@ export function SessionMissionAuthorityProvider({ children }: { children: ReactN
   }
 
   function toggleObjective(missionId: string, objectiveId: string) {
-    runtime.dispatchMissionOperation({
+    sessionRuntime.dispatchMissionOperation({
       type: "mission.objective.toggle",
       characterId: "session",
       missionId,
@@ -309,7 +311,7 @@ export function SessionMissionAuthorityProvider({ children }: { children: ReactN
   return (
     <MissionContext.Provider value={{
       missions,
-      canManageMissions: runtime.role === "MASTER",
+      canManageMissions: sessionRuntime.role === "MASTER",
       addMission,
       updateMission,
       deleteMission,
