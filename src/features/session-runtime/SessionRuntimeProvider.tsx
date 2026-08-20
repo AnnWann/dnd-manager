@@ -40,6 +40,7 @@ import type {
 import type { Itemmable } from "../../models/items/item"
 import type { Mission } from "../../models/missions/Mission"
 import type { InitiativeSession } from "../../models/initiative/Initiative"
+import type { SessionRuntimeConfigSnapshot } from "../../shared/session-runtime/sessionRuntimeConfig"
 import type {
   SessionAuthoritativeOperation,
   SessionCondition,
@@ -57,6 +58,13 @@ import type {
 const CONCENTRATION_TAG = "dnd-manager:concentrating"
 const MAX_SESSION_LOGS_IN_MEMORY = 100
 
+type OptionalViteImportMeta = ImportMeta & {
+  env?: {
+    DEV?: boolean
+    VITE_SESSION_SERVER_URL?: string
+  }
+}
+
 export type SessionRuntimeContextValue = {
   status: SessionRuntimeStatus
   sessionId: string
@@ -64,6 +72,7 @@ export type SessionRuntimeContextValue = {
   role: SessionRuntimeRole
   presence: SessionRuntimePresenceUser[]
   lastHeartbeatAckAt: number | null
+  runtimeConfigSnapshot: SessionRuntimeConfigSnapshot | null
   hpByCharacterId: Readonly<Record<string, SessionHpState>>
   conditionsByCharacterId: Readonly<Record<string, SessionConditionsState>>
   abilitiesByCharacterId: Readonly<Record<string, SessionAbilityState>>
@@ -72,6 +81,7 @@ export type SessionRuntimeContextValue = {
   missionState: SessionMissionState | null
   initiativeState: SessionInitiativeState | null
   hpLog: SessionLogRecord[]
+  publishRuntimeConfig: (snapshot: SessionRuntimeConfigSnapshot) => boolean
   initializeAbilities: (characters: SessionAbilitySeed[]) => boolean
   initializeHp: (characters: SessionHpSeed[]) => boolean
   initializeConditions: (characters: SessionConditionSeed[]) => boolean
@@ -107,9 +117,10 @@ function getOrCreateClientId(sessionId: string): string {
 }
 
 function resolveSessionServerUrl(): string {
-  const configured = import.meta.env.VITE_SESSION_SERVER_URL?.trim()
+  const viteEnv = (import.meta as OptionalViteImportMeta).env
+  const configured = viteEnv?.VITE_SESSION_SERVER_URL?.trim()
   if (configured) return configured
-  if (import.meta.env.DEV) return "http://localhost:8787"
+  if (viteEnv?.DEV === true) return "http://localhost:8787"
   return ""
 }
 
@@ -133,6 +144,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const [status, setStatus] = useState<SessionRuntimeStatus>("disconnected")
   const [presence, setPresence] = useState<SessionRuntimePresenceUser[]>([])
   const [lastHeartbeatAckAt, setLastHeartbeatAckAt] = useState<number | null>(null)
+  const [runtimeConfigSnapshot, setRuntimeConfigSnapshot] = useState<SessionRuntimeConfigSnapshot | null>(null)
   const [hpByCharacterId, setHpByCharacterId] = useState<Record<string, SessionHpState>>({})
   const [conditionsByCharacterId, setConditionsByCharacterId] = useState<Record<string, SessionConditionsState>>({})
   const [abilitiesByCharacterId, setAbilitiesByCharacterId] = useState<Record<string, SessionAbilityState>>({})
@@ -148,6 +160,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   useEffect(() => {
     setPresence([])
     setLastHeartbeatAckAt(null)
+    setRuntimeConfigSnapshot(null)
     setHpByCharacterId({})
     setConditionsByCharacterId({})
     setAbilitiesByCharacterId({})
@@ -171,6 +184,10 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
       clientId,
       onStatusChange: setStatus,
       onMessage: (message) => {
+        if (message.type === "session.config.snapshot") {
+          setRuntimeConfigSnapshot(message.snapshot)
+          return
+        }
         if (message.type === "session.presence") { setPresence(message.users); return }
         if (message.type === "session.heartbeat.ack") { setLastHeartbeatAckAt(Date.now()); return }
         if (message.type === "session.hp.snapshot") {
@@ -260,6 +277,8 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     }
   }, [baseUrl, clientId, role, sessionId, userId])
 
+  const publishRuntimeConfig = useCallback((snapshot: SessionRuntimeConfigSnapshot) =>
+    socketRef.current?.send({ type: "session.config.publish", snapshot }) ?? false, [])
   const initializeHp = useCallback((characters: SessionHpSeed[]) =>
     socketRef.current?.send({ type: "session.hp.initialize", characters }) ?? false, [])
   const initializeConditions = useCallback((characters: SessionConditionSeed[]) =>
@@ -333,8 +352,9 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     socketRef.current?.send({ type: "session.log.undo", logId }) ?? false, [])
 
   const value = useMemo<SessionRuntimeContextValue>(() => ({
-    status, sessionId, clientId, role, presence, lastHeartbeatAckAt,
+    status, sessionId, clientId, role, presence, lastHeartbeatAckAt, runtimeConfigSnapshot,
     hpByCharacterId, conditionsByCharacterId, abilitiesByCharacterId, sessionCharactersById, inventoryState, missionState, initiativeState, hpLog,
+    publishRuntimeConfig,
     initializeHp, initializeConditions, initializeAbilities, initializeInventory, initializeMissions, initializeInitiative,
     dispatchSheetOperation, dispatchHpOperation, dispatchConditionOperation,
     dispatchConcentrationOperation, dispatchAbilityOperation, dispatchMagicOperation,
@@ -346,10 +366,15 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     dispatchEquipmentOperation, dispatchHpOperation, dispatchInitiativeOperation, dispatchInventoryOperation, dispatchMagicOperation, dispatchMissionOperation,
     dispatchProficiencyOperation, dispatchProfileOperation, dispatchRaceOperation, dispatchSheetOperation,
     hpByCharacterId, hpLog, initializeAbilities, initializeConditions, initializeHp, initializeInitiative, initializeInventory, initializeMissions,
-    initiativeState, inventoryState, lastHeartbeatAckAt, missionState, presence, role, sessionCharactersById, sessionId, status, undoLog,
+    initiativeState, inventoryState, lastHeartbeatAckAt, missionState, presence, publishRuntimeConfig, role, runtimeConfigSnapshot,
+    sessionCharactersById, sessionId, status, undoLog,
   ])
 
   return <SessionRuntimeContext.Provider value={value}>{children}</SessionRuntimeContext.Provider>
+}
+
+export function useOptionalSessionRuntime(): SessionRuntimeContextValue | null {
+  return useContext(SessionRuntimeContext)
 }
 
 function mergeSessionLogs(current: SessionLogRecord[], incoming: SessionLogRecord[]): SessionLogRecord[] {
