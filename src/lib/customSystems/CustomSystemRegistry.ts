@@ -1,10 +1,13 @@
 import { useSyncExternalStore } from 'react'
-import { useOptionalCreationEditor } from '../../features/creation/CreationEditorProvider'
 import type { CustomAbilityTypeDefinition } from '../../models/customSystems/CustomAbilityDefinition'
 import type { CustomFieldDefinition } from '../../models/customSystems/CustomFieldDefinition'
 import type { CustomResourceDefinition } from '../../models/customSystems/CustomResourceDefinition'
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
 import './CharacterTemplateCustomSystemsPatch'
+import {
+  getCreationCustomSystemOverride,
+  subscribeCreationCustomSystemOverride,
+} from './creationCustomSystemsBridge'
 import { configureCustomFormulaRuntime } from './CustomFormulaRuntimePatch'
 import { configureCustomNativeStatOverrides } from './CustomNativeStatOverrides'
 
@@ -60,7 +63,6 @@ export function getCustomSystemDefinitions(): CustomSystemDefinition[] {
 }
 
 export function useCustomSystemDefinitions(): CustomSystemDefinition[] {
-  const editor = useOptionalCreationEditor()
   const runtimeDefinitions = useSyncExternalStore(
     (listener) => {
       listeners.add(listener)
@@ -69,8 +71,13 @@ export function useCustomSystemDefinitions(): CustomSystemDefinition[] {
     getCustomSystemDefinitions,
     getCustomSystemDefinitions,
   )
+  const creationDefinitions = useSyncExternalStore(
+    subscribeCreationCustomSystemOverride,
+    getCreationCustomSystemOverride,
+    getCreationCustomSystemOverride,
+  )
 
-  return editor?.draft?.customSystems ?? runtimeDefinitions
+  return creationDefinitions ?? runtimeDefinitions
 }
 
 /**
