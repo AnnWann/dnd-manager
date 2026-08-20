@@ -122,18 +122,34 @@ export type SessionHpSeed = Omit<SessionHpState, "revision" | "hitDice" | "stats
 export type SessionHpOperation =
   | { type: "character.hp.set"; characterId: string; value: number }
   | { type: "character.hp.temporary.set"; characterId: string; value: number }
-  | { type: "character.hp.max.set"; characterId: string; value: number }
+  | { type: "character.hp.temporary.add"; characterId: string; amount: number }
   | { type: "character.hp.damage"; characterId: string; amount: number; damageType?: string; source?: string; requiresConcentrationCheck?: boolean; concentrationDc?: number; concentrationSource?: string }
   | { type: "character.hp.heal"; characterId: string; amount: number; source?: string }
-  | { type: "character.hp.hitDice.spend"; characterId: string; die: SessionDieSides; amount: number }
-  | { type: "character.hp.hitDice.restore"; characterId: string; die: SessionDieSides; amount: number }
-  | { type: "character.stats.exhaustion.set"; characterId: string; value: number }
-  | { type: "character.stats.inspiration.set"; characterId: string; value: boolean }
-  | { type: "character.stats.experience.set"; characterId: string; value: number }
-  | { type: "character.stats.adjustment.set"; characterId: string; stat: "armorClassAdjustment" | "initiativeAdjustment" | "mobilityAdjustment" | "passivePerceptionAdjustment"; value: number }
-  | { type: "character.attribute.set"; characterId: string; attribute: SessionAttribute; value: number }
-  | { type: "character.savingThrow.set"; characterId: string; attribute: SessionAttribute; proficient: boolean }
-  | { type: "character.skill.set"; characterId: string; skill: SessionSkill; proficiency: SessionSkillProficiency };
+  | { type: "character.hp.max.set"; characterId: string; value: number }
+  | { type: "character.hp.currentMax.adjust"; characterId: string; amount: number }
+  | { type: "character.hp.currentMax.restore"; characterId: string };
+
+export type SessionHitDiceOperation =
+  | { type: "character.hitDice.use"; characterId: string; side: SessionDieSides; amount: number }
+  | { type: "character.hitDice.recover"; characterId: string; side: SessionDieSides; amount: number }
+  | { type: "character.hitDice.add"; characterId: string; side: SessionDieSides; amount: number }
+  | { type: "character.hitDice.remove"; characterId: string; side: SessionDieSides };
+
+export type SessionCalculatedStatOperation =
+  | { type: "character.stat.armorClass.set"; characterId: string; value: number; calculatedValue: number }
+  | { type: "character.stat.initiative.set"; characterId: string; value: number; calculatedValue: number }
+  | { type: "character.stat.mobility.set"; characterId: string; value: number; calculatedValue: number }
+  | { type: "character.stat.passivePerception.set"; characterId: string; value: number; calculatedValue: number };
+
+export type SessionSimpleStatOperation =
+  | { type: "character.stat.exhaustion.set"; characterId: string; value: number }
+  | { type: "character.stat.inspiration.set"; characterId: string; value: boolean }
+  | { type: "character.stat.experience.set"; characterId: string; value: number };
+
+export type SessionStatOperation = SessionCalculatedStatOperation | SessionSimpleStatOperation;
+export type SessionAttributeOperation = { type: "character.attribute.set"; characterId: string; attribute: SessionAttribute; value: number };
+export type SessionSavingThrowOperation = { type: "character.savingThrow.set"; characterId: string; attribute: SessionAttribute; proficient: boolean };
+export type SessionSkillOperation = { type: "character.skill.set"; characterId: string; skill: SessionSkill; proficiency: SessionSkillProficiency };
 
 export type SessionRestOperation =
   | {
@@ -146,7 +162,7 @@ export type SessionRestOperation =
       type: "character.rest.long";
       characterId: string;
       selection: Array<{ itemId: string; portions: number }>;
-      recovery?: "full" | "partial";
+      recovery: "full" | "partial";
     };
 
 export type SessionConditionOperation =
@@ -156,9 +172,43 @@ export type SessionConditionOperation =
 
 export type SessionConcentrationOperation =
   | { type: "character.concentration.start"; characterId: string; spellIndex: string; spellName: string }
-  | { type: "character.concentration.end"; characterId: string; reason: "manual" | "failed-save" | "replaced" };
+  | { type: "character.concentration.end"; characterId: string; reason?: "manual" | "failed-save" };
 
-export type SessionAuthoritativeOperation = SessionHpOperation | SessionRestOperation;
+export type SessionConditionReverseOperation =
+  | { type: "character.condition.delete"; characterId: string; conditionId: string }
+  | { type: "character.condition.restore"; characterId: string; condition: SessionCondition };
+
+export type SessionConcentrationReverseOperation = {
+  type: "character.concentration.restore";
+  characterId: string;
+  conditions: SessionCondition[];
+};
+
+export type SessionReverseOperation =
+  | { type: "character.hp.restore"; characterId: string; hp: SessionHpState }
+  | { type: "character.stat.armorClass.restore"; characterId: string; adjustment: number }
+  | { type: "character.stat.initiative.restore"; characterId: string; adjustment: number }
+  | { type: "character.stat.mobility.restore"; characterId: string; adjustment: number }
+  | { type: "character.stat.passivePerception.restore"; characterId: string; adjustment: number }
+  | { type: "character.stat.exhaustion.restore"; characterId: string; value: number }
+  | { type: "character.stat.inspiration.restore"; characterId: string; value: boolean }
+  | { type: "character.stat.experience.restore"; characterId: string; value: number }
+  | { type: "character.attribute.restore"; characterId: string; attribute: SessionAttribute; value: number }
+  | { type: "character.savingThrow.restore"; characterId: string; attribute: SessionAttribute; proficient: boolean }
+  | { type: "character.skill.restore"; characterId: string; skill: SessionSkill; proficiency: SessionSkillProficiency }
+  | SessionConditionReverseOperation
+  | SessionConcentrationReverseOperation
+  | { type: "character.rest.restore"; characterId: string; snapshot: { hp: SessionHpState; stats: SessionStatsState } };
+
+export type SessionAuthoritativeOperation =
+  | SessionHpOperation
+  | SessionHitDiceOperation
+  | SessionStatOperation
+  | SessionAttributeOperation
+  | SessionSavingThrowOperation
+  | SessionSkillOperation
+  | SessionRestOperation;
+
 export type SessionLoggedOperation = SessionAuthoritativeOperation | SessionConditionOperation | SessionConcentrationOperation;
 
 export type SessionHpLogRecord = {
@@ -166,7 +216,7 @@ export type SessionHpLogRecord = {
   createdAt: string;
   actorId: string;
   operation: SessionLoggedOperation | { type: "character.hp.undo"; characterId: string; sourceLogId: string };
-  reverseOperation: Record<string, unknown> & { type: string; characterId: string };
+  reverseOperation: SessionReverseOperation;
   affectedScopes?: string[];
   undoneAt?: string;
   undoneBy?: string;
@@ -219,7 +269,7 @@ export function parseClientSessionMessage(raw: string): ClientSessionMessage | n
         ? { type: value.type, characters: value.characters }
         : null;
     case "session.hp.operation":
-      return isHpOperation(value.operation)
+      return isAuthoritativeOperation(value.operation)
         ? { type: value.type, operation: value.operation }
         : null;
     case "session.conditions.initialize":
@@ -232,7 +282,7 @@ export function parseClientSessionMessage(raw: string): ClientSessionMessage | n
         : null;
     case "session.sheet.operation": {
       if (!isRecord(value.operation)) return null;
-      const route = routeForSheetOperation(value.operation as any);
+      const route = routeForSheetOperation(value.operation as SessionLoggedOperation);
       return route
         ? { type: value.type, route, operation: value.operation as SessionLoggedOperation }
         : null;
@@ -264,37 +314,52 @@ function isHpSeed(value: unknown): value is SessionHpSeed {
     && (value.skills === undefined || isRecord(value.skills));
 }
 
-function isHpOperation(value: unknown): value is SessionAuthoritativeOperation {
+function isAuthoritativeOperation(value: unknown): value is SessionAuthoritativeOperation {
   if (!isRecord(value) || !nonEmpty(value.type) || !nonEmpty(value.characterId)) return false;
   switch (value.type) {
     case "character.hp.set":
     case "character.hp.temporary.set":
     case "character.hp.max.set":
-      return integer(value.value);
+      return nonNegativeInteger(value.value);
+    case "character.hp.temporary.add":
     case "character.hp.damage":
     case "character.hp.heal":
       return positiveInteger(value.amount);
-    case "character.hp.hitDice.spend":
-    case "character.hp.hitDice.restore":
-      return dieSides(value.die) && positiveInteger(value.amount);
-    case "character.stats.exhaustion.set":
-    case "character.stats.experience.set":
-      return integer(value.value);
-    case "character.stats.inspiration.set":
+    case "character.hp.currentMax.adjust":
+      return typeof value.amount === "number" && Number.isInteger(value.amount) && value.amount !== 0;
+    case "character.hp.currentMax.restore":
+      return true;
+    case "character.hitDice.use":
+    case "character.hitDice.recover":
+    case "character.hitDice.add":
+      return dieSides(value.side) && positiveInteger(value.amount);
+    case "character.hitDice.remove":
+      return dieSides(value.side);
+    case "character.stat.armorClass.set":
+    case "character.stat.initiative.set":
+    case "character.stat.mobility.set":
+    case "character.stat.passivePerception.set":
+      return typeof value.value === "number"
+        && Number.isFinite(value.value)
+        && typeof value.calculatedValue === "number"
+        && Number.isFinite(value.calculatedValue);
+    case "character.stat.exhaustion.set":
+    case "character.stat.experience.set":
+      return nonNegativeInteger(value.value);
+    case "character.stat.inspiration.set":
       return typeof value.value === "boolean";
-    case "character.stats.adjustment.set":
-      return (value.stat === "armorClassAdjustment" || value.stat === "initiativeAdjustment" || value.stat === "mobilityAdjustment" || value.stat === "passivePerceptionAdjustment")
-        && Number.isFinite(Number(value.value));
     case "character.attribute.set":
-      return attribute(value.attribute) && Number.isFinite(Number(value.value));
+      return attribute(value.attribute) && typeof value.value === "number" && Number.isInteger(value.value);
     case "character.savingThrow.set":
       return attribute(value.attribute) && typeof value.proficient === "boolean";
     case "character.skill.set":
       return skill(value.skill) && skillProficiency(value.proficiency);
     case "character.rest.short":
-      return integer(value.healing) && isRecord(value.hitDiceConsumption);
+      return nonNegativeInteger(value.healing) && isRecord(value.hitDiceConsumption);
     case "character.rest.long":
-      return Array.isArray(value.selection);
+      return (value.recovery === "full" || value.recovery === "partial")
+        && Array.isArray(value.selection)
+        && value.selection.every(isLongRestSelection);
     default:
       return false;
   }
@@ -312,7 +377,7 @@ function isConcentrationOperation(value: unknown): value is SessionConcentration
   if (!isRecord(value) || !nonEmpty(value.type) || !nonEmpty(value.characterId)) return false;
   if (value.type === "character.concentration.start") return nonEmpty(value.spellIndex) && nonEmpty(value.spellName);
   return value.type === "character.concentration.end"
-    && (value.reason === "manual" || value.reason === "failed-save" || value.reason === "replaced");
+    && (value.reason === undefined || value.reason === "manual" || value.reason === "failed-save");
 }
 
 function isConditionSeed(value: unknown): value is SessionConditionSeed {
@@ -340,20 +405,36 @@ function isStatsState(value: unknown): value is SessionStatsState {
     && Number.isFinite(Number(value.initiativeAdjustment))
     && Number.isFinite(Number(value.mobilityAdjustment))
     && Number.isFinite(Number(value.passivePerceptionAdjustment))
-    && integer(value.exhaustion)
+    && nonNegativeInteger(value.exhaustion)
     && typeof value.inspiration === "boolean"
-    && integer(value.experience);
+    && nonNegativeInteger(value.experience);
 }
 
 function isAttributesState(value: unknown): value is SessionAttributesState {
   return isRecord(value) && (["str", "dex", "con", "int", "wis", "cha"] as const).every((key) => Number.isFinite(Number(value[key])));
 }
 
+function isLongRestSelection(value: unknown): boolean {
+  return isRecord(value)
+    && nonEmpty(value.itemId)
+    && typeof value.portions === "number"
+    && Number.isFinite(value.portions)
+    && value.portions > 0;
+}
+
 function nonEmpty(value: unknown): value is string { return typeof value === "string" && value.trim().length > 0; }
-function integer(value: unknown): value is number { return typeof value === "number" && Number.isInteger(value) && value >= 0; }
-function positiveInteger(value: unknown): value is number { return integer(value) && value > 0; }
+function integer(value: unknown): value is number { return typeof value === "number" && Number.isInteger(value); }
+function nonNegativeInteger(value: unknown): value is number { return integer(value) && value >= 0; }
+function positiveInteger(value: unknown): value is number { return nonNegativeInteger(value) && value > 0; }
 function attribute(value: unknown): value is SessionAttribute { return value === "str" || value === "dex" || value === "con" || value === "int" || value === "wis" || value === "cha"; }
 function dieSides(value: unknown): value is SessionDieSides { return typeof value === "string" && /^d(2|3|4|6|8|10|12|20|100)$/.test(value); }
-function skill(value: unknown): value is SessionSkill { return typeof value === "string"; }
+function skill(value: unknown): value is SessionSkill {
+  return typeof value === "string" && new Set<SessionSkill>([
+    "acrobatics", "arcana", "athletics", "animalHandling", "performance",
+    "deception", "stealth", "history", "intimidation", "insight",
+    "investigation", "medicine", "nature", "perception", "persuasion",
+    "sleightOfHand", "religion", "survival",
+  ]).has(value as SessionSkill);
+}
 function skillProficiency(value: unknown): value is SessionSkillProficiency { return value === "none" || value === "proficient" || value === "expertise"; }
 function isRecord(value: unknown): value is Record<string, any> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
