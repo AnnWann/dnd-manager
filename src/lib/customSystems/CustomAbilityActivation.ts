@@ -21,8 +21,10 @@ import type {
   CustomResourceState,
   CustomSystemDefinition,
 } from '../../models/customSystems/CustomSystemDefinition'
+import { runCustomSystemAutomations } from './CustomAutomationRuntime'
 import { evaluateCustomFormula } from './CustomFormulaEngineWithCharacter'
 import { getCustomAbilityAvailability } from './CustomAbilityManagement'
+import { resolveExplicitTableEventsForAbility } from './CustomSystemEventTriggers'
 
 export function activateCustomAbility(
   character: CharacterTemplate,
@@ -31,6 +33,12 @@ export function activateCustomAbility(
   abilityId: string,
 ): CharacterTemplate {
   const originalStates = (character.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
+  const explicitEvents = resolveExplicitTableEventsForAbility(
+    definitions,
+    originalStates,
+    sourceSystemId,
+    abilityId,
+  )
   const states = originalStates.map(cloneState)
   const sourceState = requireState(states, sourceSystemId)
   const sourceDefinition = requireDefinition(definitions, sourceSystemId)
@@ -77,7 +85,20 @@ export function activateCustomAbility(
       : entry,
   )
 
-  return nextCharacter.withSheet('customSystems', states)
+  nextCharacter = nextCharacter.withSheet('customSystems', states)
+
+  // Roll/table-result events are not inferred from sheet state. Activating a
+  // custom ability whose saved trigger is onHit/onCrit is the user's explicit
+  // declaration that the corresponding event occurred at the physical table.
+  for (const event of explicitEvents) {
+    nextCharacter = runCustomSystemAutomations(
+      nextCharacter,
+      definitions,
+      event,
+    ).character
+  }
+
+  return nextCharacter
 }
 
 function mergeActivation(base: CustomAbilityActivationDefinition | undefined, preset: CustomPredefinedAbilityDefinition | undefined): CustomAbilityActivationDefinition {
