@@ -95,6 +95,29 @@ It deliberately excludes:
 
 The Session Server will eventually cache this projection with a Creation revision. The database remains authoritative for `CreationState`; the Session Server does not become a second owner of Creation configuration.
 
+## Revisioned editor migration status
+
+The Creation route now owns one `CreationEditorProvider` for the entire `creation/*` subtree. It loads the canonical snapshot once and keeps separate `base` and `draft` copies plus `baseRevision`.
+
+The first migrated draft domains are:
+
+- character configuration from `creation/settings`;
+- the session item compendium from `creation/items-compendium`.
+
+Editing those domains performs no persistence request. Membership and role administration remains immediate because it is explicitly outside `CreationState`.
+
+The editor exposes explicit Save and Discard controls. Save sends one PATCH containing the draft and its `baseRevision`. The server rejects stale saves with `409 CREATION_REVISION_CONFLICT`.
+
+The PATCH transaction currently persists only the domains whose editor write paths have actually migrated: character configuration and item compendium. Character persistence merges the Creation-owned fields into the latest stored character JSON so live HP, resources, inventory and other gameplay state are not replaced by a stale editor snapshot. The campaign revision increments only when the transaction succeeds.
+
+The remaining Creation-owned domains continue to use their legacy stores until their editor routes are migrated:
+
+- creature compendium;
+- custom-system definitions;
+- campaign spell definitions.
+
+Those domains are intentionally not rewritten by the current PATCH, preventing an old Creation draft from overwriting changes still made through their legacy providers.
+
 ## Migration consequence
 
-The next phase should not try to replace every existing endpoint at once. It should add the canonical revisioned Creation snapshot API and make the editor consume that snapshot. Once reads and draft semantics are stable, the old independent write paths can be removed domain by domain.
+Continue moving the remaining Creation-owned domains behind `CreationEditorProvider` one at a time. Only after a domain mutates the shared draft should the atomic PATCH become responsible for persisting that domain. Once all Creation-owned domains have moved, the old independent write paths can be removed entirely and the saved `CreationState` revision can be projected to the Session Server.
