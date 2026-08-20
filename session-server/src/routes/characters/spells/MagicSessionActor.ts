@@ -29,6 +29,10 @@ import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
 import type { SessionConditionsState, SessionConnection, SessionHpState } from "../../session/protocol";
 import type { SessionAbilityState } from "../abilities/abilityProtocol";
 import {
+  findRuntimeSpell,
+  readRuntimeConfig,
+} from "../../session/runtimeConfigAccess";
+import {
   commitSessionMutation,
   createSessionLogRecord,
   readSessionLog,
@@ -63,10 +67,11 @@ export class SessionActor extends AbilitySessionActor {
     connection: SessionConnection,
     operation: SessionMagicOperation,
   ): Promise<void> {
-    const [abilityState, hpState, conditionsState, log] = await Promise.all([
+    const [abilityState, hpState, conditionsState, runtimeConfig, log] = await Promise.all([
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
       this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY).then((value) => value ?? {}),
       this.ctx.storage.get<Record<string, SessionConditionsState>>(CONDITIONS_STATE_KEY).then((value) => value ?? {}),
+      readRuntimeConfig(this.ctx.storage),
       readSessionLog(this.ctx.storage),
     ]);
 
@@ -80,6 +85,21 @@ export class SessionActor extends AbilitySessionActor {
     if (connection.role !== "MASTER" && hp.ownerUserId !== connection.userId) {
       sendError(webSocket, "CHARACTER_ACCESS_DENIED", "You cannot change magic for this character.");
       return;
+    }
+
+    if (operation.type === "character.spell.add") {
+      const spellIndex = typeof operation.spellEntry.index === "string"
+        ? operation.spellEntry.index.trim()
+        : "";
+      const isHomebrew = operation.spellEntry.homebrew === true;
+      if (isHomebrew && (!spellIndex || !findRuntimeSpell(runtimeConfig, spellIndex))) {
+        sendError(
+          webSocket,
+          "HOMEBREW_SPELL_NOT_IN_CREATION",
+          "This homebrew spell is not part of the active saved Creation configuration.",
+        );
+        return;
+      }
     }
 
     let current: CharacterTemplate;
