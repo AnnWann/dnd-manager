@@ -178,10 +178,11 @@ enum CampaignMemberStatus {
 }
 
 model Campaign {
-  id          String  @id @default(uuid())
-  name        String
-  description String?
-  inviteCode  String? @unique
+  id               String  @id @default(uuid())
+  name             String
+  description      String?
+  inviteCode       String? @unique
+  creationRevision Int     @default(1)
 
   ownerId String
   owner   User   @relation("CampaignOwner", fields: [ownerId], references: [id], onDelete: Cascade)
