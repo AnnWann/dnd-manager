@@ -68,8 +68,20 @@ export type CreationItemCompendiumEntry = {
   visibility: CreationItemCompendiumVisibility
 }
 
+export type CreationManagedDomains = {
+  spells: boolean
+  creatureCompendium: boolean
+  customSystems: boolean
+}
+
 export type CreationSnapshot = {
   revision: number
   updatedAt: string
   data: CreationState
+  /**
+   * Identifies domains that have already crossed from their legacy stores into
+   * the canonical Creation persistence. This prevents intentionally empty
+   * canonical domains from being re-seeded from old local/provider data.
+   */
+  managedDomains?: CreationManagedDomains
 }
