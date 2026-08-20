@@ -26,6 +26,20 @@ export function AuthView() {
       ? requestedReturnTo
       : "/user/characters"
 
+  async function confirmSession(): Promise<boolean> {
+    const { data, error } = await authClient.getSession()
+
+    if (error || !data?.user) {
+      setMessage(
+        error?.message ??
+          "A autenticação foi aceita, mas a sessão não pôde ser carregada.",
+      )
+      return false
+    }
+
+    return true
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setMessage("")
@@ -44,6 +58,8 @@ export function AuthView() {
           return
         }
 
+        if (!(await confirmSession())) return
+
         navigate(returnTo, { replace: true })
         return
       }
@@ -57,6 +73,8 @@ export function AuthView() {
         setMessage(error.message ?? "Não foi possível entrar.")
         return
       }
+
+      if (!(await confirmSession())) return
 
       navigate(returnTo, { replace: true })
     } catch {
