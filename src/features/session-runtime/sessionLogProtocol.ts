@@ -65,6 +65,8 @@ export type SessionInitiativeReverseOperation = {
   characterId: "session"
   affectedScopes?: string[]
   snapshot: SessionInitiativeState
+  /** Character runtime snapshots changed by initiative-triggered automations. */
+  abilities?: Record<string, SessionAbilityState>
 }
 
 export type SessionProficiencyReverseOperation = {
