@@ -25,6 +25,7 @@ const UserSpellsTab = lazy(() => import("./views/user/UserSpellsTab").then((modu
 const UserCampaignsRouteView = lazy(() => import("./views/user/UserCampaignsRouteView").then((module) => ({ default: module.UserCampaignsRouteView })))
 const UserMagicRouteBoundary = lazy(() => import("./features/magic/UserMagicRouteBoundary").then((module) => ({ default: module.UserMagicRouteBoundary })))
 const SessionRouteOutlet = lazy(() => import("./features/session-runtime/SessionRouteOutlet").then((module) => ({ default: module.SessionRouteOutlet })))
+const CreationEditorRouteOutlet = lazy(() => import("./features/creation/CreationEditorRouteOutlet").then((module) => ({ default: module.CreationEditorRouteOutlet })))
 const CampaignCharactersView = lazy(() => import("./views/campaign/CampaignCharactersView").then((module) => ({ default: module.CampaignCharactersView })))
 const CharacterIndexView = lazy(() => import("./views/CharacterRouteViews").then((module) => ({ default: module.CharacterIndexView })))
 const CharacterDetailView = lazy(() => import("./views/CharacterRouteViews").then((module) => ({ default: module.CharacterDetailView })))
@@ -96,16 +97,18 @@ export function AppRouter() {
           <Route path="missions" element={<MissionsView />} />
           <Route path="initiative" element={<InitiativeRoleView />} />
 
-          <Route path="creation" element={<Navigate to="settings" replace />} />
-          <Route path="creation/settings" element={<SessionCreationSettingsView />} />
-          <Route path="creation/requests" element={<SessionCreationRequestsView />} />
-          <Route path="creation/homebrew" element={<SessionHomebrewView />} />
-          <Route path="creation/items-compendium" element={<ItemsCompendiumView />} />
-          <Route path="creation/creatures-compendium" element={<CreaturesCompendiumView />} />
-          <Route path="creation/custom-systems" element={<CustomSystemsListView />} />
-          <Route path="creation/custom-systems/:systemId" element={<CustomSystemEditorView />} />
-          <Route path="creation/custom-systems/:systemId/:tab" element={<CustomSystemEditorView />} />
-          <Route path="creation/magic" element={<MagicView />} />
+          <Route path="creation" element={<CreationEditorRouteOutlet />}>
+            <Route index element={<Navigate to="settings" replace />} />
+            <Route path="settings" element={<SessionCreationSettingsView />} />
+            <Route path="requests" element={<SessionCreationRequestsView />} />
+            <Route path="homebrew" element={<SessionHomebrewView />} />
+            <Route path="items-compendium" element={<ItemsCompendiumView />} />
+            <Route path="creatures-compendium" element={<CreaturesCompendiumView />} />
+            <Route path="custom-systems" element={<CustomSystemsListView />} />
+            <Route path="custom-systems/:systemId" element={<CustomSystemEditorView />} />
+            <Route path="custom-systems/:systemId/:tab" element={<CustomSystemEditorView />} />
+            <Route path="magic" element={<MagicView />} />
+          </Route>
 
           <Route path="requests" element={<LegacyCreationRouteRedirect suffix="requests" />} />
           <Route path="homebrew" element={<LegacyCreationRouteRedirect suffix="homebrew" />} />
