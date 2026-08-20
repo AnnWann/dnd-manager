@@ -10,13 +10,19 @@ import {
 } from "./runtimeConfigProtocol";
 import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/session-runtime/sessionRuntimeConfig";
 import {
+  RUNTIME_CONFIG_STATE_KEY,
+  authorizeCharacterMutation,
+  extractOperationCharacterId,
+  readRuntimeConfig,
+} from "./runtimeConfigAccess";
+import {
   commitSessionUndo,
   createSessionLogRecord,
   readSessionLog,
   validateUndoOrdering,
 } from "./sessionLog";
 
-export const RUNTIME_CONFIG_STATE_KEY = "runtime-config-state";
+export { RUNTIME_CONFIG_STATE_KEY } from "./runtimeConfigAccess";
 
 type SharedDomainActor = {
   webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void>;
@@ -59,7 +65,7 @@ export class SessionActor extends ComposedSessionActor {
       const [missions, initiative, runtimeConfig] = await Promise.all([
         readMissionState(this.ctx.storage),
         readInitiativeState(this.ctx.storage),
-        this.readRuntimeConfig(),
+        readRuntimeConfig(this.ctx.storage),
       ]);
       send(socket, { type: "session.missions.snapshot", state: missions });
       send(socket, { type: "session.initiative.snapshot", state: initiative });
@@ -75,6 +81,25 @@ export class SessionActor extends ComposedSessionActor {
     if (runtimeConfig) {
       await this.handleRuntimeConfigPublish(webSocket, runtimeConfig.snapshot);
       return;
+    }
+
+    const connection = readConnection(webSocket);
+    if (!connection) {
+      webSocket.close(1011, "Missing connection attachment");
+      return;
+    }
+
+    const characterId = extractOperationCharacterId(raw);
+    if (characterId) {
+      const authorization = authorizeCharacterMutation(
+        connection,
+        await readRuntimeConfig(this.ctx.storage),
+        characterId,
+      );
+      if (!authorization.ok) {
+        sendError(webSocket, authorization.code, authorization.message);
+        return;
+      }
     }
 
     const undoLogId = parseUndoLogId(raw);
@@ -115,7 +140,7 @@ export class SessionActor extends ComposedSessionActor {
     connection.lastHeartbeatAt = Date.now();
     webSocket.serializeAttachment(connection);
 
-    const current = await this.readRuntimeConfig();
+    const current = await readRuntimeConfig(this.ctx.storage);
     if (current && snapshot.creationRevision < current.creationRevision) {
       sendError(
         webSocket,
@@ -151,12 +176,6 @@ export class SessionActor extends ComposedSessionActor {
 
     // Equal revision + equal content is an idempotent republish after reconnect.
     send(webSocket, { type: "session.config.snapshot", snapshot: current });
-  }
-
-  private async readRuntimeConfig(): Promise<SessionRuntimeConfigSnapshot | null> {
-    return (
-      await this.ctx.storage.get<SessionRuntimeConfigSnapshot>(RUNTIME_CONFIG_STATE_KEY)
-    ) ?? null;
   }
 
   private async sharedUndoType(logId: string): Promise<SharedReverse["type"] | null> {
