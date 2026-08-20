@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { useOptionalCreationEditor } from '../../features/creation/CreationEditorProvider'
 import type { CustomAbilityTypeDefinition } from '../../models/customSystems/CustomAbilityDefinition'
 import type { CustomFieldDefinition } from '../../models/customSystems/CustomFieldDefinition'
 import type { CustomResourceDefinition } from '../../models/customSystems/CustomResourceDefinition'
@@ -59,7 +60,8 @@ export function getCustomSystemDefinitions(): CustomSystemDefinition[] {
 }
 
 export function useCustomSystemDefinitions(): CustomSystemDefinition[] {
-  return useSyncExternalStore(
+  const editor = useOptionalCreationEditor()
+  const runtimeDefinitions = useSyncExternalStore(
     (listener) => {
       listeners.add(listener)
       return () => listeners.delete(listener)
@@ -67,6 +69,8 @@ export function useCustomSystemDefinitions(): CustomSystemDefinition[] {
     getCustomSystemDefinitions,
     getCustomSystemDefinitions,
   )
+
+  return editor?.draft?.customSystems ?? runtimeDefinitions
 }
 
 /**
