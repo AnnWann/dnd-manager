@@ -13,11 +13,16 @@ import {
   saveCreationSnapshot,
 } from "../../api/creation"
 import { getApiStatus } from "../../api/api-client"
+import { setCreationCustomSystemOverride } from "../../lib/customSystems/creationCustomSystemsBridge"
+import {
+  toSessionRuntimeConfig,
+} from "../../shared/session-runtime/sessionRuntimeConfig"
 import type {
   CreationManagedDomains,
   CreationSnapshot,
   CreationState,
 } from "../../shared/creation/creation.types"
+import { useOptionalSessionRuntime } from "../session-runtime/SessionRuntimeProvider"
 
 type CreationEditorStatus = "loading" | "ready" | "error"
 
@@ -53,6 +58,7 @@ export function CreationEditorProvider({
   campaignId: string
   children: ReactNode
 }) {
+  const runtime = useOptionalSessionRuntime()
   const [status, setStatus] = useState<CreationEditorStatus>("loading")
   const [error, setError] = useState("")
   const [base, setBase] = useState<CreationState | null>(null)
@@ -93,6 +99,27 @@ export function CreationEditorProvider({
   useEffect(() => {
     void reload()
   }, [reload])
+
+  useEffect(() => {
+    setCreationCustomSystemOverride(draft?.customSystems ?? null)
+    return () => setCreationCustomSystemOverride(null)
+  }, [draft?.customSystems])
+
+  useEffect(() => {
+    if (
+      runtime?.role !== "MASTER" ||
+      runtime.status !== "connected" ||
+      !base ||
+      baseRevision === null
+    ) {
+      return
+    }
+
+    runtime.publishRuntimeConfig({
+      creationRevision: baseRevision,
+      config: toSessionRuntimeConfig(base),
+    })
+  }, [base, baseRevision, runtime])
 
   const updateDraft = useCallback(
     (updater: (current: CreationState) => CreationState) => {
