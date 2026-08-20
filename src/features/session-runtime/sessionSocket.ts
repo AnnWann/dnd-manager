@@ -33,6 +33,11 @@ import {
   type SessionInitiativeClientMessage,
   type SessionInitiativeServerMessage,
 } from "./initiativeSessionProtocol"
+import {
+  parseRuntimeConfigServerMessage,
+  type SessionRuntimeConfigClientMessage,
+  type SessionRuntimeConfigServerMessage,
+} from "./runtimeConfigSessionProtocol"
 import type { SessionSheetOperationMessage } from "./sheetRoutes"
 
 export type SessionRuntimeStatus = "disconnected" | "connecting" | "connected" | "reconnecting" | "error"
@@ -44,7 +49,16 @@ export type SessionSocketOptions = {
   role: SessionRuntimeRole
   clientId: string
   onStatusChange: (status: SessionRuntimeStatus) => void
-  onMessage: (message: ServerSessionMessage | SessionAbilityServerMessage | SessionInventoryServerMessage | SessionCharacterLifecycleServerMessage | SessionMissionServerMessage | SessionInitiativeServerMessage) => void
+  onMessage: (
+    message:
+      | ServerSessionMessage
+      | SessionAbilityServerMessage
+      | SessionInventoryServerMessage
+      | SessionCharacterLifecycleServerMessage
+      | SessionMissionServerMessage
+      | SessionInitiativeServerMessage
+      | SessionRuntimeConfigServerMessage
+  ) => void
 }
 
 const HEARTBEAT_MIN_MS = 27_000
@@ -78,6 +92,7 @@ export class SessionSocket {
     | SessionRaceClientMessage
     | SessionProfileClientMessage
     | SessionCharacterLifecycleClientMessage
+    | SessionRuntimeConfigClientMessage
     | { type: "session.magic.operation"; operation: SessionMagicOperation }
     | { type: "session.equipment.operation"; operation: SessionEquipmentOperation }
   ): boolean {
@@ -104,11 +119,12 @@ export class SessionSocket {
 
     socket.onmessage = (event) => {
       if (typeof event.data !== "string") return
+      const runtimeConfigMessage = parseRuntimeConfigServerMessage(event.data)
       const lifecycleMessage = parseCharacterLifecycleServerMessage(event.data)
       const inventoryMessage = parseInventoryServerMessage(event.data)
       const missionMessage = parseMissionServerMessage(event.data)
       const initiativeMessage = parseInitiativeServerMessage(event.data)
-      const message = lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? parseAbilityServerMessage(event.data) ?? parseServerSessionMessage(event.data)
+      const message = runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? parseAbilityServerMessage(event.data) ?? parseServerSessionMessage(event.data)
       if (!message) return
       if (message.type === "session.ready") {
         this.hasConnectedOnce = true
