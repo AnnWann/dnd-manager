@@ -52,6 +52,9 @@ const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
 
+type RuntimeConfigSnapshot = NonNullable<Awaited<ReturnType<typeof readRuntimeConfig>>>;
+type AccessError = { ok: false; code: string; message: string };
+
 export class SessionActor extends BaseSessionActor {
   override async webSocketMessage(
     webSocket: WebSocket,
@@ -97,6 +100,7 @@ export class SessionActor extends BaseSessionActor {
       sendError(webSocket, access.code, access.message);
       return;
     }
+    const activeRuntimeConfig = runtimeConfig as RuntimeConfigSnapshot;
     const { definition, installation } = access.value;
 
     const storedAbility = abilityState[operation.characterId];
@@ -135,7 +139,7 @@ export class SessionActor extends BaseSessionActor {
       if (operation.type === "character.customSystem.ability.activate") {
         nextCharacter = activateCustomAbility(
           character,
-          runtimeConfig!.config.customSystems,
+          activeRuntimeConfig.config.customSystems,
           operation.systemId,
           operation.abilityId,
         );
@@ -166,6 +170,19 @@ export class SessionActor extends BaseSessionActor {
         error instanceof Error ? error.message : "The custom-system operation is invalid for the current state.",
       );
       return;
+    }
+
+    if (operation.type === "character.customSystem.ability.activate") {
+      const validation = validateActivationSystemChanges(
+        activeRuntimeConfig,
+        operation.characterId,
+        character,
+        nextCharacter,
+      );
+      if (!validation.ok) {
+        sendError(webSocket, validation.code, validation.message);
+        return;
+      }
     }
 
     if (JSON.stringify(character.toJSON()) === JSON.stringify(nextCharacter.toJSON())) {
@@ -329,6 +346,61 @@ function normalizeAddedAbility(
     ...progress,
     usage,
   };
+}
+
+function validateActivationSystemChanges(
+  runtimeConfig: RuntimeConfigSnapshot,
+  characterId: string,
+  before: CharacterTemplate,
+  after: CharacterTemplate,
+): { ok: true } | AccessError {
+  const beforeStates = before.get("sheet").customSystems ?? [];
+  const afterStates = after.get("sheet").customSystems ?? [];
+  const beforeById = new Map(beforeStates.map((state) => [state.systemId, state]));
+  const afterIds = new Set(afterStates.map((state) => state.systemId));
+
+  if (beforeStates.some((state) => !afterIds.has(state.systemId))) {
+    return {
+      ok: false,
+      code: "CUSTOM_SYSTEM_ACTIVATION_INVALID_STATE_CHANGE",
+      message: "Custom ability activation cannot install or remove custom systems.",
+    };
+  }
+
+  for (const nextState of afterStates) {
+    const previous = beforeById.get(nextState.systemId);
+    if (!previous) {
+      return {
+        ok: false,
+        code: "CUSTOM_SYSTEM_ACTIVATION_INVALID_STATE_CHANGE",
+        message: "Custom ability activation cannot install or remove custom systems.",
+      };
+    }
+    if (JSON.stringify(previous) === JSON.stringify(nextState)) continue;
+
+    const access = validateRuntimeCustomSystemAccess(
+      runtimeConfig,
+      characterId,
+      nextState.systemId,
+    );
+    if (!access.ok) return access;
+    if (!nextState.enabled) {
+      return {
+        ok: false,
+        code: "CUSTOM_SYSTEM_RUNTIME_DISABLED",
+        message: `Custom system “${nextState.systemId}” changed by this activation is disabled at runtime.`,
+      };
+    }
+    if (nextState.systemVersion !== access.value.installation.systemVersion) {
+      return {
+        ok: false,
+        code: "CUSTOM_SYSTEM_RUNTIME_VERSION_MISMATCH",
+        message: `Custom system “${nextState.systemId}” changed by this activation does not match its saved Creation version.`,
+      };
+    }
+  }
+
+  return { ok: true };
 }
 
 function projectActivationHp(
