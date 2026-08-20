@@ -91,48 +91,73 @@ Character mutation authorization is performed before routing into gameplay domai
 - the target character must exist in the active Creation configuration;
 - the PLAYER must match the saved `ownerId` from Creation.
 
-This means authorization no longer depends only on mutable live HP/character snapshots.
-
 Runtime config visibility is participant-specific. MASTER receives every character configuration. A PLAYER receives their own characters plus characters marked `party`; other players' `private` characters and MASTER-only characters are removed from the config snapshot sent to that client.
 
-The same visibility rule applies to live authoritative character state. Each WebSocket attachment stores the character ids visible to that participant for the active Creation revision. HP, conditions, abilities and character-lifecycle snapshots and incremental updates are filtered per recipient before they are written to the socket. Domain actors use a visibility-filtered Durable Object context for outbound broadcasts, so equipment, magic, proficiency, race and profile operations cannot bypass the same boundary when they emit character state.
+The same visibility rule applies to live authoritative character state. Each WebSocket attachment stores the character ids visible to that participant for the active Creation revision. HP, conditions, abilities and character-lifecycle snapshots and incremental updates are filtered per recipient before they are written to the socket.
 
-When a newer Creation revision is accepted, the server recalculates every connection's visible character set and immediately re-sends filtered HP, conditions, abilities and lifecycle snapshots. This is important when a character changes from `party` to `private` or `master`, or is removed from Creation: clients replace their local authoritative maps with the newly filtered snapshots instead of retaining stale character data until reconnect.
+When a newer Creation revision is accepted, the server recalculates every connection's visible character set and immediately re-sends filtered HP, conditions, abilities and lifecycle snapshots.
 
 Homebrew spell installation is validated against Creation. `character.spell.add` with `homebrew: true` is accepted only when its spell index exists in the active saved runtime config. Official spells are intentionally not subject to this lookup because official definitions are not owned by Creation.
 
 ## Custom-system runtime authority
 
-Custom-system field and resource mutations are authoritative. The session workspace derives semantic operations from local UI changes instead of persisting whole-character mutations. The Session Server requires the referenced `systemId` to exist in the active runtime config, requires that exact system/version to be installed and enabled for the target character in Creation, and requires matching enabled live runtime state. It then delegates field/resource validation to the existing `CustomSystemState` rules, including edit permissions, required fields, value constraints, resource min/max rules and manual-adjustment permissions. Accepted mutations produce one semantic log record, an undo snapshot and a visibility-filtered authoritative character update.
+Custom-system field and resource mutations are authoritative. The Session Server requires the referenced `systemId` to exist in the active runtime config, requires that exact system/version to be installed and enabled for the target character in Creation, and requires matching enabled live runtime state.
 
-Custom-system ability live state is authoritative too. Semantic operations cover ability add/remove, custom field edits, learned/prepared state, usage counters and activation. Ability addition does not trust client-supplied acquisition or usage progress: the Session Server resolves the active ability type/preset from saved Creation definitions, initializes learned/prepared state from those rules and resets limited usage from the active definition.
+Custom-system ability live state is authoritative too. Semantic operations cover ability add/remove, custom field edits, learned/prepared state, usage counters and activation. Ability addition does not trust client-supplied acquisition or usage progress: the Session Server resolves the active ability type/preset from saved Creation definitions.
 
-Custom ability activation executes the existing activation rules on the Session Server. It validates availability and usage, applies native/custom resource costs, condition changes and usage consumption, then projects the result into authoritative ability, HP and condition state. All touched state is committed together under one semantic timeline record with one aggregate `character.ability.restore` reverse snapshot, so MASTER undo restores the coupled state instead of producing separate subevents.
+Custom ability activation executes the existing activation rules on the Session Server. It validates availability and usage, applies native/custom resource costs, condition changes and usage consumption, then projects the result into authoritative ability, HP and condition state. All touched state is committed under one semantic timeline record with one aggregate reverse snapshot.
 
-Activation can reference resources belonging to another custom system. Every custom-system state changed by activation is therefore revalidated against saved Creation before commit: the target system must exist, be installed and enabled for the character, and its live state version must match the configured installation version. Activation is not allowed to install or remove custom systems as a side effect.
+Activation can reference resources belonging to another custom system. Every custom-system state changed by activation is therefore revalidated against saved Creation before commit.
 
-Custom-system actions are also runtime intent operations. The sheet sends only `{ characterId, systemId, actionId }`; the Session Server loads the saved action definition from runtime config and executes `resourceChanges` and `conditionChanges` itself. Actions use the same aggregate ability/HP/conditions commit and reverse strategy as custom abilities. The client no longer sends precomputed action effects while connected to the authoritative session runtime.
+Custom-system actions are runtime intent operations. The sheet sends only `{ characterId, systemId, actionId }`; the Session Server loads the saved action definition from runtime config and executes its configured effects itself.
 
-`CustomAutomationRuntime` is a pure executor for saved custom automations. It evaluates automation conditions using literals, fields, resources, character formula paths and formulas, then applies `modifyResource`, `setField` and `modifyField` effects through the existing automation permission boundary. A targeted `automation.execute` operation exists only for definitions whose event is `manual`.
+`CustomAutomationRuntime` is a pure executor for saved custom automations. It evaluates automation conditions and applies configured resource/field effects through the existing custom-system permission boundary. A targeted `automation.execute` operation exists only for definitions whose event is `manual`.
 
-Automatic custom-system hooks currently execute inside their parent authoritative operation rather than creating child timeline events:
+## Automation event model
 
-- custom ability activation triggers `abilityUsed` automations;
-- `character.hp.damage` triggers `damageTaken` automations;
-- `character.hp.heal` triggers `healingReceived` automations;
-- short rest triggers `shortRestCompleted` automations;
-- long rest triggers `longRestCompleted` automations.
+Custom-system events use a hybrid rule based on whether the application can actually observe the event from authoritative sheet state.
 
-When one of those automations changes custom-system state, that state is committed together with the parent operation. HP damage/healing upgrades its reverse to an aggregate ability/HP/conditions snapshot when needed; rests already use their aggregate rest reverse. Therefore MASTER sees one semantic log entry for the action that happened, not one entry per internal automation effect.
+### Inferred events
+
+When the event is explicit in an authoritative operation/state transition, the Session Server infers it and runs the corresponding automations inside the parent operation:
+
+- custom ability activation → `abilityUsed`;
+- `character.hp.damage` → `damageTaken`;
+- `character.hp.heal` → `healingReceived`;
+- short rest → `shortRestCompleted`;
+- long rest → `longRestCompleted`;
+- initiative start/end/advance → `combatStarted`, `combatEnded`, `roundStarted`, `roundEnded`, `turnStarted`, `turnEnded` as appropriate.
+
+These automation effects do not create child timeline entries. They are committed with the parent operation and share its aggregate reverse. Initiative operations may affect multiple characters, so the initiative reverse also stores every touched authoritative ability snapshot.
+
+### Explicit table-result events
+
+Events that depend on information the application does not possess — especially dice/attack resolution at the physical table — are not inferred from unrelated state changes.
+
+The existing `CustomAbilityActivationDefinition.trigger` / `triggerFieldId` is the declaration surface for those events. Activating the ability in the sheet is the player's explicit statement that the configured table event occurred.
+
+Current mappings are:
+
+- `onHit` → `attackHit`;
+- `onCrit` → `attackHit` + `criticalHit`.
+
+A critical hit deliberately fires both events because it is also a successful hit. The client does not send an arbitrary event name; the runtime resolves the event from the saved Creation definition for the activated ability. This prevents a modified client from freely claiming unrelated automation events.
+
+Other trigger presets such as saves, misses or skill checks remain ordinary ability metadata until matching `CustomSystemEventType` events are introduced. They must not be guessed from state the application cannot observe.
+
+## Logging and undo
+
+Automation effects are part of the semantic operation that caused them:
+
+- damage automation changes remain part of the damage log;
+- rest automation changes remain part of the rest log;
+- initiative automation changes remain part of the initiative log;
+- ability-triggered `attackHit`/`criticalHit` automations remain part of the ability activation log.
+
+MASTER therefore sees one meaningful event instead of one timeline row per internal automation effect, and undo restores all coupled authoritative state together.
 
 Custom-system installation/enabling remains Creation configuration, not gameplay. A session operation cannot install a system or change its configured version/enabled flag.
 
-The runtime-config wire parser validates revision shape, character configuration, spell identifiers, custom-system identifiers and duplicate ids before the Durable Object accepts a publish.
-
 ## Remaining runtime work
 
-Initiative-derived automation events remain to be connected: `combatStarted`, `combatEnded`, `roundStarted`, `roundEnded`, `turnStarted` and `turnEnded`. Those events may affect multiple character entries in one initiative operation, so their implementation must extend the initiative reverse to include every affected character snapshot and restore them atomically with initiative state. They should not be implemented as independent child log records.
-
-`attackHit` and `criticalHit` remain intentionally unhooked until there is an authoritative attack-resolution operation that can produce those events reliably. Client-side inference would not be authoritative.
-
-After event wiring, the remaining custom-system runtime surfaces are standard-action overrides and native-stat overrides.
+The remaining custom-system runtime surfaces are standard-action overrides and native-stat overrides. Additional table-result automation events should follow the same rule as `attackHit`/`criticalHit`: if the result cannot be derived from authoritative application state, it must be declared through an explicit sheet interaction whose definition is validated from saved Creation configuration.
