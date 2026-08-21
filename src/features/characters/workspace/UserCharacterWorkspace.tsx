@@ -19,6 +19,7 @@ import {
   getLocalUser,
   LOCAL_AUTH_BYPASS,
 } from "../../../auth/local-auth"
+import { AppLoadingScreen } from "../../../components/AppLoadingScreen"
 import {
   applyCharacterDomains,
   getChangedCharacterDomains,
@@ -40,7 +41,7 @@ import { ensureCharacterAcquisitionMetadata } from "../../../models/characters/c
 import type { Player } from "../../../models/player/Player"
 import { normalizeStandardItemsInValue } from "../../items/standardItemCompendium"
 import {
-  readUserCharacterCache,
+  readUserCharacterCacheSnapshot,
   removeUserCharacterCache,
   writeUserCharacterCache,
 } from "../../user/userPersistentCache"
@@ -138,7 +139,11 @@ export function UserCharacterWorkspace({
     }
     characterRuntimeHandlers.set(runtimeKey, handlers)
 
-    const cached = readUserCharacterCache<UserCharacterSummary>(userId, characterId)
+    const cachedSnapshot = readUserCharacterCacheSnapshot<UserCharacterSummary>(
+      userId,
+      characterId,
+    )
+    const cached = cachedSnapshot?.data
     let hasUsableCache = false
 
     if (cached?.id === characterId) {
@@ -167,6 +172,22 @@ export function UserCharacterWorkspace({
         reconciled: false,
       }
       characterRuntimeEntries.set(runtimeKey, runtime)
+    }
+
+    if (
+      hasUsableCache &&
+      cachedSnapshot?.fresh &&
+      cached &&
+      characterRef.current &&
+      !runtime.reconciled
+    ) {
+      const persistence = createPersistence(cached, runtimeKey)
+      runtime.persistence = persistence
+      runtime.reconciled = true
+      persistenceRef.current = persistence
+      if (persistence) {
+        void persistence.bootstrapMissingDomains(characterRef.current.toJSON())
+      }
     }
 
     if (runtime.reconciled) {
@@ -198,7 +219,7 @@ export function UserCharacterWorkspace({
           await persistence.bootstrapMissingDomains(normalizedCharacter.toJSON())
         }
 
-        writeUserCharacterCache(userId, characterId, result)
+        writeUserCharacterCache(userId, characterId, result, { synced: true })
         const currentRuntime = characterRuntimeEntries.get(runtimeKey)
         if (currentRuntime) {
           currentRuntime.persistence = persistence
@@ -414,9 +435,10 @@ export function UserCharacterWorkspace({
 
   if (loading) {
     return (
-      <div className="grid min-h-64 place-items-center text-sm text-textMuted">
-        Carregando ficha...
-      </div>
+      <AppLoadingScreen
+        title="Carregando personagem..."
+        detail="Preparando a ficha."
+      />
     )
   }
 
