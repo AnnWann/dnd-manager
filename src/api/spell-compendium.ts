@@ -47,6 +47,7 @@ export type SpellCompendiumPage<T> = {
   totalPages: number
 }
 
+const SPELL_INDEX_BATCH_SIZE = 100
 const spellDetailCache = new Map<string, Spell>()
 let allOfficialSpellSummariesCache: SpellCompendiumPage<SpellCompendiumSummary> | null = null
 let allOfficialSpellSummariesRequest: Promise<SpellCompendiumPage<SpellCompendiumSummary>> | null = null
@@ -190,17 +191,31 @@ export async function getOfficialSpellsByIndexes(
     const wanted = new Set(missing)
     loaded = local.filter((spell) => wanted.has(spell.index))
   } else {
-    const response = await apiClient.get<SpellCompendiumPage<Spell>>(
-      "/compendium/spells",
-      {
-        params: {
-          indexes: missing.join(","),
-          includeDetails: true,
-          pageSize: Math.min(100, missing.length),
-        },
-      },
+    const batches = Array.from(
+      { length: Math.ceil(missing.length / SPELL_INDEX_BATCH_SIZE) },
+      (_, batchIndex) =>
+        missing.slice(
+          batchIndex * SPELL_INDEX_BATCH_SIZE,
+          (batchIndex + 1) * SPELL_INDEX_BATCH_SIZE,
+        ),
     )
-    loaded = response.data.spells
+
+    const pages = await Promise.all(
+      batches.map(async (batch) => {
+        const response = await apiClient.get<SpellCompendiumPage<Spell>>(
+          "/compendium/spells",
+          {
+            params: {
+              indexes: batch.join(","),
+              includeDetails: true,
+              pageSize: batch.length,
+            },
+          },
+        )
+        return response.data.spells
+      }),
+    )
+    loaded = pages.flat()
   }
 
   for (const spell of loaded) spellDetailCache.set(spell.index, spell)
