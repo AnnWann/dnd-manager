@@ -20,6 +20,8 @@ import type { Spell } from "../../../models/magic/spells/Spell"
 import type { ClassName } from "../../../models/sheet/Class"
 import { SpellCreatorModule } from "../spellCreator/spellCreatorModule"
 
+const INITIAL_VISIBLE_SPELLS = 40
+
 export type SpellLibraryRecord = {
   index: string
   owned: boolean
@@ -82,6 +84,7 @@ export function SpellLibraryView({
   )
   const [officialLoading, setOfficialLoading] = useState(false)
   const [officialError, setOfficialError] = useState("")
+  const [visibleSpellCount, setVisibleSpellCount] = useState(INITIAL_VISIBLE_SPELLS)
 
   const isSession = variant === "session"
   const recordByIndex = useMemo(
@@ -93,7 +96,12 @@ export function SpellLibraryView({
     [spells],
   )
 
+  // Session libraries can query/filter the server independently. The user
+  // library is fully preloaded during /user bootstrap, so querying here would
+  // reintroduce network work after the shell is already interactive.
   useEffect(() => {
+    if (!isSession) return
+
     if (sourceFilter !== "all" && sourceFilter !== "official") {
       setOfficialSummaries([])
       setOfficialTotal(0)
@@ -163,7 +171,57 @@ export function SpellLibraryView({
     castingTimeFilter,
     classFilter,
     concentrationFilter,
+    isSession,
     levelFilter,
+    query,
+    ritualFilter,
+    saveFilter,
+    schoolFilter,
+    sourceFilter,
+  ])
+
+  const filteredOfficial = useMemo(() => {
+    if (isSession) return officialSummaries
+    if (sourceFilter !== "all" && sourceFilter !== "official") return []
+
+    const normalizedQuery = normalizeSearch(query)
+    return officialSummaries.filter((spell) => {
+      if (
+        normalizedQuery &&
+        !normalizeSearch(
+          [
+            spell.displayName,
+            spell.name,
+            spell.description,
+            MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school,
+            ...spell.classes.map((className) => CLASS_NAMES[className]),
+          ]
+            .filter(Boolean)
+            .join(" "),
+        ).includes(normalizedQuery)
+      ) {
+        return false
+      }
+
+      return (
+        (levelFilter === "all" || spell.slotLevel === Number(levelFilter)) &&
+        (schoolFilter === "all" || spell.school === schoolFilter) &&
+        (classFilter === "all" || spell.classes.includes(classFilter)) &&
+        matchesBoolean(concentrationFilter, spell.concentration) &&
+        matchesBoolean(ritualFilter, spell.ritual) &&
+        matchesBoolean(attackFilter, spell.targeting.hasAttackRoll) &&
+        matchesBoolean(saveFilter, spell.targeting.hasSavingThrow) &&
+        (castingTimeFilter === "all" || spell.castingTime.type === castingTimeFilter)
+      )
+    })
+  }, [
+    attackFilter,
+    castingTimeFilter,
+    classFilter,
+    concentrationFilter,
+    isSession,
+    levelFilter,
+    officialSummaries,
     query,
     ritualFilter,
     saveFilter,
@@ -230,7 +288,7 @@ export function SpellLibraryView({
   ])
 
   const filteredSpells = useMemo<LibrarySpell[]>(() => {
-    const result: LibrarySpell[] = [...officialSummaries, ...filteredHomebrew]
+    const result: LibrarySpell[] = [...filteredOfficial, ...filteredHomebrew]
     return result.sort((left, right) => {
       if (sortMode === "name") return spellName(left).localeCompare(spellName(right), "pt-BR")
       if (sortMode === "recent") {
@@ -244,7 +302,25 @@ export function SpellLibraryView({
         ? levelDifference
         : spellName(left).localeCompare(spellName(right), "pt-BR")
     })
-  }, [filteredHomebrew, officialSummaries, recordByIndex, sortMode])
+  }, [filteredHomebrew, filteredOfficial, recordByIndex, sortMode])
+
+  useEffect(() => {
+    setVisibleSpellCount(INITIAL_VISIBLE_SPELLS)
+  }, [
+    attackFilter,
+    castingTimeFilter,
+    classFilter,
+    concentrationFilter,
+    levelFilter,
+    query,
+    ritualFilter,
+    saveFilter,
+    schoolFilter,
+    sortMode,
+    sourceFilter,
+  ])
+
+  const visibleSpells = filteredSpells.slice(0, visibleSpellCount)
 
   const availableSchools = useMemo(
     () =>
@@ -257,7 +333,7 @@ export function SpellLibraryView({
   const ownedCount = records.filter((record) => record.owned).length
   const campaignCount = records.filter((record) => record.campaignNames?.length).length
   const characterCount = records.filter((record) => record.characterNames?.length).length
-  const visibleTotal = officialTotal + filteredHomebrew.length
+  const totalAvailable = (isSession ? officialTotal : initialOfficialPage?.total ?? officialSummaries.length) + homebrewSpells.length
 
   function clearFilters() {
     setQuery("")
@@ -338,7 +414,7 @@ export function SpellLibraryView({
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <LibraryBadge label={`${visibleTotal} disponíveis`} />
+          <LibraryBadge label={`${totalAvailable} disponíveis`} />
           <LibraryBadge label={`${ownedCount} ${isSession ? "da sessão" : "próprias"}`} />
           {!isSession ? <LibraryBadge label={`${campaignCount} de campanhas`} /> : null}
           {!isSession ? <LibraryBadge label={`${characterCount} em personagens`} /> : null}
@@ -355,7 +431,7 @@ export function SpellLibraryView({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-textH">Filtros</div>
-              <div className="mt-1 text-xs text-textMuted">{filteredSpells.length} de {visibleTotal} magias exibidas.</div>
+              <div className="mt-1 text-xs text-textMuted">{visibleSpells.length} de {filteredSpells.length} magias exibidas.</div>
             </div>
             <div className="flex gap-2">
               <Button size="sm" variant="secondary" onClick={clearFilters}>Limpar</Button>
@@ -422,7 +498,7 @@ export function SpellLibraryView({
         {!filteredSpells.length && !combinedLoading ? (
           <div className="rounded-xl border border-dashed border-border bg-bg p-6 text-center text-sm text-textMuted">Nenhuma magia corresponde aos filtros.</div>
         ) : null}
-        {filteredSpells.map((spell) => {
+        {visibleSpells.map((spell) => {
           const record = recordByIndex.get(spell.index)
           const owned = Boolean(record?.owned)
           const fullSpell = isFullSpell(spell) ? spell : null
@@ -460,6 +536,17 @@ export function SpellLibraryView({
           )
         })}
       </div>
+
+      {visibleSpells.length < filteredSpells.length ? (
+        <div className="flex justify-center">
+          <Button
+            variant="secondary"
+            onClick={() => setVisibleSpellCount((current) => current + INITIAL_VISIBLE_SPELLS)}
+          >
+            Mostrar mais {Math.min(INITIAL_VISIBLE_SPELLS, filteredSpells.length - visibleSpells.length)}
+          </Button>
+        </div>
+      ) : null}
 
       {creatorOpen ? (
         <ModalFrame title={editingSpell ? "Editar magia" : "Criar magia homebrew"} onClose={closeCreator}>
