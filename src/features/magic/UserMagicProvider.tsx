@@ -29,6 +29,7 @@ type UserMagicState = {
   loading: boolean
   refreshing: boolean
   errorMessage: string
+  bootstrapError: string
   reload: () => Promise<void>
 }
 
@@ -55,6 +56,7 @@ export function UserMagicProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
+  const [bootstrapError, setBootstrapError] = useState("")
 
   const setRecords = useCallback(
     (next: AccessibleHomebrewSpell[] | ((current: AccessibleHomebrewSpell[]) => AccessibleHomebrewSpell[])) => {
@@ -80,18 +82,50 @@ export function UserMagicProvider({ children }: { children: ReactNode }) {
       setErrorMessage("Não foi possível atualizar as magias homebrew.")
     } finally {
       setRefreshing(false)
-      setLoading(false)
     }
   }, [userId])
 
   useEffect(() => {
     if (!userId) return
 
+    let active = true
     const cached = readUserCacheSnapshot<AccessibleHomebrewSpell[]>(userId, "spells")
+    const shouldRefresh = !cached?.fresh
+
+    setBootstrapError("")
+    setErrorMessage("")
     setRecordsState(cached?.data ?? [])
-    setLoading(!cached)
-    if (!cached || !cached.fresh) void reload()
-  }, [reload, userId])
+    setLoading(shouldRefresh)
+
+    if (!shouldRefresh) {
+      return () => {
+        active = false
+      }
+    }
+
+    void fetchSpellsOnce(userId)
+      .then((next) => {
+        if (!active) return
+        setRecordsState(next)
+        writeUserCache(userId, "spells", next, { synced: true })
+      })
+      .catch(() => {
+        if (!active) return
+        setErrorMessage("Não foi possível atualizar as magias homebrew.")
+        if (!cached) {
+          setBootstrapError(
+            "Não foi possível carregar as magias para iniciar a área do usuário.",
+          )
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [userId])
 
   const spells = useMemo(
     () => records.map((record) => record.data),
@@ -178,7 +212,14 @@ export function UserMagicProvider({ children }: { children: ReactNode }) {
 
   return (
     <UserMagicStateContext.Provider
-      value={{ records, loading, refreshing, errorMessage, reload }}
+      value={{
+        records,
+        loading,
+        refreshing,
+        errorMessage,
+        bootstrapError,
+        reload,
+      }}
     >
       <MagicProvider
         spells={spells}
