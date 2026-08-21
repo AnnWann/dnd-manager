@@ -30,14 +30,26 @@ const AuthenticatedLayout = lazy(() =>
 function App() {
   const location = useLocation()
   const path = location.pathname
+  const isPublicPath =
+    path === "/auth" ||
+    path === "/not-found" ||
+    path === "/unauthorized" ||
+    (import.meta.env.DEV && path.startsWith("/dev/session-runtime/"))
 
   return (
     <Suspense
       fallback={
-        <AppLoadingScreen
-          title="Carregando aplicação..."
-          detail="Preparando os módulos necessários."
-        />
+        isPublicPath ? (
+          <AppLoadingScreen
+            title="Carregando aplicação..."
+            detail="Preparando a página."
+          />
+        ) : (
+          <AppLoadingScreen
+            title="Verificando autenticação..."
+            detail="Confirmando sua sessão."
+          />
+        )
       }
     >
       {path === "/auth" ? (
