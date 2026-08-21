@@ -13,9 +13,13 @@ import { prisma } from "../../../server/prisma"
 import { requireSession } from "../../../server/session"
 
 type RouteContext = {
-  params: Promise<{
-    campaignId: string
-  }>
+  params?:
+    | Promise<{
+        campaignId?: string
+      }>
+    | {
+        campaignId?: string
+      }
 }
 
 export type CampaignContentRequestType =
@@ -50,11 +54,11 @@ type RawRequestRow = {
 
 export async function GET(
   request: Request,
-  context: RouteContext,
+  context?: RouteContext,
 ): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const { campaignId } = await context.params
+    const campaignId = await resolveCampaignId(request, context)
     const access = await requireCampaignAccess(campaignId, session.user.id)
 
     if (!access.isMaster) {
@@ -126,11 +130,11 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  context: RouteContext,
+  context?: RouteContext,
 ): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const { campaignId } = await context.params
+    const campaignId = await resolveCampaignId(request, context)
     const access = await requireCampaignAccess(campaignId, session.user.id)
     const body = await readJsonObject(request)
     const type = parseRequestType(body.type)
@@ -440,4 +444,22 @@ function readRequiredString(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
+}
+
+async function resolveCampaignId(
+  request: Request,
+  context?: RouteContext,
+): Promise<string> {
+  const params = context?.params ? await context.params : undefined
+  const fromContext = params?.campaignId?.trim()
+  if (fromContext) return fromContext
+
+  const match = new URL(request.url).pathname.match(/\/api\/campaigns\/([^/]+)/)
+  if (match?.[1]) return decodeURIComponent(match[1])
+
+  throw new ApiError(
+    400,
+    "CAMPAIGN_ID_REQUIRED",
+    "O identificador da campanha não foi informado.",
+  )
 }
