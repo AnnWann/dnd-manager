@@ -680,7 +680,7 @@ function readCreationCharacterConfiguration(
   return {
     characterId,
     ownerId,
-    type,
+    type: type as CreationCharacterConfiguration["type"],
     visibility,
     unique: configuration.unique,
     hiddenCharacterTabs: configuration.hiddenCharacterTabs,
