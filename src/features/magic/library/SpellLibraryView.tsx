@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 
 import {
+  getCachedAllOfficialSpellSummaries,
   getOfficialSpell,
   queryAllOfficialSpellSummaries,
   type SpellCompendiumSummary,
@@ -55,6 +56,7 @@ export function SpellLibraryView({
   prepareSpellForSave,
 }: Props) {
   const { spells, saveSpell, deleteSpell } = useMagicContext()
+  const initialOfficialPage = getCachedAllOfficialSpellSummaries()
   const [query, setQuery] = useState("")
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all")
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("all")
@@ -72,8 +74,12 @@ export function SpellLibraryView({
   const [viewingSpell, setViewingSpell] = useState<Spell | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState("")
-  const [officialSummaries, setOfficialSummaries] = useState<SpellCompendiumSummary[]>([])
-  const [officialTotal, setOfficialTotal] = useState(0)
+  const [officialSummaries, setOfficialSummaries] = useState<SpellCompendiumSummary[]>(
+    () => initialOfficialPage?.spells ?? [],
+  )
+  const [officialTotal, setOfficialTotal] = useState(
+    () => initialOfficialPage?.total ?? 0,
+  )
   const [officialLoading, setOfficialLoading] = useState(false)
   const [officialError, setOfficialError] = useState("")
 
@@ -93,6 +99,28 @@ export function SpellLibraryView({
       setOfficialTotal(0)
       setOfficialLoading(false)
       return
+    }
+
+    const isDefaultQuery =
+      !query.trim() &&
+      levelFilter === "all" &&
+      classFilter === "all" &&
+      schoolFilter === "all" &&
+      concentrationFilter === "all" &&
+      ritualFilter === "all" &&
+      attackFilter === "all" &&
+      saveFilter === "all" &&
+      castingTimeFilter === "all"
+
+    if (isDefaultQuery) {
+      const cached = getCachedAllOfficialSpellSummaries()
+      if (cached) {
+        setOfficialSummaries(cached.spells)
+        setOfficialTotal(cached.total)
+        setOfficialLoading(false)
+        setOfficialError("")
+        return
+      }
     }
 
     let cancelled = false
