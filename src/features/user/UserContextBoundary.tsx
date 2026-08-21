@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react"
 
+import { preloadAllOfficialSpellSummaries } from "../../api/spell-compendium"
+import { AppLoadingScreen } from "../../components/AppLoadingScreen"
 import { useUserMagicState } from "../magic/UserMagicProvider"
 import { preloadUserNavigation } from "./userNavigationPreload"
 import { useUserData } from "./UserDataProvider"
@@ -14,21 +16,24 @@ export function UserContextBoundary({ children }: { children: ReactNode }) {
     loading: magicLoading,
     bootstrapError: magicBootstrapError,
   } = useUserMagicState()
-  const [modulesReady, setModulesReady] = useState(false)
-  const [moduleError, setModuleError] = useState(false)
+  const [staticContentReady, setStaticContentReady] = useState(false)
+  const [staticContentError, setStaticContentError] = useState(false)
 
   useEffect(() => {
     let active = true
-    setModulesReady(false)
-    setModuleError(false)
+    setStaticContentReady(false)
+    setStaticContentError(false)
 
-    preloadUserNavigation()
+    Promise.all([
+      preloadUserNavigation(),
+      preloadAllOfficialSpellSummaries(),
+    ])
       .then(() => {
-        if (active) setModulesReady(true)
+        if (active) setStaticContentReady(true)
       })
       .catch((error) => {
-        console.error("[user-context] Failed to preload user navigation.", error)
-        if (active) setModuleError(true)
+        console.error("[user-context] Failed to preload user context.", error)
+        if (active) setStaticContentError(true)
       })
 
     return () => {
@@ -38,10 +43,10 @@ export function UserContextBoundary({ children }: { children: ReactNode }) {
 
   const bootstrapError = userDataBootstrapError || magicBootstrapError
 
-  if (moduleError) {
+  if (staticContentError) {
     return (
       <UserContextError
-        message="Não foi possível carregar os módulos da área do usuário."
+        message="Não foi possível carregar os módulos ou o compêndio de magias da área do usuário."
         onRetry={() => window.location.reload()}
       />
     )
@@ -57,28 +62,20 @@ export function UserContextBoundary({ children }: { children: ReactNode }) {
   }
 
   if (
-    !modulesReady ||
+    !staticContentReady ||
     charactersLoading ||
     campaignsLoading ||
     magicLoading
   ) {
-    return <UserContextLoading />
+    return (
+      <AppLoadingScreen
+        title="Carregando seus dados..."
+        detail="Preparando personagens, campanhas, magias e descrições."
+      />
+    )
   }
 
   return children
-}
-
-function UserContextLoading() {
-  return (
-    <div className="grid min-h-dvh place-items-center text-sm text-textMuted">
-      <div className="text-center">
-        <div className="font-medium text-textH">Preparando seu ambiente...</div>
-        <div className="mt-1 text-xs text-textMuted">
-          Carregando personagens, campanhas, magias e navegação.
-        </div>
-      </div>
-    </div>
-  )
 }
 
 function UserContextError({
