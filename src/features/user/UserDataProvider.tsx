@@ -75,7 +75,7 @@ function seedOwnedCharacterCaches(
       userId,
       character.id,
     )
-    if (existing) continue
+    if (existing && (existing.fresh || !sourceIsFresh)) continue
     writeUserCharacterCache(userId, character.id, character, {
       synced: sourceIsFresh,
     })
