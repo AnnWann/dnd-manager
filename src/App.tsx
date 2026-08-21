@@ -1,12 +1,24 @@
 import { lazy, Suspense } from "react"
 import { useLocation } from "react-router-dom"
 
-const PublicLayout = lazy(() =>
-  import("./layouts/publicLayout").then((module) => ({
-    default: module.PublicLayout,
+const AuthView = lazy(() =>
+  import("./views/AuthView").then((module) => ({ default: module.AuthView })),
+)
+const NotFoundView = lazy(() =>
+  import("./views/NotFoundView").then((module) => ({ default: module.NotFoundView })),
+)
+const UnauthorizedView = lazy(() =>
+  import("./views/UnauthorisedView").then((module) => ({
+    default: module.UnauthorizedView,
   })),
 )
-
+const SessionRuntimeDevView = import.meta.env.DEV
+  ? lazy(() =>
+      import("./views/dev/SessionRuntimeDevView").then((module) => ({
+        default: module.SessionRuntimeDevView,
+      })),
+    )
+  : null
 const AuthenticatedLayout = lazy(() =>
   import("./layouts/authenticatedLayout").then((module) => ({
     default: module.AuthenticatedLayout,
@@ -15,23 +27,40 @@ const AuthenticatedLayout = lazy(() =>
 
 function App() {
   const location = useLocation()
-
-  const usesPublicLayout =
-    location.pathname.startsWith("/auth") ||
-    (import.meta.env.DEV && location.pathname.startsWith("/dev/session-runtime")) ||
-    location.pathname === "/not-found" ||
-    location.pathname === "/unauthorized"
-
-  const usesUserLayout = location.pathname.startsWith("/user")
+  const path = location.pathname
 
   return (
     <Suspense fallback={<AppLoading />}>
-      {usesPublicLayout ? (
-        <PublicLayout />
+      {path === "/auth" ? (
+        <PublicPage>
+          <AuthView />
+        </PublicPage>
+      ) : path === "/not-found" ? (
+        <PublicPage>
+          <NotFoundView />
+        </PublicPage>
+      ) : path === "/unauthorized" ? (
+        <PublicPage>
+          <UnauthorizedView />
+        </PublicPage>
+      ) : import.meta.env.DEV &&
+        SessionRuntimeDevView &&
+        path.startsWith("/dev/session-runtime/") ? (
+        <PublicPage>
+          <SessionRuntimeDevView />
+        </PublicPage>
       ) : (
-        <AuthenticatedLayout mode={usesUserLayout ? "user" : "campaign"} />
+        <AuthenticatedLayout mode={path.startsWith("/user") ? "user" : "campaign"} />
       )}
     </Suspense>
+  )
+}
+
+function PublicPage({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-dvh bg-[color:var(--surface-app)] text-text">
+      {children}
+    </div>
   )
 }
 
