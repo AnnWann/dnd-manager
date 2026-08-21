@@ -24,6 +24,7 @@ type SyncStatus =
 type CustomSystemsContextValue = {
   definitions: CustomSystemDefinition[]
   status: SyncStatus
+  hydrated: boolean
   canManage: boolean
   createDefinition: () => CustomSystemDefinition
   saveDefinition: (definition: CustomSystemDefinition, previousId?: string) => void
@@ -63,11 +64,11 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
 
   const [definitions, setDefinitions] = useState<CustomSystemDefinition[]>(initialSnapshot.definitions)
   const [status, setStatus] = useState<SyncStatus>({ kind: 'idle' })
+  const [hydrated, setHydrated] = useState(false)
   const definitionsRef = useRef(initialSnapshot.definitions)
   const baseDefinitionsRef = useRef(initialSnapshot.baseDefinitions)
   const revisionRef = useRef(initialSnapshot.revision)
   const dirtyRef = useRef(initialSnapshot.dirty)
-  const hydratedRef = useRef(false)
   const savingRef = useRef(false)
   const saveTimerRef = useRef<number | null>(null)
   const flushRef = useRef<() => Promise<void>>(async () => undefined)
@@ -187,8 +188,8 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
 
   const reload = useCallback(async () => {
     if (!canSync) {
-      hydratedRef.current = false
       setStatus({ kind: 'idle' })
+      setHydrated(true)
       saveLocalSnapshot()
       return
     }
@@ -216,9 +217,9 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
 
       revisionRef.current = remoteRevision
       baseDefinitionsRef.current = remote
-      hydratedRef.current = true
       const stillDirty = !definitionsEqual(next, remote)
       applyLocalDefinitions(next, stillDirty)
+      setHydrated(true)
 
       if (stillDirty && canManage) {
         setStatus({ kind: 'saving' })
@@ -227,6 +228,7 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
         setStatus({ kind: 'synced', at: Date.now() })
       }
     } catch (error) {
+      setHydrated(true)
       setStatus({
         kind: 'error',
         message: `${error instanceof Error ? error.message : 'Falha ao carregar sistemas.'} Exibindo a cópia salva neste dispositivo.`,
@@ -235,7 +237,7 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
   }, [applyLocalDefinitions, canManage, canSync, saveLocalSnapshot, schedulePersist, syncKey])
 
   useEffect(() => {
-    hydratedRef.current = false
+    setHydrated(false)
     void reload()
 
     const handleOnline = () => {
@@ -262,6 +264,7 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
   const value = useMemo<CustomSystemsContextValue>(() => ({
     definitions,
     status,
+    hydrated,
     canManage,
     createDefinition: () => {
       const definition = createEmptyDefinition()
@@ -302,7 +305,7 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
       return copy
     },
     reload,
-  }), [canManage, definitions, reload, update])
+  }), [canManage, definitions, hydrated, reload, status, update])
 
   return <CustomSystemsContext.Provider value={value}>{children}</CustomSystemsContext.Provider>
 }
@@ -314,7 +317,7 @@ export function useCustomSystemsContext(): CustomSystemsContextValue {
 
   useEffect(() => {
     if (legacySeededRef.current) return
-    if (!context || !editor?.draft || !editor.base) return
+    if (!context?.hydrated || !editor?.draft || !editor.base) return
 
     if (editor.managedDomains.customSystems) {
       legacySeededRef.current = true
@@ -362,6 +365,7 @@ export function useCustomSystemsContext(): CustomSystemsContextValue {
       status: editor.saving
         ? { kind: 'saving' as const }
         : { kind: 'idle' as const },
+      hydrated: true,
       canManage: context.canManage,
       createDefinition: () => {
         const definition = createEmptyDefinition()
