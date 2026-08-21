@@ -53,6 +53,31 @@ function start(name, command, commandArgs, env = commonEnv) {
   children.push(child)
 }
 
+function run(name, command, commandArgs, env = commonEnv) {
+  return new Promise((resolve, reject) => {
+    console.log(`[dev:full] ${name}: ${command} ${commandArgs.join(" ")}`)
+    const child = spawn(command, commandArgs, {
+      stdio: "inherit",
+      env,
+      shell: process.platform === "win32",
+    })
+
+    child.on("error", reject)
+    child.on("exit", (code, signal) => {
+      if (code === 0) {
+        resolve()
+        return
+      }
+
+      reject(
+        new Error(
+          `${name} failed (${signal ?? code ?? "unknown"}).`,
+        ),
+      )
+    })
+  })
+}
+
 function shutdown(exitCode = 0) {
   if (shuttingDown) return
   shuttingDown = true
@@ -86,19 +111,34 @@ console.log(
     : "[dev:full] WARNING: using Vercel Production env values locally\n",
 )
 
+const withVercelEnvironment = (command, commandArgs) => [
+  "env",
+  "run",
+  "-e",
+  environment,
+  "--",
+  command,
+  ...commandArgs,
+]
+
+try {
+  await run(
+    "Applying Prisma migrations",
+    vercelCommand,
+    withVercelEnvironment(npmCommand, ["run", "prisma:migrate:deploy"]),
+  )
+} catch (error) {
+  console.error("\n[dev:full] Database migration preflight failed.")
+  console.error(
+    "The local stack was not started because the Prisma schema and database may be out of sync.",
+  )
+  console.error(error instanceof Error ? error.message : error)
+  process.exit(1)
+}
+
 const vercelArgs =
   environment === "production"
-    ? [
-        "env",
-        "run",
-        "-e",
-        "production",
-        "--",
-        vercelCommand,
-        "dev",
-        "--listen",
-        vercelPort,
-      ]
+    ? withVercelEnvironment(vercelCommand, ["dev", "--listen", vercelPort])
     : ["dev", "--listen", vercelPort]
 
 start("Vercel", vercelCommand, vercelArgs)
