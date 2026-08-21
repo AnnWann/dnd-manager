@@ -1,85 +1,19 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { useLocation } from "react-router-dom"
 
+import { useUserMagicState } from "../magic/UserMagicProvider"
+import { preloadUserNavigation } from "./userNavigationPreload"
 import { useUserData } from "./UserDataProvider"
 
-const routePreloads = new Map<string, Promise<void>>()
-
-type UserRouteRequirements = {
-  characters: boolean
-  campaigns: boolean
-}
-
-function preloadCurrentUserRoute(pathname: string): Promise<void> {
-  const key = userRoutePreloadKey(pathname)
-  const existing = routePreloads.get(key)
-  if (existing) return existing
-
-  const routeImport = (() => {
-    if (key === "characters") return import("../../views/user/UserCharactersTab")
-    if (key === "character-create") return import("../../views/user/UserCharacterCreateView")
-    if (key === "character-level-up") return import("../../views/user/UserCharacterLevelUpView")
-    if (key === "character-add-spells") return import("../../views/user/UserCharacterAddSpellsView")
-    if (key === "character-add-item") return import("../../views/user/UserCharacterCreateItemView")
-    if (key === "character-detail") return import("../../views/user/UserCharacterDetailView")
-    if (key === "spells") return import("../../views/user/UserSpellsTab")
-    if (key === "campaigns") return import("../../views/user/UserCampaignsRouteView")
-    return Promise.resolve(undefined)
-  })()
-
-  const preload = Promise.all([
-    import("../../views/user/UserDashboardView"),
-    routeImport,
-  ]).then(() => undefined)
-
-  routePreloads.set(key, preload)
-  return preload
-}
-
-function userRoutePreloadKey(pathname: string): string {
-  if (pathname === "/user" || pathname === "/user/characters") return "characters"
-  if (pathname === "/user/characters/create") return "character-create"
-  if (/^\/user\/characters\/[^/]+\/level-up\/?$/.test(pathname)) return "character-level-up"
-  if (/^\/user\/characters\/[^/]+\/spells-list\/add-spells\/?$/.test(pathname)) return "character-add-spells"
-  if (/^\/user\/characters\/[^/]+\/inventory\/add-item\/?$/.test(pathname)) return "character-add-item"
-  if (/^\/user\/characters\/[^/]+(?:\/[^/]+)?\/?$/.test(pathname)) return "character-detail"
-  if (pathname.startsWith("/user/spells")) return "spells"
-  if (pathname.startsWith("/user/campaigns")) return "campaigns"
-  return "user-shell"
-}
-
-function userRouteRequirements(pathname: string): UserRouteRequirements {
-  const key = userRoutePreloadKey(pathname)
-
-  if (key === "characters") {
-    return { characters: true, campaigns: false }
-  }
-
-  if (key === "spells") {
-    return { characters: false, campaigns: true }
-  }
-
-  if (key === "campaigns") {
-    return { characters: true, campaigns: true }
-  }
-
-  if (key.startsWith("character-")) {
-    return { characters: true, campaigns: false }
-  }
-
-  return { characters: false, campaigns: false }
-}
-
 export function UserContextBoundary({ children }: { children: ReactNode }) {
-  const location = useLocation()
-  const requirements = userRouteRequirements(location.pathname)
   const {
     charactersLoading,
     campaignsLoading,
-    charactersError,
-    campaignsError,
-    refreshAll,
+    bootstrapError: userDataBootstrapError,
   } = useUserData()
+  const {
+    loading: magicLoading,
+    bootstrapError: magicBootstrapError,
+  } = useUserMagicState()
   const [modulesReady, setModulesReady] = useState(false)
   const [moduleError, setModuleError] = useState(false)
 
@@ -88,43 +22,46 @@ export function UserContextBoundary({ children }: { children: ReactNode }) {
     setModulesReady(false)
     setModuleError(false)
 
-    preloadCurrentUserRoute(location.pathname)
+    preloadUserNavigation()
       .then(() => {
         if (active) setModulesReady(true)
       })
       .catch((error) => {
-        console.error("[user-context] Failed to preload active protected user route.", error)
-        routePreloads.delete(userRoutePreloadKey(location.pathname))
+        console.error("[user-context] Failed to preload user navigation.", error)
         if (active) setModuleError(true)
       })
 
     return () => {
       active = false
     }
-  }, [location.pathname])
+  }, [])
+
+  const bootstrapError = userDataBootstrapError || magicBootstrapError
 
   if (moduleError) {
     return (
       <UserContextError
-        message="Não foi possível carregar a rota da área do usuário."
+        message="Não foi possível carregar os módulos da área do usuário."
         onRetry={() => window.location.reload()}
       />
     )
   }
 
-  if (requirements.characters && charactersError && charactersLoading) {
-    return <UserContextError message={charactersError} onRetry={() => void refreshAll()} />
+  if (bootstrapError) {
+    return (
+      <UserContextError
+        message={bootstrapError}
+        onRetry={() => window.location.reload()}
+      />
+    )
   }
 
-  if (requirements.campaigns && campaignsError && campaignsLoading) {
-    return <UserContextError message={campaignsError} onRetry={() => void refreshAll()} />
-  }
-
-  const routeDataLoading =
-    (requirements.characters && charactersLoading) ||
-    (requirements.campaigns && campaignsLoading)
-
-  if (!modulesReady || routeDataLoading) {
+  if (
+    !modulesReady ||
+    charactersLoading ||
+    campaignsLoading ||
+    magicLoading
+  ) {
     return <UserContextLoading />
   }
 
@@ -137,7 +74,7 @@ function UserContextLoading() {
       <div className="text-center">
         <div className="font-medium text-textH">Preparando seu ambiente...</div>
         <div className="mt-1 text-xs text-textMuted">
-          Usando dados locais quando disponíveis e sincronizando com o servidor.
+          Carregando personagens, campanhas, magias e navegação.
         </div>
       </div>
     </div>
