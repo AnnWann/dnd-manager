@@ -1,4 +1,4 @@
-CREATE TABLE "campaign_item_compendium" (
+CREATE TABLE IF NOT EXISTS "campaign_item_compendium" (
   "id" TEXT NOT NULL,
   "campaignId" TEXT NOT NULL,
   "templateId" TEXT NOT NULL,
@@ -12,11 +12,11 @@ CREATE TABLE "campaign_item_compendium" (
   CONSTRAINT "campaign_item_compendium_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "campaign_item_compendium_campaign_template_key"
+CREATE UNIQUE INDEX IF NOT EXISTS "campaign_item_compendium_campaign_template_key"
   ON "campaign_item_compendium"("campaignId", "templateId");
 
-CREATE INDEX "campaign_item_compendium_campaign_visibility_idx"
+CREATE INDEX IF NOT EXISTS "campaign_item_compendium_campaign_visibility_idx"
   ON "campaign_item_compendium"("campaignId", "visibility");
 
-CREATE INDEX "campaign_item_compendium_created_by_idx"
+CREATE INDEX IF NOT EXISTS "campaign_item_compendium_created_by_idx"
   ON "campaign_item_compendium"("createdById");
