@@ -1,5 +1,5 @@
 import { LogOut } from "lucide-react"
-import { Suspense, useEffect } from "react"
+import { Suspense } from "react"
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom"
 
 import {
@@ -15,62 +15,13 @@ import {
   LOCAL_AUTH_BYPASS,
 } from "../../auth/local-auth"
 
-let userMagicPreload: Promise<unknown> | null = null
-
-function preloadUserMagicRuntime(): Promise<unknown> {
-  if (userMagicPreload) return userMagicPreload
-
-  userMagicPreload = Promise.all([
-    import("../../features/magic/UserMagicRouteBoundary"),
-    import("./UserSpellsTab"),
-  ]).catch((error) => {
-    userMagicPreload = null
-    throw error
-  })
-
-  return userMagicPreload
-}
-
 export function UserDashboardView() {
   const navigate = useNavigate()
   const location = useLocation()
   const { data: session, isPending } = authClient.useSession()
 
-  const localUser =
-    LOCAL_AUTH_BYPASS ? getLocalUser() : null
-
+  const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
   const user = session?.user ?? localUser
-
-  useEffect(() => {
-    if (location.pathname.startsWith("/user/spells")) return
-
-    const browser = window as Window & {
-      requestIdleCallback?: (
-        callback: () => void,
-        options?: { timeout: number },
-      ) => number
-      cancelIdleCallback?: (handle: number) => void
-    }
-
-    if (browser.requestIdleCallback) {
-      const handle = browser.requestIdleCallback(
-        () => {
-          void preloadUserMagicRuntime()
-        },
-        { timeout: 2000 },
-      )
-
-      return () => {
-        browser.cancelIdleCallback?.(handle)
-      }
-    }
-
-    const handle = window.setTimeout(() => {
-      void preloadUserMagicRuntime()
-    }, 750)
-
-    return () => window.clearTimeout(handle)
-  }, [location.pathname])
 
   if (!LOCAL_AUTH_BYPASS && isPending) {
     return (
@@ -107,9 +58,6 @@ export function UserDashboardView() {
       label: "Magias",
       icon: <IconMagic />,
       active: location.pathname.startsWith("/user/spells"),
-      onIntent: () => {
-        void preloadUserMagicRuntime()
-      },
       onClick: () => navigate("/user/spells"),
     },
     {
