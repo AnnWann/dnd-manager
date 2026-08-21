@@ -9,7 +9,6 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react"
-import { useLocation } from "react-router-dom"
 
 import { getMyCampaigns, type UserCampaign } from "../../api/user-campaigns"
 import { getMyCharacters, type UserCharacterSummary } from "../../api/user-characters"
@@ -31,16 +30,12 @@ type UserDataState = {
   campaignsRefreshing: boolean
   charactersError: string
   campaignsError: string
+  bootstrapError: string
   setCharacters: Dispatch<SetStateAction<UserCharacterSummary[]>>
   setCampaigns: Dispatch<SetStateAction<UserCampaign[]>>
   refreshCharacters: () => Promise<void>
   refreshCampaigns: () => Promise<void>
   refreshAll: () => Promise<void>
-}
-
-type UserDataRequirements = {
-  characters: boolean
-  campaigns: boolean
 }
 
 const UserDataContext = createContext<UserDataState | null>(null)
@@ -67,22 +62,7 @@ function fetchCampaignsOnce(userId: string): Promise<UserCampaign[]> {
   return request
 }
 
-function requirementsForPath(pathname: string): UserDataRequirements {
-  if (pathname === "/user" || pathname.startsWith("/user/characters")) {
-    return { characters: true, campaigns: false }
-  }
-  if (pathname.startsWith("/user/campaigns")) {
-    return { characters: true, campaigns: true }
-  }
-  if (pathname.startsWith("/user/spells")) {
-    return { characters: false, campaigns: true }
-  }
-  return { characters: false, campaigns: false }
-}
-
 export function UserDataProvider({ children }: { children: ReactNode }) {
-  const location = useLocation()
-  const requirements = requirementsForPath(location.pathname)
   const { data: session } = authClient.useSession()
   const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
   const userId = session?.user?.id ?? localUser?.id ?? ""
@@ -97,6 +77,7 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
   const [campaignsRefreshing, setCampaignsRefreshing] = useState(false)
   const [charactersError, setCharactersError] = useState("")
   const [campaignsError, setCampaignsError] = useState("")
+  const [bootstrapError, setBootstrapError] = useState("")
 
   const setCharacters: Dispatch<SetStateAction<UserCharacterSummary[]>> = useCallback((next) => {
     setCharactersState((current) => {
@@ -126,7 +107,6 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
       setCharactersError("Não foi possível atualizar seus personagens.")
     } finally {
       setCharactersRefreshing(false)
-      setCharactersLoading(false)
     }
   }, [userId])
 
@@ -142,7 +122,6 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
       setCampaignsError("Não foi possível atualizar suas campanhas.")
     } finally {
       setCampaignsRefreshing(false)
-      setCampaignsLoading(false)
     }
   }, [userId])
 
@@ -152,27 +131,71 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!userId) return
+
+    let active = true
     const cachedCharacters = readUserCacheSnapshot<UserCharacterSummary[]>(userId, "characters")
     const cachedCampaigns = readUserCacheSnapshot<UserCampaign[]>(userId, "campaigns")
+    const shouldRefreshCharacters = !cachedCharacters?.fresh
+    const shouldRefreshCampaigns = !cachedCampaigns?.fresh
 
+    setBootstrapError("")
+    setCharactersError("")
+    setCampaignsError("")
     setCharactersState(cachedCharacters?.data ?? [])
     setCampaignsState(cachedCampaigns?.data ?? [])
-    setCharactersLoading(!cachedCharacters)
-    setCampaignsLoading(!cachedCampaigns)
+    setCharactersLoading(shouldRefreshCharacters)
+    setCampaignsLoading(shouldRefreshCampaigns)
 
-    if (requirements.characters && (!cachedCharacters || !cachedCharacters.fresh)) {
-      void refreshCharacters()
+    async function bootstrap() {
+      const missing: string[] = []
+
+      await Promise.all([
+        shouldRefreshCharacters
+          ? fetchCharactersOnce(userId)
+              .then((next) => {
+                if (!active) return
+                setCharactersState(next)
+                writeUserCache(userId, "characters", next, { synced: true })
+              })
+              .catch(() => {
+                if (!active) return
+                setCharactersError("Não foi possível atualizar seus personagens.")
+                if (!cachedCharacters) missing.push("personagens")
+              })
+              .finally(() => {
+                if (active) setCharactersLoading(false)
+              })
+          : Promise.resolve(),
+        shouldRefreshCampaigns
+          ? fetchCampaignsOnce(userId)
+              .then((next) => {
+                if (!active) return
+                setCampaignsState(next)
+                writeUserCache(userId, "campaigns", next, { synced: true })
+              })
+              .catch(() => {
+                if (!active) return
+                setCampaignsError("Não foi possível atualizar suas campanhas.")
+                if (!cachedCampaigns) missing.push("campanhas")
+              })
+              .finally(() => {
+                if (active) setCampaignsLoading(false)
+              })
+          : Promise.resolve(),
+      ])
+
+      if (!active || missing.length === 0) return
+      setBootstrapError(
+        `Não foi possível carregar ${missing.join(" e ")} para iniciar a área do usuário.`,
+      )
     }
-    if (requirements.campaigns && (!cachedCampaigns || !cachedCampaigns.fresh)) {
-      void refreshCampaigns()
+
+    void bootstrap()
+
+    return () => {
+      active = false
     }
-  }, [
-    refreshCampaigns,
-    refreshCharacters,
-    requirements.campaigns,
-    requirements.characters,
-    userId,
-  ])
+  }, [userId])
 
   const value = useMemo<UserDataState>(() => ({
     userId,
@@ -184,12 +207,14 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     campaignsRefreshing,
     charactersError,
     campaignsError,
+    bootstrapError,
     setCharacters,
     setCampaigns,
     refreshCharacters,
     refreshCampaigns,
     refreshAll,
   }), [
+    bootstrapError,
     campaigns,
     campaignsError,
     campaignsLoading,
