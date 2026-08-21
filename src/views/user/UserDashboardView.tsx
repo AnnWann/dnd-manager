@@ -2,34 +2,27 @@ import { LogOut } from "lucide-react"
 import { Suspense } from "react"
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom"
 
-import {
-  AppSidebar,
-  IconCastle,
-  IconCharacter,
-  IconMagic,
-} from "../../components/AppSidebar"
 import { authClient } from "../../auth/auth-client"
 import {
   clearLocalDevelopmentSession,
   getLocalUser,
   LOCAL_AUTH_BYPASS,
 } from "../../auth/local-auth"
+import {
+  AppSidebar,
+  IconCastle,
+  IconCharacter,
+  IconMagic,
+} from "../../components/AppSidebar"
+import { AppLoadingScreen } from "../../components/AppLoadingScreen"
 
 export function UserDashboardView() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { data: session, isPending } = authClient.useSession()
+  const { data: session } = authClient.useSession()
 
   const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
   const user = session?.user ?? localUser
-
-  if (!LOCAL_AUTH_BYPASS && isPending) {
-    return (
-      <div className="grid min-h-dvh place-items-center text-sm text-textMuted">
-        Verificando sessão...
-      </div>
-    )
-  }
 
   if (!user) {
     return <Navigate to="/unauthorized" replace />
@@ -95,20 +88,19 @@ export function UserDashboardView() {
 
         <main className="min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto">
           <div className="mx-auto w-full min-w-0 max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
-            <Suspense fallback={<UserRouteLoading />}>
+            <Suspense
+              fallback={
+                <AppLoadingScreen
+                  title="Carregando página..."
+                  detail="Preparando o conteúdo solicitado."
+                />
+              }
+            >
               <Outlet />
             </Suspense>
           </div>
         </main>
       </div>
-    </div>
-  )
-}
-
-function UserRouteLoading() {
-  return (
-    <div className="grid min-h-64 place-items-center text-sm text-textMuted">
-      Carregando...
     </div>
   )
 }
