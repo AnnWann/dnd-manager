@@ -7,15 +7,9 @@ const PublicLayout = lazy(() =>
   })),
 )
 
-const UserLayout = lazy(() =>
-  import("./layouts/userLayout").then((module) => ({
-    default: module.UserLayout,
-  })),
-)
-
-const CampaignLayout = lazy(() =>
-  import("./layouts/campaignLayout").then((module) => ({
-    default: module.CampaignLayout,
+const AuthenticatedLayout = lazy(() =>
+  import("./layouts/authenticatedLayout").then((module) => ({
+    default: module.AuthenticatedLayout,
   })),
 )
 
@@ -34,10 +28,8 @@ function App() {
     <Suspense fallback={<AppLoading />}>
       {usesPublicLayout ? (
         <PublicLayout />
-      ) : usesUserLayout ? (
-        <UserLayout />
       ) : (
-        <CampaignLayout />
+        <AuthenticatedLayout mode={usesUserLayout ? "user" : "campaign"} />
       )}
     </Suspense>
   )
