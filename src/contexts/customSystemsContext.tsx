@@ -314,13 +314,19 @@ export function useCustomSystemsContext(): CustomSystemsContextValue {
   const context = useContext(CustomSystemsContext)
   const editor = useOptionalCreationEditor()
   const legacySeededRef = useRef(false)
+  const [creationMigrationReady, setCreationMigrationReady] = useState(false)
 
   useEffect(() => {
+    if (!editor?.draft || !editor.base) {
+      setCreationMigrationReady(false)
+      return
+    }
+    if (!context?.hydrated) return
     if (legacySeededRef.current) return
-    if (!context?.hydrated || !editor?.draft || !editor.base) return
 
     if (editor.managedDomains.customSystems) {
       legacySeededRef.current = true
+      setCreationMigrationReady(true)
       return
     }
 
@@ -329,11 +335,16 @@ export function useCustomSystemsContext(): CustomSystemsContextValue {
       editor.draft.customSystems.length > 0
     ) {
       legacySeededRef.current = true
+      setCreationMigrationReady(true)
       return
     }
 
     const legacyDefinitions = normalizeDefinitions(context.definitions)
-    if (!legacyDefinitions.length) return
+    if (!legacyDefinitions.length) {
+      legacySeededRef.current = true
+      setCreationMigrationReady(true)
+      return
+    }
 
     legacySeededRef.current = true
     editor.updateDraft((draft) => ({
@@ -342,6 +353,7 @@ export function useCustomSystemsContext(): CustomSystemsContextValue {
         structuredClone(definition),
       ),
     }))
+    setCreationMigrationReady(true)
   }, [context, editor])
 
   return useMemo(() => {
@@ -365,7 +377,7 @@ export function useCustomSystemsContext(): CustomSystemsContextValue {
       status: editor.saving
         ? { kind: 'saving' as const }
         : { kind: 'idle' as const },
-      hydrated: true,
+      hydrated: creationMigrationReady,
       canManage: context.canManage,
       createDefinition: () => {
         const definition = createEmptyDefinition()
@@ -407,7 +419,7 @@ export function useCustomSystemsContext(): CustomSystemsContextValue {
       },
       reload: editor.reload,
     }
-  }, [context, editor])
+  }, [context, creationMigrationReady, editor])
 }
 
 function createEmptyDefinition(): CustomSystemDefinition {
