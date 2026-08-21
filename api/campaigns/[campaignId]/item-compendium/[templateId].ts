@@ -11,19 +11,24 @@ import { prisma } from "../../../../server/prisma"
 import { requireSession } from "../../../../server/session"
 
 type RouteContext = {
-  params: Promise<{
-    campaignId: string
-    templateId: string
-  }>
+  params?:
+    | Promise<{
+        campaignId?: string
+        templateId?: string
+      }>
+    | {
+        campaignId?: string
+        templateId?: string
+      }
 }
 
 export async function DELETE(
   request: Request,
-  context: RouteContext,
+  context?: RouteContext,
 ): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const { campaignId, templateId } = await context.params
+    const { campaignId, templateId } = await resolveRouteParams(request, context)
     const access = await requireCampaignAccess(campaignId, session.user.id)
 
     if (!access.isMaster) {
@@ -90,4 +95,35 @@ async function requireCampaignAccess(
       campaign.ownerId === userId ||
       campaign.members.some((member) => member.role === CampaignRole.MASTER),
   }
+}
+
+async function resolveRouteParams(
+  request: Request,
+  context?: RouteContext,
+): Promise<{ campaignId: string; templateId: string }> {
+  const params = context?.params ? await context.params : undefined
+  const fromContextCampaignId = params?.campaignId?.trim()
+  const fromContextTemplateId = params?.templateId?.trim()
+  if (fromContextCampaignId && fromContextTemplateId) {
+    return {
+      campaignId: fromContextCampaignId,
+      templateId: fromContextTemplateId,
+    }
+  }
+
+  const match = new URL(request.url).pathname.match(
+    /\/api\/campaigns\/([^/]+)\/item-compendium\/([^/]+)/,
+  )
+  if (match?.[1] && match?.[2]) {
+    return {
+      campaignId: decodeURIComponent(match[1]),
+      templateId: decodeURIComponent(match[2]),
+    }
+  }
+
+  throw new ApiError(
+    400,
+    "ITEM_ROUTE_PARAMS_REQUIRED",
+    "Os identificadores da campanha e do item não foram informados.",
+  )
 }
