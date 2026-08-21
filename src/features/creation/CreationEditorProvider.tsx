@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import { useBlocker } from "react-router-dom"
 
 import {
   getCreationSnapshot,
@@ -143,6 +144,25 @@ export function CreationEditorProvider({
     () => Boolean(base && draft && !creationStatesEqual(base, draft)),
     [base, draft],
   )
+
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => {
+    if (!dirty) return false
+    if (currentLocation.pathname === nextLocation.pathname) return false
+
+    const creationRoot = `/session/${campaignId}/creation`
+    return !nextLocation.pathname.startsWith(creationRoot)
+  })
+
+  useEffect(() => {
+    if (blocker.state !== "blocked") return
+
+    const shouldLeave = window.confirm(
+      "Há alterações de Criação não salvas. Deseja sair e descartá-las?",
+    )
+
+    if (shouldLeave) blocker.proceed()
+    else blocker.reset()
+  }, [blocker])
 
   useEffect(() => {
     if (!dirty) return
