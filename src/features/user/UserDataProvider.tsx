@@ -18,6 +18,7 @@ import {
   readUserCacheSnapshot,
   setActiveUserCacheId,
   writeUserCache,
+  writeUserCharacterCache,
 } from "./userPersistentCache"
 
 type UserDataState = {
@@ -62,6 +63,17 @@ function fetchCampaignsOnce(userId: string): Promise<UserCampaign[]> {
   return request
 }
 
+function cacheOwnedCharacters(
+  userId: string,
+  characters: UserCharacterSummary[],
+  synced: boolean,
+): void {
+  if (!userId) return
+  for (const character of characters) {
+    writeUserCharacterCache(userId, character.id, character, { synced })
+  }
+}
+
 export function UserDataProvider({ children }: { children: ReactNode }) {
   const { data: session } = authClient.useSession()
   const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
@@ -82,7 +94,10 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
   const setCharacters: Dispatch<SetStateAction<UserCharacterSummary[]>> = useCallback((next) => {
     setCharactersState((current) => {
       const resolved = typeof next === "function" ? next(current) : next
-      if (userId) writeUserCache(userId, "characters", resolved)
+      if (userId) {
+        writeUserCache(userId, "characters", resolved)
+        cacheOwnedCharacters(userId, resolved, false)
+      }
       return resolved
     })
   }, [userId])
@@ -103,6 +118,7 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
       const next = await fetchCharactersOnce(userId)
       setCharactersState(next)
       writeUserCache(userId, "characters", next, { synced: true })
+      cacheOwnedCharacters(userId, next, true)
     } catch {
       setCharactersError("Não foi possível atualizar seus personagens.")
     } finally {
@@ -146,6 +162,10 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     setCharactersLoading(shouldRefreshCharacters)
     setCampaignsLoading(shouldRefreshCampaigns)
 
+    if (cachedCharacters?.data) {
+      cacheOwnedCharacters(userId, cachedCharacters.data, cachedCharacters.fresh)
+    }
+
     async function bootstrap() {
       const missing: string[] = []
 
@@ -156,6 +176,7 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
                 if (!active) return
                 setCharactersState(next)
                 writeUserCache(userId, "characters", next, { synced: true })
+                cacheOwnedCharacters(userId, next, true)
               })
               .catch(() => {
                 if (!active) return
