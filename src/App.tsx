@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react"
+import { lazy, Suspense, type ReactNode } from "react"
 import { useLocation } from "react-router-dom"
 
 const AuthView = lazy(() =>
@@ -56,7 +56,7 @@ function App() {
   )
 }
 
-function PublicPage({ children }: { children: React.ReactNode }) {
+function PublicPage({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh bg-[color:var(--surface-app)] text-text">
       {children}
