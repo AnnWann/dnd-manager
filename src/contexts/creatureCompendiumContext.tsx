@@ -148,12 +148,23 @@ export function useCreatureCompendium(): CreatureCompendiumContextValue {
   useEffect(() => {
     if (legacySeededRef.current) return
     if (!context?.hydrated || !editor?.draft || !editor.base) return
-    legacySeededRef.current = true
 
-    if (editor.base.creatureCompendium.length) return
-    if (editor.draft.creatureCompendium.length) return
+    if (editor.managedDomains.creatureCompendium) {
+      legacySeededRef.current = true
+      return
+    }
+
+    if (
+      editor.base.creatureCompendium.length > 0 ||
+      editor.draft.creatureCompendium.length > 0
+    ) {
+      legacySeededRef.current = true
+      return
+    }
+
     if (!context.creatures.length) return
 
+    legacySeededRef.current = true
     editor.updateDraft((draft) => ({
       ...draft,
       creatureCompendium: context.creatures.map((creature) =>
