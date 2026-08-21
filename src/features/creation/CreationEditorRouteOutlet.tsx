@@ -1,6 +1,8 @@
 import { Navigate, Outlet, useParams } from "react-router-dom"
 
 import { Button } from "../../components/ui/Button"
+import { useCreatureCompendium } from "../../contexts/creatureCompendiumContext"
+import { useCustomSystemsContext } from "../../contexts/customSystemsContext"
 import { CreationEditorProvider, useCreationEditor } from "./CreationEditorProvider"
 
 export function CreationEditorRouteOutlet() {
@@ -16,6 +18,8 @@ export function CreationEditorRouteOutlet() {
 
 function CreationEditorRouteContent() {
   const editor = useCreationEditor()
+  const creatureCompendium = useCreatureCompendium()
+  const customSystems = useCustomSystemsContext()
 
   if (editor.status === "loading") {
     return (
@@ -29,6 +33,14 @@ function CreationEditorRouteContent() {
     return (
       <div className="mx-auto max-w-3xl rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger">
         {editor.error || "Não foi possível carregar o estado de Criação."}
+      </div>
+    )
+  }
+
+  if (!creatureCompendium.hydrated || !customSystems.hydrated) {
+    return (
+      <div className="grid min-h-48 place-items-center text-sm text-textMuted">
+        Preparando dados de Criação...
       </div>
     )
   }
