@@ -17,8 +17,8 @@ export function AuthenticatedLayout({ mode }: { mode: "user" | "campaign" }) {
       <Suspense
         fallback={
           <AppLoadingScreen
-            title="Carregando área autenticada..."
-            detail="Preparando sua navegação."
+            title="Verificando autenticação..."
+            detail="Confirmando sua sessão."
           />
         }
       >
