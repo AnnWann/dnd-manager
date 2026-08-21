@@ -144,13 +144,19 @@ export function useCreatureCompendium(): CreatureCompendiumContextValue {
   const context = useContext(CreatureCompendiumContext)
   const editor = useOptionalCreationEditor()
   const legacySeededRef = useRef(false)
+  const [creationMigrationReady, setCreationMigrationReady] = useState(false)
 
   useEffect(() => {
+    if (!editor?.draft || !editor.base) {
+      setCreationMigrationReady(false)
+      return
+    }
+    if (!context?.hydrated) return
     if (legacySeededRef.current) return
-    if (!context?.hydrated || !editor?.draft || !editor.base) return
 
     if (editor.managedDomains.creatureCompendium) {
       legacySeededRef.current = true
+      setCreationMigrationReady(true)
       return
     }
 
@@ -159,10 +165,15 @@ export function useCreatureCompendium(): CreatureCompendiumContextValue {
       editor.draft.creatureCompendium.length > 0
     ) {
       legacySeededRef.current = true
+      setCreationMigrationReady(true)
       return
     }
 
-    if (!context.creatures.length) return
+    if (!context.creatures.length) {
+      legacySeededRef.current = true
+      setCreationMigrationReady(true)
+      return
+    }
 
     legacySeededRef.current = true
     editor.updateDraft((draft) => ({
@@ -171,6 +182,7 @@ export function useCreatureCompendium(): CreatureCompendiumContextValue {
         structuredClone(creature),
       ),
     }))
+    setCreationMigrationReady(true)
   }, [context, editor])
 
   return useMemo(() => {
@@ -212,7 +224,7 @@ export function useCreatureCompendium(): CreatureCompendiumContextValue {
 
     return {
       creatures: editor.draft.creatureCompendium,
-      hydrated: true,
+      hydrated: creationMigrationReady,
       upsertCreature,
       upsertCreatures,
       deleteCreature: (creatureId) => {
@@ -233,5 +245,5 @@ export function useCreatureCompendium(): CreatureCompendiumContextValue {
         updateCreatures(() => [])
       },
     }
-  }, [context, editor])
+  }, [context, creationMigrationReady, editor])
 }
