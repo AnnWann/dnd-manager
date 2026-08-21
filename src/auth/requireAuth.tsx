@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import { Navigate, useLocation } from "react-router-dom"
 
+import { AppLoadingScreen } from "../components/AppLoadingScreen"
 import { authClient } from "./auth-client"
 import {
   getLocalUser,
@@ -20,9 +21,10 @@ export function RequireAuth({
 
   if (!LOCAL_AUTH_BYPASS && isPending) {
     return (
-      <div className="grid min-h-dvh place-items-center text-sm text-textMuted">
-        Verificando sessão...
-      </div>
+      <AppLoadingScreen
+        title="Verificando autenticação..."
+        detail="Confirmando sua sessão."
+      />
     )
   }
 
