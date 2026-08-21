@@ -13,19 +13,24 @@ import { prisma } from "../../../../server/prisma"
 import { requireSession } from "../../../../server/session"
 
 type RouteContext = {
-  params: Promise<{
-    campaignId: string
-    spellId: string
-  }>
+  params?:
+    | Promise<{
+        campaignId?: string
+        spellId?: string
+      }>
+    | {
+        campaignId?: string
+        spellId?: string
+      }
 }
 
 export async function PATCH(
   request: Request,
-  context: RouteContext,
+  context?: RouteContext,
 ): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const { campaignId, spellId } = await context.params
+    const { campaignId, spellId } = await resolveRouteParams(request, context)
     const body = await readJsonObject(request)
     const status = parseReviewStatus(body.status)
     const note =
@@ -118,5 +123,36 @@ function parseReviewStatus(
     400,
     "INVALID_CAMPAIGN_SPELL_STATUS",
     "O status precisa ser APPROVED, REJECTED ou REVOKED.",
+  )
+}
+
+async function resolveRouteParams(
+  request: Request,
+  context?: RouteContext,
+): Promise<{ campaignId: string; spellId: string }> {
+  const params = context?.params ? await context.params : undefined
+  const fromContextCampaignId = params?.campaignId?.trim()
+  const fromContextSpellId = params?.spellId?.trim()
+  if (fromContextCampaignId && fromContextSpellId) {
+    return {
+      campaignId: fromContextCampaignId,
+      spellId: fromContextSpellId,
+    }
+  }
+
+  const match = new URL(request.url).pathname.match(
+    /\/api\/campaigns\/([^/]+)\/spells\/([^/]+)/,
+  )
+  if (match?.[1] && match?.[2]) {
+    return {
+      campaignId: decodeURIComponent(match[1]),
+      spellId: decodeURIComponent(match[2]),
+    }
+  }
+
+  throw new ApiError(
+    400,
+    "SPELL_ROUTE_PARAMS_REQUIRED",
+    "Os identificadores da campanha e da magia não foram informados.",
   )
 }
