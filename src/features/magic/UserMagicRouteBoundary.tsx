@@ -1,11 +1,10 @@
 import { Outlet } from "react-router-dom"
 
-import { UserMagicProvider } from "./UserMagicProvider"
-
+/**
+ * Kept as a routing boundary for compatibility with the existing route tree.
+ * UserMagicProvider now lives at /user layout scope so navigation never
+ * remounts or reloads the user's spell context.
+ */
 export function UserMagicRouteBoundary() {
-  return (
-    <UserMagicProvider>
-      <Outlet />
-    </UserMagicProvider>
-  )
+  return <Outlet />
 }
