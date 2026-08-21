@@ -1,8 +1,10 @@
 @import "tailwindcss";
 
-/* Arquivos nos quais o Tailwind deve procurar classes. */
-@source "../index.html";
-@source "./**/*.{ts,tsx}";
+/*
+ * Tailwind v4 detects project source files automatically. Keeping a broad
+ * explicit @source glob here makes this stylesheet depend on every TS/TSX file
+ * and can turn large development updates into an index.css HMR storm.
+ */
 
 /*
  * ============================================================
