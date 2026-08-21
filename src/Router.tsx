@@ -11,9 +11,6 @@ import { RequireAuth } from "./auth/requireAuth"
 import { readActiveSession } from "./lib/activeCampaign"
 import { sessionPath } from "./lib/campaignRoutes"
 
-const AuthView = lazy(() => import("./views/AuthView").then((module) => ({ default: module.AuthView })))
-const NotFoundView = lazy(() => import("./views/NotFoundView").then((module) => ({ default: module.NotFoundView })))
-const UnauthorizedView = lazy(() => import("./views/UnauthorisedView").then((module) => ({ default: module.UnauthorizedView })))
 const UserDashboardView = lazy(() => import("./views/user/UserDashboardView").then((module) => ({ default: module.UserDashboardView })))
 const UserCharactersTab = lazy(() => import("./views/user/UserCharactersTab").then((module) => ({ default: module.UserCharactersTab })))
 const UserCharacterCreateView = lazy(() => import("./views/user/UserCharacterCreateView").then((module) => ({ default: module.UserCharacterCreateView })))
@@ -49,9 +46,6 @@ export function AppRouter() {
     <Suspense fallback={<RouteLoading />}>
       <Routes>
         <Route path="/" element={<Navigate to="/user" replace />} />
-        <Route path="/auth" element={<AuthView />} />
-        <Route path="/not-found" element={<NotFoundView />} />
-        <Route path="/unauthorized" element={<UnauthorizedView />} />
 
         <Route
           path="/user"
