@@ -13,10 +13,15 @@ import { prisma } from "../../../../server/prisma"
 import { requireSession } from "../../../../server/session"
 
 type RouteContext = {
-  params: Promise<{
-    campaignId: string
-    requestId: string
-  }>
+  params?:
+    | Promise<{
+        campaignId?: string
+        requestId?: string
+      }>
+    | {
+        campaignId?: string
+        requestId?: string
+      }
 }
 
 type RequestType = "CHARACTER" | "SYSTEM" | "CLASS" | "OTHER"
@@ -35,11 +40,11 @@ type RawRequest = {
 
 export async function PATCH(
   request: Request,
-  context: RouteContext,
+  context?: RouteContext,
 ): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const { campaignId, requestId } = await context.params
+    const { campaignId, requestId } = await resolveRouteParams(request, context)
     await requireMaster(campaignId, session.user.id)
     const body = await readJsonObject(request)
     const status = parseReviewStatus(body.status)
@@ -222,4 +227,35 @@ function parseVisibility(value: unknown): CharacterVisibility {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
+}
+
+async function resolveRouteParams(
+  request: Request,
+  context?: RouteContext,
+): Promise<{ campaignId: string; requestId: string }> {
+  const params = context?.params ? await context.params : undefined
+  const fromContextCampaignId = params?.campaignId?.trim()
+  const fromContextRequestId = params?.requestId?.trim()
+  if (fromContextCampaignId && fromContextRequestId) {
+    return {
+      campaignId: fromContextCampaignId,
+      requestId: fromContextRequestId,
+    }
+  }
+
+  const match = new URL(request.url).pathname.match(
+    /\/api\/campaigns\/([^/]+)\/requests\/([^/]+)/,
+  )
+  if (match?.[1] && match?.[2]) {
+    return {
+      campaignId: decodeURIComponent(match[1]),
+      requestId: decodeURIComponent(match[2]),
+    }
+  }
+
+  throw new ApiError(
+    400,
+    "REQUEST_ROUTE_PARAMS_REQUIRED",
+    "Os identificadores da campanha e da solicitação não foram informados.",
+  )
 }
