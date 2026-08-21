@@ -14,6 +14,7 @@ export function preloadUserNavigation(): Promise<void> {
     import("../../views/user/UserCharactersTab"),
     import("../../views/user/UserCampaignsRouteView"),
     import("../../views/user/UserSpellsTab"),
+    import("../magic/UserMagicRouteBoundary"),
   ])
     .then(() => undefined)
     .catch((error) => {
