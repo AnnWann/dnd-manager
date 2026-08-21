@@ -12,19 +12,24 @@ import { prisma } from "../../../../../server/prisma"
 import { requireSession } from "../../../../../server/session"
 
 type RouteContext = {
-  params: Promise<{
-    campaignId: string
-    userId: string
-  }>
+  params?:
+    | Promise<{
+        campaignId?: string
+        userId?: string
+      }>
+    | {
+        campaignId?: string
+        userId?: string
+      }
 }
 
 export async function PATCH(
   request: Request,
-  context: RouteContext,
+  context?: RouteContext,
 ): Promise<Response> {
   try {
     const session = await requireSession(request)
-    const { campaignId, userId } = await context.params
+    const { campaignId, userId } = await resolveRouteParams(request, context)
     const body = await readJsonObject(request)
 
     const campaign = await prisma.campaign.findFirst({
@@ -88,6 +93,32 @@ export async function PATCH(
   } catch (error) {
     return handleApiError(error)
   }
+}
+
+async function resolveRouteParams(
+  request: Request,
+  context?: RouteContext,
+): Promise<{ campaignId: string; userId: string }> {
+  const params = context?.params ? await context.params : undefined
+  const campaignId = params?.campaignId?.trim()
+  const userId = params?.userId?.trim()
+  if (campaignId && userId) return { campaignId, userId }
+
+  const match = new URL(request.url).pathname.match(
+    /\/api\/me\/campaigns\/([^/]+)\/members\/([^/]+)/,
+  )
+  if (match?.[1] && match?.[2]) {
+    return {
+      campaignId: decodeURIComponent(match[1]),
+      userId: decodeURIComponent(match[2]),
+    }
+  }
+
+  throw new ApiError(
+    400,
+    "MEMBER_ROUTE_PARAMS_REQUIRED",
+    "Os identificadores da campanha e do membro não foram informados.",
+  )
 }
 
 function parseStatus(value: unknown): CampaignMemberStatus {
