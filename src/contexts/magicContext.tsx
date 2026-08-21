@@ -45,6 +45,7 @@ const MagicContext = createContext<MagicContextValue | null>(null)
 type MagicProviderProps = {
   children: ReactNode
   spells: Spell[]
+  preloadedOfficialSpells?: Spell[]
   setAppState?: React.Dispatch<React.SetStateAction<AppStateV1>>
   onSpellsChange?: (spells: Spell[]) => void
   onSaveSpell?: (spell: Spell) => void
@@ -54,6 +55,7 @@ type MagicProviderProps = {
 export function MagicProvider({
   children,
   spells,
+  preloadedOfficialSpells = [],
   setAppState,
   onSpellsChange,
   onSaveSpell,
@@ -67,6 +69,11 @@ export function MagicProvider({
   const normalizedSavedSpells = useMemo(
     () => spells.map(normalizeSpellText),
     [spells],
+  )
+
+  const effectiveOfficialSpells = useMemo(
+    () => mergeSpells(preloadedOfficialSpells, officialSpells),
+    [officialSpells, preloadedOfficialSpells],
   )
 
   const mergeOfficialSpells = useCallback((incoming: readonly Spell[]) => {
@@ -101,7 +108,7 @@ export function MagicProvider({
       normalizedSavedSpells.map((spell) => spell.index.trim()).filter(Boolean),
     )
     const loadedIndexes = new Set(
-      officialSpells.map((spell) => spell.index.trim()).filter(Boolean),
+      effectiveOfficialSpells.map((spell) => spell.index.trim()).filter(Boolean),
     )
     const missing = Array.from(
       new Set(spellIndexes.map((index) => index.trim()).filter(Boolean)),
@@ -119,15 +126,15 @@ export function MagicProvider({
     }
   }, [
     beginOfficialLoad,
+    effectiveOfficialSpells,
     finishOfficialLoad,
     mergeOfficialSpells,
     normalizedSavedSpells,
-    officialSpells,
   ])
 
   const spellByIndex = useMemo(() => {
     const map = new Map<string, Spell>()
-    for (const spell of officialSpells) {
+    for (const spell of effectiveOfficialSpells) {
       const index = spell.index?.trim()
       if (index) map.set(index, spell)
     }
@@ -136,7 +143,7 @@ export function MagicProvider({
       if (index) map.set(index, spell)
     }
     return map
-  }, [normalizedSavedSpells, officialSpells])
+  }, [effectiveOfficialSpells, normalizedSavedSpells])
 
   const allSpells = useMemo(() => Array.from(spellByIndex.values()), [spellByIndex])
   const metamagics = useMemo(() => officialMetamagics, [])
@@ -230,7 +237,7 @@ export function MagicProvider({
   )
 }
 
-function mergeSpells(existing: Spell[], incoming: Spell[]): Spell[] {
+function mergeSpells(existing: readonly Spell[], incoming: readonly Spell[]): Spell[] {
   const byIndex = new Map(existing.map((spell) => [spell.index, spell]))
   for (const spell of incoming) byIndex.set(spell.index, spell)
   return Array.from(byIndex.values())
