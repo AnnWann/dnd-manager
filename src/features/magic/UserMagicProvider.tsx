@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react"
 
+import { getOfficialSpellsByIndexes } from "../../api/spell-compendium"
 import {
   archiveOwnedHomebrewSpell,
   createOwnedHomebrewSpell,
@@ -18,7 +19,9 @@ import {
 import { authClient } from "../../auth/auth-client"
 import { getLocalUser, LOCAL_AUTH_BYPASS } from "../../auth/local-auth"
 import { MagicProvider } from "../../contexts/magicContext"
+import { collectReferencedSpellIndexes } from "../../lib/spellReferences"
 import type { Spell } from "../../models/magic/spells/Spell"
+import { useUserData } from "../user/UserDataProvider"
 import {
   readUserCacheSnapshot,
   writeUserCache,
@@ -51,12 +54,16 @@ export function UserMagicProvider({ children }: { children: ReactNode }) {
   const { data: session } = authClient.useSession()
   const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
   const userId = session?.user?.id ?? localUser?.id ?? ""
+  const { characters, charactersLoading } = useUserData()
 
   const [records, setRecordsState] = useState<AccessibleHomebrewSpell[]>([])
-  const [loading, setLoading] = useState(true)
+  const [recordsLoading, setRecordsLoading] = useState(true)
+  const [characterSpellsLoading, setCharacterSpellsLoading] = useState(true)
+  const [characterOfficialSpells, setCharacterOfficialSpells] = useState<Spell[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
-  const [bootstrapError, setBootstrapError] = useState("")
+  const [recordsBootstrapError, setRecordsBootstrapError] = useState("")
+  const [characterSpellsBootstrapError, setCharacterSpellsBootstrapError] = useState("")
 
   const setRecords = useCallback(
     (next: AccessibleHomebrewSpell[] | ((current: AccessibleHomebrewSpell[]) => AccessibleHomebrewSpell[])) => {
@@ -92,10 +99,10 @@ export function UserMagicProvider({ children }: { children: ReactNode }) {
     const cached = readUserCacheSnapshot<AccessibleHomebrewSpell[]>(userId, "spells")
     const shouldRefresh = !cached?.fresh
 
-    setBootstrapError("")
+    setRecordsBootstrapError("")
     setErrorMessage("")
     setRecordsState(cached?.data ?? [])
-    setLoading(shouldRefresh)
+    setRecordsLoading(shouldRefresh)
 
     if (!shouldRefresh) {
       return () => {
@@ -113,19 +120,65 @@ export function UserMagicProvider({ children }: { children: ReactNode }) {
         if (!active) return
         setErrorMessage("Não foi possível atualizar as magias homebrew.")
         if (!cached) {
-          setBootstrapError(
+          setRecordsBootstrapError(
             "Não foi possível carregar as magias para iniciar a área do usuário.",
           )
         }
       })
       .finally(() => {
-        if (active) setLoading(false)
+        if (active) setRecordsLoading(false)
       })
 
     return () => {
       active = false
     }
   }, [userId])
+
+  useEffect(() => {
+    if (!userId || charactersLoading) {
+      setCharacterSpellsLoading(true)
+      return
+    }
+
+    let active = true
+    const indexes = Array.from(
+      new Set(
+        characters.flatMap((character) =>
+          collectReferencedSpellIndexes(character.data),
+        ),
+      ),
+    )
+
+    setCharacterSpellsBootstrapError("")
+
+    if (!indexes.length) {
+      setCharacterOfficialSpells([])
+      setCharacterSpellsLoading(false)
+      return () => {
+        active = false
+      }
+    }
+
+    setCharacterSpellsLoading(true)
+    void getOfficialSpellsByIndexes(indexes)
+      .then((spells) => {
+        if (!active) return
+        setCharacterOfficialSpells(spells)
+      })
+      .catch(() => {
+        if (!active) return
+        setCharacterSpellsBootstrapError(
+          "Não foi possível carregar as magias usadas pelos seus personagens.",
+        )
+      })
+      .finally(() => {
+        if (active) setCharacterSpellsLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [characters, charactersLoading, userId])
 
   const spells = useMemo(
     () => records.map((record) => record.data),
@@ -210,6 +263,10 @@ export function UserMagicProvider({ children }: { children: ReactNode }) {
     })
   }
 
+  const loading = recordsLoading || characterSpellsLoading
+  const bootstrapError =
+    recordsBootstrapError || characterSpellsBootstrapError
+
   return (
     <UserMagicStateContext.Provider
       value={{
@@ -223,6 +280,7 @@ export function UserMagicProvider({ children }: { children: ReactNode }) {
     >
       <MagicProvider
         spells={spells}
+        preloadedOfficialSpells={characterOfficialSpells}
         onSaveSpell={saveSpell}
         onDeleteSpell={deleteSpell}
       >
