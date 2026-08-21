@@ -22,6 +22,8 @@ import {
   writeUserCharacterCache,
 } from "./userPersistentCache"
 
+const INVITED_CAMPAIGN_POLL_MS = 10_000
+
 type UserDataState = {
   userId: string
   characters: UserCharacterSummary[]
@@ -167,7 +169,12 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     const cachedCharacters = readUserCacheSnapshot<UserCharacterSummary[]>(userId, "characters")
     const cachedCampaigns = readUserCacheSnapshot<UserCampaign[]>(userId, "campaigns")
     const shouldRefreshCharacters = !cachedCharacters?.fresh
-    const shouldRefreshCampaigns = !cachedCampaigns?.fresh
+
+    // Campaign membership can be changed by another user (for example, a
+    // MASTER approving a pending join request). Always revalidate campaigns
+    // when the /user context is mounted instead of trusting the long-lived
+    // persistent cache across a reload/login.
+    const shouldRefreshCampaigns = true
 
     setBootstrapError("")
     setCharactersError("")
@@ -206,22 +213,20 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
                 if (active) setCharactersLoading(false)
               })
           : Promise.resolve(),
-        shouldRefreshCampaigns
-          ? fetchCampaignsOnce(userId)
-              .then((next) => {
-                if (!active) return
-                setCampaignsState(next)
-                writeUserCache(userId, "campaigns", next, { synced: true })
-              })
-              .catch(() => {
-                if (!active) return
-                setCampaignsError("Não foi possível atualizar suas campanhas.")
-                if (!cachedCampaigns) missing.push("campanhas")
-              })
-              .finally(() => {
-                if (active) setCampaignsLoading(false)
-              })
-          : Promise.resolve(),
+        fetchCampaignsOnce(userId)
+          .then((next) => {
+            if (!active) return
+            setCampaignsState(next)
+            writeUserCache(userId, "campaigns", next, { synced: true })
+          })
+          .catch(() => {
+            if (!active) return
+            setCampaignsError("Não foi possível atualizar suas campanhas.")
+            if (!cachedCampaigns) missing.push("campanhas")
+          })
+          .finally(() => {
+            if (active) setCampaignsLoading(false)
+          }),
       ])
 
       if (!active || missing.length === 0) return
@@ -236,6 +241,57 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
       active = false
     }
   }, [userId])
+
+  useEffect(() => {
+    if (!userId || LOCAL_AUTH_BYPASS) return
+    if (!campaigns.some((campaign) => campaign.status === "INVITED")) return
+
+    let stopped = false
+    let timerId: number | undefined
+
+    const schedule = () => {
+      if (stopped) return
+      timerId = window.setTimeout(() => {
+        void poll()
+      }, INVITED_CAMPAIGN_POLL_MS)
+    }
+
+    const poll = async () => {
+      if (stopped) return
+
+      if (document.visibilityState !== "visible") {
+        schedule()
+        return
+      }
+
+      try {
+        const next = await fetchCampaignsOnce(userId)
+        if (stopped) return
+        setCampaignsState(next)
+        writeUserCache(userId, "campaigns", next, { synced: true })
+      } catch {
+        // This is a background revalidation. Keep the last known state and try
+        // again while the membership remains pending.
+      }
+
+      if (!stopped) schedule()
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== "visible" || stopped) return
+      if (timerId !== undefined) window.clearTimeout(timerId)
+      void poll()
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    schedule()
+
+    return () => {
+      stopped = true
+      if (timerId !== undefined) window.clearTimeout(timerId)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+    }
+  }, [campaigns, userId])
 
   const value = useMemo<UserDataState>(() => ({
     userId,
