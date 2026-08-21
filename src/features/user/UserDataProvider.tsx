@@ -16,6 +16,7 @@ import { authClient } from "../../auth/auth-client"
 import { getLocalUser, LOCAL_AUTH_BYPASS } from "../../auth/local-auth"
 import {
   readUserCacheSnapshot,
+  readUserCharacterCacheSnapshot,
   setActiveUserCacheId,
   writeUserCache,
   writeUserCharacterCache,
@@ -63,14 +64,31 @@ function fetchCampaignsOnce(userId: string): Promise<UserCampaign[]> {
   return request
 }
 
-function cacheOwnedCharacters(
+function seedOwnedCharacterCaches(
   userId: string,
   characters: UserCharacterSummary[],
-  synced: boolean,
+  sourceIsFresh: boolean,
 ): void {
   if (!userId) return
   for (const character of characters) {
-    writeUserCharacterCache(userId, character.id, character, { synced })
+    const existing = readUserCharacterCacheSnapshot<UserCharacterSummary>(
+      userId,
+      character.id,
+    )
+    if (existing) continue
+    writeUserCharacterCache(userId, character.id, character, {
+      synced: sourceIsFresh,
+    })
+  }
+}
+
+function replaceOwnedCharacterCachesFromServer(
+  userId: string,
+  characters: UserCharacterSummary[],
+): void {
+  if (!userId) return
+  for (const character of characters) {
+    writeUserCharacterCache(userId, character.id, character, { synced: true })
   }
 }
 
@@ -94,10 +112,7 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
   const setCharacters: Dispatch<SetStateAction<UserCharacterSummary[]>> = useCallback((next) => {
     setCharactersState((current) => {
       const resolved = typeof next === "function" ? next(current) : next
-      if (userId) {
-        writeUserCache(userId, "characters", resolved)
-        cacheOwnedCharacters(userId, resolved, false)
-      }
+      if (userId) writeUserCache(userId, "characters", resolved)
       return resolved
     })
   }, [userId])
@@ -118,7 +133,7 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
       const next = await fetchCharactersOnce(userId)
       setCharactersState(next)
       writeUserCache(userId, "characters", next, { synced: true })
-      cacheOwnedCharacters(userId, next, true)
+      replaceOwnedCharacterCachesFromServer(userId, next)
     } catch {
       setCharactersError("Não foi possível atualizar seus personagens.")
     } finally {
@@ -163,7 +178,11 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     setCampaignsLoading(shouldRefreshCampaigns)
 
     if (cachedCharacters?.data) {
-      cacheOwnedCharacters(userId, cachedCharacters.data, cachedCharacters.fresh)
+      seedOwnedCharacterCaches(
+        userId,
+        cachedCharacters.data,
+        cachedCharacters.fresh,
+      )
     }
 
     async function bootstrap() {
@@ -176,7 +195,7 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
                 if (!active) return
                 setCharactersState(next)
                 writeUserCache(userId, "characters", next, { synced: true })
-                cacheOwnedCharacters(userId, next, true)
+                replaceOwnedCharacterCachesFromServer(userId, next)
               })
               .catch(() => {
                 if (!active) return
