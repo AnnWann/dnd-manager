@@ -10,7 +10,7 @@ export function CreationEditorRouteOutlet() {
   if (!campaignId) return <Navigate to="/not-found" replace />
 
   return (
-    <CreationEditorProvider campaignId={campaignId}>
+    <CreationEditorProvider key={campaignId} campaignId={campaignId}>
       <CreationEditorRouteContent />
     </CreationEditorProvider>
   )
