@@ -310,6 +310,36 @@ export function CustomSystemsProvider({ children }: { children: ReactNode }) {
 export function useCustomSystemsContext(): CustomSystemsContextValue {
   const context = useContext(CustomSystemsContext)
   const editor = useOptionalCreationEditor()
+  const legacySeededRef = useRef(false)
+
+  useEffect(() => {
+    if (legacySeededRef.current) return
+    if (!context || !editor?.draft || !editor.base) return
+
+    if (editor.managedDomains.customSystems) {
+      legacySeededRef.current = true
+      return
+    }
+
+    if (
+      editor.base.customSystems.length > 0 ||
+      editor.draft.customSystems.length > 0
+    ) {
+      legacySeededRef.current = true
+      return
+    }
+
+    const legacyDefinitions = normalizeDefinitions(context.definitions)
+    if (!legacyDefinitions.length) return
+
+    legacySeededRef.current = true
+    editor.updateDraft((draft) => ({
+      ...draft,
+      customSystems: legacyDefinitions.map((definition) =>
+        structuredClone(definition),
+      ),
+    }))
+  }, [context, editor])
 
   return useMemo(() => {
     if (!context) {
