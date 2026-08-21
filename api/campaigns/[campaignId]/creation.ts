@@ -14,16 +14,17 @@ import {
 } from "../../../server/api"
 import { prisma } from "../../../server/prisma"
 import { requireSession } from "../../../server/session"
+import { CHARACTER_TYPES } from "../../../src/models/characters/CharacterType"
+import type { CustomSystemDefinition } from "../../../src/models/customSystems/CustomSystemDefinition"
+import type { CompendiumCreature } from "../../../src/models/creatures/CompendiumCreature"
+import type { Itemmable } from "../../../src/models/items/item"
+import type { Spell } from "../../../src/models/magic/spells/Spell"
 import type {
   CreationCharacterConfiguration,
   CreationCharacterCustomSystemConfiguration,
   CreationItemCompendiumEntry,
   CreationState,
 } from "../../../src/shared/creation/creation.types"
-import type { CustomSystemDefinition } from "../../../src/models/customSystems/CustomSystemDefinition"
-import type { CompendiumCreature } from "../../../src/models/creatures/CompendiumCreature"
-import type { Itemmable } from "../../../src/models/items/item"
-import type { Spell } from "../../../src/models/magic/spells/Spell"
 
 type RouteContext = {
   params?:
@@ -70,6 +71,57 @@ export async function PATCH(
     const baseRevision = readRevision(body.baseRevision)
     const data = readCreationState(body.data)
 
+    const systems = data.customSystems.map(readCreationCustomSystem)
+    ensureUniqueIds(
+      systems.map((system) => system.id),
+      "CREATION_SYSTEM_DUPLICATE",
+      "A Criação contém ids de sistema personalizado duplicados.",
+    )
+    const knownSystemIds = new Set(systems.map((system) => system.id))
+
+    const incomingCharacters = data.characters
+      .map(readCreationCharacterConfiguration)
+      .sort((left, right) => left.characterId.localeCompare(right.characterId))
+    ensureUniqueIds(
+      incomingCharacters.map((character) => character.characterId),
+      "CREATION_CHARACTER_DUPLICATE",
+      "A Criação contém personagens duplicados.",
+    )
+
+    for (const configuration of incomingCharacters) {
+      for (const installedSystem of configuration.customSystems) {
+        if (!knownSystemIds.has(installedSystem.systemId)) {
+          throw new ApiError(
+            400,
+            "CREATION_CHARACTER_SYSTEM_UNKNOWN",
+            `O sistema ${installedSystem.systemId} instalado em ${configuration.characterId} não existe na Criação.`,
+          )
+        }
+      }
+    }
+
+    const itemEntries = data.itemCompendium.map(readCreationItemEntry)
+    const templateIds = itemEntries.map((entry) => entry.templateId)
+    ensureUniqueIds(
+      templateIds,
+      "CREATION_ITEM_DUPLICATE",
+      "O compêndio contém ids de item duplicados.",
+    )
+
+    const spells = data.spells.map(readCreationSpell)
+    ensureUniqueIds(
+      spells.map((spell) => spell.index),
+      "CREATION_SPELL_DUPLICATE",
+      "A Criação contém ids de magia duplicados.",
+    )
+
+    const creatures = data.creatureCompendium.map(readCreationCreature)
+    ensureUniqueIds(
+      creatures.map((creature) => creature.id),
+      "CREATION_CREATURE_DUPLICATE",
+      "O compêndio contém ids de criatura duplicados.",
+    )
+
     await prisma.$transaction(async (tx) => {
       const campaign = await tx.campaign.findUnique({
         where: { id: campaignId },
@@ -103,9 +155,6 @@ export async function PATCH(
         )
       }
 
-      const incomingCharacters = data.characters
-        .map(readCreationCharacterConfiguration)
-        .sort((left, right) => left.characterId.localeCompare(right.characterId))
       const currentCharacterIds = campaign.characters
         .map((link) => link.characterId)
         .sort((left, right) => left.localeCompare(right))
@@ -173,10 +222,6 @@ export async function PATCH(
         })
       }
 
-      const itemEntries = data.itemCompendium.map(readCreationItemEntry)
-      const templateIds = itemEntries.map((entry) => entry.templateId)
-      ensureUniqueIds(templateIds, "CREATION_ITEM_DUPLICATE", "O compêndio contém ids de item duplicados.")
-
       await tx.campaignItemCompendium.deleteMany({
         where: {
           campaignId,
@@ -209,10 +254,6 @@ export async function PATCH(
           },
         })
       }
-
-      const spells = data.spells.map(readCreationSpell)
-      const creatures = data.creatureCompendium.map(readCreationCreature)
-      const systems = data.customSystems.map(readCreationCustomSystem)
 
       await replaceCreationAssets(tx, {
         campaignId,
@@ -409,9 +450,15 @@ async function buildCreationSnapshot(campaignId: string) {
   ])
 
   let updatedAt = campaign.updatedAt
-  const managed = assets.some(
+  const marker = assets.find(
     (asset) => asset.type === CREATION_META_TYPE && asset.sourceId === CREATION_META_SOURCE,
   )
+  const markerData = asRecord(marker?.data)
+  const managedDomains = {
+    spells: markerData?.spells === true,
+    creatureCompendium: markerData?.creatureCompendium === true,
+    customSystems: markerData?.customSystems === true,
+  }
 
   const characters = characterLinks.map((link) => {
     updatedAt = laterDate(updatedAt, link.character.updatedAt)
@@ -426,7 +473,7 @@ async function buildCreationSnapshot(campaignId: string) {
   for (const asset of assets) updatedAt = laterDate(updatedAt, asset.updatedAt)
 
   const spellAssets = assets.filter((asset) => asset.type === "SPELL")
-  const spells = managed
+  const spells = managedDomains.spells
     ? spellAssets.map((asset) => asset.data as Spell)
     : spellLinks.map((link) => {
         updatedAt = laterDate(updatedAt, link.spell.updatedAt)
@@ -443,15 +490,17 @@ async function buildCreationSnapshot(campaignId: string) {
     }
   })
 
-  const creatureCompendium = managed
+  const creatureCompendium = managedDomains.creatureCompendium
     ? assets
         .filter((asset) => asset.type === "CREATURE")
         .map((asset) => asset.data as CompendiumCreature)
     : []
 
-  const customSystems = assets
-    .filter((asset) => asset.type === "SYSTEM")
-    .map((asset) => asset.data as CustomSystemDefinition)
+  const customSystems = managedDomains.customSystems
+    ? assets
+        .filter((asset) => asset.type === "SYSTEM")
+        .map((asset) => asset.data as CustomSystemDefinition)
+    : []
 
   const data: CreationState = {
     version: 1,
@@ -466,6 +515,7 @@ async function buildCreationSnapshot(campaignId: string) {
     revision: Math.max(1, campaign.creationRevision),
     updatedAt: updatedAt.toISOString(),
     data,
+    managedDomains,
   }
 }
 
@@ -560,42 +610,151 @@ function readCreationCharacterConfiguration(
 ): CreationCharacterConfiguration {
   const configuration = asRecord(value)
   if (!configuration) {
-    throw new ApiError(400, "CREATION_CHARACTER_INVALID", "Configuração de personagem inválida.")
+    throw new ApiError(
+      400,
+      "CREATION_CHARACTER_INVALID",
+      "Configuração de personagem inválida.",
+    )
   }
 
   const characterId = readRequiredString(configuration.characterId)
   const ownerId = readRequiredString(configuration.ownerId)
   const type = readRequiredString(configuration.type)
+  if (!CHARACTER_TYPES.some((candidate) => candidate === type)) {
+    throw new ApiError(
+      400,
+      "CREATION_CHARACTER_TYPE_INVALID",
+      "Tipo de personagem inválido.",
+    )
+  }
+
   const visibility = configuration.visibility
   if (
     visibility !== "private" &&
     visibility !== "party" &&
     visibility !== "master"
   ) {
-    throw new ApiError(400, "CREATION_VISIBILITY_INVALID", "Visibilidade de personagem inválida.")
+    throw new ApiError(
+      400,
+      "CREATION_VISIBILITY_INVALID",
+      "Visibilidade de personagem inválida.",
+    )
   }
 
-  const customSystems = Array.isArray(configuration.customSystems)
-    ? configuration.customSystems
-        .map(toCustomSystemConfiguration)
-        .filter(
-          (entry): entry is CreationCharacterCustomSystemConfiguration => Boolean(entry),
-        )
-    : []
+  if (typeof configuration.unique !== "boolean") {
+    throw new ApiError(
+      400,
+      "CREATION_CHARACTER_UNIQUE_INVALID",
+      "A configuração de unicidade do personagem é inválida.",
+    )
+  }
+
+  if (
+    !Array.isArray(configuration.hiddenCharacterTabs) ||
+    configuration.hiddenCharacterTabs.some((entry) => typeof entry !== "string")
+  ) {
+    throw new ApiError(
+      400,
+      "CREATION_CHARACTER_TABS_INVALID",
+      "As abas ocultas do personagem são inválidas.",
+    )
+  }
+
+  if (!Array.isArray(configuration.customSystems)) {
+    throw new ApiError(
+      400,
+      "CREATION_CHARACTER_SYSTEMS_INVALID",
+      "A configuração de sistemas personalizados do personagem é inválida.",
+    )
+  }
+
+  const customSystems = configuration.customSystems.map(
+    readCreationCharacterCustomSystemConfiguration,
+  )
+  ensureUniqueIds(
+    customSystems.map((entry) => entry.systemId),
+    "CREATION_CHARACTER_SYSTEM_DUPLICATE",
+    "O personagem possui o mesmo sistema personalizado mais de uma vez.",
+  )
 
   return {
     characterId,
     ownerId,
-    type: type as CreationCharacterConfiguration["type"],
+    type,
     visibility,
-    unique: configuration.unique === true,
-    hiddenCharacterTabs: Array.isArray(configuration.hiddenCharacterTabs)
-      ? configuration.hiddenCharacterTabs.filter(
-          (entry): entry is string => typeof entry === "string",
-        )
-      : [],
+    unique: configuration.unique,
+    hiddenCharacterTabs: configuration.hiddenCharacterTabs,
     customSystems,
   }
+}
+
+function readCreationCharacterCustomSystemConfiguration(
+  value: unknown,
+): CreationCharacterCustomSystemConfiguration {
+  const state = asRecord(value)
+  if (!state) {
+    throw new ApiError(
+      400,
+      "CREATION_CHARACTER_SYSTEM_INVALID",
+      "Configuração de sistema personalizado inválida.",
+    )
+  }
+
+  const systemId = readRequiredString(state.systemId)
+  if (
+    typeof state.systemVersion !== "number" ||
+    !Number.isInteger(state.systemVersion) ||
+    state.systemVersion < 1
+  ) {
+    throw new ApiError(
+      400,
+      "CREATION_CHARACTER_SYSTEM_VERSION_INVALID",
+      "A versão instalada do sistema personalizado precisa ser um inteiro positivo.",
+    )
+  }
+
+  if (typeof state.enabled !== "boolean") {
+    throw new ApiError(
+      400,
+      "CREATION_CHARACTER_SYSTEM_ENABLED_INVALID",
+      "O estado habilitado do sistema personalizado é inválido.",
+    )
+  }
+
+  const configuration: CreationCharacterCustomSystemConfiguration = {
+    systemId,
+    systemVersion: state.systemVersion,
+    enabled: state.enabled,
+  }
+
+  if (state.abilityAcquisitionExceptions !== undefined) {
+    const exceptions = asRecord(state.abilityAcquisitionExceptions)
+    if (!exceptions) {
+      throw new ApiError(
+        400,
+        "CREATION_CHARACTER_SYSTEM_EXCEPTIONS_INVALID",
+        "As exceções de aquisição de habilidades do sistema são inválidas.",
+      )
+    }
+    configuration.abilityAcquisitionExceptions =
+      exceptions as CreationCharacterCustomSystemConfiguration["abilityAcquisitionExceptions"]
+  }
+
+  if (state.installationSource !== undefined) {
+    if (
+      state.installationSource !== "master" &&
+      state.installationSource !== "automatic"
+    ) {
+      throw new ApiError(
+        400,
+        "CREATION_CHARACTER_SYSTEM_SOURCE_INVALID",
+        "A origem de instalação do sistema personalizado é inválida.",
+      )
+    }
+    configuration.installationSource = state.installationSource
+  }
+
+  return configuration
 }
 
 function readCreationItemEntry(value: unknown): CreationItemCompendiumEntry {
@@ -615,11 +774,27 @@ function readCreationItemEntry(value: unknown): CreationItemCompendiumEntry {
   }
   readRequiredString(item.name)
 
+  if (typeof entry.custom !== "boolean") {
+    throw new ApiError(
+      400,
+      "CREATION_ITEM_CUSTOM_INVALID",
+      "A flag custom do item é inválida.",
+    )
+  }
+
+  if (entry.visibility !== "PUBLIC" && entry.visibility !== "MASTER") {
+    throw new ApiError(
+      400,
+      "CREATION_ITEM_VISIBILITY_INVALID",
+      "A visibilidade do item é inválida.",
+    )
+  }
+
   return {
     templateId,
     item: item as unknown as Itemmable,
-    custom: entry.custom === true,
-    visibility: entry.visibility === "MASTER" ? "MASTER" : "PUBLIC",
+    custom: entry.custom,
+    visibility: entry.visibility,
   }
 }
 
@@ -628,9 +803,13 @@ function readCreationSpell(value: unknown): Spell {
   if (!spell) {
     throw new ApiError(400, "CREATION_SPELL_INVALID", "Magia de Criação inválida.")
   }
-  readRequiredString(spell.index)
-  readRequiredString(spell.name)
-  return spell as unknown as Spell
+  const index = readRequiredString(spell.index)
+  const name = readRequiredString(spell.name)
+  return {
+    ...spell,
+    index,
+    name,
+  } as unknown as Spell
 }
 
 function readCreationCreature(value: unknown): CompendiumCreature {
@@ -638,9 +817,13 @@ function readCreationCreature(value: unknown): CompendiumCreature {
   if (!creature) {
     throw new ApiError(400, "CREATION_CREATURE_INVALID", "Criatura de Criação inválida.")
   }
-  readRequiredString(creature.id)
-  readRequiredString(creature.name)
-  return creature as unknown as CompendiumCreature
+  const id = readRequiredString(creature.id)
+  const name = readRequiredString(creature.name)
+  return {
+    ...creature,
+    id,
+    name,
+  } as unknown as CompendiumCreature
 }
 
 function readCreationCustomSystem(value: unknown): CustomSystemDefinition {
@@ -648,9 +831,69 @@ function readCreationCustomSystem(value: unknown): CustomSystemDefinition {
   if (!system) {
     throw new ApiError(400, "CREATION_SYSTEM_INVALID", "Sistema de Criação inválido.")
   }
-  readRequiredString(system.id)
-  readRequiredString(system.name)
-  return system as unknown as CustomSystemDefinition
+
+  const id = readRequiredString(system.id)
+  const name = readRequiredString(system.name)
+  if (
+    typeof system.version !== "number" ||
+    !Number.isInteger(system.version) ||
+    system.version < 1
+  ) {
+    throw new ApiError(
+      400,
+      "CREATION_SYSTEM_VERSION_INVALID",
+      "A versão do sistema personalizado precisa ser um inteiro positivo.",
+    )
+  }
+
+  for (const field of ["fields", "resources", "abilityTypes", "panels", "automations"] as const) {
+    if (!Array.isArray(system[field])) {
+      throw new ApiError(
+        400,
+        "CREATION_SYSTEM_STRUCTURE_INVALID",
+        `O campo ${field} do sistema personalizado precisa ser uma lista.`,
+      )
+    }
+  }
+
+  for (const field of ["nativeStatOverrides", "actions", "standardActionOverrides"] as const) {
+    if (system[field] !== undefined && !Array.isArray(system[field])) {
+      throw new ApiError(
+        400,
+        "CREATION_SYSTEM_STRUCTURE_INVALID",
+        `O campo ${field} do sistema personalizado precisa ser uma lista.`,
+      )
+    }
+  }
+
+  if (
+    system.tags !== undefined &&
+    (!Array.isArray(system.tags) || system.tags.some((tag) => typeof tag !== "string"))
+  ) {
+    throw new ApiError(
+      400,
+      "CREATION_SYSTEM_TAGS_INVALID",
+      "As tags do sistema personalizado são inválidas.",
+    )
+  }
+
+  if (
+    system.hiddenFromSheet !== undefined &&
+    typeof system.hiddenFromSheet !== "boolean"
+  ) {
+    throw new ApiError(
+      400,
+      "CREATION_SYSTEM_VISIBILITY_INVALID",
+      "A configuração hiddenFromSheet do sistema personalizado é inválida.",
+    )
+  }
+
+  return {
+    ...system,
+    id,
+    name,
+    version: system.version,
+  } as unknown as CustomSystemDefinition
 }
 
 function mergeCharacterCreationConfiguration(
@@ -723,7 +966,8 @@ function toCreationCharacter(
   return {
     characterId,
     type:
-      typeof sheet.type === "string"
+      typeof sheet.type === "string" &&
+      CHARACTER_TYPES.some((candidate) => candidate === sheet.type)
         ? sheet.type as CreationCharacterConfiguration["type"]
         : "pc",
     visibility: toCreationVisibility(visibility),
@@ -747,7 +991,11 @@ function toCustomSystemConfiguration(
   const configuration: CreationCharacterCustomSystemConfiguration = {
     systemId: state.systemId,
     systemVersion:
-      typeof state.systemVersion === "number" ? state.systemVersion : 1,
+      typeof state.systemVersion === "number" &&
+      Number.isInteger(state.systemVersion) &&
+      state.systemVersion >= 1
+        ? state.systemVersion
+        : 1,
     enabled: state.enabled !== false,
   }
 
@@ -799,7 +1047,11 @@ function ensureUniqueIds(
 function readRequiredString(value: unknown): string {
   const normalized = typeof value === "string" ? value.trim() : ""
   if (!normalized) {
-    throw new ApiError(400, "CREATION_FIELD_REQUIRED", "Um campo obrigatório da Criação está vazio.")
+    throw new ApiError(
+      400,
+      "CREATION_FIELD_REQUIRED",
+      "Um campo obrigatório da Criação está vazio.",
+    )
   }
   return normalized
 }
