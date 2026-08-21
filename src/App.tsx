@@ -1,6 +1,8 @@
 import { lazy, Suspense, type ReactNode } from "react"
 import { useLocation } from "react-router-dom"
 
+import { AppLoadingScreen } from "./components/AppLoadingScreen"
+
 const AuthView = lazy(() =>
   import("./views/AuthView").then((module) => ({ default: module.AuthView })),
 )
@@ -30,7 +32,14 @@ function App() {
   const path = location.pathname
 
   return (
-    <Suspense fallback={<AppLoading />}>
+    <Suspense
+      fallback={
+        <AppLoadingScreen
+          title="Carregando aplicação..."
+          detail="Preparando os módulos necessários."
+        />
+      }
+    >
       {path === "/auth" ? (
         <PublicPage>
           <AuthView />
@@ -60,17 +69,6 @@ function PublicPage({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh bg-[color:var(--surface-app)] text-text">
       {children}
-    </div>
-  )
-}
-
-function AppLoading() {
-  return (
-    <div className="grid min-h-dvh place-items-center text-sm text-textMuted">
-      <div className="text-center">
-        <div className="font-medium text-textH">Preparando seu ambiente...</div>
-        <div className="mt-1 text-xs text-textMuted">Carregando a aplicação.</div>
-      </div>
     </div>
   )
 }
