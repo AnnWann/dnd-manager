@@ -29,6 +29,7 @@ import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
 import type { SessionConditionsState, SessionConnection, SessionHpState } from "../../session/protocol";
 import type { SessionAbilityState } from "../abilities/abilityProtocol";
 import {
+  authorizeCharacterMutation,
   findRuntimeSpell,
   readRuntimeConfig,
 } from "../../session/runtimeConfigAccess";
@@ -41,6 +42,20 @@ import {
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
+const MANUAL_SOURCE_IDS = new Set([
+  "manual-feat",
+  "manual-race",
+  "manual-equipment",
+  "custom-system",
+  "manual",
+  "dm-granted",
+]);
+
+type KnownSpellEntry = CharacterSpells["knownSpells"][number];
+type RuntimeConfigSnapshot = Awaited<ReturnType<typeof readRuntimeConfig>>;
+type SpellAddValidation =
+  | { ok: true }
+  | { ok: false; code: string; message: string };
 
 export class SessionActor extends AbilitySessionActor {
   override async webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void> {
@@ -82,24 +97,19 @@ export class SessionActor extends AbilitySessionActor {
       sendError(webSocket, "MAGIC_STATE_NOT_INITIALIZED", "Magic state for this character has not been initialized by the MASTER.");
       return;
     }
+
+    const authorization = authorizeCharacterMutation(
+      connection,
+      runtimeConfig,
+      operation.characterId,
+    );
+    if (!authorization.ok) {
+      sendError(webSocket, authorization.code, authorization.message);
+      return;
+    }
     if (connection.role !== "MASTER" && hp.ownerUserId !== connection.userId) {
       sendError(webSocket, "CHARACTER_ACCESS_DENIED", "You cannot change magic for this character.");
       return;
-    }
-
-    if (operation.type === "character.spell.add") {
-      const spellIndex = typeof operation.spellEntry.index === "string"
-        ? operation.spellEntry.index.trim()
-        : "";
-      const isHomebrew = operation.spellEntry.homebrew === true;
-      if (isHomebrew && (!spellIndex || !findRuntimeSpell(runtimeConfig, spellIndex))) {
-        sendError(
-          webSocket,
-          "HOMEBREW_SPELL_NOT_IN_CREATION",
-          "This homebrew spell is not part of the active saved Creation configuration.",
-        );
-        return;
-      }
     }
 
     let current: CharacterTemplate;
@@ -108,6 +118,19 @@ export class SessionActor extends AbilitySessionActor {
     } catch {
       sendError(webSocket, "MAGIC_STATE_INVALID", "The authoritative character snapshot is invalid.");
       return;
+    }
+
+    if (operation.type === "character.spell.add") {
+      const validation = validateSpellAdd(
+        connection,
+        current,
+        runtimeConfig,
+        operation.spellEntry as unknown as KnownSpellEntry,
+      );
+      if (!validation.ok) {
+        sendError(webSocket, validation.code, validation.message);
+        return;
+      }
     }
 
     const next = applyMagicOperation(current, operation);
@@ -143,6 +166,158 @@ export class SessionActor extends AbilitySessionActor {
 
     broadcast(this.ctx.getWebSockets(), { type: "session.abilities.updated", character: nextState });
   }
+}
+
+function validateSpellAdd(
+  connection: SessionConnection,
+  character: CharacterTemplate,
+  runtimeConfig: RuntimeConfigSnapshot,
+  entry: KnownSpellEntry,
+): SpellAddValidation {
+  const spellIndex = entry.spells.id.trim();
+  const source = entry.source;
+  const acquisition = entry.acquisition;
+
+  const alreadyKnown = character
+    .getOrCreateMagic()
+    .spells.knownSpells.some((known) => known.spells.id === spellIndex);
+  if (alreadyKnown) {
+    return {
+      ok: false,
+      code: "SPELL_ALREADY_KNOWN",
+      message: "This character already knows this spell.",
+    };
+  }
+
+  const classes = character.get("sheet").classes ?? [];
+  if (source.type === "class") {
+    const classEntry = classes.find((candidate) => candidate.className === source.sourceId);
+    if (!classEntry) {
+      return {
+        ok: false,
+        code: "SPELL_SOURCE_CLASS_INVALID",
+        message: "The selected spell source is not one of this character's classes.",
+      };
+    }
+    if (classEntry.castingAttribute && classEntry.castingAttribute !== source.attribute) {
+      return {
+        ok: false,
+        code: "SPELL_SOURCE_ATTRIBUTE_INVALID",
+        message: "The selected casting attribute does not match the class configuration.",
+      };
+    }
+  }
+
+  if (MANUAL_SOURCE_IDS.has(source.sourceId) && !acquisition) {
+    return {
+      ok: false,
+      code: "SPELL_ACQUISITION_REQUIRED",
+      message: "Manual session spell additions must include acquisition metadata.",
+    };
+  }
+
+  if (!acquisition) return { ok: true };
+
+  if (acquisition.reason !== "manual" && acquisition.reason !== "campaign-grant") {
+    return { ok: true };
+  }
+
+  const characterLevel = classes.reduce((total, candidate) => total + candidate.level, 0);
+  if (acquisition.characterLevel !== characterLevel) {
+    return {
+      ok: false,
+      code: "SPELL_ACQUISITION_LEVEL_STALE",
+      message: "The character level changed before this spell acquisition was committed.",
+    };
+  }
+
+  if (acquisition.reason === "campaign-grant") {
+    if (
+      connection.role !== "MASTER"
+      || source.type !== "ability"
+      || source.sourceId !== "dm-granted"
+      || acquisition.sourceType !== "campaign"
+    ) {
+      return {
+        ok: false,
+        code: "SPELL_CAMPAIGN_GRANT_MASTER_REQUIRED",
+        message: "Only the MASTER can add a spell as a campaign grant.",
+      };
+    }
+  } else {
+    const sourceValidation = validateManualSource(character, entry);
+    if (!sourceValidation.ok) return sourceValidation;
+  }
+
+  const catalogOrigin = acquisition.notes?.trim();
+  if (catalogOrigin !== "spell-catalog:official" && catalogOrigin !== "spell-catalog:homebrew") {
+    return {
+      ok: false,
+      code: "SPELL_CATALOG_ORIGIN_REQUIRED",
+      message: "Manual spell acquisition must identify whether the spell came from the official or homebrew catalog.",
+    };
+  }
+
+  if (catalogOrigin === "spell-catalog:homebrew" && !findRuntimeSpell(runtimeConfig, spellIndex)) {
+    return {
+      ok: false,
+      code: "HOMEBREW_SPELL_NOT_IN_CREATION",
+      message: "This homebrew spell is not part of the active saved Creation configuration.",
+    };
+  }
+
+  return { ok: true };
+}
+
+function validateManualSource(
+  character: CharacterTemplate,
+  entry: KnownSpellEntry,
+): SpellAddValidation {
+  const source = entry.source;
+  const acquisition = entry.acquisition;
+  if (!acquisition || acquisition.reason !== "manual") {
+    return {
+      ok: false,
+      code: "SPELL_ACQUISITION_INVALID",
+      message: "The spell acquisition metadata is invalid.",
+    };
+  }
+
+  if (source.type === "class") {
+    const classEntry = (character.get("sheet").classes ?? []).find(
+      (candidate) => candidate.className === source.sourceId,
+    );
+    if (
+      !classEntry
+      || acquisition.sourceType !== "class"
+      || acquisition.className !== classEntry.className
+      || acquisition.classLevel !== classEntry.level
+    ) {
+      return {
+        ok: false,
+        code: "SPELL_MANUAL_CLASS_SOURCE_INVALID",
+        message: "The manual class spell acquisition does not match the character's current class.",
+      };
+    }
+    return { ok: true };
+  }
+
+  const valid =
+    (source.type === "feat" && source.sourceId === "manual-feat" && acquisition.sourceType === "feat")
+    || (source.type === "race" && source.sourceId === "manual-race" && acquisition.sourceType === "race")
+    || (source.type === "equipment" && source.sourceId === "manual-equipment" && acquisition.sourceType === "equipment")
+    || (source.type === "ability" && source.sourceId === "custom-system" && acquisition.sourceType === "ability")
+    || (source.type === "ability" && source.sourceId === "manual" && acquisition.sourceType === "manual");
+
+  if (!valid) {
+    return {
+      ok: false,
+      code: "SPELL_MANUAL_SOURCE_INVALID",
+      message: "The selected manual spell source is not valid for session acquisition.",
+    };
+  }
+
+  return { ok: true };
 }
 
 function applyMagicOperation(character: CharacterTemplate, operation: SessionMagicOperation): CharacterTemplate | null {
