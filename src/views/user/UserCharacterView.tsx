@@ -367,10 +367,15 @@ export function UserCharacterView() {
         ) : null}
 
         {activeStaticTab === "proficiencies" ? (
-          <CharacterProficienciesTab
-            character={character}
-            updateCharacter={updateCharacter}
-          />
+          <fieldset
+            disabled={!isEditing}
+            className="m-0 min-w-0 border-0 p-0 disabled:opacity-75"
+          >
+            <CharacterProficienciesTab
+              character={character}
+              updateCharacter={updateCharacter}
+            />
+          </fieldset>
         ) : null}
 
         {customTabSystemId ? (
