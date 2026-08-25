@@ -42,7 +42,13 @@ jobs:
           new = '''auto_open_blocks = [\n    ''' + "'''" + '''      if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) {\\n        onConfigureCustomClass?.()\\n      }\\n''' + "'''" + ''',\n    ''' + "'''" + '''    if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) {\\n      onConfigureCustomClass?.()\\n    }\\n''' + "'''" + ''',\n]\nfor auto_open in auto_open_blocks:\n    if integrated.count(auto_open) != 1:\n        raise SystemExit(f'custom class auto-open anchor mismatch: {integrated.count(auto_open)}')\n    integrated = integrated.replace(auto_open, '', 1)\n'''
           if old not in script:
               raise SystemExit('auto-open patch block not found')
-          path.write_text(script.replace(old, new, 1))
+          script = script.replace(old, new, 1)
+
+          old_reset = '''wrapper = replace_once(\n    wrapper,\n    '      setCustomClassDialogOpen(false)\\n',\n    '',\n    'custom class dialog reset',\n)\n'''
+          new_reset = '''reset_anchor = '      setCustomClassDialogOpen(false)\\n'\nif wrapper.count(reset_anchor) < 1:\n    raise SystemExit('custom class dialog reset anchor not found')\nwrapper = wrapper.replace(reset_anchor, '', 1)\n'''
+          if old_reset not in script:
+              raise SystemExit('custom class dialog reset patch block not found')
+          path.write_text(script.replace(old_reset, new_reset, 1))
           PY
 
           python /tmp/apply-inline-config.py
