@@ -28,7 +28,7 @@ const CLASS_NAMES: ClassName[] = [
   "monk", "paladin", "ranger", "rogue", "sorcerer", "warlock", "wizard",
 ]
 
-/** No multiclass prerequisite table is bundled; users configure/consult their own source. */
+/** No multiclass prerequisite table is bundled; requirements remain user-defined. */
 export const MULTICLASS_REQUIREMENTS = Object.assign(
   Object.fromEntries(
     CLASS_NAMES.map((className) => [className, EMPTY_REQUIREMENT]),
@@ -59,7 +59,7 @@ export function checkMulticlassRequirements(
   }
 }
 
-/** Requirements are intentionally not bundled into selector labels. */
+/** Used only as explanatory copy; selectors strip this suffix. */
 export function formatClassMulticlassRequirement(_className: ClassName): string {
-  return ""
+  return "requisitos manuais"
 }
