@@ -3,6 +3,7 @@
 import type { CharacterClassInterface } from "../../sheet/Class"
 import {
   getCustomClassConfigFromEntry,
+  getCustomProgressionValueAtLevel,
   isCustomClassEntry,
 } from "../../characters/customClassConfig"
 import type { Slot } from "./LeveledSlots"
@@ -102,12 +103,15 @@ function getExplicitCustomSlots(
 ): Partial<Record<MagicCircleLevel, number>> {
   const config = getCustomClassConfigFromEntry(classData)
   if (!config || config.slotProgressionMode !== "table") return {}
-  const row = config.spellSlotProgression[String(classData.level)] ?? {}
   const result: Partial<Record<MagicCircleLevel, number>> = {}
 
   for (let level = 1; level <= 9; level += 1) {
     const circle = level as MagicCircleLevel
-    const amount = Math.max(0, Math.trunc(Number(row[String(level)] ?? 0)))
+    const amount = getCustomProgressionValueAtLevel(
+      config.spellSlotProgression,
+      classData.level,
+      level,
+    )
     if (amount > 0) result[circle] = amount
   }
 

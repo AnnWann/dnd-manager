@@ -203,10 +203,13 @@ export function getCustomSpellSlotPools(character: CharacterTemplate): CustomSpe
 
     for (const pool of config.additionalSlotPools) {
       const slots: CustomSpellSlotPool["slots"] = {}
-      const row = pool.progression[level] ?? {}
       for (let circle = 1; circle <= 9; circle += 1) {
         const key = String(circle)
-        const max = Math.max(0, Math.trunc(Number(row[key] ?? 0)))
+        const max = getCustomProgressionValueAtLevel(
+          pool.progression,
+          classEntry.level,
+          circle,
+        )
         if (max <= 0) continue
         const current = state[pool.id]?.[key]
         slots[circle] = {
@@ -248,8 +251,11 @@ function changeSlot(character: CharacterTemplate, poolId: string, level: number,
     if (!pool) continue
 
     const key = String(level)
-    const row = pool.progression[String(classEntry.level)] ?? {}
-    const max = Math.max(0, Math.trunc(Number(row[key] ?? 0)))
+    const max = getCustomProgressionValueAtLevel(
+      pool.progression,
+      classEntry.level,
+      level,
+    )
     if (max <= 0) return character
 
     const state = readState(character, index)
@@ -331,6 +337,24 @@ export function normalizeCustomClassConfig(
         : {},
     additionalSlotPools: Array.isArray(config.additionalSlotPools) ? config.additionalSlotPools : [],
   }
+}
+
+export function getCustomProgressionValueAtLevel(
+  progression: Record<string, Record<string, number>>,
+  classLevel: number,
+  circle: number,
+): number {
+  const targetLevel = Math.max(1, Math.min(20, Math.trunc(classLevel || 1)))
+  const circleKey = String(Math.max(1, Math.min(9, Math.trunc(circle || 1))))
+  let amount = 0
+
+  for (let level = 1; level <= targetLevel; level += 1) {
+    const configured = progression[String(level)]?.[circleKey]
+    if (configured === undefined) continue
+    amount = Math.max(0, Math.trunc(Number(configured) || 0))
+  }
+
+  return amount
 }
 
 export function getCustomCantripsKnownAtLevel(

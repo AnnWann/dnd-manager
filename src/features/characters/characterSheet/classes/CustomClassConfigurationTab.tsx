@@ -7,6 +7,7 @@ import type { CharacterTemplate } from "../../../../models/characters/CharacterT
 import {
   createCustomSlotPool,
   getCustomClassConfig,
+  getCustomProgressionValueAtLevel,
   normalizeCustomClassConfig,
   updateCustomClassConfig,
   type CustomClassRuntimeConfig,
@@ -135,15 +136,15 @@ export function CustomClassConfigurationEditor({
     progression: Record<string, Record<string, number>>,
     level: number,
     circle: number,
-    amount: number,
+    raw: string,
   ) {
     const next = { ...progression }
     const levelKey = String(level)
     const circleKey = String(circle)
     const row = { ...(next[levelKey] ?? {}) }
 
-    if (amount > 0) row[circleKey] = amount
-    else delete row[circleKey]
+    if (raw.trim() === "") delete row[circleKey]
+    else row[circleKey] = Math.max(0, Math.trunc(Number(raw) || 0))
 
     if (Object.keys(row).length) next[levelKey] = row
     else delete next[levelKey]
@@ -341,7 +342,7 @@ export function CustomClassConfigurationEditor({
             <div>
               <h2 className="text-sm font-semibold text-textH">Progressão de espaços de magia</h2>
               <p className="mt-1 max-w-3xl text-xs leading-5 text-textMuted">
-                Use a progressão automática de conjurador ou defina exatamente quantos espaços de cada círculo a classe possui em cada nível.
+                Use a progressão automática de conjurador ou defina os espaços manualmente. Valores continuam nos níveis seguintes até que você informe outro valor; um valor alterado abaixo vira uma substituição independente.
               </p>
             </div>
             <label className="grid min-w-56 gap-1">
@@ -384,16 +385,22 @@ export function CustomClassConfigurationEditor({
                               inputMode="numeric"
                               aria-label={`Nível ${level}, círculo ${circle}`}
                               className="h-8 w-14 rounded-md border border-border bg-bg-subtle px-1 text-center text-xs text-textH disabled:opacity-70"
-                              value={draft.spellSlotProgression[String(level)]?.[String(circle)] ?? ""}
+                              value={
+                                draft.spellSlotProgression[String(level)]?.[String(circle)] ??
+                                (getCustomProgressionValueAtLevel(
+                                  draft.spellSlotProgression,
+                                  level,
+                                  circle,
+                                ) || "")
+                              }
                               placeholder="—"
                               onChange={(event) => {
-                                const amount = Math.max(0, Math.trunc(Number(event.target.value) || 0))
                                 patch({
                                   spellSlotProgression: setProgressionCell(
                                     draft.spellSlotProgression,
                                     level,
                                     circle,
-                                    amount,
+                                    event.target.value,
                                   ),
                                 })
                               }}
@@ -502,14 +509,25 @@ export function CustomClassConfigurationEditor({
                               inputMode="numeric"
                               aria-label={`Nível ${level}, círculo ${circle}`}
                               className="h-8 w-14 rounded-md border border-border bg-bg-subtle px-1 text-center text-xs text-textH disabled:opacity-70"
-                              value={pool.progression[String(level)]?.[String(circle)] ?? ""}
+                              value={
+                                pool.progression[String(level)]?.[String(circle)] ??
+                                (getCustomProgressionValueAtLevel(
+                                  pool.progression,
+                                  level,
+                                  circle,
+                                ) || "")
+                              }
                               placeholder="—"
                               onChange={(event) => {
-                                const amount = Math.max(0, Math.trunc(Number(event.target.value) || 0))
                                 const pools = [...draft.additionalSlotPools]
                                 pools[poolIndex] = {
                                   ...pool,
-                                  progression: setProgressionCell(pool.progression, level, circle, amount),
+                                  progression: setProgressionCell(
+                                    pool.progression,
+                                    level,
+                                    circle,
+                                    event.target.value,
+                                  ),
                                 }
                                 patch({ additionalSlotPools: pools })
                               }}
