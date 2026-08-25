@@ -57,12 +57,19 @@ export function CreationCustomClassSelectionBridge({
         }
 
         const option = existing ?? document.createElement("option")
-        option.value = CUSTOM_CLASS_RUNTIME_ID
-        option.textContent = customName.trim() || "Classe personalizada"
-        option.dataset[CUSTOM_OPTION_DATASET] = "true"
+        const desiredLabel = customName.trim() || "Classe personalizada"
+        if (option.value !== CUSTOM_CLASS_RUNTIME_ID) {
+          option.value = CUSTOM_CLASS_RUNTIME_ID
+        }
+        if (option.textContent !== desiredLabel) {
+          option.textContent = desiredLabel
+        }
+        if (option.dataset[CUSTOM_OPTION_DATASET] !== "true") {
+          option.dataset[CUSTOM_OPTION_DATASET] = "true"
+        }
         if (!existing) select.appendChild(option)
 
-        if (isPrimary && hasCustomClassPlan) {
+        if (isPrimary && hasCustomClassPlan && select.value !== CUSTOM_CLASS_RUNTIME_ID) {
           select.value = CUSTOM_CLASS_RUNTIME_ID
         }
       }
