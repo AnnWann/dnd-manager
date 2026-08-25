@@ -1,5 +1,6 @@
 import { getCantripsKnownAtLevel } from "../../data/classProgression"
 import {
+  CUSTOM_CLASS_RUNTIME_ID,
   createCustomClassEntry,
   getCustomClassConfigFromEntry,
   isCustomClassEntry,
@@ -91,7 +92,7 @@ export function getClassSpellSelectionRule(
 ): ClassSpellSelectionRule {
   const level = clampLevel(classLevel)
 
-  if (className === "__custom__") {
+  if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) {
     return getCustomSpellSelectionRule(character, level, subclassId)
   }
 
@@ -136,7 +137,7 @@ function getCustomSpellSelectionRule(
 
   if (!config || config.casterType === "none") {
     return {
-      className: "__custom__",
+      className: CUSTOM_CLASS_RUNTIME_ID,
       classLevel: level,
       subclassId,
       mode: "none",
@@ -172,14 +173,12 @@ function getCustomSpellSelectionRule(
         )
 
   return {
-    className: "__custom__",
+    className: CUSTOM_CLASS_RUNTIME_ID,
     classLevel: level,
     subclassId,
     mode: maxSpellLevel === 0 ? "none" : mode,
     castingAttribute: config.castingAttribute,
     maxSpellLevel,
-    // The current custom-class schema does not define a separate cantrip count.
-    // Cantrips can still be added manually to the durable character afterwards.
     maxCantrips: 0,
     maxLeveledSpells,
     swap: { leveledKnown: 0, cantrips: 0 },
@@ -204,31 +203,24 @@ export function getSubclassSpellGrants(
   return []
 }
 
-/**
- * Cantrips may be learned by prepared casters. Leveled spell selection is only
- * exposed for limited-known casters and spellbooks. A custom class intentionally
- * uses the whole catalog because its spell list is user-defined.
- */
 export function isSpellAllowedForClassSelection(
   spell: Spell,
   rule: ClassSpellSelectionRule,
   _subclassSpellNames: string[],
 ): boolean {
   if (rule.mode === "none") return false
-  if (rule.className !== "__custom__" && !spell.classes.includes(rule.className)) {
+  if (
+    String(rule.className) !== String(CUSTOM_CLASS_RUNTIME_ID) &&
+    !spell.classes.includes(rule.className)
+  ) {
     return false
   }
 
-  if (spell.slotLevel === 0) {
-    return rule.maxCantrips > 0
-  }
-
+  if (spell.slotLevel === 0) return rule.maxCantrips > 0
   if (rule.mode === "prepared") return false
-  if (spell.slotLevel > rule.maxSpellLevel) return false
-  return true
+  return spell.slotLevel <= rule.maxSpellLevel
 }
 
-/** Public structural progression only; metamagic option content remains separate. */
 export function getMetamagicLimit(sorcererLevel: number): number {
   const level = clampLevel(sorcererLevel)
   if (level < 3) return 0
@@ -237,7 +229,6 @@ export function getMetamagicLimit(sorcererLevel: number): number {
   return 2
 }
 
-/** Compatibility helper for the level-up UI. */
 export function canReplaceMetamagicAtLevel(sorcererLevel: number): boolean {
   return [4, 8, 12, 16, 19].includes(clampLevel(sorcererLevel))
 }
@@ -251,7 +242,7 @@ export function createClassEntry(
   level: number,
 ): CharacterClassInterface {
   const normalizedLevel = clampLevel(level) as ClassLevel
-  if (className === "__custom__") {
+  if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) {
     return {
       ...createCustomClassEntry(),
       level: normalizedLevel,
