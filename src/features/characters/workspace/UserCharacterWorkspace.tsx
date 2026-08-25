@@ -454,15 +454,7 @@ export function UserCharacterWorkspace({
         </div>
       ) : null}
 
-      <div
-        className={
-          isEditing
-            ? undefined
-            : "[&_input]:pointer-events-none [&_select]:pointer-events-none [&_textarea]:pointer-events-none"
-        }
-      >
-        {children}
-      </div>
+      {children}
     </CharacterWorkspaceProvider>
   )
 }
