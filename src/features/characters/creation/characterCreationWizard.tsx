@@ -6,18 +6,28 @@ import {
   type ComponentProps,
 } from "react"
 
+import { Button } from "../../../components/ui/Button"
 import { useMagicContext } from "../../../contexts/magicContext"
 import {
   createEmptyCharacterCreationIdentity,
   type CharacterCreationIdentity,
   type CharacterCreationProgressionPlan,
 } from "../../../models/characters/creation/CharacterCreation"
+import {
+  DEFAULT_CUSTOM_CLASS_CONFIG,
+  CUSTOM_CLASS_RUNTIME_ID,
+  hasCustomClass,
+  normalizeCustomClassConfig,
+  type CustomClassRuntimeConfig,
+} from "../../../models/characters/customClassConfig"
+import { applyCustomClassCreationConfiguration } from "../../../models/characters/customClassProgression"
 import type { ClassName } from "../../../models/sheet/Class"
 import {
   finalizeCreatedCharacter,
   validateCharacterCreationOverrides,
   type CharacterCreationValidationError,
 } from "../../../lib/characterCreation/finalizeCharacterCreation"
+import { CustomClassConfigurationEditor } from "../characterSheet/classes/CustomClassConfigurationTab"
 import {
   CharacterCreationAbilityScoreRules,
   type AbilityScoreOverride,
@@ -26,6 +36,7 @@ import {
   CharacterCreationBackgroundChoices,
   type BackgroundChoiceOverride,
 } from "./CharacterCreationBackgroundChoices"
+import { CharacterCreationCustomClassSelectionBridge } from "./bridges/CreationCustomClassSelectionBridge"
 import { CharacterCreationFlowBootstrap } from "./bridges/CharacterCreationFlowBootstrap"
 import { CreationLegacyProgressionStateSync } from "./bridges/CreationLegacyProgressionStateSync"
 import {
@@ -72,6 +83,16 @@ type WrapperDraft = {
   identity: CharacterCreationIdentity
   progressionConfiguration: CreationProgressionConfiguration
   subclasses: Partial<Record<ClassName, ManualSubclassSelection>>
+  customClassConfig?: CustomClassRuntimeConfig
+}
+
+function createCustomClassDraft(): CustomClassRuntimeConfig {
+  return normalizeCustomClassConfig({
+    ...DEFAULT_CUSTOM_CLASS_CONFIG,
+    savingThrows: [...DEFAULT_CUSTOM_CLASS_CONFIG.savingThrows],
+    spellSlotProgression: { ...DEFAULT_CUSTOM_CLASS_CONFIG.spellSlotProgression },
+    additionalSlotPools: [...DEFAULT_CUSTOM_CLASS_CONFIG.additionalSlotPools],
+  })
 }
 
 export function CharacterCreationWizard(props: WizardProps) {
@@ -95,6 +116,9 @@ export function CharacterCreationWizard(props: WizardProps) {
   const [subclasses, setSubclasses] = useState<
     Partial<Record<ClassName, ManualSubclassSelection>>
   >({})
+  const [customClassConfig, setCustomClassConfig] =
+    useState<CustomClassRuntimeConfig>(createCustomClassDraft)
+  const [customClassDialogOpen, setCustomClassDialogOpen] = useState(false)
   const [identity, setIdentity] = useState<CharacterCreationIdentity>(() =>
     createEmptyCharacterCreationIdentity(),
   )
@@ -127,6 +151,8 @@ export function CharacterCreationWizard(props: WizardProps) {
         createEmptyCreationProgressionConfiguration(),
       )
       setSubclasses({})
+      setCustomClassConfig(createCustomClassDraft())
+      setCustomClassDialogOpen(false)
       setDraftHydrated(false)
       clearErrors()
       return
@@ -146,6 +172,11 @@ export function CharacterCreationWizard(props: WizardProps) {
           createEmptyCreationProgressionConfiguration(),
       )
       setSubclasses(cached.subclasses ?? {})
+      if (cached.customClassConfig) {
+        setCustomClassConfig(
+          normalizeCustomClassConfig(cached.customClassConfig),
+        )
+      }
     }
     setDraftHydrated(true)
 
@@ -167,8 +198,10 @@ export function CharacterCreationWizard(props: WizardProps) {
       identity,
       progressionConfiguration,
       subclasses,
+      customClassConfig,
     } satisfies WrapperDraft)
   }, [
+    customClassConfig,
     draftHydrated,
     draftId,
     identity,
@@ -231,23 +264,45 @@ export function CharacterCreationWizard(props: WizardProps) {
         }
       }),
     )
-    const configured = applyCreationProgressionConfiguration(
+    let configured = applyCreationProgressionConfiguration(
       withManualClasses,
       progressionConfiguration,
       spells,
     )
+    if (hasCustomClass(configured)) {
+      configured = applyCustomClassCreationConfiguration(
+        configured,
+        customClassConfig,
+      )
+    }
     await props.onCreate(configured, plan)
     clearCharacterCreationDraft(draftId)
   }
 
   return (
     <>
-      <IntegratedCharacterCreationWizard
-        {...props}
-        draftId={draftId}
-        onCreate={handleCreate}
-      />
+      <div
+        onChangeCapture={(event) => {
+          const target = event.target
+          if (
+            target instanceof HTMLSelectElement &&
+            target.value === String(CUSTOM_CLASS_RUNTIME_ID)
+          ) {
+            setCustomClassDialogOpen(true)
+          }
+        }}
+      >
+        <IntegratedCharacterCreationWizard
+          {...props}
+          draftId={draftId}
+          onCreate={handleCreate}
+        />
+      </div>
 
+      <CharacterCreationCustomClassSelectionBridge
+        open={props.open}
+        customName={customClassConfig.name}
+      />
       <CharacterCreationFlowBootstrap open={props.open} />
       <CharacterCreationIdentityStep
         open={props.open}
@@ -322,12 +377,61 @@ export function CharacterCreationWizard(props: WizardProps) {
         resetSignal={progressionConfiguration}
       />
 
+      <CustomClassCreationDialog
+        open={customClassDialogOpen}
+        config={customClassConfig}
+        onClose={() => setCustomClassDialogOpen(false)}
+        onApply={(next) => {
+          setCustomClassConfig(normalizeCustomClassConfig(next))
+          setCustomClassDialogOpen(false)
+        }}
+      />
+
       {blockingError ? (
         <div className="pointer-events-none fixed left-1/2 top-4 z-[260] w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger shadow-theme-lg">
           {blockingError}
         </div>
       ) : null}
     </>
+  )
+}
+
+function CustomClassCreationDialog({
+  open,
+  config,
+  onApply,
+  onClose,
+}: {
+  open: boolean
+  config: CustomClassRuntimeConfig
+  onApply: (config: CustomClassRuntimeConfig) => void
+  onClose: () => void
+}) {
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-[280] flex items-start justify-center overflow-y-auto bg-black/65 p-3 backdrop-blur-sm sm:p-6">
+      <div className="w-full max-w-6xl rounded-2xl border border-border bg-bg-elevated p-4 shadow-theme-lg sm:p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
+          <div>
+            <h2 className="text-lg font-semibold text-textH">
+              Configurar classe personalizada
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-textMuted">
+              Esta configuração faz parte do rascunho da criação. Ela só é persistida quando o personagem for confirmado.
+            </p>
+          </div>
+          <Button variant="secondary" onClick={onClose}>
+            Fechar
+          </Button>
+        </div>
+        <CustomClassConfigurationEditor
+          config={config}
+          applyLabel="Aplicar ao rascunho"
+          onApply={onApply}
+        />
+      </div>
+    </div>
   )
 }
 
