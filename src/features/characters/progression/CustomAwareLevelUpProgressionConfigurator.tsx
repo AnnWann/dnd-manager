@@ -54,13 +54,13 @@ export function CustomAwareLevelUpProgressionConfigurator({
       const select = label?.querySelector<HTMLSelectElement>("select")
       if (!select) return
 
-      for (const option of Array.from(select.options)) {
-        const current = option.textContent ?? ""
+      for (const candidate of Array.from(select.options)) {
+        const current = candidate.textContent ?? ""
         const next = current
           .replace(/\s*·\s*consulte sua refer[eê]ncia\s*$/iu, "")
           .replace(/\s*·\s*$/u, "")
           .trim()
-        if (next !== current) option.textContent = next
+        if (next !== current) candidate.textContent = next
       }
 
       let option = Array.from(select.options).find(
@@ -73,14 +73,15 @@ export function CustomAwareLevelUpProgressionConfigurator({
         select.appendChild(option)
       }
 
-      if (customEntry) {
-        const name = customConfig?.name?.trim() || "Classe personalizada"
-        option.textContent = `${name} ${customEntry.level} → ${customEntry.level + 1}`
-        option.disabled = customEntry.level >= 20 || totalLevel >= 20
-      } else {
-        option.textContent = "Nova classe personalizada 1 (multiclasse)"
-        option.disabled = totalLevel >= 20
-      }
+      const desiredLabel = customEntry
+        ? `${customConfig?.name?.trim() || "Classe personalizada"} ${customEntry.level} → ${customEntry.level + 1}`
+        : "Nova classe personalizada 1 (multiclasse)"
+      const desiredDisabled = customEntry
+        ? customEntry.level >= 20 || totalLevel >= 20
+        : totalLevel >= 20
+
+      if (option.textContent !== desiredLabel) option.textContent = desiredLabel
+      if (option.disabled !== desiredDisabled) option.disabled = desiredDisabled
     }
 
     const scheduleSync = () => {
