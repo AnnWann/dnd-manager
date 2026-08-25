@@ -115,7 +115,7 @@ function cleanRequirementSuffixes(select: HTMLSelectElement) {
     if (option.value === CUSTOM_CLASS_RUNTIME_ID) continue
     const current = option.textContent ?? ""
     const next = current
-      .replace(/\s*·\s*consulte sua refer[eê]ncia\s*$/iu, "")
+      .replace(/\s*·\s*(?:consulte sua refer[eê]ncia|requisitos manuais)\s*$/iu, "")
       .replace(/\s*·\s*$/u, "")
       .trim()
     if (next !== current) option.textContent = next
