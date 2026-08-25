@@ -249,8 +249,8 @@ export async function createMyCharacter(input: {
 }
 
 /**
- * Legacy whole-document update. New character editing code should use
- * replaceMyCharacterDomain and updateMyCharacterRoot instead.
+ * Saves a complete user-owned character document in one request. The server
+ * mirrors the document into the relational domain rows in the same transaction.
  */
 export async function updateMyCharacter(
   characterId: string,
@@ -258,6 +258,7 @@ export async function updateMyCharacter(
   options: {
     name?: string
     visibility?: CharacterVisibility
+    expectedVersion?: number
   } = {},
 ): Promise<UserCharacterSummary> {
   const requestedName =
@@ -278,6 +279,7 @@ export async function updateMyCharacter(
           options.visibility ??
           (character.visibility as CharacterVisibility) ??
           "PRIVATE",
+        revision: (character.revision ?? 0) + 1,
         data,
         updatedAt: now,
       } as UserCharacterSummary
@@ -293,16 +295,26 @@ export async function updateMyCharacter(
     return updatedCharacter
   }
 
-  const response = await apiClient.patch<CharacterResponse>(
-    `/me/characters/${encodeURIComponent(characterId)}`,
-    {
-      name: requestedName,
-      visibility: options.visibility,
-      data,
-    },
-  )
+  try {
+    const response = await apiClient.patch<CharacterResponse>(
+      `/me/characters/${encodeURIComponent(characterId)}`,
+      {
+        name: requestedName,
+        visibility: options.visibility,
+        expectedVersion: options.expectedVersion,
+        data,
+      },
+    )
 
-  return hydrateCharacterSummary(response.data.character)
+    return hydrateCharacterSummary(response.data.character)
+  } catch (error) {
+    if (getApiStatus(error) === 409) {
+      throw new Error(
+        "A ficha foi alterada em outro cliente. Recarregue antes de salvar.",
+      )
+    }
+    throw error
+  }
 }
 
 export async function updateMyCharacterRoot(
