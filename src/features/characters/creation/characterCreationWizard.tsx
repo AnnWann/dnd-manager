@@ -195,11 +195,14 @@ export function CharacterCreationWizard(props: WizardProps) {
       if (event.target instanceof Element) clearErrors()
     }
 
-    document.addEventListener("input", clearAfterEdit, true)
-    document.addEventListener("change", clearAfterEdit, true)
+    // Let React-controlled fields process their edit before clearing
+    // wrapper validation errors. Capture-phase listeners can rerender
+    // the wizard before React receives the new input/select value.
+    document.addEventListener("input", clearAfterEdit)
+    document.addEventListener("change", clearAfterEdit)
     return () => {
-      document.removeEventListener("input", clearAfterEdit, true)
-      document.removeEventListener("change", clearAfterEdit, true)
+      document.removeEventListener("input", clearAfterEdit)
+      document.removeEventListener("change", clearAfterEdit)
     }
   }, [clearErrors, draftId, props.open])
 

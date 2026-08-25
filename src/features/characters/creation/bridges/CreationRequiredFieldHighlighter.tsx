@@ -83,12 +83,14 @@ export function CreationRequiredFieldHighlighter(_props: { resetSignal?: unknown
     }
 
     document.addEventListener("click", onClick, true)
-    document.addEventListener("input", clearFeedback, true)
-    document.addEventListener("change", clearFeedback, true)
+    // Input/change feedback clearing belongs in bubble phase so the
+    // controlled field updates before this helper can rerender.
+    document.addEventListener("input", clearFeedback)
+    document.addEventListener("change", clearFeedback)
     return () => {
       document.removeEventListener("click", onClick, true)
-      document.removeEventListener("input", clearFeedback, true)
-      document.removeEventListener("change", clearFeedback, true)
+      document.removeEventListener("input", clearFeedback)
+      document.removeEventListener("change", clearFeedback)
       clearCreationAttemptHighlights()
       if (root) delete root.dataset.characterCreationMobile
     }
