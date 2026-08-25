@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import { useBlocker } from "react-router-dom"
 
 import {
   deleteMyCharacter,
@@ -149,6 +150,33 @@ export function UserCharacterWorkspace({
     if (!isEditing || !character || !savedJsonRef.current) return false
     return !characterJsonEqual(savedJsonRef.current, character.toJSON())
   }, [character, isEditing])
+
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => {
+    const current = characterRef.current
+    const saved = savedJsonRef.current
+    if (
+      !isEditing ||
+      !current ||
+      !saved ||
+      characterJsonEqual(saved, current.toJSON())
+    ) {
+      return false
+    }
+
+    if (currentLocation.pathname === nextLocation.pathname) return false
+    return !isSameCharacterTabPath(nextLocation.pathname, characterId)
+  })
+
+  useEffect(() => {
+    if (blocker.state !== "blocked") return
+
+    const shouldLeave = window.confirm(
+      "Há alterações não salvas nesta ficha. Deseja sair e descartá-las?",
+    )
+
+    if (shouldLeave) blocker.proceed()
+    else blocker.reset()
+  }, [blocker])
 
   useEffect(() => {
     if (!dirty) return
@@ -497,4 +525,12 @@ function characterJsonEqual(
   right: CharacterTemplateProps,
 ): boolean {
   return JSON.stringify(left) === JSON.stringify(right)
+}
+
+function isSameCharacterTabPath(pathname: string, characterId: string): boolean {
+  const prefix = `/user/characters/${encodeURIComponent(characterId)}/`
+  if (!pathname.startsWith(prefix)) return false
+
+  const tail = pathname.slice(prefix.length).replace(/^\/+|\/+$/g, "")
+  return Boolean(tail) && !tail.includes("/") && tail !== "level-up"
 }
