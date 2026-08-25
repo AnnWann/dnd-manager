@@ -8,7 +8,6 @@ import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
 import type { Ability } from "../../../models/abilities/Ability"
 import { getAbilityUsageMax } from "../../../models/abilities/abilityActivation"
-import { getCharacterAsis } from "../../../models/characters/CharacterAsi"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { flattenBonuses } from "../inventory/equipmentBonusFields"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
@@ -26,11 +25,6 @@ type Props = {
     characterId: string,
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) => void
-}
-
-type RaceAbility = Ability & {
-  source: "race"
-  originalAbilityId: string
 }
 
 type AbilitySourceFilter =
@@ -64,24 +58,23 @@ export function UserCharacterAbilitiesTab({
   const [kindFilter, setKindFilter] = useState<AbilityKindFilter>("all")
   const [search, setSearch] = useState("")
 
-  const raceAbilities: RaceAbility[] = (
-    character.get("sheet").race.naturalAbilities ?? []
-  ).map((ability) => ({
-    ...ability,
-    id: `race:${ability.id}`,
-    source: "race",
-    originalAbilityId: ability.id,
-  }))
+  const abilities = useMemo(() => {
+    const raceAbilities: Ability[] = (
+      character.get("sheet").race.naturalAbilities ?? []
+    ).map((ability) => ({
+      ...ability,
+      id: `race:${ability.id}`,
+      source: "race",
+      originalAbilityId: ability.id,
+    }))
 
-  const abilities = useMemo(
-    () => [
+    return [
       ...character
         .getCharacterAbilities()
         .filter((ability) => ability.source !== "condition"),
       ...raceAbilities,
-    ],
-    [character, raceAbilities],
-  )
+    ]
+  }, [character])
 
   const filteredAbilities = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR")
@@ -257,6 +250,7 @@ function UserAbilityCard({
     spell: getSpellByIndex(grant.index),
   }))
   const proficiencies = ability.grantedProficiencies ?? []
+  const usageLabel = formatConfiguredUsage(character, ability)
 
   return (
     <article className="rounded-2xl border border-border bg-bg p-4">
@@ -269,9 +263,7 @@ function UserAbilityCard({
             <DefinitionPill>{formatAbilityKind(ability)}</DefinitionPill>
             <DefinitionPill>{formatAbilityTiming(ability)}</DefinitionPill>
             {sourceLabel ? <DefinitionPill>{sourceLabel}</DefinitionPill> : null}
-            {formatConfiguredUsage(character, ability) ? (
-              <DefinitionPill>{formatConfiguredUsage(character, ability)!}</DefinitionPill>
-            ) : null}
+            {usageLabel ? <DefinitionPill>{usageLabel}</DefinitionPill> : null}
           </div>
 
           {description ? (
@@ -429,6 +421,3 @@ function getAbilitySourceLabel(ability: Ability): string | undefined {
   if (ability.category === "martialArts") return "Artes marciais"
   return undefined
 }
-
-/** Retained to document that ASI-owned abilities are projected by the model. */
-void getCharacterAsis
