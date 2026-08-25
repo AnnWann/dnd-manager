@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
 
 import { Button } from "../../../components/ui/Button"
@@ -314,7 +314,7 @@ function UserSpellCard({ entry }: { entry: DisplaySpell }) {
   )
 }
 
-function CapacityPill({ children }: { children: React.ReactNode }) {
+function CapacityPill({ children }: { children: ReactNode }) {
   return (
     <span className="rounded-full border border-accentBorder bg-accentBg px-3 py-1.5 text-xs font-semibold text-textH">
       {children}
@@ -322,7 +322,7 @@ function CapacityPill({ children }: { children: React.ReactNode }) {
   )
 }
 
-function DefinitionPill({ children }: { children: React.ReactNode }) {
+function DefinitionPill({ children }: { children: ReactNode }) {
   return (
     <span className="rounded-full border border-border bg-bg-subtle px-2.5 py-1 text-[11px] font-medium text-text">
       {children}
