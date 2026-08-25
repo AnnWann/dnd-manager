@@ -9,6 +9,7 @@ import {
 } from "../../features/characters/customSystems/CustomSystemsTabWithLibrary"
 import { CharacterEquipmentTab } from "../../features/characters/equipment/characterEquipment"
 import { CharacterInventoryTab } from "../../features/characters/inventory/characterInventory"
+import { ItemCreationWizard } from "../../features/characters/inventory/ItemCreationWizard"
 import { OnDemandCharacterSpellLibrary } from "../../features/characters/magic/OnDemandCharacterSpellLibrary"
 import { UserCharacterMagicTab } from "../../features/characters/magic/userCharacterMagic"
 import { CharacterProgressionFlow } from "../../features/characters/progression/CharacterProgressionFlow"
@@ -28,10 +29,12 @@ import type {
   CustomSystemDefinition,
   CustomSystemExistingCharacterTab,
 } from "../../models/customSystems/CustomSystemDefinition"
+import type { Itemmable } from "../../models/items/item"
 import { prepareCharacterForProgression } from "../../models/leveling/prepareCharacterForProgression"
 
 const CONTENT_ANCHOR = "__standard-content__"
 const ADD_SPELLS_PAGE = "add-spells"
+const ADD_ITEM_PAGE = "add-item"
 const LEVEL_UP_PAGE = "level-up-editor"
 
 /**
@@ -40,6 +43,9 @@ const LEVEL_UP_PAGE = "level-up-editor"
  * This is intentionally separate from CharacterView: the session view is a
  * gameplay surface, while this screen presents and edits the durable character
  * definition. Gameplay-only controls should not be added here.
+ *
+ * All editor subpages stay inside this route so the UserCharacterWorkspace,
+ * edit mode and draft remain mounted for the entire character editing session.
  */
 export function UserCharacterView() {
   const {
@@ -88,13 +94,16 @@ export function UserCharacterView() {
   )
 
   const isAddSpellsPage = tab === ADD_SPELLS_PAGE
+  const isAddItemPage = tab === ADD_ITEM_PAGE
   const isLevelUpPage = tab === LEVEL_UP_PAGE
-  const isEditorSubpage = isAddSpellsPage || isLevelUpPage
+  const isEditorSubpage = isAddSpellsPage || isAddItemPage || isLevelUpPage
   const activeTab = isAddSpellsPage
     ? "spells-list"
-    : isLevelUpPage
-      ? "sheet"
-      : normalizeCharacterViewTab(tab, characterTabs)
+    : isAddItemPage
+      ? "inventory"
+      : isLevelUpPage
+        ? "sheet"
+        : normalizeCharacterViewTab(tab, characterTabs)
 
   useEffect(() => {
     if (
@@ -130,6 +139,7 @@ export function UserCharacterView() {
 
   const sheetPath = userCharacterPath(characterId, "sheet")
   const spellListPath = userCharacterPath(characterId, "spells-list")
+  const inventoryPath = userCharacterPath(characterId, "inventory")
 
   if (isAddSpellsPage) {
     return (
@@ -164,6 +174,49 @@ export function UserCharacterView() {
             onCancel={() => navigate(spellListPath)}
             onSpellAdded={() => navigate(spellListPath)}
           />
+        )}
+      </div>
+    )
+  }
+
+  if (isAddItemPage) {
+    return (
+      <div className="flex flex-col gap-4">
+        <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
+          <button
+            type="button"
+            onClick={() => navigate(inventoryPath)}
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-textH hover:bg-accentBg"
+          >
+            <ArrowLeft className="h-4 w-4" /> Inventário
+          </button>
+
+          <div className="min-w-0 flex-1 text-center sm:text-left">
+            <div className="truncate font-semibold text-textH">
+              {character.get("name")}
+            </div>
+            <div className="truncate text-xs text-textMuted">
+              Criar item
+            </div>
+          </div>
+        </header>
+
+        {!isEditing ? (
+          <div className="rounded-xl border border-border bg-bg p-6 text-sm text-textMuted">
+            Ative o modo de edição acima para criar itens para este personagem.
+          </div>
+        ) : (
+          <div className="mx-auto w-full max-w-5xl">
+            <ItemCreationWizard
+              onCancel={() => navigate(inventoryPath)}
+              onCreate={(item: Itemmable) => {
+                updateCharacter(characterId, (current) =>
+                  current.addInventoryItem(item),
+                )
+                navigate(inventoryPath)
+              }}
+            />
+          </div>
         )}
       </div>
     )
