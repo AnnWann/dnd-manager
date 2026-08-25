@@ -6,6 +6,7 @@ import { Select } from "../../../../components/ui/Select"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
 import {
   createCustomSlotPool,
+  getCustomCantripsKnownAtLevel,
   getCustomClassConfig,
   getCustomProgressionValueAtLevel,
   normalizeCustomClassConfig,
@@ -314,7 +315,7 @@ export function CustomClassConfigurationEditor({
             <div>
               <h2 className="text-sm font-semibold text-textH">Progressão de truques conhecidos</h2>
               <p className="mt-1 max-w-3xl text-xs leading-5 text-textMuted">
-                Informe o total de truques conhecidos nos níveis em que esse total muda. Campos vazios mantêm o valor do nível anterior.
+                Informe o total de truques conhecidos nos níveis em que esse total muda. O último valor é preenchido automaticamente nos níveis seguintes, mas qualquer nível pode sobrescrevê-lo independentemente.
               </p>
             </div>
             <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-10">
@@ -328,7 +329,10 @@ export function CustomClassConfigurationEditor({
                     max={20}
                     inputMode="numeric"
                     className="h-9 w-full rounded-md border border-border bg-bg-subtle px-2 text-center text-xs text-textH disabled:opacity-70"
-                    value={draft.cantripsKnownProgression[String(level)] ?? ""}
+                    value={
+                      draft.cantripsKnownProgression[String(level)] ??
+                      (getCustomCantripsKnownAtLevel(draft, level) || "")
+                    }
                     placeholder="—"
                     onChange={(event) => setCantripsAtLevel(level, event.target.value)}
                   />
