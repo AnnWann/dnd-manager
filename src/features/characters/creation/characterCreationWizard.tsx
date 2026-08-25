@@ -14,7 +14,9 @@ import {
 } from "../../../models/characters/creation/CharacterCreation"
 import {
   DEFAULT_CUSTOM_CLASS_CONFIG,
+  getCustomClassConfigFromEntry,
   hasCustomClass,
+  isCustomClassEntry,
   normalizeCustomClassConfig,
   type CustomClassRuntimeConfig,
 } from "../../../models/characters/customClassConfig"
@@ -74,8 +76,9 @@ type WizardProps = Omit<
   ComponentProps<typeof IntegratedCharacterCreationWizard>,
   | "draftId"
   | "customClassName"
-  | "customClassConfig"
+  | "customClassConfigs"
   | "onApplyCustomClassConfig"
+  | "onRemoveCustomClassConfig"
 >
 
 type WrapperDraft = {
@@ -83,6 +86,7 @@ type WrapperDraft = {
   progressionConfiguration: CreationProgressionConfiguration
   subclasses: Partial<Record<ClassName, ManualSubclassSelection>>
   customClassConfig?: CustomClassRuntimeConfig
+  customClassConfigs?: Record<string, CustomClassRuntimeConfig>
 }
 
 function createCustomClassDraft(): CustomClassRuntimeConfig {
@@ -115,8 +119,9 @@ export function CharacterCreationWizard(props: WizardProps) {
   const [subclasses, setSubclasses] = useState<
     Partial<Record<ClassName, ManualSubclassSelection>>
   >({})
-  const [customClassConfig, setCustomClassConfig] =
-    useState<CustomClassRuntimeConfig>(createCustomClassDraft)
+  const [customClassConfigs, setCustomClassConfigs] = useState<
+    Record<string, CustomClassRuntimeConfig>
+  >({})
   const [identity, setIdentity] = useState<CharacterCreationIdentity>(() =>
     createEmptyCharacterCreationIdentity(),
   )
@@ -149,7 +154,7 @@ export function CharacterCreationWizard(props: WizardProps) {
         createEmptyCreationProgressionConfiguration(),
       )
       setSubclasses({})
-      setCustomClassConfig(createCustomClassDraft())
+      setCustomClassConfigs({})
       setDraftHydrated(false)
       clearErrors()
       return
@@ -169,10 +174,19 @@ export function CharacterCreationWizard(props: WizardProps) {
           createEmptyCreationProgressionConfiguration(),
       )
       setSubclasses(cached.subclasses ?? {})
-      if (cached.customClassConfig) {
-        setCustomClassConfig(
-          normalizeCustomClassConfig(cached.customClassConfig),
+      if (cached.customClassConfigs) {
+        setCustomClassConfigs(
+          Object.fromEntries(
+            Object.entries(cached.customClassConfigs).map(([className, config]) => [
+              className,
+              normalizeCustomClassConfig(config),
+            ]),
+          ),
         )
+      } else if (cached.customClassConfig) {
+        setCustomClassConfigs({
+          __custom__: normalizeCustomClassConfig(cached.customClassConfig),
+        })
       }
     }
     setDraftHydrated(true)
@@ -195,10 +209,10 @@ export function CharacterCreationWizard(props: WizardProps) {
       identity,
       progressionConfiguration,
       subclasses,
-      customClassConfig,
+      customClassConfigs,
     } satisfies WrapperDraft)
   }, [
-    customClassConfig,
+    customClassConfigs,
     draftHydrated,
     draftId,
     identity,
@@ -267,10 +281,19 @@ export function CharacterCreationWizard(props: WizardProps) {
       spells,
     )
     if (hasCustomClass(configured)) {
-      configured = applyCustomClassCreationConfiguration(
-        configured,
-        customClassConfig,
-      )
+      for (const classEntry of configured.get("sheet").classes ?? []) {
+        if (!isCustomClassEntry(classEntry)) continue
+        const config =
+          customClassConfigs[String(classEntry.className)] ??
+          getCustomClassConfigFromEntry(classEntry)
+        if (!config) continue
+        configured = applyCustomClassCreationConfiguration(
+          configured,
+          config,
+          [],
+          classEntry.className,
+        )
+      }
     }
     await props.onCreate(configured, plan)
     clearCharacterCreationDraft(draftId)
@@ -281,10 +304,20 @@ export function CharacterCreationWizard(props: WizardProps) {
       <IntegratedCharacterCreationWizard
         {...props}
         draftId={draftId}
-        customClassName={customClassConfig.name}
-        customClassConfig={customClassConfig}
-        onApplyCustomClassConfig={(next) =>
-          setCustomClassConfig(normalizeCustomClassConfig(next))
+        customClassName="Classe personalizada"
+        customClassConfigs={customClassConfigs}
+        onApplyCustomClassConfig={(className, next) =>
+          setCustomClassConfigs((current) => ({
+            ...current,
+            [String(className)]: normalizeCustomClassConfig(next),
+          }))
+        }
+        onRemoveCustomClassConfig={(className) =>
+          setCustomClassConfigs((current) => {
+            const next = { ...current }
+            delete next[String(className)]
+            return next
+          })
         }
         onCreate={handleCreate}
       />

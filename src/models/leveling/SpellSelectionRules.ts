@@ -4,6 +4,7 @@ import {
   createCustomClassEntry,
   getCustomClassConfigFromEntry,
   isCustomClassEntry,
+  isCustomClassName,
 } from "../characters/customClassConfig"
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import type { Spell } from "../magic/spells/Spell"
@@ -92,8 +93,8 @@ export function getClassSpellSelectionRule(
 ): ClassSpellSelectionRule {
   const level = clampLevel(classLevel)
 
-  if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) {
-    return getCustomSpellSelectionRule(character, level, subclassId)
+  if (isCustomClassName(className)) {
+    return getCustomSpellSelectionRule(character, className, level, subclassId)
   }
 
   const classEntry = createClassEntry(className, level)
@@ -124,20 +125,24 @@ export function getClassSpellSelectionRule(
 
 function getCustomSpellSelectionRule(
   character: CharacterTemplate,
+  className: ClassName,
   level: number,
   subclassId?: string,
 ): ClassSpellSelectionRule {
-  const stored = (character.get("sheet").classes ?? []).find(isCustomClassEntry)
-  const baseEntry = stored ?? createCustomClassEntry()
+  const stored = (character.get("sheet").classes ?? []).find(
+    (entry) => entry.className === className && isCustomClassEntry(entry),
+  )
+  const baseEntry = stored ?? createCustomClassEntry("Classe personalizada", className)
   const entry: CharacterClassInterface = {
     ...baseEntry,
+    className,
     level: level as ClassLevel,
   }
   const config = getCustomClassConfigFromEntry(entry)
 
   if (!config || config.casterType === "none") {
     return {
-      className: CUSTOM_CLASS_RUNTIME_ID,
+      className,
       classLevel: level,
       subclassId,
       mode: "none",
@@ -173,7 +178,7 @@ function getCustomSpellSelectionRule(
         )
 
   return {
-    className: CUSTOM_CLASS_RUNTIME_ID,
+    className,
     classLevel: level,
     subclassId,
     mode: maxSpellLevel === 0 ? "none" : mode,
@@ -209,10 +214,7 @@ export function isSpellAllowedForClassSelection(
   _subclassSpellNames: string[],
 ): boolean {
   if (rule.mode === "none") return false
-  if (
-    String(rule.className) !== String(CUSTOM_CLASS_RUNTIME_ID) &&
-    !spell.classes.includes(rule.className)
-  ) {
+  if (!isCustomClassName(rule.className) && !spell.classes.includes(rule.className)) {
     return false
   }
 
@@ -242,9 +244,10 @@ export function createClassEntry(
   level: number,
 ): CharacterClassInterface {
   const normalizedLevel = clampLevel(level) as ClassLevel
-  if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) {
+  if (isCustomClassName(className)) {
     return {
-      ...createCustomClassEntry(),
+      ...createCustomClassEntry("Classe personalizada", className),
+      className,
       level: normalizedLevel,
     }
   }

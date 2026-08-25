@@ -3,6 +3,25 @@ import type { Attribute } from "../sheet/Attribute"
 import type { CharacterClassInterface, ClassName } from "../sheet/Class"
 
 export const CUSTOM_CLASS_RUNTIME_ID = "__custom__" as ClassName
+const CUSTOM_CLASS_RUNTIME_PREFIX = `${String(CUSTOM_CLASS_RUNTIME_ID)}-`
+
+export function isCustomClassName(
+  className: ClassName | string | undefined,
+): boolean {
+  const value = String(className ?? "")
+  return (
+    value === String(CUSTOM_CLASS_RUNTIME_ID) ||
+    value.startsWith(CUSTOM_CLASS_RUNTIME_PREFIX)
+  )
+}
+
+export function createCustomClassRuntimeId(): ClassName {
+  const suffix =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  return `${CUSTOM_CLASS_RUNTIME_PREFIX}${suffix}` as ClassName
+}
 export const CUSTOM_CLASS_CHOICE_KEY = "dnd-manager:custom-class-name"
 export const CUSTOM_CLASS_CONFIG_KEY = "dnd-manager:custom-class-config"
 const CUSTOM_CLASS_SLOT_STATE_KEY = "dnd-manager:custom-class-slot-state"
@@ -57,17 +76,18 @@ export const DEFAULT_CUSTOM_CLASS_CONFIG: CustomClassRuntimeConfig = {
 export function isCustomClassEntry(entry: CharacterClassInterface | undefined): boolean {
   return Boolean(
     entry &&
-      (entry.className === CUSTOM_CLASS_RUNTIME_ID ||
+      (isCustomClassName(entry.className) ||
         entry.levelChoices?.[CUSTOM_CLASS_CHOICE_KEY]?.length),
   )
 }
 
 export function createCustomClassEntry(
   name = "Classe personalizada",
+  className: ClassName = createCustomClassRuntimeId(),
 ): CharacterClassInterface {
   const config = normalizeCustomClassConfig({ ...DEFAULT_CUSTOM_CLASS_CONFIG, name })
   return {
-    className: CUSTOM_CLASS_RUNTIME_ID,
+    className,
     level: 1,
     levelChoices: {
       [CUSTOM_CLASS_CHOICE_KEY]: [config.name],
@@ -76,10 +96,17 @@ export function createCustomClassEntry(
   }
 }
 
-export function getCustomClassIndex(character: CharacterTemplate): number {
-  return (character.get("sheet").classes ?? []).findIndex((entry) =>
-    isCustomClassEntry(entry),
-  )
+export function getCustomClassIndex(
+  character: CharacterTemplate,
+  className?: ClassName,
+): number {
+  const classes = character.get("sheet").classes ?? []
+  if (className) {
+    return classes.findIndex(
+      (entry) => entry.className === className && isCustomClassEntry(entry),
+    )
+  }
+  return classes.findIndex(isCustomClassEntry)
 }
 
 export function hasCustomClass(character: CharacterTemplate): boolean {
@@ -109,14 +136,21 @@ export function getCustomClassConfigFromEntry(
   })
 }
 
-export function getCustomClassConfig(character: CharacterTemplate): CustomClassRuntimeConfig | undefined {
-  const index = getCustomClassIndex(character)
+export function getCustomClassConfig(
+  character: CharacterTemplate,
+  className?: ClassName,
+): CustomClassRuntimeConfig | undefined {
+  const index = getCustomClassIndex(character, className)
   if (index < 0) return undefined
   return getCustomClassConfigFromEntry(character.get("sheet").classes?.[index])
 }
 
-export function updateCustomClassConfig(character: CharacterTemplate, config: CustomClassRuntimeConfig): CharacterTemplate {
-  const index = getCustomClassIndex(character)
+export function updateCustomClassConfig(
+  character: CharacterTemplate,
+  config: CustomClassRuntimeConfig,
+  className?: ClassName,
+): CharacterTemplate {
+  const index = getCustomClassIndex(character, className)
   if (index < 0) return character
   const normalized = normalizeCustomClassConfig(config)
   const classes = [...(character.get("sheet").classes ?? [])]
@@ -124,7 +158,7 @@ export function updateCustomClassConfig(character: CharacterTemplate, config: Cu
   if (!entry) return character
   classes[index] = {
     ...entry,
-    className: CUSTOM_CLASS_RUNTIME_ID,
+    className: entry.className,
     castingAttribute: normalized.casterType === "none" ? undefined : normalized.castingAttribute,
     spellcastingProgression:
       normalized.casterType === "none" || normalized.slotProgressionMode === "table"
@@ -154,26 +188,41 @@ export function createCustomSlotPool(name = "Espaços da classe"): CustomSpellSl
 }
 
 export function getCustomSpellSlotPools(character: CharacterTemplate): CustomSpellSlotPool[] {
-  const config = getCustomClassConfig(character)
-  const index = getCustomClassIndex(character)
-  if (!config || index < 0) return []
-  const classEntry = character.get("sheet").classes?.[index]
-  if (!classEntry) return []
-  const level = String(classEntry.level)
-  const state = readState(character, index)
+  const result: CustomSpellSlotPool[] = []
+  const classes = character.get("sheet").classes ?? []
 
-  return config.additionalSlotPools.map((pool) => {
-    const slots: CustomSpellSlotPool["slots"] = {}
-    const row = pool.progression[level] ?? {}
-    for (let circle = 1; circle <= 9; circle += 1) {
-      const key = String(circle)
-      const max = Math.max(0, Math.trunc(Number(row[key] ?? 0)))
-      if (max <= 0) continue
-      const current = state[pool.id]?.[key]
-      slots[circle] = { level: circle, max, current: Math.min(max, Math.max(0, current ?? max)) }
+  classes.forEach((classEntry, index) => {
+    const config = getCustomClassConfigFromEntry(classEntry)
+    if (!config) return
+    const level = String(classEntry.level)
+    const state = readState(character, index)
+
+    for (const pool of config.additionalSlotPools) {
+      const slots: CustomSpellSlotPool["slots"] = {}
+      const row = pool.progression[level] ?? {}
+      for (let circle = 1; circle <= 9; circle += 1) {
+        const key = String(circle)
+        const max = Math.max(0, Math.trunc(Number(row[key] ?? 0)))
+        if (max <= 0) continue
+        const current = state[pool.id]?.[key]
+        slots[circle] = {
+          level: circle,
+          max,
+          current: Math.min(max, Math.max(0, current ?? max)),
+        }
+      }
+      if (Object.keys(slots).length > 0) {
+        result.push({
+          id: pool.id,
+          name: pool.name,
+          recovery: pool.recovery,
+          slots,
+        })
+      }
     }
-    return { id: pool.id, name: pool.name, recovery: pool.recovery, slots }
-  }).filter((pool) => Object.keys(pool.slots).length > 0)
+  })
+
+  return result
 }
 
 export function spendCustomSpellSlot(character: CharacterTemplate, poolId: string, level: number): CharacterTemplate {
@@ -185,15 +234,30 @@ export function restoreCustomSpellSlot(character: CharacterTemplate, poolId: str
 }
 
 function changeSlot(character: CharacterTemplate, poolId: string, level: number, delta: number): CharacterTemplate {
-  const index = getCustomClassIndex(character)
-  if (index < 0) return character
-  const slot = getCustomSpellSlotPools(character).find((pool) => pool.id === poolId)?.slots[level]
-  if (!slot) return character
-  const next = Math.max(0, Math.min(slot.max, slot.current + delta))
-  if (next === slot.current) return character
-  const state = readState(character, index)
-  state[poolId] = { ...(state[poolId] ?? {}), [String(level)]: next }
-  return writeState(character, index, state)
+  const classes = character.get("sheet").classes ?? []
+
+  for (let index = 0; index < classes.length; index += 1) {
+    const classEntry = classes[index]
+    const config = getCustomClassConfigFromEntry(classEntry)
+    if (!config) continue
+    const pool = config.additionalSlotPools.find((candidate) => candidate.id === poolId)
+    if (!pool) continue
+
+    const key = String(level)
+    const row = pool.progression[String(classEntry.level)] ?? {}
+    const max = Math.max(0, Math.trunc(Number(row[key] ?? 0)))
+    if (max <= 0) return character
+
+    const state = readState(character, index)
+    const current = Math.min(max, Math.max(0, state[poolId]?.[key] ?? max))
+    const next = Math.max(0, Math.min(max, current + delta))
+    if (next === current) return character
+
+    state[poolId] = { ...(state[poolId] ?? {}), [key]: next }
+    return writeState(character, index, state)
+  }
+
+  return character
 }
 
 function readState(character: CharacterTemplate, index: number): Record<string, Record<string, number>> {

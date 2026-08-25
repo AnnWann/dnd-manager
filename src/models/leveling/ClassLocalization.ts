@@ -152,7 +152,11 @@ const CLASS_SPECIFIC_SUBCLASS_NAME_PT: Partial<
 }
 
 export function getClassNamePt(className: ClassName): string {
-  return CLASS_NAME_PT[String(className)] ?? String(className)
+  const value = String(className)
+  if (value === "__custom__" || value.startsWith("__custom__-")) {
+    return "Classe personalizada"
+  }
+  return CLASS_NAME_PT[value] ?? value
 }
 
 export function getSubclassNamePt(

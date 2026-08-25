@@ -28,6 +28,11 @@ import type { CharacterTemplate } from "../../../models/characters/CharacterTemp
 import type { CharacterCreationProgressionPlan } from "../../../models/characters/creation/CharacterCreation"
 import {
   CUSTOM_CLASS_RUNTIME_ID,
+  DEFAULT_CUSTOM_CLASS_CONFIG,
+  createCustomClassRuntimeId,
+  isCustomClassName,
+  normalizeCustomClassConfig,
+  updateCustomClassConfig,
   type CustomClassRuntimeConfig,
 } from "../../../models/characters/customClassConfig"
 import type { Itemmable } from "../../../models/items/item"
@@ -170,8 +175,12 @@ type Props = {
   ) => void | Promise<void>
   createOwner: (ownerName: string) => Player
   customClassName?: string
-  customClassConfig?: CustomClassRuntimeConfig
-  onApplyCustomClassConfig?: (config: CustomClassRuntimeConfig) => void
+  customClassConfigs?: Record<string, CustomClassRuntimeConfig>
+  onApplyCustomClassConfig?: (
+    className: ClassName,
+    config: CustomClassRuntimeConfig,
+  ) => void
+  onRemoveCustomClassConfig?: (className: ClassName) => void
   mode?: "modal" | "page"
 }
 
@@ -185,8 +194,9 @@ export function IntegratedCharacterCreationWizard({
   onCreate,
   createOwner,
   customClassName = "Classe personalizada",
-  customClassConfig,
+  customClassConfigs,
   onApplyCustomClassConfig,
+  onRemoveCustomClassConfig,
   mode = "modal",
 }: Props) {
   const { spells, metamagics } = useMagicContext()
@@ -344,13 +354,15 @@ export function IntegratedCharacterCreationWizard({
         owner.id === ownerName.trim() || owner.name === ownerName.trim(),
     ) ?? createOwner(ownerName)
   const primaryClass = classPlans[0]?.className ?? firstClass.id
-  const primaryClassLabel =
-    String(primaryClass) === String(CUSTOM_CLASS_RUNTIME_ID)
-      ? customClassName.trim() || getClassNamePt(primaryClass)
-      : getClassNamePt(primaryClass)
+  const primaryCustomConfig = customClassConfigs?.[String(primaryClass)]
+  const primaryClassLabel = isCustomClassName(primaryClass)
+    ? primaryCustomConfig?.name.trim() ||
+      customClassName.trim() ||
+      getClassNamePt(primaryClass)
+    : getClassNamePt(primaryClass)
   const primaryPreset =
     PHB_CLASS_PRESETS.find((entry) => entry.id === primaryClass) ?? firstClass
-  const draftCharacter = createDraftCharacter({
+  const baseDraftCharacter = createDraftCharacter({
     name,
     owner: chosenOwner,
     visibility,
@@ -358,6 +370,13 @@ export function IntegratedCharacterCreationWizard({
     attributes,
     classPlans,
   })
+  const draftCharacter = classPlans.reduce((current, plan) => {
+    if (!isCustomClassName(plan.className)) return current
+    const config = customClassConfigs?.[String(plan.className)]
+    return config
+      ? updateCustomClassConfig(current, config, plan.className)
+      : current
+  }, baseDraftCharacter)
   const racialSkills = proficiencySkills(race.proficiencies)
   const blockedClassSkills = new Set<Skill>([
     ...racialSkills,
@@ -424,30 +443,53 @@ export function IntegratedCharacterCreationWizard({
   }
 
   function addClass(className: ClassName) {
-    if (classPlans.some((plan) => plan.className === className)) return
+    const addingCustom =
+      String(className) === String(CUSTOM_CLASS_RUNTIME_ID)
+    const runtimeClassName = addingCustom
+      ? createCustomClassRuntimeId()
+      : className
+
+    if (classPlans.some((plan) => plan.className === runtimeClassName)) return
+
+    const addCustomConfig = () => {
+      if (!addingCustom || !onApplyCustomClassConfig) return
+      onApplyCustomClassConfig(
+        runtimeClassName,
+        normalizeCustomClassConfig({
+          ...DEFAULT_CUSTOM_CLASS_CONFIG,
+          savingThrows: [...DEFAULT_CUSTOM_CLASS_CONFIG.savingThrows],
+          spellSlotProgression: {},
+          additionalSlotPools: [],
+        }),
+      )
+    }
 
     if (!classPlans.length) {
-      setClassPlans([createPlan(className, totalLevel)])
+      addCustomConfig()
+      setClassPlans([createPlan(runtimeClassName, totalLevel)])
       setClassSkillSelections({})
       setClassToolChoices({})
       setCustomClassAbilities([])
       setSpellSelections({})
       setSelectedMetamagics([])
-      setClassEquipmentItems(defaultClassEquipment(className))
-      const preset = PHB_CLASS_PRESETS.find((entry) => entry.id === className)
+      setClassEquipmentItems(defaultClassEquipment(runtimeClassName))
+      const preset = PHB_CLASS_PRESETS.find(
+        (entry) => entry.id === runtimeClassName,
+      )
       if (preset) setAttributes({ ...preset.recommendedAttributes })
       return
     }
 
     const donor = classPlans.find((plan) => plan.level > 1)
     if (!donor || classPlans.length >= totalLevel) return
+    addCustomConfig()
     setClassPlans((current) => [
       ...current.map((plan) =>
         plan.className === donor.className
           ? { ...plan, level: plan.level - 1 }
           : plan,
       ),
-      createPlan(className, 1),
+      createPlan(runtimeClassName, 1),
     ])
   }
 
@@ -472,6 +514,9 @@ export function IntegratedCharacterCreationWizard({
       current.filter((entry) => entry.className !== className),
     )
     if (className === "sorcerer") setSelectedMetamagics([])
+    if (isCustomClassName(className)) {
+      onRemoveCustomClassConfig?.(className)
+    }
 
     if (removedIndex === 0) {
       const nextPrimary = nextPlans[0]?.className
@@ -969,7 +1014,7 @@ export function IntegratedCharacterCreationWizard({
               draftCharacter={draftCharacter}
               classPlans={classPlans}
               customClassName={customClassName}
-              customClassConfig={customClassConfig}
+              customClassConfigs={customClassConfigs}
               blockedSkills={blockedClassSkills}
               classSkillSelections={classSkillSelections}
               classToolChoices={classToolChoices}
@@ -1079,6 +1124,7 @@ export function IntegratedCharacterCreationWizard({
               totalLevel={totalLevel}
               classPlans={classPlans}
               customClassName={customClassName}
+              customClassConfigs={customClassConfigs}
               classEquipmentItems={classEquipmentItems}
               attributes={attributes}
               classSkillSelections={classSkillSelections}
@@ -1625,7 +1671,7 @@ function ClassesStep({
   draftCharacter,
   classPlans,
   customClassName,
-  customClassConfig,
+  customClassConfigs,
   blockedSkills,
   classSkillSelections,
   classToolChoices,
@@ -1657,7 +1703,7 @@ function ClassesStep({
   draftCharacter: CharacterTemplate
   classPlans: ProgressionClassPlan[]
   customClassName: string
-  customClassConfig?: CustomClassRuntimeConfig
+  customClassConfigs?: Record<string, CustomClassRuntimeConfig>
   blockedSkills: Set<Skill>
   classSkillSelections: Partial<Record<ClassName, Skill[]>>
   classToolChoices: Partial<Record<ClassName, string>>
@@ -1670,7 +1716,10 @@ function ClassesStep({
   metamagicLimit: number
   onAddClass: (className: ClassName) => void
   onRemoveClass: (className: ClassName) => void
-  onApplyCustomClassConfig?: (config: CustomClassRuntimeConfig) => void
+  onApplyCustomClassConfig?: (
+    className: ClassName,
+    config: CustomClassRuntimeConfig,
+  ) => void
   onShiftLevel: (className: ClassName, delta: -1 | 1) => void
   onUpdatePlan: (
     className: ClassName,
@@ -1703,6 +1752,7 @@ function ClassesStep({
   )
   const selectedAlreadyAdded =
     newClass !== "" &&
+    String(newClass) !== String(CUSTOM_CLASS_RUNTIME_ID) &&
     classPlans.some((plan) => plan.className === newClass)
   const canAddSelectedClass =
     newClass !== "" &&
@@ -1728,13 +1778,14 @@ function ClassesStep({
             >
               <option value="">Selecionar classe</option>
               {AVAILABLE_CLASSES.map((className) => {
-                const added = classPlans.some(
-                  (plan) => plan.className === className,
-                )
-                const label =
+                const customOption =
                   String(className) === String(CUSTOM_CLASS_RUNTIME_ID)
-                    ? customClassName.trim() || "Classe personalizada"
-                    : getClassNamePt(className)
+                const added =
+                  !customOption &&
+                  classPlans.some((plan) => plan.className === className)
+                const label = customOption
+                  ? "Classe personalizada"
+                  : getClassNamePt(className)
                 return (
                   <option key={className} value={className} disabled={added}>
                     {label}
@@ -1766,10 +1817,12 @@ function ClassesStep({
 
       {classPlans.map((plan, index) => {
         const progression = getClassProgression(plan.className)
-        const isCustomClass =
-          String(plan.className) === String(CUSTOM_CLASS_RUNTIME_ID)
+        const isCustomClass = isCustomClassName(plan.className)
+        const customClassConfig = customClassConfigs?.[String(plan.className)]
         const displayLabel = isCustomClass
-          ? customClassName.trim() || progression.label
+          ? customClassConfig?.name.trim() ||
+            customClassName.trim() ||
+            progression.label
           : progression.label
         const subclassRequired = plan.level >= progression.subclassLevel
         const proficiencyRule = getClassProficiencyRule(plan.className)
@@ -1886,7 +1939,9 @@ function ClassesStep({
                     <CustomClassConfigurationEditor
                       config={customClassConfig}
                       applyLabel="Aplicar ao rascunho"
-                      onApply={onApplyCustomClassConfig}
+                      onApply={(next) =>
+                        onApplyCustomClassConfig(plan.className, next)
+                      }
                     />
                   </div>
                 ) : null}
@@ -2399,6 +2454,7 @@ function ReviewStep({
   totalLevel,
   classPlans,
   customClassName,
+  customClassConfigs,
   classEquipmentItems,
   attributes,
   classSkillSelections,
@@ -2412,6 +2468,7 @@ function ReviewStep({
   totalLevel: number
   classPlans: ProgressionClassPlan[]
   customClassName: string
+  customClassConfigs?: Record<string, CustomClassRuntimeConfig>
   classEquipmentItems: Itemmable[]
   attributes: Record<Attribute, number>
   classSkillSelections: Partial<Record<ClassName, Skill[]>>
@@ -2436,7 +2493,7 @@ function ReviewStep({
             value={classPlans
               .map(
                 (plan) =>
-                  `${String(plan.className) === String(CUSTOM_CLASS_RUNTIME_ID) ? customClassName.trim() || getClassNamePt(plan.className) : getClassNamePt(plan.className)} ${plan.level}${plan.subclassId ? ` — ${getClassProgression(plan.className).subclasses.find((entry) => entry.id === plan.subclassId)?.name ?? plan.subclassId}` : ""}`,
+                  `${isCustomClassName(plan.className) ? customClassConfigs?.[String(plan.className)]?.name.trim() || customClassName.trim() || getClassNamePt(plan.className) : getClassNamePt(plan.className)} ${plan.level}${plan.subclassId ? ` — ${getClassProgression(plan.className).subclasses.find((entry) => entry.id === plan.subclassId)?.name ?? plan.subclassId}` : ""}`,
               )
               .join(" / ")}
           />
@@ -2749,7 +2806,7 @@ function redistributeTotal(
 }
 
 function defaultClassEquipment(className: ClassName): Itemmable[] {
-  if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) return []
+  if (isCustomClassName(className)) return []
   const selections = getDefaultClassEquipmentSelections(className)
   return getSelectedClassEquipment(className, selections).map((spec) =>
     createStartingInventoryItem(spec),

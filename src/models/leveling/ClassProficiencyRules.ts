@@ -30,6 +30,11 @@ const CLASS_NAMES: ClassName[] = [
   "artificer", "barbarian", "bard", "cleric", "druid", "fighter",
   "monk", "paladin", "ranger", "rogue", "sorcerer", "warlock", "wizard",
 ]
+function isCustomRuntimeClass(className: ClassName): boolean {
+  const value = String(className)
+  return value === "__custom__" || value.startsWith("__custom__-")
+}
+
 const EMPTY_RULE: ClassProficiencyRule = {
   savingThrows: [],
   initial: [],
@@ -42,7 +47,7 @@ export const CLASS_PROFICIENCY_RULES = Object.fromEntries(
 ) as unknown as Record<ClassName, ClassProficiencyRule>
 
 export function getClassProficiencyRule(className: ClassName): ClassProficiencyRule {
-  if (String(className) === "__custom__") return EMPTY_RULE
+  if (isCustomRuntimeClass(className)) return EMPTY_RULE
   return CLASS_PROFICIENCY_RULES[className]
 }
 

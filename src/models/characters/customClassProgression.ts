@@ -6,6 +6,7 @@ import {
   CUSTOM_CLASS_RUNTIME_ID,
   createCustomClassEntry,
   getCustomClassConfig,
+  getCustomClassConfigFromEntry,
   getCustomClassIndex,
   isCustomClassEntry,
   normalizeCustomClassConfig,
@@ -15,7 +16,7 @@ import {
 import type { HP } from "../sheet/HP"
 import type { Skill } from "../sheet/Skills"
 import type { Attribute } from "../sheet/Attribute"
-import type { ClassLevel } from "../sheet/Class"
+import type { ClassLevel, ClassName } from "../sheet/Class"
 
 const ATTRIBUTES: Attribute[] = ["str", "dex", "con", "int", "wis", "cha"]
 
@@ -23,12 +24,13 @@ export function applyCustomClassCreationConfiguration(
   character: CharacterTemplate,
   config: CustomClassRuntimeConfig,
   selectedSkills: Skill[] = [],
+  className?: ClassName,
 ): CharacterTemplate {
-  if (getCustomClassIndex(character) < 0) return character
+  if (getCustomClassIndex(character, className) < 0) return character
 
   const normalized = normalizeCustomClassConfig(config)
-  let next = updateCustomClassConfig(character, normalized)
-  const customIndex = getCustomClassIndex(next)
+  let next = updateCustomClassConfig(character, normalized, className)
+  const customIndex = getCustomClassIndex(next, className)
 
   if (customIndex === 0) {
     const current = next.get("sheet").savingThrowProficiencies ?? {}
@@ -47,7 +49,7 @@ export function applyCustomClassCreationConfiguration(
     next = next.withSheet("skills", skills)
   }
 
-  next = recalculateCreationHp(next, normalized)
+  next = recalculateCreationHp(next)
   return next.syncMagicWithClasses()
 }
 
@@ -135,7 +137,6 @@ export function getCustomLevelUpConfig(
 
 function recalculateCreationHp(
   character: CharacterTemplate,
-  customConfig: CustomClassRuntimeConfig,
 ): CharacterTemplate {
   const conModifier = character.getAttributeModifier("con")
   const hitDice: HP["hitDice"] = {}
@@ -144,7 +145,7 @@ function recalculateCreationHp(
 
   for (const classEntry of character.get("sheet").classes ?? []) {
     const hitDie = isCustomClassEntry(classEntry)
-      ? customConfig.hitDie
+      ? getCustomClassConfigFromEntry(classEntry)?.hitDie ?? "d8"
       : getClassProgression(classEntry.className).hitDie
     const sides = Number(hitDie.slice(1)) || 6
     const currentPool = hitDice[hitDie] ?? {

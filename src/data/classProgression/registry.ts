@@ -5,6 +5,12 @@ import type {
 } from "./types"
 
 const CUSTOM_CLASS_RUNTIME_ID = "__custom__"
+const CUSTOM_CLASS_RUNTIME_PREFIX = `${CUSTOM_CLASS_RUNTIME_ID}-`
+
+function isCustomRuntimeClass(className: ClassName): boolean {
+  const value = String(className)
+  return value === CUSTOM_CLASS_RUNTIME_ID || value.startsWith(CUSTOM_CLASS_RUNTIME_PREFIX)
+}
 
 export const ALL_CLASS_NAMES: readonly ClassName[] = [
   "artificer",
@@ -99,7 +105,7 @@ export const CLASS_PROGRESSION_MODULES = [] as const
 export function getClassProgression(
   className: ClassName,
 ): ClassProgressionDefinition {
-  if (String(className) === CUSTOM_CLASS_RUNTIME_ID) return CUSTOM_CLASS_REFERENCE
+  if (isCustomRuntimeClass(className)) return CUSTOM_CLASS_REFERENCE
   return CLASS_PROGRESSIONS[className]
 }
 
@@ -116,7 +122,7 @@ export function getCantripsKnownAtLevel(
   className: ClassName,
   level: number,
 ): number {
-  if (String(className) === CUSTOM_CLASS_RUNTIME_ID) return 0
+  if (isCustomRuntimeClass(className)) return 0
   const normalizedLevel = Math.max(1, Math.min(20, Math.trunc(level || 1)))
   return CLASS_PROGRESSIONS[className].cantripsKnown?.[normalizedLevel] ?? 0
 }
