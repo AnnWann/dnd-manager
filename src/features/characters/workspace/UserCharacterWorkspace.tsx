@@ -47,9 +47,11 @@ import {
 export function UserCharacterWorkspace({
   characterId,
   children,
+  initialEditing = false,
 }: {
   characterId: string
   children: ReactNode
+  initialEditing?: boolean
 }) {
   const { data: session } = authClient.useSession()
   const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
@@ -60,7 +62,7 @@ export function UserCharacterWorkspace({
   const [character, setCharacter] = useState<CharacterTemplate | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
+  const [isEditing, setIsEditing] = useState(initialEditing)
   const [isSaving, setIsSaving] = useState(false)
   const [persistenceError, setPersistenceError] = useState("")
 
@@ -75,9 +77,9 @@ export function UserCharacterWorkspace({
     characterRef.current = hydrated
     setCharacter(hydrated)
     setNotFound(false)
-    setIsEditing(false)
+    setIsEditing(initialEditing)
     setPersistenceError("")
-  }, [])
+  }, [initialEditing])
 
   useEffect(() => {
     if (!userId) return
@@ -85,7 +87,7 @@ export function UserCharacterWorkspace({
     let active = true
     setLoading(true)
     setNotFound(false)
-    setIsEditing(false)
+    setIsEditing(initialEditing)
     setIsSaving(false)
     setPersistenceError("")
     characterRef.current = null
@@ -141,7 +143,7 @@ export function UserCharacterWorkspace({
       summaryRef.current = null
       savedJsonRef.current = null
     }
-  }, [characterId, installSavedCharacter, userId])
+  }, [characterId, initialEditing, installSavedCharacter, userId])
 
   const dirty = useMemo(() => {
     if (!isEditing || !character || !savedJsonRef.current) return false
@@ -174,13 +176,19 @@ export function UserCharacterWorkspace({
     characterRef.current = restored
     setCharacter(restored)
     setPersistenceError("")
-    setIsEditing(false)
-  }, [isSaving])
+    setIsEditing(initialEditing)
+  }, [initialEditing, isSaving])
 
-  const saveCharacter = useCallback(async () => {
+  const saveCharacter = useCallback(async (): Promise<boolean> => {
     const current = characterRef.current
     const summary = summaryRef.current
-    if (!current || !summary || !dirty || isSaving) return
+    const saved = savedJsonRef.current
+    if (!current || !summary || !saved || isSaving) return false
+
+    if (characterJsonEqual(saved, current.toJSON())) {
+      setIsEditing(initialEditing)
+      return true
+    }
 
     setIsSaving(true)
     setPersistenceError("")
@@ -200,28 +208,30 @@ export function UserCharacterWorkspace({
         },
       )
 
-      const saved = hydrateWorkspaceCharacter(fresh)
+      const savedCharacter = hydrateWorkspaceCharacter(fresh)
       summaryRef.current = fresh
-      savedJsonRef.current = saved.toJSON()
-      characterRef.current = saved
-      setCharacter(saved)
+      savedJsonRef.current = savedCharacter.toJSON()
+      characterRef.current = savedCharacter
+      setCharacter(savedCharacter)
       writeUserCharacterCache(userId, fresh.id, fresh, { synced: true })
       setCharacters((currentCharacters) =>
         currentCharacters.map((entry) =>
           entry.id === fresh.id ? fresh : entry,
         ),
       )
-      setIsEditing(false)
+      setIsEditing(initialEditing)
+      return true
     } catch (error) {
       setPersistenceError(
         error instanceof Error
           ? error.message
           : "Não foi possível salvar a ficha.",
       )
+      return false
     } finally {
       setIsSaving(false)
     }
-  }, [dirty, isSaving, setCharacters, userId])
+  }, [initialEditing, isSaving, setCharacters, userId])
 
   const applyCharacterUpdate = useCallback(
     (
@@ -246,12 +256,8 @@ export function UserCharacterWorkspace({
         sourceName: "Edição da ficha",
       })
 
-      if (declaredDomain) {
-        // Domain ownership remains useful as a development invariant even
-        // though user-context persistence is now batched into one Save.
-        const before = current.toJSON()
-        const after = withMetadata.toJSON()
-        if (characterJsonEqual(before, after)) return
+      if (declaredDomain && characterJsonEqual(current.toJSON(), withMetadata.toJSON())) {
+        return
       }
 
       characterRef.current = withMetadata
@@ -351,6 +357,7 @@ export function UserCharacterWorkspace({
   const value: CharacterWorkspaceValue = {
     mode: "user",
     isEditing,
+    saveCharacter,
     characters: [character],
     activeCharacter: character,
     selectedCharacterId: character.get("id"),
@@ -408,14 +415,16 @@ export function UserCharacterWorkspace({
         <div className="flex items-center gap-2">
           {isEditing ? (
             <>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={isSaving}
-                onClick={cancelEditing}
-              >
-                Cancelar
-              </Button>
+              {!initialEditing ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={isSaving}
+                  onClick={cancelEditing}
+                >
+                  Cancelar
+                </Button>
+              ) : null}
               {dirty ? (
                 <Button
                   size="sm"
