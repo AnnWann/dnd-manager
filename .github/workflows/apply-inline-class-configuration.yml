@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: feature/session-server
-          fetch-depth: 2
+          fetch-depth: 8
 
       - uses: actions/setup-node@v4
         with:
@@ -26,28 +26,29 @@ jobs:
       - name: Apply inline configuration refactor
         shell: bash
         run: |
-          git show HEAD^:.github/workflows/apply-inline-class-configuration.yml > /tmp/previous-workflow.yml
+          git show aa9a12f08f919ad34191193f890f9b2067035a75:.github/workflows/apply-inline-class-configuration.yml > /tmp/base-workflow.yml
           awk '
             /python - <<'"'"'PY'"'"'/ { capture=1; next }
             capture && /^[[:space:]]*PY[[:space:]]*$/ { exit }
             capture { sub(/^          /, ""); print }
-          ' /tmp/previous-workflow.yml > /tmp/apply-inline-config.py
+          ' /tmp/base-workflow.yml > /tmp/apply-inline-config.py
           test -s /tmp/apply-inline-config.py
 
           python - <<'PY'
           from pathlib import Path
           path = Path('/tmp/apply-inline-config.py')
           script = path.read_text()
+
           old = '''auto_open = ''' + "'''" + '''      if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) {\\n        onConfigureCustomClass?.()\\n      }\\n''' + "'''" + '''\nif integrated.count(auto_open) != 2:\n    raise SystemExit(f'custom class auto-open: expected 2 anchors, found {integrated.count(auto_open)}')\nintegrated = integrated.replace(auto_open, '')\n'''
           new = '''auto_open_blocks = [\n    ''' + "'''" + '''      if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) {\\n        onConfigureCustomClass?.()\\n      }\\n''' + "'''" + ''',\n    ''' + "'''" + '''    if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) {\\n      onConfigureCustomClass?.()\\n    }\\n''' + "'''" + ''',\n]\nfor auto_open in auto_open_blocks:\n    if integrated.count(auto_open) != 1:\n        raise SystemExit(f'custom class auto-open anchor mismatch: {integrated.count(auto_open)}')\n    integrated = integrated.replace(auto_open, '', 1)\n'''
           if old not in script:
-              raise SystemExit('auto-open patch block not found')
+              raise SystemExit('base auto-open patch block not found')
           script = script.replace(old, new, 1)
 
           old_reset = '''wrapper = replace_once(\n    wrapper,\n    '      setCustomClassDialogOpen(false)\\n',\n    '',\n    'custom class dialog reset',\n)\n'''
           new_reset = '''reset_anchor = '      setCustomClassDialogOpen(false)\\n'\nif wrapper.count(reset_anchor) < 1:\n    raise SystemExit('custom class dialog reset anchor not found')\nwrapper = wrapper.replace(reset_anchor, '', 1)\n'''
           if old_reset not in script:
-              raise SystemExit('custom class dialog reset patch block not found')
+              raise SystemExit('base custom class dialog reset patch block not found')
           path.write_text(script.replace(old_reset, new_reset, 1))
           PY
 
