@@ -14,6 +14,7 @@ export const CLASS_NAME_PT: Record<ClassName, string> = {
   sorcerer: "Feiticeiro",
   warlock: "Bruxo",
   wizard: "Mago",
+  __custom__: "Classe personalizada",
 }
 
 export const SUBCLASS_NAME_PT: Record<string, string> = {
