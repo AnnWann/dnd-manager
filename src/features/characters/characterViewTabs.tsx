@@ -8,6 +8,7 @@ import {
   WandSparkles,
   Leaf,
   UserRound,
+  SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react"
 
@@ -25,6 +26,7 @@ export type CharacterTab =
   | "equipment"
   | "inventory"
   | "spells-list"
+  | "custom-class"
 
 export type CharacterViewTabDefinition = {
   key: string
@@ -47,6 +49,7 @@ export const CHARACTER_TABS: Array<CharacterViewTabDefinition & { key: Character
   { key: "race", label: "Raça", icon: Leaf },
   { key: "profile", label: "Perfil", icon: UserRound },
   { key: "proficiencies", label: "Proficiências", icon: BadgeCheck },
+  { key: "custom-class", label: "Classe customizada", icon: SlidersHorizontal },
 ]
 
 export function CharacterViewTabs({
