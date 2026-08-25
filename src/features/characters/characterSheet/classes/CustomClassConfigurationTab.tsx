@@ -168,8 +168,8 @@ export function CustomClassConfigurationEditor({
             <Select
               disabled={readOnly}
               value={draft.hitDie}
-              onChange={(event) =>
-                patch({ hitDie: event.target.value as CustomClassRuntimeConfig["hitDie"] })
+              onInput={(event) =>
+                patch({ hitDie: event.currentTarget.value as CustomClassRuntimeConfig["hitDie"] })
               }
             >
               {HIT_DICE.map((die) => <option key={die} value={die}>{die}</option>)}
@@ -190,7 +190,7 @@ export function CustomClassConfigurationEditor({
 
           <label className="grid gap-1.5">
             <span className="text-xs font-medium text-textH">Tipo de conjurador</span>
-            <Select disabled={readOnly} value={draft.casterType} onChange={(event) => patch({ casterType: event.target.value as CustomClassRuntimeConfig["casterType"] })}>
+            <Select disabled={readOnly} value={draft.casterType} onInput={(event) => patch({ casterType: event.currentTarget.value as CustomClassRuntimeConfig["casterType"] })}>
               <option value="none">Não conjurador</option>
               <option value="full">Conjurador completo</option>
               <option value="half">Meio conjurador</option>
@@ -202,14 +202,14 @@ export function CustomClassConfigurationEditor({
             <>
               <label className="grid gap-1.5">
                 <span className="text-xs font-medium text-textH">Atributo de conjuração</span>
-                <Select disabled={readOnly} value={draft.castingAttribute} onChange={(event) => patch({ castingAttribute: event.target.value as Attribute })}>
+                <Select disabled={readOnly} value={draft.castingAttribute} onInput={(event) => patch({ castingAttribute: event.currentTarget.value as Attribute })}>
                   {ATTRIBUTES.map((attribute) => <option key={attribute.value} value={attribute.value}>{attribute.label}</option>)}
                 </Select>
               </label>
 
               <label className="grid gap-1.5">
                 <span className="text-xs font-medium text-textH">Modelo de magias</span>
-                <Select disabled={readOnly} value={draft.knownSpellMode} onChange={(event) => patch({ knownSpellMode: event.target.value as KnownSpellMode })}>
+                <Select disabled={readOnly} value={draft.knownSpellMode} onInput={(event) => patch({ knownSpellMode: event.currentTarget.value as KnownSpellMode })}>
                   <option value="limited">Magias conhecidas</option>
                   <option value="spellbook">Grimório</option>
                   <option value="prepared-only">Somente preparadas</option>
@@ -275,7 +275,7 @@ export function CustomClassConfigurationEditor({
               <Select
                 disabled={readOnly}
                 value={draft.slotProgressionMode}
-                onChange={(event) => patch({ slotProgressionMode: event.target.value === "table" ? "table" : "formula" })}
+                onInput={(event) => patch({ slotProgressionMode: event.currentTarget.value === "table" ? "table" : "formula" })}
               >
                 <option value="formula">Padrão do tipo de conjurador</option>
                 <option value="table">Tabela exata por nível</option>
@@ -385,9 +385,9 @@ export function CustomClassConfigurationEditor({
                   <Select
                     disabled={readOnly}
                     value={pool.recovery}
-                    onChange={(event) => {
+                    onInput={(event) => {
                       const pools = [...draft.additionalSlotPools]
-                      pools[poolIndex] = { ...pool, recovery: event.target.value === "short" ? "short" : "long" }
+                      pools[poolIndex] = { ...pool, recovery: event.currentTarget.value === "short" ? "short" : "long" }
                       patch({ additionalSlotPools: pools })
                     }}
                   >
