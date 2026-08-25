@@ -279,7 +279,7 @@ export async function updateMyCharacter(
           options.visibility ??
           (character.visibility as CharacterVisibility) ??
           "PRIVATE",
-        revision: (character.revision ?? 0) + 1,
+        revision: ((character as UserCharacterSummary).revision ?? 0) + 1,
         data,
         updatedAt: now,
       } as UserCharacterSummary
