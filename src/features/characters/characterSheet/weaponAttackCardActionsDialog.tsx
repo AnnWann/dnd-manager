@@ -36,6 +36,7 @@ export function HandItemActionsDialog({
   onClose: () => void
 }) {
   const {
+    mode,
     updateCharacter,
     stowHandOccupant,
     dropHandOccupant,
@@ -44,6 +45,7 @@ export function HandItemActionsDialog({
     canUseGroundInventory,
   } = useCharacterWorkspace()
   const [pendingHands, setPendingHands] = useState<HeldHands | null>(null)
+  const userMode = mode === "user"
 
   useEffect(() => {
     setPendingHands(null)
@@ -62,12 +64,13 @@ export function HandItemActionsDialog({
   const itemIsWeapon = occupant.reference.type === "weapon"
   const improvised =
     itemIsWeapon && isWeaponImprovisedGrip(occupant.item)
-  const canPocketSelected = canItemGoInPocket(occupant.item)
+  const canPocketSelected =
+    !userMode && canItemGoInPocket(occupant.item)
   const pocketFull = character.get("equipment").pockets.length >= 8
   const canMoveToGround =
-    canUseGroundInventory && Boolean(moveEquippedItemToGround)
+    !userMode && canUseGroundInventory && Boolean(moveEquippedItemToGround)
   const canDropToGround =
-    canUseGroundInventory && Boolean(dropHandOccupant)
+    !userMode && canUseGroundInventory && Boolean(dropHandOccupant)
 
   function setHands(hands: HeldHands) {
     const availableAfterRemovingCurrent =
@@ -113,7 +116,7 @@ export function HandItemActionsDialog({
   }
 
   function moveSelectedToGround() {
-    if (!moveEquippedItemToGround) return
+    if (!moveEquippedItemToGround || userMode) return
 
     const currentOccupant = findHandOccupantByItemId(
       character,
@@ -132,7 +135,7 @@ export function HandItemActionsDialog({
   }
 
   function throwSelected() {
-    if (!dropHandOccupant) return
+    if (!dropHandOccupant || userMode) return
 
     const currentOccupant = findHandOccupantByItemId(character, itemId)
     if (!currentOccupant) return
@@ -150,7 +153,7 @@ export function HandItemActionsDialog({
     if (destination === "inventory") {
       stowHandOccupant(character.get("id"), blocker.reference)
     } else {
-      if (!dropHandOccupant) return
+      if (!dropHandOccupant || userMode) return
       dropHandOccupant(character.get("id"), blocker.reference)
     }
 
@@ -215,7 +218,7 @@ export function HandItemActionsDialog({
           <div className="text-[11px] font-semibold uppercase tracking-wide text-textMuted">
             Destino ao retirar
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className={userMode ? "grid gap-2" : "grid gap-2 sm:grid-cols-2 lg:grid-cols-4"}>
             <Button
               variant="secondary"
               onClick={() => removeSelected("inventory")}
