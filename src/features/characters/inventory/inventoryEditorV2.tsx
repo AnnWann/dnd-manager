@@ -15,6 +15,7 @@ type Props = {
   description: string
   items: Itemmable[]
   emptyMessage: string
+  mutationsDisabled?: boolean
   onAddItem?: (item: Itemmable) => void
   onUpdateItem?: (
     itemId: string,
@@ -92,6 +93,7 @@ export function InventoryEditor({
   description,
   items,
   emptyMessage,
+  mutationsDisabled = false,
   onAddItem,
   onUpdateItem,
   onRemoveItem,
@@ -120,6 +122,7 @@ export function InventoryEditor({
   }
 
   function openEdit(item: Itemmable) {
+    if (mutationsDisabled) return
     setViewingItem(null)
     setEditingItem(item)
   }
@@ -141,6 +144,7 @@ export function InventoryEditor({
               className="w-full sm:w-auto"
               size="sm"
               variant="primary"
+              disabled={mutationsDisabled}
               onClick={() => setCreatingItem(true)}
             >
               + Adicionar
@@ -152,6 +156,7 @@ export function InventoryEditor({
       <CardContent>
         <CurrencyWallet
           items={currencyItems}
+          mutationsDisabled={mutationsDisabled}
           onAddItem={onAddItem}
           onUpdateItem={onUpdateItem}
           onRemoveItem={onRemoveItem}
@@ -232,6 +237,7 @@ export function InventoryEditor({
                         <Button
                           size="sm"
                           variant={isAttuned ? "primary" : "secondary"}
+                          disabled={mutationsDisabled}
                           onClick={() => onToggleAttunement(item.id)}
                         >
                           {isAttuned ? "Desfazer sintonia" : "Sintonizar"}
@@ -242,6 +248,7 @@ export function InventoryEditor({
                         <Button
                           size="sm"
                           variant="secondary"
+                          disabled={mutationsDisabled}
                           onClick={() => onConsumeItem(item.id)}
                         >
                           {item.kind === "ammunition"
@@ -254,6 +261,7 @@ export function InventoryEditor({
                         <Button
                           size="sm"
                           variant="secondary"
+                          disabled={mutationsDisabled}
                           onClick={() => onEquipItem(item.id)}
                         >
                           Equipar
@@ -264,6 +272,7 @@ export function InventoryEditor({
                         <Button
                           size="sm"
                           variant="secondary"
+                          disabled={mutationsDisabled}
                           onClick={() => onToggleBagOfHolding(item.id)}
                         >
                           {item.insideBagOfHolding
@@ -276,6 +285,7 @@ export function InventoryEditor({
                         <Button
                           size="sm"
                           variant="secondary"
+                          disabled={mutationsDisabled}
                           onClick={() => onTransferItem(item)}
                         >
                           {transferLabel}
@@ -286,6 +296,7 @@ export function InventoryEditor({
                         <Button
                           size="sm"
                           variant="ghost"
+                          disabled={mutationsDisabled}
                           onClick={() => onRemoveItem(item.id)}
                         >
                           Remover
@@ -311,31 +322,34 @@ export function InventoryEditor({
       <ItemDetailsDialog
         item={viewingItem}
         canEdit={Boolean(onUpdateItem)}
+        mutationsDisabled={mutationsDisabled}
         onClose={() => setViewingItem(null)}
         onEdit={openEdit}
         onUpdate={
-          viewingItem && onUpdateItem
+          viewingItem && onUpdateItem && !mutationsDisabled
             ? (updater) => onUpdateItem(viewingItem.id, updater)
             : undefined
         }
       />
 
       <ItemCreationDialog
-        open={creatingItem}
+        open={!mutationsDisabled && creatingItem}
         title="Criar item"
         onClose={() => setCreatingItem(false)}
         onSave={(item) => {
+          if (mutationsDisabled) return
           onAddItem?.(item)
           setCreatingItem(false)
         }}
       />
 
       <ItemCreationDialog
-        open={editingItem !== null}
+        open={!mutationsDisabled && editingItem !== null}
         title="Editar item"
         item={editingItem}
         onClose={() => setEditingItem(null)}
         onSave={(item) => {
+          if (mutationsDisabled) return
           onUpdateItem?.(item.id, () => item)
           setEditingItem(null)
         }}
@@ -347,12 +361,14 @@ export function InventoryEditor({
 function ItemDetailsDialog({
   item,
   canEdit,
+  mutationsDisabled,
   onClose,
   onEdit,
   onUpdate,
 }: {
   item: Itemmable | null
   canEdit: boolean
+  mutationsDisabled: boolean
   onClose: () => void
   onEdit: (item: Itemmable) => void
   onUpdate?: (updater: (item: Itemmable) => Itemmable) => void
@@ -392,7 +408,11 @@ function ItemDetailsDialog({
 
           <div className="flex gap-2">
             {canEdit && !protectedDefinition ? (
-              <Button size="sm" onClick={() => onEdit(item)}>
+              <Button
+                size="sm"
+                disabled={mutationsDisabled}
+                onClick={() => onEdit(item)}
+              >
                 Editar
               </Button>
             ) : null}
@@ -416,6 +436,7 @@ function ItemDetailsDialog({
 
 function CurrencyWallet({
   items,
+  mutationsDisabled,
   onAddItem,
   onUpdateItem,
   onRemoveItem,
@@ -425,6 +446,7 @@ function CurrencyWallet({
   onViewItem,
 }: {
   items: Itemmable[]
+  mutationsDisabled: boolean
   onAddItem?: (item: Itemmable) => void
   onUpdateItem?: (
     itemId: string,
@@ -457,6 +479,7 @@ function CurrencyWallet({
                 className="w-full sm:w-auto"
                 size="sm"
                 variant={currenciesInsideBagOfHolding ? "primary" : "secondary"}
+                disabled={mutationsDisabled}
                 onClick={onMoveAllCurrenciesToBagOfHolding}
               >
                 {currenciesInsideBagOfHolding
@@ -487,7 +510,7 @@ function CurrencyWallet({
                   type="number"
                   min={0}
                   step={1}
-                  disabled={!onUpdateItem}
+                  disabled={mutationsDisabled || !onUpdateItem}
                   value={item.quantity ?? 0}
                   onChange={(event) =>
                     onUpdateItem?.(item.id, (current) => ({
@@ -512,6 +535,7 @@ function CurrencyWallet({
                   <Button
                     size="sm"
                     variant="secondary"
+                    disabled={mutationsDisabled}
                     onClick={() => onTransferItem(item)}
                   >
                     {transferLabel}
@@ -521,6 +545,7 @@ function CurrencyWallet({
                   <Button
                     size="sm"
                     variant="ghost"
+                    disabled={mutationsDisabled}
                     onClick={() => onRemoveItem(item.id)}
                   >
                     Remover
