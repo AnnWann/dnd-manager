@@ -2,11 +2,9 @@ import { Input } from "../../../components/ui/Input"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { setMaxHp } from "../../../models/characters/characterHp"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
-import { Attributes } from "./attributes"
-import { GroupStats } from "./character_info/components/stats/GroupStats"
-import { SavingThrows } from "./savingThrows"
 import { Skills } from "./skills/skills"
 import { UserCharacterIdentity } from "./userCharacterIdentity"
+import { UserCharacterStatistics } from "./userCharacterStatistics"
 
 type Props = {
   character: CharacterTemplate
@@ -62,36 +60,16 @@ export function UserCharacterSheet({ character, updateCharacter }: Props) {
         </label>
       </section>
 
+      <UserCharacterStatistics
+        character={character}
+        updateCharacter={updateCharacter}
+      />
+
       <div className={isEditing ? undefined : "pointer-events-none"}>
-        <GroupStats
+        <Skills
           character={character}
           updateCharacter={updateCharacter}
         />
-      </div>
-
-      <div className="grid items-start gap-4 xl:grid-cols-[280px_minmax(360px,1fr)]">
-        <div className="grid gap-4">
-          <div className={isEditing ? undefined : "[&_input]:pointer-events-none"}>
-            <Attributes
-              character={character}
-              updateCharacter={updateCharacter}
-            />
-          </div>
-
-          <div className={isEditing ? undefined : "pointer-events-none"}>
-            <SavingThrows
-              character={character}
-              updateCharacter={updateCharacter}
-            />
-          </div>
-        </div>
-
-        <div className={isEditing ? undefined : "pointer-events-none"}>
-          <Skills
-            character={character}
-            updateCharacter={updateCharacter}
-          />
-        </div>
       </div>
     </div>
   )
