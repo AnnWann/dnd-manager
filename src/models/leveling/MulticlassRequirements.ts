@@ -17,16 +17,27 @@ export type MulticlassRequirementResult = {
   }>
 }
 
+const EMPTY_REQUIREMENT: MulticlassRequirementGroup = {
+  mode: "all",
+  requirements: [],
+}
+
 const CLASS_NAMES: ClassName[] = [
   "artificer", "barbarian", "bard", "cleric", "druid", "fighter",
   "monk", "paladin", "ranger", "rogue", "sorcerer", "warlock", "wizard",
-  "__custom__",
 ]
 
 /** No multiclass prerequisite table is bundled; users consult their reference. */
 export const MULTICLASS_REQUIREMENTS = Object.fromEntries(
-  CLASS_NAMES.map((className) => [className, { mode: "all", requirements: [] }]),
+  CLASS_NAMES.map((className) => [className, EMPTY_REQUIREMENT]),
 ) as unknown as Record<ClassName, MulticlassRequirementGroup>
+
+export function getMulticlassRequirement(
+  className: ClassName,
+): MulticlassRequirementGroup {
+  if (String(className) === "__custom__") return EMPTY_REQUIREMENT
+  return MULTICLASS_REQUIREMENTS[className]
+}
 
 export function checkMulticlassRequirements(
   character: CharacterTemplate,
