@@ -17,7 +17,19 @@ export function CharacterRaceTab({ character, updateCharacter }: Props) {
   const runtime = useOptionalSessionRuntime()
 
   if (!runtime) {
-    return <BaseCharacterRaceTab character={character} updateCharacter={updateCharacter} />
+    const mutationsDisabled = workspace.mode === "user" && !workspace.isEditing
+
+    return (
+      <fieldset
+        disabled={mutationsDisabled}
+        className="m-0 min-w-0 border-0 p-0 disabled:opacity-75"
+      >
+        <BaseCharacterRaceTab
+          character={character}
+          updateCharacter={updateCharacter}
+        />
+      </fieldset>
+    )
   }
 
   const authoritativeCharacter =
