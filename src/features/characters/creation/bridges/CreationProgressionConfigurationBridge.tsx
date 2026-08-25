@@ -149,7 +149,12 @@ export function CreationProgressionConfigurationBridge({
 
       for (const section of Array.from(main.querySelectorAll<HTMLElement>("section"))) {
         const heading = section.querySelector<HTMLElement>(":scope > div h2, :scope > h2")
-        const parsedClass = parseClassHeading(heading?.textContent ?? "")
+        const datasetClassName = section.dataset.creationClassName as ClassName | undefined
+        const datasetLevel = Number(section.dataset.creationClassLevel)
+        const parsedClass =
+          datasetClassName && Number.isFinite(datasetLevel) && datasetLevel > 0
+            ? { className: datasetClassName, level: datasetLevel }
+            : parseClassHeading(heading?.textContent ?? "")
         if (parsedClass) {
           hideLegacyClassConfiguration(section)
           let mount = section.querySelector<HTMLElement>(
@@ -811,8 +816,11 @@ function parseClassHeading(
   const normalized = text.trim()
   for (const className of ALL_CLASS_NAMES) {
     const label = getClassProgression(className).label
-    if (!normalized.startsWith(`${label} `)) continue
-    const level = Number(normalized.slice(label.length).trim().match(/^\d+/)?.[0])
+    if (!normalized.startsWith(label)) continue
+    const suffix = normalized.slice(label.length).trim()
+    const level = Number(
+      suffix.match(/^(?:—\s*)?(?:nível\s*)?(\d+)/i)?.[1],
+    )
     if (Number.isFinite(level) && level > 0) return { className, level }
   }
   return undefined

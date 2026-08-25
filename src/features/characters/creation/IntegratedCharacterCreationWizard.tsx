@@ -1876,6 +1876,8 @@ function ClassesStep({
         return (
           <section
             key={plan.className}
+            data-creation-class-name={String(plan.className)}
+            data-creation-class-level={String(plan.level)}
             className="grid gap-4 rounded-xl border border-border bg-bg-subtle p-4"
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
