@@ -83,6 +83,7 @@ export const CLASS_PROGRESSIONS: Record<ClassName, ClassProgressionDefinition> =
   sorcerer: classReference("sorcerer", "Feiticeiro", "d6"),
   warlock: classReference("warlock", "Bruxo", "d8"),
   wizard: classReference("wizard", "Mago", "d6"),
+  __custom__: classReference("__custom__", "Classe personalizada", "d8"),
 }
 
 /** Compatibility export: there are intentionally no bundled feature modules. */
