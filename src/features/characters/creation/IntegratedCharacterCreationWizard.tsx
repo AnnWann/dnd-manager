@@ -26,7 +26,10 @@ import type { Ability } from "../../../models/abilities/Ability"
 import type { CharacterBackground } from "../../../models/characters/CharacterBackground"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { CharacterCreationProgressionPlan } from "../../../models/characters/creation/CharacterCreation"
-import { CUSTOM_CLASS_RUNTIME_ID } from "../../../models/characters/customClassConfig"
+import {
+  CUSTOM_CLASS_RUNTIME_ID,
+  type CustomClassRuntimeConfig,
+} from "../../../models/characters/customClassConfig"
 import type { Itemmable } from "../../../models/items/item"
 import {
   getDynamicSubclassSpellGrants,
@@ -67,6 +70,7 @@ import type { Proficiency } from "../../../models/sheet/Proficiency"
 import type { Skill } from "../../../models/sheet/Skills"
 import { getClassNamePt } from "../../../models/leveling/ClassLocalization"
 import { AbilityDialog } from "../abilities/abilityDialog"
+import { CustomClassConfigurationEditor } from "../characterSheet/classes/CustomClassConfigurationTab"
 import { GrantedProficienciesEditor } from "../proficiencies/grantedProficienciesEditor"
 import { finalizeDynamicSubclassSpells } from "../progression/CharacterProgressionFlow"
 import {
@@ -166,7 +170,8 @@ type Props = {
   ) => void | Promise<void>
   createOwner: (ownerName: string) => Player
   customClassName?: string
-  onConfigureCustomClass?: () => void
+  customClassConfig?: CustomClassRuntimeConfig
+  onApplyCustomClassConfig?: (config: CustomClassRuntimeConfig) => void
   mode?: "modal" | "page"
 }
 
@@ -180,7 +185,8 @@ export function IntegratedCharacterCreationWizard({
   onCreate,
   createOwner,
   customClassName = "Classe personalizada",
-  onConfigureCustomClass,
+  customClassConfig,
+  onApplyCustomClassConfig,
   mode = "modal",
 }: Props) {
   const { spells, metamagics } = useMagicContext()
@@ -430,9 +436,6 @@ export function IntegratedCharacterCreationWizard({
       setClassEquipmentItems(defaultClassEquipment(className))
       const preset = PHB_CLASS_PRESETS.find((entry) => entry.id === className)
       if (preset) setAttributes({ ...preset.recommendedAttributes })
-      if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) {
-        onConfigureCustomClass?.()
-      }
       return
     }
 
@@ -446,9 +449,6 @@ export function IntegratedCharacterCreationWizard({
       ),
       createPlan(className, 1),
     ])
-    if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) {
-      onConfigureCustomClass?.()
-    }
   }
 
   function removeClass(className: ClassName) {
@@ -969,6 +969,7 @@ export function IntegratedCharacterCreationWizard({
               draftCharacter={draftCharacter}
               classPlans={classPlans}
               customClassName={customClassName}
+              customClassConfig={customClassConfig}
               blockedSkills={blockedClassSkills}
               classSkillSelections={classSkillSelections}
               classToolChoices={classToolChoices}
@@ -981,7 +982,7 @@ export function IntegratedCharacterCreationWizard({
               metamagicLimit={metamagicLimit}
               onAddClass={addClass}
               onRemoveClass={removeClass}
-              onConfigureCustomClass={onConfigureCustomClass}
+              onApplyCustomClassConfig={onApplyCustomClassConfig}
               onShiftLevel={shiftClassLevel}
               onUpdatePlan={updatePlan}
               onToggleChoice={toggleFeatureChoice}
@@ -1624,6 +1625,7 @@ function ClassesStep({
   draftCharacter,
   classPlans,
   customClassName,
+  customClassConfig,
   blockedSkills,
   classSkillSelections,
   classToolChoices,
@@ -1636,7 +1638,7 @@ function ClassesStep({
   metamagicLimit,
   onAddClass,
   onRemoveClass,
-  onConfigureCustomClass,
+  onApplyCustomClassConfig,
   onShiftLevel,
   onUpdatePlan,
   onToggleChoice,
@@ -1655,6 +1657,7 @@ function ClassesStep({
   draftCharacter: CharacterTemplate
   classPlans: ProgressionClassPlan[]
   customClassName: string
+  customClassConfig?: CustomClassRuntimeConfig
   blockedSkills: Set<Skill>
   classSkillSelections: Partial<Record<ClassName, Skill[]>>
   classToolChoices: Partial<Record<ClassName, string>>
@@ -1667,7 +1670,7 @@ function ClassesStep({
   metamagicLimit: number
   onAddClass: (className: ClassName) => void
   onRemoveClass: (className: ClassName) => void
-  onConfigureCustomClass?: () => void
+  onApplyCustomClassConfig?: (config: CustomClassRuntimeConfig) => void
   onShiftLevel: (className: ClassName, delta: -1 | 1) => void
   onUpdatePlan: (
     className: ClassName,
@@ -1860,7 +1863,6 @@ function ClassesStep({
                       else next.add(plan.className)
                       return next
                     })
-                    if (isCustomClass) onConfigureCustomClass?.()
                   }}
                 >
                   {expandedClasses.has(plan.className)
@@ -1879,6 +1881,15 @@ function ClassesStep({
 
             {expandedClasses.has(plan.className) ? (
               <>
+                {isCustomClass && customClassConfig && onApplyCustomClassConfig ? (
+                  <div className="rounded-lg border border-border bg-bg p-3">
+                    <CustomClassConfigurationEditor
+                      config={customClassConfig}
+                      applyLabel="Aplicar ao rascunho"
+                      onApply={onApplyCustomClassConfig}
+                    />
+                  </div>
+                ) : null}
 
             {subclassRequired && progression.subclasses.length ? (
               <Field
@@ -2137,6 +2148,47 @@ function ClassesStep({
               }
             />
 
+            {plan.className === "sorcerer" && metamagicLimit > 0 ? (
+              <div className="grid gap-3 rounded-lg border border-border bg-bg p-3">
+                <div>
+                  <strong className="text-sm text-textH">Metamagia</strong>
+                  <p className="mt-1 text-xs text-textMuted">
+                    Escolha {metamagicLimit} opções para Feiticeiro {plan.level}.
+                  </p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {metamagics.map((metamagic) => {
+                    const selected = selectedMetamagics.includes(metamagic.id)
+                    return (
+                      <button
+                        key={metamagic.id}
+                        type="button"
+                        onClick={() => onToggleMetamagic(metamagic.id)}
+                        className={
+                          selected
+                            ? "rounded-xl border border-accentBorder bg-accentBg p-4 text-left"
+                            : "rounded-xl border border-border bg-bg-subtle p-4 text-left"
+                        }
+                      >
+                        <strong className="text-sm text-textH">{metamagic.name}</strong>
+                        <details
+                          className="mt-2 text-xs"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <summary className="cursor-pointer font-medium text-textH">
+                            Ler detalhes da Metamagia
+                          </summary>
+                          <p className="mt-2 leading-5 text-textMuted">
+                            {metamagic.desc.join(" ")}
+                          </p>
+                        </details>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
+
             <FeatureList
               title="Características personalizadas desta classe"
               abilities={classCustomAbilities.map((entry) => entry.ability)}
@@ -2155,40 +2207,6 @@ function ClassesStep({
         )
       })}
 
-      {metamagicLimit > 0 ? (
-        <StepSection
-          title="Metamagia"
-          description={`Escolha ${metamagicLimit} opções para Feiticeiro ${classPlans.find((plan) => plan.className === "sorcerer")?.level ?? 0}.`}
-        >
-          <div className="grid gap-3 md:grid-cols-2">
-            {metamagics.map((metamagic) => {
-              const selected = selectedMetamagics.includes(metamagic.id)
-              return (
-                <button
-                  key={metamagic.id}
-                  type="button"
-                  onClick={() => onToggleMetamagic(metamagic.id)}
-                  className={
-                    selected
-                      ? "rounded-xl border border-accentBorder bg-accentBg p-4 text-left"
-                      : "rounded-xl border border-border bg-bg p-4 text-left"
-                  }
-                >
-                  <strong className="text-sm text-textH">{metamagic.name}</strong>
-                  <details className="mt-2 text-xs" onClick={(event) => event.stopPropagation()}>
-                    <summary className="cursor-pointer font-medium text-textH">
-                      Ler detalhes da Metamagia
-                    </summary>
-                    <p className="mt-2 leading-5 text-textMuted">
-                      {metamagic.desc.join(" ")}
-                    </p>
-                  </details>
-                </button>
-              )
-            })}
-          </div>
-        </StepSection>
-      ) : null}
     </div>
   )
 }

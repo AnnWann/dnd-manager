@@ -6,7 +6,6 @@ import {
   type ComponentProps,
 } from "react"
 
-import { Button } from "../../../components/ui/Button"
 import { useMagicContext } from "../../../contexts/magicContext"
 import {
   createEmptyCharacterCreationIdentity,
@@ -15,7 +14,6 @@ import {
 } from "../../../models/characters/creation/CharacterCreation"
 import {
   DEFAULT_CUSTOM_CLASS_CONFIG,
-  CUSTOM_CLASS_RUNTIME_ID,
   hasCustomClass,
   normalizeCustomClassConfig,
   type CustomClassRuntimeConfig,
@@ -27,7 +25,6 @@ import {
   validateCharacterCreationOverrides,
   type CharacterCreationValidationError,
 } from "../../../lib/characterCreation/finalizeCharacterCreation"
-import { CustomClassConfigurationEditor } from "../characterSheet/classes/CustomClassConfigurationTab"
 import {
   CharacterCreationAbilityScoreRules,
   type AbilityScoreOverride,
@@ -75,7 +72,10 @@ export type { CharacterCreationProgressionPlan }
 
 type WizardProps = Omit<
   ComponentProps<typeof IntegratedCharacterCreationWizard>,
-  "draftId" | "customClassName" | "onConfigureCustomClass"
+  | "draftId"
+  | "customClassName"
+  | "customClassConfig"
+  | "onApplyCustomClassConfig"
 >
 
 type WrapperDraft = {
@@ -117,7 +117,6 @@ export function CharacterCreationWizard(props: WizardProps) {
   >({})
   const [customClassConfig, setCustomClassConfig] =
     useState<CustomClassRuntimeConfig>(createCustomClassDraft)
-  const [customClassDialogOpen, setCustomClassDialogOpen] = useState(false)
   const [identity, setIdentity] = useState<CharacterCreationIdentity>(() =>
     createEmptyCharacterCreationIdentity(),
   )
@@ -151,7 +150,6 @@ export function CharacterCreationWizard(props: WizardProps) {
       )
       setSubclasses({})
       setCustomClassConfig(createCustomClassDraft())
-      setCustomClassDialogOpen(false)
       setDraftHydrated(false)
       clearErrors()
       return
@@ -280,25 +278,16 @@ export function CharacterCreationWizard(props: WizardProps) {
 
   return (
     <>
-      <div
-        onChangeCapture={(event) => {
-          const target = event.target
-          if (
-            target instanceof HTMLSelectElement &&
-            target.value === String(CUSTOM_CLASS_RUNTIME_ID)
-          ) {
-            setCustomClassDialogOpen(true)
-          }
-        }}
-      >
-        <IntegratedCharacterCreationWizard
-          {...props}
-          draftId={draftId}
-          customClassName={customClassConfig.name}
-          onConfigureCustomClass={() => setCustomClassDialogOpen(true)}
-          onCreate={handleCreate}
-        />
-      </div>
+      <IntegratedCharacterCreationWizard
+        {...props}
+        draftId={draftId}
+        customClassName={customClassConfig.name}
+        customClassConfig={customClassConfig}
+        onApplyCustomClassConfig={(next) =>
+          setCustomClassConfig(normalizeCustomClassConfig(next))
+        }
+        onCreate={handleCreate}
+      />
 
       <CharacterCreationFlowBootstrap open={props.open} />
       <CharacterCreationIdentityStep
@@ -374,15 +363,6 @@ export function CharacterCreationWizard(props: WizardProps) {
         resetSignal={progressionConfiguration}
       />
 
-      <CustomClassCreationDialog
-        open={customClassDialogOpen}
-        config={customClassConfig}
-        onClose={() => setCustomClassDialogOpen(false)}
-        onApply={(next) => {
-          setCustomClassConfig(normalizeCustomClassConfig(next))
-          setCustomClassDialogOpen(false)
-        }}
-      />
 
       {blockingError ? (
         <div className="pointer-events-none fixed left-1/2 top-4 z-[260] w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger shadow-theme-lg">
@@ -390,45 +370,6 @@ export function CharacterCreationWizard(props: WizardProps) {
         </div>
       ) : null}
     </>
-  )
-}
-
-function CustomClassCreationDialog({
-  open,
-  config,
-  onApply,
-  onClose,
-}: {
-  open: boolean
-  config: CustomClassRuntimeConfig
-  onApply: (config: CustomClassRuntimeConfig) => void
-  onClose: () => void
-}) {
-  if (!open) return null
-
-  return (
-    <div className="fixed inset-0 z-[280] flex items-start justify-center overflow-y-auto bg-black/65 p-3 backdrop-blur-sm sm:p-6">
-      <div className="w-full max-w-6xl rounded-2xl border border-border bg-bg-elevated p-4 shadow-theme-lg sm:p-5">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
-          <div>
-            <h2 className="text-lg font-semibold text-textH">
-              Configurar classe personalizada
-            </h2>
-            <p className="mt-1 text-xs leading-5 text-textMuted">
-              Esta configuração faz parte do rascunho da criação. Ela só é persistida quando o personagem for confirmado.
-            </p>
-          </div>
-          <Button variant="secondary" onClick={onClose}>
-            Fechar
-          </Button>
-        </div>
-        <CustomClassConfigurationEditor
-          config={config}
-          applyLabel="Aplicar ao rascunho"
-          onApply={onApply}
-        />
-      </div>
-    </div>
   )
 }
 
