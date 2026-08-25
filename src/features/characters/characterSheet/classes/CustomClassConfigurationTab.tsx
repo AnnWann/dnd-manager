@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from "react"
 
-import { Button } from "../../../components/ui/Button"
-import { Input } from "../../../components/ui/Input"
-import { Select } from "../../../components/ui/Select"
-import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { Button } from "../../../../components/ui/Button"
+import { Input } from "../../../../components/ui/Input"
+import { Select } from "../../../../components/ui/Select"
+import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
 import {
   createCustomSlotPool,
   getCustomClassConfig,
   normalizeCustomClassConfig,
   updateCustomClassConfig,
   type CustomClassRuntimeConfig,
-} from "../../../models/characters/customClassConfig"
-import type { Attribute } from "../../../models/sheet/Attribute"
-import type { KnownSpellMode } from "../../../models/sheet/Class"
+} from "../../../../models/characters/customClassConfig"
+import type { Attribute } from "../../../../models/sheet/Attribute"
+import type { KnownSpellMode } from "../../../../models/sheet/Class"
 
 const ATTRIBUTES: Array<{ value: Attribute; label: string }> = [
   { value: "str", label: "Força" },
