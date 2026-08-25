@@ -36,7 +36,6 @@ import {
   CharacterCreationBackgroundChoices,
   type BackgroundChoiceOverride,
 } from "./CharacterCreationBackgroundChoices"
-import { CharacterCreationCustomClassSelectionBridge } from "./bridges/CreationCustomClassSelectionBridge"
 import { CharacterCreationFlowBootstrap } from "./bridges/CharacterCreationFlowBootstrap"
 import { CreationLegacyProgressionStateSync } from "./bridges/CreationLegacyProgressionStateSync"
 import {
@@ -76,7 +75,7 @@ export type { CharacterCreationProgressionPlan }
 
 type WizardProps = Omit<
   ComponentProps<typeof IntegratedCharacterCreationWizard>,
-  "draftId"
+  "draftId" | "customClassName" | "onConfigureCustomClass"
 >
 
 type WrapperDraft = {
@@ -295,14 +294,12 @@ export function CharacterCreationWizard(props: WizardProps) {
         <IntegratedCharacterCreationWizard
           {...props}
           draftId={draftId}
+          customClassName={customClassConfig.name}
+          onConfigureCustomClass={() => setCustomClassDialogOpen(true)}
           onCreate={handleCreate}
         />
       </div>
 
-      <CharacterCreationCustomClassSelectionBridge
-        open={props.open}
-        customName={customClassConfig.name}
-      />
       <CharacterCreationFlowBootstrap open={props.open} />
       <CharacterCreationIdentityStep
         open={props.open}

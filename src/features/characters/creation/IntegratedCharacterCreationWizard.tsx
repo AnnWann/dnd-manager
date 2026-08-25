@@ -26,6 +26,7 @@ import type { Ability } from "../../../models/abilities/Ability"
 import type { CharacterBackground } from "../../../models/characters/CharacterBackground"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { CharacterCreationProgressionPlan } from "../../../models/characters/creation/CharacterCreation"
+import { CUSTOM_CLASS_RUNTIME_ID } from "../../../models/characters/customClassConfig"
 import type { Itemmable } from "../../../models/items/item"
 import {
   getDynamicSubclassSpellGrants,
@@ -40,10 +41,6 @@ import {
   validateClassProficiencySelections,
   type ClassProficiencySelection,
 } from "../../../models/leveling/ClassProficiencyRules"
-import {
-  MULTICLASS_REQUIREMENTS,
-  formatClassMulticlassRequirement,
-} from "../../../models/leveling/MulticlassRequirements"
 import {
   createClassEntry,
   getClassSpellSelectionRule,
@@ -106,6 +103,8 @@ const ALL_CLASSES: ClassName[] = [
   "wizard",
 ]
 
+const AVAILABLE_CLASSES: ClassName[] = [...ALL_CLASSES, CUSTOM_CLASS_RUNTIME_ID]
+
 const ATTRIBUTE_LABELS: Record<Attribute, string> = {
   str: "Força",
   dex: "Destreza",
@@ -166,6 +165,8 @@ type Props = {
     plan: CharacterCreationProgressionPlan,
   ) => void | Promise<void>
   createOwner: (ownerName: string) => Player
+  customClassName?: string
+  onConfigureCustomClass?: () => void
   mode?: "modal" | "page"
 }
 
@@ -178,6 +179,8 @@ export function IntegratedCharacterCreationWizard({
   onClose,
   onCreate,
   createOwner,
+  customClassName = "Classe personalizada",
+  onConfigureCustomClass,
   mode = "modal",
 }: Props) {
   const { spells, metamagics } = useMagicContext()
@@ -239,9 +242,7 @@ export function IntegratedCharacterCreationWizard({
     Math.max(1, Math.min(20, initialDraft?.totalLevel ?? 1)),
   )
   const [classPlans, setClassPlans] = useState<ProgressionClassPlan[]>(
-    initialDraft?.classPlans?.length
-      ? initialDraft.classPlans
-      : [createPlan(firstClass.id, 1)],
+    initialDraft?.classPlans ?? [],
   )
   const [classSkillSelections, setClassSkillSelections] = useState<
     Partial<Record<ClassName, Skill[]>>
@@ -263,7 +264,10 @@ export function IntegratedCharacterCreationWizard({
   )
 
   const [classEquipmentItems, setClassEquipmentItems] = useState<Itemmable[]>(
-    initialDraft?.classEquipmentItems ?? defaultClassEquipment(firstClass.id),
+    initialDraft?.classEquipmentItems ??
+      (initialDraft?.classPlans?.[0]
+        ? defaultClassEquipment(initialDraft.classPlans[0].className)
+        : []),
   )
   const [attributes, setAttributes] = useState<Record<Attribute, number>>(
     initialDraft?.attributes ?? { ...firstClass.recommendedAttributes },
@@ -334,6 +338,10 @@ export function IntegratedCharacterCreationWizard({
         owner.id === ownerName.trim() || owner.name === ownerName.trim(),
     ) ?? createOwner(ownerName)
   const primaryClass = classPlans[0]?.className ?? firstClass.id
+  const primaryClassLabel =
+    String(primaryClass) === String(CUSTOM_CLASS_RUNTIME_ID)
+      ? customClassName.trim() || getClassNamePt(primaryClass)
+      : getClassNamePt(primaryClass)
   const primaryPreset =
     PHB_CLASS_PRESETS.find((entry) => entry.id === primaryClass) ?? firstClass
   const draftCharacter = createDraftCharacter({
@@ -409,22 +417,27 @@ export function IntegratedCharacterCreationWizard({
     setClassPlans((current) => redistributeTotal(current, nextTotal))
   }
 
-  function changePrimaryClass(className: ClassName) {
-    setClassPlans([createPlan(className, totalLevel)])
-    setClassSkillSelections({})
-    setClassToolChoices({})
-    setCustomClassAbilities([])
-    setSpellSelections({})
-    setSelectedMetamagics([])
-    setClassEquipmentItems(defaultClassEquipment(className))
-    const preset = PHB_CLASS_PRESETS.find((entry) => entry.id === className)
-    if (preset) setAttributes({ ...preset.recommendedAttributes })
-  }
-
-  function addMulticlass(className: ClassName) {
+  function addClass(className: ClassName) {
     if (classPlans.some((plan) => plan.className === className)) return
+
+    if (!classPlans.length) {
+      setClassPlans([createPlan(className, totalLevel)])
+      setClassSkillSelections({})
+      setClassToolChoices({})
+      setCustomClassAbilities([])
+      setSpellSelections({})
+      setSelectedMetamagics([])
+      setClassEquipmentItems(defaultClassEquipment(className))
+      const preset = PHB_CLASS_PRESETS.find((entry) => entry.id === className)
+      if (preset) setAttributes({ ...preset.recommendedAttributes })
+      if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) {
+        onConfigureCustomClass?.()
+      }
+      return
+    }
+
     const donor = classPlans.find((plan) => plan.level > 1)
-    if (!donor) return
+    if (!donor || classPlans.length >= totalLevel) return
     setClassPlans((current) => [
       ...current.map((plan) =>
         plan.className === donor.className
@@ -433,22 +446,43 @@ export function IntegratedCharacterCreationWizard({
       ),
       createPlan(className, 1),
     ])
+    if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) {
+      onConfigureCustomClass?.()
+    }
   }
 
-  function removeMulticlass(className: ClassName) {
-    if (className === primaryClass) return
-    const removed = classPlans.find((plan) => plan.className === className)
-    if (!removed) return
-    setClassPlans((current) =>
-      current
-        .filter((plan) => plan.className !== className)
-        .map((plan, index) =>
-          index === 0 ? { ...plan, level: plan.level + removed.level } : plan,
-        ),
+  function removeClass(className: ClassName) {
+    const removedIndex = classPlans.findIndex(
+      (plan) => plan.className === className,
     )
+    if (removedIndex < 0) return
+
+    const removed = classPlans[removedIndex]
+    const nextPlans = classPlans
+      .filter((plan) => plan.className !== className)
+      .map((plan, index) =>
+        index === 0 ? { ...plan, level: plan.level + removed.level } : plan,
+      )
+
+    setClassPlans(nextPlans)
     setClassSkillSelections((current) => ({ ...current, [className]: undefined }))
     setClassToolChoices((current) => ({ ...current, [className]: undefined }))
     setSpellSelections((current) => ({ ...current, [className]: undefined as never }))
+    setCustomClassAbilities((current) =>
+      current.filter((entry) => entry.className !== className),
+    )
+    if (className === "sorcerer") setSelectedMetamagics([])
+
+    if (removedIndex === 0) {
+      const nextPrimary = nextPlans[0]?.className
+      setClassEquipmentItems(
+        nextPrimary ? defaultClassEquipment(nextPrimary) : [],
+      )
+      const preset = nextPrimary
+        ? PHB_CLASS_PRESETS.find((entry) => entry.id === nextPrimary)
+        : undefined
+      if (preset) setAttributes({ ...preset.recommendedAttributes })
+    }
   }
 
   function shiftClassLevel(className: ClassName, delta: -1 | 1) {
@@ -648,6 +682,7 @@ export function IntegratedCharacterCreationWizard({
 
   function validateCreation(): string {
     if (!name.trim()) return "Informe o nome do personagem."
+    if (!classPlans.length) return "Adicione pelo menos uma classe."
     if (
       classPlans.reduce((sum, plan) => sum + plan.level, 0) !== totalLevel
     ) {
@@ -691,24 +726,6 @@ export function IntegratedCharacterCreationWizard({
       primaryClass,
     )
     if (proficiencyError) return proficiencyError
-
-    if (classPlans.length > 1) {
-      for (const plan of classPlans) {
-        const requirement = MULTICLASS_REQUIREMENTS[plan.className]
-        const values = requirement.requirements.map(
-          ({ attribute, minimum }) =>
-            attributes[attribute] + (race.attributeBonus[attribute] ?? 0) >=
-            minimum,
-        )
-        const allowed =
-          requirement.mode === "all"
-            ? values.every(Boolean)
-            : values.some(Boolean)
-        if (!allowed) {
-          return `${getClassNamePt(plan.className)} exige ${formatClassMulticlassRequirement(plan.className)} para participar de uma multiclasse.`
-        }
-      }
-    }
 
     if (selectedMetamagics.length !== metamagicLimit) {
       return metamagicLimit
@@ -951,7 +968,7 @@ export function IntegratedCharacterCreationWizard({
               totalLevel={totalLevel}
               draftCharacter={draftCharacter}
               classPlans={classPlans}
-              primaryClass={primaryClass}
+              customClassName={customClassName}
               blockedSkills={blockedClassSkills}
               classSkillSelections={classSkillSelections}
               classToolChoices={classToolChoices}
@@ -962,9 +979,9 @@ export function IntegratedCharacterCreationWizard({
               metamagics={metamagics}
               selectedMetamagics={selectedMetamagics}
               metamagicLimit={metamagicLimit}
-              onChangePrimaryClass={changePrimaryClass}
-              onAddMulticlass={addMulticlass}
-              onRemoveMulticlass={removeMulticlass}
+              onAddClass={addClass}
+              onRemoveClass={removeClass}
+              onConfigureCustomClass={onConfigureCustomClass}
               onShiftLevel={shiftClassLevel}
               onUpdatePlan={updatePlan}
               onToggleChoice={toggleFeatureChoice}
@@ -1019,9 +1036,17 @@ export function IntegratedCharacterCreationWizard({
 
           {step === 6 ? (
             <InlineStartingEquipmentEditor
-              title={`Equipamento de nível 1 de ${getClassNamePt(primaryClass)}`}
+              title={
+                classPlans.length
+                  ? `Equipamento de nível 1 de ${primaryClassLabel}`
+                  : "Equipamento da classe inicial"
+              }
               description="Somente a classe inicial concede equipamento. Níveis adicionais e multiclasse não duplicam o pacote inicial."
-              sourceLabel={`Classe inicial: ${getClassNamePt(primaryClass)}`}
+              sourceLabel={
+                classPlans.length
+                  ? `Classe inicial: ${primaryClassLabel}`
+                  : "Nenhuma classe inicial"
+              }
               items={classEquipmentItems}
               onChange={setClassEquipmentItems}
             />
@@ -1031,7 +1056,6 @@ export function IntegratedCharacterCreationWizard({
             <AttributesStep
               attributes={attributes}
               raceBonuses={race.attributeBonus}
-              classPlans={classPlans}
               onChange={(attribute, value) =>
                 setAttributes((current) => ({
                   ...current,
@@ -1053,6 +1077,7 @@ export function IntegratedCharacterCreationWizard({
               backgroundItems={backgroundItems}
               totalLevel={totalLevel}
               classPlans={classPlans}
+              customClassName={customClassName}
               classEquipmentItems={classEquipmentItems}
               attributes={attributes}
               classSkillSelections={classSkillSelections}
@@ -1598,7 +1623,7 @@ function ClassesStep({
   totalLevel,
   draftCharacter,
   classPlans,
-  primaryClass,
+  customClassName,
   blockedSkills,
   classSkillSelections,
   classToolChoices,
@@ -1609,9 +1634,9 @@ function ClassesStep({
   metamagics,
   selectedMetamagics,
   metamagicLimit,
-  onChangePrimaryClass,
-  onAddMulticlass,
-  onRemoveMulticlass,
+  onAddClass,
+  onRemoveClass,
+  onConfigureCustomClass,
   onShiftLevel,
   onUpdatePlan,
   onToggleChoice,
@@ -1629,7 +1654,7 @@ function ClassesStep({
   totalLevel: number
   draftCharacter: CharacterTemplate
   classPlans: ProgressionClassPlan[]
-  primaryClass: ClassName
+  customClassName: string
   blockedSkills: Set<Skill>
   classSkillSelections: Partial<Record<ClassName, Skill[]>>
   classToolChoices: Partial<Record<ClassName, string>>
@@ -1640,9 +1665,9 @@ function ClassesStep({
   metamagics: Array<{ id: MetamagicId; name: string; desc: string[] }>
   selectedMetamagics: MetamagicId[]
   metamagicLimit: number
-  onChangePrimaryClass: (className: ClassName) => void
-  onAddMulticlass: (className: ClassName) => void
-  onRemoveMulticlass: (className: ClassName) => void
+  onAddClass: (className: ClassName) => void
+  onRemoveClass: (className: ClassName) => void
+  onConfigureCustomClass?: () => void
   onShiftLevel: (className: ClassName, delta: -1 | 1) => void
   onUpdatePlan: (
     className: ClassName,
@@ -1669,73 +1694,80 @@ function ClassesStep({
   onTogglePrepared: (className: ClassName, spellIndex: string) => void
   onToggleMetamagic: (id: MetamagicId) => void
 }) {
-  const availableMulticlass =
-    ALL_CLASSES.find(
-      (className) =>
-        !classPlans.some((plan) => plan.className === className),
-    ) ?? "artificer"
-  const [newClass, setNewClass] = useState<ClassName>(availableMulticlass)
+  const [newClass, setNewClass] = useState<ClassName | "">("")
+  const [expandedClasses, setExpandedClasses] = useState<Set<ClassName>>(
+    () => new Set(),
+  )
+  const selectedAlreadyAdded =
+    newClass !== "" &&
+    classPlans.some((plan) => plan.className === newClass)
+  const canAddSelectedClass =
+    newClass !== "" &&
+    !selectedAlreadyAdded &&
+    (classPlans.length === 0 ||
+      (classPlans.length < totalLevel &&
+        classPlans.some((plan) => plan.level > 1)))
 
   useEffect(() => {
-    if (classPlans.some((plan) => plan.className === newClass)) {
-      setNewClass(availableMulticlass)
-    }
-  }, [availableMulticlass, classPlans, newClass])
+    if (selectedAlreadyAdded) setNewClass("")
+  }, [selectedAlreadyAdded])
 
   return (
     <div className="grid gap-5">
-      <StepSection
-        title="Classe inicial e distribuição de níveis"
-        description="A primeira classe concede salvaguardas, proficiências completas e equipamento. Classes adicionais usam as regras de multiclasse."
-      >
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
-          <Field label="Classe inicial">
-            <Select
-              value={primaryClass}
-              onChange={(event) =>
-                onChangePrimaryClass(event.target.value as ClassName)
-              }
-            >
-              {ALL_CLASSES.map((className) => (
-                <option key={className} value={className}>
-                  {getClassNamePt(className)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Adicionar multiclasse">
+      <StepSection title="Classes">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <Field label="Classe">
             <Select
               value={newClass}
               onChange={(event) =>
-                setNewClass(event.target.value as ClassName)
+                setNewClass(event.target.value as ClassName | "")
               }
             >
-              {ALL_CLASSES.filter(
-                (className) =>
-                  !classPlans.some((plan) => plan.className === className),
-              ).map((className) => (
-                <option key={className} value={className}>
-                  {getClassNamePt(className)} · {formatClassMulticlassRequirement(className)}
-                </option>
-              ))}
+              <option value="">Selecionar classe</option>
+              {AVAILABLE_CLASSES.map((className) => {
+                const added = classPlans.some(
+                  (plan) => plan.className === className,
+                )
+                const label =
+                  String(className) === String(CUSTOM_CLASS_RUNTIME_ID)
+                    ? customClassName.trim() || "Classe personalizada"
+                    : getClassNamePt(className)
+                return (
+                  <option key={className} value={className} disabled={added}>
+                    {label}
+                  </option>
+                )
+              })}
             </Select>
           </Field>
           <Button
             variant="secondary"
-            disabled={
-              classPlans.length >= totalLevel ||
-              !classPlans.some((plan) => plan.level > 1)
-            }
-            onClick={() => onAddMulticlass(newClass)}
+            disabled={!canAddSelectedClass}
+            onClick={() => {
+              if (!newClass) return
+              onAddClass(newClass)
+              setNewClass("")
+            }}
           >
             <Plus className="h-4 w-4" />
-            Classe
+            Adicionar classe
           </Button>
         </div>
       </StepSection>
 
+      {!classPlans.length ? (
+        <div className="rounded-xl border border-dashed border-border bg-bg p-4 text-center text-xs text-textMuted">
+          Nenhuma classe adicionada. A primeira classe adicionada será a classe inicial.
+        </div>
+      ) : null}
+
       {classPlans.map((plan, index) => {
         const progression = getClassProgression(plan.className)
+        const isCustomClass =
+          String(plan.className) === String(CUSTOM_CLASS_RUNTIME_ID)
+        const displayLabel = isCustomClass
+          ? customClassName.trim() || progression.label
+          : progression.label
         const subclassRequired = plan.level >= progression.subclassLevel
         const proficiencyRule = getClassProficiencyRule(plan.className)
         const skillRule =
@@ -1790,19 +1822,17 @@ function ClassesStep({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="font-semibold text-textH">
-                  {progression.label} {plan.level}
+                  {displayLabel} — nível {plan.level}
                 </h2>
                 <p className="mt-1 text-xs text-textMuted">
-                  {index === 0
-                    ? "Classe inicial: salvaguardas, proficiências completas e equipamento de nível 1."
-                    : `Multiclasse: exige ${formatClassMulticlassRequirement(plan.className)} e concede apenas proficiências de multiclasse.`}
+                  {index === 0 ? "Classe inicial" : "Multiclasse"}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
                   variant="secondary"
-                  disabled={plan.level <= 1}
+                  disabled={plan.level <= 1 || classPlans.length <= 1}
                   onClick={() => onShiftLevel(plan.className, -1)}
                 >
                   − nível
@@ -1820,17 +1850,35 @@ function ClassesStep({
                 >
                   + nível
                 </Button>
-                {index > 0 ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => onRemoveMulticlass(plan.className)}
-                  >
-                    Remover classe
-                  </Button>
-                ) : null}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setExpandedClasses((current) => {
+                      const next = new Set(current)
+                      if (next.has(plan.className)) next.delete(plan.className)
+                      else next.add(plan.className)
+                      return next
+                    })
+                    if (isCustomClass) onConfigureCustomClass?.()
+                  }}
+                >
+                  {expandedClasses.has(plan.className)
+                    ? "Fechar configuração"
+                    : "Configurar"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onRemoveClass(plan.className)}
+                >
+                  Remover
+                </Button>
               </div>
             </div>
+
+            {expandedClasses.has(plan.className) ? (
+              <>
 
             {subclassRequired && progression.subclasses.length ? (
               <Field
@@ -2101,6 +2149,8 @@ function ClassesStep({
               }}
               onRemove={onRemoveCustomAbility}
             />
+              </>
+            ) : null}
           </section>
         )
       })}
@@ -2267,20 +2317,18 @@ function ClassSpellSelector({
 function AttributesStep({
   attributes,
   raceBonuses,
-  classPlans,
   onChange,
   onUseRecommended,
 }: {
   attributes: Record<Attribute, number>
   raceBonuses: Partial<Record<Attribute, number>>
-  classPlans: ProgressionClassPlan[]
   onChange: (attribute: Attribute, value: number) => void
   onUseRecommended: () => void
 }) {
   return (
     <StepSection
       title="Atributos"
-      description="Os requisitos de multiclasse são verificados usando o valor final após os bônus raciais."
+      description="Defina os valores base. Os bônus raciais são somados ao valor final exibido."
     >
       <div className="mb-4 flex justify-end">
         <Button variant="secondary" onClick={onUseRecommended}>
@@ -2320,34 +2368,6 @@ function AttributesStep({
           )
         })}
       </div>
-
-      {classPlans.length > 1 ? (
-        <div className="mt-5 grid gap-2">
-          {classPlans.map((plan) => {
-            const requirement = MULTICLASS_REQUIREMENTS[plan.className]
-            const results = requirement.requirements.map(
-              ({ attribute, minimum }) =>
-                attributes[attribute] + (raceBonuses[attribute] ?? 0) >= minimum,
-            )
-            const passes =
-              requirement.mode === "all"
-                ? results.every(Boolean)
-                : results.some(Boolean)
-            return (
-              <div
-                key={plan.className}
-                className={
-                  passes
-                    ? "rounded-lg border border-accentBorder bg-accentBg p-3 text-xs text-textH"
-                    : "rounded-lg border border-danger bg-dangerBg p-3 text-xs text-danger"
-                }
-              >
-                {getClassNamePt(plan.className)}: exige {formatClassMulticlassRequirement(plan.className)} · {passes ? "atendido" : "não atendido"}
-              </div>
-            )
-          })}
-        </div>
-      ) : null}
     </StepSection>
   )
 }
@@ -2360,6 +2380,7 @@ function ReviewStep({
   backgroundItems,
   totalLevel,
   classPlans,
+  customClassName,
   classEquipmentItems,
   attributes,
   classSkillSelections,
@@ -2372,6 +2393,7 @@ function ReviewStep({
   backgroundItems: Itemmable[]
   totalLevel: number
   classPlans: ProgressionClassPlan[]
+  customClassName: string
   classEquipmentItems: Itemmable[]
   attributes: Record<Attribute, number>
   classSkillSelections: Partial<Record<ClassName, Skill[]>>
@@ -2396,7 +2418,7 @@ function ReviewStep({
             value={classPlans
               .map(
                 (plan) =>
-                  `${getClassNamePt(plan.className)} ${plan.level}${plan.subclassId ? ` — ${getClassProgression(plan.className).subclasses.find((entry) => entry.id === plan.subclassId)?.name ?? plan.subclassId}` : ""}`,
+                  `${String(plan.className) === String(CUSTOM_CLASS_RUNTIME_ID) ? customClassName.trim() || getClassNamePt(plan.className) : getClassNamePt(plan.className)} ${plan.level}${plan.subclassId ? ` — ${getClassProgression(plan.className).subclasses.find((entry) => entry.id === plan.subclassId)?.name ?? plan.subclassId}` : ""}`,
               )
               .join(" / ")}
           />
@@ -2692,7 +2714,7 @@ function redistributeTotal(
   plans: ProgressionClassPlan[],
   totalLevel: number,
 ): ProgressionClassPlan[] {
-  if (!plans.length) return [createPlan("fighter", totalLevel)]
+  if (!plans.length) return []
   const minimumForOthers = Math.max(0, plans.length - 1)
   if (totalLevel < plans.length) {
     const trimmed = plans.slice(0, totalLevel).map((plan) => ({
@@ -2709,6 +2731,7 @@ function redistributeTotal(
 }
 
 function defaultClassEquipment(className: ClassName): Itemmable[] {
+  if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) return []
   const selections = getDefaultClassEquipmentSelections(className)
   return getSelectedClassEquipment(className, selections).map((spec) =>
     createStartingInventoryItem(spec),
