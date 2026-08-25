@@ -11,7 +11,7 @@ export function UserCharacterLevelUpView() {
   if (!characterId) return <Navigate to="/not-found" replace />
 
   return (
-    <UserCharacterWorkspace characterId={characterId}>
+    <UserCharacterWorkspace characterId={characterId} initialEditing>
       <LevelUpContent />
     </UserCharacterWorkspace>
   )
@@ -19,7 +19,7 @@ export function UserCharacterLevelUpView() {
 
 function LevelUpContent() {
   const navigate = useNavigate()
-  const { activeCharacter, updateCharacter } = useCharacterWorkspace()
+  const { activeCharacter, updateCharacter, saveCharacter } = useCharacterWorkspace()
 
   if (!activeCharacter) return null
 
@@ -34,7 +34,9 @@ function LevelUpContent() {
       onCancel={() => navigate(returnPath)}
       onComplete={(updated) => {
         updateCharacter(characterId, () => updated)
-        navigate(returnPath, { replace: true })
+        void saveCharacter?.().then((saved) => {
+          if (saved) navigate(returnPath, { replace: true })
+        })
       }}
     />
   )
