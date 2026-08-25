@@ -1,7 +1,14 @@
 import { getCantripsKnownAtLevel } from "../../data/classProgression"
+import {
+  createCustomClassEntry,
+  getCustomClassConfigFromEntry,
+  isCustomClassEntry,
+} from "../characters/customClassConfig"
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import type { Spell } from "../magic/spells/Spell"
+import { deriveLeveledSlotsFromClasses } from "../magic/spells/SpellSlotProgression"
 import type { MagicCircleLevel } from "../magic/spells/spellDefinitions"
+import type { Attribute } from "../sheet/Attribute"
 import {
   CharacterClassBuilder,
   type CharacterClassInterface,
@@ -26,7 +33,7 @@ export type ClassSpellSelectionRule = {
   classLevel: number
   subclassId?: string
   mode: SpellSelectionMode
-  castingAttribute?: "int" | "wis" | "cha"
+  castingAttribute?: Attribute
   maxSpellLevel: MagicCircleLevel
   maxCantrips: number
   maxLeveledSpells: number
@@ -73,15 +80,21 @@ const LIMITED_KNOWN: Partial<Record<ClassName, Record<number, number>>> = {
 /**
  * Structural spell progression. Prepared casters keep mode="prepared" so their
  * cantrip progression can be selected without treating prepared leveled spells
- * as learned spells.
+ * as learned spells. Custom classes read their rule from the character entry
+ * instead of borrowing one of the official class chassis.
  */
 export function getClassSpellSelectionRule(
-  _character: CharacterTemplate,
+  character: CharacterTemplate,
   className: ClassName,
   classLevel: number,
   subclassId?: string,
 ): ClassSpellSelectionRule {
   const level = clampLevel(classLevel)
+
+  if (className === "__custom__") {
+    return getCustomSpellSelectionRule(character, level, subclassId)
+  }
+
   const classEntry = createClassEntry(className, level)
   const baseMode = getBaseMode(className)
   const maxSpellLevel = getMaximumSpellLevel(className, level)
@@ -97,11 +110,7 @@ export function getClassSpellSelectionRule(
     classLevel: level,
     subclassId,
     mode,
-    castingAttribute: classEntry.castingAttribute as
-      | "int"
-      | "wis"
-      | "cha"
-      | undefined,
+    castingAttribute: classEntry.castingAttribute,
     maxSpellLevel,
     maxCantrips,
     maxLeveledSpells,
@@ -109,6 +118,71 @@ export function getClassSpellSelectionRule(
       leveledKnown: getSpellReplacementLimit(className, level),
       cantrips: 0,
     },
+  }
+}
+
+function getCustomSpellSelectionRule(
+  character: CharacterTemplate,
+  level: number,
+  subclassId?: string,
+): ClassSpellSelectionRule {
+  const stored = (character.get("sheet").classes ?? []).find(isCustomClassEntry)
+  const baseEntry = stored ?? createCustomClassEntry()
+  const entry: CharacterClassInterface = {
+    ...baseEntry,
+    level: level as ClassLevel,
+  }
+  const config = getCustomClassConfigFromEntry(entry)
+
+  if (!config || config.casterType === "none") {
+    return {
+      className: "__custom__",
+      classLevel: level,
+      subclassId,
+      mode: "none",
+      maxSpellLevel: 0,
+      maxCantrips: 0,
+      maxLeveledSpells: 0,
+      swap: { leveledKnown: 0, cantrips: 0 },
+    }
+  }
+
+  const slots = deriveLeveledSlotsFromClasses([entry])
+  const maxSpellLevel = Math.max(
+    0,
+    ...Object.entries(slots)
+      .filter(([, slot]) => (slot?.max ?? 0) > 0)
+      .map(([circle]) => Number(circle)),
+  ) as MagicCircleLevel
+  const mode: SpellSelectionMode =
+    config.knownSpellMode === "spellbook"
+      ? "spellbook"
+      : config.knownSpellMode === "prepared-only"
+        ? "prepared"
+        : "limited-known"
+  const maxLeveledSpells =
+    config.knownSpellMode === "prepared-only"
+      ? 0
+      : Math.max(
+          0,
+          Math.floor(
+            config.knownAtLevel1 +
+              Math.max(0, level - 1) * config.knownPerLevel,
+          ),
+        )
+
+  return {
+    className: "__custom__",
+    classLevel: level,
+    subclassId,
+    mode: maxSpellLevel === 0 ? "none" : mode,
+    castingAttribute: config.castingAttribute,
+    maxSpellLevel,
+    // The current custom-class schema does not define a separate cantrip count.
+    // Cantrips can still be added manually to the durable character afterwards.
+    maxCantrips: 0,
+    maxLeveledSpells,
+    swap: { leveledKnown: 0, cantrips: 0 },
   }
 }
 
@@ -132,7 +206,8 @@ export function getSubclassSpellGrants(
 
 /**
  * Cantrips may be learned by prepared casters. Leveled spell selection is only
- * exposed for limited-known casters and spellbooks.
+ * exposed for limited-known casters and spellbooks. A custom class intentionally
+ * uses the whole catalog because its spell list is user-defined.
  */
 export function isSpellAllowedForClassSelection(
   spell: Spell,
@@ -140,7 +215,9 @@ export function isSpellAllowedForClassSelection(
   _subclassSpellNames: string[],
 ): boolean {
   if (rule.mode === "none") return false
-  if (!spell.classes.includes(rule.className)) return false
+  if (rule.className !== "__custom__" && !spell.classes.includes(rule.className)) {
+    return false
+  }
 
   if (spell.slotLevel === 0) {
     return rule.maxCantrips > 0
@@ -173,6 +250,14 @@ export function createClassEntry(
   className: ClassName,
   level: number,
 ): CharacterClassInterface {
+  const normalizedLevel = clampLevel(level) as ClassLevel
+  if (className === "__custom__") {
+    return {
+      ...createCustomClassEntry(),
+      level: normalizedLevel,
+    }
+  }
+
   const builder = new CharacterClassBuilder()
   let entry: CharacterClassInterface
 
@@ -194,7 +279,7 @@ export function createClassEntry(
 
   return {
     ...entry,
-    level: clampLevel(level) as ClassLevel,
+    level: normalizedLevel,
   }
 }
 
