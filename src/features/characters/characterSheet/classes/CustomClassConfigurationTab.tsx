@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 
 import { Button } from "../../../../components/ui/Button"
 import { Input } from "../../../../components/ui/Input"
@@ -85,10 +85,6 @@ export function CustomClassConfigurationEditor({
   const normalizedConfig = useMemo(() => normalizeCustomClassConfig(config), [config])
   const [draft, setDraft] = useState<CustomClassRuntimeConfig>(normalizedConfig)
   const [applying, setApplying] = useState(false)
-
-  useEffect(() => {
-    setDraft(normalizedConfig)
-  }, [normalizedConfig])
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(normalizedConfig)
 
