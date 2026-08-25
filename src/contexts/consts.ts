@@ -55,22 +55,24 @@ export const SPELL_CLASS_OPTIONS:  Array<{ value: ClassName; label: string }> = 
   { value: "wizard", label: "Mago" },
 ]
 
-export const CLASS_NAMES: Record<ClassName, string> = {
-  artificer: "Artífice",
-  barbarian: "Bárbaro",
-  bard: "Bardo",
-  cleric: "Clérigo",
-  druid: "Druida",
-  fighter: "Guerreiro",
-  monk: "Monge",
-  paladin: "Paladino",
-  ranger: "Patrulheiro",
-  rogue: "Ladino",
-  sorcerer: "Feiticeiro",
-  warlock: "Bruxo",
-  wizard: "Mago",
-  __custom__: "Classe personalizada",
-}
+export const CLASS_NAMES = Object.assign(
+  {
+    artificer: "Artífice",
+    barbarian: "Bárbaro",
+    bard: "Bardo",
+    cleric: "Clérigo",
+    druid: "Druida",
+    fighter: "Guerreiro",
+    monk: "Monge",
+    paladin: "Paladino",
+    ranger: "Patrulheiro",
+    rogue: "Ladino",
+    sorcerer: "Feiticeiro",
+    warlock: "Bruxo",
+    wizard: "Mago",
+  } satisfies Record<ClassName, string>,
+  { "__custom__": "Classe personalizada" },
+) as Record<ClassName, string> & Record<string, string>
 
 export const ACTION_NAMES: Record<ActionType, string> = {
   action: "Ação",
