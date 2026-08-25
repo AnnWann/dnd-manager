@@ -29,6 +29,7 @@ export type ClassProficiencyRule = {
 const CLASS_NAMES: ClassName[] = [
   "artificer", "barbarian", "bard", "cleric", "druid", "fighter",
   "monk", "paladin", "ranger", "rogue", "sorcerer", "warlock", "wizard",
+  "__custom__",
 ]
 const EMPTY_RULE: ClassProficiencyRule = {
   savingThrows: [],
