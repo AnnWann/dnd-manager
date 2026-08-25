@@ -12,6 +12,7 @@ import type {
   SessionSkillOperation,
   SessionStatOperation,
 } from "../../session-runtime/sessionProtocol"
+import type { SessionCustomClassOperation } from "../../session-runtime/customClassSessionProtocol"
 import type { CharacterDomainName } from "../../../lib/relationalApi"
 import type {
   EquippedItemDestination,
@@ -66,6 +67,9 @@ export type CharacterWorkspaceValue = {
   dispatchSavingThrowOperation: (operation: SessionSavingThrowOperation) => boolean
   dispatchSkillOperation: (operation: SessionSkillOperation) => boolean
   dispatchConditionOperation: (operation: SessionConditionOperation) => boolean
+
+  /** Custom-class edits are one semantic session operation, never per-field mutations. */
+  dispatchCustomClassOperation?: (operation: SessionCustomClassOperation) => boolean
 
   /**
    * Executes a saved custom-system action through the authoritative session
