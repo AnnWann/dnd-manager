@@ -62,6 +62,7 @@ export function CharacterInventoryTab({
   const runtime = useOptionalSessionRuntime()
   const {
     mode,
+    isEditing = false,
     transferCharacters = [],
     transferItem,
     canTransferFromCharacter,
@@ -81,12 +82,15 @@ export function CharacterInventoryTab({
     ? items.filter((item) => normalizeSearchText(item.name || "Item sem nome").includes(normalizedSearchQuery))
     : items
   const encumbrance = getEncumbranceInfo(character)
-  const canTransfer = Boolean(transferItem && canTransferFromCharacter?.(characterId))
+  const canTransfer =
+    mode === "campaign" &&
+    Boolean(transferItem && canTransferFromCharacter?.(characterId))
   const bagWeight = hasBagOfHolding ? getBagOfHoldingWeightKg(items) : 0
   const hasCurrency = items.some((item) => item.kind === "currency" && (item.quantity ?? 0) > 0)
   const currenciesInsideBagOfHolding = hasBagOfHolding && areAllCurrenciesInBagOfHolding(items)
   const attunedItemIds = items.filter((item) => item.attuned === true).map((item) => item.id)
   const authoritative = mode === "campaign" && Boolean(runtime)
+  const mutationsDisabled = mode === "user" && !isEditing
 
   function wouldExceedBagCapacity(candidateItems: Itemmable[]): boolean {
     if (!hasBagOfHolding) return false
@@ -103,6 +107,7 @@ export function CharacterInventoryTab({
   }
 
   function addCompendiumItem(item: Itemmable) {
+    if (mutationsDisabled) return
     if (wouldExceedBagCapacity([...items, item])) return
     if (authoritative) {
       runtime?.dispatchInventoryOperation({ type: "character.inventory.item.add", characterId, item })
@@ -112,6 +117,7 @@ export function CharacterInventoryTab({
   }
 
   function updateItem(itemId: string, updater: (item: Itemmable) => Itemmable) {
+    if (mutationsDisabled) return
     const currentItem = items.find((item) => item.id === itemId)
     if (!currentItem) return
     const updated = updater(currentItem)
@@ -125,6 +131,7 @@ export function CharacterInventoryTab({
   }
 
   function removeItem(itemId: string) {
+    if (mutationsDisabled) return
     if (authoritative) {
       runtime?.dispatchInventoryOperation({ type: "character.inventory.item.remove", characterId, itemId })
       return
@@ -140,6 +147,7 @@ export function CharacterInventoryTab({
   }
 
   function consumeItem(itemId: string) {
+    if (mutationsDisabled || mode === "user") return
     if (authoritative) {
       runtime?.dispatchInventoryOperation({ type: "character.inventory.item.consume", characterId, itemId })
       return
@@ -148,6 +156,7 @@ export function CharacterInventoryTab({
   }
 
   function toggleBagOfHolding(itemId: string) {
+    if (mutationsDisabled) return
     if (!hasBagOfHolding) return
     const target = items.find((item) => item.id === itemId)
     if (!target || isBagOfHoldingItem(target)) return
@@ -161,6 +170,7 @@ export function CharacterInventoryTab({
   }
 
   function setAllCurrenciesBagOfHolding(insideBagOfHolding: boolean) {
+    if (mutationsDisabled) return
     if (!hasBagOfHolding) return
     const candidateItems = setCurrenciesInsideBagOfHolding(items, insideBagOfHolding)
     if (wouldExceedBagCapacity(candidateItems)) return
@@ -172,6 +182,7 @@ export function CharacterInventoryTab({
   }
 
   function toggleAttunement(itemId: string) {
+    if (mutationsDisabled) return
     if (authoritative) {
       runtime?.dispatchInventoryOperation({ type: "character.inventory.attunement.toggle", characterId, itemId })
       return
@@ -180,6 +191,7 @@ export function CharacterInventoryTab({
   }
 
   function equipItem(destination: Parameters<typeof equipInventoryItemWithRules>[2]) {
+    if (mutationsDisabled) return
     if (!equippingItem || !destination) return
     if (authoritative) {
       runtime?.dispatchInventoryOperation({ type: "character.inventory.item.equip", characterId, itemId: equippingItem.id, destination })
@@ -205,7 +217,10 @@ export function CharacterInventoryTab({
         </label>
 
         {mode === "user" ? (
-          <Button onClick={() => navigate(`/user/characters/${encodeURIComponent(characterId)}/inventory/add-item`)}>
+          <Button
+            disabled={mutationsDisabled}
+            onClick={() => navigate(`/user/characters/${encodeURIComponent(characterId)}/add-item`)}
+          >
             Criar item
           </Button>
         ) : null}
@@ -216,11 +231,15 @@ export function CharacterInventoryTab({
         description={`Peso carregado: ${formatKg(encumbrance.weight)} de ${formatKg(encumbrance.carryingCapacity)}.`}
         items={visibleItems}
         emptyMessage={normalizedSearchQuery ? "Nenhum item corresponde à busca." : "Nenhum item encontrado."}
+        mutationsDisabled={mutationsDisabled}
         onAddCompendiumItem={mode === "campaign" ? addCompendiumItem : undefined}
         onUpdateItem={updateItem}
         onRemoveItem={removeItem}
-        onConsumeItem={consumeItem}
-        onEquipItem={(itemId) => setEquippingItem(items.find((item) => item.id === itemId) ?? null)}
+        onConsumeItem={mode === "campaign" ? consumeItem : undefined}
+        onEquipItem={(itemId) => {
+          if (mutationsDisabled) return
+          setEquippingItem(items.find((item) => item.id === itemId) ?? null)
+        }}
         onToggleBagOfHolding={hasBagOfHolding ? toggleBagOfHolding : undefined}
         onMoveAllCurrenciesToBagOfHolding={hasBagOfHolding && hasCurrency ? () => setAllCurrenciesBagOfHolding(!currenciesInsideBagOfHolding) : undefined}
         onToggleAttunement={toggleAttunement}
@@ -229,14 +248,14 @@ export function CharacterInventoryTab({
       />
 
       <EquipItemDialog
-        open={equippingItem !== null}
+        open={!mutationsDisabled && equippingItem !== null}
         character={character}
         item={equippingItem}
         onClose={() => setEquippingItem(null)}
         onEquip={equipItem}
       />
 
-      {transferItem && canViewCharacterDetails ? (
+      {transferItem && canViewCharacterDetails && mode === "campaign" ? (
         <TransferItemDialog
           open={transferringItem !== null}
           item={transferringItem}
