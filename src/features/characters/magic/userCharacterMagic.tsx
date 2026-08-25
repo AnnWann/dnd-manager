@@ -140,8 +140,7 @@ export function UserCharacterMagicTab({ character }: Props) {
                 variant="secondary"
                 onClick={() =>
                   navigate(
-                    `/user/characters/${encodeURIComponent(character.get("id"))}/spells-list/add-spells`,
-                    { state: { fromCharacterEdit: true } },
+                    `/user/characters/${encodeURIComponent(character.get("id"))}/add-spells`,
                   )
                 }
               >
