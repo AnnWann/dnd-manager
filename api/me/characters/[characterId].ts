@@ -1,6 +1,7 @@
 import {
   CampaignMemberStatus,
   CampaignSpellApprovalStatus,
+  CharacterDataDomain,
   CharacterVisibility,
   HomebrewSpellStatus,
   Prisma,
@@ -15,6 +16,8 @@ import { sanitizeCharacterAcquisitionData } from "../../../server/character-acqu
 import { sanitizeCharacterItemData } from "../../../server/character-items"
 import { prisma } from "../../../server/prisma"
 import { requireSession } from "../../../server/session"
+import { splitCharacterIntoDomains } from "../../../src/lib/characterDomains"
+import type { CharacterTemplateProps } from "../../../src/models/characters/CharacterTemplate"
 
 export async function GET(request: Request): Promise<Response> {
   try {
@@ -26,37 +29,7 @@ export async function GET(request: Request): Promise<Response> {
         id: characterId,
         ownerId: session.user.id,
       },
-      select: {
-        id: true,
-        name: true,
-        data: true,
-        visibility: true,
-        revision: true,
-        createdAt: true,
-        updatedAt: true,
-        domains: {
-          select: {
-            domain: true,
-            data: true,
-            revision: true,
-            updatedById: true,
-            updatedAt: true,
-          },
-          orderBy: {
-            domain: "asc",
-          },
-        },
-        campaignLinks: {
-          select: {
-            campaign: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-      },
+      select: characterSelect,
     })
 
     if (!character) {
@@ -67,20 +40,7 @@ export async function GET(request: Request): Promise<Response> {
       )
     }
 
-    return jsonResponse({
-      character: {
-        ...character,
-        domains: character.domains.map((domain) => ({
-          domain: domain.domain.toLowerCase(),
-          payload: domain.data,
-          version: domain.revision,
-          updatedBy: domain.updatedById,
-          updatedAt: domain.updatedAt,
-        })),
-        campaigns: character.campaignLinks.map((link) => link.campaign),
-        campaignLinks: undefined,
-      },
-    })
+    return jsonResponse({ character: serializeCharacter(character) })
   } catch (error) {
     return handleApiError(error)
   }
@@ -114,17 +74,17 @@ export async function PATCH(request: Request): Promise<Response> {
     const requestedName =
       typeof body.name === "string" ? body.name.trim() : ""
     const requestedVisibility = parseVisibility(body.visibility)
-    const hasLegacyData = body.data !== undefined
+    const hasDocumentData = body.data !== undefined
 
-    if (!requestedName && !requestedVisibility && !hasLegacyData) {
+    if (!requestedName && !requestedVisibility && !hasDocumentData) {
       throw new ApiError(
         400,
         "EMPTY_CHARACTER_UPDATE",
-        "Nenhuma alteração de identidade foi informada.",
+        "Nenhuma alteração foi informada.",
       )
     }
 
-    if (hasLegacyData && !isJsonObject(body.data)) {
+    if (hasDocumentData && !isJsonObject(body.data)) {
       throw new ApiError(
         400,
         "INVALID_CHARACTER_DATA",
@@ -132,29 +92,41 @@ export async function PATCH(request: Request): Promise<Response> {
       )
     }
 
-    const expectedVersion = hasLegacyData
-      ? undefined
-      : parseExpectedRootVersion(body.expectedVersion)
+    const expectedVersion =
+      body.expectedVersion === undefined
+        ? undefined
+        : parseExpectedRootVersion(body.expectedVersion)
 
-    let legacyData: Prisma.InputJsonObject | undefined
+    let documentData: Prisma.InputJsonObject | undefined
     let accessibleSpellIds: string[] | undefined
 
-    if (hasLegacyData) {
+    if (hasDocumentData) {
       const itemSafeData = sanitizeCharacterItemData(
         body.data as Prisma.InputJsonObject,
       )
-      legacyData = sanitizeCharacterAcquisitionData(itemSafeData, {
+      documentData = sanitizeCharacterAcquisitionData(itemSafeData, {
         reason: "manual",
         sourceType: "manual",
-        sourceName: "Edição legada da ficha",
+        sourceName: "Edição da ficha",
       })
       accessibleSpellIds = await getAccessibleReferencedSpellIds(
-        legacyData,
+        documentData,
         session.user.id,
       )
     }
 
-    const character = await prisma.$transaction(async (transaction) => {
+    const result = await prisma.$transaction(async (transaction) => {
+      const updateData = {
+        ...(documentData ? { data: documentData } : {}),
+        ...(requestedName
+          ? { name: requestedName.slice(0, 120) }
+          : {}),
+        ...(requestedVisibility
+          ? { visibility: requestedVisibility }
+          : {}),
+        revision: { increment: 1 },
+      }
+
       if (expectedVersion !== undefined) {
         const changed = await transaction.character.updateMany({
           where: {
@@ -162,15 +134,7 @@ export async function PATCH(request: Request): Promise<Response> {
             ownerId: session.user.id,
             revision: expectedVersion,
           },
-          data: {
-            ...(requestedName
-              ? { name: requestedName.slice(0, 120) }
-              : {}),
-            ...(requestedVisibility
-              ? { visibility: requestedVisibility }
-              : {}),
-            revision: { increment: 1 },
-          },
+          data: updateData,
         })
 
         if (changed.count !== 1) {
@@ -189,20 +153,41 @@ export async function PATCH(request: Request): Promise<Response> {
       } else {
         await transaction.character.update({
           where: { id: existing.id },
-          data: {
-            ...(legacyData ? { data: legacyData } : {}),
-            ...(requestedName
-              ? { name: requestedName.slice(0, 120) }
-              : {}),
-            ...(requestedVisibility
-              ? { visibility: requestedVisibility }
-              : {}),
-            revision: { increment: 1 },
-          },
+          data: updateData,
         })
       }
 
-      if (legacyData && accessibleSpellIds) {
+      if (documentData) {
+        const domainPayloads = splitCharacterIntoDomains(
+          documentData as unknown as CharacterTemplateProps,
+        )
+
+        for (const [domainName, payload] of Object.entries(domainPayloads)) {
+          const domain = domainName.toUpperCase() as CharacterDataDomain
+          await transaction.characterDomainState.upsert({
+            where: {
+              characterId_domain: {
+                characterId: existing.id,
+                domain,
+              },
+            },
+            update: {
+              data: payload as Prisma.InputJsonObject,
+              revision: { increment: 1 },
+              updatedById: session.user.id,
+            },
+            create: {
+              domain,
+              data: payload as Prisma.InputJsonObject,
+              revision: 1,
+              characterId: existing.id,
+              updatedById: session.user.id,
+            },
+          })
+        }
+      }
+
+      if (documentData && accessibleSpellIds) {
         await transaction.characterHomebrewSpell.deleteMany({
           where: {
             characterId: existing.id,
@@ -230,34 +215,28 @@ export async function PATCH(request: Request): Promise<Response> {
 
       const updated = await transaction.character.findUniqueOrThrow({
         where: { id: existing.id },
-        select: {
-          id: true,
-          name: true,
-          data: true,
-          visibility: true,
-          revision: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        select: characterSelect,
       })
 
       return { conflict: null, character: updated }
     })
 
-    if (character.conflict) {
+    if (result.conflict) {
       return jsonResponse(
         {
           error: {
-            code: "CHARACTER_ROOT_VERSION_CONFLICT",
-            message: "A identidade do personagem foi alterada por outro cliente.",
+            code: "CHARACTER_VERSION_CONFLICT",
+            message: "A ficha foi alterada por outro cliente. Recarregue antes de salvar.",
           },
-          current: character.conflict,
+          current: result.conflict,
         },
         409,
       )
     }
 
-    return jsonResponse({ character: character.character })
+    return jsonResponse({
+      character: result.character ? serializeCharacter(result.character) : null,
+    })
   } catch (error) {
     return handleApiError(error)
   }
@@ -295,6 +274,74 @@ export async function DELETE(request: Request): Promise<Response> {
     return new Response(null, { status: 204 })
   } catch (error) {
     return handleApiError(error)
+  }
+}
+
+const characterSelect = {
+  id: true,
+  name: true,
+  data: true,
+  visibility: true,
+  revision: true,
+  createdAt: true,
+  updatedAt: true,
+  domains: {
+    select: {
+      domain: true,
+      data: true,
+      revision: true,
+      updatedById: true,
+      updatedAt: true,
+    },
+    orderBy: {
+      domain: "asc" as const,
+    },
+  },
+  campaignLinks: {
+    select: {
+      campaign: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.CharacterSelect
+
+function serializeCharacter(character: {
+  id: string
+  name: string
+  data: Prisma.JsonValue
+  visibility: CharacterVisibility
+  revision: number
+  createdAt: Date
+  updatedAt: Date
+  domains: Array<{
+    domain: CharacterDataDomain
+    data: Prisma.JsonValue
+    revision: number
+    updatedById: string | null
+    updatedAt: Date
+  }>
+  campaignLinks: Array<{
+    campaign: {
+      id: string
+      name: string
+    }
+  }>
+}) {
+  return {
+    ...character,
+    domains: character.domains.map((domain) => ({
+      domain: domain.domain.toLowerCase(),
+      payload: domain.data,
+      version: domain.revision,
+      updatedBy: domain.updatedById,
+      updatedAt: domain.updatedAt,
+    })),
+    campaigns: character.campaignLinks.map((link) => link.campaign),
+    campaignLinks: undefined,
   }
 }
 
@@ -340,8 +387,8 @@ function parseExpectedRootVersion(value: unknown): number {
   if (!Number.isInteger(parsed) || parsed < 1) {
     throw new ApiError(
       428,
-      "CHARACTER_ROOT_VERSION_REQUIRED",
-      "expectedVersion é obrigatório para alterar a identidade da ficha.",
+      "CHARACTER_VERSION_REQUIRED",
+      "expectedVersion precisa ser uma revisão válida da ficha.",
     )
   }
   return parsed
