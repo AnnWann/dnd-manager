@@ -410,7 +410,7 @@ export function AbilityDialog({
             <div className="grid gap-4">
               <SectionIntro
                 title="Usos e recurso"
-                description="Configure cargas, recuperação e compartilhamento do recurso usado por esta habilidade."
+                description="Configure o limite, a recuperação e o compartilhamento do recurso. O consumo acontece somente durante o jogo."
               />
 
               {sharedClassResource ? (
@@ -427,7 +427,7 @@ export function AbilityDialog({
                   <label className="flex items-center justify-between gap-3">
                     <span>
                       <span className="block text-xs font-semibold text-textH">Contador de usos</span>
-                      <span className="mt-0.5 block text-[11px] text-textMuted">Ative para limitar quantas vezes a habilidade pode ser usada.</span>
+                      <span className="mt-0.5 block text-[11px] text-textMuted">Ative para definir um limite de usos para a habilidade.</span>
                     </span>
                     <input
                       type="checkbox"
@@ -442,7 +442,7 @@ export function AbilityDialog({
                   {hasUsage && draft.usage ? (
                     <>
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <label className="grid gap-1">
+                        <label className="grid gap-1 sm:col-span-2">
                           <span className="text-xs text-textMuted">Máximo ou fórmula</span>
                           <Input
                             type="text"
@@ -455,22 +455,6 @@ export function AbilityDialog({
                           ) : maximumFormula ? (
                             <span className="text-[10px] text-textMuted">Recalculado pelos valores atuais da ficha.</span>
                           ) : null}
-                        </label>
-
-                        <label className="grid gap-1">
-                          <span className="text-xs text-textMuted">Usos já gastos</span>
-                          <Input
-                            type="number"
-                            min={0}
-                            value={draft.usage.used}
-                            onChange={(event) => setDraft({
-                              ...draft,
-                              usage: {
-                                ...draft.usage!,
-                                used: Math.max(0, Math.min(draft.usage!.max, Number(event.target.value) || 0)),
-                              },
-                            })}
-                          />
                         </label>
 
                         <label className="grid gap-1 sm:col-span-2">
