@@ -30,6 +30,7 @@ import {
   CUSTOM_CLASS_RUNTIME_ID,
   DEFAULT_CUSTOM_CLASS_CONFIG,
   createCustomClassRuntimeId,
+  getCustomClassConfig,
   isCustomClassName,
   normalizeCustomClassConfig,
   updateCustomClassConfig,
@@ -1818,7 +1819,9 @@ function ClassesStep({
       {classPlans.map((plan, index) => {
         const progression = getClassProgression(plan.className)
         const isCustomClass = isCustomClassName(plan.className)
-        const customClassConfig = customClassConfigs?.[String(plan.className)]
+        const customClassConfig =
+          customClassConfigs?.[String(plan.className)] ??
+          getCustomClassConfig(draftCharacter, plan.className)
         const displayLabel = isCustomClass
           ? customClassConfig?.name.trim() ||
             customClassName.trim() ||
