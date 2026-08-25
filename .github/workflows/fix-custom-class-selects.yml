@@ -36,11 +36,20 @@ jobs:
           # Native selects emit input as soon as the selected option changes.
           # In the creation flow this avoids the remaining delegated change-event
           # interference while keeping the editor fully controlled by React.
-          pattern = re.compile(r'(<Select\b(?:(?!</Select>).)*?)onChange=', re.S)
-          text, count = pattern.subn(r'\1onInput=', text)
-          if count != 6:
-              raise SystemExit(f'expected 6 custom class Select handlers, replaced {count}')
+          pattern = re.compile(r'<Select\b(?:(?!</Select>).)*?</Select>', re.S)
+          matches = list(pattern.finditer(text))
+          if len(matches) != 6:
+              raise SystemExit(f'expected 6 custom class Select blocks, found {len(matches)}')
 
+          def patch_select(match: re.Match[str]) -> str:
+              block = match.group(0)
+              if block.count('onChange=') != 1:
+                  raise SystemExit('custom class Select block does not contain exactly one onChange handler')
+              block = block.replace('onChange=', 'onInput=', 1)
+              block = block.replace('event.target.value', 'event.currentTarget.value')
+              return block
+
+          text = pattern.sub(patch_select, text)
           path.write_text(text)
           PY
 
