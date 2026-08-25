@@ -1,6 +1,6 @@
 import type { ClassName } from "../sheet/Class"
 
-export const CLASS_NAME_PT: Record<ClassName, string> = {
+export const CLASS_NAME_PT = {
   artificer: "Artífice",
   barbarian: "Bárbaro",
   bard: "Bardo",
@@ -15,7 +15,7 @@ export const CLASS_NAME_PT: Record<ClassName, string> = {
   warlock: "Bruxo",
   wizard: "Mago",
   __custom__: "Classe personalizada",
-}
+} as Record<ClassName, string> & Record<string, string>
 
 export const SUBCLASS_NAME_PT: Record<string, string> = {
   // Artífice
@@ -152,7 +152,7 @@ const CLASS_SPECIFIC_SUBCLASS_NAME_PT: Partial<
 }
 
 export function getClassNamePt(className: ClassName): string {
-  return CLASS_NAME_PT[className]
+  return CLASS_NAME_PT[String(className)] ?? String(className)
 }
 
 export function getSubclassNamePt(
