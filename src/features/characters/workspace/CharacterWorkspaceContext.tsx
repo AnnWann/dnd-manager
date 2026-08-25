@@ -28,6 +28,12 @@ export type CharacterWorkspaceMode = "campaign" | "user"
 
 export type CharacterWorkspaceValue = {
   mode: CharacterWorkspaceMode
+  /**
+   * User-owned character pages explicitly opt into edit mode. Campaign/session
+   * workspaces omit this because their mutations are governed by the session
+   * runtime instead.
+   */
+  isEditing?: boolean
 
   characters: CharacterTemplate[]
   activeCharacter?: CharacterTemplate
