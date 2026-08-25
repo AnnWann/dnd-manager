@@ -11,6 +11,7 @@ import { CharacterEquipmentTab } from "../../features/characters/equipment/chara
 import { CharacterInventoryTab } from "../../features/characters/inventory/characterInventory"
 import { OnDemandCharacterSpellLibrary } from "../../features/characters/magic/OnDemandCharacterSpellLibrary"
 import { UserCharacterMagicTab } from "../../features/characters/magic/userCharacterMagic"
+import { CharacterProgressionFlow } from "../../features/characters/progression/CharacterProgressionFlow"
 import { CharacterProficienciesTab } from "../../features/characters/proficiencies/characterProficiencies"
 import { CharacterProfileTab } from "../../features/characters/profile/characterProfileV2"
 import { CharacterRaceTab } from "../../features/characters/race/characterRaceV2"
@@ -27,9 +28,11 @@ import type {
   CustomSystemDefinition,
   CustomSystemExistingCharacterTab,
 } from "../../models/customSystems/CustomSystemDefinition"
+import { prepareCharacterForProgression } from "../../models/leveling/prepareCharacterForProgression"
 
 const CONTENT_ANCHOR = "__standard-content__"
 const ADD_SPELLS_PAGE = "add-spells"
+const LEVEL_UP_PAGE = "level-up-editor"
 
 /**
  * User-context character view.
@@ -85,13 +88,17 @@ export function UserCharacterView() {
   )
 
   const isAddSpellsPage = tab === ADD_SPELLS_PAGE
+  const isLevelUpPage = tab === LEVEL_UP_PAGE
+  const isEditorSubpage = isAddSpellsPage || isLevelUpPage
   const activeTab = isAddSpellsPage
     ? "spells-list"
-    : normalizeCharacterViewTab(tab, characterTabs)
+    : isLevelUpPage
+      ? "sheet"
+      : normalizeCharacterViewTab(tab, characterTabs)
 
   useEffect(() => {
     if (
-      isAddSpellsPage ||
+      isEditorSubpage ||
       !character ||
       !characterId ||
       tab === activeTab
@@ -99,7 +106,7 @@ export function UserCharacterView() {
       return
     }
     navigate(userCharacterPath(characterId, activeTab), { replace: true })
-  }, [activeTab, character, characterId, isAddSpellsPage, navigate, tab])
+  }, [activeTab, character, characterId, isEditorSubpage, navigate, tab])
 
   if (!characterId || !character) {
     return (
@@ -121,6 +128,7 @@ export function UserCharacterView() {
     )
   }
 
+  const sheetPath = userCharacterPath(characterId, "sheet")
   const spellListPath = userCharacterPath(characterId, "spells-list")
 
   if (isAddSpellsPage) {
@@ -155,6 +163,28 @@ export function UserCharacterView() {
             updateCharacter={updateCharacter}
             onCancel={() => navigate(spellListPath)}
             onSpellAdded={() => navigate(spellListPath)}
+          />
+        )}
+      </div>
+    )
+  }
+
+  if (isLevelUpPage) {
+    return (
+      <div className="flex flex-col gap-4">
+        {!isEditing ? (
+          <div className="rounded-xl border border-border bg-bg p-6 text-sm text-textMuted">
+            Ative o modo de edição acima para subir o personagem de nível.
+          </div>
+        ) : (
+          <CharacterProgressionFlow
+            mode="level-up"
+            character={prepareCharacterForProgression(character)}
+            onCancel={() => navigate(sheetPath)}
+            onComplete={(updated) => {
+              updateCharacter(characterId, () => updated)
+              navigate(sheetPath, { replace: true })
+            }}
           />
         )}
       </div>
@@ -215,11 +245,7 @@ export function UserCharacterView() {
         {isEditing ? (
           <button
             type="button"
-            onClick={() =>
-              navigate(
-                `/user/characters/${encodeURIComponent(character.get("id"))}/level-up`,
-              )
-            }
+            onClick={() => navigate(userCharacterPath(characterId, LEVEL_UP_PAGE))}
             className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-sm font-medium text-textH hover:bg-bg-subtle"
           >
             <TrendingUp className="h-4 w-4" />
