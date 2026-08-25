@@ -13,7 +13,7 @@ export function UserCharacterCreateItemView() {
   }
 
   return (
-    <UserCharacterWorkspace characterId={characterId} initialEditing>
+    <UserCharacterWorkspace characterId={characterId}>
       <UserCharacterCreateItemContent characterId={characterId} />
     </UserCharacterWorkspace>
   )
@@ -25,7 +25,12 @@ function UserCharacterCreateItemContent({
   characterId: string
 }) {
   const navigate = useNavigate()
-  const { characters, updateCharacter, saveCharacter } = useCharacterWorkspace()
+  const {
+    characters,
+    isEditing,
+    updateCharacter,
+    saveCharacter,
+  } = useCharacterWorkspace()
   const character = characters.find(
     (entry) => entry.get("id") === characterId,
   )
@@ -34,6 +39,14 @@ function UserCharacterCreateItemContent({
 
   if (!character) {
     return <Navigate to="/not-found" replace />
+  }
+
+  if (!isEditing) {
+    return (
+      <div className="rounded-xl border border-border bg-bg p-6 text-sm text-textMuted">
+        Ative o modo de edição acima para criar um item para este personagem.
+      </div>
+    )
   }
 
   async function addItem(item: Itemmable) {
