@@ -41,6 +41,7 @@ import type {
   CustomSystemDefinition,
   CustomSystemExistingCharacterTab,
 } from "../models/customSystems/CustomSystemDefinition"
+import { campaignCharacterPath, campaignPath } from "../lib/campaignRoutes"
 
 const TAB_SWIPE_MIN_DISTANCE = 88
 const TAB_SWIPE_PREVIEW_DISTANCE = 28
