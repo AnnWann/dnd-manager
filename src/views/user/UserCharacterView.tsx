@@ -9,6 +9,7 @@ import {
 } from "../../features/characters/customSystems/CustomSystemsTabWithLibrary"
 import { CharacterEquipmentTab } from "../../features/characters/equipment/characterEquipment"
 import { CharacterInventoryTab } from "../../features/characters/inventory/characterInventory"
+import { OnDemandCharacterSpellLibrary } from "../../features/characters/magic/OnDemandCharacterSpellLibrary"
 import { UserCharacterMagicTab } from "../../features/characters/magic/userCharacterMagic"
 import { CharacterProficienciesTab } from "../../features/characters/proficiencies/characterProficiencies"
 import { CharacterProfileTab } from "../../features/characters/profile/characterProfileV2"
@@ -28,6 +29,7 @@ import type {
 } from "../../models/customSystems/CustomSystemDefinition"
 
 const CONTENT_ANCHOR = "__standard-content__"
+const ADD_SPELLS_PAGE = "add-spells"
 
 /**
  * User-context character view.
@@ -82,12 +84,22 @@ export function UserCharacterView() {
     [activeCustomSystemDefinitions, visibleStandardTabs],
   )
 
-  const activeTab = normalizeCharacterViewTab(tab, characterTabs)
+  const isAddSpellsPage = tab === ADD_SPELLS_PAGE
+  const activeTab = isAddSpellsPage
+    ? "spells-list"
+    : normalizeCharacterViewTab(tab, characterTabs)
 
   useEffect(() => {
-    if (!character || !characterId || tab === activeTab) return
+    if (
+      isAddSpellsPage ||
+      !character ||
+      !characterId ||
+      tab === activeTab
+    ) {
+      return
+    }
     navigate(userCharacterPath(characterId, activeTab), { replace: true })
-  }, [activeTab, character, characterId, navigate, tab])
+  }, [activeTab, character, characterId, isAddSpellsPage, navigate, tab])
 
   if (!characterId || !character) {
     return (
@@ -106,6 +118,46 @@ export function UserCharacterView() {
           <ArrowLeft className="h-4 w-4" /> Personagens
         </button>
       </section>
+    )
+  }
+
+  const spellListPath = userCharacterPath(characterId, "spells-list")
+
+  if (isAddSpellsPage) {
+    return (
+      <div className="flex flex-col gap-4">
+        <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
+          <button
+            type="button"
+            onClick={() => navigate(spellListPath)}
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-textH hover:bg-accentBg"
+          >
+            <ArrowLeft className="h-4 w-4" /> Magias
+          </button>
+
+          <div className="min-w-0 flex-1 text-center sm:text-left">
+            <div className="truncate font-semibold text-textH">
+              {character.get("name")}
+            </div>
+            <div className="truncate text-xs text-textMuted">
+              Adicionar magia
+            </div>
+          </div>
+        </header>
+
+        {!isEditing ? (
+          <div className="rounded-xl border border-border bg-bg p-6 text-sm text-textMuted">
+            Ative o modo de edição acima para adicionar magias a este personagem.
+          </div>
+        ) : (
+          <OnDemandCharacterSpellLibrary
+            character={character}
+            updateCharacter={updateCharacter}
+            onCancel={() => navigate(spellListPath)}
+            onSpellAdded={() => navigate(spellListPath)}
+          />
+        )}
+      </div>
     )
   }
 
