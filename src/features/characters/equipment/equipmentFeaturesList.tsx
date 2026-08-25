@@ -5,6 +5,7 @@ import {
   getAbilityUsageMax,
   isAbilityBenefitsActive,
 } from "../../../models/abilities/abilityActivation"
+import type { AbilityUsageResetKind } from "../../../models/abilities/Ability"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 
@@ -20,8 +21,9 @@ export function EquipmentFeaturesList<T extends Equipment>({
   onUpdate,
 }: Props<T>) {
   const { getSpellByIndex } = useMagicContext()
-  const { characters, updateCharacter } = useCharacterWorkspace()
+  const { characters, updateCharacter, mode } = useCharacterWorkspace()
   const character = characters.find((entry) => entry.get("id") === characterId)
+  const userMode = mode === "user"
   const abilities = equipment.abilities ?? []
   const spells = equipment.spells ?? []
 
@@ -31,7 +33,7 @@ export function EquipmentFeaturesList<T extends Equipment>({
     abilityId: string,
     action: "use" | "restore" | "deactivate",
   ) {
-    if (!character) return
+    if (!character || userMode) return
 
     updateCharacter(characterId, (current) => {
       if (action === "use") {
@@ -45,6 +47,8 @@ export function EquipmentFeaturesList<T extends Equipment>({
   }
 
   function updateSpellCharge(spellIndex: string, delta: number) {
+    if (userMode) return
+
     onUpdate((current) => ({
       ...current,
       spells: (current.spells ?? []).map((spell) => {
@@ -73,7 +77,9 @@ export function EquipmentFeaturesList<T extends Equipment>({
             Recursos do item
           </div>
           <div className="mt-0.5 text-[11px] text-textMuted">
-            Habilidades e magias concedidas enquanto o item estiver equipado.
+            {userMode
+              ? "Habilidades e magias concedidas enquanto o item estiver equipado."
+              : "Habilidades e magias concedidas enquanto o item estiver equipado."}
           </div>
         </div>
 
@@ -120,9 +126,11 @@ export function EquipmentFeaturesList<T extends Equipment>({
 
                   {usage ? (
                     <div className="mt-1 text-xs font-medium text-text">
-                      {usage.reset === "spellSlot"
-                        ? "Usa espaço de magia"
-                        : `${remaining}/${usageMax} cargas disponíveis`}
+                      {userMode
+                        ? formatUsageDefinition(usageMax ?? usage.max, usage.reset)
+                        : usage.reset === "spellSlot"
+                          ? "Usa espaço de magia"
+                          : `${remaining}/${usageMax} cargas disponíveis`}
                     </div>
                   ) : (
                     <div className="mt-1 text-xs text-textMuted">
@@ -152,39 +160,41 @@ export function EquipmentFeaturesList<T extends Equipment>({
                   ) : null}
                 </div>
 
-                <div className="flex shrink-0 gap-2">
-                  {canTrigger ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={remaining !== undefined && remaining <= 0}
-                      onClick={() => updateAbilityState(ability.id, "use")}
-                    >
-                      {(ability.kind ?? "active") === "passive" ? "Acionar" : "Usar"}
-                    </Button>
-                  ) : null}
+                {!userMode ? (
+                  <div className="flex shrink-0 gap-2">
+                    {canTrigger ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={remaining !== undefined && remaining <= 0}
+                        onClick={() => updateAbilityState(ability.id, "use")}
+                      >
+                        {(ability.kind ?? "active") === "passive" ? "Acionar" : "Usar"}
+                      </Button>
+                    ) : null}
 
-                  {requiresActivation && benefitsActive ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => updateAbilityState(ability.id, "deactivate")}
-                    >
-                      Encerrar
-                    </Button>
-                  ) : null}
+                    {requiresActivation && benefitsActive ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => updateAbilityState(ability.id, "deactivate")}
+                      >
+                        Encerrar
+                      </Button>
+                    ) : null}
 
-                  {canRestore ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={usage.used <= 0}
-                      onClick={() => updateAbilityState(ability.id, "restore")}
-                    >
-                      Regenerar
-                    </Button>
-                  ) : null}
-                </div>
+                    {canRestore ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={usage.used <= 0}
+                        onClick={() => updateAbilityState(ability.id, "restore")}
+                      >
+                        Regenerar
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
 
               {ability.description ? (
@@ -227,41 +237,50 @@ export function EquipmentFeaturesList<T extends Equipment>({
                   </div>
 
                   <div className="mt-1 text-xs font-medium text-text">
-                    {spellGrant.usage.reset === "spellSlot"
-                      ? "Aprendida pelo item • usa espaços normais"
-                      : `${remaining}/${spellGrant.usage.max} cargas do item`}
+                    {userMode
+                      ? spellGrant.usage.reset === "spellSlot"
+                        ? "Aprendida pelo item • usa espaços normais"
+                        : formatUsageDefinition(
+                            spellGrant.usage.max,
+                            spellGrant.usage.reset,
+                          )
+                      : spellGrant.usage.reset === "spellSlot"
+                        ? "Aprendida pelo item • usa espaços normais"
+                        : `${remaining}/${spellGrant.usage.max} cargas do item`}
                   </div>
                 </div>
 
-                <div className="flex shrink-0 gap-2">
-                  {canConsume ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={
-                        spellGrant.usage.used >= spellGrant.usage.max
-                      }
-                      onClick={() =>
-                        updateSpellCharge(spellGrant.index, 1)
-                      }
-                    >
-                      Consumir
-                    </Button>
-                  ) : null}
+                {!userMode ? (
+                  <div className="flex shrink-0 gap-2">
+                    {canConsume ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={
+                          spellGrant.usage.used >= spellGrant.usage.max
+                        }
+                        onClick={() =>
+                          updateSpellCharge(spellGrant.index, 1)
+                        }
+                      >
+                        Consumir
+                      </Button>
+                    ) : null}
 
-                  {canRestore ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={spellGrant.usage.used <= 0}
-                      onClick={() =>
-                        updateSpellCharge(spellGrant.index, -1)
-                      }
-                    >
-                      Regenerar
-                    </Button>
-                  ) : null}
-                </div>
+                    {canRestore ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={spellGrant.usage.used <= 0}
+                        onClick={() =>
+                          updateSpellCharge(spellGrant.index, -1)
+                        }
+                      >
+                        Regenerar
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </div>
           )
@@ -269,4 +288,19 @@ export function EquipmentFeaturesList<T extends Equipment>({
       </div>
     </div>
   )
+}
+
+function formatUsageDefinition(
+  maximum: number,
+  reset: AbilityUsageResetKind,
+): string {
+  if (reset === "spellSlot") return "Usa espaço de magia"
+
+  const uses = `${maximum} ${maximum === 1 ? "uso" : "usos"}`
+  if (reset === "shortRest") return `${uses} • descanso curto`
+  if (reset === "longRest") return `${uses} • descanso longo`
+  if (reset === "turn") return `${uses} • por turno`
+  if (reset === "cooldown") return `${uses} • recarga`
+  if (reset === "limited") return `${uses} • limite permanente`
+  return uses
 }
