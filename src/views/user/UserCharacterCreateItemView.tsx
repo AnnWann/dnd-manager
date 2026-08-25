@@ -13,7 +13,7 @@ export function UserCharacterCreateItemView() {
   }
 
   return (
-    <UserCharacterWorkspace characterId={characterId}>
+    <UserCharacterWorkspace characterId={characterId} initialEditing>
       <UserCharacterCreateItemContent characterId={characterId} />
     </UserCharacterWorkspace>
   )
@@ -25,7 +25,7 @@ function UserCharacterCreateItemContent({
   characterId: string
 }) {
   const navigate = useNavigate()
-  const { characters, updateCharacter } = useCharacterWorkspace()
+  const { characters, updateCharacter, saveCharacter } = useCharacterWorkspace()
   const character = characters.find(
     (entry) => entry.get("id") === characterId,
   )
@@ -36,18 +36,19 @@ function UserCharacterCreateItemContent({
     return <Navigate to="/not-found" replace />
   }
 
-  function addItem(item: Itemmable) {
+  async function addItem(item: Itemmable) {
     updateCharacter(characterId, (current) =>
       current.addInventoryItem(item),
     )
-    navigate(inventoryPath)
+    const saved = await saveCharacter?.()
+    if (saved) navigate(inventoryPath)
   }
 
   return (
     <div className="mx-auto w-full max-w-5xl">
       <ItemCreationWizard
         onCancel={() => navigate(inventoryPath)}
-        onCreate={addItem}
+        onCreate={(item) => void addItem(item)}
       />
     </div>
   )
