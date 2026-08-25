@@ -24,81 +24,7 @@ jobs:
           node-version: 22
 
       - name: Restore class creation configuration actions
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          integrated_path = Path('src/features/characters/creation/IntegratedCharacterCreationWizard.tsx')
-          integrated = integrated_path.read_text()
-
-          old = '''          <section
-            key={plan.className}
-            className="grid gap-4 rounded-xl border border-border bg-bg-subtle p-4"
-          >'''
-          new = '''          <section
-            key={plan.className}
-            data-creation-class-name={String(plan.className)}
-            data-creation-class-level={String(plan.level)}
-            className="grid gap-4 rounded-xl border border-border bg-bg-subtle p-4"
-          >'''
-          if integrated.count(old) != 1:
-              raise SystemExit(f'class section anchor mismatch: {integrated.count(old)}')
-          integrated = integrated.replace(old, new, 1)
-          integrated_path.write_text(integrated)
-
-          bridge_path = Path('src/features/characters/creation/bridges/CreationProgressionConfigurationBridge.tsx')
-          bridge = bridge_path.read_text()
-
-          old = '''      for (const section of Array.from(main.querySelectorAll<HTMLElement>("section"))) {
-        const heading = section.querySelector<HTMLElement>(":scope > div h2, :scope > h2")
-        const parsedClass = parseClassHeading(heading?.textContent ?? "")
-        if (parsedClass) {'''
-          new = '''      for (const section of Array.from(main.querySelectorAll<HTMLElement>("section"))) {
-        const heading = section.querySelector<HTMLElement>(":scope > div h2, :scope > h2")
-        const datasetClassName = section.dataset.creationClassName as ClassName | undefined
-        const datasetLevel = Number(section.dataset.creationClassLevel)
-        const parsedClass =
-          datasetClassName && Number.isFinite(datasetLevel) && datasetLevel > 0
-            ? { className: datasetClassName, level: datasetLevel }
-            : parseClassHeading(heading?.textContent ?? "")
-        if (parsedClass) {'''
-          if bridge.count(old) != 1:
-              raise SystemExit(f'bridge class mount anchor mismatch: {bridge.count(old)}')
-          bridge = bridge.replace(old, new, 1)
-
-          old = '''function parseClassHeading(
-  text: string,
-): { className: ClassName; level: number } | undefined {
-  const normalized = text.trim()
-  for (const className of ALL_CLASS_NAMES) {
-    const label = getClassProgression(className).label
-    if (!normalized.startsWith(`${label} `)) continue
-    const level = Number(normalized.slice(label.length).trim().match(/^\\d+/)?.[0])
-    if (Number.isFinite(level) && level > 0) return { className, level }
-  }
-  return undefined
-}'''
-          new = '''function parseClassHeading(
-  text: string,
-): { className: ClassName; level: number } | undefined {
-  const normalized = text.trim()
-  for (const className of ALL_CLASS_NAMES) {
-    const label = getClassProgression(className).label
-    if (!normalized.startsWith(label)) continue
-    const suffix = normalized.slice(label.length).trim()
-    const level = Number(
-      suffix.match(/^(?:—\\s*)?(?:nível\\s*)?(\\d+)/i)?.[1],
-    )
-    if (Number.isFinite(level) && level > 0) return { className, level }
-  }
-  return undefined
-}'''
-          if bridge.count(old) != 1:
-              raise SystemExit(f'parseClassHeading anchor mismatch: {bridge.count(old)}')
-          bridge = bridge.replace(old, new, 1)
-          bridge_path.write_text(bridge)
-          PY
+        run: python scripts/restore-class-creation-actions.py
 
       - name: Install dependencies
         run: npm install --package-lock=false --ignore-scripts
@@ -115,6 +41,7 @@ jobs:
       - name: Commit implementation
         shell: bash
         run: |
+          rm -f scripts/restore-class-creation-actions.py
           rm -f .github/workflows/fix-custom-class-selects.yml
           rm -f .github/workflows/restore-class-creation-actions.yml
           if git diff --quiet; then
