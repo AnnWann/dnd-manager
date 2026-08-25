@@ -1,9 +1,10 @@
 import type { CharacterTemplate } from "./CharacterTemplate"
+import type { Attribute } from "../sheet/Attribute"
 import type { CharacterClassInterface, ClassName } from "../sheet/Class"
 
 export const CUSTOM_CLASS_RUNTIME_ID = "__custom__" as ClassName
 export const CUSTOM_CLASS_CHOICE_KEY = "dnd-manager:custom-class-name"
-const CUSTOM_CLASS_CONFIG_KEY = "dnd-manager:custom-class-config"
+export const CUSTOM_CLASS_CONFIG_KEY = "dnd-manager:custom-class-config"
 const CUSTOM_CLASS_SLOT_STATE_KEY = "dnd-manager:custom-class-slot-state"
 
 export type CustomCasterType = "none" | "full" | "half" | "third"
@@ -18,8 +19,10 @@ export type CustomSpellSlotPoolConfig = {
 export type CustomClassRuntimeConfig = {
   name: string
   hitDie: "d4" | "d6" | "d8" | "d10" | "d12"
+  savingThrows: Attribute[]
+  skillChoices: number
   casterType: CustomCasterType
-  castingAttribute: "str" | "dex" | "con" | "int" | "wis" | "cha"
+  castingAttribute: Attribute
   knownSpellMode: "limited" | "spellbook" | "prepared-only"
   knownAtLevel1: number
   knownPerLevel: number
@@ -34,9 +37,13 @@ export type CustomSpellSlotPool = {
   slots: Record<number, { level: number; max: number; current: number }>
 }
 
-const DEFAULT_CONFIG: CustomClassRuntimeConfig = {
+const ATTRIBUTE_KEYS: Attribute[] = ["str", "dex", "con", "int", "wis", "cha"]
+
+export const DEFAULT_CUSTOM_CLASS_CONFIG: CustomClassRuntimeConfig = {
   name: "Classe personalizada",
   hitDie: "d8",
+  savingThrows: [],
+  skillChoices: 2,
   casterType: "none",
   castingAttribute: "int",
   knownSpellMode: "limited",
@@ -58,7 +65,7 @@ export function isCustomClassEntry(entry: CharacterClassInterface | undefined): 
 export function createCustomClassEntry(
   name = "Classe personalizada",
 ): CharacterClassInterface {
-  const config = normalizeConfig({ ...DEFAULT_CONFIG, name })
+  const config = normalizeCustomClassConfig({ ...DEFAULT_CUSTOM_CLASS_CONFIG, name })
   return {
     className: CUSTOM_CLASS_RUNTIME_ID,
     level: 1,
@@ -86,14 +93,14 @@ export function getCustomClassConfigFromEntry(
   const raw = entry.levelChoices?.[CUSTOM_CLASS_CONFIG_KEY]?.[0]
   if (raw) {
     try {
-      return normalizeConfig(JSON.parse(raw))
+      return normalizeCustomClassConfig(JSON.parse(raw))
     } catch {
       // Cai para a configuração inferida.
     }
   }
-  return normalizeConfig({
-    ...DEFAULT_CONFIG,
-    name: entry.levelChoices?.[CUSTOM_CLASS_CHOICE_KEY]?.[0] || DEFAULT_CONFIG.name,
+  return normalizeCustomClassConfig({
+    ...DEFAULT_CUSTOM_CLASS_CONFIG,
+    name: entry.levelChoices?.[CUSTOM_CLASS_CHOICE_KEY]?.[0] || DEFAULT_CUSTOM_CLASS_CONFIG.name,
     casterType: entry.spellcastingProgression ?? "none",
     castingAttribute: entry.castingAttribute ?? "int",
     knownSpellMode: entry.knownSpells?.mode ?? "limited",
@@ -111,7 +118,7 @@ export function getCustomClassConfig(character: CharacterTemplate): CustomClassR
 export function updateCustomClassConfig(character: CharacterTemplate, config: CustomClassRuntimeConfig): CharacterTemplate {
   const index = getCustomClassIndex(character)
   if (index < 0) return character
-  const normalized = normalizeConfig(config)
+  const normalized = normalizeCustomClassConfig(config)
   const classes = [...(character.get("sheet").classes ?? [])]
   const entry = classes[index]
   if (!entry) return character
@@ -214,12 +221,20 @@ function writeState(character: CharacterTemplate, index: number, state: Record<s
   return character.withSheet("classes", classes)
 }
 
-function normalizeConfig(value: Partial<CustomClassRuntimeConfig> | undefined): CustomClassRuntimeConfig {
-  const config = { ...DEFAULT_CONFIG, ...(value ?? {}) }
+export function normalizeCustomClassConfig(
+  value: Partial<CustomClassRuntimeConfig> | undefined,
+): CustomClassRuntimeConfig {
+  const config = { ...DEFAULT_CUSTOM_CLASS_CONFIG, ...(value ?? {}) }
+  const savingThrows = Array.isArray(config.savingThrows)
+    ? Array.from(new Set(config.savingThrows.filter((entry): entry is Attribute => ATTRIBUTE_KEYS.includes(entry))))
+    : []
+
   return {
     ...config,
-    name: String(config.name || DEFAULT_CONFIG.name).trim() || DEFAULT_CONFIG.name,
+    name: String(config.name || DEFAULT_CUSTOM_CLASS_CONFIG.name).trim() || DEFAULT_CUSTOM_CLASS_CONFIG.name,
     hitDie: config.hitDie ?? "d8",
+    savingThrows,
+    skillChoices: Math.max(0, Math.min(18, Math.trunc(Number(config.skillChoices) || 0))),
     casterType: config.casterType ?? "none",
     castingAttribute: config.castingAttribute ?? "int",
     knownSpellMode: config.knownSpellMode ?? "limited",
