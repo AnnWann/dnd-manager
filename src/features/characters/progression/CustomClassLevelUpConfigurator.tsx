@@ -45,6 +45,11 @@ export function CustomClassLevelUpConfigurator({
     existingIndex >= 0 ? character.get("sheet").classes?.[existingIndex] : undefined
   const previousLevel = existingEntry?.level ?? 0
   const targetLevel = Math.min(20, previousLevel + 1)
+  const totalLevel = (character.get("sheet").classes ?? []).reduce(
+    (sum, entry) => sum + entry.level,
+    0,
+  )
+  const cannotLevel = previousLevel >= 20 || totalLevel >= 20
   const existingConfig = getCustomClassConfig(character)
   const [config, setConfig] = useState<CustomClassRuntimeConfig>(() =>
     getCustomLevelUpConfig(character),
@@ -97,7 +102,7 @@ export function CustomClassLevelUpConfigurator({
   }
 
   function confirm() {
-    if (previousLevel >= 20) return
+    if (cannotLevel) return
 
     let updated = applyCustomClassLevelUp(
       character,
@@ -109,7 +114,7 @@ export function CustomClassLevelUpConfigurator({
     if (asiEligible && asiChoice) {
       const eventId = crypto.randomUUID()
       const addedAt = new Date().toISOString()
-      const totalLevel = (updated.get("sheet").classes ?? []).reduce(
+      const nextTotalLevel = (updated.get("sheet").classes ?? []).reduce(
         (sum, entry) => sum + entry.level,
         0,
       )
@@ -121,7 +126,7 @@ export function CustomClassLevelUpConfigurator({
           eventId,
           addedAt,
           reason: "level-up",
-          characterLevel: totalLevel,
+          characterLevel: nextTotalLevel,
           className: CUSTOM_CLASS_RUNTIME_ID,
           classLevel: targetLevel,
           sourceType: "class",
@@ -297,13 +302,19 @@ export function CustomClassLevelUpConfigurator({
         </section>
       ) : null}
 
+      {cannotLevel ? (
+        <div className="rounded-xl border border-danger bg-dangerBg p-3 text-xs text-danger">
+          O personagem ou esta classe já atingiu o limite de nível permitido.
+        </div>
+      ) : null}
+
       <footer className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-between">
         <Button variant="secondary" onClick={onBack}>
           Voltar
         </Button>
-        <Button disabled={previousLevel >= 20} onClick={confirm}>
-          {previousLevel >= 20
-            ? "Classe já está no nível 20"
+        <Button disabled={cannotLevel} onClick={confirm}>
+          {cannotLevel
+            ? "Limite de nível atingido"
             : previousLevel > 0
               ? `Confirmar ${config.name} ${targetLevel}`
               : `Adicionar ${config.name}`}
