@@ -4,6 +4,8 @@ import type {
   LevelFeatureDefinition,
 } from "./types"
 
+const CUSTOM_CLASS_RUNTIME_ID = "__custom__"
+
 export const ALL_CLASS_NAMES: readonly ClassName[] = [
   "artificer",
   "barbarian",
@@ -64,6 +66,12 @@ function classReference(
   }
 }
 
+const CUSTOM_CLASS_REFERENCE = classReference(
+  CUSTOM_CLASS_RUNTIME_ID as ClassName,
+  "Classe personalizada",
+  "d8",
+)
+
 /**
  * Only structural class metadata is bundled: identifiers, labels, hit dice and
  * public spell-count progression. No subclass names, feature names, rules text,
@@ -83,7 +91,6 @@ export const CLASS_PROGRESSIONS: Record<ClassName, ClassProgressionDefinition> =
   sorcerer: classReference("sorcerer", "Feiticeiro", "d6"),
   warlock: classReference("warlock", "Bruxo", "d8"),
   wizard: classReference("wizard", "Mago", "d6"),
-  __custom__: classReference("__custom__", "Classe personalizada", "d8"),
 }
 
 /** Compatibility export: there are intentionally no bundled feature modules. */
@@ -92,6 +99,7 @@ export const CLASS_PROGRESSION_MODULES = [] as const
 export function getClassProgression(
   className: ClassName,
 ): ClassProgressionDefinition {
+  if (String(className) === CUSTOM_CLASS_RUNTIME_ID) return CUSTOM_CLASS_REFERENCE
   return CLASS_PROGRESSIONS[className]
 }
 
@@ -108,6 +116,7 @@ export function getCantripsKnownAtLevel(
   className: ClassName,
   level: number,
 ): number {
+  if (String(className) === CUSTOM_CLASS_RUNTIME_ID) return 0
   const normalizedLevel = Math.max(1, Math.min(20, Math.trunc(level || 1)))
   return CLASS_PROGRESSIONS[className].cantripsKnown?.[normalizedLevel] ?? 0
 }
