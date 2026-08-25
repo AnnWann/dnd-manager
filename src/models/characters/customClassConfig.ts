@@ -43,8 +43,11 @@ export type CustomClassRuntimeConfig = {
   casterType: CustomCasterType
   castingAttribute: Attribute
   knownSpellMode: "limited" | "spellbook" | "prepared-only"
+  /** @deprecated Kept only to migrate older custom-class configs. */
   knownAtLevel1: number
+  /** @deprecated Kept only to migrate older custom-class configs. */
   knownPerLevel: number
+  leveledSpellsKnownProgression: Record<string, number>
   cantripsKnownProgression: Record<string, number>
   asiLevels: number[]
   slotProgressionMode: CustomSpellProgressionMode
@@ -70,6 +73,7 @@ export const DEFAULT_CUSTOM_CLASS_CONFIG: CustomClassRuntimeConfig = {
   knownSpellMode: "limited",
   knownAtLevel1: 2,
   knownPerLevel: 1,
+  leveledSpellsKnownProgression: { "1": 2 },
   cantripsKnownProgression: {},
   asiLevels: [4, 8, 12, 16, 19],
   slotProgressionMode: "formula",
@@ -137,6 +141,9 @@ export function getCustomClassConfigFromEntry(
     knownSpellMode: entry.knownSpells?.mode ?? "limited",
     knownAtLevel1: entry.knownSpells?.baseAtLevel1 ?? 2,
     knownPerLevel: entry.knownSpells?.perLevel ?? 1,
+    leveledSpellsKnownProgression: {
+      "1": entry.knownSpells?.baseAtLevel1 ?? 2,
+    },
   })
 }
 
@@ -170,8 +177,11 @@ export function updateCustomClassConfig(
         : normalized.casterType,
     knownSpells: normalized.casterType === "none" ? undefined : {
       mode: normalized.knownSpellMode,
-      baseAtLevel1: normalized.knownSpellMode === "prepared-only" ? 0 : normalized.knownAtLevel1,
-      perLevel: normalized.knownSpellMode === "prepared-only" ? 0 : normalized.knownPerLevel,
+      baseAtLevel1:
+        normalized.knownSpellMode === "prepared-only"
+          ? 0
+          : getCustomLeveledSpellsKnownAtLevel(normalized, 1),
+      perLevel: 0,
     },
     levelChoices: {
       ...(entry.levelChoices ?? {}),
@@ -302,6 +312,32 @@ export function normalizeCustomClassConfig(
   const savingThrows = Array.isArray(config.savingThrows)
     ? Array.from(new Set(config.savingThrows.filter((entry): entry is Attribute => ATTRIBUTE_KEYS.includes(entry))))
     : []
+  const legacyKnownAtLevel1 = Math.max(
+    0,
+    Math.trunc(Number(value?.knownAtLevel1 ?? DEFAULT_CUSTOM_CLASS_CONFIG.knownAtLevel1) || 0),
+  )
+  const legacyKnownPerLevel = Math.max(
+    0,
+    Number(value?.knownPerLevel ?? DEFAULT_CUSTOM_CLASS_CONFIG.knownPerLevel) || 0,
+  )
+  const leveledSpellsKnownProgression =
+    value?.leveledSpellsKnownProgression &&
+    typeof value.leveledSpellsKnownProgression === "object"
+      ? normalizeScalarLevelProgression(value.leveledSpellsKnownProgression)
+      : value === undefined
+        ? { ...DEFAULT_CUSTOM_CLASS_CONFIG.leveledSpellsKnownProgression }
+        : Object.fromEntries(
+            Array.from({ length: 20 }, (_, index) => {
+              const level = index + 1
+              return [
+                String(level),
+                Math.max(
+                  0,
+                  Math.floor(legacyKnownAtLevel1 + index * legacyKnownPerLevel),
+                ),
+              ]
+            }),
+          )
 
   return {
     ...config,
@@ -312,16 +348,12 @@ export function normalizeCustomClassConfig(
     casterType: config.casterType ?? "none",
     castingAttribute: config.castingAttribute ?? "int",
     knownSpellMode: config.knownSpellMode ?? "limited",
-    knownAtLevel1: Math.max(0, Math.trunc(Number(config.knownAtLevel1) || 0)),
-    knownPerLevel: Math.max(0, Number(config.knownPerLevel) || 0),
+    knownAtLevel1: legacyKnownAtLevel1,
+    knownPerLevel: legacyKnownPerLevel,
+    leveledSpellsKnownProgression,
     cantripsKnownProgression:
       config.cantripsKnownProgression && typeof config.cantripsKnownProgression === "object"
-        ? Object.fromEntries(
-            Object.entries(config.cantripsKnownProgression).map(([level, amount]) => [
-              String(Math.max(1, Math.min(20, Math.trunc(Number(level) || 1)))),
-              Math.max(0, Math.trunc(Number(amount) || 0)),
-            ]),
-          )
+        ? normalizeScalarLevelProgression(config.cantripsKnownProgression)
         : {},
     asiLevels: Array.from(
       new Set(
@@ -357,14 +389,45 @@ export function getCustomProgressionValueAtLevel(
   return amount
 }
 
+function normalizeScalarLevelProgression(
+  progression: Record<string, number>,
+): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(progression).map(([level, amount]) => [
+      String(Math.max(1, Math.min(20, Math.trunc(Number(level) || 1)))),
+      Math.max(0, Math.trunc(Number(amount) || 0)),
+    ]),
+  )
+}
+
+export function getCustomLeveledSpellsKnownAtLevel(
+  config: CustomClassRuntimeConfig,
+  classLevel: number,
+): number {
+  return getInheritedScalarProgressionValue(
+    config.leveledSpellsKnownProgression,
+    classLevel,
+  )
+}
+
 export function getCustomCantripsKnownAtLevel(
   config: CustomClassRuntimeConfig,
+  classLevel: number,
+): number {
+  return getInheritedScalarProgressionValue(
+    config.cantripsKnownProgression,
+    classLevel,
+  )
+}
+
+function getInheritedScalarProgressionValue(
+  progression: Record<string, number>,
   classLevel: number,
 ): number {
   const target = Math.max(1, Math.min(20, Math.trunc(classLevel || 1)))
   let amount = 0
   for (let level = 1; level <= target; level += 1) {
-    const configured = config.cantripsKnownProgression[String(level)]
+    const configured = progression[String(level)]
     if (configured === undefined) continue
     amount = Math.max(0, Math.trunc(Number(configured) || 0))
   }

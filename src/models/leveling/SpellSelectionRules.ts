@@ -4,6 +4,7 @@ import {
   createCustomClassEntry,
   getCustomCantripsKnownAtLevel,
   getCustomClassConfigFromEntry,
+  getCustomLeveledSpellsKnownAtLevel,
   isCustomClassEntry,
   isCustomClassName,
 } from "../characters/customClassConfig"
@@ -170,13 +171,7 @@ function getCustomSpellSelectionRule(
   const maxLeveledSpells =
     config.knownSpellMode === "prepared-only"
       ? 0
-      : Math.max(
-          0,
-          Math.floor(
-            config.knownAtLevel1 +
-              Math.max(0, level - 1) * config.knownPerLevel,
-          ),
-        )
+      : getCustomLeveledSpellsKnownAtLevel(config, level)
   const maxCantrips = getCustomCantripsKnownAtLevel(config, level)
 
   return {

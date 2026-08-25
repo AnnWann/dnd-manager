@@ -8,6 +8,7 @@ import {
   createCustomSlotPool,
   getCustomCantripsKnownAtLevel,
   getCustomClassConfig,
+  getCustomLeveledSpellsKnownAtLevel,
   getCustomProgressionValueAtLevel,
   normalizeCustomClassConfig,
   updateCustomClassConfig,
@@ -133,6 +134,14 @@ export function CustomClassConfigurationEditor({
     patch({ cantripsKnownProgression: progression })
   }
 
+  function setLeveledSpellsAtLevel(level: number, raw: string) {
+    if (readOnly) return
+    const progression = { ...draft.leveledSpellsKnownProgression }
+    if (raw.trim() === "") delete progression[String(level)]
+    else progression[String(level)] = Math.max(0, Math.trunc(Number(raw) || 0))
+    patch({ leveledSpellsKnownProgression: progression })
+  }
+
   function setProgressionCell(
     progression: Record<string, Record<string, number>>,
     level: number,
@@ -235,18 +244,6 @@ export function CustomClassConfigurationEditor({
                 </Select>
               </label>
 
-              {draft.knownSpellMode !== "prepared-only" ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="grid gap-1.5">
-                    <span className="text-xs font-medium text-textH">Conhecidas no N1</span>
-                    <Input disabled={readOnly} type="number" min={0} value={draft.knownAtLevel1} onChange={(event) => patch({ knownAtLevel1: Math.max(0, Number(event.target.value) || 0) })} />
-                  </label>
-                  <label className="grid gap-1.5">
-                    <span className="text-xs font-medium text-textH">Por nível</span>
-                    <Input disabled={readOnly} type="number" min={0} step="0.5" value={draft.knownPerLevel} onChange={(event) => patch({ knownPerLevel: Math.max(0, Number(event.target.value) || 0) })} />
-                  </label>
-                </div>
-              ) : null}
             </>
           ) : null}
         </div>
@@ -340,6 +337,42 @@ export function CustomClassConfigurationEditor({
               ))}
             </div>
           </section>
+
+          {draft.knownSpellMode !== "prepared-only" ? (
+            <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
+              <div>
+                <h2 className="text-sm font-semibold text-textH">
+                  {draft.knownSpellMode === "spellbook"
+                    ? "Progressão de magias no grimório"
+                    : "Progressão de magias conhecidas"}
+                </h2>
+                <p className="mt-1 max-w-3xl text-xs leading-5 text-textMuted">
+                  Informe o total de magias de 1º círculo ou superior aprendidas em cada nível. O último valor é preenchido automaticamente nos níveis seguintes e pode ser sobrescrito em qualquer nível.
+                </p>
+              </div>
+              <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-10">
+                {LEVELS.map((level) => (
+                  <label key={level} className="grid gap-1">
+                    <span className="text-[11px] text-textMuted">N{level}</span>
+                    <input
+                      disabled={readOnly}
+                      type="number"
+                      min={0}
+                      max={200}
+                      inputMode="numeric"
+                      className="h-9 w-full rounded-md border border-border bg-bg-subtle px-2 text-center text-xs text-textH disabled:opacity-70"
+                      value={
+                        draft.leveledSpellsKnownProgression[String(level)] ??
+                        (getCustomLeveledSpellsKnownAtLevel(draft, level) || "")
+                      }
+                      placeholder="—"
+                      onChange={(event) => setLeveledSpellsAtLevel(level, event.target.value)}
+                    />
+                  </label>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
