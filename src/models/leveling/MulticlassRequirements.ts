@@ -20,6 +20,7 @@ export type MulticlassRequirementResult = {
 const CLASS_NAMES: ClassName[] = [
   "artificer", "barbarian", "bard", "cleric", "druid", "fighter",
   "monk", "paladin", "ranger", "rogue", "sorcerer", "warlock", "wizard",
+  "__custom__",
 ]
 
 /** No multiclass prerequisite table is bundled; users consult their reference. */
