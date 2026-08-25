@@ -2,6 +2,7 @@ import { getCantripsKnownAtLevel } from "../../data/classProgression"
 import {
   CUSTOM_CLASS_RUNTIME_ID,
   createCustomClassEntry,
+  getCustomCantripsKnownAtLevel,
   getCustomClassConfigFromEntry,
   isCustomClassEntry,
   isCustomClassName,
@@ -176,15 +177,16 @@ function getCustomSpellSelectionRule(
               Math.max(0, level - 1) * config.knownPerLevel,
           ),
         )
+  const maxCantrips = getCustomCantripsKnownAtLevel(config, level)
 
   return {
     className,
     classLevel: level,
     subclassId,
-    mode: maxSpellLevel === 0 ? "none" : mode,
+    mode: maxSpellLevel === 0 && maxCantrips === 0 ? "none" : mode,
     castingAttribute: config.castingAttribute,
     maxSpellLevel,
-    maxCantrips: 0,
+    maxCantrips,
     maxLeveledSpells,
     swap: { leveledKnown: 0, cantrips: 0 },
   }

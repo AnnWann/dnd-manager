@@ -15,6 +15,12 @@ import {
 import { newCharacterTemplate } from "../../../../lib/newCharacterTemplate"
 import type { Ability } from "../../../../models/abilities/Ability"
 import type { CharacterAsi } from "../../../../models/characters/CharacterAsi"
+import {
+  getCustomClassConfig,
+  isCustomClassName,
+  updateCustomClassConfig,
+  type CustomClassRuntimeConfig,
+} from "../../../../models/characters/customClassConfig"
 import type { Attribute } from "../../../../models/sheet/Attribute"
 import type { ClassName } from "../../../../models/sheet/Class"
 import type { Proficiency } from "../../../../models/sheet/Proficiency"
@@ -47,6 +53,7 @@ import { findCharacterCreationRoot } from "../logic/characterCreationStepValidat
 type Props = {
   open: boolean
   value: CreationProgressionConfiguration
+  customClassConfigs?: Record<string, CustomClassRuntimeConfig>
   onChange: (value: CreationProgressionConfiguration) => void
 }
 
@@ -95,6 +102,7 @@ const ATTRIBUTE_LABELS: Record<Attribute, string> = {
 export function CreationProgressionConfigurationBridge({
   open,
   value,
+  customClassConfigs = {},
   onChange,
 }: Props) {
   const { spells, metamagics } = useMagicContext()
@@ -117,12 +125,18 @@ export function CreationProgressionConfigurationBridge({
     .join("|")
   const previewCharacter = useMemo(() => {
     const owner = { id: "creation-preview", name: "Criação", role: "player" as const }
-    const base = newCharacterTemplate("Rascunho", owner)
-    return base.withSheet(
+    const base = newCharacterTemplate("Rascunho", owner).withSheet(
       "classes",
       classMounts.map((entry) => createClassEntry(entry.className, entry.level)),
     )
-  }, [classSignature])
+    return classMounts.reduce((current, entry) => {
+      if (!isCustomClassName(entry.className)) return current
+      const config = customClassConfigs[String(entry.className)]
+      return config
+        ? updateCustomClassConfig(current, config, entry.className)
+        : current
+    }, base)
+  }, [classSignature, customClassConfigs])
 
   useEffect(() => {
     if (!open) {
@@ -581,8 +595,14 @@ function ClassConfigurationPanel({
   const leveled = resolveSpellCount(configuration.spells.selected, spells, 1)
   const metamagicLimit = className === "sorcerer" ? getMetamagicLimit(level) : 0
   const invocationLimit = className === "warlock" ? getInvocationLimit(level) : 0
+  const customClassConfig = isCustomClassName(className)
+    ? getCustomClassConfig(character, className)
+    : undefined
   const asiLevels = Array.from({ length: level }, (_, index) => index + 1).filter(
-    (candidate) => isAsiLevel(className, candidate),
+    (candidate) =>
+      customClassConfig
+        ? customClassConfig.asiLevels.includes(candidate)
+        : isAsiLevel(className, candidate),
   )
 
   return (

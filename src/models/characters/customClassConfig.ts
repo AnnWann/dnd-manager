@@ -45,6 +45,8 @@ export type CustomClassRuntimeConfig = {
   knownSpellMode: "limited" | "spellbook" | "prepared-only"
   knownAtLevel1: number
   knownPerLevel: number
+  cantripsKnownProgression: Record<string, number>
+  asiLevels: number[]
   slotProgressionMode: CustomSpellProgressionMode
   spellSlotProgression: Record<string, Record<string, number>>
   additionalSlotPools: CustomSpellSlotPoolConfig[]
@@ -68,6 +70,8 @@ export const DEFAULT_CUSTOM_CLASS_CONFIG: CustomClassRuntimeConfig = {
   knownSpellMode: "limited",
   knownAtLevel1: 2,
   knownPerLevel: 1,
+  cantripsKnownProgression: {},
+  asiLevels: [4, 8, 12, 16, 19],
   slotProgressionMode: "formula",
   spellSlotProgression: {},
   additionalSlotPools: [],
@@ -304,6 +308,22 @@ export function normalizeCustomClassConfig(
     knownSpellMode: config.knownSpellMode ?? "limited",
     knownAtLevel1: Math.max(0, Math.trunc(Number(config.knownAtLevel1) || 0)),
     knownPerLevel: Math.max(0, Number(config.knownPerLevel) || 0),
+    cantripsKnownProgression:
+      config.cantripsKnownProgression && typeof config.cantripsKnownProgression === "object"
+        ? Object.fromEntries(
+            Object.entries(config.cantripsKnownProgression).map(([level, amount]) => [
+              String(Math.max(1, Math.min(20, Math.trunc(Number(level) || 1)))),
+              Math.max(0, Math.trunc(Number(amount) || 0)),
+            ]),
+          )
+        : {},
+    asiLevels: Array.from(
+      new Set(
+        (Array.isArray(config.asiLevels) ? config.asiLevels : [4, 8, 12, 16, 19])
+          .map((level) => Math.trunc(Number(level) || 0))
+          .filter((level) => level >= 1 && level <= 20),
+      ),
+    ).sort((left, right) => left - right),
     slotProgressionMode: config.slotProgressionMode === "table" ? "table" : "formula",
     spellSlotProgression:
       config.spellSlotProgression && typeof config.spellSlotProgression === "object"
@@ -311,4 +331,18 @@ export function normalizeCustomClassConfig(
         : {},
     additionalSlotPools: Array.isArray(config.additionalSlotPools) ? config.additionalSlotPools : [],
   }
+}
+
+export function getCustomCantripsKnownAtLevel(
+  config: CustomClassRuntimeConfig,
+  classLevel: number,
+): number {
+  const target = Math.max(1, Math.min(20, Math.trunc(classLevel || 1)))
+  let amount = 0
+  for (let level = 1; level <= target; level += 1) {
+    const configured = config.cantripsKnownProgression[String(level)]
+    if (configured === undefined) continue
+    amount = Math.max(0, Math.trunc(Number(configured) || 0))
+  }
+  return amount
 }

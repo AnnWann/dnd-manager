@@ -114,6 +114,23 @@ export function CustomClassConfigurationEditor({
     })
   }
 
+  function toggleAsiLevel(level: number) {
+    if (readOnly) return
+    patch({
+      asiLevels: draft.asiLevels.includes(level)
+        ? draft.asiLevels.filter((entry) => entry !== level)
+        : [...draft.asiLevels, level].sort((left, right) => left - right),
+    })
+  }
+
+  function setCantripsAtLevel(level: number, raw: string) {
+    if (readOnly) return
+    const progression = { ...draft.cantripsKnownProgression }
+    if (raw.trim() === "") delete progression[String(level)]
+    else progression[String(level)] = Math.max(0, Math.trunc(Number(raw) || 0))
+    patch({ cantripsKnownProgression: progression })
+  }
+
   function setProgressionCell(
     progression: Record<string, Record<string, number>>,
     level: number,
@@ -233,6 +250,35 @@ export function CustomClassConfigurationEditor({
         </div>
 
         <div className="mt-5 rounded-xl border border-border bg-bg-subtle p-3">
+          <div className="text-xs font-semibold text-textH">Níveis de ASI / talentos</div>
+          <p className="mt-1 text-xs leading-5 text-textMuted">
+            Marque os níveis da classe em que o personagem recebe um aumento de atributo ou talento.
+          </p>
+          <div className="mt-2 grid grid-cols-5 gap-2 sm:grid-cols-10">
+            {LEVELS.map((level) => {
+              const selected = draft.asiLevels.includes(level)
+              return (
+                <button
+                  key={level}
+                  type="button"
+                  disabled={readOnly}
+                  aria-pressed={selected}
+                  onClick={() => toggleAsiLevel(level)}
+                  className={[
+                    "rounded-lg border px-2 py-2 text-xs font-semibold disabled:cursor-default disabled:opacity-70",
+                    selected
+                      ? "border-accentBorder bg-accentBg text-textH"
+                      : "border-border bg-bg text-textMuted",
+                  ].join(" ")}
+                >
+                  {selected ? "✓ " : ""}{level}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-xl border border-border bg-bg-subtle p-3">
           <div className="text-xs font-semibold text-textH">
             Proficiências em testes de resistência
           </div>
@@ -262,7 +308,35 @@ export function CustomClassConfigurationEditor({
       </section>
 
       {draft.casterType !== "none" ? (
-        <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
+        <>
+          <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
+            <div>
+              <h2 className="text-sm font-semibold text-textH">Progressão de truques conhecidos</h2>
+              <p className="mt-1 max-w-3xl text-xs leading-5 text-textMuted">
+                Informe o total de truques conhecidos nos níveis em que esse total muda. Campos vazios mantêm o valor do nível anterior.
+              </p>
+            </div>
+            <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-10">
+              {LEVELS.map((level) => (
+                <label key={level} className="grid gap-1">
+                  <span className="text-[11px] text-textMuted">N{level}</span>
+                  <input
+                    disabled={readOnly}
+                    type="number"
+                    min={0}
+                    max={20}
+                    inputMode="numeric"
+                    className="h-9 w-full rounded-md border border-border bg-bg-subtle px-2 text-center text-xs text-textH disabled:opacity-70"
+                    value={draft.cantripsKnownProgression[String(level)] ?? ""}
+                    placeholder="—"
+                    onChange={(event) => setCantripsAtLevel(level, event.target.value)}
+                  />
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold text-textH">Progressão de espaços de magia</h2>
@@ -337,7 +411,8 @@ export function CustomClassConfigurationEditor({
               A progressão será calculada automaticamente usando {draft.casterType === "full" ? "conjurador completo" : draft.casterType === "half" ? "meio conjurador" : "1/3 de conjurador"}.
             </div>
           )}
-        </section>
+          </section>
+        </>
       ) : null}
 
       <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">

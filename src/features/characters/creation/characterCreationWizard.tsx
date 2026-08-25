@@ -388,6 +388,7 @@ export function CharacterCreationWizard(props: WizardProps) {
       <CreationProgressionConfigurationBridge
         open={props.open}
         value={progressionConfiguration}
+        customClassConfigs={customClassConfigs}
         onChange={updateProgressionConfiguration}
       />
       <CreationLegacyProgressionStateSync
