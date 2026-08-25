@@ -57,7 +57,7 @@ export function CustomAwareLevelUpProgressionConfigurator({
       for (const candidate of Array.from(select.options)) {
         const current = candidate.textContent ?? ""
         const next = current
-          .replace(/\s*·\s*consulte sua refer[eê]ncia\s*$/iu, "")
+          .replace(/\s*·\s*(?:consulte sua refer[eê]ncia|requisitos manuais)\s*$/iu, "")
           .replace(/\s*·\s*$/u, "")
           .trim()
         if (next !== current) candidate.textContent = next
