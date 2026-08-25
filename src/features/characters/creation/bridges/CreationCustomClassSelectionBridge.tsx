@@ -100,6 +100,9 @@ export function CreationCustomClassSelectionBridge({
   return null
 }
 
+export const CharacterCreationCustomClassSelectionBridge =
+  CreationCustomClassSelectionBridge
+
 function cleanRequirementSuffixes(select: HTMLSelectElement) {
   for (const option of Array.from(select.options)) {
     if (option.value === CUSTOM_CLASS_RUNTIME_ID) continue
