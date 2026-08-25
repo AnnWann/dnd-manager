@@ -69,8 +69,10 @@ export function EquipmentPocketsSection({
   character,
   updateCharacter,
 }: Props) {
-  const { addGroundItem } = useCharacterWorkspace()
+  const { mode, isEditing, addGroundItem } = useCharacterWorkspace()
   const pockets = character.get("equipment").pockets
+  const userMode = mode === "user"
+  const canChangeLoadout = !userMode || Boolean(isEditing)
 
   function unequipPocketItem(index: number) {
     updateCharacter(character.get("id"), (current) =>
@@ -85,6 +87,8 @@ export function EquipmentPocketsSection({
   }
 
   function usePocketItem(index: number) {
+    if (userMode) return
+
     const item = pockets[index]
     if (!item || !isConsumableItemKind(item)) return
 
@@ -171,23 +175,27 @@ export function EquipmentPocketsSection({
                   ) : null}
                 </div>
 
-                <div className="flex shrink-0 flex-col gap-2">
-                  {isPocketWeapon(item) ? (
-                    <Button size="sm" variant="secondary" onClick={() => wieldPocketWeapon(index)}>
-                      Empunhar
-                    </Button>
-                  ) : null}
+                {(canChangeLoadout || !userMode) ? (
+                  <div className="flex shrink-0 flex-col gap-2">
+                    {isPocketWeapon(item) && canChangeLoadout ? (
+                      <Button size="sm" variant="secondary" onClick={() => wieldPocketWeapon(index)}>
+                        Empunhar
+                      </Button>
+                    ) : null}
 
-                  {isConsumableItemKind(item) ? (
-                    <Button size="sm" variant="secondary" onClick={() => usePocketItem(index)}>
-                      Usar
-                    </Button>
-                  ) : null}
+                    {!userMode && isConsumableItemKind(item) ? (
+                      <Button size="sm" variant="secondary" onClick={() => usePocketItem(index)}>
+                        Usar
+                      </Button>
+                    ) : null}
 
-                  <Button size="sm" variant="secondary" onClick={() => unequipPocketItem(index)}>
-                    Tirar do bolso
-                  </Button>
-                </div>
+                    {canChangeLoadout ? (
+                      <Button size="sm" variant="secondary" onClick={() => unequipPocketItem(index)}>
+                        Tirar do bolso
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
 
               {item.desc?.trim() ? (
