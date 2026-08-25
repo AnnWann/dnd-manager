@@ -12,6 +12,7 @@ import { useNavigate, useParams } from "react-router-dom"
 import { CharacterAbilitiesTab } from "../features/characters/abilities/characterAbilities"
 import { CharacterSelector } from "../features/characters/characterSelector"
 import { CharacterSheetTab } from "../features/characters/characterSheet/characterSheet"
+import { CustomClassConfigurationTab } from "../features/characters/characterSheet/classes/CustomClassConfigurationTab"
 import { CharacterEquipmentTab } from "../features/characters/equipment/characterEquipment"
 import { CharacterInventoryTab } from "../features/characters/inventory/characterInventory"
 import {
@@ -31,10 +32,11 @@ import {
   CustomSystemsTabWithLibrary,
   isActiveSystemState,
 } from "../features/characters/customSystems/CustomSystemsTabWithLibrary"
+import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
 import { getCustomSystemPlacement } from "../features/customSystems/CustomSystemPlacementEditor"
-import { campaignCharacterPath, campaignPath } from "../lib/campaignRoutes"
 import { useCustomSystemDefinitions } from "../lib/customSystems/CustomSystemRegistry"
 import type { CustomSystemActor } from "../lib/customSystems"
+import { hasCustomClass } from "../models/characters/customClassConfig"
 import type {
   CustomSystemDefinition,
   CustomSystemExistingCharacterTab,
@@ -68,6 +70,7 @@ export function CharacterView() {
     completeLongRest,
     canAssignOwners,
   } = useCharacterWorkspace()
+  const sessionRuntime = useOptionalSessionRuntime()
   const customSystemDefinitions = useCustomSystemDefinitions()
   const { campaignId, characterId, tab } = useParams<{
     campaignId?: string
@@ -79,6 +82,7 @@ export function CharacterView() {
   const routeCharacter = characterId
     ? characters.find((character) => character.get("id") === characterId)
     : undefined
+  const characterHasCustomClass = Boolean(routeCharacter && hasCustomClass(routeCharacter))
 
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [swipeDragging, setSwipeDragging] = useState(false)
@@ -103,17 +107,17 @@ export function CharacterView() {
   }, [customSystemDefinitions, routeCharacter])
 
   const hiddenStandardTabs = useMemo(
-    () => new Set(routeCharacter?.get("sheet").hiddenCharacterTabs ?? []),
+    () => new Set<string>(routeCharacter?.get("sheet").hiddenCharacterTabs ?? []),
     [routeCharacter],
   )
 
   const visibleStandardTabs = useMemo(
     () =>
-      CHARACTER_TABS.filter(
-        (entry) =>
-          entry.key === "sheet" || !hiddenStandardTabs.has(entry.key),
-      ),
-    [hiddenStandardTabs],
+      CHARACTER_TABS.filter((entry) => {
+        if (entry.key === "custom-class" && !characterHasCustomClass) return false
+        return entry.key === "sheet" || !hiddenStandardTabs.has(entry.key)
+      }),
+    [characterHasCustomClass, hiddenStandardTabs],
   )
 
   const characterTabs = useMemo<CharacterViewTabDefinition[]>(
@@ -463,6 +467,25 @@ export function CharacterView() {
           ) : null}
           {activeStaticTab === "proficiencies" ? (
             <CharacterProficienciesTab character={routeCharacter} updateCharacter={updateCharacter} />
+          ) : null}
+          {activeTab === "custom-class" && characterHasCustomClass ? (
+            <CustomClassConfigurationTab
+              character={routeCharacter}
+              readOnly={!sessionRuntime || sessionRuntime.status !== "connected"}
+              applyLabel="Aplicar na sessão"
+              onApply={(config) => {
+                const sent = sessionRuntime?.dispatchCustomClassOperation({
+                  type: "character.class.custom.configure",
+                  characterId: routeCharacter.get("id"),
+                  config,
+                }) ?? false
+                if (!sent) {
+                  console.warn("[session-runtime] custom class operation was not sent", {
+                    characterId: routeCharacter.get("id"),
+                  })
+                }
+              }}
+            />
           ) : null}
           {customTabSystemId ? (
             <CustomSystemsTabWithLibrary
