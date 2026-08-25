@@ -356,6 +356,7 @@ export type ClassName =
   | "sorcerer"
   | "warlock"
   | "wizard"
+  | "__custom__"
 
 /**
  * Level zero is used only as the previous level when adding a new class during
