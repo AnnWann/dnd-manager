@@ -1,5 +1,6 @@
 import { getCharacterAsis, withCharacterAsis } from "../../models/characters/CharacterAsi"
 import { CharacterTemplate } from "../../models/characters/CharacterTemplate"
+import { isCustomClassEntry } from "../../models/characters/customClassConfig"
 import type { SessionAbilityState } from "./abilitySessionProtocol"
 
 /** Applies the slices already owned by authoritative session runtimes. */
@@ -30,12 +31,26 @@ export function applySessionAbilityState(
 
   next = withCharacterAsis(next, getCharacterAsis(authoritative))
 
-  // Custom spell-slot pools persist their current value in class levelChoices.
+  // Class runtime state is authoritative only for values owned by session
+  // operations. Custom classes additionally own their mechanical configuration
+  // (casting progression, known-spell model and serialized config), so project
+  // the complete authoritative custom entry while leaving official class
+  // definitions on the durable character baseline.
   const currentClasses = next.get("sheet").classes ?? []
   const authoritativeClasses = authoritative.get("sheet").classes ?? []
   next = next.withSheet("classes", currentClasses.map((entry, index) => {
     const source = authoritativeClasses[index]
     if (!source || source.className !== entry.className || source.level !== entry.level) return entry
+    if (isCustomClassEntry(entry) || isCustomClassEntry(source)) {
+      return {
+        ...entry,
+        ...source,
+        levelChoices: {
+          ...(entry.levelChoices ?? {}),
+          ...(source.levelChoices ?? {}),
+        },
+      }
+    }
     return { ...entry, levelChoices: source.levelChoices ?? entry.levelChoices }
   }))
 
