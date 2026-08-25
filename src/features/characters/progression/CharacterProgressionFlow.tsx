@@ -2,14 +2,14 @@ import type { ComponentProps } from "react"
 
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { CharacterProgressionConfigurator } from "./CharacterProgressionConfigurator"
-import { LevelUpProgressionConfigurator } from "./LevelUpProgressionConfigurator"
+import { CustomAwareLevelUpProgressionConfigurator } from "./CustomAwareLevelUpProgressionConfigurator"
 
 type Props = ComponentProps<typeof CharacterProgressionConfigurator>
 
 export function CharacterProgressionFlow(props: Props) {
   if (props.mode === "level-up") {
     return (
-      <LevelUpProgressionConfigurator
+      <CustomAwareLevelUpProgressionConfigurator
         character={props.character}
         primaryClassName={props.primaryClassName}
         onCancel={props.onCancel}
