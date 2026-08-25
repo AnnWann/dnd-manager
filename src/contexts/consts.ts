@@ -7,7 +7,7 @@ import type { ClassName } from "../models/sheet/Class";
 export const MAGIC_SCHOOLS: { value: MagicSchool; label: string }[] = [
   { value: "abjuration", label: "Abjuração" },
   { value: "conjuration", label: "Conjuração" },
-  { value: "divination", label: "Adivinhação" },
+  { value: "divination", label: "Divinação" },
   { value: "enchantment", label: "Encantamento" },
   { value: "evocation", label: "Evocação" },
   { value: "illusion", label: "Ilusão" },
@@ -18,7 +18,7 @@ export const MAGIC_SCHOOLS: { value: MagicSchool; label: string }[] = [
 export const MAGIC_SCHOOLS_MAP: Record<MagicSchool | string, string> = {
   "abjuration": "Abjuração",
   "conjuration": "Conjuração",
-  "divination": "Adivinhação",
+  "divination": "Divinação",
   "enchantment": "Encantamento",
   "evocation": "Evocação",
   "illusion": "Ilusão",
@@ -69,6 +69,7 @@ export const CLASS_NAMES: Record<ClassName, string> = {
   sorcerer: "Feiticeiro",
   warlock: "Bruxo",
   wizard: "Mago",
+  __custom__: "Classe personalizada",
 }
 
 export const ACTION_NAMES: Record<ActionType, string> = {
