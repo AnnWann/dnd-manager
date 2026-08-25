@@ -12,7 +12,7 @@ export function UserCharacterAddSpellsView() {
   }
 
   return (
-    <UserCharacterWorkspace characterId={characterId} initialEditing>
+    <UserCharacterWorkspace characterId={characterId}>
       <UserCharacterAddSpellsContent characterId={characterId} />
     </UserCharacterWorkspace>
   )
@@ -24,7 +24,12 @@ function UserCharacterAddSpellsContent({
   characterId: string
 }) {
   const navigate = useNavigate()
-  const { characters, updateCharacter, saveCharacter } = useCharacterWorkspace()
+  const {
+    characters,
+    isEditing,
+    updateCharacter,
+    saveCharacter,
+  } = useCharacterWorkspace()
   const character = characters.find(
     (entry) => entry.get("id") === characterId,
   )
@@ -32,6 +37,14 @@ function UserCharacterAddSpellsContent({
 
   if (!character) {
     return <Navigate to="/not-found" replace />
+  }
+
+  if (!isEditing) {
+    return (
+      <div className="rounded-xl border border-border bg-bg p-6 text-sm text-textMuted">
+        Ative o modo de edição acima para adicionar magias a este personagem.
+      </div>
+    )
   }
 
   return (
