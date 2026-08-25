@@ -18,11 +18,13 @@ import type {
   CharacterClassInterface,
   ClassName,
 } from "../../../models/sheet/Class"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { ChannelDivinityModule } from "./channelDivinityModule"
 import { KiModule } from "./kiModule"
 import { KnownSpellsList } from "./knownSpellsList"
 import { MetamagicModule } from "./metamagicModule"
+import { OnDemandCharacterSpellLibrary } from "./OnDemandCharacterSpellLibrary"
 import { SpellSlotsEditor } from "./slots"
 
 type Props = {
@@ -49,9 +51,14 @@ export function CharacterMagicTab({
   character,
   updateCharacter,
 }: Props) {
-  const { characters } = useCharacterWorkspace()
+  const workspace = useCharacterWorkspace()
+  const { characters, currentOwner, mode } = workspace
+  const sessionRuntime = useOptionalSessionRuntime()
   const { getSpellByIndex } = useMagicContext()
-  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle")
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">(
+    "idle",
+  )
+  const [addingSpell, setAddingSpell] = useState(false)
   const sorcererLevel = getSorcererLevel(character)
   const hasSorcererResources = sorcererLevel >= 2
   const spellListText = useMemo(
@@ -59,6 +66,16 @@ export function CharacterMagicTab({
     [characters, getSpellByIndex],
   )
   const canCopySpellList = spellListText.trim().length > 0
+  const characterOwnerId = character.get("owner").id?.trim()
+  const canManuallyAddSpell =
+    mode === "campaign" &&
+    sessionRuntime?.status === "connected" &&
+    (sessionRuntime.role === "MASTER" ||
+      Boolean(
+        characterOwnerId &&
+          currentOwner?.id?.trim() &&
+          currentOwner.id.trim() === characterOwnerId,
+      ))
   const divineClasses = (character.get("sheet").classes ?? []).filter((entry) =>
     DIVINE_PREPARED_CLASSES.includes(entry.className),
   )
@@ -107,6 +124,10 @@ export function CharacterMagicTab({
     }
   }, [divineCatalogRequestKey, updateCharacter])
 
+  useEffect(() => {
+    if (!canManuallyAddSpell && addingSpell) setAddingSpell(false)
+  }, [addingSpell, canManuallyAddSpell])
+
   async function copyAllSpellLists() {
     if (!canCopySpellList) return
 
@@ -126,32 +147,46 @@ export function CharacterMagicTab({
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <div className="text-sm font-semibold text-textH">
-                Magias
-              </div>
+              <div className="text-sm font-semibold text-textH">Magias</div>
 
               <div className="mt-1 text-xs text-text">
                 Gerencie magias conhecidas, preparadas e slots.
               </div>
             </div>
 
-            <div className="grid gap-1 sm:justify-items-end">
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={!canCopySpellList}
-                onClick={copyAllSpellLists}
-              >
-                Copiar listas do grupo
-              </Button>
+            <div className="grid gap-2 sm:justify-items-end">
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={!canCopySpellList}
+                  onClick={copyAllSpellLists}
+                >
+                  Copiar listas do grupo
+                </Button>
+
+                {mode === "campaign" ? (
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    disabled={!canManuallyAddSpell}
+                    onClick={() => setAddingSpell((current) => !current)}
+                  >
+                    {addingSpell ? "Fechar adição" : "Adicionar magia"}
+                  </Button>
+                ) : null}
+              </div>
 
               {copyStatus === "copied" ? (
-                <span className="text-xs text-accent">
-                  Listas copiadas.
-                </span>
+                <span className="text-xs text-accent">Listas copiadas.</span>
               ) : copyStatus === "error" ? (
                 <span className="text-xs text-danger">
                   Não foi possível copiar.
+                </span>
+              ) : !canManuallyAddSpell && mode === "campaign" ? (
+                <span className="text-xs text-textMuted">
+                  Para adicionar magias manualmente, use seu próprio personagem
+                  com a sessão conectada.
                 </span>
               ) : (
                 <span className="text-xs text-textMuted">
@@ -167,10 +202,7 @@ export function CharacterMagicTab({
           updateCharacter={updateCharacter}
         />
 
-        <KiModule
-          character={character}
-          updateCharacter={updateCharacter}
-        />
+        <KiModule character={character} updateCharacter={updateCharacter} />
 
         {hasSorcererResources ? (
           <MetamagicModule
@@ -184,6 +216,17 @@ export function CharacterMagicTab({
           updateCharacter={updateCharacter}
         />
       </Card>
+
+      {addingSpell && canManuallyAddSpell ? (
+        <OnDemandCharacterSpellLibrary
+          character={character}
+          updateCharacter={updateCharacter}
+          sourcePolicy="session-manual"
+          allowCampaignGrant={sessionRuntime?.role === "MASTER"}
+          onCancel={() => setAddingSpell(false)}
+          onSpellAdded={() => setAddingSpell(false)}
+        />
+      ) : null}
 
       <KnownSpellsList
         character={character}
@@ -267,7 +310,9 @@ function getMissingDivineClassSpells(
   return missing
 }
 
-function maximumSpellLevelForClass(classEntry: CharacterClassInterface): number {
+function maximumSpellLevelForClass(
+  classEntry: CharacterClassInterface,
+): number {
   const level = classEntry.level
 
   switch (classEntry.className) {
