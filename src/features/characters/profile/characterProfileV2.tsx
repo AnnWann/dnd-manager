@@ -21,8 +21,15 @@ export function CharacterProfileTab({
   const runtime = useOptionalSessionRuntime()
 
   if (!runtime) {
+    const mutationsDisabled = workspace.mode === "user" && !workspace.isEditing
+
     return (
-      <ProfileContent character={character} updateCharacter={updateCharacter} />
+      <fieldset
+        disabled={mutationsDisabled}
+        className="m-0 min-w-0 border-0 p-0 disabled:opacity-75"
+      >
+        <ProfileContent character={character} updateCharacter={updateCharacter} />
+      </fieldset>
     )
   }
 
