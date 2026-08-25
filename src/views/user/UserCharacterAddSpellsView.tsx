@@ -1,4 +1,9 @@
-import { Navigate, useNavigate, useParams } from "react-router-dom"
+import {
+  Navigate,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom"
 
 import { OnDemandCharacterSpellLibrary } from "../../features/characters/magic/OnDemandCharacterSpellLibrary"
 import { useCharacterWorkspace } from "../../features/characters/workspace/CharacterWorkspaceContext"
@@ -6,13 +11,21 @@ import { UserCharacterWorkspace } from "../../features/characters/workspace/User
 
 export function UserCharacterAddSpellsView() {
   const { characterId } = useParams<{ characterId?: string }>()
+  const location = useLocation()
+  const requestedFromCharacterEdit = Boolean(
+    (location.state as { fromCharacterEdit?: boolean } | null)
+      ?.fromCharacterEdit,
+  )
 
   if (!characterId) {
     return <Navigate to="/not-found" replace />
   }
 
   return (
-    <UserCharacterWorkspace characterId={characterId}>
+    <UserCharacterWorkspace
+      characterId={characterId}
+      initialEditing={requestedFromCharacterEdit}
+    >
       <UserCharacterAddSpellsContent characterId={characterId} />
     </UserCharacterWorkspace>
   )
