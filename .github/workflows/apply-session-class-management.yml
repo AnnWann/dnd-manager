@@ -1,0 +1,263 @@
+name: Apply centralized class creation management
+
+on:
+  push:
+    branches:
+      - feature/session-server
+    paths:
+      - .github/workflows/apply-session-class-management.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/session-server
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply class management refactor
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          integrated_path = Path('src/features/characters/creation/IntegratedCharacterCreationWizard.tsx')
+          wrapper_path = Path('src/features/characters/creation/characterCreationWizard.tsx')
+          integrated = integrated_path.read_text()
+          wrapper = wrapper_path.read_text()
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 anchor, found {count}')
+              return text.replace(old, new, 1)
+
+          # Integrated creator: custom class is a first-class option in the centralized selector.
+          integrated = replace_once(
+              integrated,
+              'import type { CharacterCreationProgressionPlan } from "../../../models/characters/creation/CharacterCreation"\n',
+              'import type { CharacterCreationProgressionPlan } from "../../../models/characters/creation/CharacterCreation"\nimport { CUSTOM_CLASS_RUNTIME_ID } from "../../../models/characters/customClassConfig"\n',
+              'custom class runtime import',
+          )
+          integrated = replace_once(
+              integrated,
+              '''import {\n  MULTICLASS_REQUIREMENTS,\n  formatClassMulticlassRequirement,\n} from "../../../models/leveling/MulticlassRequirements"\n''',
+              '',
+              'multiclass requirement imports',
+          )
+          integrated = replace_once(
+              integrated,
+              ''']\n\nconst ATTRIBUTE_LABELS: Record<Attribute, string> = {''',
+              ''']\n\nconst AVAILABLE_CLASSES: ClassName[] = [...ALL_CLASSES, CUSTOM_CLASS_RUNTIME_ID]\n\nconst ATTRIBUTE_LABELS: Record<Attribute, string> = {''',
+              'available classes declaration',
+          )
+          integrated = replace_once(
+              integrated,
+              '''  createOwner: (ownerName: string) => Player\n  mode?: "modal" | "page"\n}''',
+              '''  createOwner: (ownerName: string) => Player\n  customClassName?: string\n  onConfigureCustomClass?: () => void\n  mode?: "modal" | "page"\n}''',
+              'integrated props',
+          )
+          integrated = replace_once(
+              integrated,
+              '''  onCreate,\n  createOwner,\n  mode = "modal",''',
+              '''  onCreate,\n  createOwner,\n  customClassName = "Classe personalizada",\n  onConfigureCustomClass,\n  mode = "modal",''',
+              'integrated props destructure',
+          )
+          integrated = replace_once(
+              integrated,
+              '''  const [classPlans, setClassPlans] = useState<ProgressionClassPlan[]>(\n    initialDraft?.classPlans?.length\n      ? initialDraft.classPlans\n      : [createPlan(firstClass.id, 1)],\n  )''',
+              '''  const [classPlans, setClassPlans] = useState<ProgressionClassPlan[]>(\n    initialDraft?.classPlans ?? [],\n  )''',
+              'class plan initial state',
+          )
+          integrated = replace_once(
+              integrated,
+              '''  const [classEquipmentItems, setClassEquipmentItems] = useState<Itemmable[]>(\n    initialDraft?.classEquipmentItems ?? defaultClassEquipment(firstClass.id),\n  )''',
+              '''  const [classEquipmentItems, setClassEquipmentItems] = useState<Itemmable[]>(\n    initialDraft?.classEquipmentItems ??\n      (initialDraft?.classPlans?.[0]\n        ? defaultClassEquipment(initialDraft.classPlans[0].className)\n        : []),\n  )''',
+              'class equipment initial state',
+          )
+          integrated = replace_once(
+              integrated,
+              '''  const primaryClass = classPlans[0]?.className ?? firstClass.id\n  const primaryPreset =''',
+              '''  const primaryClass = classPlans[0]?.className ?? firstClass.id\n  const primaryClassLabel =\n    String(primaryClass) === String(CUSTOM_CLASS_RUNTIME_ID)\n      ? customClassName.trim() || getClassNamePt(primaryClass)\n      : getClassNamePt(primaryClass)\n  const primaryPreset =''',
+              'primary class label',
+          )
+
+          old_class_mutators = '''  function changePrimaryClass(className: ClassName) {\n    setClassPlans([createPlan(className, totalLevel)])\n    setClassSkillSelections({})\n    setClassToolChoices({})\n    setCustomClassAbilities([])\n    setSpellSelections({})\n    setSelectedMetamagics([])\n    setClassEquipmentItems(defaultClassEquipment(className))\n    const preset = PHB_CLASS_PRESETS.find((entry) => entry.id === className)\n    if (preset) setAttributes({ ...preset.recommendedAttributes })\n  }\n\n  function addMulticlass(className: ClassName) {\n    if (classPlans.some((plan) => plan.className === className)) return\n    const donor = classPlans.find((plan) => plan.level > 1)\n    if (!donor) return\n    setClassPlans((current) => [\n      ...current.map((plan) =>\n        plan.className === donor.className\n          ? { ...plan, level: plan.level - 1 }\n          : plan,\n      ),\n      createPlan(className, 1),\n    ])\n  }\n\n  function removeMulticlass(className: ClassName) {\n    if (className === primaryClass) return\n    const removed = classPlans.find((plan) => plan.className === className)\n    if (!removed) return\n    setClassPlans((current) =>\n      current\n        .filter((plan) => plan.className !== className)\n        .map((plan, index) =>\n          index === 0 ? { ...plan, level: plan.level + removed.level } : plan,\n        ),\n    )\n    setClassSkillSelections((current) => ({ ...current, [className]: undefined }))\n    setClassToolChoices((current) => ({ ...current, [className]: undefined }))\n    setSpellSelections((current) => ({ ...current, [className]: undefined as never }))\n  }\n'''
+          new_class_mutators = '''  function addClass(className: ClassName) {\n    if (classPlans.some((plan) => plan.className === className)) return\n\n    if (!classPlans.length) {\n      setClassPlans([createPlan(className, totalLevel)])\n      setClassSkillSelections({})\n      setClassToolChoices({})\n      setCustomClassAbilities([])\n      setSpellSelections({})\n      setSelectedMetamagics([])\n      setClassEquipmentItems(defaultClassEquipment(className))\n      const preset = PHB_CLASS_PRESETS.find((entry) => entry.id === className)\n      if (preset) setAttributes({ ...preset.recommendedAttributes })\n      if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) {\n        onConfigureCustomClass?.()\n      }\n      return\n    }\n\n    const donor = classPlans.find((plan) => plan.level > 1)\n    if (!donor || classPlans.length >= totalLevel) return\n    setClassPlans((current) => [\n      ...current.map((plan) =>\n        plan.className === donor.className\n          ? { ...plan, level: plan.level - 1 }\n          : plan,\n      ),\n      createPlan(className, 1),\n    ])\n    if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) {\n      onConfigureCustomClass?.()\n    }\n  }\n\n  function removeClass(className: ClassName) {\n    const removedIndex = classPlans.findIndex(\n      (plan) => plan.className === className,\n    )\n    if (removedIndex < 0) return\n\n    const removed = classPlans[removedIndex]\n    const nextPlans = classPlans\n      .filter((plan) => plan.className !== className)\n      .map((plan, index) =>\n        index === 0 ? { ...plan, level: plan.level + removed.level } : plan,\n      )\n\n    setClassPlans(nextPlans)\n    setClassSkillSelections((current) => ({ ...current, [className]: undefined }))\n    setClassToolChoices((current) => ({ ...current, [className]: undefined }))\n    setSpellSelections((current) => ({ ...current, [className]: undefined as never }))\n    setCustomClassAbilities((current) =>\n      current.filter((entry) => entry.className !== className),\n    )\n    if (className === "sorcerer") setSelectedMetamagics([])\n\n    if (removedIndex === 0) {\n      const nextPrimary = nextPlans[0]?.className\n      setClassEquipmentItems(\n        nextPrimary ? defaultClassEquipment(nextPrimary) : [],\n      )\n      const preset = nextPrimary\n        ? PHB_CLASS_PRESETS.find((entry) => entry.id === nextPrimary)\n        : undefined\n      if (preset) setAttributes({ ...preset.recommendedAttributes })\n    }\n  }\n'''
+          integrated = replace_once(
+              integrated,
+              old_class_mutators,
+              new_class_mutators,
+              'class add/remove mutators',
+          )
+          integrated = replace_once(
+              integrated,
+              '''  function validateCreation(): string {\n    if (!name.trim()) return "Informe o nome do personagem."\n''',
+              '''  function validateCreation(): string {\n    if (!name.trim()) return "Informe o nome do personagem."\n    if (!classPlans.length) return "Adicione pelo menos uma classe."\n''',
+              'empty class validation',
+          )
+          requirements_validation = '''\n    if (classPlans.length > 1) {\n      for (const plan of classPlans) {\n        const requirement = MULTICLASS_REQUIREMENTS[plan.className]\n        const values = requirement.requirements.map(\n          ({ attribute, minimum }) =>\n            attributes[attribute] + (race.attributeBonus[attribute] ?? 0) >=\n            minimum,\n        )\n        const allowed =\n          requirement.mode === "all"\n            ? values.every(Boolean)\n            : values.some(Boolean)\n        if (!allowed) {\n          return `${getClassNamePt(plan.className)} exige ${formatClassMulticlassRequirement(plan.className)} para participar de uma multiclasse.`\n        }\n      }\n    }\n'''
+          integrated = replace_once(
+              integrated,
+              requirements_validation,
+              '',
+              'multiclass requirements validation',
+          )
+
+          old_classes_call = '''            <ClassesStep\n              totalLevel={totalLevel}\n              draftCharacter={draftCharacter}\n              classPlans={classPlans}\n              primaryClass={primaryClass}\n              blockedSkills={blockedClassSkills}\n              classSkillSelections={classSkillSelections}\n              classToolChoices={classToolChoices}\n              customAbilities={customClassAbilities}\n              spells={spells}\n              spellSelections={spellSelections}\n              spellQueries={spellQueries}\n              metamagics={metamagics}\n              selectedMetamagics={selectedMetamagics}\n              metamagicLimit={metamagicLimit}\n              onChangePrimaryClass={changePrimaryClass}\n              onAddMulticlass={addMulticlass}\n              onRemoveMulticlass={removeMulticlass}\n              onShiftLevel={shiftClassLevel}'''
+          new_classes_call = '''            <ClassesStep\n              totalLevel={totalLevel}\n              draftCharacter={draftCharacter}\n              classPlans={classPlans}\n              customClassName={customClassName}\n              blockedSkills={blockedClassSkills}\n              classSkillSelections={classSkillSelections}\n              classToolChoices={classToolChoices}\n              customAbilities={customClassAbilities}\n              spells={spells}\n              spellSelections={spellSelections}\n              spellQueries={spellQueries}\n              metamagics={metamagics}\n              selectedMetamagics={selectedMetamagics}\n              metamagicLimit={metamagicLimit}\n              onAddClass={addClass}\n              onRemoveClass={removeClass}\n              onConfigureCustomClass={onConfigureCustomClass}\n              onShiftLevel={shiftClassLevel}'''
+          integrated = replace_once(
+              integrated,
+              old_classes_call,
+              new_classes_call,
+              'classes step call',
+          )
+          integrated = replace_once(
+              integrated,
+              '''              title={`Equipamento de nível 1 de ${getClassNamePt(primaryClass)}`}\n              description="Somente a classe inicial concede equipamento. Níveis adicionais e multiclasse não duplicam o pacote inicial."\n              sourceLabel={`Classe inicial: ${getClassNamePt(primaryClass)}`}''',
+              '''              title={\n                classPlans.length\n                  ? `Equipamento de nível 1 de ${primaryClassLabel}`\n                  : "Equipamento da classe inicial"\n              }\n              description="Somente a classe inicial concede equipamento. Níveis adicionais e multiclasse não duplicam o pacote inicial."\n              sourceLabel={\n                classPlans.length\n                  ? `Classe inicial: ${primaryClassLabel}`\n                  : "Nenhuma classe inicial"\n              }''',
+              'initial class equipment labels',
+          )
+          integrated = replace_once(
+              integrated,
+              '''            <AttributesStep\n              attributes={attributes}\n              raceBonuses={race.attributeBonus}\n              classPlans={classPlans}\n''',
+              '''            <AttributesStep\n              attributes={attributes}\n              raceBonuses={race.attributeBonus}\n''',
+              'attributes step call',
+          )
+          integrated = replace_once(
+              integrated,
+              '''              totalLevel={totalLevel}\n              classPlans={classPlans}\n              classEquipmentItems={classEquipmentItems}''',
+              '''              totalLevel={totalLevel}\n              classPlans={classPlans}\n              customClassName={customClassName}\n              classEquipmentItems={classEquipmentItems}''',
+              'review custom class name',
+          )
+
+          classes_start = integrated.index('function ClassesStep({')
+          class_map_marker = '      {classPlans.map((plan, index) => {'
+          classes_map = integrated.index(class_map_marker, classes_start)
+          new_classes_top = '''function ClassesStep({\n  totalLevel,\n  draftCharacter,\n  classPlans,\n  customClassName,\n  blockedSkills,\n  classSkillSelections,\n  classToolChoices,\n  customAbilities,\n  spells,\n  spellSelections,\n  spellQueries,\n  metamagics,\n  selectedMetamagics,\n  metamagicLimit,\n  onAddClass,\n  onRemoveClass,\n  onConfigureCustomClass,\n  onShiftLevel,\n  onUpdatePlan,\n  onToggleChoice,\n  onSetCustomChoice,\n  onToggleSkill,\n  onToolChoiceChange,\n  onAddCustomAbility,\n  onEditCustomAbility,\n  onRemoveCustomAbility,\n  onSpellQueryChange,\n  onToggleSpell,\n  onTogglePrepared,\n  onToggleMetamagic,\n}: {\n  totalLevel: number\n  draftCharacter: CharacterTemplate\n  classPlans: ProgressionClassPlan[]\n  customClassName: string\n  blockedSkills: Set<Skill>\n  classSkillSelections: Partial<Record<ClassName, Skill[]>>\n  classToolChoices: Partial<Record<ClassName, string>>\n  customAbilities: ProgressionCustomAbility[]\n  spells: Spell[]\n  spellSelections: SpellSelections\n  spellQueries: Partial<Record<ClassName, string>>\n  metamagics: Array<{ id: MetamagicId; name: string; desc: string[] }>\n  selectedMetamagics: MetamagicId[]\n  metamagicLimit: number\n  onAddClass: (className: ClassName) => void\n  onRemoveClass: (className: ClassName) => void\n  onConfigureCustomClass?: () => void\n  onShiftLevel: (className: ClassName, delta: -1 | 1) => void\n  onUpdatePlan: (\n    className: ClassName,\n    updater: (plan: ProgressionClassPlan) => ProgressionClassPlan,\n  ) => void\n  onToggleChoice: (\n    className: ClassName,\n    choiceId: string,\n    count: number,\n    option: string,\n  ) => void\n  onSetCustomChoice: (\n    className: ClassName,\n    choiceId: string,\n    value: string,\n  ) => void\n  onToggleSkill: (className: ClassName, skill: Skill, limit: number) => void\n  onToolChoiceChange: (className: ClassName, value: string) => void\n  onAddCustomAbility: (className: ClassName, classLevel: number) => void\n  onEditCustomAbility: (entry: ProgressionCustomAbility) => void\n  onRemoveCustomAbility: (abilityId: string) => void\n  onSpellQueryChange: (className: ClassName, value: string) => void\n  onToggleSpell: (plan: ProgressionClassPlan, spell: Spell) => void\n  onTogglePrepared: (className: ClassName, spellIndex: string) => void\n  onToggleMetamagic: (id: MetamagicId) => void\n}) {\n  const [newClass, setNewClass] = useState<ClassName | "">("")\n  const [expandedClasses, setExpandedClasses] = useState<Set<ClassName>>(\n    () => new Set(),\n  )\n  const selectedAlreadyAdded =\n    newClass !== "" &&\n    classPlans.some((plan) => plan.className === newClass)\n  const canAddSelectedClass =\n    newClass !== "" &&\n    !selectedAlreadyAdded &&\n    (classPlans.length === 0 ||\n      (classPlans.length < totalLevel &&\n        classPlans.some((plan) => plan.level > 1)))\n\n  useEffect(() => {\n    if (selectedAlreadyAdded) setNewClass("")\n  }, [selectedAlreadyAdded])\n\n  return (\n    <div className="grid gap-5">\n      <StepSection title="Classes">\n        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">\n          <Field label="Classe">\n            <Select\n              value={newClass}\n              onChange={(event) =>\n                setNewClass(event.target.value as ClassName | "")\n              }\n            >\n              <option value="">Selecionar classe</option>\n              {AVAILABLE_CLASSES.map((className) => {\n                const added = classPlans.some(\n                  (plan) => plan.className === className,\n                )\n                const label =\n                  String(className) === String(CUSTOM_CLASS_RUNTIME_ID)\n                    ? customClassName.trim() || "Classe personalizada"\n                    : getClassNamePt(className)\n                return (\n                  <option key={className} value={className} disabled={added}>\n                    {label}\n                  </option>\n                )\n              })}\n            </Select>\n          </Field>\n          <Button\n            variant="secondary"\n            disabled={!canAddSelectedClass}\n            onClick={() => {\n              if (!newClass) return\n              onAddClass(newClass)\n              setNewClass("")\n            }}\n          >\n            <Plus className="h-4 w-4" />\n            Adicionar classe\n          </Button>\n        </div>\n      </StepSection>\n\n      {!classPlans.length ? (\n        <div className="rounded-xl border border-dashed border-border bg-bg p-4 text-center text-xs text-textMuted">\n          Nenhuma classe adicionada. A primeira classe adicionada será a classe inicial.\n        </div>\n      ) : null}\n\n'''
+          integrated = integrated[:classes_start] + new_classes_top + integrated[classes_map:]
+
+          integrated = replace_once(
+              integrated,
+              '''        const progression = getClassProgression(plan.className)\n        const subclassRequired = plan.level >= progression.subclassLevel''',
+              '''        const progression = getClassProgression(plan.className)\n        const isCustomClass =\n          String(plan.className) === String(CUSTOM_CLASS_RUNTIME_ID)\n        const displayLabel = isCustomClass\n          ? customClassName.trim() || progression.label\n          : progression.label\n        const subclassRequired = plan.level >= progression.subclassLevel''',
+              'class card display label',
+          )
+
+          old_card_header = '''            <div className="flex flex-wrap items-start justify-between gap-3">\n              <div>\n                <h2 className="font-semibold text-textH">\n                  {progression.label} {plan.level}\n                </h2>\n                <p className="mt-1 text-xs text-textMuted">\n                  {index === 0\n                    ? "Classe inicial: salvaguardas, proficiências completas e equipamento de nível 1."\n                    : `Multiclasse: exige ${formatClassMulticlassRequirement(plan.className)} e concede apenas proficiências de multiclasse.`}\n                </p>\n              </div>\n              <div className="flex flex-wrap gap-2">\n                <Button\n                  size="sm"\n                  variant="secondary"\n                  disabled={plan.level <= 1}\n                  onClick={() => onShiftLevel(plan.className, -1)}\n                >\n                  − nível\n                </Button>\n                <Button\n                  size="sm"\n                  variant="secondary"\n                  disabled={\n                    !classPlans.some(\n                      (entry) =>\n                        entry.className !== plan.className && entry.level > 1,\n                    )\n                  }\n                  onClick={() => onShiftLevel(plan.className, 1)}\n                >\n                  + nível\n                </Button>\n                {index > 0 ? (\n                  <Button\n                    size="sm"\n                    variant="ghost"\n                    onClick={() => onRemoveMulticlass(plan.className)}\n                  >\n                    Remover classe\n                  </Button>\n                ) : null}\n              </div>\n            </div>\n'''
+          new_card_header = '''            <div className="flex flex-wrap items-start justify-between gap-3">\n              <div>\n                <h2 className="font-semibold text-textH">\n                  {displayLabel} — nível {plan.level}\n                </h2>\n                <p className="mt-1 text-xs text-textMuted">\n                  {index === 0 ? "Classe inicial" : "Multiclasse"}\n                </p>\n              </div>\n              <div className="flex flex-wrap gap-2">\n                <Button\n                  size="sm"\n                  variant="secondary"\n                  disabled={plan.level <= 1 || classPlans.length <= 1}\n                  onClick={() => onShiftLevel(plan.className, -1)}\n                >\n                  − nível\n                </Button>\n                <Button\n                  size="sm"\n                  variant="secondary"\n                  disabled={\n                    !classPlans.some(\n                      (entry) =>\n                        entry.className !== plan.className && entry.level > 1,\n                    )\n                  }\n                  onClick={() => onShiftLevel(plan.className, 1)}\n                >\n                  + nível\n                </Button>\n                <Button\n                  size="sm"\n                  variant="secondary"\n                  onClick={() => {\n                    setExpandedClasses((current) => {\n                      const next = new Set(current)\n                      if (next.has(plan.className)) next.delete(plan.className)\n                      else next.add(plan.className)\n                      return next\n                    })\n                    if (isCustomClass) onConfigureCustomClass?.()\n                  }}\n                >\n                  {expandedClasses.has(plan.className)\n                    ? "Fechar configuração"\n                    : "Configurar"}\n                </Button>\n                <Button\n                  size="sm"\n                  variant="ghost"\n                  onClick={() => onRemoveClass(plan.className)}\n                >\n                  Remover\n                </Button>\n              </div>\n            </div>\n\n            {expandedClasses.has(plan.className) ? (\n              <>\n'''
+          integrated = replace_once(
+              integrated,
+              old_card_header,
+              new_card_header,
+              'class card header',
+          )
+          integrated = replace_once(
+              integrated,
+              '''            <FeatureList\n              title="Características personalizadas desta classe"\n              abilities={classCustomAbilities.map((entry) => entry.ability)}\n              onAdd={() => onAddCustomAbility(plan.className, plan.level)}\n              onEdit={(ability) => {\n                const entry = classCustomAbilities.find(\n                  (candidate) => candidate.ability.id === ability.id,\n                )\n                if (entry) onEditCustomAbility(entry)\n              }}\n              onRemove={onRemoveCustomAbility}\n            />\n          </section>''',
+              '''            <FeatureList\n              title="Características personalizadas desta classe"\n              abilities={classCustomAbilities.map((entry) => entry.ability)}\n              onAdd={() => onAddCustomAbility(plan.className, plan.level)}\n              onEdit={(ability) => {\n                const entry = classCustomAbilities.find(\n                  (candidate) => candidate.ability.id === ability.id,\n                )\n                if (entry) onEditCustomAbility(entry)\n              }}\n              onRemove={onRemoveCustomAbility}\n            />\n              </>\n            ) : null}\n          </section>''',
+              'class card configuration collapse',
+          )
+
+          # Requirements are not part of class selection/management UI.
+          integrated = replace_once(
+              integrated,
+              '''function AttributesStep({\n  attributes,\n  raceBonuses,\n  classPlans,\n  onChange,\n  onUseRecommended,\n}: {\n  attributes: Record<Attribute, number>\n  raceBonuses: Partial<Record<Attribute, number>>\n  classPlans: ProgressionClassPlan[]\n  onChange: (attribute: Attribute, value: number) => void\n  onUseRecommended: () => void\n}) {\n  return (\n    <StepSection\n      title="Atributos"\n      description="Os requisitos de multiclasse são verificados usando o valor final após os bônus raciais."\n    >''',
+              '''function AttributesStep({\n  attributes,\n  raceBonuses,\n  onChange,\n  onUseRecommended,\n}: {\n  attributes: Record<Attribute, number>\n  raceBonuses: Partial<Record<Attribute, number>>\n  onChange: (attribute: Attribute, value: number) => void\n  onUseRecommended: () => void\n}) {\n  return (\n    <StepSection\n      title="Atributos"\n      description="Defina os valores base. Os bônus raciais são somados ao valor final exibido."\n    >''',
+              'attributes step requirements copy',
+          )
+          attributes_requirements = '''\n      {classPlans.length > 1 ? (\n        <div className="mt-5 grid gap-2">\n          {classPlans.map((plan) => {\n            const requirement = MULTICLASS_REQUIREMENTS[plan.className]\n            const results = requirement.requirements.map(\n              ({ attribute, minimum }) =>\n                attributes[attribute] + (raceBonuses[attribute] ?? 0) >= minimum,\n            )\n            const passes =\n              requirement.mode === "all"\n                ? results.every(Boolean)\n                : results.some(Boolean)\n            return (\n              <div\n                key={plan.className}\n                className={\n                  passes\n                    ? "rounded-lg border border-accentBorder bg-accentBg p-3 text-xs text-textH"\n                    : "rounded-lg border border-danger bg-dangerBg p-3 text-xs text-danger"\n                }\n              >\n                {getClassNamePt(plan.className)}: exige {formatClassMulticlassRequirement(plan.className)} · {passes ? "atendido" : "não atendido"}\n              </div>\n            )\n          })}\n        </div>\n      ) : null}\n'''
+          integrated = replace_once(
+              integrated,
+              attributes_requirements,
+              '',
+              'attributes multiclass requirements panel',
+          )
+
+          integrated = replace_once(
+              integrated,
+              '''function ReviewStep({\n  name,\n  race,\n  background,\n  backgroundAbilities,\n  backgroundItems,\n  totalLevel,\n  classPlans,\n  classEquipmentItems,''',
+              '''function ReviewStep({\n  name,\n  race,\n  background,\n  backgroundAbilities,\n  backgroundItems,\n  totalLevel,\n  classPlans,\n  customClassName,\n  classEquipmentItems,''',
+              'review props destructure',
+          )
+          integrated = replace_once(
+              integrated,
+              '''  totalLevel: number\n  classPlans: ProgressionClassPlan[]\n  classEquipmentItems: Itemmable[]''',
+              '''  totalLevel: number\n  classPlans: ProgressionClassPlan[]\n  customClassName: string\n  classEquipmentItems: Itemmable[]''',
+              'review props type',
+          )
+          integrated = replace_once(
+              integrated,
+              '''                  `${getClassNamePt(plan.className)} ${plan.level}${plan.subclassId ? ` — ${getClassProgression(plan.className).subclasses.find((entry) => entry.id === plan.subclassId)?.name ?? plan.subclassId}` : ""}`,''',
+              '''                  `${String(plan.className) === String(CUSTOM_CLASS_RUNTIME_ID) ? customClassName.trim() || getClassNamePt(plan.className) : getClassNamePt(plan.className)} ${plan.level}${plan.subclassId ? ` — ${getClassProgression(plan.className).subclasses.find((entry) => entry.id === plan.subclassId)?.name ?? plan.subclassId}` : ""}`,''',
+              'review class label',
+          )
+          integrated = replace_once(
+              integrated,
+              '  if (!plans.length) return [createPlan("fighter", totalLevel)]',
+              '  if (!plans.length) return []',
+              'empty class redistribution',
+          )
+          integrated = replace_once(
+              integrated,
+              '''function defaultClassEquipment(className: ClassName): Itemmable[] {\n  const selections = getDefaultClassEquipmentSelections(className)''',
+              '''function defaultClassEquipment(className: ClassName): Itemmable[] {\n  if (String(className) === String(CUSTOM_CLASS_RUNTIME_ID)) return []\n  const selections = getDefaultClassEquipmentSelections(className)''',
+              'custom class starting equipment guard',
+          )
+
+          # Wrapper owns custom class configuration; pass it into the integrated class card.
+          wrapper = replace_once(
+              wrapper,
+              '''type WizardProps = Omit<\n  ComponentProps<typeof IntegratedCharacterCreationWizard>,\n  "draftId"\n>''',
+              '''type WizardProps = Omit<\n  ComponentProps<typeof IntegratedCharacterCreationWizard>,\n  "draftId" | "customClassName" | "onConfigureCustomClass"\n>''',
+              'wrapper prop omissions',
+          )
+          wrapper = replace_once(
+              wrapper,
+              'import { CharacterCreationCustomClassSelectionBridge } from "./bridges/CreationCustomClassSelectionBridge"\n',
+              '',
+              'legacy custom selector bridge import',
+          )
+          wrapper = replace_once(
+              wrapper,
+              '''        <IntegratedCharacterCreationWizard\n          {...props}\n          draftId={draftId}\n          onCreate={handleCreate}\n        />''',
+              '''        <IntegratedCharacterCreationWizard\n          {...props}\n          draftId={draftId}\n          customClassName={customClassConfig.name}\n          onConfigureCustomClass={() => setCustomClassDialogOpen(true)}\n          onCreate={handleCreate}\n        />''',
+              'integrated custom class props',
+          )
+          wrapper = replace_once(
+              wrapper,
+              '''\n      <CharacterCreationCustomClassSelectionBridge\n        open={props.open}\n        customName={customClassConfig.name}\n      />''',
+              '',
+              'legacy custom selector bridge render',
+          )
+
+          integrated_path.write_text(integrated)
+          wrapper_path.write_text(wrapper)
+          PY
+
+      - name: Install dependencies
+        run: npm install --package-lock=false --ignore-scripts
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit implementation
+        shell: bash
+        run: |
+          rm -f .github/workflows/apply-session-class-management.yml
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor: centralize character class management"
+          git push origin HEAD:feature/session-server
