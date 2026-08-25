@@ -313,7 +313,9 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
                 const equipmentAbility = isEquipmentAbility(ability)
                 const raceAbility = isRaceAbility(ability)
                 const conditionAbility = isConditionAbility(ability)
-                const grantedAbility = equipmentAbility || raceAbility || conditionAbility
+                const asiAbility = ability.source === "asi"
+                const grantedAbility =
+                  equipmentAbility || raceAbility || conditionAbility || asiAbility
                 const usageMax = ability.usage ? getAbilityUsageMax(displayCharacter, ability.usage) : undefined
                 const sourceLabel = getAbilitySourceLabel(
                   ability,
