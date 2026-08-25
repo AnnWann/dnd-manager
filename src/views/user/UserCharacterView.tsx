@@ -9,7 +9,7 @@ import {
 } from "../../features/characters/customSystems/CustomSystemsTabWithLibrary"
 import { CharacterEquipmentTab } from "../../features/characters/equipment/characterEquipment"
 import { CharacterInventoryTab } from "../../features/characters/inventory/characterInventory"
-import { CharacterMagicTab } from "../../features/characters/magic/characterMagicModule"
+import { UserCharacterMagicTab } from "../../features/characters/magic/userCharacterMagic"
 import { CharacterProficienciesTab } from "../../features/characters/proficiencies/characterProficiencies"
 import { CharacterProfileTab } from "../../features/characters/profile/characterProfileV2"
 import { CharacterRaceTab } from "../../features/characters/race/characterRaceV2"
@@ -204,10 +204,7 @@ export function UserCharacterView() {
         ) : null}
 
         {activeStaticTab === "spellsList" ? (
-          <CharacterMagicTab
-            character={character}
-            updateCharacter={updateCharacter}
-          />
+          <UserCharacterMagicTab character={character} />
         ) : null}
 
         {activeStaticTab === "equipment" ? (
