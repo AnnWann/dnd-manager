@@ -73,12 +73,22 @@ export function EquipmentItemCard<T extends Equipment>({
   onUpdate,
   children,
 }: Props<T>) {
-  const { moveEquippedItem } = useCharacterWorkspace()
+  const { moveEquippedItem, mode, isEditing } = useCharacterWorkspace()
   const [destinationOpen, setDestinationOpen] = useState(false)
+  const userMode = mode === "user"
+  const canChangeLoadout = !userMode || Boolean(isEditing)
 
   function handleMove(destination: EquippedItemDestination) {
     if (destination === "ground") return
     moveEquippedItem(characterId, reference, destination)
+  }
+
+  function handleUnequip() {
+    if (userMode) {
+      moveEquippedItem(characterId, reference, "inventory")
+      return
+    }
+    setDestinationOpen(true)
   }
 
   return (
@@ -112,14 +122,16 @@ export function EquipmentItemCard<T extends Equipment>({
             ) : null}
           </div>
 
-          <Button
-            className="w-full shrink-0 sm:w-auto"
-            size="sm"
-            variant="ghost"
-            onClick={() => setDestinationOpen(true)}
-          >
-            Desequipar
-          </Button>
+          {canChangeLoadout ? (
+            <Button
+              className="w-full shrink-0 sm:w-auto"
+              size="sm"
+              variant="ghost"
+              onClick={handleUnequip}
+            >
+              Desequipar
+            </Button>
+          ) : null}
         </div>
 
         {stats.length > 0 ? (
@@ -155,13 +167,15 @@ export function EquipmentItemCard<T extends Equipment>({
         </div>
       </article>
 
-      <EquippedItemDestinationDialog
-        open={destinationOpen}
-        item={item}
-        pocketCount={pocketCount}
-        onClose={() => setDestinationOpen(false)}
-        onMove={handleMove}
-      />
+      {!userMode ? (
+        <EquippedItemDestinationDialog
+          open={destinationOpen}
+          item={item}
+          pocketCount={pocketCount}
+          onClose={() => setDestinationOpen(false)}
+          onMove={handleMove}
+        />
+      ) : null}
     </>
   )
 }
