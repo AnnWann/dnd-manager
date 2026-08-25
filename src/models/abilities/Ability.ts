@@ -78,7 +78,13 @@ export interface Usage {
   cooldownRemaining?: number
 }
 
-export type AbilityCategory = 'general' | 'invocation' | 'feat' | 'channelDivinity' | 'martialArts'
+export type AbilityCategory =
+  | 'general'
+  | 'asi'
+  | 'invocation'
+  | 'feat'
+  | 'channelDivinity'
+  | 'martialArts'
 
 export type AbilityUsageResetKind = 'turn' | 'cooldown' | 'shortRest' | 'longRest' | 'limited' | 'spellSlot'
 
