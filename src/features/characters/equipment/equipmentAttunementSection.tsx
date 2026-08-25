@@ -4,6 +4,7 @@ import {
   getCharacterCarriedItems,
   toggleInventoryItemAttunement,
 } from "../../../models/characters/characterInventory"
+import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 
 type Props = {
   character: CharacterTemplate
@@ -17,6 +18,9 @@ export function EquipmentAttunementSection({
   character,
   updateCharacter,
 }: Props) {
+  const { mode, isEditing } = useCharacterWorkspace()
+  const userMode = mode === "user"
+  const canEditAttunement = !userMode || Boolean(isEditing)
   const attunedItems = getCharacterCarriedItems(character)
     .filter((item) => item.attuned === true)
     .slice(0, 3)
@@ -53,18 +57,20 @@ export function EquipmentAttunementSection({
                 <div className="mt-1 text-xs text-textMuted">
                   Item mágico sintonizado
                 </div>
-                <Button
-                  className="mt-3"
-                  size="sm"
-                  variant="secondary"
-                  onClick={() =>
-                    updateCharacter(character.get("id"), (current) =>
-                      toggleInventoryItemAttunement(current, item.id),
-                    )
-                  }
-                >
-                  Desfazer sintonia
-                </Button>
+                {canEditAttunement ? (
+                  <Button
+                    className="mt-3"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      updateCharacter(character.get("id"), (current) =>
+                        toggleInventoryItemAttunement(current, item.id),
+                      )
+                    }
+                  >
+                    Desfazer sintonia
+                  </Button>
+                ) : null}
               </>
             ) : (
               <div className="mt-2 text-sm text-textMuted">Espaço vazio</div>
