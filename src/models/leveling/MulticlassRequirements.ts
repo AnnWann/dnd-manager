@@ -17,6 +17,7 @@ export type MulticlassRequirementResult = {
   }>
 }
 
+const CUSTOM_CLASS_RUNTIME_ID = "__custom__"
 const EMPTY_REQUIREMENT: MulticlassRequirementGroup = {
   mode: "all",
   requirements: [],
@@ -27,16 +28,22 @@ const CLASS_NAMES: ClassName[] = [
   "monk", "paladin", "ranger", "rogue", "sorcerer", "warlock", "wizard",
 ]
 
-/** No multiclass prerequisite table is bundled; users consult their reference. */
-export const MULTICLASS_REQUIREMENTS = Object.fromEntries(
-  CLASS_NAMES.map((className) => [className, EMPTY_REQUIREMENT]),
+/** No multiclass prerequisite table is bundled; users configure/consult their own source. */
+export const MULTICLASS_REQUIREMENTS = Object.assign(
+  Object.fromEntries(
+    CLASS_NAMES.map((className) => [className, EMPTY_REQUIREMENT]),
+  ),
+  { [CUSTOM_CLASS_RUNTIME_ID]: EMPTY_REQUIREMENT },
 ) as unknown as Record<ClassName, MulticlassRequirementGroup>
 
 export function getMulticlassRequirement(
   className: ClassName,
 ): MulticlassRequirementGroup {
-  if (String(className) === "__custom__") return EMPTY_REQUIREMENT
-  return MULTICLASS_REQUIREMENTS[className]
+  return (
+    (MULTICLASS_REQUIREMENTS as unknown as Record<string, MulticlassRequirementGroup>)[
+      String(className)
+    ] ?? EMPTY_REQUIREMENT
+  )
 }
 
 export function checkMulticlassRequirements(
@@ -52,6 +59,7 @@ export function checkMulticlassRequirements(
   }
 }
 
+/** Requirements are intentionally not bundled into selector labels. */
 export function formatClassMulticlassRequirement(_className: ClassName): string {
-  return "consulte sua referência"
+  return ""
 }
