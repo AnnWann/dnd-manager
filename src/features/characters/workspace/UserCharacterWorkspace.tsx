@@ -20,16 +20,9 @@ import {
   LOCAL_AUTH_BYPASS,
 } from "../../../auth/local-auth"
 import { AppLoadingScreen } from "../../../components/AppLoadingScreen"
-import {
-  applyCharacterDomains,
-  getChangedCharacterDomains,
-  splitCharacterIntoDomains,
-} from "../../../lib/characterDomains"
+import { Button } from "../../../components/ui/Button"
+import { applyCharacterDomains } from "../../../lib/characterDomains"
 import type { CharacterDomainName } from "../../../lib/relationalApi"
-import {
-  UserCharacterDomainPersistence,
-  type UserCharacterPersistenceConflict,
-} from "../../../lib/userCharacterDomainPersistence"
 import { moveEquippedItemToCharacterStorage } from "../../../models/characters/characterEquippedItemMovement"
 import { stowHandOccupant as stowCharacterHandOccupant } from "../../../models/characters/characterHands"
 import { takeLongRest } from "../../../models/characters/characterRest"
@@ -40,6 +33,7 @@ import {
 import { ensureCharacterAcquisitionMetadata } from "../../../models/characters/characterAcquisitionMetadata"
 import type { Player } from "../../../models/player/Player"
 import { normalizeStandardItemsInValue } from "../../items/standardItemCompendium"
+import { useUserData } from "../../user/UserDataProvider"
 import {
   readUserCharacterCacheSnapshot,
   removeUserCharacterCache,
@@ -49,24 +43,6 @@ import {
   CharacterWorkspaceProvider,
   type CharacterWorkspaceValue,
 } from "./CharacterWorkspaceContext"
-
-type CharacterRuntimeHandlers = {
-  onConflict: (conflict: UserCharacterPersistenceConflict) => void
-  onError: (error: unknown) => void
-}
-
-type CharacterRuntimeEntry = {
-  persistence: UserCharacterDomainPersistence | null
-  reconcilePromise: Promise<UserCharacterSummary> | null
-  reconciled: boolean
-}
-
-const characterRuntimeEntries = new Map<string, CharacterRuntimeEntry>()
-const characterRuntimeHandlers = new Map<string, CharacterRuntimeHandlers>()
-
-function characterRuntimeKey(userId: string, characterId: string): string {
-  return `${userId}:${characterId}`
-}
 
 export function UserCharacterWorkspace({
   characterId,
@@ -79,179 +55,81 @@ export function UserCharacterWorkspace({
   const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
   const user = session?.user ?? localUser
   const userId = user?.id ?? ""
-  const runtimeKey = characterRuntimeKey(userId, characterId)
+  const { setCharacters } = useUserData()
 
-  const [character, setCharacter] =
-    useState<CharacterTemplate | null>(null)
+  const [character, setCharacter] = useState<CharacterTemplate | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [persistenceError, setPersistenceError] = useState("")
+
   const characterRef = useRef<CharacterTemplate | null>(null)
   const summaryRef = useRef<UserCharacterSummary | null>(null)
-  const persistenceRef = useRef<UserCharacterDomainPersistence | null>(null)
-  const localMutationVersionRef = useRef(0)
+  const savedJsonRef = useRef<CharacterTemplateProps | null>(null)
 
-  const createPersistence = useCallback((
-    summary: UserCharacterSummary,
-    key: string,
-  ) => {
-    if (LOCAL_AUTH_BYPASS) return null
-
-    return new UserCharacterDomainPersistence(
-      summary.id,
-      summary.revision ?? 1,
-      summary.domains ?? [],
-      (conflict) => {
-        characterRuntimeHandlers.get(key)?.onConflict(conflict)
-      },
-      (error) => {
-        characterRuntimeHandlers.get(key)?.onError(error)
-      },
-    )
+  const installSavedCharacter = useCallback((summary: UserCharacterSummary) => {
+    const hydrated = hydrateWorkspaceCharacter(summary)
+    summaryRef.current = summary
+    savedJsonRef.current = hydrated.toJSON()
+    characterRef.current = hydrated
+    setCharacter(hydrated)
+    setNotFound(false)
+    setIsEditing(false)
+    setPersistenceError("")
   }, [])
 
   useEffect(() => {
     if (!userId) return
 
     let active = true
+    setLoading(true)
+    setNotFound(false)
+    setIsEditing(false)
+    setIsSaving(false)
+    setPersistenceError("")
     characterRef.current = null
     summaryRef.current = null
-    persistenceRef.current = null
-    localMutationVersionRef.current = 0
-    setNotFound(false)
-    setPersistenceError("")
-
-    const handlers: CharacterRuntimeHandlers = {
-      onConflict: (conflict) => {
-        if (!active) return
-        setPersistenceError(
-          `Conflito de edição em ${formatDomainName(conflict.domain)}. Recarregue a ficha antes de continuar editando esse campo.`,
-        )
-      },
-      onError: (error) => {
-        if (!active) return
-        setPersistenceError(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível persistir uma alteração da ficha.",
-        )
-      },
-    }
-    characterRuntimeHandlers.set(runtimeKey, handlers)
+    savedJsonRef.current = null
 
     const cachedSnapshot = readUserCharacterCacheSnapshot<UserCharacterSummary>(
       userId,
       characterId,
     )
     const cached = cachedSnapshot?.data
-    let hasUsableCache = false
 
-    if (cached?.id === characterId) {
+    if (cached?.id === characterId && cachedSnapshot?.fresh) {
       try {
-        const cachedCharacter = hydrateWorkspaceCharacter(cached)
-        summaryRef.current = cached
-        characterRef.current = cachedCharacter
-        setCharacter(cachedCharacter)
+        installSavedCharacter(cached)
         setLoading(false)
-        hasUsableCache = true
+        return () => {
+          active = false
+        }
       } catch {
         removeUserCharacterCache(userId, characterId)
       }
     }
 
-    if (!hasUsableCache) {
-      setCharacter(null)
-      setLoading(true)
-    }
-
-    let runtime = characterRuntimeEntries.get(runtimeKey)
-    if (!runtime) {
-      runtime = {
-        persistence: null,
-        reconcilePromise: null,
-        reconciled: false,
-      }
-      characterRuntimeEntries.set(runtimeKey, runtime)
-    }
-
-    if (
-      hasUsableCache &&
-      cachedSnapshot?.fresh &&
-      cached &&
-      characterRef.current &&
-      !runtime.reconciled
-    ) {
-      const persistence = createPersistence(cached, runtimeKey)
-      runtime.persistence = persistence
-      runtime.reconciled = true
-      persistenceRef.current = persistence
-      if (persistence) {
-        void persistence.bootstrapMissingDomains(characterRef.current.toJSON())
-      }
-    }
-
-    if (runtime.reconciled) {
-      persistenceRef.current = runtime.persistence
-      if (!hasUsableCache) {
-        runtime.reconciled = false
-      } else {
-        return () => {
-          active = false
-          if (characterRuntimeHandlers.get(runtimeKey) === handlers) {
-            characterRuntimeHandlers.delete(runtimeKey)
-          }
-          characterRef.current = null
-          summaryRef.current = null
-          persistenceRef.current = null
-        }
-      }
-    }
-
-    const mutationVersionAtRequest = localMutationVersionRef.current
-
-    if (!runtime.reconcilePromise) {
-      runtime.reconcilePromise = (async () => {
-        const result = await getMyCharacter(characterId)
-        const normalizedCharacter = hydrateWorkspaceCharacter(result)
-        const persistence = createPersistence(result, runtimeKey)
-
-        if (persistence) {
-          await persistence.bootstrapMissingDomains(normalizedCharacter.toJSON())
-        }
-
-        writeUserCharacterCache(userId, characterId, result, { synced: true })
-        const currentRuntime = characterRuntimeEntries.get(runtimeKey)
-        if (currentRuntime) {
-          currentRuntime.persistence = persistence
-          currentRuntime.reconciled = true
-        }
-        return result
-      })().finally(() => {
-        const currentRuntime = characterRuntimeEntries.get(runtimeKey)
-        if (currentRuntime) currentRuntime.reconcilePromise = null
-      })
-    }
-
-    void runtime.reconcilePromise
-      .then((result) => {
+    void getMyCharacter(characterId)
+      .then((fresh) => {
         if (!active) return
-        if (localMutationVersionRef.current !== mutationVersionAtRequest) {
-          persistenceRef.current = characterRuntimeEntries.get(runtimeKey)?.persistence ?? null
-          return
-        }
-
-        const normalizedCharacter = hydrateWorkspaceCharacter(result)
-        summaryRef.current = result
-        persistenceRef.current = characterRuntimeEntries.get(runtimeKey)?.persistence ?? null
-        characterRef.current = normalizedCharacter
-        setCharacter(normalizedCharacter)
-        setNotFound(false)
+        writeUserCharacterCache(userId, characterId, fresh, { synced: true })
+        installSavedCharacter(fresh)
       })
       .catch(() => {
         if (!active) return
-        const currentRuntime = characterRuntimeEntries.get(runtimeKey)
-        if (currentRuntime) currentRuntime.reconciled = false
-        if (!hasUsableCache) setNotFound(true)
+        if (cached?.id === characterId) {
+          try {
+            installSavedCharacter(cached)
+            setPersistenceError(
+              "Não foi possível confirmar a versão mais recente da ficha. Recarregue antes de editar.",
+            )
+            return
+          } catch {
+            removeUserCharacterCache(userId, characterId)
+          }
+        }
+        setNotFound(true)
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -259,87 +137,91 @@ export function UserCharacterWorkspace({
 
     return () => {
       active = false
-      if (characterRuntimeHandlers.get(runtimeKey) === handlers) {
-        characterRuntimeHandlers.delete(runtimeKey)
-      }
       characterRef.current = null
       summaryRef.current = null
-      persistenceRef.current = null
+      savedJsonRef.current = null
     }
-  }, [characterId, createPersistence, runtimeKey, userId])
+  }, [characterId, installSavedCharacter, userId])
 
-  const cacheCharacter = useCallback((
-    previous: CharacterTemplate,
-    updated: CharacterTemplate,
-  ) => {
-    if (!userId) return
-    const currentSummary = summaryRef.current
-    if (!currentSummary) return
+  const dirty = useMemo(() => {
+    if (!isEditing || !character || !savedJsonRef.current) return false
+    return !characterJsonEqual(savedJsonRef.current, character.toJSON())
+  }, [character, isEditing])
 
-    const previousJson = previous.toJSON()
-    const updatedJson = updated.toJSON()
-    const changedDomains = getChangedCharacterDomains(previousJson, updatedJson)
-    const nextDomainPayloads = splitCharacterIntoDomains(updatedJson)
-    const existingDomains = currentSummary.domains ?? []
-    const domainsByName = new Map(existingDomains.map((domain) => [domain.domain, domain]))
+  useEffect(() => {
+    if (!dirty) return
 
-    for (const domain of changedDomains) {
-      const existing = domainsByName.get(domain)
-      domainsByName.set(domain, {
-        domain,
-        payload: nextDomainPayloads[domain],
-        version: existing?.version ?? 0,
-        updatedBy: existing?.updatedBy ?? null,
-        updatedAt: new Date().toISOString(),
-      })
+    const preventUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ""
     }
+    window.addEventListener("beforeunload", preventUnload)
+    return () => window.removeEventListener("beforeunload", preventUnload)
+  }, [dirty])
 
-    const nextSummary: UserCharacterSummary = {
-      ...currentSummary,
-      name: updated.get("name"),
-      visibility: toApiVisibility(updated.get("visibility")),
-      data: updatedJson as unknown as Record<string, unknown>,
-      domains: Array.from(domainsByName.values()),
-      updatedAt: new Date().toISOString(),
-    }
+  const beginEditing = useCallback(() => {
+    if (!characterRef.current || isSaving) return
+    setPersistenceError("")
+    setIsEditing(true)
+  }, [isSaving])
 
-    summaryRef.current = nextSummary
-    writeUserCharacterCache(userId, updated.get("id"), nextSummary)
-  }, [userId])
+  const cancelEditing = useCallback(() => {
+    if (isSaving) return
+    const saved = savedJsonRef.current
+    if (!saved) return
 
-  const persistCharacter = useCallback(
-    (
-      previous: CharacterTemplate,
-      updated: CharacterTemplate,
-    ) => {
-      cacheCharacter(previous, updated)
+    const restored = CharacterTemplate.fromJSON(saved)
+    characterRef.current = restored
+    setCharacter(restored)
+    setPersistenceError("")
+    setIsEditing(false)
+  }, [isSaving])
 
-      if (LOCAL_AUTH_BYPASS) {
-        const data = normalizeStandardItemsInValue(
-          updated.toJSON(),
-        ) as Record<string, unknown>
+  const saveCharacter = useCallback(async () => {
+    const current = characterRef.current
+    const summary = summaryRef.current
+    if (!current || !summary || !dirty || isSaving) return
 
-        void updateMyCharacter(
-          updated.get("id"),
-          data,
-          {
-            name: updated.get("name"),
-            visibility: toApiVisibility(updated.get("visibility")),
-          },
-        ).then((fresh) => {
-          summaryRef.current = fresh
-          if (userId) writeUserCharacterCache(userId, fresh.id, fresh)
-        })
-        return
-      }
+    setIsSaving(true)
+    setPersistenceError("")
 
-      persistenceRef.current?.persistChange(
-        previous.toJSON(),
-        updated.toJSON(),
+    try {
+      const data = normalizeStandardItemsInValue(
+        current.toJSON(),
+      ) as Record<string, unknown>
+
+      const fresh = await updateMyCharacter(
+        current.get("id"),
+        data,
+        {
+          name: current.get("name"),
+          visibility: toApiVisibility(current.get("visibility")),
+          expectedVersion: summary.revision,
+        },
       )
-    },
-    [cacheCharacter, userId],
-  )
+
+      const saved = hydrateWorkspaceCharacter(fresh)
+      summaryRef.current = fresh
+      savedJsonRef.current = saved.toJSON()
+      characterRef.current = saved
+      setCharacter(saved)
+      writeUserCharacterCache(userId, fresh.id, fresh, { synced: true })
+      setCharacters((currentCharacters) =>
+        currentCharacters.map((entry) =>
+          entry.id === fresh.id ? fresh : entry,
+        ),
+      )
+      setIsEditing(false)
+    } catch (error) {
+      setPersistenceError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar a ficha.",
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }, [dirty, isSaving, setCharacters, userId])
 
   const applyCharacterUpdate = useCallback(
     (
@@ -347,6 +229,8 @@ export function UserCharacterWorkspace({
       updater: (current: CharacterTemplate) => CharacterTemplate,
       declaredDomain?: CharacterDomainName,
     ) => {
+      if (!isEditing || isSaving) return
+
       const current = characterRef.current
       if (!current || current.get("id") !== targetId) return
 
@@ -363,27 +247,18 @@ export function UserCharacterWorkspace({
       })
 
       if (declaredDomain) {
-        const changedDomains = getChangedCharacterDomains(
-          current.toJSON(),
-          withMetadata.toJSON(),
-        )
-        const unexpected = changedDomains.filter(
-          (domain) => domain !== declaredDomain,
-        )
-        if (unexpected.length) {
-          console.warn(
-            `Updater de ${declaredDomain} alterou domínios fora do ownership: ${unexpected.join(", ")}.`,
-          )
-        }
+        // Domain ownership remains useful as a development invariant even
+        // though user-context persistence is now batched into one Save.
+        const before = current.toJSON()
+        const after = withMetadata.toJSON()
+        if (characterJsonEqual(before, after)) return
       }
 
-      localMutationVersionRef.current += 1
-      setPersistenceError("")
       characterRef.current = withMetadata
       setCharacter(withMetadata)
-      persistCharacter(current, withMetadata)
+      setPersistenceError("")
     },
-    [persistCharacter],
+    [isEditing, isSaving],
   )
 
   const updateCharacter = useCallback(
@@ -404,24 +279,25 @@ export function UserCharacterWorkspace({
   )
 
   const deleteCharacter = useCallback((targetId: string) => {
+    if (!isEditing || isSaving) return
     const current = characterRef.current
     if (!current || current.get("id") !== targetId) return
 
-    characterRef.current = null
-    summaryRef.current = null
-    persistenceRef.current = null
-    setCharacter(null)
-    if (userId) {
-      removeUserCharacterCache(userId, targetId)
-      const key = characterRuntimeKey(userId, targetId)
-      characterRuntimeEntries.delete(key)
-      characterRuntimeHandlers.delete(key)
-    }
-
-    void deleteMyCharacter(targetId).catch(() => {
-      setNotFound(false)
-    })
-  }, [userId])
+    void deleteMyCharacter(targetId)
+      .then(() => {
+        characterRef.current = null
+        summaryRef.current = null
+        savedJsonRef.current = null
+        setCharacter(null)
+        removeUserCharacterCache(userId, targetId)
+        setCharacters((currentCharacters) =>
+          currentCharacters.filter((entry) => entry.id !== targetId),
+        )
+      })
+      .catch(() => {
+        setPersistenceError("Não foi possível excluir o personagem.")
+      })
+  }, [isEditing, isSaving, setCharacters, userId])
 
   const currentOwner = useMemo<Player | undefined>(() => {
     if (!user) return undefined
@@ -474,6 +350,7 @@ export function UserCharacterWorkspace({
 
   const value: CharacterWorkspaceValue = {
     mode: "user",
+    isEditing,
     characters: [character],
     activeCharacter: character,
     selectedCharacterId: character.get("id"),
@@ -506,7 +383,7 @@ export function UserCharacterWorkspace({
     },
     canUseGroundInventory: false,
     canAssignOwners: false,
-    canEditCharacterType: true,
+    canEditCharacterType: isEditing,
     owners: [fallbackOwner],
     currentOwner: fallbackOwner,
     knownPlayerKeys: [fallbackOwner.id],
@@ -516,12 +393,67 @@ export function UserCharacterWorkspace({
 
   return (
     <CharacterWorkspaceProvider value={value}>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
+        <div>
+          <div className="text-sm font-semibold text-textH">
+            {isEditing ? "Modo de edição" : "Modo de visualização"}
+          </div>
+          <div className="mt-0.5 text-xs text-textMuted">
+            {isEditing
+              ? "As alterações ficam locais até você salvar."
+              : "A ficha está protegida contra alterações acidentais."}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {isEditing ? (
+            <>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={isSaving}
+                onClick={cancelEditing}
+              >
+                Cancelar
+              </Button>
+              {dirty ? (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  loading={isSaving}
+                  onClick={() => void saveCharacter()}
+                >
+                  Salvar alterações
+                </Button>
+              ) : null}
+            </>
+          ) : (
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={beginEditing}
+            >
+              Editar ficha
+            </Button>
+          )}
+        </div>
+      </div>
+
       {persistenceError ? (
         <div className="mb-3 rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger">
           {persistenceError}
         </div>
       ) : null}
-      {children}
+
+      <div
+        className={
+          isEditing
+            ? undefined
+            : "[&_input]:pointer-events-none [&_select]:pointer-events-none [&_textarea]:pointer-events-none"
+        }
+      >
+        {children}
+      </div>
     </CharacterWorkspaceProvider>
   )
 }
@@ -559,18 +491,9 @@ function fromApiVisibility(
   return visibility.toLowerCase() as "private" | "party" | "master"
 }
 
-function formatDomainName(domain: string): string {
-  const labels: Record<string, string> = {
-    root: "identidade",
-    sheet: "dados da ficha",
-    vitals: "vida e condições",
-    profile: "perfil",
-    abilities: "características",
-    magic: "magia",
-    inventory: "inventário",
-    equipment: "equipamento",
-    progression: "progressão",
-    notes: "notas",
-  }
-  return labels[domain] ?? domain
+function characterJsonEqual(
+  left: CharacterTemplateProps,
+  right: CharacterTemplateProps,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
 }
