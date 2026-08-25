@@ -50,6 +50,7 @@ type ConditionAbility = Ability & {
 type AbilitySourceFilter =
   | "all"
   | "character"
+  | "asi"
   | "race"
   | "condition"
   | "weapon"
@@ -119,6 +120,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
         const matchesSource = (() => {
           switch (sourceFilter) {
             case "character": return !equipmentAbility && !raceAbility && !conditionAbility
+            case "asi": return ability.category === "asi" || ability.source === "asi"
             case "race": return raceAbility
             case "condition": return conditionAbility
             case "weapon": return isWeaponAbility
@@ -266,7 +268,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
             <div>
               <div className="text-sm font-semibold text-textH">Habilidades</div>
               <div className="mt-1 text-xs text-text">
-                Filtre habilidades próprias, temporárias, raciais, de armas, equipamentos, evocações, talentos, Canalizar Divindade e habilidades marciais.
+                Filtre habilidades próprias, ASIs, temporárias, raciais, de armas, equipamentos, evocações, talentos, Canalizar Divindade e habilidades marciais.
               </div>
             </div>
             <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>
@@ -283,6 +285,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
             <Select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as AbilitySourceFilter)}>
               <option value="all">Todas as origens</option>
               <option value="character">Habilidades próprias</option>
+              <option value="asi">ASI</option>
               <option value="condition">Habilidades temporárias</option>
               <option value="race">Habilidades raciais</option>
               <option value="weapon">Habilidades de armas</option>
@@ -454,10 +457,12 @@ function getAbilitySourceLabel(
     return `Condição: ${ability.sourceConditionName}`
   }
   if (raceAbility) return "Raça"
+  if (ability.source === "asi") return "ASI"
   return getCategoryLabel(ability)
 }
 
 function getCategoryLabel(ability: Ability): string | undefined {
+  if (ability.category === "asi") return "ASI"
   if (ability.category === "invocation") return "Evocação"
   if (ability.category === "feat") return "Talento"
   if (ability.category === "channelDivinity") return "Canalizar Divindade"
