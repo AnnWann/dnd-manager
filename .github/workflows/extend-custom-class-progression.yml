@@ -23,8 +23,8 @@ jobs:
         with:
           node-version: 22
 
-      - name: Apply implementation patch
-        run: git apply --whitespace=fix .github/patches/custom-class-progression.patch
+      - name: Apply implementation
+        run: python .github/patches/apply_custom_class_progression.py
 
       - name: Install dependencies
         run: npm install --package-lock=false --ignore-scripts
@@ -43,6 +43,7 @@ jobs:
         run: |
           rm -f .github/workflows/extend-custom-class-progression.yml
           rm -f .github/patches/custom-class-progression.patch
+          rm -f .github/patches/apply_custom_class_progression.py
           if git diff --quiet; then
             exit 0
           fi
