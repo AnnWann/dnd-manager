@@ -25,6 +25,28 @@ export type SessionMagicClientMessage = {
   operation: SessionMagicOperation;
 };
 
+const SPELL_SOURCE_TYPES = new Set(["class", "feat", "ability", "race", "equipment"]);
+const ATTRIBUTES = new Set(["str", "dex", "con", "int", "wis", "cha"]);
+const ACQUISITION_SOURCE_TYPES = new Set([
+  "characterCreation",
+  "class",
+  "race",
+  "background",
+  "feat",
+  "ability",
+  "equipment",
+  "campaign",
+  "manual",
+  "import",
+]);
+const ACQUISITION_REASONS = new Set([
+  "character-creation",
+  "level-up",
+  "manual",
+  "import",
+  "campaign-grant",
+]);
+
 export function parseMagicClientMessage(raw: string): SessionMagicClientMessage | null {
   let parsed: unknown;
   try { parsed = JSON.parse(raw); } catch { return null; }
@@ -36,7 +58,7 @@ function isMagicOperation(value: unknown): value is SessionMagicOperation {
   if (!isRecord(value) || typeof value.type !== "string" || typeof value.characterId !== "string" || !value.characterId.trim()) return false;
   switch (value.type) {
     case "character.spell.prepare": return nonEmpty(value.spellIndex) && typeof value.prepared === "boolean";
-    case "character.spell.add": return isRecord(value.spellEntry);
+    case "character.spell.add": return isKnownSpellEntry(value.spellEntry);
     case "character.spell.remove": return nonEmpty(value.spellIndex);
     case "character.spell.castingDescription.add": return nonEmpty(value.spellIndex);
     case "character.spell.castingDescription.update": return nonEmpty(value.spellIndex) && integer(value.descriptionIndex) && typeof value.description === "string";
@@ -59,7 +81,38 @@ function isMagicOperation(value: unknown): value is SessionMagicOperation {
   }
 }
 
+function isKnownSpellEntry(value: unknown): value is Record<string, unknown> {
+  if (!isRecord(value)) return false;
+
+  const spells = value.spells;
+  const source = value.source;
+  if (!isRecord(spells) || !nonEmpty(spells.id) || typeof spells.prepared !== "boolean") return false;
+  if (!isRecord(source)) return false;
+  if (!nonEmpty(source.type) || !SPELL_SOURCE_TYPES.has(source.type)) return false;
+  if (!nonEmpty(source.name) || !nonEmpty(source.sourceId)) return false;
+  if (!nonEmpty(source.attribute) || !ATTRIBUTES.has(source.attribute)) return false;
+  if (source.extendedList !== undefined && typeof source.extendedList !== "boolean") return false;
+
+  if (value.acquisition !== undefined && !isAcquisition(value.acquisition)) return false;
+  return true;
+}
+
+function isAcquisition(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (!nonEmpty(value.eventId) || !nonEmpty(value.addedAt)) return false;
+  if (!integer(value.characterLevel)) return false;
+  if (!nonEmpty(value.sourceType) || !ACQUISITION_SOURCE_TYPES.has(value.sourceType)) return false;
+  if (!nonEmpty(value.reason) || !ACQUISITION_REASONS.has(value.reason)) return false;
+
+  if (value.className !== undefined && !nonEmpty(value.className)) return false;
+  if (value.classLevel !== undefined && !integer(value.classLevel)) return false;
+  if (value.sourceId !== undefined && !nonEmpty(value.sourceId)) return false;
+  if (value.sourceName !== undefined && !nonEmpty(value.sourceName)) return false;
+  if (value.notes !== undefined && typeof value.notes !== "string") return false;
+  return true;
+}
+
 function nonEmpty(value: unknown): value is string { return typeof value === "string" && value.trim().length > 0; }
 function integer(value: unknown): value is number { return typeof value === "number" && Number.isInteger(value) && value >= 0; }
 function slotLevel(value: unknown): value is number { return integer(value) && value >= 1 && value <= 9; }
-function isRecord(value: unknown): value is Record<string, any> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
+function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === "object" && !Array.isArray(value); }
