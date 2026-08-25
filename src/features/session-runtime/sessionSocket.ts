@@ -14,6 +14,7 @@ import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
 import type { SessionProficiencyClientMessage } from "./proficiencySessionProtocol"
 import type { SessionRaceClientMessage } from "./raceSessionProtocol"
 import type { SessionProfileClientMessage } from "./profileSessionProtocol"
+import type { SessionCustomClassClientMessage } from "./customClassSessionProtocol"
 import type { SessionCustomSystemClientMessage } from "./customSystemSessionProtocol"
 import {
   parseCharacterLifecycleServerMessage,
@@ -92,6 +93,7 @@ export class SessionSocket {
     | SessionProficiencyClientMessage
     | SessionRaceClientMessage
     | SessionProfileClientMessage
+    | SessionCustomClassClientMessage
     | SessionCharacterLifecycleClientMessage
     | SessionRuntimeConfigClientMessage
     | SessionCustomSystemClientMessage
