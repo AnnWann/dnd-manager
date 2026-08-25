@@ -11,7 +11,7 @@ export function UserCharacterLevelUpView() {
   if (!characterId) return <Navigate to="/not-found" replace />
 
   return (
-    <UserCharacterWorkspace characterId={characterId} initialEditing>
+    <UserCharacterWorkspace characterId={characterId}>
       <LevelUpContent />
     </UserCharacterWorkspace>
   )
@@ -19,12 +19,26 @@ export function UserCharacterLevelUpView() {
 
 function LevelUpContent() {
   const navigate = useNavigate()
-  const { activeCharacter, updateCharacter, saveCharacter } = useCharacterWorkspace()
+  const {
+    activeCharacter,
+    isEditing,
+    updateCharacter,
+    saveCharacter,
+  } = useCharacterWorkspace()
 
   if (!activeCharacter) return null
 
   const characterId = activeCharacter.get("id")
   const returnPath = `/user/characters/${encodeURIComponent(characterId)}/sheet`
+
+  if (!isEditing) {
+    return (
+      <div className="rounded-xl border border-border bg-bg p-6 text-sm text-textMuted">
+        Ative o modo de edição acima para subir o personagem de nível.
+      </div>
+    )
+  }
+
   const preparedCharacter = prepareCharacterForProgression(activeCharacter)
 
   return (
