@@ -5,7 +5,7 @@ import {
 
 import { CharacterSpellRuntime } from "../../features/characters/workspace/CharacterSpellRuntime"
 import { UserCharacterWorkspace } from "../../features/characters/workspace/UserCharacterWorkspace"
-import { CharacterView } from "../CharacterView"
+import { UserCharacterView } from "./UserCharacterView"
 
 export function UserCharacterDetailView() {
   const { characterId } =
@@ -27,7 +27,7 @@ export function UserCharacterDetailView() {
       characterId={characterId}
     >
       <CharacterSpellRuntime>
-        <CharacterView />
+        <UserCharacterView />
       </CharacterSpellRuntime>
     </UserCharacterWorkspace>
   )
