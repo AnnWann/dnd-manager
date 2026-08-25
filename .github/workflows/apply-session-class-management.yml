@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: feature/session-server
-          fetch-depth: 2
+          fetch-depth: 3
 
       - uses: actions/setup-node@v4
         with:
@@ -26,17 +26,23 @@ jobs:
       - name: Apply class management refactor
         shell: bash
         run: |
-          git show HEAD^:.github/workflows/apply-session-class-management.yml > /tmp/previous-workflow.yml
+          git show HEAD^^:.github/workflows/apply-session-class-management.yml > /tmp/patch-workflow.yml
           awk '
             /python - <<'"'"'PY'"'"'/ { capture=1; next }
             capture && /^[[:space:]]*PY[[:space:]]*$/ { exit }
             capture { sub(/^          /, ""); print }
-          ' /tmp/previous-workflow.yml > /tmp/apply-class-management.py
+          ' /tmp/patch-workflow.yml > /tmp/apply-class-management.py
           test -s /tmp/apply-class-management.py
           python /tmp/apply-class-management.py
 
-      - name: Install dependencies and generate Prisma client
-        run: npm install --package-lock=false
+      - name: Install dependencies
+        run: npm install --package-lock=false --ignore-scripts
+
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+        run: npx prisma generate
 
       - name: Verify character creation changes
         shell: bash
