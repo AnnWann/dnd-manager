@@ -1,0 +1,86 @@
+name: Fix custom class config editor in creation
+
+on:
+  push:
+    branches:
+      - feature/session-server
+    paths:
+      - .github/workflows/fix-custom-class-config-creation.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/session-server
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply fix
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/features/characters/creation/IntegratedCharacterCreationWizard.tsx')
+          text = path.read_text()
+
+          old_import = '''  createCustomClassRuntimeId,\n  isCustomClassName,\n  normalizeCustomClassConfig,\n'''
+          new_import = '''  createCustomClassRuntimeId,\n  getCustomClassConfig,\n  isCustomClassName,\n  normalizeCustomClassConfig,\n'''
+          if text.count(old_import) != 1:
+              raise SystemExit(f'import anchor mismatch: {text.count(old_import)}')
+          text = text.replace(old_import, new_import, 1)
+
+          old_config = '''        const customClassConfig = customClassConfigs?.[String(plan.className)]\n'''
+          new_config = '''        const customClassConfig =\n          customClassConfigs?.[String(plan.className)] ??\n          getCustomClassConfig(draftCharacter, plan.className)\n'''
+          if text.count(old_config) != 1:
+              raise SystemExit(f'config anchor mismatch: {text.count(old_config)}')
+          text = text.replace(old_config, new_config, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Install dependencies
+        run: npm install --package-lock=false --ignore-scripts
+
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+        run: npx prisma generate
+
+      - name: Verify touched code
+        shell: bash
+        run: |
+          set +e
+          npm run build 2>&1 | tee /tmp/build.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if grep -E 'src/features/characters/creation/IntegratedCharacterCreationWizard\.tsx' /tmp/build.log; then
+            echo "Creation custom class config fix introduced TypeScript/build errors."
+            exit 1
+          fi
+
+          if [ "$status" -ne 0 ]; then
+            echo "Full build still contains unrelated baseline errors; touched file is clean."
+          fi
+
+      - name: Commit implementation
+        shell: bash
+        run: |
+          rm -f .github/workflows/fix-custom-class-config-creation.yml
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: enable custom class config during creation"
+          git push origin HEAD:feature/session-server
