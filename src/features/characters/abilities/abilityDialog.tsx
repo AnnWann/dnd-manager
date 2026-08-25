@@ -284,6 +284,7 @@ export function AbilityDialog({
                     }}
                   >
                     <option value="general">Habilidade</option>
+                    <option value="asi">ASI</option>
                     <option value="invocation">Evocação</option>
                     <option value="feat">Talento</option>
                     <option value="channelDivinity">Canalizar Divindade</option>
