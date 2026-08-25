@@ -12,7 +12,7 @@ export function UserCharacterAddSpellsView() {
   }
 
   return (
-    <UserCharacterWorkspace characterId={characterId}>
+    <UserCharacterWorkspace characterId={characterId} initialEditing>
       <UserCharacterAddSpellsContent characterId={characterId} />
     </UserCharacterWorkspace>
   )
@@ -24,7 +24,7 @@ function UserCharacterAddSpellsContent({
   characterId: string
 }) {
   const navigate = useNavigate()
-  const { characters, updateCharacter } = useCharacterWorkspace()
+  const { characters, updateCharacter, saveCharacter } = useCharacterWorkspace()
   const character = characters.find(
     (entry) => entry.get("id") === characterId,
   )
@@ -40,7 +40,11 @@ function UserCharacterAddSpellsContent({
         character={character}
         updateCharacter={updateCharacter}
         onCancel={() => navigate(spellListPath)}
-        onSpellAdded={() => navigate(spellListPath)}
+        onSpellAdded={() => {
+          void saveCharacter?.().then((saved) => {
+            if (saved) navigate(spellListPath)
+          })
+        }}
       />
     </div>
   )
