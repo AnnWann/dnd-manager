@@ -2,7 +2,7 @@ import { ArrowLeft, Settings2, TrendingUp } from "lucide-react"
 import { useEffect, useMemo } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 
-import { CharacterAbilitiesTab } from "../../features/characters/abilities/characterAbilities"
+import { UserCharacterAbilitiesTab } from "../../features/characters/abilities/userCharacterAbilities"
 import {
   CustomSystemsTabWithLibrary,
   isActiveSystemState,
@@ -197,7 +197,7 @@ export function UserCharacterView() {
         ) : null}
 
         {activeStaticTab === "abilities" ? (
-          <CharacterAbilitiesTab
+          <UserCharacterAbilitiesTab
             character={character}
             updateCharacter={updateCharacter}
           />
