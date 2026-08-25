@@ -20,6 +20,7 @@ import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
 import type { SessionProficiencyOperation } from "./proficiencySessionProtocol"
 import type { SessionRaceOperation } from "./raceSessionProtocol"
 import type { SessionProfileOperation } from "./profileSessionProtocol"
+import type { SessionCustomClassOperation } from "./customClassSessionProtocol"
 import type {
   SessionCharacterLifecycleOperation,
   SessionCharacterLifecycleState,
@@ -101,6 +102,7 @@ export type SessionRuntimeContextValue = {
   dispatchProficiencyOperation: (operation: SessionProficiencyOperation) => boolean
   dispatchRaceOperation: (operation: SessionRaceOperation) => boolean
   dispatchProfileOperation: (operation: SessionProfileOperation) => boolean
+  dispatchCustomClassOperation: (operation: SessionCustomClassOperation) => boolean
   dispatchCharacterLifecycleOperation: (operation: SessionCharacterLifecycleOperation) => boolean
   undoLog: (logId: string) => boolean
 }
@@ -325,6 +327,8 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     socketRef.current?.send({ type: "session.race.operation", operation }) ?? false, [])
   const dispatchProfileOperation = useCallback((operation: SessionProfileOperation) =>
     socketRef.current?.send({ type: "session.profile.operation", operation }) ?? false, [])
+  const dispatchCustomClassOperation = useCallback((operation: SessionCustomClassOperation) =>
+    socketRef.current?.send({ type: "session.custom-class.operation", operation }) ?? false, [])
   const dispatchCharacterLifecycleOperation = useCallback((operation: SessionCharacterLifecycleOperation) =>
     socketRef.current?.send({ type: "session.character.operation", operation }) ?? false, [])
 
@@ -359,12 +363,12 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     dispatchSheetOperation, dispatchHpOperation, dispatchConditionOperation,
     dispatchConcentrationOperation, dispatchAbilityOperation, dispatchMagicOperation,
     dispatchEquipmentOperation, dispatchInventoryOperation, dispatchMissionOperation, dispatchInitiativeOperation, dispatchProficiencyOperation,
-    dispatchRaceOperation, dispatchProfileOperation, dispatchCharacterLifecycleOperation, undoLog,
+    dispatchRaceOperation, dispatchProfileOperation, dispatchCustomClassOperation, dispatchCharacterLifecycleOperation, undoLog,
   }), [
     abilitiesByCharacterId, clientId, conditionsByCharacterId,
     dispatchAbilityOperation, dispatchCharacterLifecycleOperation, dispatchConditionOperation, dispatchConcentrationOperation,
-    dispatchEquipmentOperation, dispatchHpOperation, dispatchInitiativeOperation, dispatchInventoryOperation, dispatchMagicOperation, dispatchMissionOperation,
-    dispatchProficiencyOperation, dispatchProfileOperation, dispatchRaceOperation, dispatchSheetOperation,
+    dispatchCustomClassOperation, dispatchEquipmentOperation, dispatchHpOperation, dispatchInitiativeOperation, dispatchInventoryOperation,
+    dispatchMagicOperation, dispatchMissionOperation, dispatchProficiencyOperation, dispatchProfileOperation, dispatchRaceOperation, dispatchSheetOperation,
     hpByCharacterId, hpLog, initializeAbilities, initializeConditions, initializeHp, initializeInitiative, initializeInventory, initializeMissions,
     initiativeState, inventoryState, lastHeartbeatAckAt, missionState, presence, publishRuntimeConfig, role, runtimeConfigSnapshot,
     sessionCharactersById, sessionId, status, undoLog,
