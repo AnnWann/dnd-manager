@@ -3,6 +3,7 @@ import { useEffect, useMemo } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 
 import { UserCharacterAbilitiesTab } from "../../features/characters/abilities/userCharacterAbilities"
+import { CustomClassConfigurationTab } from "../../features/characters/characterSheet/classes/CustomClassConfigurationTab"
 import {
   CustomSystemsTabWithLibrary,
   isActiveSystemState,
@@ -25,6 +26,7 @@ import {
 import { useCharacterWorkspace } from "../../features/characters/workspace/CharacterWorkspaceContext"
 import { getCustomSystemPlacement } from "../../features/customSystems/CustomSystemPlacementEditor"
 import { useCustomSystemDefinitions } from "../../lib/customSystems/CustomSystemRegistry"
+import { hasCustomClass } from "../../models/characters/customClassConfig"
 import type {
   CustomSystemDefinition,
   CustomSystemExistingCharacterTab,
@@ -63,6 +65,7 @@ export function UserCharacterView() {
   const character = characterId
     ? characters.find((entry) => entry.get("id") === characterId)
     : undefined
+  const characterHasCustomClass = Boolean(character && hasCustomClass(character))
 
   const activeCustomSystemDefinitions = useMemo(() => {
     if (!character) return []
@@ -76,16 +79,17 @@ export function UserCharacterView() {
   }, [character, customSystemDefinitions])
 
   const hiddenStandardTabs = useMemo(
-    () => new Set(character?.get("sheet").hiddenCharacterTabs ?? []),
+    () => new Set<string>(character?.get("sheet").hiddenCharacterTabs ?? []),
     [character],
   )
 
   const visibleStandardTabs = useMemo(
     () =>
-      CHARACTER_TABS.filter(
-        (entry) => entry.key === "sheet" || !hiddenStandardTabs.has(entry.key),
-      ),
-    [hiddenStandardTabs],
+      CHARACTER_TABS.filter((entry) => {
+        if (entry.key === "custom-class" && !characterHasCustomClass) return false
+        return entry.key === "sheet" || !hiddenStandardTabs.has(entry.key)
+      }),
+    [characterHasCustomClass, hiddenStandardTabs],
   )
 
   const characterTabs = useMemo<CharacterViewTabDefinition[]>(
@@ -376,6 +380,15 @@ export function UserCharacterView() {
               updateCharacter={updateCharacter}
             />
           </fieldset>
+        ) : null}
+
+        {activeTab === "custom-class" && characterHasCustomClass ? (
+          <CustomClassConfigurationTab
+            character={character}
+            updateCharacter={updateCharacter}
+            readOnly={!isEditing}
+            applyLabel="Aplicar ao rascunho"
+          />
         ) : null}
 
         {customTabSystemId ? (
