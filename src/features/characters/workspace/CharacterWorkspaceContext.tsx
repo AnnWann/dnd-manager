@@ -34,6 +34,11 @@ export type CharacterWorkspaceValue = {
    * runtime instead.
    */
   isEditing?: boolean
+  /**
+   * User workspaces batch draft mutations and expose one explicit save. Other
+   * workspaces omit this because they persist through their own runtime.
+   */
+  saveCharacter?: () => Promise<boolean>
 
   characters: CharacterTemplate[]
   activeCharacter?: CharacterTemplate
