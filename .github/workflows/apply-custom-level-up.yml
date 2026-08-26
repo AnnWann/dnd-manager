@@ -14,6 +14,9 @@ permissions:
 jobs:
   apply:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dnd_manager
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/dnd_manager
     steps:
       - name: Checkout branch
         uses: actions/checkout@v4
@@ -31,7 +34,7 @@ jobs:
         run: python scripts/apply-custom-level-up-patch.py
 
       - name: Install dependencies
-        run: npm install --package-lock=false --no-audit --no-fund
+        run: npm install --ignore-scripts --package-lock=false --no-audit --no-fund
 
       - name: Generate Prisma client
         run: npx prisma generate
