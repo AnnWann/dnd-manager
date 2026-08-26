@@ -21,13 +21,13 @@
   ],
 
   "vars": {
-    "SESSION_AUTH_MODE": "development"
+    "SESSION_AUTH_MODE": "token"
   },
 
   "env": {
     "qa": {
       "vars": {
-        "SESSION_AUTH_MODE": "development"
+        "SESSION_AUTH_MODE": "token"
       },
       "durable_objects": {
         "bindings": [
