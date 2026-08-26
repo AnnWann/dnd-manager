@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --var SESSION_AUTH_MODE:development",
     "deploy": "wrangler deploy",
     "generate-types": "wrangler types",
     "typecheck": "npm run generate-types && tsc --noEmit"
