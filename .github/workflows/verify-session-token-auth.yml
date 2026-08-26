@@ -5,6 +5,7 @@ on:
     branches:
       - feature/session-server
     paths:
+      - .github/workflows/verify-session-token-auth.yml
       - .github/session-token-auth-verify-trigger
 
 permissions:
