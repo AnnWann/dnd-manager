@@ -62,12 +62,12 @@ export async function verifySessionConnectionToken(
 
   try {
     const expectedSignature = decodeBase64Url(parts[1])
-    const key = await importHmacKey(secret, ["verify"])
+    const key = await importHmacKey(secret, "verify")
     const validSignature = await crypto.subtle.verify(
       "HMAC",
       key,
-      expectedSignature,
-      encoder.encode(parts[0]),
+      toArrayBuffer(expectedSignature),
+      toArrayBuffer(encoder.encode(parts[0])),
     )
     if (!validSignature) return null
 
@@ -83,29 +83,32 @@ async function signPayload(
   payload: string,
   secret: string,
 ): Promise<Uint8Array> {
-  const key = await importHmacKey(secret, ["sign"])
+  const key = await importHmacKey(secret, "sign")
   const signature = await crypto.subtle.sign(
     "HMAC",
     key,
-    encoder.encode(payload),
+    toArrayBuffer(encoder.encode(payload)),
   )
   return new Uint8Array(signature)
 }
 
-function importHmacKey(
-  secret: string,
-  usages: KeyUsage[],
-): Promise<CryptoKey> {
+async function importHmacKey(secret: string, usage: "sign" | "verify") {
   return crypto.subtle.importKey(
     "raw",
-    encoder.encode(secret),
+    toArrayBuffer(encoder.encode(secret)),
     {
       name: "HMAC",
       hash: "SHA-256",
     },
     false,
-    usages,
+    [usage],
   )
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength)
+  copy.set(bytes)
+  return copy.buffer
 }
 
 function encodeBase64Url(bytes: Uint8Array): string {
@@ -151,13 +154,21 @@ function isValidClaims(
   if (!isIdentifier(value.sessionId) || !isIdentifier(value.userId)) return false
   if (!isIdentifier(value.clientId)) return false
   if (value.role !== "MASTER" && value.role !== "PLAYER") return false
-  if (!Number.isSafeInteger(value.issuedAt) || !Number.isSafeInteger(value.expiresAt)) {
+
+  const issuedAt = value.issuedAt
+  const expiresAt = value.expiresAt
+  if (
+    typeof issuedAt !== "number" ||
+    typeof expiresAt !== "number" ||
+    !Number.isSafeInteger(issuedAt) ||
+    !Number.isSafeInteger(expiresAt)
+  ) {
     return false
   }
-  if (value.issuedAt > now + CLOCK_SKEW_MS) return false
-  if (value.expiresAt <= now) return false
-  if (value.expiresAt <= value.issuedAt) return false
-  if (value.expiresAt - value.issuedAt > MAX_TOKEN_TTL_MS) return false
+  if (issuedAt > now + CLOCK_SKEW_MS) return false
+  if (expiresAt <= now) return false
+  if (expiresAt <= issuedAt) return false
+  if (expiresAt - issuedAt > MAX_TOKEN_TTL_MS) return false
   return true
 }
 
