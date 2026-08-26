@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { Button } from "../../../components/ui/Button"
@@ -85,6 +85,9 @@ export function CharacterCreationAbilityScoreRules({
   draftId,
   onChange,
 }: Props) {
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+
   const initialDraft = useMemo(
     () =>
       readCharacterCreationDraftSection<AbilityScoreDraft>(
@@ -287,9 +290,12 @@ export function CharacterCreationAbilityScoreRules({
   }, [attributeInputs, attributes])
 
   useEffect(() => {
-    onChange({ attributes, racialBonuses })
-    return () => onChange(null)
-  }, [attributes, onChange, racialBonuses])
+    onChangeRef.current({ attributes, racialBonuses })
+  }, [attributes, racialBonuses])
+
+  useEffect(() => {
+    return () => onChangeRef.current(null)
+  }, [])
 
   return (
     <>
