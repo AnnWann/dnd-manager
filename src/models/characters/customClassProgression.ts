@@ -1,9 +1,9 @@
 import { getClassProgression } from "../../data/classProgression"
 import type { Ability } from "../abilities/Ability"
+import type { Spell } from "../magic/spells/Spell"
 import { createCharacterAcquisition } from "./CharacterAcquisition"
 import type { CharacterTemplate } from "./CharacterTemplate"
 import {
-  CUSTOM_CLASS_RUNTIME_ID,
   createCustomClassEntry,
   getCustomClassConfig,
   getCustomClassConfigFromEntry,
@@ -55,40 +55,32 @@ export function applyCustomClassCreationConfiguration(
 
 export function applyCustomClassLevelUp(
   character: CharacterTemplate,
+  className: ClassName,
   config: CustomClassRuntimeConfig,
   hpGain: number,
   abilities: Ability[] = [],
+  eventId = crypto.randomUUID(),
+  addedAt = new Date().toISOString(),
 ): CharacterTemplate {
   const normalized = normalizeCustomClassConfig(config)
   const classes = [...(character.get("sheet").classes ?? [])]
-  const customIndex = classes.findIndex(isCustomClassEntry)
+  const customIndex = getCustomClassIndex(character, className)
   const previousCustomLevel = customIndex >= 0 ? classes[customIndex].level : 0
   const targetLevel = Math.min(20, previousCustomLevel + 1)
   if (previousCustomLevel >= 20) return character
 
   if (customIndex >= 0) {
-    classes[customIndex] = {
-      ...classes[customIndex],
-      level: targetLevel as ClassLevel,
-    }
+    classes[customIndex] = { ...classes[customIndex], level: targetLevel as ClassLevel }
   } else {
-    classes.push({
-      ...createCustomClassEntry(normalized.name),
-      level: 1,
-    })
+    classes.push({ ...createCustomClassEntry(normalized.name, className), level: 1 })
   }
 
   let next = character.withSheet("classes", classes)
-  next = updateCustomClassConfig(next, normalized)
+  next = updateCustomClassConfig(next, normalized, className)
   next = addCustomLevelHp(next, normalized, hpGain)
 
   if (abilities.length) {
-    const eventId = crypto.randomUUID()
-    const addedAt = new Date().toISOString()
-    const totalLevel = (next.get("sheet").classes ?? []).reduce(
-      (sum, entry) => sum + entry.level,
-      0,
-    )
+    const totalLevel = (next.get("sheet").classes ?? []).reduce((sum, entry) => sum + entry.level, 0)
     const stamped = abilities.map((ability) => ({
       ...ability,
       source: "class" as const,
@@ -97,10 +89,10 @@ export function applyCustomClassLevelUp(
         addedAt,
         reason: "level-up",
         characterLevel: totalLevel,
-        className: CUSTOM_CLASS_RUNTIME_ID,
+        className,
         classLevel: targetLevel,
         sourceType: "class",
-        sourceId: String(CUSTOM_CLASS_RUNTIME_ID),
+        sourceId: String(className),
         sourceName: normalized.name,
       }),
     }))
@@ -114,25 +106,91 @@ export function applyCustomClassLevelUp(
   return next.syncMagicWithClasses()
 }
 
+export function applyCustomClassSpellSelection(
+  character: CharacterTemplate,
+  className: ClassName,
+  config: CustomClassRuntimeConfig,
+  targetLevel: number,
+  spellIndexes: string[],
+  preparedSpellIndexes: string[],
+  spells: Spell[],
+  eventId = crypto.randomUUID(),
+  addedAt = new Date().toISOString(),
+): CharacterTemplate {
+  const normalized = normalizeCustomClassConfig(config)
+  const ensured = character.ensureMagic()
+  const magic = ensured.get("magic")
+  if (!magic) return ensured
+
+  const byIndex = new Map(spells.map((spell) => [spell.index, spell]))
+  const matchesClass = (entry: typeof magic.spells.knownSpells[number]) =>
+    entry.source.type === "class" &&
+    String(entry.source.sourceId ?? entry.source.name) === String(className)
+  const existingForClass = new Map(
+    magic.spells.knownSpells.filter(matchesClass).map((entry) => [entry.spells.id, entry]),
+  )
+  const preparedOnly = normalized.knownSpellMode === "prepared-only"
+  const retained = magic.spells.knownSpells.filter((entry) => {
+    if (!matchesClass(entry)) return true
+    if (!preparedOnly) return false
+    const spell = byIndex.get(entry.spells.id)
+    return !spell || spell.slotLevel > 0
+  })
+  const totalLevel = (ensured.get("sheet").classes ?? []).reduce((sum, entry) => sum + entry.level, 0)
+  const acquisition = createCharacterAcquisition({
+    eventId,
+    addedAt,
+    reason: "level-up",
+    characterLevel: totalLevel,
+    className,
+    classLevel: targetLevel,
+    sourceType: "class",
+    sourceId: String(className),
+    sourceName: normalized.name,
+  })
+  const additions = [] as typeof magic.spells.knownSpells
+
+  for (const spellIndex of Array.from(new Set(spellIndexes))) {
+    const spell = byIndex.get(spellIndex)
+    if (!spell) continue
+    if (preparedOnly && spell.slotLevel > 0) continue
+    const existing = existingForClass.get(spellIndex)
+    additions.push({
+      source: {
+        ...(existing?.source ?? {}),
+        type: "class",
+        name: normalized.name,
+        sourceId: String(className),
+        attribute: normalized.castingAttribute,
+        extendedList: existing?.source.extendedList ?? false,
+      },
+      spells: {
+        ...existing?.spells,
+        id: spellIndex,
+        prepared: preparedOnly && spell.slotLevel === 0
+          ? true
+          : existing?.spells.prepared ?? preparedSpellIndexes.includes(spellIndex),
+      },
+      acquisition: existing?.acquisition ?? acquisition,
+    })
+  }
+
+  const byKey = new Map<string, typeof magic.spells.knownSpells[number]>()
+  for (const entry of [...retained, ...additions]) {
+    byKey.set(`${entry.source.type}:${entry.source.sourceId ?? entry.source.name}:${entry.spells.id}`, entry)
+  }
+
+  return ensured.with("magic", {
+    ...magic,
+    spells: { ...magic.spells, knownSpells: Array.from(byKey.values()) },
+  }).syncMagicWithClasses()
+}
+
 export function getCustomLevelUpConfig(
   character: CharacterTemplate,
+  className?: ClassName,
 ): CustomClassRuntimeConfig {
-  return normalizeCustomClassConfig(
-    getCustomClassConfig(character) ?? {
-      name: "Classe personalizada",
-      hitDie: "d8",
-      savingThrows: [],
-      skillChoices: 2,
-      casterType: "none",
-      castingAttribute: "int",
-      knownSpellMode: "limited",
-      knownAtLevel1: 0,
-      knownPerLevel: 0,
-      slotProgressionMode: "formula",
-      spellSlotProgression: {},
-      additionalSlotPools: [],
-    },
-  )
+  return normalizeCustomClassConfig(getCustomClassConfig(character, className))
 }
 
 function recalculateCreationHp(

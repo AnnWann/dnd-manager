@@ -7,6 +7,7 @@ import { Input } from "../../../components/ui/Input"
 import { CLASS_NAMES, MAGIC_SCHOOLS_MAP } from "../../../contexts/consts"
 import { useMagicContext } from "../../../contexts/magicContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { getCustomClassConfig, isCustomClassName } from "../../../models/characters/customClassConfig"
 import type { Spell } from "../../../models/magic/spells/Spell"
 import type { ClassName } from "../../../models/sheet/Class"
 import {
@@ -70,10 +71,38 @@ export function LevelUpSpellSelectionModal({
     Math.max(1, previousLevel),
     subclassId,
   )
-  const canUseModal =
-    kind === "cantrip"
+  const customClass = isCustomClassName(className)
+  const customConfig = customClass ? getCustomClassConfig(character, className) : undefined
+  const classLabel = customClass
+    ? customConfig?.name?.trim() || "Classe personalizada"
+    : CLASS_NAMES[className]
+  const previousCantrips = previousLevel <= 0 ? 0 : previousRule.maxCantrips
+  const previousLeveled = previousLevel <= 0 ? 0 : previousRule.maxLeveledSpells
+  const searchableMaxSpellLevel = Math.max(
+    Number(rule.maxSpellLevel),
+    previousLevel <= 0 ? 0 : Number(previousRule.maxSpellLevel),
+  )
+  const canUseModal = customClass
+    ? kind === "cantrip"
+      ? rule.maxCantrips > 0 || previousCantrips > 0
+      : customConfig?.knownSpellMode !== "prepared-only" &&
+        (rule.maxLeveledSpells > 0 || previousLeveled > 0)
+    : kind === "cantrip"
       ? rule.mode !== "none" && rule.maxCantrips > 0
       : rule.mode === "limited-known" || rule.mode === "spellbook"
+  const currentClassSpellIndexes = useMemo(
+    () =>
+      new Set(
+        (character.get("magic")?.spells.knownSpells ?? [])
+          .filter(
+            (entry) =>
+              entry.source.type === "class" &&
+              resolveSourceClass(entry.source.sourceId, entry.source.name) === className,
+          )
+          .map((entry) => entry.spells.id),
+      ),
+    [character, className],
+  )
 
   useEffect(() => {
     if (!open || !canUseModal) return
@@ -91,10 +120,10 @@ export function LevelUpSpellSelectionModal({
 
     void Promise.all([
       queryOfficialSpellDetails({
-        className,
-        maxLevel: Number(rule.maxSpellLevel),
+        className: customClass ? undefined : className,
+        maxLevel: searchableMaxSpellLevel,
         page: 1,
-        pageSize: 250,
+        pageSize: customClass ? 1000 : 250,
       }),
       ensureOfficialSpells(selection.selected),
     ])
@@ -112,19 +141,23 @@ export function LevelUpSpellSelectionModal({
       cancelled = true
       document.body.style.overflow = previousOverflow
     }
-  }, [canUseModal, className, ensureOfficialSpells, open, rule.maxSpellLevel, selection.selected])
+  }, [canUseModal, className, customClass, ensureOfficialSpells, open, searchableMaxSpellLevel, selection.selected])
 
   const availableSpells = useMemo(() => {
-    const homebrew = spells.filter(
-      (spell) => spell.homebrew && spell.classes.includes(className),
-    )
+    const localSpells = customClass
+      ? spells
+      : spells.filter(
+          (spell) => spell.homebrew && spell.classes.includes(className),
+        )
     const byIndex = new Map<string, Spell>()
     for (const spell of officialSpells) byIndex.set(spell.index, spell)
-    for (const spell of homebrew) byIndex.set(spell.index, spell)
-    return Array.from(byIndex.values()).filter((spell) =>
-      isSpellAllowedForClassSelection(spell, rule, []),
+    for (const spell of localSpells) byIndex.set(spell.index, spell)
+    return Array.from(byIndex.values()).filter(
+      (spell) =>
+        currentClassSpellIndexes.has(spell.index) ||
+        isSpellAllowedForClassSelection(spell, rule, []),
     )
-  }, [className, officialSpells, rule, spells])
+  }, [className, currentClassSpellIndexes, customClass, officialSpells, rule, spells])
 
   const byIndex = useMemo(
     () => new Map([...spells, ...officialSpells].map((spell) => [spell.index, spell])),
@@ -154,7 +187,11 @@ export function LevelUpSpellSelectionModal({
         : previousRule.maxLeveledSpells
   const maximum = kind === "cantrip" ? rule.maxCantrips : rule.maxLeveledSpells
   const gained = Math.max(0, maximum - previousMaximum)
-  const replacementLimit = kind === "cantrip" ? rule.swap.cantrips : rule.swap.leveledKnown
+  const replacementLimit = customClass
+    ? originalIndexes.length
+    : kind === "cantrip"
+      ? rule.swap.cantrips
+      : rule.swap.leveledKnown
   const originalSet = useMemo(() => new Set(originalIndexes), [originalIndexes])
   const replacementsUsed = originalIndexes.filter((index) => !selection.selected.includes(index)).length
   const selectedSpells = selection.selected
@@ -208,14 +245,14 @@ export function LevelUpSpellSelectionModal({
     onChange({ selected: [...selection.selected, spell.index], prepared: selection.prepared })
   }
 
-  const title = getTitle(kind, rule.mode, className, gained, replacementLimit)
+  const title = getTitle(kind, rule.mode, classLabel, gained, replacementLimit)
   const counterLabel = kind === "cantrip" ? "Truques conhecidos" : rule.mode === "spellbook" ? "Magias no grimório" : "Magias conhecidas"
 
   return createPortal(
     <div className="fixed inset-0 z-[12500] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/55 p-3 backdrop-blur-sm sm:p-4">
       <div role="dialog" aria-modal="true" aria-label={title} className="grid max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-bg-elevated p-4 shadow-theme-lg sm:max-h-[calc(100dvh-2rem)]">
         <div className="flex items-start justify-between gap-3">
-          <div><h2 className="text-base font-semibold text-textH">{title}</h2><p className="mt-1 text-xs leading-5 text-textMuted">Somente opções da lista de {CLASS_NAMES[className]} são exibidas.</p></div>
+          <div><h2 className="text-base font-semibold text-textH">{title}</h2><p className="mt-1 text-xs leading-5 text-textMuted">Somente opções disponíveis para {classLabel} são exibidas.</p></div>
           <Button size="sm" variant="ghost" onClick={onClose}>Fechar</Button>
         </div>
 
@@ -243,7 +280,7 @@ export function LevelUpSpellSelectionModal({
               <p className="mt-3 line-clamp-3 text-xs leading-5 text-textMuted">{spell.description?.trim() || "Sem descrição cadastrada."}</p>
               <details className="mt-3 border-t border-border pt-3 text-xs text-text"><summary className="cursor-pointer font-medium text-textH">Ver descrição completa</summary><div className="mt-2 whitespace-pre-wrap leading-5 text-textMuted">{spell.description?.trim() || "Sem descrição cadastrada."}</div>{spell.higherLevelText?.trim() ? <div className="mt-3 whitespace-pre-wrap leading-5 text-textMuted"><strong className="text-textH">Em círculos superiores: </strong>{spell.higherLevelText.trim()}</div> : null}</details>
             </article>
-          })}</div> : <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-textMuted">Nenhuma opção da lista de {CLASS_NAMES[className]} corresponde aos filtros.</div>}
+          })}</div> : <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-textMuted">Nenhuma opção disponível para {classLabel} corresponde aos filtros.</div>}
         </div>
 
         <div className="mt-4 flex justify-end border-t border-border pt-4"><Button variant="primary" onClick={onClose}>Concluir seleção</Button></div>
@@ -257,8 +294,7 @@ function Counter({ label, current, maximum, gained, replacementsUsed, replacemen
   return <div className="rounded-lg border border-border bg-bg p-3 text-xs"><div className="text-textMuted">{label}</div><strong className="mt-1 block text-sm text-textH">{current}/{maximum}</strong><div className="mt-1 text-[10px] text-textMuted">{gained > 0 ? `+${gained} neste nível` : "Sem aumento neste nível"}{replacementLimit > 0 ? ` · ${replacementsUsed}/${replacementLimit} substituição` : ""}</div></div>
 }
 
-function getTitle(kind: LevelUpSpellSelectionKind, mode: ReturnType<typeof getClassSpellSelectionRule>["mode"], className: ClassName, gained: number, replacementLimit: number): string {
-  const classLabel = CLASS_NAMES[className]
+function getTitle(kind: LevelUpSpellSelectionKind, mode: ReturnType<typeof getClassSpellSelectionRule>["mode"], classLabel: string, gained: number, replacementLimit: number): string {
   if (kind === "cantrip") {
     if (gained > 0 && replacementLimit > 0) return `Aprender / substituir truques — ${classLabel}`
     if (replacementLimit > 0) return `Substituir truque — ${classLabel}`
