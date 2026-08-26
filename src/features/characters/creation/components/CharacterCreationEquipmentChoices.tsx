@@ -83,6 +83,8 @@ export function CharacterCreationEquipmentChoices({
 }: Props) {
   const [target, setTarget] = useState<EquipmentTarget | null>(null)
   const targetRef = useRef<EquipmentTarget | null>(null)
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
 
   useEffect(() => {
     targetRef.current = target
@@ -162,8 +164,8 @@ export function CharacterCreationEquipmentChoices({
   }, [])
 
   useEffect(() => {
-    if (!target) onChange(null)
-  }, [onChange, target])
+    if (!target) onChangeRef.current(null)
+  }, [target])
 
   if (!target) return null
 
@@ -187,6 +189,8 @@ function ClassEquipmentConfigurator({
   draftId: string
   onChange: Props["onChange"]
 }) {
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
   const preset = getPhbClassEquipmentPreset(className)
   const sectionKey = `equipment:${className}`
   const initialDraft = useMemo(
@@ -277,8 +281,8 @@ function ClassEquipmentConfigurator({
   )
 
   useEffect(() => {
-    onChange(override)
-  }, [onChange, override])
+    onChangeRef.current(override)
+  }, [override])
 
   return (
     <section

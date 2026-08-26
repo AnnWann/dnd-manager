@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { Input } from "../../../components/ui/Input"
@@ -35,6 +35,8 @@ export function CharacterCreationBackgroundChoices({
   onChange,
   externalError,
 }: Props) {
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
   const initialDraft = useMemo(
     () =>
       readCharacterCreationDraftSection<BackgroundChoiceDraft>(
@@ -226,8 +228,8 @@ export function CharacterCreationBackgroundChoices({
   )
 
   useEffect(() => {
-    onChange(override)
-  }, [onChange, override])
+    onChangeRef.current(override)
+  }, [override])
 
   if (!anchor || !choices.length) return null
 

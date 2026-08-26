@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { Button } from "../../../components/ui/Button"
@@ -61,6 +61,8 @@ export function CharacterCreationRacialChoices({
   onChange,
   externalError,
 }: Props) {
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
   const initialDraft = useMemo(
     () =>
       readCharacterCreationDraftSection<RacialChoicesDraft>(
@@ -172,7 +174,7 @@ export function CharacterCreationRacialChoices({
     const error = valid
       ? undefined
       : "Complete todas as escolhas obrigatórias da raça antes de criar o personagem."
-    onChange({
+    onChangeRef.current({
       valid,
       error,
       apply: (abilities, proficiencies) => {
@@ -243,18 +245,20 @@ export function CharacterCreationRacialChoices({
         }
       },
     })
-    return () => onChange(null)
   }, [
     ancestry,
     featAbility,
     halfElf,
     dragonborn,
-    onChange,
     skillOne,
     skillTwo,
     valid,
     variantHuman,
   ])
+
+  useEffect(() => {
+    return () => onChangeRef.current(null)
+  }, [])
 
   if (!anchor || !needsChoice) return null
 

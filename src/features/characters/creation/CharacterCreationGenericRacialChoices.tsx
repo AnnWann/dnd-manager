@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { Input } from "../../../components/ui/Input"
@@ -37,6 +37,8 @@ export function CharacterCreationGenericRacialChoices({
   onChange,
   externalError,
 }: Props) {
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
   const initialDraft = useMemo(
     () =>
       readCharacterCreationDraftSection<GenericRacialChoiceDraft>(
@@ -163,9 +165,12 @@ export function CharacterCreationGenericRacialChoices({
   )
 
   useEffect(() => {
-    onChange(override)
-    return () => onChange(null)
-  }, [onChange, override])
+    onChangeRef.current(override)
+  }, [override])
+
+  useEffect(() => {
+    return () => onChangeRef.current(null)
+  }, [])
 
   if (!anchor || !prompts.length) return null
 
