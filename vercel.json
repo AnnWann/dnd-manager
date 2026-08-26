@@ -19,5 +19,11 @@
     { "source": "/magic", "destination": "/index.html" },
     { "source": "/requests", "destination": "/index.html" },
     { "source": "/homebrew", "destination": "/index.html" }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "*": false,
+      "qa": true
+    }
+  }
 }

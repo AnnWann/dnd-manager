@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --var SESSION_AUTH_MODE:development",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler deploy --secrets-file ../.env.session",
+    "deploy:qa": "wrangler deploy --env qa --secrets-file ../.env.session.qa",
     "generate-types": "wrangler types",
     "typecheck": "npm run generate-types && tsc --noEmit"
   },
