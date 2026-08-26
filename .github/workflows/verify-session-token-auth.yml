@@ -1,0 +1,39 @@
+name: Verify session token auth
+
+on:
+  push:
+    branches:
+      - feature/session-server
+    paths:
+      - .github/session-token-auth-verify-trigger
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install app dependencies
+        run: npm install --ignore-scripts --package-lock=false --no-audit --no-fund
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Build app
+        run: npm run build
+
+      - name: Install session server dependencies
+        run: npm install --prefix session-server --ignore-scripts --package-lock=false --no-audit --no-fund
+
+      - name: Typecheck session server
+        run: npm run typecheck:session-server
