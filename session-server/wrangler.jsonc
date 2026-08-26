@@ -3,6 +3,7 @@
   "name": "dnd-manager-session-server",
   "main": "src/routes/index.ts",
   "compatibility_date": "2026-08-18",
+
   "durable_objects": {
     "bindings": [
       {
@@ -11,13 +12,31 @@
       }
     ]
   },
+
   "migrations": [
     {
       "tag": "v1",
       "new_sqlite_classes": ["SessionActor"]
     }
   ],
+
   "vars": {
     "SESSION_AUTH_MODE": "development"
+  },
+
+  "env": {
+    "qa": {
+      "vars": {
+        "SESSION_AUTH_MODE": "development"
+      },
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "SESSION_ACTOR",
+            "class_name": "SessionActor"
+          }
+        ]
+      }
+    }
   }
 }

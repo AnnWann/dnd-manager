@@ -32,3 +32,8 @@ dist-ssr
 public/spells.v1.json
 
 /generated
+
+
+# wrangler
+.wrangler/
+**/.wrangler/
