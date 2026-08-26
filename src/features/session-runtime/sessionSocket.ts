@@ -63,6 +63,12 @@ export type SessionSocketOptions = {
   ) => void
 }
 
+type SessionConnectionTokenResponse = {
+  token: string
+  expiresAt: number
+  role: SessionRuntimeRole
+}
+
 const HEARTBEAT_MIN_MS = 27_000
 const HEARTBEAT_MAX_MS = 33_000
 const RECONNECT_MAX_MS = 10_000
@@ -72,6 +78,7 @@ export class SessionSocket {
   private heartbeatTimer: number | null = null
   private reconnectTimer: number | null = null
   private reconnectAttempt = 0
+  private connectionAttempt = 0
   private stopped = false
   private hasConnectedOnce = false
 
@@ -80,7 +87,7 @@ export class SessionSocket {
   connect(): void {
     this.stopped = false
     this.clearReconnectTimer()
-    this.openSocket()
+    void this.openSocket()
   }
 
   send(message:
@@ -107,6 +114,7 @@ export class SessionSocket {
 
   disconnect(): void {
     this.stopped = true
+    this.connectionAttempt += 1
     this.clearHeartbeatTimer()
     this.clearReconnectTimer()
     const socket = this.socket
@@ -115,10 +123,35 @@ export class SessionSocket {
     this.options.onStatusChange("disconnected")
   }
 
-  private openSocket(): void {
+  private async openSocket(): Promise<void> {
     if (this.stopped) return
+
+    const attempt = ++this.connectionAttempt
     this.options.onStatusChange(this.hasConnectedOnce ? "reconnecting" : "connecting")
-    const socket = new WebSocket(this.buildUrl())
+
+    let socketUrl: string
+    try {
+      socketUrl = await this.buildUrl()
+    } catch (error) {
+      if (this.stopped || attempt !== this.connectionAttempt) return
+      console.error("[session-runtime] failed to authorize websocket connection", error)
+      this.options.onStatusChange("error")
+      this.scheduleReconnect()
+      return
+    }
+
+    if (this.stopped || attempt !== this.connectionAttempt) return
+
+    let socket: WebSocket
+    try {
+      socket = new WebSocket(socketUrl)
+    } catch (error) {
+      console.error("[session-runtime] failed to open websocket connection", error)
+      this.options.onStatusChange("error")
+      this.scheduleReconnect()
+      return
+    }
+
     this.socket = socket
 
     socket.onmessage = (event) => {
@@ -149,15 +182,61 @@ export class SessionSocket {
     }
   }
 
-  private buildUrl(): string {
+  private async buildUrl(): Promise<string> {
     const url = new URL(this.options.baseUrl)
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
     url.pathname = `/session/${encodeURIComponent(this.options.sessionId)}/connect`
     url.search = ""
-    url.searchParams.set("userId", this.options.userId)
-    url.searchParams.set("role", this.options.role)
-    url.searchParams.set("clientId", this.options.clientId)
+
+    if (this.usesTokenAuth()) {
+      url.searchParams.set("token", await this.requestConnectionToken())
+    } else {
+      url.searchParams.set("userId", this.options.userId)
+      url.searchParams.set("role", this.options.role)
+      url.searchParams.set("clientId", this.options.clientId)
+    }
+
     return url.toString()
+  }
+
+  private usesTokenAuth(): boolean {
+    const configured = import.meta.env.VITE_SESSION_AUTH_MODE?.trim().toLowerCase()
+    if (configured === "token") return true
+    if (configured === "development") return false
+    return !import.meta.env.DEV
+  }
+
+  private async requestConnectionToken(): Promise<string> {
+    const response = await fetch("/api/session-connection", {
+      method: "POST",
+      credentials: "include",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        sessionId: this.options.sessionId,
+        clientId: this.options.clientId,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(
+        `Session connection token request failed with HTTP ${response.status}.`,
+      )
+    }
+
+    const payload = await response.json() as Partial<SessionConnectionTokenResponse>
+    if (
+      typeof payload.token !== "string" ||
+      !payload.token ||
+      typeof payload.expiresAt !== "number" ||
+      (payload.role !== "MASTER" && payload.role !== "PLAYER")
+    ) {
+      throw new Error("Session connection token response is invalid.")
+    }
+
+    return payload.token
   }
 
   private scheduleHeartbeat(): void {
@@ -178,7 +257,7 @@ export class SessionSocket {
     this.reconnectAttempt += 1
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null
-      this.openSocket()
+      void this.openSocket()
     }, delay)
   }
 
