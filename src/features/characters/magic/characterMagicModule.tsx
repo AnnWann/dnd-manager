@@ -16,6 +16,7 @@ import { KiModule } from "./kiModule"
 import { KnownSpellsList } from "./knownSpellsList"
 import { MetamagicModule } from "./metamagicModule"
 import { OnDemandCharacterSpellLibrary } from "./OnDemandCharacterSpellLibrary"
+import { PreparedClassSpellList } from "./PreparedClassSpellList"
 import { SpellSlotsEditor } from "./slots"
 
 type Props = {
@@ -159,6 +160,11 @@ export function CharacterMagicTab({
           onSpellAdded={() => setAddingSpell(false)}
         />
       ) : null}
+
+      <PreparedClassSpellList
+        character={character}
+        updateCharacter={updateCharacter}
+      />
 
       <KnownSpellsList
         character={character}
