@@ -4,7 +4,7 @@ import path from "node:path"
 const API_DIRECTORY = path.resolve("api")
 const EXPECTED_ENTRYPOINTS = new Set([
   "api/auth.ts",
-  "api/campaigns/[...path].ts",
+  "api/campaigns.ts",
   "api/compendium/spells.ts",
   "api/custom-systems.ts",
   "api/images/upload.ts",

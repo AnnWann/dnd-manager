@@ -1,13 +1,3 @@
-import * as charactersRoute from "../../api-handlers/campaigns/[campaignId]/_characters"
-import * as creationRoute from "../../api-handlers/campaigns/[campaignId]/_creation"
-import * as homebrewRoute from "../../api-handlers/campaigns/[campaignId]/_homebrew"
-import * as itemCompendiumRoute from "../../api-handlers/campaigns/[campaignId]/_item-compendium"
-import * as itemCompendiumEntryRoute from "../../api-handlers/campaigns/[campaignId]/item-compendium/_template"
-import * as requestsRoute from "../../api-handlers/campaigns/[campaignId]/_requests"
-import * as requestRoute from "../../api-handlers/campaigns/[campaignId]/requests/_request"
-import * as settingsRoute from "../../api-handlers/campaigns/[campaignId]/_settings"
-import * as spellRoute from "../../api-handlers/campaigns/[campaignId]/spells/_spell"
-
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const
 
 type Method = (typeof METHODS)[number]
@@ -18,9 +8,10 @@ type RouteHandler = (
   context?: RouteContext,
 ) => Response | Promise<Response>
 type RouteModule = Partial<Record<Method, RouteHandler>>
+type RouteLoader = () => Promise<RouteModule>
 
 type MatchedRoute = {
-  module: RouteModule
+  load: RouteLoader
   params: RouteParams
 }
 
@@ -33,10 +24,12 @@ async function route(request: Request): Promise<Response> {
     )
   }
 
+  const module = await match.load()
   const method = request.method.toUpperCase() as Method
-  const handler = match.module[method]
+  const handler = module[method]
+
   if (!handler) {
-    const allow = METHODS.filter((candidate) => Boolean(match.module[candidate]))
+    const allow = METHODS.filter((candidate) => Boolean(module[candidate]))
     return Response.json(
       {
         error: {
@@ -62,38 +55,65 @@ function matchRoute(request: Request): MatchedRoute | null {
   const params: RouteParams = { campaignId }
 
   if (segments.length === 2 && segments[1] === "characters") {
-    return { module: charactersRoute as RouteModule, params }
+    return {
+      load: async () =>
+        (await import("../api-handlers/campaigns/[campaignId]/_characters.js")) as RouteModule,
+      params,
+    }
   }
   if (segments.length === 2 && segments[1] === "creation") {
-    return { module: creationRoute as RouteModule, params }
+    return {
+      load: async () =>
+        (await import("../api-handlers/campaigns/[campaignId]/_creation.js")) as RouteModule,
+      params,
+    }
   }
   if (segments.length === 2 && segments[1] === "homebrew") {
-    return { module: homebrewRoute as RouteModule, params }
+    return {
+      load: async () =>
+        (await import("../api-handlers/campaigns/[campaignId]/_homebrew.js")) as RouteModule,
+      params,
+    }
   }
   if (segments.length === 2 && segments[1] === "item-compendium") {
-    return { module: itemCompendiumRoute as RouteModule, params }
+    return {
+      load: async () =>
+        (await import("../api-handlers/campaigns/[campaignId]/_item-compendium.js")) as RouteModule,
+      params,
+    }
   }
   if (segments.length === 3 && segments[1] === "item-compendium") {
     return {
-      module: itemCompendiumEntryRoute as RouteModule,
+      load: async () =>
+        (await import("../api-handlers/campaigns/[campaignId]/item-compendium/_template.js")) as RouteModule,
       params: { ...params, templateId: segments[2] },
     }
   }
   if (segments.length === 2 && segments[1] === "requests") {
-    return { module: requestsRoute as RouteModule, params }
+    return {
+      load: async () =>
+        (await import("../api-handlers/campaigns/[campaignId]/_requests.js")) as RouteModule,
+      params,
+    }
   }
   if (segments.length === 3 && segments[1] === "requests") {
     return {
-      module: requestRoute as RouteModule,
+      load: async () =>
+        (await import("../api-handlers/campaigns/[campaignId]/requests/_request.js")) as RouteModule,
       params: { ...params, requestId: segments[2] },
     }
   }
   if (segments.length === 2 && segments[1] === "settings") {
-    return { module: settingsRoute as RouteModule, params }
+    return {
+      load: async () =>
+        (await import("../api-handlers/campaigns/[campaignId]/_settings.js")) as RouteModule,
+      params,
+    }
   }
   if (segments.length === 3 && segments[1] === "spells") {
     return {
-      module: spellRoute as RouteModule,
+      load: async () =>
+        (await import("../api-handlers/campaigns/[campaignId]/spells/_spell.js")) as RouteModule,
       params: { ...params, spellId: segments[2] },
     }
   }
@@ -102,7 +122,17 @@ function matchRoute(request: Request): MatchedRoute | null {
 }
 
 function getSegments(request: Request): string[] {
-  const segments = new URL(request.url).pathname
+  const url = new URL(request.url)
+  const rewrittenPath = url.searchParams.get("__campaignPath")?.trim()
+
+  if (rewrittenPath) {
+    return rewrittenPath
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => decodeURIComponent(segment))
+  }
+
+  const segments = url.pathname
     .split("/")
     .filter(Boolean)
     .map((segment) => decodeURIComponent(segment))
