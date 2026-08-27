@@ -2,7 +2,11 @@ import { useEffect, useState } from "react"
 
 import { useCustomSystemDefinitions } from "../../../lib/customSystems/CustomSystemRegistry"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
+import {
+  useCharacterWorkspace,
+  type CharacterWorkspaceMode,
+} from "../workspace/CharacterWorkspaceContext"
 
 import { AttributeCalculators } from "./attributeCalculators"
 import { Attributes } from "./attributes"
@@ -28,7 +32,7 @@ type Props = {
   ) => void
 }
 
-type SheetViewMode = "full" | "minimal"
+type SheetViewMode = "play" | "configuration"
 
 const SHEET_VIEW_STORAGE_KEY = "dnd-manager:character-sheet-view"
 
@@ -36,9 +40,12 @@ export function CharacterSheetTab({
   character,
   updateCharacter,
 }: Props) {
-  const [viewMode, setViewMode] = useState<SheetViewMode>(loadSheetViewMode)
+  const { mode, canAssignOwners } = useCharacterWorkspace()
+  const sessionRuntime = useOptionalSessionRuntime()
+  const [viewMode, setViewMode] = useState<SheetViewMode>(() =>
+    loadSheetViewMode(mode),
+  )
   const customSystemDefinitions = useCustomSystemDefinitions()
-  const { canAssignOwners } = useCharacterWorkspace()
   const showActionEconomy = canAssignOwners
   const showCustomActions = hasCustomSystemSheetActions(
     character,
@@ -47,48 +54,54 @@ export function CharacterSheetTab({
   const showActionsColumn = showActionEconomy || showCustomActions
 
   useEffect(() => {
-    saveSheetViewMode(viewMode)
-  }, [viewMode])
+    setViewMode(loadSheetViewMode(mode))
+  }, [mode])
+
+  useEffect(() => {
+    saveSheetViewMode(mode, viewMode)
+  }, [mode, viewMode])
 
   return (
     <div className="grid gap-4">
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-bg p-2 shadow-theme-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg p-2 shadow-theme-sm">
         <div className="min-w-0 px-1">
           <div className="text-xs font-semibold text-textH">Visualização da ficha</div>
           <div className="text-[10px] text-textMuted">
-            Alterne entre a ficha completa e a versão reduzida.
+            {viewMode === "play"
+              ? "Use a visão de jogo para consultar e alterar o que importa durante a partida."
+              : "Use a configuração para ajustar a estrutura e os valores completos da ficha."}
           </div>
         </div>
 
         <div className="flex shrink-0 rounded-lg border border-border bg-bg-subtle p-1">
           <button
             type="button"
-            aria-pressed={viewMode === "full"}
-            onClick={() => setViewMode("full")}
+            aria-pressed={viewMode === "play"}
+            onClick={() => setViewMode("play")}
             className={
-              viewMode === "full"
+              viewMode === "play"
                 ? "rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accentText"
                 : "rounded-md px-3 py-1.5 text-xs font-medium text-text hover:bg-bg"
             }
           >
-            Completa
+            Em jogo
           </button>
           <button
             type="button"
-            aria-pressed={viewMode === "minimal"}
-            onClick={() => setViewMode("minimal")}
+            aria-pressed={viewMode === "configuration"}
+            onClick={() => setViewMode("configuration")}
             className={
-              viewMode === "minimal"
+              viewMode === "configuration"
                 ? "rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accentText"
                 : "rounded-md px-3 py-1.5 text-xs font-medium text-text hover:bg-bg"
             }
           >
-            Minimalista
+            Configuração
           </button>
         </div>
       </div>
 
-      {viewMode === "minimal" ? (
+      {viewMode === "play" ? (
         <>
           <MinimalCharacterSheet
             character={character}
@@ -105,6 +118,13 @@ export function CharacterSheetTab({
         </>
       ) : (
         <>
+          {mode === "campaign" ? (
+            <SessionConfigurationHeader
+              connected={sessionRuntime?.status === "connected"}
+              role={sessionRuntime?.role}
+            />
+          ) : null}
+
           <CharacterIdentity
             character={character}
             updateCharacter={updateCharacter}
@@ -159,23 +179,73 @@ export function CharacterSheetTab({
   )
 }
 
-function loadSheetViewMode(): SheetViewMode {
-  if (typeof window === "undefined") return "full"
+function SessionConfigurationHeader({
+  connected,
+  role,
+}: {
+  connected: boolean
+  role?: "MASTER" | "PLAYER"
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-textH">
+          Configuração da ficha na sessão
+        </div>
+        <div className="mt-0.5 text-xs text-textMuted">
+          Ajuste os dados completos da ficha. Operações suportadas são validadas e sincronizadas pela sessão.
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide">
+        <span className="rounded-full border border-border bg-bg-subtle px-2.5 py-1 text-textMuted">
+          {role === "MASTER" ? "Mestre" : role === "PLAYER" ? "Jogador" : "Sessão"}
+        </span>
+        <span
+          className={
+            connected
+              ? "rounded-full border border-success bg-successBg px-2.5 py-1 text-success"
+              : "rounded-full border border-border bg-bg-subtle px-2.5 py-1 text-textMuted"
+          }
+        >
+          {connected ? "Sincronizada" : "Sem conexão"}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function loadSheetViewMode(mode: CharacterWorkspaceMode): SheetViewMode {
+  if (typeof window === "undefined") {
+    return defaultSheetViewMode(mode)
+  }
 
   try {
-    return window.localStorage.getItem(SHEET_VIEW_STORAGE_KEY) === "minimal"
-      ? "minimal"
-      : "full"
+    const stored = window.localStorage.getItem(sheetViewStorageKey(mode))
+    return stored === "play" || stored === "configuration"
+      ? stored
+      : defaultSheetViewMode(mode)
   } catch {
-    return "full"
+    return defaultSheetViewMode(mode)
   }
 }
 
-function saveSheetViewMode(viewMode: SheetViewMode) {
+function defaultSheetViewMode(mode: CharacterWorkspaceMode): SheetViewMode {
+  return mode === "campaign" ? "play" : "configuration"
+}
+
+function sheetViewStorageKey(mode: CharacterWorkspaceMode) {
+  return `${SHEET_VIEW_STORAGE_KEY}:${mode}`
+}
+
+function saveSheetViewMode(
+  mode: CharacterWorkspaceMode,
+  viewMode: SheetViewMode,
+) {
   if (typeof window === "undefined") return
 
   try {
-    window.localStorage.setItem(SHEET_VIEW_STORAGE_KEY, viewMode)
+    window.localStorage.setItem(sheetViewStorageKey(mode), viewMode)
   } catch {
     // Storage may be unavailable in private or restricted browser contexts.
   }
