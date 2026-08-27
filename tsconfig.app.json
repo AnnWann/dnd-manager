@@ -22,5 +22,5 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["./"],
-  "exclude": ["session-server"]
+  "exclude": ["session-server", "legacy-functions"]
 }
