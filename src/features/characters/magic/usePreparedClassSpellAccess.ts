@@ -26,7 +26,20 @@ type PreparedClassCatalog = {
   spells: SpellCompendiumSummary[]
 }
 
-export function usePreparedClassSpellAccess(character: CharacterTemplate): PreparedClassSpellAccess[] {
+export type PreparedClassSpellAccessState = {
+  entries: PreparedClassSpellAccess[]
+  accessibleKeys: ReadonlySet<string>
+  loading: boolean
+  ready: boolean
+}
+
+export function preparedClassSpellAccessKey(className: string, spellIndex: string): string {
+  return `${className}:${spellIndex}`
+}
+
+export function usePreparedClassSpellAccess(
+  character: CharacterTemplate,
+): PreparedClassSpellAccessState {
   const { ensureOfficialSpells, getSpellByIndex } = useMagicContext()
   const preparedClasses = useMemo(
     () =>
@@ -40,14 +53,20 @@ export function usePreparedClassSpellAccess(character: CharacterTemplate): Prepa
     .sort()
     .join("|")
   const [catalogs, setCatalogs] = useState<PreparedClassCatalog[]>([])
+  const [loadedKey, setLoadedKey] = useState("")
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (!requestKey) {
       setCatalogs([])
+      setLoadedKey("")
+      setLoading(false)
       return
     }
 
     let cancelled = false
+    setLoading(true)
+
     void Promise.all(
       preparedClasses.map(async (classEntry): Promise<PreparedClassCatalog> => {
         const page = await queryAllOfficialSpellSummaries({
@@ -61,6 +80,7 @@ export function usePreparedClassSpellAccess(character: CharacterTemplate): Prepa
       .then(async (nextCatalogs) => {
         if (cancelled) return
         setCatalogs(nextCatalogs)
+        setLoadedKey(requestKey)
         await ensureOfficialSpells(
           Array.from(
             new Set(
@@ -70,7 +90,13 @@ export function usePreparedClassSpellAccess(character: CharacterTemplate): Prepa
         )
       })
       .catch(() => {
-        if (!cancelled) setCatalogs([])
+        if (!cancelled) {
+          setCatalogs([])
+          setLoadedKey(requestKey)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
       })
 
     return () => {
@@ -78,7 +104,19 @@ export function usePreparedClassSpellAccess(character: CharacterTemplate): Prepa
     }
   }, [ensureOfficialSpells, requestKey])
 
-  return useMemo(
+  const accessibleKeys = useMemo(
+    () =>
+      new Set(
+        catalogs.flatMap(({ classEntry, spells }) =>
+          spells.map((spell) =>
+            preparedClassSpellAccessKey(classEntry.className, spell.index),
+          ),
+        ),
+      ),
+    [catalogs],
+  )
+
+  const entries = useMemo(
     () =>
       catalogs.flatMap(({ classEntry, spells }) => {
         const source = preparedClassSpellSource(classEntry)
@@ -89,4 +127,11 @@ export function usePreparedClassSpellAccess(character: CharacterTemplate): Prepa
       }),
     [catalogs, getSpellByIndex],
   )
+
+  return {
+    entries,
+    accessibleKeys,
+    loading,
+    ready: !requestKey || loadedKey === requestKey,
+  }
 }
