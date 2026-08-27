@@ -3,7 +3,7 @@ import {
   CampaignSpellApprovalStatus,
   HomebrewSpellStatus,
   Prisma,
-} from "../generated/prisma/client"
+} from "../generated/prisma/client.js"
 
 const COMPLETE_DOMAIN_COUNT = 9
 

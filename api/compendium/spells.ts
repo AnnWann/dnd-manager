@@ -1,4 +1,4 @@
-import spellData from "../../src/data/spells.v1.json"
+import spellData from "../../src/data/spells.v1.json" with { type: "json" }
 import type { Spell } from "../../src/models/magic/spells/Spell"
 
 const CACHE_CONTROL = "public, max-age=86400, stale-while-revalidate=604800"

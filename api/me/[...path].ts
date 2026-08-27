@@ -1,16 +1,3 @@
-import * as campaignsRoute from "../../api-handlers/me/_campaigns"
-import * as campaignJoinRoute from "../../api-handlers/me/campaigns/_join"
-import * as campaignCharacterRoute from "../../api-handlers/me/campaigns/[campaignId]/characters/_character"
-import * as campaignMemberRoute from "../../api-handlers/me/campaigns/[campaignId]/members/_member"
-import * as campaignMembershipRoute from "../../api-handlers/me/campaigns/[campaignId]/_membership"
-import * as charactersRoute from "../../api-handlers/me/_characters"
-import * as characterRoute from "../../api-handlers/me/characters/_character"
-import * as characterAccessRoute from "../../api-handlers/me/characters/[characterId]/_access"
-import * as characterDomainRoute from "../../api-handlers/me/characters/[characterId]/domains/_domain"
-import * as spellsRoute from "../../api-handlers/me/_spells"
-import * as spellRoute from "../../api-handlers/me/spells/_spell"
-import * as spellCampaignsRoute from "../../api-handlers/me/spells/[spellId]/_campaigns"
-
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const
 
 type Method = (typeof METHODS)[number]
@@ -21,9 +8,10 @@ type RouteHandler = (
   context?: RouteContext,
 ) => Response | Promise<Response>
 type RouteModule = Partial<Record<Method, RouteHandler>>
+type RouteLoader = () => Promise<RouteModule>
 
 type MatchedRoute = {
-  module: RouteModule
+  load: RouteLoader
   params: RouteParams
 }
 
@@ -36,10 +24,12 @@ async function route(request: Request): Promise<Response> {
     )
   }
 
+  const module = await match.load()
   const method = request.method.toUpperCase() as Method
-  const handler = match.module[method]
+  const handler = module[method]
+
   if (!handler) {
-    const allow = METHODS.filter((candidate) => Boolean(match.module[candidate]))
+    const allow = METHODS.filter((candidate) => Boolean(module[candidate]))
     return Response.json(
       {
         error: {
@@ -61,10 +51,16 @@ function matchRoute(request: Request): MatchedRoute | null {
   const segments = getSegments(request)
 
   if (segments.length === 1 && segments[0] === "campaigns") {
-    return { module: campaignsRoute as RouteModule, params: {} }
+    return {
+      load: async () => (await import("../../api-handlers/me/_campaigns.js")) as RouteModule,
+      params: {},
+    }
   }
   if (segments.length === 2 && segments[0] === "campaigns" && segments[1] === "join") {
-    return { module: campaignJoinRoute as RouteModule, params: {} }
+    return {
+      load: async () => (await import("../../api-handlers/me/campaigns/_join.js")) as RouteModule,
+      params: {},
+    }
   }
   if (
     segments.length === 4 &&
@@ -72,7 +68,8 @@ function matchRoute(request: Request): MatchedRoute | null {
     segments[2] === "characters"
   ) {
     return {
-      module: campaignCharacterRoute as RouteModule,
+      load: async () =>
+        (await import("../../api-handlers/me/campaigns/[campaignId]/characters/_character.js")) as RouteModule,
       params: { campaignId: segments[1], characterId: segments[3] },
     }
   }
@@ -82,7 +79,8 @@ function matchRoute(request: Request): MatchedRoute | null {
     segments[2] === "members"
   ) {
     return {
-      module: campaignMemberRoute as RouteModule,
+      load: async () =>
+        (await import("../../api-handlers/me/campaigns/[campaignId]/members/_member.js")) as RouteModule,
       params: { campaignId: segments[1], userId: segments[3] },
     }
   }
@@ -92,16 +90,21 @@ function matchRoute(request: Request): MatchedRoute | null {
     segments[2] === "membership"
   ) {
     return {
-      module: campaignMembershipRoute as RouteModule,
+      load: async () =>
+        (await import("../../api-handlers/me/campaigns/[campaignId]/_membership.js")) as RouteModule,
       params: { campaignId: segments[1] },
     }
   }
   if (segments.length === 1 && segments[0] === "characters") {
-    return { module: charactersRoute as RouteModule, params: {} }
+    return {
+      load: async () => (await import("../../api-handlers/me/_characters.js")) as RouteModule,
+      params: {},
+    }
   }
   if (segments.length === 2 && segments[0] === "characters") {
     return {
-      module: characterRoute as RouteModule,
+      load: async () =>
+        (await import("../../api-handlers/me/characters/_character.js")) as RouteModule,
       params: { characterId: segments[1] },
     }
   }
@@ -111,7 +114,8 @@ function matchRoute(request: Request): MatchedRoute | null {
     segments[2] === "access"
   ) {
     return {
-      module: characterAccessRoute as RouteModule,
+      load: async () =>
+        (await import("../../api-handlers/me/characters/[characterId]/_access.js")) as RouteModule,
       params: { characterId: segments[1] },
     }
   }
@@ -121,16 +125,21 @@ function matchRoute(request: Request): MatchedRoute | null {
     segments[2] === "domains"
   ) {
     return {
-      module: characterDomainRoute as RouteModule,
+      load: async () =>
+        (await import("../../api-handlers/me/characters/[characterId]/domains/_domain.js")) as RouteModule,
       params: { characterId: segments[1], domain: segments[3] },
     }
   }
   if (segments.length === 1 && segments[0] === "spells") {
-    return { module: spellsRoute as RouteModule, params: {} }
+    return {
+      load: async () => (await import("../../api-handlers/me/_spells.js")) as RouteModule,
+      params: {},
+    }
   }
   if (segments.length === 2 && segments[0] === "spells") {
     return {
-      module: spellRoute as RouteModule,
+      load: async () =>
+        (await import("../../api-handlers/me/spells/_spell.js")) as RouteModule,
       params: { spellId: segments[1] },
     }
   }
@@ -140,7 +149,8 @@ function matchRoute(request: Request): MatchedRoute | null {
     segments[2] === "campaigns"
   ) {
     return {
-      module: spellCampaignsRoute as RouteModule,
+      load: async () =>
+        (await import("../../api-handlers/me/spells/[spellId]/_campaigns.js")) as RouteModule,
       params: { spellId: segments[1] },
     }
   }

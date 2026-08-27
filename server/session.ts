@@ -1,5 +1,5 @@
-import { auth } from "./auth"
-import { ApiError } from "./api"
+import { auth } from "./auth.js"
+import { ApiError } from "./api.js"
 
 export async function requireSession(request: Request) {
   const session = await auth.api.getSession({
