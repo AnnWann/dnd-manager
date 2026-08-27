@@ -20,6 +20,7 @@ import type {
   ClassName,
 } from "../../../models/sheet/Class"
 import { CompactSpellCard } from "./compactSpellCard"
+import { isPreparedClassListEntry } from "./preparedClassSpellAccess"
 import { SpellCard } from "./spellCard"
 
 type Props = {
@@ -135,6 +136,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
     const spell = getSpellByIndex(entry.spells.id)
     if (!spell) continue
 
+    const classListEntry = isPreparedClassListEntry(entry.acquisition?.notes)
     const alwaysPrepared = isAlwaysAvailableSpell(
       spell,
       entry.source,
@@ -147,6 +149,14 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       prepared,
       classes,
     )
+    const accessLabels = [
+      classListEntry ? "Lista da classe" : undefined,
+      availableAsRitual
+        ? prepared
+          ? "Ritual"
+          : "Disponível como ritual"
+        : undefined,
+    ].filter((label): label is string => Boolean(label))
 
     regularSpells.push({
       key: `known:${entry.source.type}:${entry.source.sourceId}:${spell.index}`,
@@ -155,12 +165,8 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
       prepared,
       alwaysPrepared,
       availableAsRitual,
-      removable: true,
-      accessLabel: availableAsRitual
-        ? prepared
-          ? "Ritual"
-          : "Disponível como ritual"
-        : undefined,
+      removable: !classListEntry,
+      accessLabel: accessLabels.length ? accessLabels.join(" • ") : undefined,
     })
   }
 
@@ -337,9 +343,10 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
           Magias disponíveis
         </div>
         <div className="mt-1 text-xs text-text">
-          Magias aprendidas por classes e concedidas por habilidades, talentos,
-          raça e equipamentos equipados. Rituais preparados são identificados,
-          e magos também podem acessar rituais não preparados do grimório.
+          Magias aprendidas, acessíveis automaticamente pelas listas das classes
+          e concedidas por habilidades, talentos, raça e equipamentos. Rituais
+          preparados são identificados, e magos também podem acessar rituais não
+          preparados do grimório.
         </div>
 
         {spellLimits.length ? (
@@ -870,7 +877,7 @@ function getClassKnownSpellLimit(
   classData: CharacterClassInterface,
 ): number | undefined {
   const knownSpells = classData.knownSpells
-  if (!knownSpells) return undefined
+  if (!knownSpells || knownSpells.mode === "prepared-only") return undefined
   const override = knownSpells.overrides?.[classData.level]
   if (override !== undefined) return override
   return (
