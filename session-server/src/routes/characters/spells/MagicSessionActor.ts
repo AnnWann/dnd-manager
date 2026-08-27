@@ -34,7 +34,7 @@ import {
   readRuntimeConfig,
 } from "../../session/runtimeConfigAccess";
 import {
-  commitSessionMutation,
+  commitSessionMutations,
   createSessionLogRecord,
   readSessionLog,
 } from "../../session/sessionLog";
@@ -74,14 +74,23 @@ export class SessionActor extends AbilitySessionActor {
     connection.lastHeartbeatAt = Date.now();
     webSocket.serializeAttachment(connection);
 
-    await this.handleMagicOperation(webSocket, connection, parsed.operation);
+    const operations = parsed.type === "session.magic.operation"
+      ? [parsed.operation]
+      : parsed.operations;
+    await this.handleMagicOperations(webSocket, connection, operations);
   }
 
-  private async handleMagicOperation(
+  private async handleMagicOperations(
     webSocket: WebSocket,
     connection: SessionConnection,
-    operation: SessionMagicOperation,
+    operations: SessionMagicOperation[],
   ): Promise<void> {
+    const characterId = operations[0]?.characterId;
+    if (!characterId || operations.some((operation) => operation.characterId !== characterId)) {
+      sendError(webSocket, "MAGIC_BATCH_INVALID", "Magic operation batches must target one character.");
+      return;
+    }
+
     const [abilityState, hpState, conditionsState, runtimeConfig, log] = await Promise.all([
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
       this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY).then((value) => value ?? {}),
@@ -90,9 +99,9 @@ export class SessionActor extends AbilitySessionActor {
       readSessionLog(this.ctx.storage),
     ]);
 
-    const storedAbility = abilityState[operation.characterId];
-    const hp = hpState[operation.characterId];
-    const conditions = conditionsState[operation.characterId];
+    const storedAbility = abilityState[characterId];
+    const hp = hpState[characterId];
+    const conditions = conditionsState[characterId];
     if (!storedAbility?.initialized || !hp || !conditions?.initialized) {
       sendError(webSocket, "MAGIC_STATE_NOT_INITIALIZED", "Magic state for this character has not been initialized by the MASTER.");
       return;
@@ -101,7 +110,7 @@ export class SessionActor extends AbilitySessionActor {
     const authorization = authorizeCharacterMutation(
       connection,
       runtimeConfig,
-      operation.characterId,
+      characterId,
     );
     if (!authorization.ok) {
       sendError(webSocket, authorization.code, authorization.message);
@@ -120,51 +129,61 @@ export class SessionActor extends AbilitySessionActor {
       return;
     }
 
-    if (operation.type === "character.spell.add") {
-      const validation = validateSpellAdd(
-        connection,
-        current,
-        runtimeConfig,
-        operation.spellEntry as unknown as KnownSpellEntry,
-      );
-      if (!validation.ok) {
-        sendError(webSocket, validation.code, validation.message);
+    let previousAbilityState = storedAbility;
+    const records = [];
+
+    for (const operation of operations) {
+      if (operation.type === "character.spell.add") {
+        const validation = validateSpellAdd(
+          connection,
+          current,
+          runtimeConfig,
+          operation.spellEntry as unknown as KnownSpellEntry,
+        );
+        if (!validation.ok) {
+          sendError(webSocket, validation.code, validation.message);
+          return;
+        }
+      }
+
+      const next = applyMagicOperation(current, operation);
+      if (!next || JSON.stringify(current.toJSON()) === JSON.stringify(next.toJSON())) {
+        sendError(webSocket, "MAGIC_OPERATION_REJECTED", "The requested magic operation is invalid for the current character state.");
         return;
       }
+
+      records.push(createSessionLogRecord({
+        actorId: connection.userId,
+        operation,
+        reverseOperation: {
+          type: "character.ability.restore",
+          characterId,
+          snapshot: { ability: previousAbilityState, hp, conditions },
+        },
+      }));
+
+      previousAbilityState = {
+        characterId,
+        character: next.toJSON() as unknown as Record<string, unknown>,
+        initialized: true,
+        revision: previousAbilityState.revision + 1,
+      };
+      current = next;
     }
 
-    const next = applyMagicOperation(current, operation);
-    if (!next || JSON.stringify(current.toJSON()) === JSON.stringify(next.toJSON())) {
-      sendError(webSocket, "MAGIC_OPERATION_REJECTED", "The requested magic operation is invalid for the current character state.");
-      return;
-    }
+    abilityState[characterId] = previousAbilityState;
 
-    const nextState: SessionAbilityState = {
-      characterId: operation.characterId,
-      character: next.toJSON() as unknown as Record<string, unknown>,
-      initialized: true,
-      revision: storedAbility.revision + 1,
-    };
-    abilityState[operation.characterId] = nextState;
-
-    const record = createSessionLogRecord({
-      actorId: connection.userId,
-      operation,
-      reverseOperation: {
-        type: "character.ability.restore",
-        characterId: operation.characterId,
-        snapshot: { ability: storedAbility, hp, conditions },
-      },
-    });
-
-    await commitSessionMutation(this.ctx.storage, this.ctx.getWebSockets(), {
+    await commitSessionMutations(this.ctx.storage, this.ctx.getWebSockets(), {
       writes: { [ABILITIES_STATE_KEY]: abilityState },
-      record,
+      records,
       currentLog: log,
       maxRecords: MAX_HP_LOG_RECORDS,
     });
 
-    broadcast(this.ctx.getWebSockets(), { type: "session.abilities.updated", character: nextState });
+    broadcast(this.ctx.getWebSockets(), {
+      type: "session.abilities.updated",
+      character: previousAbilityState,
+    });
   }
 }
 
