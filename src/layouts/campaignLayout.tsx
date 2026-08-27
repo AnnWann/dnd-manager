@@ -13,6 +13,7 @@ import {
   buildSessionCharacterSnapshots,
   getCampaignSessionCharacters,
   invalidateCampaignSessionCharacters,
+  type CampaignSessionMember,
 } from "../api/campaign-session"
 import { getSessionHomebrew } from "../api/session-homebrew"
 import { authClient } from "../auth/auth-client"
@@ -38,6 +39,7 @@ import { PartyInventorySettingsProvider } from "../contexts/partyInventorySettin
 import { SyncProvider } from "../contexts/syncContext"
 import { MasterConcentrationAlerts } from "../features/characters/characterSheet/masterConcentrationAlerts"
 import { SessionActionLog } from "../features/session/SessionActionLog"
+import { SessionPresenceIndicator } from "../features/session/SessionPresenceIndicator"
 import { RelationalMigrationBridge } from "../features/sync/RelationalMigrationBridge"
 import {
   clearActiveSession,
@@ -61,6 +63,7 @@ export function CampaignLayout() {
   const [resolvedSessionRole, setResolvedSessionRole] = useState<
     "master" | "player" | null
   >(null)
+  const [sessionMembers, setSessionMembers] = useState<CampaignSessionMember[]>([])
   const [sessionReady, setSessionReady] = useState(!sessionId)
   const [sessionLoadError, setSessionLoadError] = useState("")
   const [sessionContentRevision, setSessionContentRevision] = useState(0)
@@ -125,6 +128,7 @@ export function CampaignLayout() {
   useEffect(() => {
     if (!sessionId) {
       setResolvedSessionRole(null)
+      setSessionMembers([])
       setSessionLoadError("")
       setSessionReady(true)
       return
@@ -142,6 +146,7 @@ export function CampaignLayout() {
         if (cancelled) return
 
         setResolvedSessionRole(data.campaign.isMaster ? "master" : "player")
+        setSessionMembers(data.members ?? [])
 
         const sourceSnapshots = buildSessionCharacterSnapshots(data)
         const approvedSpells = homebrew.spells
@@ -203,6 +208,7 @@ export function CampaignLayout() {
       .catch(() => {
         if (cancelled) return
         setResolvedSessionRole(null)
+        setSessionMembers([])
         setSessionLoadError("Não foi possível carregar o conteúdo vinculado a esta sessão.")
         setSessionReady(true)
       })
@@ -432,7 +438,13 @@ export function CampaignLayout() {
                   setAppState={setAppState}
                 >
                   <div className="fixed inset-0 flex w-full max-w-full flex-col overflow-hidden bg-[color:var(--surface-app)] text-text">
-                    <AppHeader />
+                    <AppHeader
+                      rightContent={
+                        sessionId ? (
+                          <SessionPresenceIndicator members={sessionMembers} />
+                        ) : undefined
+                      }
+                    />
 
                     <div className="flex min-h-0 min-w-0 max-w-full flex-1 overflow-hidden">
                       <AppSidebar items={sidebarItems} topContent={modeSwitcher} />
