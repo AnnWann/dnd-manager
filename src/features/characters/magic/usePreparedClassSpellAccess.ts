@@ -13,6 +13,7 @@ import {
   isPreparedClass,
   maximumPreparedClassSpellLevel,
   preparedClassSpellSource,
+  type PreparedClassSpellCatalogEntry,
 } from "./preparedClassSpellAccess"
 
 export type PreparedClassSpellAccess = {
@@ -28,6 +29,7 @@ type PreparedClassCatalog = {
 
 export type PreparedClassSpellAccessState = {
   entries: PreparedClassSpellAccess[]
+  catalogEntries: PreparedClassSpellCatalogEntry[]
   accessibleKeys: ReadonlySet<string>
   loading: boolean
   ready: boolean
@@ -104,16 +106,25 @@ export function usePreparedClassSpellAccess(
     }
   }, [ensureOfficialSpells, requestKey])
 
+  const catalogEntries = useMemo<PreparedClassSpellCatalogEntry[]>(
+    () =>
+      catalogs.flatMap(({ classEntry, spells }) =>
+        spells.map((spell) => ({
+          classEntry,
+          spellIndex: spell.index,
+        })),
+      ),
+    [catalogs],
+  )
+
   const accessibleKeys = useMemo(
     () =>
       new Set(
-        catalogs.flatMap(({ classEntry, spells }) =>
-          spells.map((spell) =>
-            preparedClassSpellAccessKey(classEntry.className, spell.index),
-          ),
+        catalogEntries.map((entry) =>
+          preparedClassSpellAccessKey(entry.classEntry.className, entry.spellIndex),
         ),
       ),
-    [catalogs],
+    [catalogEntries],
   )
 
   const entries = useMemo(
@@ -130,6 +141,7 @@ export function usePreparedClassSpellAccess(
 
   return {
     entries,
+    catalogEntries,
     accessibleKeys,
     loading,
     ready: !requestKey || loadedKey === requestKey,
