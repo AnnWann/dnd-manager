@@ -16,6 +16,9 @@ import { KiModule } from "./kiModule"
 import { KnownSpellsList } from "./knownSpellsList"
 import { MetamagicModule } from "./metamagicModule"
 import { OnDemandCharacterSpellLibrary } from "./OnDemandCharacterSpellLibrary"
+import {
+  withoutPreparedClassKnownSpells,
+} from "./preparedClassSpellAccess"
 import { PreparedClassSpellList } from "./PreparedClassSpellList"
 import { SpellSlotsEditor } from "./slots"
 
@@ -41,6 +44,10 @@ export function CharacterMagicTab({
   const [addingSpell, setAddingSpell] = useState(false)
   const sorcererLevel = getSorcererLevel(character)
   const hasSorcererResources = sorcererLevel >= 2
+  const knownSpellCharacter = useMemo(
+    () => withoutPreparedClassKnownSpells(character),
+    [character],
+  )
   const spellListText = useMemo(
     () => buildAllCharacterSpellList(characters, getSpellByIndex),
     [characters, getSpellByIndex],
@@ -167,7 +174,7 @@ export function CharacterMagicTab({
       />
 
       <KnownSpellsList
-        character={character}
+        character={knownSpellCharacter}
         updateCharacter={updateCharacter}
       />
     </div>
