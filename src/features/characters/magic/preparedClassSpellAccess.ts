@@ -21,11 +21,17 @@ export function maximumPreparedClassSpellLevel(classEntry: CharacterClassInterfa
   if (!isPreparedClass(classEntry)) return 0
   const level = classEntry.level
   switch (classEntry.className) {
-    case "artificer": return Math.min(5, Math.ceil(level / 2))
+    case "artificer":
+      return Math.min(5, Math.floor((Math.max(1, level) - 1) / 4) + 1)
     case "cleric":
-    case "druid": return Math.min(9, Math.ceil(level / 2))
-    case "paladin": return level < 2 ? 0 : Math.min(5, Math.ceil((level - 1) / 2))
-    default: return 0
+    case "druid":
+      return Math.min(9, Math.ceil(level / 2))
+    case "paladin":
+      return level < 2
+        ? 0
+        : Math.min(5, Math.floor((level - 1) / 4) + 1)
+    default:
+      return 0
   }
 }
 
