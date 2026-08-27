@@ -4,27 +4,27 @@ import {
   CampaignSpellApprovalStatus,
   CharacterVisibility,
   HomebrewSpellStatus,
-} from "../../../generated/prisma/client"
-import type { Prisma } from "../../../generated/prisma/client"
+} from "../../../generated/prisma/client.js"
+import type { Prisma } from "../../../generated/prisma/client.js"
 import {
   ApiError,
   handleApiError,
   jsonResponse,
   readJsonObject,
-} from "../../../server/api"
-import { prisma } from "../../../server/prisma"
-import { requireSession } from "../../../server/session"
-import { CHARACTER_TYPES } from "../../../src/models/characters/CharacterType"
-import type { CustomSystemDefinition } from "../../../src/models/customSystems/CustomSystemDefinition"
-import type { CompendiumCreature } from "../../../src/models/creatures/CompendiumCreature"
-import type { Itemmable } from "../../../src/models/items/item"
-import type { Spell } from "../../../src/models/magic/spells/Spell"
+} from "../../../server/api.js"
+import { prisma } from "../../../server/prisma.js"
+import { requireSession } from "../../../server/session.js"
+import { CHARACTER_TYPES } from "../../../src/models/characters/CharacterType.js"
+import type { CustomSystemDefinition } from "../../../src/models/customSystems/CustomSystemDefinition.js"
+import type { CompendiumCreature } from "../../../src/models/creatures/CompendiumCreature.js"
+import type { Itemmable } from "../../../src/models/items/item.js"
+import type { Spell } from "../../../src/models/magic/spells/Spell.js"
 import type {
   CreationCharacterConfiguration,
   CreationCharacterCustomSystemConfiguration,
   CreationItemCompendiumEntry,
   CreationState,
-} from "../../../src/shared/creation/creation.types"
+} from "../../../src/shared/creation/creation.types.js"
 
 type RouteContext = {
   params?:
