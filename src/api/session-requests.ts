@@ -14,6 +14,24 @@ export type SessionContentRequestStatus =
   | "REJECTED"
   | "REVOKED"
 
+export type SessionCharacterPreview = {
+  id: string
+  name: string
+  data: Record<string, unknown>
+  revision: number
+  owner: {
+    id: string
+    name: string
+  }
+  domains: Array<{
+    domain: string
+    payload: Record<string, unknown>
+    version: number
+    updatedBy?: string | null
+    updatedAt: string
+  }>
+}
+
 export type SessionContentRequest = {
   id: string
   campaignId: string
@@ -22,6 +40,7 @@ export type SessionContentRequest = {
   title: string
   sourceId: string
   data: Record<string, unknown>
+  characterPreview?: SessionCharacterPreview | null
   note?: string | null
   submittedBy: {
     id: string
