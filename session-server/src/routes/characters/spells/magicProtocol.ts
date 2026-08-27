@@ -20,11 +20,17 @@ export type SessionMagicOperation =
   | { type: "character.channelDivinity.spend"; characterId: string }
   | { type: "character.channelDivinity.restore"; characterId: string };
 
-export type SessionMagicClientMessage = {
-  type: "session.magic.operation";
-  operation: SessionMagicOperation;
-};
+export type SessionMagicClientMessage =
+  | {
+      type: "session.magic.operation";
+      operation: SessionMagicOperation;
+    }
+  | {
+      type: "session.magic.operations";
+      operations: SessionMagicOperation[];
+    };
 
+const MAX_MAGIC_BATCH_OPERATIONS = 200;
 const SPELL_SOURCE_TYPES = new Set(["class", "feat", "ability", "race", "equipment"]);
 const ATTRIBUTES = new Set(["str", "dex", "con", "int", "wis", "cha"]);
 const ACQUISITION_SOURCE_TYPES = new Set([
@@ -50,8 +56,33 @@ const ACQUISITION_REASONS = new Set([
 export function parseMagicClientMessage(raw: string): SessionMagicClientMessage | null {
   let parsed: unknown;
   try { parsed = JSON.parse(raw); } catch { return null; }
-  if (!isRecord(parsed) || parsed.type !== "session.magic.operation" || !isMagicOperation(parsed.operation)) return null;
-  return { type: "session.magic.operation", operation: parsed.operation };
+  if (!isRecord(parsed)) return null;
+
+  if (parsed.type === "session.magic.operation") {
+    return isMagicOperation(parsed.operation)
+      ? { type: parsed.type, operation: parsed.operation }
+      : null;
+  }
+
+  if (parsed.type === "session.magic.operations") {
+    if (
+      !Array.isArray(parsed.operations)
+      || parsed.operations.length < 1
+      || parsed.operations.length > MAX_MAGIC_BATCH_OPERATIONS
+      || !parsed.operations.every(isMagicOperation)
+    ) {
+      return null;
+    }
+
+    const characterId = parsed.operations[0]?.characterId;
+    if (!characterId || !parsed.operations.every((operation) => operation.characterId === characterId)) {
+      return null;
+    }
+
+    return { type: parsed.type, operations: parsed.operations };
+  }
+
+  return null;
 }
 
 function isMagicOperation(value: unknown): value is SessionMagicOperation {
