@@ -16,11 +16,9 @@ import { KiModule } from "./kiModule"
 import { KnownSpellsList } from "./knownSpellsList"
 import { MetamagicModule } from "./metamagicModule"
 import { OnDemandCharacterSpellLibrary } from "./OnDemandCharacterSpellLibrary"
-import {
-  withoutPreparedClassKnownSpells,
-} from "./preparedClassSpellAccess"
-import { PreparedClassSpellList } from "./PreparedClassSpellList"
+import { reconcilePreparedClassKnownSpells } from "./preparedClassSpellAccess"
 import { SpellSlotsEditor } from "./slots"
+import { usePreparedClassSpellAccess } from "./usePreparedClassSpellAccess"
 
 type Props = {
   character: CharacterTemplate
@@ -38,21 +36,19 @@ export function CharacterMagicTab({
   const { characters, currentOwner, mode } = workspace
   const sessionRuntime = useOptionalSessionRuntime()
   const { getSpellByIndex } = useMagicContext()
+  const preparedClassAccess = usePreparedClassSpellAccess(character)
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">(
     "idle",
   )
   const [addingSpell, setAddingSpell] = useState(false)
   const sorcererLevel = getSorcererLevel(character)
   const hasSorcererResources = sorcererLevel >= 2
-  const knownSpellCharacter = useMemo(
-    () => withoutPreparedClassKnownSpells(character),
-    [character],
-  )
   const spellListText = useMemo(
     () => buildAllCharacterSpellList(characters, getSpellByIndex),
     [characters, getSpellByIndex],
   )
   const canCopySpellList = spellListText.trim().length > 0
+  const characterId = character.get("id")
   const characterOwnerId = character.get("owner").id?.trim()
   const canManuallyAddSpell =
     mode === "campaign" &&
@@ -63,6 +59,23 @@ export function CharacterMagicTab({
           currentOwner?.id?.trim() &&
           currentOwner.id.trim() === characterOwnerId,
       ))
+
+  useEffect(() => {
+    if (!preparedClassAccess.ready || !canManuallyAddSpell) return
+
+    updateCharacter(characterId, (current) =>
+      reconcilePreparedClassKnownSpells(
+        current,
+        preparedClassAccess.catalogEntries,
+      ),
+    )
+  }, [
+    canManuallyAddSpell,
+    characterId,
+    preparedClassAccess.catalogEntries,
+    preparedClassAccess.ready,
+    updateCharacter,
+  ])
 
   useEffect(() => {
     if (!canManuallyAddSpell && addingSpell) setAddingSpell(false)
@@ -168,13 +181,8 @@ export function CharacterMagicTab({
         />
       ) : null}
 
-      <PreparedClassSpellList
-        character={character}
-        updateCharacter={updateCharacter}
-      />
-
       <KnownSpellsList
-        character={knownSpellCharacter}
+        character={character}
         updateCharacter={updateCharacter}
       />
     </div>
