@@ -2,9 +2,19 @@ import type { CharacterClassInterface, ClassName } from "../../../models/sheet/C
 import type { SpellSource } from "../../../models/magic/spells/SpellSource"
 
 export const PREPARED_CLASS_LIST_MARKER = "class-list-access:official"
+export const PREPARED_CLASS_NAMES = new Set<ClassName>([
+  "artificer",
+  "cleric",
+  "druid",
+  "paladin",
+])
 
 export function isPreparedClass(classEntry: CharacterClassInterface | undefined): boolean {
   return classEntry?.knownSpells?.mode === "prepared-only"
+}
+
+export function isPreparedClassName(className: string): className is ClassName {
+  return PREPARED_CLASS_NAMES.has(className as ClassName)
 }
 
 export function maximumPreparedClassSpellLevel(classEntry: CharacterClassInterface): number {
