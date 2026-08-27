@@ -1,4 +1,4 @@
-
+import { CLASS_NAMES } from "../../../contexts/consts"
 import { getCharacterGrantedSpells } from "../../../models/characters/characterGrantedSpells"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Spell } from "../../../models/magic/spells/Spell"
@@ -22,9 +22,7 @@ export function toCampaignCharacterSelectorItem(
   )
 
   const classLabel = classes
-    .map((entry) => {
-      return entry.className
-    })
+    .map((entry) => CLASS_NAMES[entry.className] ?? entry.className)
     .filter(Boolean)
     .join(" / ")
 
