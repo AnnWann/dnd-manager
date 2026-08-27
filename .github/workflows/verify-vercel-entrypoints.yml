@@ -31,7 +31,7 @@ jobs:
       - name: Compile Vercel entrypoints with root options
         shell: bash
         run: |
-          npx tsc --noEmit --target ES2023 --module ESNext --moduleResolution Bundler --types node --skipLibCheck --resolveJsonModule \
+          npx tsc --ignoreConfig --noEmit --target ES2023 --module ESNext --moduleResolution Bundler --types node --skipLibCheck --resolveJsonModule \
             api/auth.ts \
             'api/campaigns/[...path].ts' \
             api/compendium/spells.ts \
