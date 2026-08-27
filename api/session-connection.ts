@@ -1,20 +1,20 @@
 import {
   CampaignMemberStatus,
   type CampaignRole,
-} from "../generated/prisma/client"
+} from "../generated/prisma/client.js"
 import {
   ApiError,
   handleApiError,
   jsonResponse,
   readJsonObject,
-} from "../server/api"
-import { prisma } from "../server/prisma"
-import { requireSession } from "../server/session"
+} from "../server/api.js"
+import { prisma } from "../server/prisma.js"
+import { requireSession } from "../server/session.js"
 import {
   isValidSessionConnectionSecret,
   signSessionConnectionToken,
   type SessionConnectionRole,
-} from "../src/shared/session-runtime/sessionConnectionToken"
+} from "../src/shared/session-runtime/sessionConnectionToken.js"
 
 const CONNECTION_TOKEN_TTL_MS = 60_000
 const MAX_IDENTIFIER_LENGTH = 256
