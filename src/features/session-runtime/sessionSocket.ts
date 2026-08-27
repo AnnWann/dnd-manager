@@ -81,6 +81,8 @@ export class SessionSocket {
   private connectionAttempt = 0
   private stopped = false
   private hasConnectedOnce = false
+  private pendingMagicOperations: SessionMagicOperation[] = []
+  private magicFlushQueued = false
 
   constructor(private readonly options: SessionSocketOptions) {}
 
@@ -108,6 +110,13 @@ export class SessionSocket {
     | { type: "session.equipment.operation"; operation: SessionEquipmentOperation }
   ): boolean {
     if (this.socket?.readyState !== WebSocket.OPEN) return false
+
+    if (message.type === "session.magic.operation") {
+      this.pendingMagicOperations.push(message.operation)
+      this.scheduleMagicFlush()
+      return true
+    }
+
     this.socket.send(JSON.stringify(message))
     return true
   }
@@ -117,6 +126,8 @@ export class SessionSocket {
     this.connectionAttempt += 1
     this.clearHeartbeatTimer()
     this.clearReconnectTimer()
+    this.pendingMagicOperations = []
+    this.magicFlushQueued = false
     const socket = this.socket
     this.socket = null
     if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000, "Session runtime disconnected")
@@ -125,7 +136,6 @@ export class SessionSocket {
 
   private async openSocket(): Promise<void> {
     if (this.stopped) return
-
     const attempt = ++this.connectionAttempt
     this.options.onStatusChange(this.hasConnectedOnce ? "reconnecting" : "connecting")
 
@@ -180,6 +190,32 @@ export class SessionSocket {
     socket.onerror = () => {
       if (!this.stopped) this.options.onStatusChange("error")
     }
+  }
+
+  private scheduleMagicFlush(): void {
+    if (this.magicFlushQueued) return
+    this.magicFlushQueued = true
+
+    queueMicrotask(() => {
+      this.magicFlushQueued = false
+      const socket = this.socket
+      const pending = this.pendingMagicOperations.splice(0)
+      if (!pending.length || socket?.readyState !== WebSocket.OPEN) return
+
+      const byCharacter = new Map<string, SessionMagicOperation[]>()
+      for (const operation of pending) {
+        const group = byCharacter.get(operation.characterId)
+        if (group) group.push(operation)
+        else byCharacter.set(operation.characterId, [operation])
+      }
+
+      for (const operations of byCharacter.values()) {
+        const payload = operations.length === 1
+          ? { type: "session.magic.operation", operation: operations[0] }
+          : { type: "session.magic.operations", operations }
+        socket.send(JSON.stringify(payload))
+      }
+    })
   }
 
   private async buildUrl(): Promise<string> {
