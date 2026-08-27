@@ -1,6 +1,9 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider            = "prisma-client"
+  output              = "../generated/prisma"
+  moduleFormat        = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension = "js"
 }
 
 datasource db {
@@ -255,7 +258,7 @@ model HomebrewSpell {
   name        String
   data        Json
   status      HomebrewSpellStatus @default(ACTIVE)
-  revision    Int                 @default(1)
+  revision   Int                 @default(1)
 
   ownerId String
   owner   User @relation("HomebrewSpellOwner", fields: [ownerId], references: [id], onDelete: Cascade)
