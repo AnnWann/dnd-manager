@@ -1,4 +1,4 @@
-import { auth } from "../server/auth"
+import { auth } from "../server/auth.js"
 
 export default {
   async fetch(request: Request): Promise<Response> {
