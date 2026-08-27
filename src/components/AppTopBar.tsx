@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { useLocation } from "react-router-dom"
 
 type PageMetadata = {
@@ -30,7 +31,7 @@ const DEFAULT_PAGE: PageMetadata = {
   description: "Ferramentas para administrar sua mesa.",
 }
 
-export function AppHeader() {
+export function AppHeader({ rightContent }: { rightContent?: ReactNode }) {
   const location = useLocation()
   const page = location.pathname.startsWith("/character")
     ? CHARACTER_PAGE
@@ -38,7 +39,7 @@ export function AppHeader() {
 
   return (
     <header className="shrink-0 border-b border-border bg-bg-elevated">
-      <div className="flex min-h-16 w-full items-center px-4 py-3 lg:px-6">
+      <div className="flex min-h-16 w-full items-center justify-between gap-4 px-4 py-3 lg:px-6">
         <div className="min-w-0">
           <h1 className="truncate font-heading text-xl font-semibold text-textH">
             {page.title}
@@ -48,6 +49,10 @@ export function AppHeader() {
             {page.description}
           </p>
         </div>
+
+        {rightContent ? (
+          <div className="flex shrink-0 items-center gap-2">{rightContent}</div>
+        ) : null}
       </div>
     </header>
   )
