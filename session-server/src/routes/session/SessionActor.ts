@@ -159,6 +159,22 @@ export class SessionActor extends DurableObject<Env> {
         await this.handleConditionOperation(webSocket, connection, parsed.operation);
         break;
       case "session.sheet.operation":
+        if (
+          parsed.operation.type.startsWith("character.condition.") ||
+          parsed.operation.type.startsWith("character.concentration.")
+        ) {
+          await this.handleConditionOperation(
+            webSocket,
+            connection,
+            parsed.operation as SessionConditionOperation | SessionConcentrationOperation,
+          );
+        } else {
+          await this.handleHpOperation(
+            webSocket,
+            connection,
+            parsed.operation as Parameters<typeof applyHpOperation>[1],
+          );
+        }
         break;
       case "session.log.undo":
         this.sendError(webSocket, "UNDO_ROUTING_ERROR", "Session undo must be handled by the composed session actor.");
@@ -611,7 +627,7 @@ export class SessionActor extends DurableObject<Env> {
   }
 
   private async readRestInventoryState(): Promise<SharedInventoryState> {
-    return (await this.ctx.storage.get<SharedInventoryState>(INVENTORY_STATE_KEY)) ?? {
+    return (await this.ctx.storage.get<SharedInventoryState>>(INVENTORY_STATE_KEY)) ?? {
       initialized: false,
       revision: 0,
       partyInventory: [],
