@@ -1,18 +1,18 @@
 import {
   CharacterDataDomain,
   Prisma,
-} from "../../../../../generated/prisma/client"
+} from "../../../../../generated/prisma/client.js"
 import {
   ApiError,
   handleApiError,
   jsonResponse,
   readJsonObject,
-} from "../../../../../server/api"
-import { sanitizeCharacterAcquisitionData } from "../../../../../server/character-acquisitions"
-import { syncCharacterHomebrewSpellLinks } from "../../../../../server/character-domain-spells"
-import { sanitizeCharacterItemData } from "../../../../../server/character-items"
-import { prisma } from "../../../../../server/prisma"
-import { requireSession } from "../../../../../server/session"
+} from "../../../../../server/api.js"
+import { sanitizeCharacterAcquisitionData } from "../../../../../server/character-acquisitions.js"
+import { syncCharacterHomebrewSpellLinks } from "../../../../../server/character-domain-spells.js"
+import { sanitizeCharacterItemData } from "../../../../../server/character-items.js"
+import { prisma } from "../../../../../server/prisma.js"
+import { requireSession } from "../../../../../server/session.js"
 
 type DomainResult = {
   domain: string
