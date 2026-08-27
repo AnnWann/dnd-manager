@@ -14,6 +14,8 @@ import type { SpellSource } from "../../../models/magic/spells/SpellSource"
 import type { MagicCircleLevel } from "../../../models/magic/spells/spellDefinitions"
 import type { ClassName } from "../../../models/sheet/Class"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
+import { isPreparedClassName } from "./preparedClassSpellAccess"
+import { PreparedClassSpellList } from "./PreparedClassSpellList"
 
 type Props = {
   character: CharacterTemplate
@@ -54,6 +56,13 @@ export function UserCharacterMagicTab({ character }: Props) {
     const result: DisplaySpell[] = []
 
     for (const entry of character.get("magic")?.spells.knownSpells ?? []) {
+      if (
+        entry.source.type === "class" &&
+        isPreparedClassName(entry.source.sourceId)
+      ) {
+        continue
+      }
+
       const spell = getSpellByIndex(entry.spells.id)
       if (!spell) continue
       result.push({
@@ -221,11 +230,18 @@ export function UserCharacterMagicTab({ character }: Props) {
         </CardContent>
       </Card>
 
+      <PreparedClassSpellList
+        character={character}
+        updateCharacter={updateCharacter}
+      />
+
       <Card>
         <CardHeader>
-          <div className="text-sm font-semibold text-textH">Magias</div>
+          <div className="text-sm font-semibold text-textH">
+            Conhecidas e concedidas
+          </div>
           <div className="mt-1 text-xs text-textMuted">
-            Magias conhecidas e magias permanentes concedidas pela ficha.
+            Magias aprendidas individualmente e magias permanentes concedidas pela ficha.
           </div>
 
           <div className="mt-4 grid gap-2 md:grid-cols-[minmax(220px,1fr)_170px_190px]">
