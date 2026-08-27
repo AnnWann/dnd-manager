@@ -7,6 +7,7 @@ import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from "../models/characters/CharacterTemplate"
+import { preloadSessionRouteModules } from "../sessionRoutePreload"
 import { apiClient } from "./api-client"
 import {
   getMyCampaigns,
@@ -63,7 +64,7 @@ export async function getCampaignSessionCharacters(
       getLocalCharacters().map((character) => [character.id, character]),
     )
 
-    return {
+    const data: CampaignSessionCharacters = {
       campaign: {
         id: campaign.id,
         name: campaign.name,
@@ -85,6 +86,9 @@ export async function getCampaignSessionCharacters(
         }]
       }),
     }
+
+    await preloadSessionRouteModules(data.campaign.isMaster)
+    return data
   }
 
   const now = Date.now()
@@ -95,7 +99,11 @@ export async function getCampaignSessionCharacters(
     .get<CampaignSessionCharacters>(
       `/campaigns/${encodeURIComponent(campaignId)}/characters`,
     )
-    .then((response) => response.data)
+    .then(async (response) => {
+      const data = response.data
+      await preloadSessionRouteModules(data.campaign.isMaster)
+      return data
+    })
     .catch((error) => {
       sessionRequestCache.delete(campaignId)
       throw error
