@@ -48,6 +48,7 @@ export type SpellCompendiumPage<T> = {
 }
 
 const SPELL_INDEX_BATCH_SIZE = 100
+const MAX_SPELL_PAGE_SIZE = 1000
 const spellDetailCache = new Map<string, Spell>()
 let allOfficialSpellSummariesCache: SpellCompendiumPage<SpellCompendiumSummary> | null = null
 let allOfficialSpellSummariesRequest: Promise<SpellCompendiumPage<SpellCompendiumSummary>> | null = null
@@ -57,17 +58,20 @@ export async function queryOfficialSpells(
 ): Promise<SpellCompendiumPage<SpellCompendiumSummary>> {
   if (import.meta.env.DEV && LOCAL_AUTH_BYPASS) {
     const spells = await loadLocalOfficialSpells()
-    const filtered = filterLocalSpells(spells, query)
-    const page = Math.max(1, query.page ?? 1)
-    const pageSize = Math.max(1, query.pageSize ?? 100)
-    const start = (page - 1) * pageSize
-    return {
-      spells: filtered.slice(start, start + pageSize).map(toSummary),
-      page,
-      pageSize,
-      total: filtered.length,
-      totalPages: Math.max(1, Math.ceil(filtered.length / pageSize)),
-    }
+    return paginateSummaries(
+      filterLocalSpells(spells, query).map(toSummary),
+      query,
+    )
+  }
+
+  // Once the complete official compendium has been loaded, every summary
+  // field used by the filters is already available in memory. Reuse that
+  // snapshot instead of issuing another request for each UI filter change.
+  if (allOfficialSpellSummariesCache) {
+    return paginateSummaries(
+      filterSpellSummaries(allOfficialSpellSummariesCache.spells, query),
+      query,
+    )
   }
 
   const response = await apiClient.get<SpellCompendiumPage<SpellCompendiumSummary>>(
@@ -126,7 +130,7 @@ export async function queryAllOfficialSpellSummaries(
   }
 
   const load = async () => {
-    const pageSize = 1000
+    const pageSize = MAX_SPELL_PAGE_SIZE
     const first = await queryOfficialSpells({ ...query, page: 1, pageSize })
     if (first.totalPages <= 1) return first
 
@@ -295,6 +299,55 @@ function filterLocalSpells(spells: Spell[], query: SpellCompendiumQuery): Spell[
         .join(" "),
     ).includes(normalizedQuery)
   })
+}
+
+function filterSpellSummaries(
+  spells: SpellCompendiumSummary[],
+  query: SpellCompendiumQuery,
+): SpellCompendiumSummary[] {
+  const normalizedQuery = normalizeSearch(query.q ?? "")
+  const normalizedClass = normalizeSearch(query.className ?? "")
+  const normalizedSchool = normalizeSearch(query.school ?? "")
+
+  return spells.filter((spell) => {
+    if (query.level !== undefined && spell.slotLevel !== query.level) return false
+    if (query.minLevel !== undefined && spell.slotLevel < query.minLevel) return false
+    if (query.maxLevel !== undefined && spell.slotLevel > query.maxLevel) return false
+    if (normalizedClass && !spell.classes.some((entry) => normalizeSearch(entry) === normalizedClass)) return false
+    if (normalizedSchool && normalizeSearch(String(spell.school)) !== normalizedSchool) return false
+    if (query.concentration !== undefined && spell.concentration !== query.concentration) return false
+    if (query.ritual !== undefined && spell.ritual !== query.ritual) return false
+    if (query.attack !== undefined && spell.targeting.hasAttackRoll !== query.attack) return false
+    if (query.save !== undefined && spell.targeting.hasSavingThrow !== query.save) return false
+    if (query.castingTime && spell.castingTime.type !== query.castingTime) return false
+    if (!normalizedQuery) return true
+
+    return normalizeSearch(
+      [spell.displayName, spell.name, spell.description, spell.school, ...spell.classes]
+        .filter(Boolean)
+        .join(" "),
+    ).includes(normalizedQuery)
+  })
+}
+
+function paginateSummaries(
+  spells: SpellCompendiumSummary[],
+  query: SpellCompendiumQuery,
+): SpellCompendiumPage<SpellCompendiumSummary> {
+  const page = Math.max(1, query.page ?? 1)
+  const pageSize = Math.min(
+    MAX_SPELL_PAGE_SIZE,
+    Math.max(1, query.pageSize ?? 100),
+  )
+  const start = (page - 1) * pageSize
+
+  return {
+    spells: spells.slice(start, start + pageSize),
+    page,
+    pageSize,
+    total: spells.length,
+    totalPages: Math.max(1, Math.ceil(spells.length / pageSize)),
+  }
 }
 
 function toSummary(spell: Spell): SpellCompendiumSummary {
