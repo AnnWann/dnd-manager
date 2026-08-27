@@ -52,6 +52,25 @@ type RawRequestRow = {
   updatedAt: Date
 }
 
+type CharacterPreviewRow = {
+  id: string
+  name: string
+  data: unknown
+  revision: number
+  ownerId: string
+  owner: {
+    id: string
+    name: string
+  }
+  domains: Array<{
+    domain: string
+    data: unknown
+    revision: number
+    updatedById: string | null
+    updatedAt: Date
+  }>
+}
+
 export async function GET(
   request: Request,
   context?: RouteContext,
@@ -120,8 +139,49 @@ export async function GET(
           ORDER BY request."submittedAt" DESC
         `
 
+    const characterRequestIds = Array.from(
+      new Set(
+        rows
+          .filter((row) => row.type === "CHARACTER")
+          .map((row) => row.sourceId),
+      ),
+    )
+    const characterRows: CharacterPreviewRow[] = characterRequestIds.length
+      ? await prisma.character.findMany({
+          where: { id: { in: characterRequestIds } },
+          select: {
+            id: true,
+            name: true,
+            data: true,
+            revision: true,
+            ownerId: true,
+            owner: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            domains: {
+              select: {
+                domain: true,
+                data: true,
+                revision: true,
+                updatedById: true,
+                updatedAt: true,
+              },
+              orderBy: { domain: "asc" },
+            },
+          },
+        })
+      : []
+    const characterById = new Map(
+      characterRows.map((character) => [character.id, character]),
+    )
+
     return jsonResponse({
-      requests: rows.map(serializeRequest),
+      requests: rows.map((row) =>
+        serializeRequest(row, characterById.get(row.sourceId)),
+      ),
     })
   } catch (error) {
     return handleApiError(error)
@@ -366,7 +426,28 @@ export async function requireCampaignAccess(
   }
 }
 
-function serializeRequest(row: RawRequestRow) {
+function serializeRequest(
+  row: RawRequestRow,
+  character?: CharacterPreviewRow,
+) {
+  const characterPreview =
+    row.type === "CHARACTER" && character?.ownerId === row.submittedById
+      ? {
+          id: character.id,
+          name: character.name,
+          data: character.data,
+          revision: character.revision,
+          owner: character.owner,
+          domains: character.domains.map((domain) => ({
+            domain: domain.domain.toLowerCase(),
+            payload: domain.data,
+            version: domain.revision,
+            updatedBy: domain.updatedById,
+            updatedAt: domain.updatedAt,
+          })),
+        }
+      : null
+
   return {
     id: row.id,
     campaignId: row.campaignId,
@@ -375,6 +456,7 @@ function serializeRequest(row: RawRequestRow) {
     title: row.title,
     sourceId: row.sourceId,
     data: row.data,
+    characterPreview,
     note: row.note,
     submittedBy: {
       id: row.submittedById,
