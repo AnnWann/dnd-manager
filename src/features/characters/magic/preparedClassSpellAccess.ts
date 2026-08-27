@@ -1,3 +1,4 @@
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { CharacterClassInterface, ClassName } from "../../../models/sheet/Class"
 import type { SpellSource } from "../../../models/magic/spells/SpellSource"
 
@@ -46,6 +47,30 @@ export function preparedClassSpellSource(classEntry: CharacterClassInterface): S
 
 export function isPreparedClassListEntry(notes: string | undefined): boolean {
   return notes?.trim() === PREPARED_CLASS_LIST_MARKER
+}
+
+export function withoutPreparedClassKnownSpells(
+  character: CharacterTemplate,
+): CharacterTemplate {
+  const magic = character.get("magic")
+  if (!magic) return character
+
+  const knownSpells = magic.spells.knownSpells.filter(
+    (entry) =>
+      entry.source.type !== "class" ||
+      !isPreparedClassName(entry.source.sourceId),
+  )
+  if (knownSpells.length === magic.spells.knownSpells.length) return character
+
+  return character.withPatch({
+    magic: {
+      ...magic,
+      spells: {
+        ...magic.spells,
+        knownSpells,
+      },
+    },
+  })
 }
 
 function defaultCastingAttribute(className: ClassName) {
