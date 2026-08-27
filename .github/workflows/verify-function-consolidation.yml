@@ -1,0 +1,33 @@
+name: Verify Vercel function consolidation
+
+on:
+  push:
+    branches:
+      - feature/session-server
+    paths:
+      - .github/workflows/verify-function-consolidation.yml
+      - .github/function-consolidation-verify-trigger
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      BETTER_AUTH_URL: http://localhost:3000
+      BETTER_AUTH_SECRET: test-only-secret-for-build-verification-1234567890
+      SESSION_CONNECTION_SECRET: test-only-session-secret-for-build-verification-1234567890
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm install --ignore-scripts --package-lock=false --no-audit --no-fund
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Build app
+        run: npm run build
