@@ -81,8 +81,7 @@ export function usePreparedClassSpellAccess(
     )
       .then(async (nextCatalogs) => {
         if (cancelled) return
-        setCatalogs(nextCatalogs)
-        setLoadedKey(requestKey)
+
         await ensureOfficialSpells(
           Array.from(
             new Set(
@@ -90,6 +89,14 @@ export function usePreparedClassSpellAccess(
             ),
           ),
         )
+        if (cancelled) return
+
+        // Do not expose the catalog as ready until every spell detail has been
+        // loaded into MagicContext. Otherwise CharacterSpellRuntime can observe
+        // newly-added indexes while the bulk request is still in flight and
+        // start redundant per-index loads.
+        setCatalogs(nextCatalogs)
+        setLoadedKey(requestKey)
       })
       .catch(() => {
         if (!cancelled) {
