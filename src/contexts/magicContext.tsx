@@ -76,6 +76,14 @@ export function MagicProvider({
     [officialSpells, preloadedOfficialSpells],
   )
 
+  // Keep the loader callback stable while still reading the latest indexes.
+  // Effects that depend on ensureOfficialSpells should not restart merely
+  // because a completed load expanded the official-spell cache.
+  const savedSpellsRef = useRef(normalizedSavedSpells)
+  savedSpellsRef.current = normalizedSavedSpells
+  const officialSpellsRef = useRef(effectiveOfficialSpells)
+  officialSpellsRef.current = effectiveOfficialSpells
+
   const mergeOfficialSpells = useCallback((incoming: readonly Spell[]) => {
     if (!incoming.length) return
     setOfficialSpells((current) => {
@@ -105,10 +113,10 @@ export function MagicProvider({
     spellIndexes: readonly string[],
   ) => {
     const savedIndexes = new Set(
-      normalizedSavedSpells.map((spell) => spell.index.trim()).filter(Boolean),
+      savedSpellsRef.current.map((spell) => spell.index.trim()).filter(Boolean),
     )
     const loadedIndexes = new Set(
-      effectiveOfficialSpells.map((spell) => spell.index.trim()).filter(Boolean),
+      officialSpellsRef.current.map((spell) => spell.index.trim()).filter(Boolean),
     )
     const missing = Array.from(
       new Set(spellIndexes.map((index) => index.trim()).filter(Boolean)),
@@ -126,10 +134,8 @@ export function MagicProvider({
     }
   }, [
     beginOfficialLoad,
-    effectiveOfficialSpells,
     finishOfficialLoad,
     mergeOfficialSpells,
-    normalizedSavedSpells,
   ])
 
   const spellByIndex = useMemo(() => {
