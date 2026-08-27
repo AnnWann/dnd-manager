@@ -3,15 +3,15 @@ import {
   CampaignRole,
   CampaignSpellApprovalStatus,
   HomebrewSpellStatus,
-} from "../../../../generated/prisma/client"
+} from "../../../../generated/prisma/client.js"
 import {
   ApiError,
   handleApiError,
   jsonResponse,
   readJsonObject,
-} from "../../../../server/api"
-import { prisma } from "../../../../server/prisma"
-import { requireSession } from "../../../../server/session"
+} from "../../../../server/api.js"
+import { prisma } from "../../../../server/prisma.js"
+import { requireSession } from "../../../../server/session.js"
 
 type RouteContext = {
   params: Promise<{
