@@ -1,12 +1,12 @@
-import * as charactersRoute from "./[campaignId]/_characters"
-import * as creationRoute from "./[campaignId]/_creation"
-import * as homebrewRoute from "./[campaignId]/_homebrew"
-import * as itemCompendiumRoute from "./[campaignId]/_item-compendium"
-import * as itemCompendiumEntryRoute from "./[campaignId]/item-compendium/_template"
-import * as requestsRoute from "./[campaignId]/_requests"
-import * as requestRoute from "./[campaignId]/requests/_request"
-import * as settingsRoute from "./[campaignId]/_settings"
-import * as spellRoute from "./[campaignId]/spells/_spell"
+import * as charactersRoute from "../../api-handlers/campaigns/[campaignId]/_characters"
+import * as creationRoute from "../../api-handlers/campaigns/[campaignId]/_creation"
+import * as homebrewRoute from "../../api-handlers/campaigns/[campaignId]/_homebrew"
+import * as itemCompendiumRoute from "../../api-handlers/campaigns/[campaignId]/_item-compendium"
+import * as itemCompendiumEntryRoute from "../../api-handlers/campaigns/[campaignId]/item-compendium/_template"
+import * as requestsRoute from "../../api-handlers/campaigns/[campaignId]/_requests"
+import * as requestRoute from "../../api-handlers/campaigns/[campaignId]/requests/_request"
+import * as settingsRoute from "../../api-handlers/campaigns/[campaignId]/_settings"
+import * as spellRoute from "../../api-handlers/campaigns/[campaignId]/spells/_spell"
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const
 
