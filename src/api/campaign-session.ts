@@ -16,6 +16,12 @@ import {
 } from "./user-campaigns"
 import type { UserCharacterDomain } from "./user-characters"
 
+export type CampaignSessionMember = {
+  id: string
+  name: string
+  role: CampaignRole
+}
+
 export type CampaignSessionCharacter = {
   id: string
   name: string
@@ -37,6 +43,7 @@ export type CampaignSessionCharacters = {
     role: CampaignRole
     isMaster: boolean
   }
+  members: CampaignSessionMember[]
   characters: CampaignSessionCharacter[]
 }
 
@@ -71,6 +78,13 @@ export async function getCampaignSessionCharacters(
         role: campaign.role,
         isMaster: campaign.isOwner || campaign.role === "MASTER",
       },
+      members: [
+        {
+          id: campaign.owner.id,
+          name: campaign.owner.name,
+          role: "MASTER",
+        },
+      ],
       characters: campaign.characters.flatMap((character) => {
         const source = localCharacters.get(character.id)
         if (!source) return []
