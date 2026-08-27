@@ -34,11 +34,29 @@ export async function GET(
         id: true,
         name: true,
         ownerId: true,
-        members: {
-          where: { userId: session.user.id },
+        owner: {
           select: {
+            id: true,
+            name: true,
+          },
+        },
+        members: {
+          where: {
+            status: CampaignMemberStatus.ACTIVE,
+          },
+          select: {
+            userId: true,
             role: true,
             status: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+          orderBy: {
+            joinedAt: "asc",
           },
         },
       },
@@ -52,7 +70,9 @@ export async function GET(
       )
     }
 
-    const membership = campaign.members[0]
+    const membership = campaign.members.find(
+      (member) => member.userId === session.user.id,
+    )
     const isOwner = campaign.ownerId === session.user.id
     const isActiveMember = membership?.status === CampaignMemberStatus.ACTIVE
 
@@ -122,6 +142,20 @@ export async function GET(
         role,
         isMaster,
       },
+      members: [
+        {
+          id: campaign.owner.id,
+          name: campaign.owner.name,
+          role: CampaignRole.MASTER,
+        },
+        ...campaign.members
+          .filter((member) => member.userId !== campaign.ownerId)
+          .map((member) => ({
+            id: member.user.id,
+            name: member.user.name,
+            role: member.role,
+          })),
+      ],
       characters: links.map((link) => ({
         id: link.character.id,
         name: link.character.name,
