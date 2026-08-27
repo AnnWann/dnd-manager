@@ -41,7 +41,10 @@ const SLOT_LEVELS: MagicCircleLevel[] = [1, 2, 3, 4, 5, 6, 7, 8, 9]
  */
 export function UserCharacterMagicTab({ character }: Props) {
   const navigate = useNavigate()
-  const { isEditing = false } = useCharacterWorkspace()
+  const {
+    isEditing = false,
+    updateCharacter,
+  } = useCharacterWorkspace()
   const { getSpellByIndex } = useMagicContext()
   const [search, setSearch] = useState("")
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("all")
@@ -121,6 +124,19 @@ export function UserCharacterMagicTab({ character }: Props) {
     customPools.some((pool) =>
       SLOT_LEVELS.some((level) => (pool.slots[level]?.max ?? 0) > 0),
     )
+
+  function removeKnownSpell(entry: DisplaySpell) {
+    if (entry.granted) return
+
+    const name = spellName(entry.spell)
+    if (!window.confirm(`Remover ${name} da lista de magias do personagem?`)) {
+      return
+    }
+
+    updateCharacter(character.get("id"), (current) =>
+      current.removeSpell(entry.spell.index),
+    )
+  }
 
   return (
     <div className="grid gap-4">
@@ -258,7 +274,12 @@ export function UserCharacterMagicTab({ character }: Props) {
           ) : (
             <div className="grid gap-3">
               {visibleSpells.map((entry) => (
-                <UserSpellCard key={entry.key} entry={entry} />
+                <UserSpellCard
+                  key={entry.key}
+                  entry={entry}
+                  canRemove={isEditing && !entry.granted}
+                  onRemove={() => removeKnownSpell(entry)}
+                />
               ))}
             </div>
           )}
@@ -268,7 +289,15 @@ export function UserCharacterMagicTab({ character }: Props) {
   )
 }
 
-function UserSpellCard({ entry }: { entry: DisplaySpell }) {
+function UserSpellCard({
+  entry,
+  canRemove,
+  onRemove,
+}: {
+  entry: DisplaySpell
+  canRemove: boolean
+  onRemove: () => void
+}) {
   const spell = entry.spell
   const description = spell.description?.trim() ?? ""
 
@@ -289,6 +318,16 @@ function UserSpellCard({ entry }: { entry: DisplaySpell }) {
         ) : null}
         {spell.concentration ? <DefinitionPill>Concentração</DefinitionPill> : null}
         {spell.ritual ? <DefinitionPill>Ritual</DefinitionPill> : null}
+        {canRemove ? (
+          <Button
+            size="sm"
+            variant="danger"
+            className="ml-auto"
+            onClick={onRemove}
+          >
+            Remover
+          </Button>
+        ) : null}
       </div>
 
       {description ? (
