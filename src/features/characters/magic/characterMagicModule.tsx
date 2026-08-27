@@ -2,22 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react"
 
-import {
-  queryAllOfficialSpellSummaries,
-  type SpellCompendiumSummary,
-} from "../../../api/spell-compendium"
 import { Button } from "../../../components/ui/Button"
 import { Card, CardHeader } from "../../../components/ui/Card"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { getCharacterGrantedSpells } from "../../../models/characters/characterGrantedSpells"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getSorcererLevel } from "../../../models/characters/characterSorceryPoints"
-import type { CharacterSpells } from "../../../models/magic/spells/CharacterSpells"
 import type { Spell } from "../../../models/magic/spells/Spell"
-import type {
-  CharacterClassInterface,
-  ClassName,
-} from "../../../models/sheet/Class"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { ChannelDivinityModule } from "./channelDivinityModule"
@@ -34,18 +25,6 @@ type Props = {
     updater: (c: CharacterTemplate) => CharacterTemplate,
   ) => void
 }
-
-type KnownSpellEntry = CharacterSpells["knownSpells"][number]
-type DivineSpellCatalog = {
-  classEntry: CharacterClassInterface
-  spells: SpellCompendiumSummary[]
-}
-
-const DIVINE_PREPARED_CLASSES: readonly ClassName[] = [
-  "cleric",
-  "druid",
-  "paladin",
-]
 
 export function CharacterMagicTab({
   character,
@@ -76,53 +55,6 @@ export function CharacterMagicTab({
           currentOwner?.id?.trim() &&
           currentOwner.id.trim() === characterOwnerId,
       ))
-  const divineClasses = (character.get("sheet").classes ?? []).filter((entry) =>
-    DIVINE_PREPARED_CLASSES.includes(entry.className),
-  )
-  const divineCatalogRequestKey = divineClasses
-    .map((entry) => `${entry.className}:${maximumSpellLevelForClass(entry)}`)
-    .sort()
-    .join("|")
-
-  useEffect(() => {
-    if (!divineCatalogRequestKey) return
-
-    let cancelled = false
-    void Promise.all(
-      divineClasses.map(async (classEntry): Promise<DivineSpellCatalog> => {
-        const availableLevel = maximumSpellLevelForClass(classEntry)
-        if (availableLevel <= 0) return { classEntry, spells: [] }
-
-        const page = await queryAllOfficialSpellSummaries({
-          className: classEntry.className,
-          maxLevel: availableLevel,
-        })
-        return { classEntry, spells: page.spells }
-      }),
-    )
-      .then((catalogs) => {
-        if (cancelled) return
-
-        updateCharacter(character.get("id"), (current) => {
-          const missingSpells = getMissingDivineClassSpells(current, catalogs)
-          if (missingSpells.length === 0) return current
-
-          let nextCharacter = current
-          for (const spellEntry of missingSpells) {
-            nextCharacter = nextCharacter.addSpell(spellEntry)
-          }
-          return nextCharacter
-        })
-      })
-      .catch(() => {
-        // The existing character spell list remains usable if the compendium
-        // cannot be reconciled. A later navigation/retry can reconcile again.
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [divineCatalogRequestKey, updateCharacter])
 
   useEffect(() => {
     if (!canManuallyAddSpell && addingSpell) setAddingSpell(false)
@@ -275,55 +207,6 @@ function buildCharacterSpellList(
   }
 
   return rows
-}
-
-function getMissingDivineClassSpells(
-  character: CharacterTemplate,
-  catalogs: DivineSpellCatalog[],
-): KnownSpellEntry[] {
-  const knownSpells = character.get("magic")?.spells.knownSpells ?? []
-  const knownIndexes = new Set(knownSpells.map((entry) => entry.spells.id))
-  const missing: KnownSpellEntry[] = []
-
-  for (const { classEntry, spells } of catalogs) {
-    for (const spell of spells) {
-      if (knownIndexes.has(spell.index)) continue
-
-      knownIndexes.add(spell.index)
-      missing.push({
-        spells: {
-          id: spell.index,
-          prepared: false,
-        },
-        source: {
-          type: "class",
-          sourceId: classEntry.className,
-          name: classEntry.className,
-          attribute:
-            classEntry.castingAttribute ??
-            (classEntry.className === "paladin" ? "cha" : "wis"),
-        },
-      })
-    }
-  }
-
-  return missing
-}
-
-function maximumSpellLevelForClass(
-  classEntry: CharacterClassInterface,
-): number {
-  const level = classEntry.level
-
-  switch (classEntry.className) {
-    case "cleric":
-    case "druid":
-      return Math.min(9, Math.ceil(level / 2))
-    case "paladin":
-      return level < 2 ? 0 : Math.min(5, Math.ceil((level - 1) / 2))
-    default:
-      return 0
-  }
 }
 
 async function copyText(value: string): Promise<void> {
