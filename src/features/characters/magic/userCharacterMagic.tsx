@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
 
 import { Button } from "../../../components/ui/Button"
@@ -14,8 +14,11 @@ import type { SpellSource } from "../../../models/magic/spells/SpellSource"
 import type { MagicCircleLevel } from "../../../models/magic/spells/spellDefinitions"
 import type { ClassName } from "../../../models/sheet/Class"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
-import { isPreparedClassName } from "./preparedClassSpellAccess"
-import { PreparedClassSpellList } from "./PreparedClassSpellList"
+import {
+  isPreparedClassListEntry,
+  reconcilePreparedClassKnownSpells,
+} from "./preparedClassSpellAccess"
+import { usePreparedClassSpellAccess } from "./usePreparedClassSpellAccess"
 
 type Props = {
   character: CharacterTemplate
@@ -27,6 +30,8 @@ type DisplaySpell = {
   source: SpellSource
   prepared: boolean
   granted: boolean
+  classList: boolean
+  persisted: boolean
 }
 
 type LevelFilter = "all" | "cantrip" | `${number}`
@@ -48,29 +53,59 @@ export function UserCharacterMagicTab({ character }: Props) {
     updateCharacter,
   } = useCharacterWorkspace()
   const { getSpellByIndex } = useMagicContext()
+  const preparedClassAccess = usePreparedClassSpellAccess(character)
   const [search, setSearch] = useState("")
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("all")
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all")
+  const characterId = character.get("id")
+
+  useEffect(() => {
+    if (!isEditing || !preparedClassAccess.ready) return
+
+    updateCharacter(characterId, (current) =>
+      reconcilePreparedClassKnownSpells(
+        current,
+        preparedClassAccess.catalogEntries,
+      ),
+    )
+  }, [
+    characterId,
+    isEditing,
+    preparedClassAccess.catalogEntries,
+    preparedClassAccess.ready,
+    updateCharacter,
+  ])
 
   const spells = useMemo<DisplaySpell[]>(() => {
     const result: DisplaySpell[] = []
+    const seen = new Set<string>()
 
     for (const entry of character.get("magic")?.spells.knownSpells ?? []) {
-      if (
-        entry.source.type === "class" &&
-        isPreparedClassName(entry.source.sourceId)
-      ) {
-        continue
-      }
-
       const spell = getSpellByIndex(entry.spells.id)
       if (!spell) continue
+      seen.add(spell.index)
       result.push({
         key: `known:${entry.source.type}:${entry.source.sourceId}:${spell.index}`,
         spell,
         source: entry.source,
         prepared: entry.spells.prepared,
         granted: false,
+        classList: isPreparedClassListEntry(entry.acquisition?.notes),
+        persisted: true,
+      })
+    }
+
+    for (const access of preparedClassAccess.entries) {
+      if (seen.has(access.spell.index)) continue
+      seen.add(access.spell.index)
+      result.push({
+        key: `class-list:${access.classEntry.className}:${access.spell.index}`,
+        spell: access.spell,
+        source: access.source,
+        prepared: false,
+        granted: false,
+        classList: true,
+        persisted: false,
       })
     }
 
@@ -90,6 +125,8 @@ export function UserCharacterMagicTab({ character }: Props) {
         source: grant.source,
         prepared: true,
         granted: true,
+        classList: false,
+        persisted: false,
       })
     }
 
@@ -98,7 +135,7 @@ export function UserCharacterMagicTab({ character }: Props) {
         left.spell.slotLevel - right.spell.slotLevel ||
         spellName(left.spell).localeCompare(spellName(right.spell), "pt-BR"),
     )
-  }, [character, getSpellByIndex])
+  }, [character, getSpellByIndex, preparedClassAccess.entries])
 
   const sourceTypes = useMemo(
     () => Array.from(new Set(spells.map((entry) => entry.source.type))),
@@ -135,16 +172,50 @@ export function UserCharacterMagicTab({ character }: Props) {
     )
 
   function removeKnownSpell(entry: DisplaySpell) {
-    if (entry.granted) return
+    if (entry.granted || entry.classList) return
 
     const name = spellName(entry.spell)
     if (!window.confirm(`Remover ${name} da lista de magias do personagem?`)) {
       return
     }
 
-    updateCharacter(character.get("id"), (current) =>
+    updateCharacter(characterId, (current) =>
       current.removeSpell(entry.spell.index),
     )
+  }
+
+  function togglePreparedClassSpell(entry: DisplaySpell) {
+    if (!entry.classList || !isEditing) return
+    if (!entry.prepared && !canPrepareClassSpell(entry)) return
+
+    updateCharacter(characterId, (current) => {
+      const reconciled = reconcilePreparedClassKnownSpells(
+        current,
+        preparedClassAccess.catalogEntries,
+      )
+      return reconciled.setSpellPrepared(entry.spell.index, !entry.prepared)
+    })
+  }
+
+  function canPrepareClassSpell(entry: DisplaySpell): boolean {
+    if (!entry.classList || entry.prepared) return true
+    if (entry.source.type !== "class") return true
+
+    const classEntry = (character.get("sheet").classes ?? []).find(
+      (candidate) => candidate.className === entry.source.sourceId,
+    )
+    const limit = classEntry?.knownSpells?.canPrepare?.(character)
+    if (limit === undefined) return true
+
+    const preparedCount = spells.filter(
+      (candidate) =>
+        candidate.classList &&
+        candidate.prepared &&
+        candidate.source.type === "class" &&
+        candidate.source.sourceId === entry.source.sourceId,
+    ).length
+
+    return preparedCount < limit
   }
 
   return (
@@ -165,7 +236,7 @@ export function UserCharacterMagicTab({ character }: Props) {
                 variant="secondary"
                 onClick={() =>
                   navigate(
-                    `/user/characters/${encodeURIComponent(character.get("id"))}/add-spells`,
+                    `/user/characters/${encodeURIComponent(characterId)}/add-spells`,
                   )
                 }
               >
@@ -230,18 +301,11 @@ export function UserCharacterMagicTab({ character }: Props) {
         </CardContent>
       </Card>
 
-      <PreparedClassSpellList
-        character={character}
-        updateCharacter={updateCharacter}
-      />
-
       <Card>
         <CardHeader>
-          <div className="text-sm font-semibold text-textH">
-            Conhecidas e concedidas
-          </div>
+          <div className="text-sm font-semibold text-textH">Magias</div>
           <div className="mt-1 text-xs text-textMuted">
-            Magias aprendidas individualmente e magias permanentes concedidas pela ficha.
+            Magias conhecidas, acessíveis pelas listas das classes e concedidas permanentemente pela ficha.
           </div>
 
           <div className="mt-4 grid gap-2 md:grid-cols-[minmax(220px,1fr)_170px_190px]">
@@ -286,15 +350,22 @@ export function UserCharacterMagicTab({ character }: Props) {
 
         <CardContent>
           {visibleSpells.length === 0 ? (
-            <p className="text-xs text-textMuted">Nenhuma magia encontrada.</p>
+            <p className="text-xs text-textMuted">
+              {preparedClassAccess.loading
+                ? "Carregando magias disponíveis..."
+                : "Nenhuma magia encontrada."}
+            </p>
           ) : (
             <div className="grid gap-3">
               {visibleSpells.map((entry) => (
                 <UserSpellCard
                   key={entry.key}
                   entry={entry}
-                  canRemove={isEditing && !entry.granted}
+                  canRemove={isEditing && entry.persisted && !entry.granted && !entry.classList}
+                  canTogglePrepared={isEditing && entry.classList}
+                  canPrepare={canPrepareClassSpell(entry)}
                   onRemove={() => removeKnownSpell(entry)}
+                  onTogglePrepared={() => togglePreparedClassSpell(entry)}
                 />
               ))}
             </div>
@@ -308,11 +379,17 @@ export function UserCharacterMagicTab({ character }: Props) {
 function UserSpellCard({
   entry,
   canRemove,
+  canTogglePrepared,
+  canPrepare,
   onRemove,
+  onTogglePrepared,
 }: {
   entry: DisplaySpell
   canRemove: boolean
+  canTogglePrepared: boolean
+  canPrepare: boolean
   onRemove: () => void
+  onTogglePrepared: () => void
 }) {
   const spell = entry.spell
   const description = spell.description?.trim() ?? ""
@@ -328,22 +405,35 @@ function UserSpellCard({
           {MAGIC_SCHOOLS_MAP[String(spell.school)] ?? String(spell.school)}
         </DefinitionPill>
         <DefinitionPill>{sourceLabel(entry.source)}</DefinitionPill>
+        {entry.classList ? <DefinitionPill>Lista da classe</DefinitionPill> : null}
         {entry.granted ? <DefinitionPill>Concedida</DefinitionPill> : null}
-        {!entry.granted && entry.prepared && spell.slotLevel > 0 ? (
+        {entry.prepared && spell.slotLevel > 0 ? (
           <DefinitionPill>Preparada</DefinitionPill>
         ) : null}
         {spell.concentration ? <DefinitionPill>Concentração</DefinitionPill> : null}
         {spell.ritual ? <DefinitionPill>Ritual</DefinitionPill> : null}
-        {canRemove ? (
-          <Button
-            size="sm"
-            variant="danger"
-            className="ml-auto"
-            onClick={onRemove}
-          >
-            Remover
-          </Button>
-        ) : null}
+
+        <div className="ml-auto flex flex-wrap gap-2">
+          {canTogglePrepared ? (
+            <Button
+              size="sm"
+              variant={entry.prepared ? "secondary" : "primary"}
+              disabled={!entry.prepared && !canPrepare}
+              onClick={onTogglePrepared}
+            >
+              {entry.prepared ? "Despreparar" : "Preparar"}
+            </Button>
+          ) : null}
+          {canRemove ? (
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={onRemove}
+            >
+              Remover
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {description ? (
