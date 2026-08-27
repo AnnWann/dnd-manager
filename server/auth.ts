@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth"
 import { prismaAdapter } from "better-auth/adapters/prisma"
 
-import { prisma } from "./prisma"
+import { prisma } from "./prisma.js"
 
 const baseURL = process.env.BETTER_AUTH_URL
 const secret = process.env.BETTER_AUTH_SECRET
