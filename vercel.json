@@ -2,6 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     { "source": "/api/auth/(.*)", "destination": "/api/auth?__betterAuthPath=$1" },
+    { "source": "/api/me/(.*)", "destination": "/api/me?__mePath=$1" },
     { "source": "/auth", "destination": "/index.html" },
     { "source": "/not-found", "destination": "/index.html" },
     { "source": "/unauthorized", "destination": "/index.html" },

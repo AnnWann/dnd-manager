@@ -52,13 +52,13 @@ function matchRoute(request: Request): MatchedRoute | null {
 
   if (segments.length === 1 && segments[0] === "campaigns") {
     return {
-      load: async () => (await import("../../api-handlers/me/_campaigns.js")) as RouteModule,
+      load: async () => (await import("../api-handlers/me/_campaigns.js")) as RouteModule,
       params: {},
     }
   }
   if (segments.length === 2 && segments[0] === "campaigns" && segments[1] === "join") {
     return {
-      load: async () => (await import("../../api-handlers/me/campaigns/_join.js")) as RouteModule,
+      load: async () => (await import("../api-handlers/me/campaigns/_join.js")) as RouteModule,
       params: {},
     }
   }
@@ -69,7 +69,7 @@ function matchRoute(request: Request): MatchedRoute | null {
   ) {
     return {
       load: async () =>
-        (await import("../../api-handlers/me/campaigns/[campaignId]/characters/_character.js")) as RouteModule,
+        (await import("../api-handlers/me/campaigns/[campaignId]/characters/_character.js")) as RouteModule,
       params: { campaignId: segments[1], characterId: segments[3] },
     }
   }
@@ -80,7 +80,7 @@ function matchRoute(request: Request): MatchedRoute | null {
   ) {
     return {
       load: async () =>
-        (await import("../../api-handlers/me/campaigns/[campaignId]/members/_member.js")) as RouteModule,
+        (await import("../api-handlers/me/campaigns/[campaignId]/members/_member.js")) as RouteModule,
       params: { campaignId: segments[1], userId: segments[3] },
     }
   }
@@ -91,20 +91,20 @@ function matchRoute(request: Request): MatchedRoute | null {
   ) {
     return {
       load: async () =>
-        (await import("../../api-handlers/me/campaigns/[campaignId]/_membership.js")) as RouteModule,
+        (await import("../api-handlers/me/campaigns/[campaignId]/_membership.js")) as RouteModule,
       params: { campaignId: segments[1] },
     }
   }
   if (segments.length === 1 && segments[0] === "characters") {
     return {
-      load: async () => (await import("../../api-handlers/me/_characters.js")) as RouteModule,
+      load: async () => (await import("../api-handlers/me/_characters.js")) as RouteModule,
       params: {},
     }
   }
   if (segments.length === 2 && segments[0] === "characters") {
     return {
       load: async () =>
-        (await import("../../api-handlers/me/characters/_character.js")) as RouteModule,
+        (await import("../api-handlers/me/characters/_character.js")) as RouteModule,
       params: { characterId: segments[1] },
     }
   }
@@ -115,7 +115,7 @@ function matchRoute(request: Request): MatchedRoute | null {
   ) {
     return {
       load: async () =>
-        (await import("../../api-handlers/me/characters/[characterId]/_access.js")) as RouteModule,
+        (await import("../api-handlers/me/characters/[characterId]/_access.js")) as RouteModule,
       params: { characterId: segments[1] },
     }
   }
@@ -126,20 +126,20 @@ function matchRoute(request: Request): MatchedRoute | null {
   ) {
     return {
       load: async () =>
-        (await import("../../api-handlers/me/characters/[characterId]/domains/_domain.js")) as RouteModule,
+        (await import("../api-handlers/me/characters/[characterId]/domains/_domain.js")) as RouteModule,
       params: { characterId: segments[1], domain: segments[3] },
     }
   }
   if (segments.length === 1 && segments[0] === "spells") {
     return {
-      load: async () => (await import("../../api-handlers/me/_spells.js")) as RouteModule,
+      load: async () => (await import("../api-handlers/me/_spells.js")) as RouteModule,
       params: {},
     }
   }
   if (segments.length === 2 && segments[0] === "spells") {
     return {
       load: async () =>
-        (await import("../../api-handlers/me/spells/_spell.js")) as RouteModule,
+        (await import("../api-handlers/me/spells/_spell.js")) as RouteModule,
       params: { spellId: segments[1] },
     }
   }
@@ -150,7 +150,7 @@ function matchRoute(request: Request): MatchedRoute | null {
   ) {
     return {
       load: async () =>
-        (await import("../../api-handlers/me/spells/[spellId]/_campaigns.js")) as RouteModule,
+        (await import("../api-handlers/me/spells/[spellId]/_campaigns.js")) as RouteModule,
       params: { spellId: segments[1] },
     }
   }
@@ -159,7 +159,17 @@ function matchRoute(request: Request): MatchedRoute | null {
 }
 
 function getSegments(request: Request): string[] {
-  const segments = new URL(request.url).pathname
+  const url = new URL(request.url)
+  const rewrittenPath = url.searchParams.get("__mePath")?.trim()
+
+  if (rewrittenPath) {
+    return rewrittenPath
+      .split("/")
+      .filter(Boolean)
+      .map((segment) => decodeURIComponent(segment))
+  }
+
+  const segments = url.pathname
     .split("/")
     .filter(Boolean)
     .map((segment) => decodeURIComponent(segment))

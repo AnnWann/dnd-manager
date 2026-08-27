@@ -8,7 +8,7 @@ const EXPECTED_ENTRYPOINTS = new Set([
   "api/compendium/spells.ts",
   "api/custom-systems.ts",
   "api/images/upload.ts",
-  "api/me/[...path].ts",
+  "api/me.ts",
   "api/session-connection.ts",
   "api/state.ts",
   "api/translate.ts",
