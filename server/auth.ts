@@ -4,12 +4,22 @@ import { prismaAdapter } from "better-auth/adapters/prisma"
 import { prisma } from "./prisma.js"
 
 const configuredBaseURL = parseHttpUrl(process.env.BETTER_AUTH_URL)
-const vercelHost =
-  process.env.VERCEL_BRANCH_URL ??
-  process.env.VERCEL_URL ??
-  process.env.VERCEL_PROJECT_PRODUCTION_URL
-const vercelBaseURL = parseHttpUrl(vercelHost ? `https://${vercelHost}` : undefined)
-const baseURL = configuredBaseURL ?? vercelBaseURL
+const vercelBranchBaseURL = parseVercelUrl(process.env.VERCEL_BRANCH_URL)
+const vercelDeploymentBaseURL = parseVercelUrl(process.env.VERCEL_URL)
+const vercelProductionBaseURL = parseVercelUrl(process.env.VERCEL_PROJECT_PRODUCTION_URL)
+const baseURL =
+  configuredBaseURL ??
+  vercelBranchBaseURL ??
+  vercelDeploymentBaseURL ??
+  vercelProductionBaseURL
+const trustedOrigins = [
+  configuredBaseURL,
+  vercelBranchBaseURL,
+  vercelDeploymentBaseURL,
+  vercelProductionBaseURL,
+].filter((origin, index, origins): origin is string =>
+  Boolean(origin) && origins.indexOf(origin) === index,
+)
 const secret = process.env.BETTER_AUTH_SECRET
 
 if (!baseURL) {
@@ -18,7 +28,7 @@ if (!baseURL) {
   )
 }
 
-if (!configuredBaseURL && process.env.BETTER_AUTH_URL && vercelBaseURL) {
+if (!configuredBaseURL && process.env.BETTER_AUTH_URL && vercelDeploymentBaseURL) {
   console.warn("BETTER_AUTH_URL inválida; usando a URL fornecida pela Vercel.")
 }
 
@@ -30,6 +40,7 @@ export const auth = betterAuth({
   appName: "D&D Manager",
 
   baseURL,
+  trustedOrigins,
   secret,
 
   database: prismaAdapter(prisma, {
@@ -40,6 +51,10 @@ export const auth = betterAuth({
     enabled: true,
   },
 })
+
+function parseVercelUrl(value: string | undefined): string | undefined {
+  return parseHttpUrl(value ? `https://${value}` : undefined)
+}
 
 function parseHttpUrl(value: string | undefined): string | undefined {
   if (!value) return undefined
