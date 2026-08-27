@@ -58,6 +58,13 @@ export type CommitSessionMutationArgs = {
   coalesceLatest?: SessionLogCoalescePredicate;
 };
 
+export type CommitSessionMutationsArgs = {
+  writes: Record<string, unknown>;
+  records: SessionLogRecord[];
+  maxRecords: number;
+  currentLog?: SessionLogRecord[];
+};
+
 export type CommitSessionUndoArgs = {
   writes: Record<string, unknown>;
   currentLog: SessionLogRecord[];
@@ -149,6 +156,25 @@ export async function commitSessionMutation(
   }
 
   const next = trimSessionLog(records, args.maxRecords);
+  normalizeSessionLogRecordsInPlace(next);
+  await storage.put({ ...args.writes, [SESSION_LOG_KEY]: next });
+  broadcastSessionLogToMasters(sockets, next);
+  return next;
+}
+
+/**
+ * Atomic variant for a group of semantic operations that must publish one
+ * final state snapshot. Individual log records are preserved so existing
+ * operation consumers and undo ordering continue to see the original types.
+ */
+export async function commitSessionMutations(
+  storage: DurableObjectStorage,
+  sockets: WebSocket[],
+  args: CommitSessionMutationsArgs,
+): Promise<SessionLogRecord[]> {
+  const current = args.currentLog ? [...args.currentLog] : await readSessionLog(storage);
+  current.push(...args.records);
+  const next = trimSessionLog(current, args.maxRecords);
   normalizeSessionLogRecordsInPlace(next);
   await storage.put({ ...args.writes, [SESSION_LOG_KEY]: next });
   broadcastSessionLogToMasters(sockets, next);
