@@ -17,6 +17,7 @@ export function AuthView() {
   const [password, setPassword] = useState("")
   const [message, setMessage] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const { refetch: refetchSession } = authClient.useSession()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -27,6 +28,8 @@ export function AuthView() {
       : "/user/characters"
 
   async function confirmSession(): Promise<boolean> {
+    await refetchSession()
+
     const { data, error } = await authClient.getSession()
 
     if (error || !data?.user) {
