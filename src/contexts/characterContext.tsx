@@ -324,13 +324,6 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
     if (resolved && resolved.get("id") !== selectedCharacterId) setSelectedCharacterId(resolved.get("id"))
   }, [appState.activeCharacterId, selectedCharacterId, visibleCharacters])
 
-  useEffect(() => {
-    if (characters.length > 0) return
-    const character = newCharacterTemplate("Meu personagem", getOwner(userKey))
-    setAppState((previous) => applyRecordedGameOperation(previous, createGameOperationRecord({ type: "character.add", character: character.toJSON(), select: true }, actorId)))
-    setSelectedCharacterId(character.get("id"))
-  }, [actorId, characters.length, setAppState, userKey])
-
   function dispatchStatOperation(operation: SessionStatOperation): boolean {
     if (!sessionRuntime) return false
     if (sessionRuntime.status !== "connected") {
