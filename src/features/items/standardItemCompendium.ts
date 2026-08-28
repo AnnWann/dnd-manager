@@ -5,10 +5,13 @@ import {
   normalizeCurrencyItem,
 } from "../../models/items/Currency"
 import type { Itemmable } from "../../models/items/item"
+import type { SupplyItem } from "../../models/items/SupplyItem"
 import {
   BASIC_ITEM_COMPENDIUM,
   cloneCompendiumItem,
 } from "./itemCompendium"
+
+const TRAVEL_RATIONS_COMPENDIUM_ID = "compendium-rations"
 
 export type StandardItemDefinition = {
   item: Itemmable
@@ -45,7 +48,7 @@ export const STANDARD_ITEM_DEFINITIONS: StandardItemDefinition[] = [
     group: "magic",
   },
   ...BASIC_ITEM_COMPENDIUM.map((item) => ({
-    item,
+    item: withCanonicalStandardMetadata(item),
     locked: false,
     group: "equipment" as const,
   })),
@@ -191,7 +194,7 @@ export function normalizeStandardItem(item: Itemmable): Itemmable {
 
   if (!definition.locked) {
     return {
-      ...item,
+      ...restoreCanonicalSupplyMetadata(item, definition.item),
       compendiumItemId: sourceId,
       itemOrigin: "standard",
     }
@@ -268,6 +271,40 @@ export function normalizeItemLookupName(value: string): string {
     .toLocaleLowerCase("pt-BR")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
+}
+
+function withCanonicalStandardMetadata(item: Itemmable): Itemmable {
+  if (item.id !== TRAVEL_RATIONS_COMPENDIUM_ID) return item
+
+  return {
+    ...item,
+    supplyCategory: "food",
+    supplyPackage: "ration",
+    supplyUnitsPerItem: 1,
+    supplyUnitLabel: "porção padrão",
+  } as Itemmable
+}
+
+function restoreCanonicalSupplyMetadata(
+  item: Itemmable,
+  canonical: Itemmable,
+): Itemmable {
+  if (canonical.id !== TRAVEL_RATIONS_COMPENDIUM_ID) return item
+
+  const currentSupply = item as Partial<SupplyItem>
+  const canonicalSupply = canonical as SupplyItem
+
+  return {
+    ...item,
+    supplyCategory:
+      currentSupply.supplyCategory ?? canonicalSupply.supplyCategory,
+    supplyPackage:
+      currentSupply.supplyPackage ?? canonicalSupply.supplyPackage,
+    supplyUnitsPerItem:
+      currentSupply.supplyUnitsPerItem ?? canonicalSupply.supplyUnitsPerItem,
+    supplyUnitLabel:
+      currentSupply.supplyUnitLabel ?? canonicalSupply.supplyUnitLabel,
+  } as Itemmable
 }
 
 function looksLikeItem(value: Record<string, unknown>): boolean {
