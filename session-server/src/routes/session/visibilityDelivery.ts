@@ -16,6 +16,10 @@ const CHARACTER_UPDATE_TYPES = new Set([
   "session.character.updated",
 ]);
 
+type OwnershipAwareSessionConnection = SessionConnection & {
+  ownedCharacterIds?: string[];
+};
+
 export function refreshConnectionVisibility(
   socket: WebSocket,
   snapshot: SessionRuntimeConfigSnapshot | null,
@@ -30,12 +34,18 @@ export function refreshConnectionVisibility(
     return;
   }
 
-  connection.runtimeConfigRevision = snapshot?.creationRevision;
-  connection.visibleCharacterIds = snapshot
+  const ownedCharacterIds = readOwnedCharacterIds(connection) ?? [];
+  const configuredCharacterIds = snapshot
     ? snapshot.config.characters
         .filter((character) => canViewRuntimeCharacter(connection, character))
         .map((character) => character.characterId)
     : [];
+
+  connection.runtimeConfigRevision = snapshot?.creationRevision;
+  connection.visibleCharacterIds = Array.from(new Set([
+    ...ownedCharacterIds,
+    ...configuredCharacterIds,
+  ]));
   socket.serializeAttachment(connection);
 }
 
@@ -198,4 +208,11 @@ function readConnection(socket: WebSocket): SessionConnection | null {
   } catch {
     return null;
   }
+}
+
+function readOwnedCharacterIds(
+  connection: SessionConnection,
+): string[] | undefined {
+  const value = (connection as OwnershipAwareSessionConnection).ownedCharacterIds;
+  return Array.isArray(value) ? value : undefined;
 }
