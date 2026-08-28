@@ -6,6 +6,10 @@ import type { SessionConnection } from "./protocol";
 
 export const RUNTIME_CONFIG_STATE_KEY = "runtime-config-state";
 
+type OwnershipAwareSessionConnection = SessionConnection & {
+  ownedCharacterIds?: string[];
+};
+
 export async function readRuntimeConfig(
   storage: DurableObjectStorage,
 ): Promise<SessionRuntimeConfigSnapshot | null> {
@@ -36,6 +40,25 @@ export function authorizeCharacterMutation(
     };
   }
 
+  const ownedCharacterIds = readOwnedCharacterIds(connection);
+  if (ownedCharacterIds !== undefined) {
+    if (ownedCharacterIds.includes(characterId)) {
+      return {
+        ok: true,
+        character: getRuntimeCharacterConfig(snapshot, characterId),
+      };
+    }
+
+    return {
+      ok: false,
+      code: "CHARACTER_ACCESS_DENIED",
+      message: "You cannot change a character owned by another player.",
+    };
+  }
+
+  // Compatibility fallback for connections created before ownership claims were
+  // added. Session tokens are short-lived, so new connections use the
+  // authoritative campaign linkage above.
   if (!snapshot) {
     return {
       ok: false,
@@ -69,7 +92,12 @@ export function canViewRuntimeCharacter(
   character: SessionRuntimeCharacterConfig,
 ): boolean {
   if (connection.role === "MASTER") return true;
-  if (character.ownerId === connection.userId) return true;
+
+  const ownedCharacterIds = readOwnedCharacterIds(connection);
+  if (ownedCharacterIds?.includes(character.characterId)) return true;
+  if (ownedCharacterIds === undefined && character.ownerId === connection.userId) {
+    return true;
+  }
   return character.visibility === "party";
 }
 
@@ -119,4 +147,11 @@ export function extractOperationCharacterId(raw: string): string | null {
   } catch {
     return null;
   }
+}
+
+function readOwnedCharacterIds(
+  connection: SessionConnection,
+): string[] | undefined {
+  const value = (connection as OwnershipAwareSessionConnection).ownedCharacterIds;
+  return Array.isArray(value) ? value : undefined;
 }
