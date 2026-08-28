@@ -6,10 +6,18 @@ import {
   authorizeCharacterMutation,
   readRuntimeConfig,
 } from "./runtimeConfigAccess";
-import { createVisibilityFilteredContext } from "./visibilityDelivery";
+import {
+  createVisibilityFilteredContext,
+  refreshConnectionVisibility,
+  sendAllVisibleCharacterSnapshots,
+} from "./visibilityDelivery";
 
 type DomainActor = {
   webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void>;
+};
+
+type OwnershipAwareSessionConnection = SessionConnection & {
+  ownedCharacterIds?: string[];
 };
 
 /**
@@ -22,6 +30,50 @@ export class SessionActor extends BaseSessionActor {
     CustomClassSessionActor.prototype,
     this.ctx,
   );
+
+  override async fetch(request: Request): Promise<Response> {
+    const response = await super.fetch(request);
+    if (response.status !== 101) return response;
+
+    const rawOwnedCharacterIds = request.headers.get("x-session-owned-character-ids");
+    if (rawOwnedCharacterIds === null) return response;
+
+    const clientId = request.headers.get("x-session-client-id")?.trim();
+    if (!clientId) return response;
+
+    const socket = this.ctx.getWebSockets().find((candidate) => {
+      const connection = readConnection(candidate);
+      return connection?.clientId === clientId;
+    });
+    if (!socket) return response;
+
+    const ownedCharacterIds = parseOwnedCharacterIds(rawOwnedCharacterIds);
+    if (!ownedCharacterIds) {
+      socket.close(1011, "Invalid owned character metadata");
+      return response;
+    }
+
+    const connection = readConnection(socket) as OwnershipAwareSessionConnection | null;
+    if (!connection) {
+      socket.close(1011, "Missing connection attachment");
+      return response;
+    }
+
+    connection.ownedCharacterIds = ownedCharacterIds;
+    socket.serializeAttachment(connection);
+
+    refreshConnectionVisibility(
+      socket,
+      await readRuntimeConfig(this.ctx.storage),
+    );
+    // The base actor sends initial snapshots before this final layer attaches
+    // database-backed ownership. Re-send the character snapshots once so a
+    // PLAYER immediately receives their own character even when it is absent
+    // from the active Creation configuration.
+    await sendAllVisibleCharacterSnapshots(this.ctx.storage, socket);
+
+    return response;
+  }
 
   override async webSocketMessage(
     webSocket: WebSocket,
@@ -75,6 +127,20 @@ function bindDomainActor<T extends DomainActor>(prototype: T, ctx: DurableObject
 function readConnection(socket: WebSocket): SessionConnection | null {
   try {
     return socket.deserializeAttachment() as SessionConnection;
+  } catch {
+    return null;
+  }
+}
+
+function parseOwnedCharacterIds(raw: string): string[] | null {
+  try {
+    const value = JSON.parse(raw) as unknown;
+    if (!Array.isArray(value) || value.length > 64) return null;
+    if (!value.every((entry) => typeof entry === "string" && entry.trim().length > 0 && entry.length <= 256)) {
+      return null;
+    }
+    const normalized = value.map((entry) => entry.trim());
+    return new Set(normalized).size === normalized.length ? normalized : null;
   } catch {
     return null;
   }
