@@ -24,8 +24,24 @@ type SettingsResponse = {
   settings: SessionCreationSettings
 }
 
+const settingsCache = new Map<string, SessionCreationSettings>()
+const settingsRequests = new Map<string, Promise<SessionCreationSettings>>()
+
+export function primeSessionCreationSettings(
+  campaignId: string,
+  settings: SessionCreationSettings,
+): void {
+  settingsCache.set(campaignId, structuredClone(settings))
+}
+
+export function invalidateSessionCreationSettings(campaignId: string): void {
+  settingsCache.delete(campaignId)
+  settingsRequests.delete(campaignId)
+}
+
 export async function getSessionCreationSettings(
   campaignId: string,
+  options: { force?: boolean } = {},
 ): Promise<SessionCreationSettings> {
   if (LOCAL_AUTH_BYPASS) {
     const campaign = (await getMyCampaigns()).find((entry) => entry.id === campaignId)
@@ -55,10 +71,27 @@ export async function getSessionCreationSettings(
     }
   }
 
-  const response = await apiClient.get<SettingsResponse>(
-    `/campaigns/${encodeURIComponent(campaignId)}/settings`,
-  )
-  return response.data.settings
+  if (!options.force) {
+    const cached = settingsCache.get(campaignId)
+    if (cached) return structuredClone(cached)
+    const pending = settingsRequests.get(campaignId)
+    if (pending) return pending.then(structuredClone)
+  }
+
+  const request = apiClient
+    .get<SettingsResponse>(
+      `/campaigns/${encodeURIComponent(campaignId)}/settings`,
+    )
+    .then((response) => {
+      primeSessionCreationSettings(campaignId, response.data.settings)
+      return structuredClone(response.data.settings)
+    })
+    .finally(() => {
+      settingsRequests.delete(campaignId)
+    })
+
+  settingsRequests.set(campaignId, request)
+  return request
 }
 
 export async function updateSessionMember(
@@ -71,6 +104,7 @@ export async function updateSessionMember(
 ): Promise<void> {
   if (LOCAL_AUTH_BYPASS) {
     await reviewCampaignMember(campaignId, userId, input.status)
+    invalidateSessionCreationSettings(campaignId)
     return
   }
 
@@ -78,4 +112,5 @@ export async function updateSessionMember(
     `/me/campaigns/${encodeURIComponent(campaignId)}/members/${encodeURIComponent(userId)}`,
     input,
   )
+  invalidateSessionCreationSettings(campaignId)
 }
