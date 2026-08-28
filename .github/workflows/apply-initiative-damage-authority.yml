@@ -1,0 +1,55 @@
+name: Apply initiative damage authority
+
+on:
+  push:
+    branches:
+      - agent/combatant-runtime-sidebar
+    paths:
+      - .github/workflows/apply-initiative-damage-authority.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/combatant-runtime-sidebar
+          fetch-depth: 0
+
+      - name: Apply authoritative damage patch
+        run: python .github/patch_initiative_damage_authority.py
+
+      - name: Remove temporary patch files
+        run: rm .github/patch_initiative_damage_authority.py .github/workflows/apply-initiative-damage-authority.yml
+
+      - name: Install frontend dependencies
+        run: npm install --package-lock=false --ignore-scripts
+
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db
+          DIRECT_URL: postgresql://user:pass@localhost:5432/db
+        run: npx prisma generate
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Install session server dependencies
+        run: npm --prefix session-server install --package-lock=false --ignore-scripts
+
+      - name: Typecheck session server
+        run: npm run typecheck:session-server
+
+      - name: Commit authoritative damage
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: resolve initiative damage authoritatively"
+          git pull --rebase origin agent/combatant-runtime-sidebar
+          git push origin HEAD:agent/combatant-runtime-sidebar
