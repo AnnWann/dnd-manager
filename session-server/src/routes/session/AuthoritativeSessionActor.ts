@@ -239,6 +239,7 @@ export class SessionActor extends ComposedSessionActor {
       refreshAllConnectionVisibility(sockets, snapshot);
       broadcastRuntimeConfig(sockets, snapshot);
       await broadcastAllVisibleCharacterSnapshots(this.ctx.storage, sockets);
+      await this.reconcileInitiativeProjection();
       return;
     }
 

@@ -1,6 +1,6 @@
 import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../characters/sheet/characterState";
 import type { SessionAbilityState } from "../characters/abilities/abilityProtocol";
-import type { SessionConditionsState, SessionConnection, SessionHpState } from "../session/protocol";
+import type { SessionCondition, SessionConditionsState, SessionConnection, SessionHpState } from "../session/protocol";
 import {
   characterScope,
   commitSessionMutation,
@@ -157,6 +157,15 @@ export class SessionActor {
       return;
     }
     let nextSession = sourceSync.session;
+    if (operation.type === "initiative.customAction.execute") {
+      enrichCustomInitiativeActionConditions(
+        operation,
+        runtimeConfig,
+        current,
+        conditions,
+        sourceSync.previousConditions,
+      );
+    }
 
     const previousAbilities: Record<string, SessionAbilityState> = {};
     const changedAbilityIds = new Set<string>();
@@ -429,6 +438,69 @@ function runtimeDefinitionsForCharacter(
   });
 }
 
+function enrichCustomInitiativeActionConditions(
+  operation: Extract<SessionInitiativeOperation, { type: "initiative.customAction.execute" }>,
+  runtimeConfig: SessionRuntimeConfigSnapshot | null,
+  before: InitiativeSession,
+  conditions: Record<string, SessionConditionsState>,
+  previousConditions: Record<string, SessionConditionsState>,
+): void {
+  const system = runtimeConfig?.config.customSystems.find((definition) => definition.id === operation.systemId);
+  const action = system?.actions?.find((candidate) => candidate.id === operation.actionId);
+  if (!system || !action) return;
+  const additions = (action.conditionChanges ?? []).filter((change) => change.operation === "add");
+  if (!additions.length) return;
+
+  for (const entryId of operation.entryIds) {
+    const entry = before.entries.find((candidate) => candidate.id === entryId);
+    const characterId = linkedCharacterIdForInitiativeEntry(entry);
+    if (!characterId) continue;
+    const state = conditions[characterId];
+    const previous = previousConditions[characterId];
+    if (!state?.initialized || !previous?.initialized) continue;
+
+    const previousIds = new Set(previous.conditions.map((condition) => condition.id));
+    const unmatched = state.conditions.filter((condition) =>
+      !previousIds.has(condition.id)
+      && condition.linkedCombatantId === entryId,
+    );
+    const used = new Set<string>();
+
+    for (const change of additions) {
+      const condition = unmatched.find((candidate) =>
+        !used.has(candidate.id)
+        && normalizeName(candidate.name) === normalizeName(change.name),
+      );
+      if (!condition) continue;
+      used.add(condition.id);
+      condition.description = change.description ?? condition.description;
+      condition.behavior = change.behavior ?? condition.behavior;
+      condition.source = change.source ?? system.name;
+      condition.notes = change.notes ?? condition.notes;
+      condition.tags = change.tags ? [...change.tags] : condition.tags;
+      if (change.bonuses) condition.bonuses = structuredClone(change.bonuses);
+      if (change.sourceCharacterId) condition.sourceCharacterId = change.sourceCharacterId;
+      condition.duration = richCustomConditionDuration(change.duration, condition.duration);
+    }
+  }
+}
+
+function richCustomConditionDuration(
+  duration: import("../../../../src/models/characters/CharacterCondition").CharacterConditionDuration & { amount?: number } | undefined,
+  fallback: SessionCondition["duration"],
+): SessionCondition["duration"] {
+  if (!duration) return fallback;
+  const { amount, ...rich } = duration;
+  const normalizedAmount = typeof amount === "number" && Number.isFinite(amount)
+    ? Math.max(0, Math.trunc(amount))
+    : undefined;
+  return {
+    ...rich,
+    ...(rich.total === undefined && normalizedAmount !== undefined ? { total: normalizedAmount } : {}),
+    ...(rich.remaining === undefined && normalizedAmount !== undefined ? { remaining: normalizedAmount } : {}),
+  } as SessionCondition["duration"];
+}
+
 function applyInitiativeOperation(
   current: InitiativeSession,
   operation: SessionInitiativeOperation,
@@ -501,8 +573,18 @@ function applyInitiativeOperation(
     case "initiative.customAction.execute": {
       const system = runtimeConfig?.config.customSystems.find((definition) => definition.id === operation.systemId);
       const action = system?.actions?.find((candidate) => candidate.id === operation.actionId);
-      if (!system || !action || action.enabled === false || !action.initiative?.enabled) {
-        return invalid("INITIATIVE_CUSTOM_ACTION_NOT_FOUND", "This initiative custom-system action is not available.");
+      const systemIsActive = Boolean(
+        system && runtimeConfig?.config.characters.some((character) =>
+          character.customSystems.some((installation) =>
+            installation.systemId === system.id
+            && installation.enabled
+            && !installation.suppressed
+            && installation.systemVersion === system.version,
+          ),
+        ),
+      );
+      if (!system || !action || !systemIsActive || action.enabled === false || !action.initiative?.enabled) {
+        return invalid("INITIATIVE_CUSTOM_ACTION_NOT_FOUND", "This initiative custom-system action is not available in the active session.");
       }
       const entryIds = Array.from(new Set(operation.entryIds));
       const targets = entryIds.flatMap((entryId) => {
