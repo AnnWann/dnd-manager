@@ -1,0 +1,48 @@
+name: Apply custom ability cost availability UI
+
+on:
+  push:
+    branches:
+      - qa
+    paths:
+      - .github/workflows/apply-custom-ability-cost-ui.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: qa
+          fetch-depth: 0
+
+      - name: Apply cost UI patch
+        run: python .github/patch_custom_ability_cost_ui.py
+
+      - name: Remove temporary patch files
+        run: rm .github/patch_custom_ability_cost_ui.py .github/workflows/apply-custom-ability-cost-ui.yml
+
+      - name: Install dependencies
+        run: npm install --package-lock=false --ignore-scripts
+
+      - name: Generate Prisma client
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db
+          DIRECT_URL: postgresql://user:pass@localhost:5432/db
+        run: npx prisma generate
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Commit feature
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: show and validate custom ability resource costs"
+          git push origin HEAD:qa
