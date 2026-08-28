@@ -32,11 +32,11 @@ jobs:
             exit "$status"
           fi
 
-      - name: Apply actor and UI continuation
-        run: python .github/patch_initiative_identity_deathsaves_continue.py
+      - name: Apply exact actor and UI patch
+        run: python .github/patch_initiative_identity_actor_ui_v2.py
 
       - name: Remove temporary patch files
-        run: rm .github/patch_initiative_identity_deathsaves.py .github/patch_initiative_identity_deathsaves_continue.py .github/workflows/apply-initiative-identity-deathsaves.yml
+        run: rm .github/patch_initiative_identity_deathsaves.py .github/patch_initiative_identity_deathsaves_continue.py .github/patch_initiative_identity_actor_ui_v2.py .github/workflows/apply-initiative-identity-deathsaves.yml
 
       - name: Install frontend dependencies
         run: npm install --package-lock=false --ignore-scripts
