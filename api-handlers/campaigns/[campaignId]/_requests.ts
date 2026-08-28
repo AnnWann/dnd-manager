@@ -195,7 +195,9 @@ export async function POST(
   try {
     const session = await requireSession(request)
     const campaignId = await resolveCampaignId(request, context)
-    const access = await requireCampaignAccess(campaignId, session.user.id)
+    const access = await requireCampaignAccess(campaignId, session.user.id, {
+      allowInvited: true,
+    })
     const body = await readJsonObject(request)
     const type = parseRequestType(body.type)
     const sourceId = readRequiredString(body.sourceId, "sourceId", 200)
@@ -312,78 +314,89 @@ export async function applyApprovedContent(input: {
   actorId: string
   submittedById: string
 }): Promise<void> {
-  if (input.type === "CHARACTER") {
-    const character = await prisma.character.findFirst({
-      where: {
-        id: input.sourceId,
-        ownerId: input.submittedById,
-      },
-      select: { id: true },
-    })
-    if (!character) {
-      throw new ApiError(
-        404,
-        "CHARACTER_NOT_FOUND",
-        "O personagem solicitado não está mais disponível.",
-      )
-    }
+  await prisma.$transaction(async (tx) => {
+    if (input.type === "CHARACTER") {
+      const character = await tx.character.findFirst({
+        where: {
+          id: input.sourceId,
+          ownerId: input.submittedById,
+        },
+        select: { id: true },
+      })
+      if (!character) {
+        throw new ApiError(
+          404,
+          "CHARACTER_NOT_FOUND",
+          "O personagem solicitado não está mais disponível.",
+        )
+      }
 
-    await prisma.campaignCharacter.upsert({
-      where: {
-        campaignId_characterId: {
+      await tx.campaignCharacter.upsert({
+        where: {
+          campaignId_characterId: {
+            campaignId: input.campaignId,
+            characterId: input.sourceId,
+          },
+        },
+        update: {
+          visibility: parseVisibility(input.data.visibility),
+        },
+        create: {
           campaignId: input.campaignId,
           characterId: input.sourceId,
+          visibility: parseVisibility(input.data.visibility),
         },
-      },
-      update: {
-        visibility: parseVisibility(input.data.visibility),
-      },
-      create: {
-        campaignId: input.campaignId,
-        characterId: input.sourceId,
-        visibility: parseVisibility(input.data.visibility),
-      },
+      })
+    } else {
+      const assetId = crypto.randomUUID()
+      const dataJson = JSON.stringify(input.data)
+
+      await tx.$executeRaw`
+        INSERT INTO "campaign_homebrew_asset" (
+          "id",
+          "campaignId",
+          "type",
+          "sourceId",
+          "name",
+          "data",
+          "addedById",
+          "createdAt",
+          "updatedAt"
+        ) VALUES (
+          ${assetId},
+          ${input.campaignId},
+          ${input.type},
+          ${input.sourceId},
+          ${input.title},
+          ${dataJson}::jsonb,
+          ${input.actorId},
+          CURRENT_TIMESTAMP,
+          CURRENT_TIMESTAMP
+        )
+        ON CONFLICT ("campaignId", "type", "sourceId") DO UPDATE SET
+          "name" = EXCLUDED."name",
+          "data" = EXCLUDED."data",
+          "addedById" = EXCLUDED."addedById",
+          "updatedAt" = CURRENT_TIMESTAMP
+      `
+    }
+
+    await tx.campaign.update({
+      where: { id: input.campaignId },
+      data: { creationRevision: { increment: 1 } },
     })
-    return
-  }
-
-  const assetId = crypto.randomUUID()
-  const dataJson = JSON.stringify(input.data)
-
-  await prisma.$executeRaw`
-    INSERT INTO "campaign_homebrew_asset" (
-      "id",
-      "campaignId",
-      "type",
-      "sourceId",
-      "name",
-      "data",
-      "addedById",
-      "createdAt",
-      "updatedAt"
-    ) VALUES (
-      ${assetId},
-      ${input.campaignId},
-      ${input.type},
-      ${input.sourceId},
-      ${input.title},
-      ${dataJson}::jsonb,
-      ${input.actorId},
-      CURRENT_TIMESTAMP,
-      CURRENT_TIMESTAMP
-    )
-    ON CONFLICT ("campaignId", "type", "sourceId") DO UPDATE SET
-      "name" = EXCLUDED."name",
-      "data" = EXCLUDED."data",
-      "addedById" = EXCLUDED."addedById",
-      "updatedAt" = CURRENT_TIMESTAMP
-  `
+  })
 }
 
 export async function requireCampaignAccess(
   campaignId: string,
   userId: string,
-): Promise<{ isMaster: boolean }> {
+  options: { allowInvited?: boolean } = {},
+): Promise<{ isMaster: boolean; status: CampaignMemberStatus }> {
+  const allowedStatuses = options.allowInvited
+    ? [CampaignMemberStatus.ACTIVE, CampaignMemberStatus.INVITED]
+    : [CampaignMemberStatus.ACTIVE]
+
   const campaign = await prisma.campaign.findFirst({
     where: {
       id: campaignId,
@@ -393,7 +406,7 @@ export async function requireCampaignAccess(
           members: {
             some: {
               userId,
-              status: CampaignMemberStatus.ACTIVE,
+              status: { in: allowedStatuses },
             },
           },
         },
@@ -404,9 +417,13 @@ export async function requireCampaignAccess(
       members: {
         where: {
           userId,
-          status: CampaignMemberStatus.ACTIVE,
+          status: { in: allowedStatuses },
         },
-        select: { role: true },
+        select: {
+          role: true,
+          status: true,
+        },
+        take: 1,
       },
     },
   })
@@ -415,14 +432,26 @@ export async function requireCampaignAccess(
     throw new ApiError(
       403,
       "CAMPAIGN_ACCESS_DENIED",
-      "Você precisa ser membro ativo desta sessão.",
+      options.allowInvited
+        ? "Você precisa ter solicitado entrada ou ser membro ativo desta sessão."
+        : "Você precisa ser membro ativo desta sessão.",
     )
+  }
+
+  if (campaign.ownerId === userId) {
+    return { isMaster: true, status: CampaignMemberStatus.ACTIVE }
+  }
+
+  const membership = campaign.members[0]
+  if (!membership) {
+    throw new ApiError(403, "CAMPAIGN_ACCESS_DENIED", "Acesso à sessão não encontrado.")
   }
 
   return {
     isMaster:
-      campaign.ownerId === userId ||
-      campaign.members.some((member) => member.role === CampaignRole.MASTER),
+      membership.status === CampaignMemberStatus.ACTIVE &&
+      membership.role === CampaignRole.MASTER,
+    status: membership.status,
   }
 }
 
