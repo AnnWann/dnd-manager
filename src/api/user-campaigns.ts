@@ -248,6 +248,21 @@ export async function leaveCampaign(campaignId: string): Promise<void> {
   )
 }
 
+export async function deleteCampaign(campaignId: string): Promise<void> {
+  if (LOCAL_AUTH_BYPASS) {
+    const campaigns = readLocalCampaigns().filter(
+      (campaign) => campaign.id !== campaignId,
+    )
+    writeLocalCampaigns(campaigns)
+    syncLocalCharacterCampaigns(campaigns)
+    return
+  }
+
+  await apiClient.delete(
+    `/me/campaigns/${encodeURIComponent(campaignId)}`,
+  )
+}
+
 export async function reviewCampaignMember(
   campaignId: string,
   userId: string,
