@@ -82,11 +82,11 @@ export function CreationEditorProvider({
     setStatus("ready")
   }, [])
 
-  const reload = useCallback(async () => {
+  const loadSnapshot = useCallback(async (force: boolean) => {
     setStatus("loading")
     setError("")
     try {
-      applySnapshot(await getCreationSnapshot(campaignId))
+      applySnapshot(await getCreationSnapshot(campaignId, { force }))
     } catch (cause) {
       setStatus("error")
       setError(
@@ -97,30 +97,48 @@ export function CreationEditorProvider({
     }
   }, [applySnapshot, campaignId])
 
+  const reload = useCallback(
+    async () => loadSnapshot(true),
+    [loadSnapshot],
+  )
+
   useEffect(() => {
-    void reload()
-  }, [reload])
+    // The user area preloads this snapshot before session navigation. Consume
+    // that cache here instead of issuing another database request per route.
+    void loadSnapshot(false)
+  }, [loadSnapshot])
 
   useEffect(() => {
     setCreationCustomSystemOverride(draft?.customSystems ?? null)
     return () => setCreationCustomSystemOverride(null)
   }, [draft?.customSystems])
 
+  const runtimeRole = runtime?.role
+  const runtimeStatus = runtime?.status
+  const publishRuntimeConfig = runtime?.publishRuntimeConfig
+
   useEffect(() => {
     if (
-      runtime?.role !== "MASTER" ||
-      runtime.status !== "connected" ||
+      runtimeRole !== "MASTER" ||
+      runtimeStatus !== "connected" ||
+      !publishRuntimeConfig ||
       !base ||
       baseRevision === null
     ) {
       return
     }
 
-    runtime.publishRuntimeConfig({
+    publishRuntimeConfig({
       creationRevision: baseRevision,
       config: toSessionRuntimeConfig(base),
     })
-  }, [base, baseRevision, runtime])
+  }, [
+    base,
+    baseRevision,
+    publishRuntimeConfig,
+    runtimeRole,
+    runtimeStatus,
+  ])
 
   const updateDraft = useCallback(
     (updater: (current: CreationState) => CreationState) => {
