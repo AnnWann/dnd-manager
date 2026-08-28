@@ -8,6 +8,7 @@ import {
   parseAbilityServerMessage,
   type SessionAbilityClientMessage,
   type SessionAbilityServerMessage,
+  type SessionAbilityState,
 } from "./abilitySessionProtocol"
 import type { SessionMagicOperation } from "./magicSessionProtocol"
 import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
@@ -84,6 +85,7 @@ export class SessionSocket {
   private hasConnectedOnce = false
   private pendingMagicOperations: SessionMagicOperation[] = []
   private magicFlushQueued = false
+  private latestAbilityStates = new Map<string, SessionAbilityState>()
 
   constructor(private readonly options: SessionSocketOptions) {}
 
@@ -129,6 +131,7 @@ export class SessionSocket {
     this.clearReconnectTimer()
     this.pendingMagicOperations = []
     this.magicFlushQueued = false
+    this.latestAbilityStates.clear()
     setCreationCustomSystemOverride(null)
     const socket = this.socket
     this.socket = null
@@ -173,8 +176,24 @@ export class SessionSocket {
       const inventoryMessage = parseInventoryServerMessage(event.data)
       const missionMessage = parseMissionServerMessage(event.data)
       const initiativeMessage = parseInitiativeServerMessage(event.data)
-      const message = runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? parseAbilityServerMessage(event.data) ?? parseServerSessionMessage(event.data)
+      const abilityMessage = parseAbilityServerMessage(event.data)
+      const message = runtimeConfigMessage ?? lifecycleMessage ?? inventoryMessage ?? missionMessage ?? initiativeMessage ?? abilityMessage ?? parseServerSessionMessage(event.data)
       if (!message) return
+
+      if (abilityMessage?.type === "session.abilities.snapshot") {
+        this.latestAbilityStates = new Map(
+          abilityMessage.characters.map((character) => [character.characterId, character]),
+        )
+      } else if (abilityMessage?.type === "session.abilities.updated") {
+        this.latestAbilityStates.set(
+          abilityMessage.character.characterId,
+          abilityMessage.character,
+        )
+      }
+      if (lifecycleMessage?.type === "session.character.removed") {
+        this.latestAbilityStates.delete(lifecycleMessage.characterId)
+      }
+
       if (runtimeConfigMessage) {
         setCreationCustomSystemOverride(
           runtimeConfigMessage.snapshot?.config.customSystems ?? null,
@@ -187,6 +206,20 @@ export class SessionSocket {
         this.scheduleHeartbeat()
       }
       this.options.onMessage(message)
+
+      // A Creation configuration change can alter formula fields, resource
+      // maxima and native stat overrides without changing the raw ability-state
+      // character snapshot. Re-emit the latest snapshots after activating the
+      // new definitions so CharacterTemplate.fromJSON rebuilds those derived
+      // custom-system values immediately.
+      if (runtimeConfigMessage && this.latestAbilityStates.size > 0) {
+        for (const character of this.latestAbilityStates.values()) {
+          this.options.onMessage({
+            type: "session.abilities.updated",
+            character,
+          })
+        }
+      }
     }
 
     socket.onclose = () => {
