@@ -267,16 +267,12 @@ export function CampaignLayout() {
       active: location.pathname === toSession("missions"),
       onClick: () => navigate(toSession("missions")),
     },
-    ...(effectiveUserRole === "master"
-      ? [
-          {
-            label: "Iniciativa",
-            icon: <IconInitiative />,
-            active: location.pathname === toSession("initiative"),
-            onClick: () => navigate(toSession("initiative")),
-          },
-        ]
-      : []),
+    {
+      label: "Iniciativa",
+      icon: <IconInitiative />,
+      active: location.pathname === toSession("initiative"),
+      onClick: () => navigate(toSession("initiative")),
+    },
   ]
 
   const creationSidebarItems = [
