@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Pencil, Play, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
 import type { CustomAbilityTypeDefinition } from '../../../models/customSystems/CustomAbilityDefinition'
@@ -31,6 +31,8 @@ import {
   type CustomSystemActor,
 } from '../../../lib/customSystems'
 import { useCustomSystemDefinitions } from '../../../lib/customSystems/CustomSystemRegistry'
+import type { SessionCustomSystemOperation } from '../../session-runtime/customSystemSessionProtocol'
+import { useOptionalSessionRuntime } from '../../session-runtime/useSessionRuntime'
 import { CustomSystemIcon } from '../../customSystems/CustomSystemIcon'
 
 const PREDEFINED_MARKER = '__predefinedAbilityId'
@@ -46,6 +48,7 @@ type Props = {
 
 export function CustomSystemsTab({ character, updateCharacter, actor }: Props) {
   const definitions = useCustomSystemDefinitions()
+  const runtime = useOptionalSessionRuntime()
   const states = character.get('sheet').customSystems ?? []
   const [selectedSystemId, setSelectedSystemId] = useState(
     states[0]?.systemId ?? definitions[0]?.id ?? '',
@@ -57,6 +60,27 @@ export function CustomSystemsTab({ character, updateCharacter, actor }: Props) {
   )
 
   function replaceState(nextState: CharacterCustomSystemState) {
+    if (runtime) {
+      if (runtime.status !== 'connected') {
+        console.warn('[session-runtime] Custom-system change ignored while the authoritative session server is disconnected.')
+        return
+      }
+
+      const currentState = states.find((state) => state.systemId === nextState.systemId)
+      if (!currentState) {
+        console.warn('[session-runtime] Custom systems must be installed through Creation configuration.')
+        return
+      }
+
+      const operation = deriveCustomSystemOperation(
+        character.get('id'),
+        currentState,
+        nextState,
+      )
+      if (operation) runtime.dispatchCustomSystemOperation(operation)
+      return
+    }
+
     updateCharacter(character.get('id'), (current) => {
       const currentStates = current.get('sheet').customSystems ?? []
       const exists = currentStates.some(
@@ -73,23 +97,39 @@ export function CustomSystemsTab({ character, updateCharacter, actor }: Props) {
   }
 
   function useAbility(systemId: string, abilityId: string) {
-    // The updater receives the real, complete character from CharacterContext.
-    // This matters when this tab is rendered with only one system visible.
+    if (runtime) {
+      if (runtime.status !== 'connected') {
+        console.warn('[session-runtime] Custom-system ability ignored while the authoritative session server is disconnected.')
+        return
+      }
+      runtime.dispatchCustomSystemOperation({
+        type: 'character.customSystem.ability.activate',
+        characterId: character.get('id'),
+        systemId,
+        abilityId,
+      })
+      return
+    }
+
+    // Outside an authoritative session, preserve the local character workflow.
     updateCharacter(character.get('id'), (current) =>
       activateCustomAbility(current, definitions, systemId, abilityId),
     )
   }
 
   function installSystem(definition: CustomSystemDefinition) {
+    if (runtime) return
     if (!states.some((state) => state.systemId === definition.id)) {
       replaceState(createCharacterCustomSystemState(definition))
     }
     setSelectedSystemId(definition.id)
   }
 
-  const availableDefinitions = definitions.filter(
-    (definition) => !states.some((state) => state.systemId === definition.id),
-  )
+  const availableDefinitions = runtime
+    ? []
+    : definitions.filter(
+        (definition) => !states.some((state) => state.systemId === definition.id),
+      )
 
   return (
     <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
@@ -351,26 +391,22 @@ function ResourceSection({
         >
           −
         </button>
-        <input
-          type="number"
+        <BufferedNumberInput
           value={resourceState.current}
           min={resource.minimum}
           max={maximum}
           disabled={!canEdit}
-          onChange={(event) => {
-            const value = Number(event.target.value)
-            if (Number.isFinite(value)) {
-              onRun(() =>
-                setCustomResourceCurrent(
-                  definition,
-                  state,
-                  resource.id,
-                  value,
-                  actor,
-                ),
-              )
-            }
-          }}
+          onCommit={(value) =>
+            onRun(() =>
+              setCustomResourceCurrent(
+                definition,
+                state,
+                resource.id,
+                value,
+                actor,
+              ),
+            )
+          }
           className="min-w-0 flex-1 rounded-lg border border-border bg-transparent px-3 py-2 text-center text-textH"
         />
         <button
@@ -750,25 +786,21 @@ function AbilityEditor({
           {ability.usage ? (
             <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3">
               <label className="text-xs text-text">Usos consumidos</label>
-              <input
-                type="number"
+              <BufferedNumberInput
                 min={0}
                 max={ability.usage.maximum}
                 value={ability.usage.used}
-                onChange={(event) => {
-                  const value = Number(event.target.value)
-                  if (Number.isFinite(value)) {
-                    onRun(() =>
-                      setCustomAbilityUsage(
-                        definition,
-                        state,
-                        ability.id,
-                        value,
-                        actor,
-                      ),
-                    )
-                  }
-                }}
+                onCommit={(value) =>
+                  onRun(() =>
+                    setCustomAbilityUsage(
+                      definition,
+                      state,
+                      ability.id,
+                      value,
+                      actor,
+                    ),
+                  )
+                }
                 className="w-24 rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH"
               />
               {ability.usage.maximum !== undefined ? (
@@ -858,18 +890,15 @@ function FieldEditor({
       </div>
 
       {field.type === 'number' ? (
-        <input
-          type="number"
+        <BufferedNumberInput
           className={commonClass}
-          value={typeof value === 'number' ? value : ''}
+          value={typeof value === 'number' ? value : 0}
           min={field.minimum}
           max={field.maximum}
           step={field.step}
           disabled={disabled}
-          onChange={(event) => {
-            const number = Number(event.target.value)
-            if (Number.isFinite(number)) onChange(number)
-          }}
+          emptyWhenUndefined={value === undefined}
+          onCommit={onChange}
         />
       ) : field.type === 'boolean' ? (
         <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-text">
@@ -910,12 +939,12 @@ function FieldEditor({
           ))}
         </select>
       ) : field.type === 'richText' ? (
-        <textarea
+        <BufferedTextArea
           className={`${commonClass} min-h-28 resize-y`}
           value={typeof value === 'string' ? value : ''}
           placeholder={field.placeholder}
           disabled={disabled}
-          onChange={(event) => onChange(event.target.value)}
+          onCommit={onChange}
         />
       ) : field.type === 'dice' ? (
         <select
@@ -930,26 +959,24 @@ function FieldEditor({
           )}
         </select>
       ) : field.type === 'reference' ? (
-        <input
-          type="text"
+        <BufferedTextInput
           className={commonClass}
           value={typeof value === 'string' ? value : ''}
           placeholder={`Referência: ${field.target}`}
           disabled={disabled}
-          onChange={(event) => onChange(event.target.value)}
+          onCommit={onChange}
         />
       ) : field.type === 'formula' ? (
         <div className="rounded-lg border border-border bg-[color:var(--social-bg)] px-3 py-2 text-sm text-text">
           {displayJsonValue(value) || field.formula}
         </div>
       ) : (
-        <input
-          type="text"
+        <BufferedTextInput
           className={commonClass}
           value={typeof value === 'string' ? value : ''}
           placeholder={field.placeholder}
           disabled={disabled}
-          onChange={(event) => onChange(event.target.value)}
+          onCommit={onChange}
         />
       )}
 
@@ -957,6 +984,135 @@ function FieldEditor({
         <div className="mt-1 text-xs text-text">{field.description}</div>
       ) : null}
     </div>
+  )
+}
+
+function BufferedNumberInput({
+  value,
+  min,
+  max,
+  step,
+  disabled,
+  className,
+  emptyWhenUndefined = false,
+  onCommit,
+}: {
+  value: number
+  min?: number
+  max?: number
+  step?: number
+  disabled?: boolean
+  className: string
+  emptyWhenUndefined?: boolean
+  onCommit: (value: number) => void
+}) {
+  const externalValue = emptyWhenUndefined ? '' : String(value)
+  const [draft, setDraft] = useState(externalValue)
+
+  useEffect(() => {
+    setDraft(externalValue)
+  }, [externalValue])
+
+  function commit() {
+    if (draft.trim() === '') {
+      setDraft(externalValue)
+      return
+    }
+    const next = Number(draft)
+    if (!Number.isFinite(next)) {
+      setDraft(externalValue)
+      return
+    }
+    if (next !== value || emptyWhenUndefined) onCommit(next)
+  }
+
+  return (
+    <input
+      type="number"
+      value={draft}
+      min={min}
+      max={max}
+      step={step}
+      disabled={disabled}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur()
+        if (event.key === 'Escape') {
+          setDraft(externalValue)
+          event.currentTarget.blur()
+        }
+      }}
+      className={className}
+    />
+  )
+}
+
+function BufferedTextInput({
+  value,
+  placeholder,
+  disabled,
+  className,
+  onCommit,
+}: {
+  value: string
+  placeholder?: string
+  disabled?: boolean
+  className: string
+  onCommit: (value: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => setDraft(value), [value])
+
+  return (
+    <input
+      type="text"
+      className={className}
+      value={draft}
+      placeholder={placeholder}
+      disabled={disabled}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        if (draft !== value) onCommit(draft)
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur()
+        if (event.key === 'Escape') {
+          setDraft(value)
+          event.currentTarget.blur()
+        }
+      }}
+    />
+  )
+}
+
+function BufferedTextArea({
+  value,
+  placeholder,
+  disabled,
+  className,
+  onCommit,
+}: {
+  value: string
+  placeholder?: string
+  disabled?: boolean
+  className: string
+  onCommit: (value: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => setDraft(value), [value])
+
+  return (
+    <textarea
+      className={className}
+      value={draft}
+      placeholder={placeholder}
+      disabled={disabled}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        if (draft !== value) onCommit(draft)
+      }}
+    />
   )
 }
 
@@ -1038,6 +1194,135 @@ function formatFieldValue(
   }
 
   return displayJsonValue(value)
+}
+
+function deriveCustomSystemOperation(
+  characterId: string,
+  before: CharacterCustomSystemState,
+  after: CharacterCustomSystemState,
+): SessionCustomSystemOperation | null {
+  if (before.systemId !== after.systemId) return null
+  const systemId = before.systemId
+
+  for (const fieldId of new Set([...Object.keys(before.fields), ...Object.keys(after.fields)])) {
+    const previous = before.fields[fieldId]
+    const next = after.fields[fieldId]
+    if (sameJson(previous, next)) continue
+    if (!(fieldId in after.fields)) {
+      return {
+        type: 'character.customSystem.field.remove',
+        characterId,
+        systemId,
+        fieldId,
+      }
+    }
+    return {
+      type: 'character.customSystem.field.set',
+      characterId,
+      systemId,
+      fieldId,
+      value: next,
+    }
+  }
+
+  for (const resourceId of new Set([...Object.keys(before.resources), ...Object.keys(after.resources)])) {
+    const previous = before.resources[resourceId]
+    const next = after.resources[resourceId]
+    if (!next || sameJson(previous, next)) continue
+    if (
+      previous &&
+      previous.maximum === next.maximum &&
+      previous.temporary === next.temporary &&
+      Math.abs(next.current - previous.current) === 1
+    ) {
+      return {
+        type: 'character.customSystem.resource.adjust',
+        characterId,
+        systemId,
+        resourceId,
+        amount: next.current - previous.current,
+      }
+    }
+    return {
+      type: 'character.customSystem.resource.set',
+      characterId,
+      systemId,
+      resourceId,
+      state: next,
+    }
+  }
+
+  const beforeById = new Map(before.abilities.map((ability) => [ability.id, ability]))
+  const afterById = new Map(after.abilities.map((ability) => [ability.id, ability]))
+  const added = after.abilities.find((ability) => !beforeById.has(ability.id))
+  if (added) {
+    return {
+      type: 'character.customSystem.ability.add',
+      characterId,
+      systemId,
+      ability: added,
+    }
+  }
+  const removed = before.abilities.find((ability) => !afterById.has(ability.id))
+  if (removed) {
+    return {
+      type: 'character.customSystem.ability.remove',
+      characterId,
+      systemId,
+      abilityId: removed.id,
+    }
+  }
+
+  for (const nextAbility of after.abilities) {
+    const previous = beforeById.get(nextAbility.id)
+    if (!previous || sameJson(previous, nextAbility)) continue
+
+    if (previous.learned !== nextAbility.learned) {
+      return {
+        type: 'character.customSystem.ability.learned.set',
+        characterId,
+        systemId,
+        abilityId: nextAbility.id,
+        learned: nextAbility.learned === true,
+      }
+    }
+    if (previous.prepared !== nextAbility.prepared) {
+      return {
+        type: 'character.customSystem.ability.prepared.set',
+        characterId,
+        systemId,
+        abilityId: nextAbility.id,
+        prepared: nextAbility.prepared === true,
+      }
+    }
+    if (previous.usage?.used !== nextAbility.usage?.used && nextAbility.usage) {
+      return {
+        type: 'character.customSystem.ability.usage.set',
+        characterId,
+        systemId,
+        abilityId: nextAbility.id,
+        used: nextAbility.usage.used,
+      }
+    }
+
+    for (const fieldId of new Set([...Object.keys(previous.values), ...Object.keys(nextAbility.values)])) {
+      if (sameJson(previous.values[fieldId], nextAbility.values[fieldId])) continue
+      return {
+        type: 'character.customSystem.ability.field.set',
+        characterId,
+        systemId,
+        abilityId: nextAbility.id,
+        fieldId,
+        value: nextAbility.values[fieldId],
+      }
+    }
+  }
+
+  return null
+}
+
+function sameJson(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
 }
 
 function isLibraryAbility(ability: CustomAbilityInstance): boolean {
