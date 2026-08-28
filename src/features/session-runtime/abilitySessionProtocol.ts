@@ -29,6 +29,12 @@ export type SessionAbilityOperation =
       activationOptionId?: string
     }
   | {
+      type: "character.ability.usage.spend"
+      characterId: string
+      source: SessionAbilitySource
+      abilityName?: string
+    }
+  | {
       type: "character.ability.restore"
       characterId: string
       source: SessionAbilitySource
