@@ -72,7 +72,7 @@ export async function PATCH(
           spellId,
         },
       },
-      select: { id: true },
+      select: { id: true, status: true },
     })
 
     if (!existing) {
@@ -83,14 +83,24 @@ export async function PATCH(
       )
     }
 
-    const link = await prisma.campaignHomebrewSpell.update({
-      where: { id: existing.id },
-      data: {
-        status,
-        note,
-        reviewedById: session.user.id,
-        reviewedAt: new Date(),
-      },
+    const link = await prisma.$transaction(async (tx) => {
+      const updated = await tx.campaignHomebrewSpell.update({
+        where: { id: existing.id },
+        data: {
+          status,
+          note,
+          reviewedById: session.user.id,
+          reviewedAt: new Date(),
+        },
+      })
+
+      if (existing.status !== status) {
+        await tx.campaign.update({
+          where: { id: campaignId },
+          data: { creationRevision: { increment: 1 } },
+        })
+      }
+      return updated
     })
 
     return jsonResponse({ link })
