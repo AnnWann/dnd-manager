@@ -17,6 +17,8 @@ export type SessionInitiativeOperation =
   | { type: "initiative.turn.previous"; characterId: "session" }
   | { type: "initiative.allies.trade"; characterId: "session"; entryId: string; direction: 1 }
   | { type: "initiative.viewMode.set"; characterId: "session"; viewMode: "table" | "cards" }
+  | { type: "initiative.settings.update"; characterId: "session"; patch: { deathSaveVisibility?: "masterOnly" | "owner" | "everyone"; deathSaveOwnerCanEdit?: boolean } }
+  | { type: "initiative.deathSaves.set"; characterId: "session"; entryId: string; successes: number; failures: number }
   | { type: "initiative.reset"; characterId: "session" }
 
 export type SessionInitiativeClientMessage =

@@ -7,6 +7,9 @@ export type InitiativeSourceType =
   | "custom"
 
 export type InitiativeViewMode = "table" | "cards"
+export type InitiativeDeathSaveVisibility = "masterOnly" | "owner" | "everyone"
+export type InitiativeDeathSaves = { successes: number; failures: number }
+export type InitiativeDefeatReason = "manual" | "zeroHp"
 
 export type InitiativeConditionDuration =
   | { type: "manual" }
@@ -26,7 +29,16 @@ export type InitiativeEntry = {
   id: string
   sourceId?: string
   sourceType: InitiativeSourceType
+  /** Nome canônico usado pelo mestre e por entradas antigas. */
   name: string
+  /** Nome verdadeiro quando a origem possui identidade secreta. */
+  realName?: string
+  /** Nome genérico/público mostrado aos jogadores. */
+  basicName?: string
+  /** Nome definido durante o combate; tem precedência para todos. */
+  customName?: string
+  /** Revela o nome verdadeiro aos jogadores. */
+  revealRealName?: boolean
   imageUrl?: string
   initiative: number
   initiativeBonus: number
@@ -39,6 +51,9 @@ export type InitiativeEntry = {
   conditions: InitiativeCondition[]
   hidden: boolean
   defeated: boolean
+  downed?: boolean
+  defeatReason?: InitiativeDefeatReason
+  deathSaves?: InitiativeDeathSaves
   order: number
   createdAt: number
 }
@@ -53,6 +68,8 @@ export type InitiativeSession = {
   round: number
   started: boolean
   viewMode: InitiativeViewMode
+  deathSaveVisibility: InitiativeDeathSaveVisibility
+  deathSaveOwnerCanEdit: boolean
   createdAt: number
   updatedAt: number
 }
@@ -80,6 +97,8 @@ export function createInitiativeSession(
     round: 1,
     started: false,
     viewMode: "table",
+    deathSaveVisibility: "owner",
+    deathSaveOwnerCanEdit: false,
     createdAt: now,
     updatedAt: now,
   }
@@ -95,6 +114,13 @@ export function createInitiativeEntry(
     conditions: input.conditions ?? [],
     hidden: input.hidden ?? false,
     defeated: input.defeated ?? false,
+    downed: input.downed ?? false,
+    defeatReason: input.defeatReason,
+    deathSaves: input.deathSaves
+      ? normalizeDeathSaves(input.deathSaves)
+      : input.sourceType === "character"
+        ? { successes: 0, failures: 0 }
+        : undefined,
     order,
     createdAt: Date.now(),
   }
@@ -119,6 +145,17 @@ export function normalizeInitiativeSession(
       conditions: Array.isArray(entry.conditions) ? entry.conditions : [],
       hidden: Boolean(entry.hidden),
       defeated: Boolean(entry.defeated),
+      downed: Boolean(entry.downed),
+      defeatReason: entry.defeatReason === "manual" || entry.defeatReason === "zeroHp"
+        ? entry.defeatReason
+        : undefined,
+      deathSaves: entry.sourceType === "character"
+        ? normalizeDeathSaves(entry.deathSaves)
+        : undefined,
+      revealRealName: Boolean(entry.revealRealName),
+      realName: entry.realName?.trim() || undefined,
+      basicName: entry.basicName?.trim() || undefined,
+      customName: entry.customName?.trim() || undefined,
       order: finiteNumber(entry.order, index),
       createdAt: finiteNumber(entry.createdAt, now + index),
     }))
@@ -146,6 +183,12 @@ export function normalizeInitiativeSession(
     round: Math.max(1, finiteNumber(raw.round, 1)),
     started: Boolean(raw.started && activeEntryId && entries.length > 0),
     viewMode: raw.viewMode === "cards" ? "cards" : "table",
+    deathSaveVisibility:
+      raw.deathSaveVisibility === "masterOnly" ||
+      raw.deathSaveVisibility === "everyone"
+        ? raw.deathSaveVisibility
+        : "owner",
+    deathSaveOwnerCanEdit: Boolean(raw.deathSaveOwnerCanEdit),
     createdAt: finiteNumber(raw.createdAt, now),
     updatedAt: finiteNumber(raw.updatedAt, now),
   }
@@ -174,7 +217,9 @@ export function updateInitiativeEntry(
   return touchSession({
     ...session,
     entries: session.entries.map((entry) =>
-      entry.id === entryId ? updater(entry) : entry,
+      entry.id === entryId
+        ? normalizeZeroHpState(updater(entry), entry)
+        : entry,
     ),
   })
 }
@@ -420,6 +465,74 @@ export function removeInitiativeCondition(
       (condition) => condition.id !== conditionId,
     ),
   }))
+}
+
+export function initiativeEntryDisplayName(
+  entry: InitiativeEntry,
+  viewer: "master" | "player" = "master",
+): string {
+  const custom = entry.customName?.trim()
+  if (custom) return custom
+  if (viewer === "master") return entry.realName?.trim() || entry.name
+  if (entry.revealRealName) return entry.realName?.trim() || entry.name
+  return entry.basicName?.trim() || entry.name
+}
+
+export function setInitiativeEntryManualDefeated(
+  entry: InitiativeEntry,
+  defeated: boolean,
+): InitiativeEntry {
+  return {
+    ...entry,
+    defeated,
+    downed: defeated ? false : entry.downed,
+    defeatReason: defeated ? "manual" : undefined,
+  }
+}
+
+function normalizeZeroHpState(
+  next: InitiativeEntry,
+  previous: InitiativeEntry,
+): InitiativeEntry {
+  if (next.currentHp === undefined) return next
+  if (next.currentHp <= 0) {
+    if (next.sourceType === "character") {
+      return {
+        ...next,
+        downed: true,
+        defeated: next.defeatReason === "manual" ? next.defeated : false,
+        deathSaves: normalizeDeathSaves(next.deathSaves),
+      }
+    }
+    return next.defeated
+      ? next
+      : { ...next, defeated: true, downed: false, defeatReason: "zeroHp" }
+  }
+
+  const recoveredFromZero = previous.currentHp !== undefined && previous.currentHp <= 0
+  return {
+    ...next,
+    downed: false,
+    defeated: next.defeatReason === "zeroHp" ? false : next.defeated,
+    defeatReason: next.defeatReason === "zeroHp" ? undefined : next.defeatReason,
+    deathSaves: recoveredFromZero && next.sourceType === "character"
+      ? { successes: 0, failures: 0 }
+      : next.deathSaves,
+  }
+}
+
+function normalizeDeathSaves(value: InitiativeDeathSaves | undefined): InitiativeDeathSaves {
+  return {
+    successes: clampInteger(value?.successes, 0, 3),
+    failures: clampInteger(value?.failures, 0, 3),
+  }
+}
+
+function clampInteger(value: unknown, minimum: number, maximum: number): number {
+  const numeric = typeof value === "number" && Number.isFinite(value)
+    ? Math.trunc(value)
+    : 0
+  return Math.max(minimum, Math.min(maximum, numeric))
 }
 
 export function rollInitiative(bonus = 0): number {

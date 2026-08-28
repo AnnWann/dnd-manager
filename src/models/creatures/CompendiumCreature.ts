@@ -24,7 +24,10 @@ export type CreatureFeatureField =
 
 export type CompendiumCreature = {
   id: string
+  /** Nome verdadeiro/canônico conhecido pelo mestre. */
   name: string
+  /** Nome genérico mostrado aos jogadores na iniciativa por padrão. */
+  basicName: string
   category: string
   size: string
   challengeRating: string
@@ -99,6 +102,7 @@ export function createCompendiumCreature(
   return {
     id: patch.id ?? crypto.randomUUID(),
     name: patch.name ?? "Nova criatura",
+    basicName: patch.basicName?.trim() || patch.name?.trim() || "Nova criatura",
     category: patch.category ?? "Monstro",
     size: patch.size ?? "Médio",
     challengeRating: patch.challengeRating ?? "",
@@ -147,6 +151,11 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
   return {
     id: stringValue(value.id).trim() || crypto.randomUUID(),
     name,
+    basicName:
+      optionalStringValue(value.basicName) ??
+      optionalStringValue(value.publicName) ??
+      optionalStringValue(value.genericName) ??
+      name,
     category: stringValue(value.category, "Monstro"),
     size: stringValue(value.size, "Médio"),
     challengeRating: stringValue(value.challengeRating),

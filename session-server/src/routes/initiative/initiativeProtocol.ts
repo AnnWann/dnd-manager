@@ -9,6 +9,8 @@ export type SessionInitiativeOperation =
   | { type: "initiative.turn.previous"; characterId: "session" }
   | { type: "initiative.allies.trade"; characterId: "session"; entryId: string; direction: 1 }
   | { type: "initiative.viewMode.set"; characterId: "session"; viewMode: "table" | "cards" }
+  | { type: "initiative.settings.update"; characterId: "session"; patch: { deathSaveVisibility?: "masterOnly" | "owner" | "everyone"; deathSaveOwnerCanEdit?: boolean } }
+  | { type: "initiative.deathSaves.set"; characterId: "session"; entryId: string; successes: number; failures: number }
   | { type: "initiative.reset"; characterId: "session" };
 
 export type SessionInitiativeState = {
@@ -39,6 +41,8 @@ export function parseInitiativeClientMessage(raw: string): SessionInitiativeClie
     case "initiative.entry.remove": return readId(operation.entryId) ? value as SessionInitiativeClientMessage : null;
     case "initiative.allies.trade": return readId(operation.entryId) && operation.direction === 1 ? value as SessionInitiativeClientMessage : null;
     case "initiative.viewMode.set": return operation.viewMode === "table" || operation.viewMode === "cards" ? value as SessionInitiativeClientMessage : null;
+    case "initiative.settings.update": return isRecord(operation.patch) ? value as SessionInitiativeClientMessage : null;
+    case "initiative.deathSaves.set": return readId(operation.entryId) && integerRange(operation.successes, 0, 3) && integerRange(operation.failures, 0, 3) ? value as SessionInitiativeClientMessage : null;
     case "initiative.sort":
     case "initiative.combat.start":
     case "initiative.combat.end":
@@ -56,4 +60,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 function readId(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function integerRange(value: unknown, minimum: number, maximum: number): boolean {
+  return typeof value === "number" && Number.isInteger(value) && value >= minimum && value <= maximum;
 }

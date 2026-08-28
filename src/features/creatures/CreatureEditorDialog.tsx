@@ -303,13 +303,22 @@ export function CreatureEditorDialog({
             />
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Nome" className="sm:col-span-2">
+              <Field label="Nome verdadeiro">
                 <Input
                   value={draft.name}
                   onChange={(event) => patch({ name: event.target.value })}
                   autoFocus={!jsonOpen}
                 />
               </Field>
+              <TextInput
+                label="Nome básico"
+                value={draft.basicName}
+                placeholder="Ex.: Goblin, Bugbear, Cultista…"
+                onChange={(basicName) => patch({ basicName })}
+              />
+              <p className="text-xs leading-5 text-textMuted sm:col-span-2">
+                O nome básico é o que os jogadores veem na iniciativa até o mestre revelar o nome verdadeiro ou definir um nome de combate.
+              </p>
 
               <TextInput
                 label="Categoria"

@@ -173,6 +173,15 @@ function filterMessageForSocket(socket: WebSocket, message: unknown): unknown | 
       : null;
   }
 
+  if (
+    (type === "session.initiative.snapshot" || type === "session.initiative.updated") &&
+    record.state &&
+    typeof record.state === "object" &&
+    !Array.isArray(record.state)
+  ) {
+    return filterInitiativeMessageForPlayer(connection, record);
+  }
+
   if (type === "session.character.removed") {
     const characterId = typeof record.characterId === "string"
       ? record.characterId
@@ -183,6 +192,51 @@ function filterMessageForSocket(socket: WebSocket, message: unknown): unknown | 
   }
 
   return message;
+}
+
+function filterInitiativeMessageForPlayer(
+  connection: SessionConnection,
+  message: Record<string, unknown>,
+): Record<string, unknown> {
+  const state = message.state as Record<string, unknown>;
+  const rawSession = state.session;
+  if (!rawSession || typeof rawSession !== "object" || Array.isArray(rawSession)) return message;
+  const session = rawSession as Record<string, unknown>;
+  if (!Array.isArray(session.entries)) return message;
+
+  const visibility = session.deathSaveVisibility;
+  const entries = session.entries.map((rawEntry) => {
+    if (!rawEntry || typeof rawEntry !== "object" || Array.isArray(rawEntry)) return rawEntry;
+    const entry = rawEntry as Record<string, unknown>;
+    const realName = typeof entry.realName === "string" ? entry.realName.trim() : "";
+    const basicName = typeof entry.basicName === "string" ? entry.basicName.trim() : "";
+    const canonicalName = typeof entry.name === "string" ? entry.name.trim() : "";
+    const customName = typeof entry.customName === "string" ? entry.customName.trim() : "";
+    const revealRealName = entry.revealRealName === true;
+    const publicName = customName || (revealRealName ? (realName || canonicalName) : (basicName || canonicalName));
+    const sourceId = typeof entry.sourceId === "string" ? entry.sourceId.trim() : "";
+    const ownsEntry = Boolean(sourceId && readOwnedCharacterIds(connection)?.includes(sourceId));
+    const maySeeDeathSaves = visibility === "everyone" || (visibility === "owner" && ownsEntry);
+
+    const filtered: Record<string, unknown> = {
+      ...entry,
+      name: publicName,
+    };
+    if (!revealRealName) delete filtered.realName;
+    if (!maySeeDeathSaves) delete filtered.deathSaves;
+    return filtered;
+  });
+
+  return {
+    ...message,
+    state: {
+      ...state,
+      session: {
+        ...session,
+        entries,
+      },
+    },
+  };
 }
 
 function canReceiveCharacter(

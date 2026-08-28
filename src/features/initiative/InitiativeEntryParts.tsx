@@ -6,10 +6,11 @@ import {
 } from "lucide-react"
 
 import { Button } from "../../components/ui/Button"
-import type {
-  InitiativeConditionDuration,
-  InitiativeEntry,
-  InitiativeSide,
+import {
+  initiativeEntryDisplayName,
+  type InitiativeConditionDuration,
+  type InitiativeEntry,
+  type InitiativeSide,
 } from "../../models/initiative/Initiative"
 
 const compactInputClassName = [
@@ -22,10 +23,12 @@ export function EntryIdentity({
   entry,
   onOpen,
   showTemporaryHp = true,
+  viewer = "master",
 }: {
   entry: InitiativeEntry
   onOpen?: () => void
   showTemporaryHp?: boolean
+  viewer?: "master" | "player"
 }) {
   const content = (
     <>
@@ -42,7 +45,7 @@ export function EntryIdentity({
       )}
       <div className="min-w-0">
         <div className="truncate font-semibold text-textH group-hover:text-accent">
-          {entry.name}
+          {initiativeEntryDisplayName(entry, viewer)}
         </div>
         <div className="mt-1 flex items-center gap-1.5">
           <span
@@ -203,6 +206,63 @@ export function ConditionChips({
         <CirclePlus className="h-3 w-3" />
         Condição
       </button>
+    </div>
+  )
+}
+
+export function DeathSaveCounter({
+  entry,
+  editable = false,
+  onChange,
+}: {
+  entry: InitiativeEntry
+  editable?: boolean
+  onChange?: (deathSaves: { successes: number; failures: number }) => void
+}) {
+  if (entry.sourceType !== "character" || !entry.downed) return null
+  const saves = entry.deathSaves ?? { successes: 0, failures: 0 }
+
+  function adjust(kind: "successes" | "failures", delta: number) {
+    if (!editable || !onChange) return
+    onChange({
+      ...saves,
+      [kind]: Math.max(0, Math.min(3, saves[kind] + delta)),
+    })
+  }
+
+  return (
+    <div className="grid gap-1 text-[10px] text-textMuted">
+      <div className="font-semibold uppercase tracking-wide text-textH">
+        Caído · Saves de morte
+      </div>
+      {(["successes", "failures"] as const).map((kind) => (
+        <div key={kind} className="flex items-center gap-1.5">
+          <span className={kind === "successes" ? "text-emerald-300" : "text-danger"}>
+            {kind === "successes" ? "Sucessos" : "Falhas"}
+          </span>
+          <div className="flex gap-1">
+            {[0, 1, 2].map((index) => (
+              <span
+                key={index}
+                className={[
+                  "h-2.5 w-2.5 rounded-full border",
+                  index < saves[kind]
+                    ? kind === "successes"
+                      ? "border-emerald-300 bg-emerald-300"
+                      : "border-danger bg-danger"
+                    : "border-border bg-bg",
+                ].join(" ")}
+              />
+            ))}
+          </div>
+          {editable ? (
+            <div className="ml-1 flex gap-1">
+              <button type="button" className="rounded border border-border px-1" onClick={() => adjust(kind, -1)}>−</button>
+              <button type="button" className="rounded border border-border px-1" onClick={() => adjust(kind, 1)}>+</button>
+            </div>
+          ) : null}
+        </div>
+      ))}
     </div>
   )
 }

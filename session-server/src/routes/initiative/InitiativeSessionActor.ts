@@ -66,7 +66,13 @@ export class SessionActor {
     connection.lastHeartbeatAt = Date.now();
     webSocket.serializeAttachment(connection);
 
-    if (connection.role !== "MASTER") {
+    if (
+      connection.role !== "MASTER" &&
+      !(
+        parsed.type === "session.initiative.operation" &&
+        parsed.operation.type === "initiative.deathSaves.set"
+      )
+    ) {
       sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can mutate initiative state.");
       return;
     }
@@ -109,6 +115,22 @@ export class SessionActor {
     }
 
     const current = normalizeInitiativeSession(state.session as Partial<InitiativeSession>);
+    if (connection.role !== "MASTER" && operation.type === "initiative.deathSaves.set") {
+      const entry = current.entries.find((candidate) => candidate.id === operation.entryId);
+      const linkedCharacterId = linkedCharacterIdForEntry(entry);
+      const linkedHp = linkedCharacterId ? hp[linkedCharacterId] : undefined;
+      if (
+        !entry ||
+        entry.sourceType !== "character" ||
+        !linkedCharacterId ||
+        linkedHp?.ownerUserId !== connection.userId ||
+        !current.deathSaveOwnerCanEdit
+      ) {
+        sendError(webSocket, "DEATH_SAVES_ACCESS_DENIED", "This player cannot edit these death saves.");
+        return;
+      }
+    }
+
     const before = structuredClone(state);
     const result = applyInitiativeOperation(current, operation);
     if (!result.ok) {
@@ -118,6 +140,33 @@ export class SessionActor {
 
     const previousAbilities: Record<string, SessionAbilityState> = {};
     const changedAbilityIds = new Set<string>();
+
+    const deathSaveEntry = operation.type === "initiative.deathSaves.set"
+      ? result.session.entries.find((entry) => entry.id === operation.entryId)
+      : operation.type === "initiative.entry.update" && "deathSaves" in operation.patch
+        ? result.session.entries.find((entry) => entry.id === operation.entryId)
+        : undefined;
+    const deathSaveCharacterId = linkedCharacterIdForEntry(deathSaveEntry);
+    if (deathSaveEntry?.deathSaves && deathSaveCharacterId) {
+      const storedAbility = abilities[deathSaveCharacterId];
+      if (storedAbility?.initialized) {
+        previousAbilities[deathSaveCharacterId] = structuredClone(storedAbility);
+        const character = CharacterTemplate.fromJSON(
+          storedAbility.character as Partial<CharacterTemplateProps>,
+        );
+        const updatedCharacter = character.with("deathSaves", {
+          ...deathSaveEntry.deathSaves,
+        });
+        abilities[deathSaveCharacterId] = {
+          characterId: deathSaveCharacterId,
+          character: updatedCharacter.toJSON() as unknown as Record<string, unknown>,
+          initialized: true,
+          revision: storedAbility.revision + 1,
+        };
+        changedAbilityIds.add(deathSaveCharacterId);
+      }
+    }
+
     if (runtimeConfig) {
       try {
         const events = initiativeAutomationEvents(current, result.session, operation);
@@ -399,6 +448,56 @@ function applyInitiativeOperation(
       if (current.viewMode === operation.viewMode) return invalid("INITIATIVE_VIEW_UNCHANGED", "Initiative already uses this view mode.");
       return { ok: true, session: { ...current, viewMode: operation.viewMode, updatedAt: Date.now() }, operation };
     }
+    case "initiative.settings.update": {
+      const visibility = operation.patch.deathSaveVisibility;
+      if (
+        visibility !== undefined &&
+        visibility !== "masterOnly" &&
+        visibility !== "owner" &&
+        visibility !== "everyone"
+      ) {
+        return invalid("INITIATIVE_SETTINGS_INVALID", "Invalid death-save visibility setting.");
+      }
+      if (
+        operation.patch.deathSaveOwnerCanEdit !== undefined &&
+        typeof operation.patch.deathSaveOwnerCanEdit !== "boolean"
+      ) {
+        return invalid("INITIATIVE_SETTINGS_INVALID", "Invalid death-save edit setting.");
+      }
+      return {
+        ok: true,
+        session: {
+          ...current,
+          ...(visibility !== undefined ? { deathSaveVisibility: visibility } : {}),
+          ...(operation.patch.deathSaveOwnerCanEdit !== undefined
+            ? { deathSaveOwnerCanEdit: operation.patch.deathSaveOwnerCanEdit }
+            : {}),
+          updatedAt: Date.now(),
+        },
+        operation,
+      };
+    }
+    case "initiative.deathSaves.set": {
+      const existing = current.entries.find((entry) => entry.id === operation.entryId);
+      if (!existing || existing.sourceType !== "character") {
+        return invalid("INITIATIVE_ENTRY_NOT_FOUND", "Player initiative entry was not found.");
+      }
+      if (!existing.downed && (existing.currentHp ?? 0) > 0) {
+        return invalid("DEATH_SAVES_NOT_ACTIVE", "Death saves are only active while the character is downed.");
+      }
+      const deathSaves = {
+        successes: operation.successes,
+        failures: operation.failures,
+      };
+      return {
+        ok: true,
+        session: updateInitiativeEntry(current, operation.entryId, (entry) => ({
+          ...entry,
+          deathSaves,
+        })),
+        operation,
+      };
+    }
     case "initiative.reset": {
       return { ok: true, session: createInitiativeSession(current.name || "Combate da sessão"), operation };
     }
@@ -463,6 +562,10 @@ function normalizeEntryInput(value: Record<string, unknown>): NewInitiativeEntry
     sourceId: optionalString(value.sourceId),
     sourceType,
     name,
+    realName: optionalString(value.realName),
+    basicName: optionalString(value.basicName),
+    customName: optionalString(value.customName),
+    revealRealName: value.revealRealName === true,
     imageUrl: optionalString(value.imageUrl),
     initiative,
     initiativeBonus,
@@ -474,6 +577,14 @@ function normalizeEntryInput(value: Record<string, unknown>): NewInitiativeEntry
     temporaryHp: optionalFinite(value.temporaryHp),
     hidden: value.hidden === true,
     defeated: value.defeated === true,
+    downed: value.downed === true,
+    defeatReason:
+      value.defeatReason === "manual" || value.defeatReason === "zeroHp"
+        ? value.defeatReason
+        : undefined,
+    deathSaves: sourceType === "character"
+      ? normalizeDeathSaves(value.deathSaves)
+      : undefined,
     conditions: Array.isArray(value.conditions) ? structuredClone(value.conditions) as InitiativeEntry["conditions"] : [],
   }];
 }
@@ -481,6 +592,11 @@ function normalizeEntryInput(value: Record<string, unknown>): NewInitiativeEntry
 function normalizeEntryPatch(value: Record<string, unknown>): Partial<InitiativeEntry> {
   const patch: Partial<InitiativeEntry> = {};
   if (typeof value.name === "string" && value.name.trim()) patch.name = value.name.trim();
+  for (const key of ["realName", "basicName", "customName"] as const) {
+    if (!(key in value)) continue;
+    patch[key] = optionalString(value[key]);
+  }
+  if (typeof value.revealRealName === "boolean") patch.revealRealName = value.revealRealName;
   for (const key of ["initiative", "initiativeBonus", "dexterity", "armorClass", "currentHp", "maxHp", "temporaryHp"] as const) {
     if (!(key in value)) continue;
     const parsed = optionalFinite(value[key]);
@@ -489,6 +605,13 @@ function normalizeEntryPatch(value: Record<string, unknown>): Partial<Initiative
   if (value.side === "ally" || value.side === "enemy" || value.side === "neutral") patch.side = value.side;
   if (typeof value.hidden === "boolean") patch.hidden = value.hidden;
   if (typeof value.defeated === "boolean") patch.defeated = value.defeated;
+  if (typeof value.downed === "boolean") patch.downed = value.downed;
+  if ("defeatReason" in value) {
+    patch.defeatReason = value.defeatReason === "manual" || value.defeatReason === "zeroHp"
+      ? value.defeatReason
+      : undefined;
+  }
+  if ("deathSaves" in value) patch.deathSaves = normalizeDeathSaves(value.deathSaves);
   if (Array.isArray(value.conditions)) patch.conditions = structuredClone(value.conditions) as InitiativeEntry["conditions"];
   return patch;
 }
@@ -502,6 +625,8 @@ function emptyInitiativeSession(): InitiativeSession {
     round: 1,
     started: false,
     viewMode: "table",
+    deathSaveVisibility: "owner",
+    deathSaveOwnerCanEdit: false,
     createdAt: 0,
     updatedAt: 0,
   };
@@ -509,6 +634,25 @@ function emptyInitiativeSession(): InitiativeSession {
 function finite(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
+function linkedCharacterIdForEntry(entry: InitiativeEntry | undefined): string | undefined {
+  if (!entry?.sourceId?.trim()) return undefined;
+  if (entry.sourceId.startsWith("compendium:")) return undefined;
+  return entry.sourceId.trim();
+}
+
+function normalizeDeathSaves(value: unknown): NonNullable<InitiativeEntry["deathSaves"]> {
+  const record = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const successes = typeof record.successes === "number" && Number.isFinite(record.successes)
+    ? Math.max(0, Math.min(3, Math.trunc(record.successes)))
+    : 0;
+  const failures = typeof record.failures === "number" && Number.isFinite(record.failures)
+    ? Math.max(0, Math.min(3, Math.trunc(record.failures)))
+    : 0;
+  return { successes, failures };
+}
+
 function optionalFinite(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }

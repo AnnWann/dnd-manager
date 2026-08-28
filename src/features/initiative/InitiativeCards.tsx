@@ -1,9 +1,10 @@
-import { Skull, Trash2 } from "lucide-react"
+import { Pencil, Skull, Trash2 } from "lucide-react"
 
 import { Button } from "../../components/ui/Button"
 import type { InitiativeEntry } from "../../models/initiative/Initiative"
 import {
   ConditionChips,
+  DeathSaveCounter,
   EntryIdentity,
   TradeControls,
   formatHp,
@@ -63,6 +64,7 @@ export function InitiativeCards({
                     entry={entry}
                     onOpen={readOnly ? undefined : () => props.onOpen(entry.id)}
                     showTemporaryHp={showPrivateStats}
+                    viewer={readOnly ? "player" : "master"}
                   />
                   <div className="rounded-lg border border-border bg-bg-subtle px-3 py-2 text-center">
                     <div className="text-[10px] uppercase text-textMuted">
@@ -96,6 +98,12 @@ export function InitiativeCards({
                         {entry.armorClass ?? "—"}
                       </div>
                     </div>
+                  </div>
+                ) : null}
+
+                {entry.downed && showPrivateStats ? (
+                  <div className="mt-3 rounded-lg border border-danger/40 bg-danger/10 p-2">
+                    <DeathSaveCounter entry={entry} />
                   </div>
                 ) : null}
 
@@ -133,6 +141,11 @@ export function InitiativeCards({
                       canTrade={props.canTrade}
                     />
                     <div className="flex gap-1">
+                      {props.onRename ? (
+                        <Button size="icon" variant="ghost" title="Nome no combate" onClick={() => props.onRename?.(entry.id)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      ) : null}
                       <Button
                         size="icon"
                         variant={entry.defeated ? "outline" : "ghost"}
@@ -142,6 +155,8 @@ export function InitiativeCards({
                         onClick={() =>
                           props.patchEntry(entry.id, {
                             defeated: !entry.defeated,
+                            downed: entry.defeated ? entry.downed : false,
+                            defeatReason: entry.defeated ? undefined : "manual",
                           })
                         }
                       >

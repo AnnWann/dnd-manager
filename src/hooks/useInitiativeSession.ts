@@ -206,6 +206,20 @@ function inferInitiativeOperation(
     return { type: "initiative.viewMode.set", characterId: "session", viewMode: next.viewMode }
   }
 
+  if (
+    current.deathSaveVisibility !== next.deathSaveVisibility ||
+    current.deathSaveOwnerCanEdit !== next.deathSaveOwnerCanEdit
+  ) {
+    return {
+      type: "initiative.settings.update",
+      characterId: "session",
+      patch: {
+        deathSaveVisibility: next.deathSaveVisibility,
+        deathSaveOwnerCanEdit: next.deathSaveOwnerCanEdit,
+      },
+    }
+  }
+
   if (current.started && current.activeEntryId !== next.activeEntryId) {
     const currentIndex = current.entries.findIndex((entry) => entry.id === current.activeEntryId)
     if (currentIndex >= 0 && current.entries.length) {
@@ -260,6 +274,10 @@ function diffEntry(current: InitiativeEntry, next: InitiativeEntry): Record<stri
   const patch: Record<string, unknown> = {}
   for (const key of [
     "name",
+    "realName",
+    "basicName",
+    "customName",
+    "revealRealName",
     "initiative",
     "initiativeBonus",
     "dexterity",
@@ -270,11 +288,16 @@ function diffEntry(current: InitiativeEntry, next: InitiativeEntry): Record<stri
     "temporaryHp",
     "hidden",
     "defeated",
+    "downed",
+    "defeatReason",
   ] as const) {
     if (current[key] !== next[key]) patch[key] = next[key]
   }
   if (JSON.stringify(current.conditions) !== JSON.stringify(next.conditions)) {
     patch.conditions = next.conditions
+  }
+  if (JSON.stringify(current.deathSaves) !== JSON.stringify(next.deathSaves)) {
+    patch.deathSaves = next.deathSaves
   }
   return patch
 }

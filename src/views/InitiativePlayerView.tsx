@@ -5,13 +5,16 @@ import { Button } from "../components/ui/Button"
 import { useCharacterContext } from "../contexts/characterContext"
 import { useSyncContext } from "../contexts/syncContext"
 import { InitiativeCards } from "../features/initiative/InitiativeCards"
+import { DeathSaveCounter } from "../features/initiative/InitiativeEntryParts"
+import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
 import { useInitiativeSession } from "../hooks/useInitiativeSession"
-import type { InitiativeEntry } from "../models/initiative/Initiative"
+import { initiativeEntryDisplayName, type InitiativeEntry } from "../models/initiative/Initiative"
 
 type PlayerViewMode = "table" | "cards"
 
 export function InitiativePlayerView() {
   const { session, hydrated } = useInitiativeSession()
+  const runtime = useOptionalSessionRuntime()
   const { visibleCharacters } = useCharacterContext()
   const { userKey } = useSyncContext()
   const [viewMode, setViewMode] = useState<PlayerViewMode>("table")
@@ -57,6 +60,31 @@ export function InitiativePlayerView() {
 
   const canViewPrivateStats = (entry: InitiativeEntry) =>
     Boolean(entry.sourceId && ownedCharacterIds.has(entry.sourceId))
+  const canViewDeathSaves = (entry: InitiativeEntry) =>
+    Boolean(entry.deathSaves) && (
+      session.deathSaveVisibility === "everyone" ||
+      (session.deathSaveVisibility === "owner" && canViewPrivateStats(entry))
+    )
+  const canEditDeathSaves = (entry: InitiativeEntry) =>
+    Boolean(
+      runtime &&
+      runtime.status === "connected" &&
+      session.deathSaveOwnerCanEdit &&
+      canViewPrivateStats(entry),
+    )
+  const setDeathSaves = (
+    entry: InitiativeEntry,
+    deathSaves: { successes: number; failures: number },
+  ) => {
+    if (!canEditDeathSaves(entry)) return
+    runtime?.dispatchInitiativeOperation({
+      type: "initiative.deathSaves.set",
+      characterId: "session",
+      entryId: entry.id,
+      successes: deathSaves.successes,
+      failures: deathSaves.failures,
+    })
+  }
 
   const noop = () => undefined
 
@@ -95,7 +123,7 @@ export function InitiativePlayerView() {
             </span>
             <span className="rounded-full border border-accentBorder bg-accentBg px-3 py-1.5 font-medium text-textH">
               {active
-                ? `Turno: ${active.name}`
+                ? `Turno: ${initiativeEntryDisplayName(active, "player")}`
                 : session.started
                   ? "Combate em andamento"
                   : "Aguardando início"}
@@ -136,6 +164,9 @@ export function InitiativePlayerView() {
               entry={entry}
               active={entry.id === session.activeEntryId}
               showPrivateStats={canViewPrivateStats(entry)}
+              showDeathSaves={canViewDeathSaves(entry)}
+              editDeathSaves={canEditDeathSaves(entry)}
+              onDeathSaves={(deathSaves) => setDeathSaves(entry, deathSaves)}
             />
           ))}
         </div>
@@ -148,10 +179,16 @@ function ReadOnlyEntry({
   entry,
   active,
   showPrivateStats,
+  showDeathSaves,
+  editDeathSaves,
+  onDeathSaves,
 }: {
   entry: InitiativeEntry
   active: boolean
   showPrivateStats: boolean
+  showDeathSaves: boolean
+  editDeathSaves: boolean
+  onDeathSaves: (deathSaves: { successes: number; failures: number }) => void
 }) {
   return (
     <article
@@ -171,14 +208,18 @@ function ReadOnlyEntry({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="min-w-0 break-words text-sm font-semibold text-textH">
-            {entry.name}
+            {initiativeEntryDisplayName(entry, "player")}
           </h2>
           {active ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
               <Clock3 className="h-3 w-3" /> Turno atual
             </span>
           ) : null}
-          {entry.defeated ? (
+          {entry.downed ? (
+            <span className="rounded-full border border-danger/50 bg-danger/10 px-2 py-1 text-[10px] font-semibold text-danger">
+              Caído
+            </span>
+          ) : entry.defeated ? (
             <span className="rounded-full border border-border px-2 py-1 text-[10px] text-textMuted">
               Derrotado
             </span>
@@ -196,6 +237,15 @@ function ReadOnlyEntry({
                 {condition.name}
               </span>
             ))}
+          </div>
+        ) : null}
+        {entry.downed && showDeathSaves ? (
+          <div className="mt-2 rounded-lg border border-danger/40 bg-danger/10 p-2">
+            <DeathSaveCounter
+              entry={entry}
+              editable={editDeathSaves}
+              onChange={onDeathSaves}
+            />
           </div>
         ) : null}
       </div>

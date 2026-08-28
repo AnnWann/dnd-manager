@@ -1,10 +1,11 @@
-import { Play, Skull, Trash2 } from "lucide-react"
+import { Pencil, Play, Skull, Trash2 } from "lucide-react"
 
 import { Button } from "../../components/ui/Button"
 import type { InitiativeEntry } from "../../models/initiative/Initiative"
 import {
   ArmorClassEditor,
   ConditionChips,
+  DeathSaveCounter,
   EntryIdentity,
   HitPointEditor,
   InitiativeEditor,
@@ -46,6 +47,7 @@ function TableEntryRows({
   started,
   patchEntry,
   onOpen,
+  onRename,
   onCondition,
   onRemove,
   onTrade,
@@ -94,7 +96,14 @@ function TableEntryRows({
           <EntryIdentity entry={entry} onOpen={() => onOpen(entry.id)} />
         </td>
         <td className="px-3 py-3">
-          <HitPointEditor entry={entry} patchEntry={patchEntry} />
+          <div className="grid gap-2">
+            <HitPointEditor entry={entry} patchEntry={patchEntry} />
+            <DeathSaveCounter
+              entry={entry}
+              editable
+              onChange={(deathSaves) => patchEntry(entry.id, { deathSaves })}
+            />
+          </div>
         </td>
         <td className="px-3 py-3">
           <ArmorClassEditor entry={entry} patchEntry={patchEntry} />
@@ -117,12 +126,21 @@ function TableEntryRows({
         </td>
         <td className="px-3 py-3">
           <div className="flex justify-end gap-1">
+            {onRename ? (
+              <Button size="icon" variant="ghost" title="Nome no combate" onClick={() => onRename(entry.id)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+            ) : null}
             <Button
               size="icon"
               variant={entry.defeated ? "outline" : "ghost"}
               title={entry.defeated ? "Reativar" : "Marcar como derrotado"}
               onClick={() =>
-                patchEntry(entry.id, { defeated: !entry.defeated })
+                patchEntry(entry.id, {
+                  defeated: !entry.defeated,
+                  downed: entry.defeated ? entry.downed : false,
+                  defeatReason: entry.defeated ? undefined : "manual",
+                })
               }
             >
               <Skull className="h-4 w-4" />

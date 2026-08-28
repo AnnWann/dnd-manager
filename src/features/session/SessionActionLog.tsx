@@ -328,6 +328,8 @@ function describeSessionOperation(
     case "initiative.turn.previous": return `Voltou para o turno anterior da iniciativa.`
     case "initiative.allies.trade": return `Trocou a ordem de dois aliados na iniciativa.`
     case "initiative.viewMode.set": return `Alterou a visualização da iniciativa para ${operation.viewMode === "cards" ? "cartões" : "tabela"}.`
+    case "initiative.settings.update": return `Alterou as configurações de saves de morte da iniciativa.`
+    case "initiative.deathSaves.set": return `Atualizou os saves de morte de um personagem na iniciativa (${operation.successes} sucessos, ${operation.failures} falhas).`
     case "initiative.reset": return `Limpou o combate atual.`
     case "character.proficiency.add": return `${characterName} ganhou a proficiência ${operation.proficiency.name}.`
     case "character.proficiency.remove": return `${characterName} perdeu a proficiência ${operation.proficiencyName || "selecionada"}.`

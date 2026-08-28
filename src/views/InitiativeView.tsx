@@ -41,6 +41,7 @@ import {
   addInitiativeEntries,
   advanceInitiativeTurn,
   applyInitiativeCondition,
+  initiativeEntryDisplayName,
   canTradeConsecutiveAllies,
   endInitiativeCombat,
   removeInitiativeCondition,
@@ -75,6 +76,8 @@ export function InitiativeView() {
     useState(false)
   const [customOpen, setCustomOpen] = useState(false)
   const [conditionTargetId, setConditionTargetId] = useState<string>()
+  const [renameTargetId, setRenameTargetId] = useState<string>()
+  const [renameValue, setRenameValue] = useState("")
   const [quickSheetEntryId, setQuickSheetEntryId] = useState<string>()
   const cardRefs = useRef(new Map<string, HTMLDivElement>())
 
@@ -90,6 +93,7 @@ export function InitiativeView() {
   const conditionTarget = session.entries.find(
     (entry) => entry.id === conditionTargetId,
   )
+  const renameTarget = session.entries.find((entry) => entry.id === renameTargetId)
   const quickSheetEntry = session.entries.find(
     (entry) => entry.id === quickSheetEntryId,
   )
@@ -136,6 +140,13 @@ export function InitiativeView() {
     )
   }
 
+  function openRename(entryId: string) {
+    const entry = session.entries.find((candidate) => candidate.id === entryId)
+    if (!entry) return
+    setRenameTargetId(entryId)
+    setRenameValue(entry.customName ?? "")
+  }
+
   function addSelectedCharacter() {
     if (!selectedCharacter) return
 
@@ -164,6 +175,9 @@ export function InitiativeView() {
                 ? "npc"
                 : "monster",
           name,
+          realName: name,
+          basicName: name,
+          revealRealName: true,
           imageUrl: selectedCharacter.get("profile").imageUrl,
           initiative: rollInitiative(initiativeBonus),
           initiativeBonus,
@@ -201,6 +215,13 @@ export function InitiativeView() {
       name: selectedCreature.unique
         ? selectedCreature.name
         : `${selectedCreature.name} ${existingCopies + index + 1}`,
+      realName: selectedCreature.unique
+        ? selectedCreature.name
+        : `${selectedCreature.name} ${existingCopies + index + 1}`,
+      basicName: selectedCreature.unique
+        ? selectedCreature.basicName
+        : `${selectedCreature.basicName} ${existingCopies + index + 1}`,
+      revealRealName: false,
       imageUrl: selectedCreature.sheetImageUrl,
       initiative:
         sharedRoll ?? rollInitiative(selectedCreature.initiativeBonus),
@@ -278,6 +299,7 @@ export function InitiativeView() {
     started: session.started,
     patchEntry,
     onOpen: setQuickSheetEntryId,
+    onRename: openRename,
     onCondition: setConditionTargetId,
     onRemove: (entryId: string) =>
       updateSession((current) => removeInitiativeEntry(current, entryId)),
@@ -297,7 +319,7 @@ export function InitiativeView() {
     <div className="flex min-w-0 flex-col gap-4">
       <InitiativeHeader
         round={session.round}
-        activeName={activeEntry?.name}
+        activeName={activeEntry ? initiativeEntryDisplayName(activeEntry, "master") : undefined}
         viewMode={session.viewMode}
         onViewMode={(viewMode) =>
           updateSession((current) => ({
@@ -388,6 +410,7 @@ export function InitiativeView() {
                     disabled={disabled}
                   >
                     {creature.name}
+                    {creature.basicName !== creature.name ? ` — ${creature.basicName}` : ""}
                     {disabled ? " — já adicionada" : ""}
                   </option>
                 )
@@ -454,6 +477,46 @@ export function InitiativeView() {
         )}
       </section>
 
+      <section className="grid gap-3 rounded-xl border border-border bg-bg p-4 shadow-theme-sm md:grid-cols-[minmax(0,1fr)_auto]">
+        <div>
+          <div className="text-sm font-semibold text-textH">Saves de morte na iniciativa</div>
+          <p className="mt-1 text-xs text-textMuted">
+            Personagens em 0 PV ficam como Caídos; criaturas não-jogadoras são marcadas como derrotadas automaticamente.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className={selectClassName}
+            value={session.deathSaveVisibility}
+            onChange={(event) =>
+              updateSession((current) => ({
+                ...current,
+                deathSaveVisibility: event.target.value as typeof current.deathSaveVisibility,
+                updatedAt: Date.now(),
+              }))
+            }
+          >
+            <option value="masterOnly">Oculto dos jogadores</option>
+            <option value="owner">Visível apenas ao dono</option>
+            <option value="everyone">Visível para todos</option>
+          </select>
+          <label className="flex h-10 items-center gap-2 rounded-lg border border-border bg-bg px-3 text-xs text-textH">
+            <input
+              type="checkbox"
+              checked={session.deathSaveOwnerCanEdit}
+              onChange={(event) =>
+                updateSession((current) => ({
+                  ...current,
+                  deathSaveOwnerCanEdit: event.target.checked,
+                  updatedAt: Date.now(),
+                }))
+              }
+            />
+            Dono pode editar
+          </label>
+        </div>
+      </section>
+
       <section className="rounded-xl border border-border bg-bg shadow-theme-sm">
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -494,6 +557,57 @@ export function InitiativeView() {
         )}
       </section>
 
+      {renameTarget ? (
+        <Modal title="Nome no combate" onClose={() => setRenameTargetId(undefined)} className="max-w-md">
+          <div className="grid gap-3">
+            <div className="text-xs text-textMuted">
+              Nome verdadeiro: <strong className="text-textH">{renameTarget.realName ?? renameTarget.name}</strong>
+              {renameTarget.basicName ? (
+                <> · nome básico: <strong className="text-textH">{renameTarget.basicName}</strong></>
+              ) : null}
+            </div>
+            <label className="grid gap-1 text-xs text-textMuted">
+              Nome personalizado neste combate
+              <Input
+                value={renameValue}
+                placeholder="Ex.: Snik, o goblin"
+                onChange={(event) => setRenameValue(event.target.value)}
+              />
+            </label>
+            {renameTarget.realName && renameTarget.basicName && renameTarget.realName !== renameTarget.basicName ? (
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-bg-subtle p-3 text-xs text-textH">
+                <input
+                  type="checkbox"
+                  checked={Boolean(renameTarget.revealRealName)}
+                  onChange={(event) => patchEntry(renameTarget.id, { revealRealName: event.target.checked })}
+                />
+                Revelar nome verdadeiro aos jogadores
+              </label>
+            ) : null}
+            <div className="flex justify-end gap-2 border-t border-border pt-3">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  patchEntry(renameTarget.id, { customName: undefined })
+                  setRenameValue("")
+                }}
+              >
+                Limpar nome de combate
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  patchEntry(renameTarget.id, { customName: renameValue.trim() || undefined })
+                  setRenameTargetId(undefined)
+                }}
+              >
+                Salvar
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
       {customOpen ? (
         <CustomEntryDialog
           onClose={() => setCustomOpen(false)}
@@ -503,7 +617,7 @@ export function InitiativeView() {
 
       {conditionTarget ? (
         <ConditionDialog
-          targetName={conditionTarget.name}
+          targetName={initiativeEntryDisplayName(conditionTarget, "master")}
           targetEntryId={conditionTarget.id}
           entries={session.entries}
           activeEntryId={session.activeEntryId}
@@ -514,7 +628,7 @@ export function InitiativeView() {
 
       {quickSheetEntry && quickSheetData ? (
         <Modal
-          title={`Ficha rápida — ${quickSheetEntry.name}`}
+          title={`Ficha rápida — ${initiativeEntryDisplayName(quickSheetEntry, "master")}`}
           onClose={() => setQuickSheetEntryId(undefined)}
           className="max-w-5xl"
         >
