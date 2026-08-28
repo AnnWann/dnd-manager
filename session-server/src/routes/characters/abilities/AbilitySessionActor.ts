@@ -8,6 +8,7 @@ import {
   getCharacterConditions,
   withCharacterConditions,
 } from "../../../../../src/models/characters/characterConditionStorage";
+import { spendGrantedSpellAbilityUse } from "../../../../../src/models/characters/characterGrantedSpells";
 import { getCurrentMaxHp } from "../../../../../src/models/characters/characterHp";
 import {
   CharacterTemplate,
@@ -352,6 +353,9 @@ function applyAbilityOperation(
   }
   if (operation.type === "character.ability.remove") {
     return character.removeAbility(operation.abilityId);
+  }
+  if (operation.type === "character.ability.usage.spend") {
+    return spendGrantedSpellAbilityUse(character, operation.source);
   }
 
   const { source } = operation;
