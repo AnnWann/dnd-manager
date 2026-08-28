@@ -2,6 +2,13 @@ import { History, Undo2 } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
+import type {
+  CharacterCustomSystemState,
+  CustomAbilityInstance,
+  CustomSystemDefinition,
+} from "../../models/customSystems/CustomSystemDefinition"
+import type { JsonValue } from "../../models/customSystems/CustomGenerals"
+import type { SessionCustomSystemOperation } from "../session-runtime/customSystemSessionProtocol"
 import { isLatestUndoableSessionLog, type SessionLogRecord } from "../session-runtime/sessionLogProtocol"
 import type { SessionSkill } from "../session-runtime/sessionProtocol"
 import { useOptionalSessionRuntime } from "../session-runtime/useSessionRuntime"
@@ -22,6 +29,7 @@ export function SessionActionLog() {
   const { operationLog, visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
   const runtime = useOptionalSessionRuntime()
   const sessionLog = (runtime?.hpLog ?? []) as SessionLogRecord[]
+  const customSystemDefinitions = runtime?.runtimeConfigSnapshot?.config.customSystems ?? []
   const [page, setPage] = useState(0)
 
   const characterNames = useMemo(
@@ -89,6 +97,7 @@ export function SessionActionLog() {
                 key={`session:${entry.record.id}`}
                 record={entry.record}
                 characterNames={characterNames}
+                customSystemDefinitions={customSystemDefinitions}
                 canUndo={runtime?.role === "MASTER" && isLatestUndoableSessionLog(sessionLog, entry.record)}
                 onUndo={() => runtime?.undoLog(entry.record.id)}
               />
@@ -148,13 +157,14 @@ function hasMatchingRestRecord(
   })
 }
 
-function SessionLogEntry({ record, characterNames, canUndo, onUndo }: {
+function SessionLogEntry({ record, characterNames, customSystemDefinitions, canUndo, onUndo }: {
   record: SessionLogRecord
   characterNames: ReadonlyMap<string, string>
+  customSystemDefinitions: CustomSystemDefinition[]
   canUndo: boolean
   onUndo: () => void
 }) {
-  const description = describeSessionOperation(record.operation, characterNames)
+  const description = describeSessionOperation(record, characterNames, customSystemDefinitions)
   const timestamp = formatTime(record.createdAt)
   return (
     <article className={`rounded-lg border border-border bg-bg px-3 py-2.5 ${record.undoneAt ? "opacity-55" : ""}`}>
@@ -192,7 +202,12 @@ function LegacyLogEntry({ record, characterNames, itemNames }: {
   )
 }
 
-function describeSessionOperation(operation: SessionLogRecord["operation"], characterNames: ReadonlyMap<string, string>): string {
+function describeSessionOperation(
+  record: SessionLogRecord,
+  characterNames: ReadonlyMap<string, string>,
+  customSystemDefinitions: CustomSystemDefinition[],
+): string {
+  const operation = record.operation
   const characterName = characterNames.get(operation.characterId) ?? "Personagem"
   switch (operation.type) {
     case "character.hp.set": return `Definiu os PV de ${characterName} para ${operation.value}.`
@@ -235,20 +250,21 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "character.ability.usage.spend": return `${characterName} gastou um uso de ${operation.abilityName || "uma habilidade"}.`
     case "character.ability.restore": return `Restaurou uma carga de ${operation.abilityName || "habilidade"} de ${characterName}.`
     case "character.ability.deactivate": return `Desativou ${operation.abilityName || "uma habilidade"} de ${characterName}.`
-    case "character.customSystem.field.set": return `${characterName} alterou um campo do sistema ${operation.systemId}.`
-    case "character.customSystem.field.remove": return `${characterName} removeu o valor de um campo do sistema ${operation.systemId}.`
-    case "character.customSystem.resource.set": return `${characterName} definiu o recurso ${operation.resourceId} do sistema ${operation.systemId}.`
-    case "character.customSystem.resource.adjust": return `${characterName} ${operation.amount > 0 ? "aumentou" : "reduziu"} ${operation.resourceId} em ${Math.abs(operation.amount)}.`
-    case "character.customSystem.resource.reset": return `${characterName} restaurou o recurso ${operation.resourceId}.`
-    case "character.customSystem.ability.add": return `${characterName} adicionou uma habilidade do sistema ${operation.systemId}.`
-    case "character.customSystem.ability.remove": return `${characterName} removeu uma habilidade do sistema ${operation.systemId}.`
-    case "character.customSystem.ability.field.set": return `${characterName} editou uma habilidade do sistema ${operation.systemId}.`
-    case "character.customSystem.ability.learned.set": return `${characterName} ${operation.learned ? "aprendeu" : "desaprendeu"} uma habilidade do sistema ${operation.systemId}.`
-    case "character.customSystem.ability.prepared.set": return `${characterName} ${operation.prepared ? "preparou" : "despreparou"} uma habilidade do sistema ${operation.systemId}.`
-    case "character.customSystem.ability.usage.set": return `Definiu os usos de uma habilidade de ${characterName} para ${operation.used}.`
-    case "character.customSystem.ability.activate": return `${characterName} usou uma habilidade do sistema ${operation.systemId}.`
-    case "character.customSystem.action.execute": return `${characterName} executou uma ação do sistema ${operation.systemId}.`
-    case "character.customSystem.automation.execute": return `${characterName} executou uma automação manual do sistema ${operation.systemId}.`
+    case "character.customSystem.field.set":
+    case "character.customSystem.field.remove":
+    case "character.customSystem.resource.set":
+    case "character.customSystem.resource.adjust":
+    case "character.customSystem.resource.reset":
+    case "character.customSystem.ability.add":
+    case "character.customSystem.ability.remove":
+    case "character.customSystem.ability.field.set":
+    case "character.customSystem.ability.learned.set":
+    case "character.customSystem.ability.prepared.set":
+    case "character.customSystem.ability.usage.set":
+    case "character.customSystem.ability.activate":
+    case "character.customSystem.action.execute":
+    case "character.customSystem.automation.execute":
+      return describeCustomSystemOperation(record, characterName, customSystemDefinitions)
     case "character.spell.prepare": return `${operation.prepared ? "Preparou" : "Despreparou"} ${operation.spellIndex} para ${characterName}.`
     case "character.spell.add": return `Adicionou uma magia à lista de ${characterName}.`
     case "character.spell.remove": return `Removeu ${operation.spellIndex} da lista de ${characterName}.`
@@ -322,6 +338,154 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "character.session.resync": return `Ressincronizou ${characterName} com a sessão.`
     case "character.hp.undo": return `Desfez uma alteração de ${characterName}.`
   }
+}
+
+function describeCustomSystemOperation(
+  record: SessionLogRecord,
+  characterName: string,
+  definitions: CustomSystemDefinition[],
+): string {
+  const operation = record.operation as SessionCustomSystemOperation
+  const definition = definitions.find((entry) => entry.id === operation.systemId)
+  const systemName = definition?.name ?? operation.systemId
+  const previous = previousCustomSystemState(record, operation.systemId)
+  const suffix = ` — ${systemName}.`
+
+  switch (operation.type) {
+    case "character.customSystem.field.set": {
+      const fieldName = definition?.fields.find((field) => field.id === operation.fieldId)?.name ?? operation.fieldId
+      const previousValue = previous?.fields[operation.fieldId]
+      return previousValue === undefined
+        ? `${characterName} definiu ${fieldName} como ${formatLogValue(operation.value)}${suffix}`
+        : `${characterName} alterou ${fieldName} de ${formatLogValue(previousValue)} para ${formatLogValue(operation.value)}${suffix}`
+    }
+    case "character.customSystem.field.remove": {
+      const fieldName = definition?.fields.find((field) => field.id === operation.fieldId)?.name ?? operation.fieldId
+      return `${characterName} removeu o valor de ${fieldName}${suffix}`
+    }
+    case "character.customSystem.resource.set": {
+      const resourceName = definition?.resources.find((resource) => resource.id === operation.resourceId)?.name ?? operation.resourceId
+      const previousValue = previous?.resources[operation.resourceId]?.current
+      return previousValue === undefined
+        ? `${characterName} definiu ${resourceName} como ${operation.state.current}${suffix}`
+        : `${characterName} alterou ${resourceName} de ${previousValue} para ${operation.state.current}${suffix}`
+    }
+    case "character.customSystem.resource.adjust": {
+      const resourceName = definition?.resources.find((resource) => resource.id === operation.resourceId)?.name ?? operation.resourceId
+      const previousValue = previous?.resources[operation.resourceId]?.current
+      if (previousValue !== undefined) {
+        return `${characterName} alterou ${resourceName} de ${previousValue} para ${previousValue + operation.amount}${suffix}`
+      }
+      return `${characterName} ${operation.amount > 0 ? "aumentou" : "reduziu"} ${resourceName} em ${Math.abs(operation.amount)}${suffix}`
+    }
+    case "character.customSystem.resource.reset": {
+      const resourceName = definition?.resources.find((resource) => resource.id === operation.resourceId)?.name ?? operation.resourceId
+      return `${characterName} restaurou ${resourceName}${suffix}`
+    }
+    case "character.customSystem.ability.add": {
+      const abilityName = customAbilityName(definition, operation.ability, previous)
+      return `${characterName} adicionou a habilidade ${abilityName}${suffix}`
+    }
+    case "character.customSystem.ability.remove": {
+      const abilityName = customAbilityNameById(definition, previous, operation.abilityId)
+      return `${characterName} removeu a habilidade ${abilityName}${suffix}`
+    }
+    case "character.customSystem.ability.field.set": {
+      const ability = previous?.abilities.find((entry) => entry.id === operation.abilityId)
+      const abilityName = customAbilityName(definition, ability, previous)
+      const fieldName = customAbilityFieldName(definition, ability, operation.fieldId)
+      return `${characterName} alterou ${fieldName} de ${abilityName} para ${formatLogValue(operation.value)}${suffix}`
+    }
+    case "character.customSystem.ability.learned.set": {
+      const abilityName = customAbilityNameById(definition, previous, operation.abilityId)
+      return `${characterName} ${operation.learned ? "aprendeu" : "desaprendeu"} ${abilityName}${suffix}`
+    }
+    case "character.customSystem.ability.prepared.set": {
+      const abilityName = customAbilityNameById(definition, previous, operation.abilityId)
+      return `${characterName} ${operation.prepared ? "preparou" : "despreparou"} ${abilityName}${suffix}`
+    }
+    case "character.customSystem.ability.usage.set": {
+      const abilityName = customAbilityNameById(definition, previous, operation.abilityId)
+      const oldUsed = previous?.abilities.find((entry) => entry.id === operation.abilityId)?.usage?.used
+      return oldUsed === undefined
+        ? `${characterName} definiu os usos consumidos de ${abilityName} para ${operation.used}${suffix}`
+        : `${characterName} alterou os usos consumidos de ${abilityName} de ${oldUsed} para ${operation.used}${suffix}`
+    }
+    case "character.customSystem.ability.activate": {
+      const abilityName = customAbilityNameById(definition, previous, operation.abilityId)
+      return `${characterName} usou ${abilityName}${suffix}`
+    }
+    case "character.customSystem.action.execute": {
+      const actionName = definition?.actions?.find((action) => action.id === operation.actionId)?.name ?? operation.actionId
+      return `${characterName} executou ${actionName}${suffix}`
+    }
+    case "character.customSystem.automation.execute": {
+      const automationName = definition?.automations.find((automation) => automation.id === operation.automationId)?.name ?? operation.automationId
+      return `${characterName} executou a automação ${automationName}${suffix}`
+    }
+  }
+}
+
+function previousCustomSystemState(
+  record: SessionLogRecord,
+  systemId: string,
+): CharacterCustomSystemState | undefined {
+  const reverse = record.reverseOperation as {
+    type?: string
+    snapshot?: {
+      ability?: {
+        character?: {
+          sheet?: { customSystems?: CharacterCustomSystemState[] }
+        }
+      }
+    }
+  }
+  if (reverse.type !== "character.ability.restore") return undefined
+  return reverse.snapshot?.ability?.character?.sheet?.customSystems?.find(
+    (state) => state.systemId === systemId,
+  )
+}
+
+function customAbilityNameById(
+  definition: CustomSystemDefinition | undefined,
+  state: CharacterCustomSystemState | undefined,
+  abilityId: string,
+): string {
+  return customAbilityName(
+    definition,
+    state?.abilities.find((ability) => ability.id === abilityId),
+    state,
+  )
+}
+
+function customAbilityName(
+  definition: CustomSystemDefinition | undefined,
+  ability: CustomAbilityInstance | undefined,
+  _state: CharacterCustomSystemState | undefined,
+): string {
+  if (!ability) return "uma habilidade"
+  const type = definition?.abilityTypes.find((entry) => entry.id === ability.abilityTypeId)
+  if (!type) return ability.id
+  const title = ability.values[type.display.titleFieldId]
+  const formatted = formatLogValue(title)
+  return formatted === "—" ? type.name : formatted
+}
+
+function customAbilityFieldName(
+  definition: CustomSystemDefinition | undefined,
+  ability: CustomAbilityInstance | undefined,
+  fieldId: string,
+): string {
+  const type = definition?.abilityTypes.find((entry) => entry.id === ability?.abilityTypeId)
+  return type?.fields.find((field) => field.id === fieldId)?.name ?? fieldId
+}
+
+function formatLogValue(value: JsonValue | undefined): string {
+  if (value === undefined || value === null) return "—"
+  if (typeof value === "boolean") return value ? "Sim" : "Não"
+  if (typeof value === "string" || typeof value === "number") return String(value)
+  if (Array.isArray(value)) return value.map((entry) => formatLogValue(entry)).join(", ")
+  return JSON.stringify(value)
 }
 
 function describeOperation(operation: GameOperation, characterNames: ReadonlyMap<string, string>, itemNames: ReadonlyMap<string, string>): string {
