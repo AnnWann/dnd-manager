@@ -66,7 +66,12 @@ export async function POST(
             members: {
               some: {
                 userId: session.user.id,
-                status: CampaignMemberStatus.ACTIVE,
+                status: {
+                  in: [
+                    CampaignMemberStatus.ACTIVE,
+                    CampaignMemberStatus.INVITED,
+                  ],
+                },
               },
             },
           },
@@ -78,11 +83,18 @@ export async function POST(
         members: {
           where: {
             userId: session.user.id,
-            status: CampaignMemberStatus.ACTIVE,
+            status: {
+              in: [
+                CampaignMemberStatus.ACTIVE,
+                CampaignMemberStatus.INVITED,
+              ],
+            },
           },
           select: {
             role: true,
+            status: true,
           },
+          take: 1,
         },
       },
     })
@@ -91,44 +103,54 @@ export async function POST(
       throw new ApiError(
         404,
         "CAMPAIGN_NOT_FOUND",
-        "Campanha não encontrada ou usuário sem acesso.",
+        "Campanha não encontrada ou usuário sem solicitação de entrada.",
       )
     }
 
+    const membership = campaign.members[0]
     const isMaster =
       campaign.ownerId === session.user.id ||
-      campaign.members.some(
-        (membership) => membership.role === CampaignRole.MASTER,
-      )
+      (membership?.status === CampaignMemberStatus.ACTIVE &&
+        membership.role === CampaignRole.MASTER)
     const status = isMaster
       ? CampaignSpellApprovalStatus.APPROVED
       : CampaignSpellApprovalStatus.PENDING
     const reviewedAt = isMaster ? new Date() : null
     const reviewedById = isMaster ? session.user.id : null
 
-    const link = await prisma.campaignHomebrewSpell.upsert({
-      where: {
-        campaignId_spellId: {
+    const link = await prisma.$transaction(async (tx) => {
+      const updated = await tx.campaignHomebrewSpell.upsert({
+        where: {
+          campaignId_spellId: {
+            campaignId,
+            spellId,
+          },
+        },
+        create: {
           campaignId,
           spellId,
+          submittedById: session.user.id,
+          status,
+          reviewedAt,
+          reviewedById,
         },
-      },
-      create: {
-        campaignId,
-        spellId,
-        submittedById: session.user.id,
-        status,
-        reviewedAt,
-        reviewedById,
-      },
-      update: {
-        submittedById: session.user.id,
-        submittedAt: new Date(),
-        status,
-        note: null,
-        reviewedAt,
-        reviewedById,
-      },
+        update: {
+          submittedById: session.user.id,
+          submittedAt: new Date(),
+          status,
+          note: null,
+          reviewedAt,
+          reviewedById,
+        },
+      })
+
+      if (isMaster) {
+        await tx.campaign.update({
+          where: { id: campaignId },
+          data: { creationRevision: { increment: 1 } },
+        })
+      }
+      return updated
     })
 
     return jsonResponse({ link }, 201)
