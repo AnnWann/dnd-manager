@@ -5,6 +5,7 @@ import { Button } from "../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../components/ui/Card"
 import { useUserData } from "../../features/user/UserDataProvider"
 import { sessionPath } from "../../lib/campaignRoutes"
+import { LegacyCampaignImportButton } from "./LegacyCampaignImportButton"
 import { UserCampaignsTab } from "./UserCampaignTab"
 
 export function UserCampaignsRouteView() {
@@ -19,10 +20,15 @@ export function UserCampaignsRouteView() {
     <div className="grid gap-4">
       <Card>
         <CardHeader>
-          <h1 className="text-base font-semibold text-textH">Sessões</h1>
-          <p className="mt-1 text-xs leading-5 text-text">
-            Entre em uma campanha ativa para acessar a cópia de sessão dos personagens vinculados a ela.
-          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h1 className="text-base font-semibold text-textH">Sessões</h1>
+              <p className="mt-1 text-xs leading-5 text-text">
+                Entre em uma campanha ativa para acessar a cópia de sessão dos personagens vinculados a ela.
+              </p>
+            </div>
+            <LegacyCampaignImportButton />
+          </div>
         </CardHeader>
         <CardContent>
           {campaignsLoading ? (
