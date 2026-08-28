@@ -147,9 +147,12 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
   const characters = useMemo(
     () => sourceCharacters.map((character) => {
       const characterId = character.get("id")
+      const authoritativeAbility = sessionRuntime?.abilitiesByCharacterId[characterId]
       const authoritative = sessionRuntime?.hpByCharacterId[characterId]
       const authoritativeConditions = sessionRuntime?.conditionsByCharacterId[characterId]
-      let projected = character
+      let projected = authoritativeAbility?.initialized
+        ? CharacterTemplate.fromJSON(authoritativeAbility.character)
+        : character
 
       if (authoritative) {
         const sheet = projected.get("sheet")
@@ -203,7 +206,12 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
 
       return projected
     }),
-    [sessionRuntime?.conditionsByCharacterId, sessionRuntime?.hpByCharacterId, sourceCharacters],
+    [
+      sessionRuntime?.abilitiesByCharacterId,
+      sessionRuntime?.conditionsByCharacterId,
+      sessionRuntime?.hpByCharacterId,
+      sourceCharacters,
+    ],
   )
 
   const canAssignOwners = userRole === "master"
