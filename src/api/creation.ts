@@ -48,7 +48,7 @@ export async function getCreationSnapshot(
     if (cached) return structuredClone(cached)
 
     const pending = creationSnapshotRequests.get(campaignId)
-    if (pending) return pending.promise.then(structuredClone)
+    if (pending) return pending.promise.then((snapshot) => structuredClone(snapshot))
   }
 
   const promise = apiClient
