@@ -71,7 +71,7 @@ export interface CustomReferenceFieldDefinition extends CustomFieldBase {
 export interface CustomFormulaFieldDefinition extends CustomFieldBase {
   type: 'formula'
   formula: FormulaExpression
-  resultType: 'number' | 'text' | 'boolean'
+  resultType: 'number' | 'text' | 'boolean' | 'dice'
   editPermission?: CustomSystemEditPermission
 }
 
