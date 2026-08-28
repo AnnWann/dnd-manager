@@ -17,7 +17,7 @@ export type SessionCustomSystemOperation =
   | { type: "character.customSystem.ability.prepared.set"; characterId: string; systemId: string; abilityId: string; prepared: boolean }
   | { type: "character.customSystem.ability.usage.set"; characterId: string; systemId: string; abilityId: string; used: number }
   | { type: "character.customSystem.ability.activate"; characterId: string; systemId: string; abilityId: string; rollValue?: number }
-  | { type: "character.customSystem.action.execute"; characterId: string; systemId: string; actionId: string }
+  | { type: "character.customSystem.action.execute"; characterId: string; systemId: string; actionId: string; rollValue?: number }
   | { type: "character.customSystem.automation.execute"; characterId: string; systemId: string; automationId: string }
 
 export type SessionCustomSystemClientMessage = {
