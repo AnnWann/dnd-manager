@@ -5,6 +5,7 @@ import type { ProficiencyCategory } from "../sheet/Proficiency"
 import type {
   CustomAbilityConditionChangeDefinition,
   CustomAbilityResourceChangeDefinition,
+  CustomAbilityRollDefinition,
   CustomAbilityTypeDefinition,
 } from "./CustomAbilityDefinition"
 import type { CustomAutomationDefinition } from "./CustomAutomationDefinition"
@@ -64,6 +65,8 @@ export interface CustomSystemActionDefinition {
   description?: string
   actionKind: AbilityActionKind
   enabled?: boolean
+  /** Rolagem opcional resolvida antes dos efeitos; o resultado fica disponível como `roll.value`. */
+  roll?: CustomAbilityRollDefinition
   resourceChanges?: CustomAbilityResourceChangeDefinition[]
   conditionChanges?: CustomSystemConditionChangeDefinition[]
 }
