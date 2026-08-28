@@ -16,8 +16,10 @@ import {
   setCustomAbilityLearned,
   setCustomAbilityPrepared,
 } from "../../../../../src/lib/customSystems/CustomAbilityManagement";
-import { activateCustomAbilityWithRoll } from "../../../../../src/lib/customSystems/CustomAbilityRoll";
-import { activateCustomSystemAction } from "../../../../../src/lib/customSystems/CustomSystemActions";
+import {
+  activateCustomAbilityWithRoll,
+  activateCustomSystemActionWithRoll,
+} from "../../../../../src/lib/customSystems/CustomAbilityRoll";
 import {
   runCustomSystemAutomation,
   runCustomSystemAutomations,
@@ -172,12 +174,20 @@ export class SessionActor extends BaseSessionActor {
           "abilityUsed",
         ).character;
       } else if (operation.type === "character.customSystem.action.execute") {
-        nextCharacter = activateCustomSystemAction(
+        const activation = activateCustomSystemActionWithRoll(
           character,
           activeRuntimeConfig.config.customSystems,
           operation.systemId,
           operation.actionId,
+          operation.rollValue,
         );
+        nextCharacter = activation.character;
+        if (activation.roll) {
+          loggedOperation = {
+            ...operation,
+            rollValue: activation.roll.value,
+          };
+        }
       } else if (operation.type === "character.customSystem.automation.execute") {
         nextCharacter = runCustomSystemAutomation(
           character,
@@ -227,7 +237,6 @@ export class SessionActor extends BaseSessionActor {
         return;
       }
     }
-
     if (JSON.stringify(character.toJSON()) === JSON.stringify(nextCharacter.toJSON())) {
       sendError(webSocket, "CUSTOM_SYSTEM_OPERATION_NO_CHANGE", "The requested custom-system operation does not change the current state.");
       return;
