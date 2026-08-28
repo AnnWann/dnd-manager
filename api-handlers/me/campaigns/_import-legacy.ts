@@ -16,10 +16,7 @@ import { sanitizeCharacterItemData } from "../../../server/character-items.js"
 import { prisma } from "../../../server/prisma.js"
 import { requireSession } from "../../../server/session.js"
 import { splitCharacterIntoDomains } from "../../../src/lib/characterDomains.js"
-import {
-  CharacterTemplate,
-  type CharacterTemplateProps,
-} from "../../../src/models/characters/CharacterTemplate.js"
+import type { CharacterTemplateProps } from "../../../src/models/characters/CharacterTemplate.js"
 import type { CustomSystemDefinition } from "../../../src/models/customSystems/CustomSystemDefinition.js"
 import type { Spell } from "../../../src/models/magic/spells/Spell.js"
 import {
@@ -65,7 +62,10 @@ export async function POST(request: Request): Promise<Response> {
     validateBackupSize(backup)
 
     const oldCharacterIds = backup.state.characters.map((character, index) => {
-      const id = typeof character?.id === "string" ? character.id.trim() : ""
+      const id =
+        isRecord(character) && typeof character.id === "string"
+          ? character.id.trim()
+          : ""
       if (!id) {
         throw new ApiError(
           400,
@@ -268,41 +268,65 @@ function prepareCharacter(
   ownerId: string,
   ownerName: string,
 ): ImportedCharacter {
-  const oldId = raw.id.trim()
+  if (!isRecord(raw)) {
+    throw new ApiError(
+      400,
+      "LEGACY_CHARACTER_INVALID",
+      "O backup contém um personagem que não é um objeto válido.",
+    )
+  }
+
+  const oldId = typeof raw.id === "string" ? raw.id.trim() : ""
   const newId = idMap.get(oldId)
   if (!newId) {
     throw new ApiError(400, "LEGACY_CHARACTER_ID_INVALID", "Um personagem do backup possui id inválido.")
   }
 
-  const remapped = remapExactStrings(raw, idMap) as CharacterTemplateProps
-  remapped.id = newId
-  remapped.owner = {
-    id: ownerId,
-    name: ownerName,
-    role: "master",
+  const remappedValue = remapExactStrings(raw, idMap)
+  if (!isRecord(remappedValue)) {
+    throw new ApiError(400, "LEGACY_CHARACTER_INVALID", "Um personagem do backup possui estrutura inválida.")
   }
 
-  let character: CharacterTemplate
-  try {
-    character = CharacterTemplate.fromJSON(remapped)
-  } catch {
+  const characterName =
+    typeof remappedValue.name === "string" ? remappedValue.name.trim() : ""
+  if (!characterName) {
     throw new ApiError(
       400,
-      "LEGACY_CHARACTER_INVALID",
-      `O personagem “${typeof raw.name === "string" ? raw.name : oldId}” não pôde ser convertido.`,
+      "LEGACY_CHARACTER_NAME_REQUIRED",
+      `O personagem ${oldId} não possui um nome válido.`,
     )
   }
 
-  const normalized = character.toJSON()
-  normalized.id = newId
-  normalized.owner = remapped.owner
+  if (!isRecord(remappedValue.sheet)) {
+    throw new ApiError(
+      400,
+      "LEGACY_CHARACTER_SHEET_REQUIRED",
+      `O personagem “${characterName}” não possui uma ficha válida.`,
+    )
+  }
+
+  const legacyOwner = isRecord(raw.owner)
+    ? raw.owner as CharacterTemplateProps["owner"]
+    : undefined
+  const visibility = toDatabaseVisibility(remappedValue.visibility)
+  const normalized = {
+    ...remappedValue,
+    id: newId,
+    name: characterName,
+    owner: {
+      id: ownerId,
+      name: ownerName,
+      role: "master",
+    },
+    visibility: visibility.toLowerCase(),
+  } as unknown as CharacterTemplateProps
 
   return {
     oldId,
     newId,
     character: normalized,
-    visibility: toDatabaseVisibility(normalized.visibility),
-    legacyOwner: raw.owner,
+    visibility,
+    legacyOwner,
   }
 }
 
@@ -432,4 +456,8 @@ function toPrismaDomain(value: string): CharacterDataDomain {
 
 function createInviteCode(): string {
   return crypto.randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
