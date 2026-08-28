@@ -52,7 +52,10 @@ type CachedSessionRequest = {
   promise: Promise<CampaignSessionCharacters>
 }
 
-const SESSION_REQUEST_CACHE_MS = 5_000
+// This cache is intentionally longer than a normal request-dedupe window.
+// The user area loads the relational bootstrap before navigation; once the
+// session opens, the Durable Object/WebSocket becomes the gameplay authority.
+const SESSION_REQUEST_CACHE_MS = 10 * 60_000
 const sessionRequestCache = new Map<string, CachedSessionRequest>()
 
 export function invalidateCampaignSessionCharacters(campaignId: string): void {
@@ -133,8 +136,9 @@ export async function getCampaignSessionCharacters(
 
 /**
  * Materializes the user/campaign character records into independent mutable
- * session copies. The returned objects are never persisted back through the
- * /me/characters APIs.
+ * session copies. They are bootstrap seeds only. Once the session socket has
+ * character snapshots, CharacterProvider projects from those authoritative
+ * snapshots instead of from this relational copy.
  */
 export function buildSessionCharacterSnapshots(
   data: CampaignSessionCharacters,
