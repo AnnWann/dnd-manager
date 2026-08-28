@@ -37,7 +37,13 @@ export type SessionHomebrewSpell = {
 
 export type SessionHomebrewAsset = {
   id: string
-  type: "SYSTEM" | "CLASS" | "OTHER"
+  type:
+    | "SYSTEM"
+    | "CLASS"
+    | "SPELL"
+    | "CREATURE"
+    | "CREATION_STATE"
+    | "OTHER"
   sourceId: string
   name: string
   data: Record<string, unknown>
