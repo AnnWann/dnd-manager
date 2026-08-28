@@ -7,9 +7,9 @@ import { Modal } from "../../../components/ui/Modal"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
 import {
-  activateCustomAbility,
   getCustomAbilityAvailability,
 } from "../../../lib/customSystems"
+import { activateCustomAbilityWithRoll } from "../../../lib/customSystems/CustomAbilityRoll"
 import {
   activateCustomSystemAction,
   getEffectiveCustomAbilityActivation,
@@ -34,12 +34,14 @@ import {
   setSorceryPointCurrent,
 } from "../../../models/characters/characterSorceryPoints"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import type { CustomAbilityRollDefinition } from "../../../models/customSystems/CustomAbilityDefinition"
 import type {
   CharacterCustomSystemState,
   CustomAbilityInstance,
   CustomSystemDefinition,
 } from "../../../models/customSystems/CustomSystemDefinition"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
+import { CustomSystemActionResources } from "./CustomSystemActionResources"
 
 type ActionFilter = "action" | "bonusAction" | "reaction" | "free" | "passive"
 
@@ -69,6 +71,7 @@ type ActionEntry = {
   ability?: Ability
   abilitySource?: AbilitySource
   customAbilitySource?: CustomAbilitySource
+  customAbilityRoll?: CustomAbilityRollDefinition
   customSystemActionSource?: CustomSystemActionSource
   metamagicCost?: number | "spell-level"
   usageRemaining?: number
@@ -123,6 +126,7 @@ export function MinimalCharacterActions({
   const [selected, setSelected] = useState<ActionEntry | null>(null)
   const [error, setError] = useState("")
   const [variableMetamagicCost, setVariableMetamagicCost] = useState(1)
+  const [manualRollValue, setManualRollValue] = useState("")
   const standardActions = useMemo(
     () => getStandardActions(character, filter, definitions),
     [character, filter, definitions],
@@ -175,6 +179,7 @@ export function MinimalCharacterActions({
       return
     }
     setError("")
+    setManualRollValue("")
     if (entry.metamagicCost === "spell-level") setVariableMetamagicCost(1)
     setSelected(entry)
   }
@@ -286,6 +291,19 @@ export function MinimalCharacterActions({
     if (!source) return
     try {
       setError("")
+      let rollValue: number | undefined
+      if (entry.customAbilityRoll?.mode === "manual") {
+        const raw = manualRollValue.trim()
+        if (!raw) {
+          setError("Informe o resultado da rolagem antes de usar esta habilidade.")
+          return
+        }
+        rollValue = Number(raw)
+        if (!Number.isFinite(rollValue)) {
+          setError("Informe um resultado numérico válido para a rolagem.")
+          return
+        }
+      }
 
       if (sessionRuntime) {
         if (sessionRuntime.status !== "connected") {
@@ -298,6 +316,7 @@ export function MinimalCharacterActions({
           characterId: character.get("id"),
           systemId: source.systemId,
           abilityId: source.abilityId,
+          ...(rollValue !== undefined ? { rollValue } : {}),
         })
         if (!sent) {
           setError("Não foi possível enviar esta habilidade para a sessão.")
@@ -308,12 +327,13 @@ export function MinimalCharacterActions({
         return
       }
 
-      const next = activateCustomAbility(
+      const next = activateCustomAbilityWithRoll(
         character,
         definitions,
         source.systemId,
         source.abilityId,
-      )
+        rollValue,
+      ).character
       updateCharacter(character.get("id"), () => next)
       setSelected(null)
     } catch (caught) {
@@ -393,6 +413,8 @@ export function MinimalCharacterActions({
         ))}
       </div>
 
+      <CustomSystemActionResources character={character} updateCharacter={updateCharacter} />
+
       <ActionGroup title="Ações padrão" entries={standardActions} onSelect={open} />
       {metamagicActions.length ? (
         <ActionGroup title="Metamagia" entries={metamagicActions} onSelect={open} />
@@ -445,6 +467,35 @@ export function MinimalCharacterActions({
               ) : null}
             </div>
             <p className="whitespace-pre-wrap text-sm leading-6 text-text">{selected.description}</p>
+            {selected.customAbilityRoll?.mode === "manual" ? (
+              <label className="grid gap-1 rounded-xl border border-accentBorder bg-accentBg/30 p-3">
+                <span className="text-xs font-semibold text-textH">
+                  {selected.customAbilityRoll.label?.trim() || "Resultado da rolagem"}
+                </span>
+                <span className="text-[11px] leading-4 text-textMuted">
+                  {selected.customAbilityRoll.dice?.trim()
+                    ? `Role ${selected.customAbilityRoll.dice} antes de usar e informe o resultado.`
+                    : "Faça a rolagem necessária antes de usar e informe o resultado."}
+                </span>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={manualRollValue}
+                  placeholder="Resultado"
+                  onChange={(event) => setManualRollValue(event.target.value)}
+                />
+              </label>
+            ) : selected.customAbilityRoll?.mode === "automatic" ? (
+              <div className="rounded-xl border border-accentBorder bg-accentBg/30 p-3 text-xs leading-5 text-textMuted">
+                <span className="font-semibold text-textH">
+                  {selected.customAbilityRoll.label?.trim() || "Rolagem automática"}
+                </span>
+                {selected.customAbilityRoll.dice?.trim()
+                  ? ` · ${selected.customAbilityRoll.dice}`
+                  : ""}
+                <div>O servidor resolve a rolagem ao confirmar o uso da habilidade.</div>
+              </div>
+            ) : null}
             {selected.metamagicCost === "spell-level" ? (
               <label className="grid gap-1 rounded-xl border border-border bg-bg-subtle p-3">
                 <span className="text-xs font-semibold text-textH">Pontos a gastar</span>
@@ -486,7 +537,13 @@ export function MinimalCharacterActions({
               </div>
             ) : selected.customAbilitySource ? (
               <div className="flex justify-end border-t border-border pt-3">
-                <Button variant="primary" onClick={() => useCustomAbility(selected)}>Usar</Button>
+                <Button
+                  variant="primary"
+                  disabled={selected.customAbilityRoll?.mode === "manual" && !isFiniteInput(manualRollValue)}
+                  onClick={() => useCustomAbility(selected)}
+                >
+                  Usar
+                </Button>
               </div>
             ) : selected.ability && abilityRequiresActivation(selected.ability) ? (
               <div className="grid gap-2 border-t border-border pt-3">
@@ -557,6 +614,11 @@ function ActionGroup({
               {entry.usageMaximum !== undefined ? (
                 <span className="mt-1 block text-[10px] font-medium text-textMuted">
                   {entry.usageRemaining ?? 0}/{entry.usageMaximum} usos
+                </span>
+              ) : null}
+              {entry.customAbilityRoll ? (
+                <span className="mt-1 block text-[10px] font-medium text-accent">
+                  {entry.customAbilityRoll.mode === "automatic" ? "rolagem automática" : "rolagem manual"}
                 </span>
               ) : null}
             </button>
@@ -767,6 +829,7 @@ function customAbilityEntry(
       abilityId: ability.id,
       canUse: true,
     },
+    customAbilityRoll: activation.roll,
   }
 }
 
@@ -843,4 +906,9 @@ function displayValue(value: unknown): string {
   if (typeof value === "string") return value.trim()
   if (typeof value === "number" || typeof value === "boolean") return String(value)
   return ""
+}
+
+function isFiniteInput(value: string): boolean {
+  if (!value.trim()) return false
+  return Number.isFinite(Number(value))
 }
