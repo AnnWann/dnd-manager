@@ -31,16 +31,21 @@ export function applySessionAbilityState(
 
   next = withCharacterAsis(next, getCharacterAsis(authoritative))
 
-  // Class runtime state is authoritative only for values owned by session
-  // operations. Custom classes additionally own their mechanical configuration
-  // (casting progression, known-spell model and serialized config), so project
-  // the complete authoritative custom entry while leaving official class
-  // definitions on the durable character baseline.
+  // A lifecycle resync (notably level up) owns the class roster and its
+  // progression state. Keep durable official class definitions where possible,
+  // but project the authoritative level/subclass/choices so the session sheet
+  // reflects the level-up immediately. Authoritative-only entries also need to
+  // appear so multiclass additions are not lost.
   const currentClasses = next.get("sheet").classes ?? []
   const authoritativeClasses = authoritative.get("sheet").classes ?? []
-  next = next.withSheet("classes", currentClasses.map((entry, index) => {
-    const source = authoritativeClasses[index]
-    if (!source || source.className !== entry.className || source.level !== entry.level) return entry
+  next = next.withSheet("classes", authoritativeClasses.map((source, index) => {
+    const indexed = currentClasses[index]
+    const entry = indexed?.className === source.className
+      ? indexed
+      : currentClasses.find((candidate) => candidate.className === source.className)
+
+    if (!entry) return source
+
     if (isCustomClassEntry(entry) || isCustomClassEntry(source)) {
       return {
         ...entry,
@@ -51,7 +56,13 @@ export function applySessionAbilityState(
         },
       }
     }
-    return { ...entry, levelChoices: source.levelChoices ?? entry.levelChoices }
+
+    return {
+      ...entry,
+      level: source.level,
+      subclass: source.subclass ?? entry.subclass,
+      levelChoices: source.levelChoices ?? entry.levelChoices,
+    }
   }))
 
   return next
