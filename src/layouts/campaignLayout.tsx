@@ -445,7 +445,7 @@ export function CampaignLayout() {
                     <div className="flex min-h-0 min-w-0 max-w-full flex-1 overflow-hidden">
                       <AppSidebar items={sidebarItems} topContent={modeSwitcher} />
                       <main className="min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto has-[[aria-modal=true]]:overflow-y-hidden">
-                        <div className="w-full min-w-0 max-w-full overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6">
+                        <div className="mx-auto w-full min-w-0 max-w-7xl overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6">
                           <AppRouter />
                         </div>
                       </main>
