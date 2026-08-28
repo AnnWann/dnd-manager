@@ -1,4 +1,4 @@
-import { Pencil, Play, Skull, Trash2 } from "lucide-react"
+import { HeartPulse, Pencil, Play, Skull, Trash2, Zap } from "lucide-react"
 
 import { Button } from "../../components/ui/Button"
 import type { InitiativeEntry } from "../../models/initiative/Initiative"
@@ -48,6 +48,9 @@ function TableEntryRows({
   patchEntry,
   onOpen,
   onRename,
+  onHpAction,
+  selectedEntryIds,
+  onSelectEntry,
   onCondition,
   onRemove,
   onTrade,
@@ -77,6 +80,15 @@ function TableEntryRows({
         ].join(" ")}
       >
         <td className="px-3 py-3">
+          <div className="flex items-center gap-2">
+            {onSelectEntry ? (
+              <input
+                type="checkbox"
+                checked={selectedEntryIds?.has(entry.id) ?? false}
+                onChange={(event) => onSelectEntry(entry.id, event.target.checked)}
+                aria-label={`Selecionar ${entry.name}`}
+              />
+            ) : null}
           {active ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-1 text-xs font-semibold text-white">
               <Play className="h-3 w-3" /> Atual
@@ -84,6 +96,7 @@ function TableEntryRows({
           ) : (
             <span className="text-textMuted">{entry.order + 1}</span>
           )}
+          </div>
         </td>
         <td className="px-3 py-3">
           <InitiativeEditor
@@ -98,6 +111,16 @@ function TableEntryRows({
         <td className="px-3 py-3">
           <div className="grid gap-2">
             <HitPointEditor entry={entry} patchEntry={patchEntry} />
+            {onHpAction ? (
+              <div className="flex gap-1">
+                <Button size="sm" variant="danger" title="Aplicar dano" disabled={entry.currentHp === undefined} onClick={() => onHpAction(entry.id, "damage")}>
+                  <Zap className="h-3.5 w-3.5" /> −
+                </Button>
+                <Button size="sm" variant="secondary" title="Aplicar cura" disabled={entry.currentHp === undefined} onClick={() => onHpAction(entry.id, "heal")}>
+                  <HeartPulse className="h-3.5 w-3.5" /> +
+                </Button>
+              </div>
+            ) : null}
             <DeathSaveCounter
               entry={entry}
               editable

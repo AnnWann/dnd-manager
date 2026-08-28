@@ -69,6 +69,16 @@ export interface CustomSystemActionDefinition {
   roll?: CustomAbilityRollDefinition
   resourceChanges?: CustomAbilityResourceChangeDefinition[]
   conditionChanges?: CustomSystemConditionChangeDefinition[]
+  /** Exposição opcional desta ação como automação de alvos na iniciativa do mestre. */
+  initiative?: CustomSystemInitiativeActionDefinition
+}
+
+export interface CustomSystemInitiativeActionDefinition {
+  enabled: boolean
+  label?: string
+  targetSide?: "any" | "ally" | "enemy" | "neutral"
+  minimumTargets?: number
+  maximumTargets?: number
 }
 
 export interface CustomStandardActionOverrideDefinition {

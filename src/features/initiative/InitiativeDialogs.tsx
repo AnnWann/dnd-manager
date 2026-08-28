@@ -4,6 +4,9 @@ import { Button } from "../../components/ui/Button"
 import { Input } from "../../components/ui/Input"
 import { Modal } from "../../components/ui/Modal"
 import { Textarea } from "../../components/ui/Textarea"
+import type { BonusCollection } from "../../models/bonuses/Bonus"
+import { BonusesFields } from "../characters/inventory/equipmentBonusFields"
+import { STANDARD_CONDITION_PRESETS } from "../characters/characterSheet/standardConditionPresets"
 import type {
   InitiativeConditionDuration,
   InitiativeEntry,
@@ -11,22 +14,7 @@ import type {
   InitiativeSourceType,
 } from "../../models/initiative/Initiative"
 
-const CONDITION_SUGGESTIONS = [
-  "Agarrado",
-  "Amedrontado",
-  "Atordoado",
-  "Caído",
-  "Cego",
-  "Enfeitiçado",
-  "Envenenado",
-  "Impedido",
-  "Incapacitado",
-  "Inconsciente",
-  "Invisível",
-  "Paralisado",
-  "Petrificado",
-  "Surdo",
-]
+const CONDITION_SUGGESTIONS = STANDARD_CONDITION_PRESETS.map((preset) => preset.name)
 
 const selectClassName =
   "h-10 w-full rounded-lg border border-border bg-bg px-3 text-sm text-textH shadow-theme-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/25"
@@ -45,6 +33,11 @@ export type CustomInitiativeEntryDraft = {
 export type InitiativeConditionInput = {
   name: string
   description?: string
+  behavior?: string
+  source?: string
+  notes?: string
+  tags?: string[]
+  bonuses?: BonusCollection
   duration: InitiativeConditionDuration
 }
 
@@ -226,6 +219,10 @@ type ConditionDialogProps = {
 type ConditionDraft = {
   name: string
   description: string
+  behavior: string
+  source: string
+  tags: string
+  bonuses: BonusCollection
   durationType: InitiativeConditionDuration["type"]
   remaining: number
   ownerEntryId: string
@@ -242,6 +239,10 @@ export function ConditionDialog({
   const [draft, setDraft] = useState<ConditionDraft>({
     name: "",
     description: "",
+    behavior: "",
+    source: "Iniciativa",
+    tags: "",
+    bonuses: {},
     durationType: "manual",
     remaining: 1,
     ownerEntryId: activeEntryId ?? targetEntryId,
@@ -260,6 +261,10 @@ export function ConditionDialog({
     onApply({
       name: draft.name.trim(),
       description: draft.description.trim() || undefined,
+      behavior: draft.behavior.trim() || undefined,
+      source: draft.source.trim() || undefined,
+      tags: draft.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+      bonuses: draft.bonuses,
       duration: buildDuration(draft, targetEntryId),
     })
   }
@@ -267,6 +272,27 @@ export function ConditionDialog({
   return (
     <Modal title={`Condição em ${targetName}`} onClose={onClose}>
       <div className="grid gap-4">
+        <Field label="Condição padrão">
+          <select
+            className={selectClassName}
+            value=""
+            onChange={(event) => {
+              const preset = STANDARD_CONDITION_PRESETS.find((entry) => entry.id === event.target.value)
+              if (!preset) return
+              setDraft((current) => ({
+                ...current,
+                name: preset.name,
+                description: preset.description,
+                behavior: preset.behavior,
+                tags: preset.tags.join(", "),
+              }))
+            }}
+          >
+            <option value="">Preencher a partir das condições da ficha…</option>
+            {STANDARD_CONDITION_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
+          </select>
+        </Field>
+
         <Field label="Condição">
           <Input
             list="initiative-condition-suggestions"
@@ -300,6 +326,30 @@ export function ConditionDialog({
             placeholder="Opcional"
           />
         </Field>
+
+        <Field label="Comportamento">
+          <Textarea
+            className="min-h-16"
+            value={draft.behavior}
+            onChange={(event) => setDraft((current) => ({ ...current, behavior: event.target.value }))}
+            placeholder="Resumo da regra da condição."
+          />
+        </Field>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Fonte">
+            <Input value={draft.source} onChange={(event) => setDraft((current) => ({ ...current, source: event.target.value }))} />
+          </Field>
+          <Field label="Tags">
+            <Input value={draft.tags} onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value }))} placeholder="controle, veneno, magia" />
+          </Field>
+        </div>
+
+        <BonusesFields
+          bonuses={draft.bonuses}
+          onChange={(bonuses) => setDraft((current) => ({ ...current, bonuses }))}
+          description="Mesmos modificadores usados na ficha de personagem. Em criaturas, eles recalculam CA, ataques, dano, saves e demais estatísticas compatíveis."
+        />
 
         <Field label="Duração">
           <select

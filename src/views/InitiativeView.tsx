@@ -8,6 +8,9 @@ import {
   Play,
   RotateCcw,
   Shield,
+  PanelRightOpen,
+  HeartPulse,
+  Zap,
   Swords,
   UserPlus,
 } from "lucide-react"
@@ -20,7 +23,6 @@ import { useCharacterContext } from "../contexts/characterContext"
 import { useCreatureCompendium } from "../contexts/creatureCompendiumContext"
 import { useSyncContext } from "../contexts/syncContext"
 import {
-  CreatureQuickSheet,
   quickSheetFromCharacter,
   quickSheetFromCompendiumCreature,
   quickSheetFromInitiativeEntry,
@@ -34,6 +36,14 @@ import {
   type InitiativeConditionInput,
 } from "../features/initiative/InitiativeDialogs"
 import { InitiativeTable } from "../features/initiative/InitiativeTable"
+import { InitiativeCombatantInspector } from "../features/initiative/InitiativeCombatantInspector"
+import {
+  InitiativeHpActionDialog,
+  type InitiativeHpActionMode,
+  type InitiativeHpActionPayload,
+} from "../features/initiative/InitiativeHpActionDialog"
+import { resolveDamage, type DamageAffinity } from "../models/combat/Damage"
+import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
 import { useInitiativeSession } from "../hooks/useInitiativeSession"
 import type { CompendiumCreature } from "../models/creatures/CompendiumCreature"
 import { getEffectiveArmorClassWithShield } from "../models/items/equipment/Shield"
@@ -64,6 +74,7 @@ export function InitiativeView() {
   const { visibleCharacters } = useCharacterContext()
   const { creatures } = useCreatureCompendium()
   const { userRole } = useSyncContext()
+  const runtime = useOptionalSessionRuntime()
   const { session, updateSession, resetSession, hydrated } =
     useInitiativeSession()
 
@@ -76,9 +87,16 @@ export function InitiativeView() {
     useState(false)
   const [customOpen, setCustomOpen] = useState(false)
   const [conditionTargetId, setConditionTargetId] = useState<string>()
+  const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(() => new Set())
+  const [bulkConditionOpen, setBulkConditionOpen] = useState(false)
+  const [bulkRemoveOpen, setBulkRemoveOpen] = useState(false)
+  const [bulkRemoveConditionName, setBulkRemoveConditionName] = useState("")
   const [renameTargetId, setRenameTargetId] = useState<string>()
   const [renameValue, setRenameValue] = useState("")
-  const [quickSheetEntryId, setQuickSheetEntryId] = useState<string>()
+  const [inspectedEntryId, setInspectedEntryId] = useState<string>()
+  const [inspectorPinned, setInspectorPinned] = useState(false)
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(false)
+  const [hpAction, setHpAction] = useState<{ entryIds: string[]; mode: InitiativeHpActionMode }>()
   const cardRefs = useRef(new Map<string, HTMLDivElement>())
 
   const selectedCharacter = visibleCharacters.find(
@@ -87,6 +105,20 @@ export function InitiativeView() {
   const selectedCreature = creatures.find(
     (creature) => creature.id === selectedCreatureId,
   )
+  const initiativeSystemActions = useMemo(() => {
+    const snapshot = runtime?.runtimeConfigSnapshot
+    if (!snapshot) return []
+    const enabledSystems = new Set(
+      snapshot.config.characters.flatMap((character) =>
+        character.customSystems.filter((installation) => installation.enabled).map((installation) => installation.systemId),
+      ),
+    )
+    return snapshot.config.customSystems.flatMap((system) =>
+      enabledSystems.has(system.id)
+        ? (system.actions ?? []).flatMap((action) => action.enabled !== false && action.initiative?.enabled ? [{ system, action }] : [])
+        : [],
+    )
+  }, [runtime?.runtimeConfigSnapshot])
   const activeEntry = session.entries.find(
     (entry) => entry.id === session.activeEntryId,
   )
@@ -94,25 +126,38 @@ export function InitiativeView() {
     (entry) => entry.id === conditionTargetId,
   )
   const renameTarget = session.entries.find((entry) => entry.id === renameTargetId)
-  const quickSheetEntry = session.entries.find(
-    (entry) => entry.id === quickSheetEntryId,
+  const inspectedEntry = session.entries.find(
+    (entry) => entry.id === inspectedEntryId,
   )
 
   const quickSheetData = useMemo(
     () =>
-      quickSheetEntry
+      inspectedEntry
         ? resolveQuickSheet(
-            quickSheetEntry,
+            inspectedEntry,
             visibleCharacters,
             creatures,
           )
         : undefined,
-    [creatures, quickSheetEntry, visibleCharacters],
+    [creatures, inspectedEntry, visibleCharacters],
   )
   const quickSheetPrefersImage = Boolean(
-    quickSheetEntry?.sourceId?.startsWith(COMPENDIUM_SOURCE_PREFIX) &&
+    inspectedEntry?.sourceId?.startsWith(COMPENDIUM_SOURCE_PREFIX) &&
       quickSheetData?.sheetImageUrl,
   )
+
+  useEffect(() => {
+    if (inspectorPinned) return
+    const nextId = session.activeEntryId ?? session.entries[0]?.id
+    if (nextId) setInspectedEntryId(nextId)
+  }, [inspectorPinned, session.activeEntryId, session.entries])
+
+  useEffect(() => {
+    if (!inspectedEntryId) return
+    if (session.entries.some((entry) => entry.id === inspectedEntryId)) return
+    setInspectedEntryId(session.activeEntryId ?? session.entries[0]?.id)
+    setInspectorPinned(false)
+  }, [inspectedEntryId, session.activeEntryId, session.entries])
 
   useEffect(() => {
     if (!session.activeEntryId || session.viewMode !== "cards") return
@@ -130,6 +175,14 @@ export function InitiativeView() {
       defaultSideForCharacter(selectedCharacter.get("sheet").type),
     )
   }, [selectedCharacter])
+
+  useEffect(() => {
+    const ids = new Set(session.entries.map((entry) => entry.id))
+    setSelectedEntryIds((current) => {
+      const next = new Set(Array.from(current).filter((entryId) => ids.has(entryId)))
+      return next.size === current.size ? current : next
+    })
+  }, [session.entries])
 
   function patchEntry(entryId: string, patch: Partial<InitiativeEntry>) {
     updateSession((current) =>
@@ -274,6 +327,124 @@ export function InitiativeView() {
     setConditionTargetId(undefined)
   }
 
+  function toggleSelectedEntry(entryId: string, selected: boolean) {
+    setSelectedEntryIds((current) => {
+      const next = new Set(current)
+      if (selected) next.add(entryId)
+      else next.delete(entryId)
+      return next
+    })
+  }
+
+  function applyBulkCondition(condition: InitiativeConditionInput) {
+    const entryIds = Array.from(selectedEntryIds)
+    if (!entryIds.length) return
+    if (runtime?.initiativeState?.initialized) {
+      runtime.dispatchInitiativeOperation({
+        type: "initiative.conditions.bulk",
+        characterId: "session",
+        entryIds,
+        mode: "add",
+        condition: condition as unknown as Record<string, unknown>,
+      })
+    } else {
+      updateSession((current) => entryIds.reduce(
+        (next, entryId) => applyInitiativeCondition(next, entryId, condition),
+        current,
+      ))
+    }
+    setBulkConditionOpen(false)
+  }
+
+  function removeBulkCondition() {
+    const entryIds = Array.from(selectedEntryIds)
+    const conditionName = bulkRemoveConditionName.trim()
+    if (!entryIds.length || !conditionName) return
+    if (runtime?.initiativeState?.initialized) {
+      runtime.dispatchInitiativeOperation({
+        type: "initiative.conditions.bulk",
+        characterId: "session",
+        entryIds,
+        mode: "remove",
+        conditionName,
+      })
+    } else {
+      const normalized = normalizeLabel(conditionName)
+      updateSession((current) => entryIds.reduce((next, entryId) => {
+        const entry = next.entries.find((candidate) => candidate.id === entryId)
+        if (!entry) return next
+        return entry.conditions
+          .filter((condition) => normalizeLabel(condition.name) === normalized)
+          .reduce((updated, condition) => removeInitiativeCondition(updated, entryId, condition.id), next)
+      }, current))
+    }
+    setBulkRemoveOpen(false)
+  }
+
+  function executeInitiativeSystemAction(systemId: string, actionId: string) {
+    const entryIds = Array.from(selectedEntryIds)
+    if (!runtime?.initiativeState?.initialized || !entryIds.length) return
+    runtime.dispatchInitiativeOperation({
+      type: "initiative.customAction.execute",
+      characterId: "session",
+      systemId,
+      actionId,
+      entryIds,
+    })
+  }
+
+  function openHpAction(entryIds: string[], mode: InitiativeHpActionMode) {
+    if (!entryIds.length) return
+    setHpAction({ entryIds, mode })
+  }
+
+  function damageAffinitiesForEntry(entry: InitiativeEntry): DamageAffinity[] {
+    if (entry.sourceId?.startsWith(COMPENDIUM_SOURCE_PREFIX)) {
+      const creatureId = entry.sourceId.slice(COMPENDIUM_SOURCE_PREFIX.length)
+      return creatures.find((creature) => creature.id === creatureId)?.damageAffinities ?? []
+    }
+    if (entry.sourceId) {
+      return visibleCharacters.find((character) => character.get("id") === entry.sourceId)?.get("sheet").damageAffinities ?? []
+    }
+    return []
+  }
+
+  function applyHpAction(payload: InitiativeHpActionPayload) {
+    if (!hpAction?.entryIds.length) return
+    const entryIds = hpAction.entryIds
+    if (runtime?.initiativeState?.initialized) {
+      runtime.dispatchInitiativeOperation(payload.mode === "damage"
+        ? { type: "initiative.hp.apply", characterId: "session", entryIds, mode: "damage", parts: payload.parts }
+        : { type: "initiative.hp.apply", characterId: "session", entryIds, mode: payload.mode, amount: payload.amount })
+      setHpAction(undefined)
+      return
+    }
+
+    updateSession((current) => ({
+      ...current,
+      entries: current.entries.map((entry) => {
+        if (!entryIds.includes(entry.id)) return entry
+        if (payload.mode === "damage") {
+          const applied = payload.parts.reduce((total, part) => total + resolveDamage(part.amount, part.damageType, damageAffinitiesForEntry(entry), { magical: part.magical }).applied, 0)
+          const temporary = Math.max(0, entry.temporaryHp ?? 0)
+          const absorbed = Math.min(temporary, applied)
+          return {
+            ...entry,
+            temporaryHp: Math.max(0, temporary - absorbed),
+            currentHp: entry.currentHp === undefined ? entry.currentHp : Math.max(0, entry.currentHp - Math.max(0, applied - absorbed)),
+          }
+        }
+        if (payload.mode === "heal") {
+          if (entry.currentHp === undefined) return entry
+          return { ...entry, currentHp: Math.min(entry.maxHp ?? entry.currentHp + payload.amount, entry.currentHp + payload.amount) }
+        }
+        return { ...entry, temporaryHp: Math.max(0, (entry.temporaryHp ?? 0) + payload.amount) }
+      }),
+      updatedAt: Date.now(),
+    }))
+    setHpAction(undefined)
+  }
+
   async function clearCombat() {
     if (!window.confirm("Apagar todo o combate atual?")) return
     await resetSession()
@@ -298,8 +469,14 @@ export function InitiativeView() {
     round: session.round,
     started: session.started,
     patchEntry,
-    onOpen: setQuickSheetEntryId,
+    onOpen: (entryId: string) => {
+      setInspectedEntryId(entryId)
+      setInspectorCollapsed(false)
+    },
     onRename: openRename,
+    onHpAction: (entryId: string, mode: InitiativeHpActionMode) => openHpAction([entryId], mode),
+    selectedEntryIds,
+    onSelectEntry: toggleSelectedEntry,
     onCondition: setConditionTargetId,
     onRemove: (entryId: string) =>
       updateSession((current) => removeInitiativeEntry(current, entryId)),
@@ -477,6 +654,59 @@ export function InitiativeView() {
         )}
       </section>
 
+      <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-textH">Ações em massa</div>
+            <div className="mt-1 text-xs text-textMuted">{selectedEntryIds.size} alvo{selectedEntryIds.size === 1 ? "" : "s"} selecionado{selectedEntryIds.size === 1 ? "" : "s"}.</div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => setSelectedEntryIds(new Set(session.entries.map((entry) => entry.id)))} disabled={!session.entries.length}>Selecionar todos</Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelectedEntryIds(new Set())} disabled={!selectedEntryIds.size}>Limpar seleção</Button>
+            <Button size="sm" variant="danger" onClick={() => openHpAction(Array.from(selectedEntryIds), "damage")} disabled={!selectedEntryIds.size}>
+              <Zap className="h-3.5 w-3.5" /> Dano
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => openHpAction(Array.from(selectedEntryIds), "heal")} disabled={!selectedEntryIds.size}>
+              <HeartPulse className="h-3.5 w-3.5" /> Cura
+            </Button>
+            <Button size="sm" onClick={() => setBulkConditionOpen(true)} disabled={!selectedEntryIds.size}>Aplicar condição</Button>
+            <Button size="sm" onClick={() => {
+              const first = session.entries.find((entry) => selectedEntryIds.has(entry.id))?.conditions[0]?.name ?? ""
+              setBulkRemoveConditionName(first)
+              setBulkRemoveOpen(true)
+            }} disabled={!selectedEntryIds.size}>Remover condição</Button>
+          </div>
+        </div>
+        {initiativeSystemActions.length ? (
+          <div className="mt-3 border-t border-border pt-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-textMuted">Automações de sistemas customizados</div>
+            <div className="flex flex-wrap gap-2">
+              {initiativeSystemActions.map(({ system, action }) => {
+                const targets = session.entries.filter((entry) => selectedEntryIds.has(entry.id))
+                const targetSide = action.initiative?.targetSide ?? "any"
+                const minimum = Math.max(1, action.initiative?.minimumTargets ?? 1)
+                const maximum = Math.max(minimum, action.initiative?.maximumTargets ?? 50)
+                const valid = targets.length >= minimum
+                  && targets.length <= maximum
+                  && (targetSide === "any" || targets.every((entry) => entry.side === targetSide))
+                return (
+                  <Button
+                    key={`${system.id}:${action.id}`}
+                    size="sm"
+                    variant="secondary"
+                    disabled={!valid}
+                    title={action.description ?? system.name}
+                    onClick={() => executeInitiativeSystemAction(system.id, action.id)}
+                  >
+                    {action.initiative?.label?.trim() || action.name}
+                  </Button>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+      </section>
+
       <section className="grid gap-3 rounded-xl border border-border bg-bg p-4 shadow-theme-sm md:grid-cols-[minmax(0,1fr)_auto]">
         <div>
           <div className="text-sm font-semibold text-textH">Saves de morte na iniciativa</div>
@@ -517,45 +747,94 @@ export function InitiativeView() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-bg shadow-theme-sm">
-        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="text-sm font-semibold text-textH">
-              {session.entries.length} participante
-              {session.entries.length === 1 ? "" : "s"}
+      <div className={`grid items-start gap-4 ${inspectorCollapsed ? "grid-cols-1" : "xl:grid-cols-[minmax(0,1fr)_26rem]"}`}>
+        <section className="min-w-0 rounded-xl border border-border bg-bg shadow-theme-sm">
+          <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-sm font-semibold text-textH">
+                  {session.entries.length} participante{session.entries.length === 1 ? "" : "s"}
+                </div>
+                {inspectorCollapsed ? (
+                  <Button size="sm" variant="secondary" onClick={() => setInspectorCollapsed(false)}>
+                    <PanelRightOpen className="h-4 w-4" /> Mostrar ficha
+                  </Button>
+                ) : null}
+              </div>
+              <div className="text-xs text-textMuted">
+                A ficha à direita acompanha o turno; clique em outro participante para inspecioná-lo ou fixe a ficha.
+              </div>
             </div>
-            <div className="text-xs text-textMuted">
-              Clique no nome ou cartão para abrir a ficha rápida.
+            <div className="flex items-center gap-2">
+              <Button size="icon" title="Turno anterior" onClick={() => updateSession(rewindInitiativeTurn)} disabled={!session.started}>
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="primary" onClick={() => updateSession(advanceInitiativeTurn)} disabled={!session.started}>
+                Próximo turno <ArrowRight className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="icon"
-              title="Turno anterior"
-              onClick={() => updateSession(rewindInitiativeTurn)}
-              disabled={!session.started}
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => updateSession(advanceInitiativeTurn)}
-              disabled={!session.started}
-            >
-              Próximo turno
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
 
-        {session.entries.length === 0 ? (
-          <EmptyRoster />
-        ) : session.viewMode === "table" ? (
-          <InitiativeTable {...rosterProps} />
-        ) : (
-          <InitiativeCards {...rosterProps} cardRefs={cardRefs} />
-        )}
-      </section>
+          {session.entries.length === 0 ? (
+            <EmptyRoster />
+          ) : session.viewMode === "table" ? (
+            <InitiativeTable {...rosterProps} />
+          ) : (
+            <InitiativeCards {...rosterProps} cardRefs={cardRefs} />
+          )}
+        </section>
+
+        {!inspectorCollapsed ? (
+          <InitiativeCombatantInspector
+            entry={inspectedEntry}
+            data={quickSheetData}
+            pinned={inspectorPinned}
+            followingTurn={!inspectorPinned && Boolean(inspectedEntry?.id && inspectedEntry.id === session.activeEntryId)}
+            preferImage={quickSheetPrefersImage}
+            onTogglePinned={() => {
+              if (inspectorPinned) {
+                setInspectorPinned(false)
+                setInspectedEntryId(session.activeEntryId ?? inspectedEntry?.id)
+              } else {
+                setInspectorPinned(true)
+              }
+            }}
+            onCollapse={() => setInspectorCollapsed(true)}
+            onHpAction={(mode) => inspectedEntry && openHpAction([inspectedEntry.id], mode)}
+          />
+        ) : null}
+      </div>
+
+      {bulkConditionOpen && selectedEntryIds.size ? (
+        <ConditionDialog
+          targetName={`${selectedEntryIds.size} participantes`}
+          targetEntryId={Array.from(selectedEntryIds)[0]}
+          entries={session.entries}
+          activeEntryId={session.activeEntryId}
+          onClose={() => setBulkConditionOpen(false)}
+          onApply={applyBulkCondition}
+        />
+      ) : null}
+
+      {bulkRemoveOpen ? (
+        <Modal title="Remover condição em massa" onClose={() => setBulkRemoveOpen(false)} className="max-w-md">
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-xs text-textMuted">
+              Condição
+              <select className={selectClassName} value={bulkRemoveConditionName} onChange={(event) => setBulkRemoveConditionName(event.target.value)}>
+                <option value="">Selecione</option>
+                {Array.from(new Set(session.entries.filter((entry) => selectedEntryIds.has(entry.id)).flatMap((entry) => entry.conditions.map((condition) => condition.name)))).map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </label>
+            <div className="flex justify-end gap-2 border-t border-border pt-3">
+              <Button variant="ghost" onClick={() => setBulkRemoveOpen(false)}>Cancelar</Button>
+              <Button variant="danger" disabled={!bulkRemoveConditionName.trim()} onClick={removeBulkCondition}>Remover dos selecionados</Button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
 
       {renameTarget ? (
         <Modal title="Nome no combate" onClose={() => setRenameTargetId(undefined)} className="max-w-md">
@@ -626,17 +905,15 @@ export function InitiativeView() {
         />
       ) : null}
 
-      {quickSheetEntry && quickSheetData ? (
-        <Modal
-          title={`Ficha rápida — ${initiativeEntryDisplayName(quickSheetEntry, "master")}`}
-          onClose={() => setQuickSheetEntryId(undefined)}
-          className="max-w-5xl"
-        >
-          <CreatureQuickSheet
-            data={quickSheetData}
-            preferImage={quickSheetPrefersImage}
-          />
-        </Modal>
+      {hpAction ? (
+        <InitiativeHpActionDialog
+          targets={session.entries
+            .filter((entry) => hpAction.entryIds.includes(entry.id))
+            .map((entry) => ({ entry, affinities: damageAffinitiesForEntry(entry) }))}
+          initialMode={hpAction.mode}
+          onClose={() => setHpAction(undefined)}
+          onApply={applyHpAction}
+        />
       ) : null}
     </div>
   )
@@ -770,6 +1047,10 @@ function defaultSideForCharacter(type: string): InitiativeSide {
   if (type === "pc") return "ally"
   if (type === "npc") return "neutral"
   return "enemy"
+}
+
+function normalizeLabel(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR")
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

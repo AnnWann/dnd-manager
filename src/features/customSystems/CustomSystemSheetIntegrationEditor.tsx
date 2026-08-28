@@ -405,6 +405,31 @@ function ActionRow({ definition, value, onChange, onRemove }: {
       />
 
       <section className="mt-4 rounded-xl border border-border bg-bg p-3">
+        <label className="flex items-center gap-2 text-sm font-semibold text-textH">
+          <input
+            type="checkbox"
+            checked={value.initiative?.enabled === true}
+            onChange={(event) => onChange({
+              ...value,
+              initiative: event.target.checked
+                ? { enabled: true, targetSide: value.initiative?.targetSide ?? "any", minimumTargets: value.initiative?.minimumTargets ?? 1, maximumTargets: value.initiative?.maximumTargets ?? 50, label: value.initiative?.label }
+                : undefined,
+            })}
+          />
+          Exibir como automação na iniciativa do mestre
+        </label>
+        <p className="mt-1 text-xs leading-5 text-textMuted">Usa as alterações de condição/estado desta ação sobre os combatentes selecionados.</p>
+        {value.initiative?.enabled ? (
+          <div className="mt-2 grid gap-3 md:grid-cols-4">
+            <TextInput label="Rótulo do botão" value={value.initiative.label ?? ""} onChange={(label) => onChange({ ...value, initiative: { ...value.initiative!, label: label || undefined } })} />
+            <Select label="Lado dos alvos" value={value.initiative.targetSide ?? "any"} options={[["any", "Qualquer"], ["ally", "Aliados"], ["enemy", "Inimigos"], ["neutral", "Neutros"]]} onChange={(targetSide) => onChange({ ...value, initiative: { ...value.initiative!, targetSide: targetSide as "any" | "ally" | "enemy" | "neutral" } })} />
+            <TextInput label="Mínimo de alvos" type="number" value={String(value.initiative.minimumTargets ?? 1)} onChange={(minimumTargets) => onChange({ ...value, initiative: { ...value.initiative!, minimumTargets: Math.max(1, Number(minimumTargets) || 1) } })} />
+            <TextInput label="Máximo de alvos" type="number" value={String(value.initiative.maximumTargets ?? 50)} onChange={(maximumTargets) => onChange({ ...value, initiative: { ...value.initiative!, maximumTargets: Math.max(1, Math.min(50, Number(maximumTargets) || 1)) } })} />
+          </div>
+        ) : null}
+      </section>
+
+      <section className="mt-4 rounded-xl border border-border bg-bg p-3">
         <h3 className="text-sm font-semibold text-textH">Rolagem antes de executar</h3>
         <p className="mt-1 text-xs leading-5 text-textMuted">
           Opcional. Use dados fixos como <code>1d6</code> ou uma variável do tipo Dado. O resultado fica disponível nas fórmulas abaixo como <code>roll.value</code>.

@@ -1,3 +1,6 @@
+import type { Attribute } from "../sheet/Attribute"
+import { inferDamageAffinitiesFromLegacy, normalizeDamageAffinities, type DamageAffinity, type DamageType } from "../combat/Damage"
+
 export type CreatureSide = "ally" | "enemy" | "neutral"
 
 export type CreatureAbilityScores = {
@@ -9,10 +12,27 @@ export type CreatureAbilityScores = {
   cha: number
 }
 
+export type CreatureDamagePart = {
+  formula: string
+  damageType: DamageType
+}
+
+export type CreatureFeatureMechanics = {
+  kind: "attack"
+  attackType: "weapon" | "spell" | "other"
+  rangeType: "melee" | "ranged"
+  attackBonus: number
+  attribute?: Attribute
+  magical?: boolean
+  reach?: string
+  damage: CreatureDamagePart[]
+}
+
 export type CreatureFeature = {
   id: string
   name: string
   description: string
+  mechanics?: CreatureFeatureMechanics
 }
 
 export type CreatureFeatureField =
@@ -46,6 +66,7 @@ export type CompendiumCreature = {
   vulnerabilities: string
   resistances: string
   immunities: string
+  damageAffinities: DamageAffinity[]
   conditionImmunities: string
   senses: string
   languages: string
@@ -91,6 +112,7 @@ export function createCreatureFeature(
     id: patch.id?.trim() || crypto.randomUUID(),
     name: patch.name ?? "",
     description: patch.description ?? "",
+    mechanics: normalizeCreatureFeatureMechanics(patch.mechanics),
   }
 }
 
@@ -119,6 +141,11 @@ export function createCompendiumCreature(
     vulnerabilities: patch.vulnerabilities ?? "",
     resistances: patch.resistances ?? "",
     immunities: patch.immunities ?? "",
+    damageAffinities: normalizeDamageAffinities(
+      patch.damageAffinities?.length
+        ? patch.damageAffinities
+        : inferDamageAffinitiesFromLegacy(patch.vulnerabilities, patch.resistances, patch.immunities),
+    ),
     conditionImmunities: patch.conditionImmunities ?? "",
     senses: patch.senses ?? "",
     languages: patch.languages ?? "",
@@ -179,6 +206,16 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
     vulnerabilities: stringValue(value.vulnerabilities),
     resistances: stringValue(value.resistances),
     immunities: stringValue(value.immunities),
+    damageAffinities: (() => {
+      const explicit = normalizeDamageAffinities(value.damageAffinities)
+      return explicit.length
+        ? explicit
+        : inferDamageAffinitiesFromLegacy(
+            stringValue(value.vulnerabilities),
+            stringValue(value.resistances),
+            stringValue(value.immunities),
+          )
+    })(),
     conditionImmunities: stringValue(value.conditionImmunities),
     senses: stringValue(value.senses),
     languages: stringValue(value.languages),
@@ -297,6 +334,7 @@ function normalizeCreatureFeatures(
           id: stringValue(record.id).trim() || undefined,
           name: name || `${fallbackName} ${index + 1}`,
           description,
+          mechanics: normalizeCreatureFeatureMechanics(record.mechanics),
         }),
       ]
     })
@@ -337,6 +375,36 @@ function normalizeLegacyFeatureText(
       description: trimmed,
     }),
   ]
+}
+
+function normalizeCreatureFeatureMechanics(value: unknown): CreatureFeatureMechanics | undefined {
+  const record = asRecord(value)
+  if (!record || record.kind !== "attack") return undefined
+  const attackType = record.attackType === "spell" || record.attackType === "other" ? record.attackType : "weapon"
+  const rangeType = record.rangeType === "ranged" ? "ranged" : "melee"
+  const attribute = ["str", "dex", "con", "int", "wis", "cha"].includes(String(record.attribute))
+    ? record.attribute as Attribute
+    : undefined
+  const damage = Array.isArray(record.damage)
+    ? record.damage.flatMap((part) => {
+        const partRecord = asRecord(part)
+        const damageType = partRecord && ["acid", "bludgeoning", "cold", "fire", "force", "lightning", "necrotic", "piercing", "poison", "psychic", "radiant", "slashing", "thunder"].includes(String(partRecord.damageType))
+          ? partRecord.damageType as DamageType
+          : undefined
+        const formula = stringValue(partRecord?.formula).trim()
+        return damageType && formula ? [{ damageType, formula }] : []
+      })
+    : []
+  return {
+    kind: "attack",
+    attackType,
+    rangeType,
+    attackBonus: finiteNumber(record.attackBonus),
+    attribute,
+    magical: booleanValue(record.magical),
+    reach: optionalStringValue(record.reach),
+    damage,
+  }
 }
 
 function normalizeAbilityScores(

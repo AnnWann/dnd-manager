@@ -2,6 +2,8 @@ import { FileImage, Shield, Swords } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { Button } from "../../components/ui/Button"
+import { damageAffinityLabel, damageTypeLabel, type DamageAffinity } from "../../models/combat/Damage"
+import { getCreatureEffectiveArmorClass, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../models/creatures/CreatureCombatRuntime"
 import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
 import type {
   CompendiumCreature,
@@ -12,10 +14,15 @@ import type {
   InitiativeSide,
 } from "../../models/initiative/Initiative"
 
+export type QuickSheetFeature = CreatureFeature & {
+  effectiveAttackBonus?: number
+  effectiveDamageBonus?: number
+}
+
 export type QuickSheetSection = {
   title: string
   content?: string
-  entries?: CreatureFeature[]
+  entries?: QuickSheetFeature[]
 }
 
 export type CombatQuickSheetData = {
@@ -39,6 +46,7 @@ export type CombatQuickSheetData = {
   resistances?: string
   immunities?: string
   conditionImmunities?: string
+  damageAffinities?: DamageAffinity[]
   senses?: string
   languages?: string
   conditions?: string[]
@@ -48,11 +56,13 @@ export type CombatQuickSheetData = {
 type CreatureQuickSheetProps = {
   data: CombatQuickSheetData
   preferImage?: boolean
+  compact?: boolean
 }
 
 export function CreatureQuickSheet({
   data,
   preferImage = false,
+  compact = false,
 }: CreatureQuickSheetProps) {
   const [mode, setMode] = useState<"summary" | "image">(
     preferImage && data.sheetImageUrl ? "image" : "summary",
@@ -67,7 +77,7 @@ export function CreatureQuickSheet({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-heading text-2xl font-semibold text-textH">
+            <h3 className={`font-heading font-semibold text-textH ${compact ? "text-lg" : "text-2xl"}`}>
               {data.name}
             </h3>
             {data.side ? (
@@ -114,16 +124,16 @@ export function CreatureQuickSheet({
           />
         </div>
       ) : (
-        <QuickSheetSummary data={data} />
+        <QuickSheetSummary data={data} compact={compact} />
       )}
     </div>
   )
 }
 
-function QuickSheetSummary({ data }: { data: CombatQuickSheetData }) {
+function QuickSheetSummary({ data, compact = false }: { data: CombatQuickSheetData; compact?: boolean }) {
   return (
     <div className="grid gap-4">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <div className={`grid gap-2 ${compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"}`}>
         <StatCard label="Iniciativa" value={signed(data.initiativeBonus)} />
         <StatCard label="CA" value={displayNumber(data.armorClass)} />
         <StatCard
@@ -146,7 +156,7 @@ function QuickSheetSummary({ data }: { data: CombatQuickSheetData }) {
       </div>
 
       {data.abilityScores ? (
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+        <div className={`grid gap-2 ${compact ? "grid-cols-3" : "grid-cols-3 sm:grid-cols-6"}`}>
           {Object.entries(data.abilityScores).map(([attribute, score]) => (
             <div
               key={attribute}
@@ -174,7 +184,20 @@ function QuickSheetSummary({ data }: { data: CombatQuickSheetData }) {
         />
       ) : null}
 
-      <div className="grid gap-3 md:grid-cols-2">
+      {data.damageAffinities?.length ? (
+        <section className="rounded-xl border border-border bg-bg-subtle p-4">
+          <div className="mb-2 text-sm font-semibold text-textH">Defesas de dano</div>
+          <div className="flex flex-wrap gap-2">
+            {data.damageAffinities.map((rule, index) => (
+              <span key={`${rule.damageType}:${rule.kind}:${index}`} className="rounded-full border border-border bg-bg px-2.5 py-1 text-xs text-textH">
+                {damageAffinityLabel(rule.kind)} • {damageTypeLabel(rule.damageType)}{rule.qualifier && rule.qualifier !== "any" ? ` • ${rule.qualifier === "magical" ? "mágico" : "não mágico"}` : ""}
+              </span>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <div className={`grid gap-3 ${compact ? "grid-cols-1" : "md:grid-cols-2"}`}>
         <OptionalInfo title="Testes de resistência" content={data.savingThrows} />
         <OptionalInfo title="Perícias" content={data.skills} />
         <OptionalInfo title="Vulnerabilidades" content={data.vulnerabilities} />
@@ -214,7 +237,7 @@ function FeatureSection({
   entries,
 }: {
   title: string
-  entries: CreatureFeature[]
+  entries: QuickSheetFeature[]
 }) {
   return (
     <section className="rounded-xl border border-border bg-bg-subtle p-4">
@@ -226,6 +249,19 @@ function FeatureSection({
             className="rounded-lg border border-border bg-bg px-3 py-3"
           >
             <h5 className="text-sm font-semibold text-textH">{entry.name}</h5>
+            {entry.mechanics ? (
+              <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-1 font-semibold text-accent">
+                  Ataque {signed(entry.effectiveAttackBonus ?? entry.mechanics.attackBonus)}
+                </span>
+                {entry.mechanics.reach ? <span className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-textMuted">{entry.mechanics.reach}</span> : null}
+                {entry.mechanics.damage.map((part, index) => (
+                  <span key={`${part.damageType}:${index}`} className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-textH">
+                    {part.formula}{entry.effectiveDamageBonus ? ` ${entry.effectiveDamageBonus > 0 ? "+" : ""}${entry.effectiveDamageBonus}` : ""} {damageTypeLabel(part.damageType)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             {entry.description.trim() ? (
               <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-text">
                 {entry.description}
@@ -295,6 +331,13 @@ export function quickSheetFromCompendiumCreature(
   creature: CompendiumCreature,
   entry?: InitiativeEntry,
 ): CombatQuickSheetData {
+  const conditions = entry?.conditions ?? []
+  const enrich = (features: CreatureFeature[]): QuickSheetFeature[] =>
+    features.map((feature) => ({
+      ...feature,
+      effectiveAttackBonus: getCreatureFeatureEffectiveAttackBonus(creature, feature, conditions, entry),
+      effectiveDamageBonus: getCreatureFeatureEffectiveDamageBonus(creature, feature, conditions, entry),
+    }))
   return {
     id: creature.id,
     name: creature.name,
@@ -304,7 +347,7 @@ export function quickSheetFromCompendiumCreature(
     side: entry?.side ?? creature.defaultSide,
     sheetImageUrl: creature.sheetImageUrl,
     initiativeBonus: creature.initiativeBonus,
-    armorClass: entry?.armorClass ?? creature.armorClass,
+    armorClass: getCreatureEffectiveArmorClass(creature, conditions, entry),
     currentHp: entry?.currentHp ?? creature.maxHp,
     maxHp: entry?.maxHp ?? creature.maxHp,
     temporaryHp: entry?.temporaryHp,
@@ -318,15 +361,16 @@ export function quickSheetFromCompendiumCreature(
     resistances: creature.resistances,
     immunities: creature.immunities,
     conditionImmunities: creature.conditionImmunities,
+    damageAffinities: creature.damageAffinities,
     senses: creature.senses,
     languages: creature.languages,
     conditions: entry?.conditions.map((condition) => condition.name),
     sections: [
-      { title: "Traços e habilidades", entries: creature.traits },
-      { title: "Ações", entries: creature.actions },
-      { title: "Ações bônus", entries: creature.bonusActions },
-      { title: "Reações", entries: creature.reactions },
-      { title: "Ações lendárias", entries: creature.legendaryActions },
+      { title: "Traços e habilidades", entries: enrich(creature.traits) },
+      { title: "Ações", entries: enrich(creature.actions) },
+      { title: "Ações bônus", entries: enrich(creature.bonusActions) },
+      { title: "Reações", entries: enrich(creature.reactions) },
+      { title: "Ações lendárias", entries: enrich(creature.legendaryActions) },
       { title: "Notas de combate", content: creature.combatNotes },
     ],
   }
@@ -390,6 +434,7 @@ export function quickSheetFromCharacter(
     passivePerception: character.getEffectivePassivePerception(),
     abilityScores: attributes,
     savingThrows,
+    damageAffinities: sheet.damageAffinities ?? [],
     conditions: entry?.conditions.map((condition) => condition.name),
     sections: [
       { title: "Traços e passivas", content: formatAbilities(passiveAbilities) },
