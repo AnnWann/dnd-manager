@@ -1,16 +1,13 @@
 import { Download, Upload } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 
-import {
-  getCampaignSessionCharacters,
-  type CampaignSessionCharacters,
-} from "../../api/campaign-session"
 import { Button } from "../../components/ui/Button"
 import { useCharacterContext } from "../../contexts/characterContext"
 import { useMagicContext } from "../../contexts/magicContext"
 import { CharacterSelectorList } from "../../features/characters/selector/CharacterSelectorList"
 import { toSessionCharacterSelectorItem } from "../../features/characters/selector/sessionCharacterSelectorAdapter"
+import { useOptionalSessionRuntime } from "../../features/session-runtime/useSessionRuntime"
 import { sessionCharacterPath } from "../../lib/campaignRoutes"
 import {
   CharacterTemplate,
@@ -29,6 +26,7 @@ export function CampaignCharactersView() {
   const { campaignId } = useParams<{ campaignId?: string }>()
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const runtime = useOptionalSessionRuntime()
   const {
     visibleCharacters,
     activeCharacter,
@@ -36,49 +34,20 @@ export function CampaignCharactersView() {
     updateCharacter,
   } = useCharacterContext()
   const { savedSpells, spellByIndex, saveSpell } = useMagicContext()
-  const [data, setData] = useState<CampaignSessionCharacters | null>(null)
-  const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
 
-  useEffect(() => {
-    if (!campaignId) return
-    let cancelled = false
-
-    async function loadCharacters() {
-      setLoading(true)
-      setErrorMessage("")
-
-      try {
-        const nextData = await getCampaignSessionCharacters(campaignId!)
-        if (!cancelled) setData(nextData)
-      } catch {
-        if (!cancelled) {
-          setData(null)
-          setErrorMessage("Não foi possível carregar os personagens da sessão.")
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    void loadCharacters()
-    return () => {
-      cancelled = true
-    }
-  }, [campaignId])
-
-  const sessionCharacters = useMemo(() => {
-    if (!data) return []
-
-    const linkedSourceIds = new Set(
-      data.characters.map((character) => character.id),
-    )
-
-    return visibleCharacters.filter((character) =>
-      linkedSourceIds.has(character.get("id")),
-    )
-  }, [data, visibleCharacters])
+  // The relational /campaigns/:id/characters endpoint is bootstrap-only.
+  // Once this route is active, the visible character collection comes from the
+  // Durable Object snapshots projected by CharacterProvider.
+  const sessionCharacters = useMemo(
+    () => visibleCharacters.filter((character) => {
+      if (!runtime) return true
+      const lifecycle = runtime.sessionCharactersById[character.get("id")]
+      return lifecycle?.active !== false
+    }),
+    [runtime, visibleCharacters],
+  )
 
   const selectorCharacters = useMemo(
     () => sessionCharacters.map(toSessionCharacterSelectorItem),
@@ -90,6 +59,17 @@ export function CampaignCharactersView() {
     if (!activeId) return undefined
     return sessionCharacters.find((character) => character.get("id") === activeId)
   }, [activeCharacter, sessionCharacters])
+
+  const loading = Boolean(
+    runtime &&
+      (runtime.status === "connecting" ||
+        runtime.status === "reconnecting" ||
+        runtime.status === "disconnected" ||
+        (runtime.status === "connected" && runtime.runtimeConfigSnapshot === null)),
+  )
+  const runtimeError = runtime?.status === "error"
+    ? "Não foi possível conectar ao estado autoritativo da sessão."
+    : ""
 
   function exportSelectedCharacter() {
     if (!selectedCharacter || working) return
@@ -182,8 +162,8 @@ export function CampaignCharactersView() {
         characters={selectorCharacters}
         selectedCharacterId={activeCharacter?.get("id") ?? ""}
         loading={loading}
-        errorMessage={errorMessage}
-        emptyMessage="Nenhum personagem disponível."
+        errorMessage={errorMessage || runtimeError}
+        emptyMessage="Nenhum personagem disponível no estado da sessão."
         onSelectCharacter={setSelectedCharacterId}
         onOpenCharacter={(characterId) =>
           navigate(sessionCharacterPath(campaignId, characterId, "sheet"))
