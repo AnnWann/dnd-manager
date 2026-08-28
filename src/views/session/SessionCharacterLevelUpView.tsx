@@ -1,9 +1,10 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 
 import { CharacterProgressionFlow } from "../../features/characters/progression/CharacterProgressionFlow"
 import { SessionCharacterWorkspace } from "../../features/characters/workspace/CampaignCharacterWorkspace"
 import { useCharacterWorkspace } from "../../features/characters/workspace/CharacterWorkspaceContext"
+import { useOptionalSessionRuntime } from "../../features/session-runtime/useSessionRuntime"
 import { sessionCharacterPath } from "../../lib/campaignRoutes"
 import { prepareCharacterForProgression } from "../../models/leveling/prepareCharacterForProgression"
 
@@ -32,7 +33,9 @@ function LevelUpContent({
   characterId: string
 }) {
   const navigate = useNavigate()
-  const { characters, setSelectedCharacterId, updateCharacter } = useCharacterWorkspace()
+  const sessionRuntime = useOptionalSessionRuntime()
+  const [error, setError] = useState("")
+  const { characters, setSelectedCharacterId } = useCharacterWorkspace()
   const character = characters.find((entry) => entry.get("id") === characterId)
 
   useEffect(() => {
@@ -51,14 +54,45 @@ function LevelUpContent({
   const preparedCharacter = prepareCharacterForProgression(character)
 
   return (
-    <CharacterProgressionFlow
-      mode="level-up"
-      character={preparedCharacter}
-      onCancel={() => navigate(returnPath)}
-      onComplete={(updated) => {
-        updateCharacter(characterId, () => updated)
-        navigate(returnPath, { replace: true })
-      }}
-    />
+    <div className="grid gap-4">
+      {error ? (
+        <div className="rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger">
+          {error}
+        </div>
+      ) : null}
+
+      <CharacterProgressionFlow
+        mode="level-up"
+        character={preparedCharacter}
+        onCancel={() => navigate(returnPath)}
+        onComplete={(updated) => {
+          setError("")
+
+          if (
+            !sessionRuntime ||
+            sessionRuntime.role !== "MASTER" ||
+            sessionRuntime.status !== "connected"
+          ) {
+            setError(
+              "A subida de nível dentro da sessão precisa ser aplicada pelo mestre com o Session Server conectado.",
+            )
+            return
+          }
+
+          const sent = sessionRuntime.dispatchCharacterLifecycleOperation({
+            type: "character.session.resync",
+            characterId,
+            character: updated.toJSON(),
+          })
+
+          if (!sent) {
+            setError("Não foi possível enviar a subida de nível para a sessão.")
+            return
+          }
+
+          navigate(returnPath, { replace: true })
+        }}
+      />
+    </div>
   )
 }
