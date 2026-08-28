@@ -3,7 +3,7 @@ import type {
   CustomSystemDefinition,
 } from "../../models/customSystems/CustomSystemDefinition"
 import type { CreationCharacterCustomSystemConfiguration } from "../../shared/creation/creation.types"
-import { createCharacterCustomSystemState } from "./CustomSystemState"
+import { createCharacterCustomSystemState } from "./CustomSystemState.js"
 
 export const CUSTOM_SYSTEM_SUPPRESSED_FIELD = "__customSystemSuppressed"
 
