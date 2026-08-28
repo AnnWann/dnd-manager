@@ -142,7 +142,7 @@ export async function getSessionHomebrew(
     const cached = homebrewCache.get(campaignId)
     if (cached) return structuredClone(cached)
     const pending = homebrewRequests.get(campaignId)
-    if (pending) return pending.then(structuredClone)
+    if (pending) return pending.then((catalog) => structuredClone(catalog))
   }
 
   const request = apiClient
