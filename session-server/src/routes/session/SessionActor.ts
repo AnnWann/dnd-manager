@@ -438,6 +438,10 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
 
+    const restDefinitions = runtimeConfig
+      ? runtimeDefinitionsForCharacter(current, runtimeConfig, operation.characterId)
+      : [];
+
     let next: CharacterTemplate;
     let nextInventory = inventory;
     let canonicalOperation: SessionLogRecord["operation"] = operation;
@@ -457,7 +461,7 @@ export class SessionActor extends DurableObject<Env> {
           return;
         }
       }
-      next = takeShortRest(current, operation.healing, operation.hitDiceConsumption as any);
+      next = takeShortRest(current, operation.healing, operation.hitDiceConsumption as any, restDefinitions);
       reverseOperation = {
         type: "session.rest.restore",
         characterId: operation.characterId,
@@ -480,7 +484,7 @@ export class SessionActor extends DurableObject<Env> {
       }
       const required = getRequiredSupplyForRace(current.get("sheet").race);
       const recovery = consumption.selectedPortions + 0.000001 < required ? "partial" : "full";
-      next = recovery === "partial" ? takePartialLongRest(current) : takeLongRest(current);
+      next = recovery === "partial" ? takePartialLongRest(current, restDefinitions) : takeLongRest(current, restDefinitions);
       nextInventory = {
         ...inventory,
         initialized: true,
@@ -503,10 +507,9 @@ export class SessionActor extends DurableObject<Env> {
 
     if (runtimeConfig) {
       try {
-        const definitions = runtimeDefinitionsForCharacter(next, runtimeConfig, operation.characterId);
         next = runCustomSystemAutomations(
           next,
-          definitions,
+          restDefinitions,
           operation.type === "character.rest.short" ? "shortRestCompleted" : "longRestCompleted",
         ).character;
       } catch (error) {

@@ -5,6 +5,7 @@ import type { CharacterEquipment } from "../items/equipment/Equipment"
 import type { Equipment } from "../items/equipment/EquipmentSlot"
 import type { Itemmable } from "../items/item"
 import type { HP } from "../sheet/HP"
+import type { CustomSystemDefinition } from "../customSystems/CustomSystemDefinition"
 import { applyCustomSystemRestRecovery } from "../../lib/customSystems"
 import { recoverChannelDivinity } from "./characterChannelDivinity"
 import { recoverKi } from "./characterKi"
@@ -24,6 +25,7 @@ export function takeShortRest(
   character: CharacterTemplate,
   healing: number,
   hitDiceConsumption: HitDiceConsumption,
+  customSystemDefinitions?: CustomSystemDefinition[],
 ): CharacterTemplate {
   let nextCharacter = resetRestResources(character, "short", 1)
 
@@ -35,23 +37,25 @@ export function takeShortRest(
     }
   }
 
-  nextCharacter = applyCustomSystemRestRecovery(nextCharacter, "short", 1)
+  nextCharacter = applyCustomSystemRestRecovery(nextCharacter, "short", 1, customSystemDefinitions)
   return nextCharacter.heal(Math.max(0, Math.trunc(healing)))
 }
 
 export function takeLongRest(
   character: CharacterTemplate,
+  customSystemDefinitions?: CustomSystemDefinition[],
 ): CharacterTemplate {
   const rested = resetRestResources(
     recoverLongRestHp(character, 1),
     "long",
     1,
   )
-  return applyCustomSystemRestRecovery(rested, "long", 1)
+  return applyCustomSystemRestRecovery(rested, "long", 1, customSystemDefinitions)
 }
 
 export function takePartialLongRest(
   character: CharacterTemplate,
+  customSystemDefinitions?: CustomSystemDefinition[],
 ): CharacterTemplate {
   const currentExhaustion = character.get("sheet").stats.exhaustion ?? 0
 
@@ -64,7 +68,7 @@ export function takePartialLongRest(
     Math.min(6, currentExhaustion + 1),
   )
 
-  return applyCustomSystemRestRecovery(rested, "long", 0.5)
+  return applyCustomSystemRestRecovery(rested, "long", 0.5, customSystemDefinitions)
 }
 
 function recoverLongRestHp(

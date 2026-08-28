@@ -4,7 +4,7 @@ import {
 } from '../../models/characters/CharacterTemplate'
 import type { CustomNumericOperation, CustomSystemEventType } from '../../models/customSystems/CustomAutomationDefinition'
 import type { CustomResourceDefinition, CustomResourceRecoveryRule } from '../../models/customSystems/CustomResourceDefinition'
-import type { CharacterCustomSystemState } from '../../models/customSystems/CustomSystemDefinition'
+import type { CharacterCustomSystemState, CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
 import { evaluateCustomFormula } from './CustomFormulaEngineWithCharacter'
 
 let installed = false
@@ -97,6 +97,7 @@ export function applyCustomSystemRestRecovery(
   character: CharacterTemplate,
   restKind: 'short' | 'long',
   recoveryFraction = 1,
+  definitions?: CustomSystemDefinition[],
 ): CharacterTemplate {
   const systems = character.get('sheet').customSystems ?? []
   if (!systems.length) return character
@@ -106,7 +107,8 @@ export function applyCustomSystemRestRecovery(
     : 'longRestCompleted'
 
   const recovered = systems.map((state) => {
-    const definition = resolveDefinition?.(state.systemId)
+    const definition = definitions?.find((entry) => entry.id === state.systemId)
+      ?? resolveDefinition?.(state.systemId)
     if (!definition || state.enabled === false) return state
 
     let next: CharacterCustomSystemState = {
