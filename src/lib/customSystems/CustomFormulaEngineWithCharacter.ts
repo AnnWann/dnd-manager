@@ -192,7 +192,13 @@ function transformFormulaContext(
     return {
       id: fieldId,
       name: path,
-      type: valueType === 'number' ? 'number' : valueType === 'boolean' ? 'boolean' : 'text',
+      type: valueType === 'number'
+        ? 'number'
+        : valueType === 'boolean'
+          ? 'boolean'
+          : valueType === 'dice'
+            ? 'dice'
+            : 'text',
       editPermission: 'automaticOnly',
     }
   })
@@ -263,7 +269,15 @@ function createMockState(
         .filter((field) => field.type !== 'formula')
         .map((field) => [
           field.id,
-          field.type === 'boolean' ? false : field.type === 'number' ? 0 : '',
+          field.defaultValue ?? (
+            field.type === 'boolean'
+              ? false
+              : field.type === 'number'
+                ? 0
+                : field.type === 'dice'
+                  ? field.allowedDice?.[0] ?? 'd6'
+                  : ''
+          ),
         ]),
     ),
     resources: Object.fromEntries(
@@ -284,22 +298,23 @@ function isFormulaCompatibleAbilityField(field: CustomFieldDefinition): boolean 
   return field.type !== 'multiSelect' && field.type !== 'reference'
 }
 
-function formulaValueType(field: CustomFieldDefinition): 'number' | 'text' | 'boolean' {
+function formulaValueType(field: CustomFieldDefinition): 'number' | 'text' | 'boolean' | 'dice' {
   if (field.type === 'formula') return field.resultType
   if (field.type === 'number') return 'number'
   if (field.type === 'boolean') return 'boolean'
+  if (field.type === 'dice') return 'dice'
   return 'text'
 }
 
 function normalizeAbilityFormulaValue(
   value: JsonValue | undefined,
-  valueType: 'number' | 'text' | 'boolean',
+  valueType: 'number' | 'text' | 'boolean' | 'dice',
 ): number | string | boolean {
   if (valueType === 'number') return typeof value === 'number' && Number.isFinite(value) ? value : 0
   if (valueType === 'boolean') return typeof value === 'boolean' ? value : false
   if (typeof value === 'string') return value
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-  return ''
+  return valueType === 'dice' ? 'd6' : ''
 }
 
 function replaceIdentifier(
