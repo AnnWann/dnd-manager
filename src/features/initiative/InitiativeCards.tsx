@@ -59,6 +59,16 @@ export function InitiativeCards({
                   entry.defeated ? "opacity-55" : "",
                 ].join(" ")}
               >
+                {!readOnly && props.onSelectEntry ? (
+                  <label className="mb-3 flex items-center gap-2 text-xs text-textMuted">
+                    <input
+                      type="checkbox"
+                      checked={props.selectedEntryIds?.has(entry.id) ?? false}
+                      onChange={(event) => props.onSelectEntry?.(entry.id, event.target.checked)}
+                    />
+                    Selecionar alvo
+                  </label>
+                ) : null}
                 <div className="flex items-start justify-between gap-3">
                   <EntryIdentity
                     entry={entry}

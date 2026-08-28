@@ -19,6 +19,8 @@ export type SessionInitiativeOperation =
   | { type: "initiative.viewMode.set"; characterId: "session"; viewMode: "table" | "cards" }
   | { type: "initiative.settings.update"; characterId: "session"; patch: { deathSaveVisibility?: "masterOnly" | "owner" | "everyone"; deathSaveOwnerCanEdit?: boolean } }
   | { type: "initiative.deathSaves.set"; characterId: "session"; entryId: string; successes: number; failures: number }
+  | { type: "initiative.conditions.bulk"; characterId: "session"; entryIds: string[]; mode: "add" | "remove"; condition?: Record<string, unknown>; conditionName?: string }
+  | { type: "initiative.customAction.execute"; characterId: "session"; systemId: string; actionId: string; entryIds: string[] }
   | { type: "initiative.reset"; characterId: "session" }
 
 export type SessionInitiativeClientMessage =

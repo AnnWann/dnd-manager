@@ -9,6 +9,8 @@ export type InitiativeRosterProps = {
   patchEntry: (entryId: string, patch: Partial<InitiativeEntry>) => void
   onOpen: (entryId: string) => void
   onRename?: (entryId: string) => void
+  selectedEntryIds?: ReadonlySet<string>
+  onSelectEntry?: (entryId: string, selected: boolean) => void
   onCondition: (entryId: string) => void
   onRemove: (entryId: string) => void
   onTrade: (entryId: string, direction: -1 | 1) => void

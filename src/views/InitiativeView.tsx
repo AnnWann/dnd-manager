@@ -34,6 +34,7 @@ import {
   type InitiativeConditionInput,
 } from "../features/initiative/InitiativeDialogs"
 import { InitiativeTable } from "../features/initiative/InitiativeTable"
+import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
 import { useInitiativeSession } from "../hooks/useInitiativeSession"
 import type { CompendiumCreature } from "../models/creatures/CompendiumCreature"
 import { getEffectiveArmorClassWithShield } from "../models/items/equipment/Shield"
@@ -64,6 +65,7 @@ export function InitiativeView() {
   const { visibleCharacters } = useCharacterContext()
   const { creatures } = useCreatureCompendium()
   const { userRole } = useSyncContext()
+  const runtime = useOptionalSessionRuntime()
   const { session, updateSession, resetSession, hydrated } =
     useInitiativeSession()
 
@@ -76,6 +78,10 @@ export function InitiativeView() {
     useState(false)
   const [customOpen, setCustomOpen] = useState(false)
   const [conditionTargetId, setConditionTargetId] = useState<string>()
+  const [selectedEntryIds, setSelectedEntryIds] = useState<Set<string>>(() => new Set())
+  const [bulkConditionOpen, setBulkConditionOpen] = useState(false)
+  const [bulkRemoveOpen, setBulkRemoveOpen] = useState(false)
+  const [bulkRemoveConditionName, setBulkRemoveConditionName] = useState("")
   const [renameTargetId, setRenameTargetId] = useState<string>()
   const [renameValue, setRenameValue] = useState("")
   const [quickSheetEntryId, setQuickSheetEntryId] = useState<string>()
@@ -87,6 +93,20 @@ export function InitiativeView() {
   const selectedCreature = creatures.find(
     (creature) => creature.id === selectedCreatureId,
   )
+  const initiativeSystemActions = useMemo(() => {
+    const snapshot = runtime?.runtimeConfigSnapshot
+    if (!snapshot) return []
+    const enabledSystems = new Set(
+      snapshot.config.characters.flatMap((character) =>
+        character.customSystems.filter((installation) => installation.enabled).map((installation) => installation.systemId),
+      ),
+    )
+    return snapshot.config.customSystems.flatMap((system) =>
+      enabledSystems.has(system.id)
+        ? (system.actions ?? []).flatMap((action) => action.enabled !== false && action.initiative?.enabled ? [{ system, action }] : [])
+        : [],
+    )
+  }, [runtime?.runtimeConfigSnapshot])
   const activeEntry = session.entries.find(
     (entry) => entry.id === session.activeEntryId,
   )
@@ -130,6 +150,14 @@ export function InitiativeView() {
       defaultSideForCharacter(selectedCharacter.get("sheet").type),
     )
   }, [selectedCharacter])
+
+  useEffect(() => {
+    const ids = new Set(session.entries.map((entry) => entry.id))
+    setSelectedEntryIds((current) => {
+      const next = new Set(Array.from(current).filter((entryId) => ids.has(entryId)))
+      return next.size === current.size ? current : next
+    })
+  }, [session.entries])
 
   function patchEntry(entryId: string, patch: Partial<InitiativeEntry>) {
     updateSession((current) =>
@@ -274,6 +302,72 @@ export function InitiativeView() {
     setConditionTargetId(undefined)
   }
 
+  function toggleSelectedEntry(entryId: string, selected: boolean) {
+    setSelectedEntryIds((current) => {
+      const next = new Set(current)
+      if (selected) next.add(entryId)
+      else next.delete(entryId)
+      return next
+    })
+  }
+
+  function applyBulkCondition(condition: InitiativeConditionInput) {
+    const entryIds = Array.from(selectedEntryIds)
+    if (!entryIds.length) return
+    if (runtime?.initiativeState?.initialized) {
+      runtime.dispatchInitiativeOperation({
+        type: "initiative.conditions.bulk",
+        characterId: "session",
+        entryIds,
+        mode: "add",
+        condition: condition as unknown as Record<string, unknown>,
+      })
+    } else {
+      updateSession((current) => entryIds.reduce(
+        (next, entryId) => applyInitiativeCondition(next, entryId, condition),
+        current,
+      ))
+    }
+    setBulkConditionOpen(false)
+  }
+
+  function removeBulkCondition() {
+    const entryIds = Array.from(selectedEntryIds)
+    const conditionName = bulkRemoveConditionName.trim()
+    if (!entryIds.length || !conditionName) return
+    if (runtime?.initiativeState?.initialized) {
+      runtime.dispatchInitiativeOperation({
+        type: "initiative.conditions.bulk",
+        characterId: "session",
+        entryIds,
+        mode: "remove",
+        conditionName,
+      })
+    } else {
+      const normalized = normalizeLabel(conditionName)
+      updateSession((current) => entryIds.reduce((next, entryId) => {
+        const entry = next.entries.find((candidate) => candidate.id === entryId)
+        if (!entry) return next
+        return entry.conditions
+          .filter((condition) => normalizeLabel(condition.name) === normalized)
+          .reduce((updated, condition) => removeInitiativeCondition(updated, entryId, condition.id), next)
+      }, current))
+    }
+    setBulkRemoveOpen(false)
+  }
+
+  function executeInitiativeSystemAction(systemId: string, actionId: string) {
+    const entryIds = Array.from(selectedEntryIds)
+    if (!runtime?.initiativeState?.initialized || !entryIds.length) return
+    runtime.dispatchInitiativeOperation({
+      type: "initiative.customAction.execute",
+      characterId: "session",
+      systemId,
+      actionId,
+      entryIds,
+    })
+  }
+
   async function clearCombat() {
     if (!window.confirm("Apagar todo o combate atual?")) return
     await resetSession()
@@ -300,6 +394,8 @@ export function InitiativeView() {
     patchEntry,
     onOpen: setQuickSheetEntryId,
     onRename: openRename,
+    selectedEntryIds,
+    onSelectEntry: toggleSelectedEntry,
     onCondition: setConditionTargetId,
     onRemove: (entryId: string) =>
       updateSession((current) => removeInitiativeEntry(current, entryId)),
@@ -477,6 +573,53 @@ export function InitiativeView() {
         )}
       </section>
 
+      <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-textH">Ações em massa</div>
+            <div className="mt-1 text-xs text-textMuted">{selectedEntryIds.size} alvo{selectedEntryIds.size === 1 ? "" : "s"} selecionado{selectedEntryIds.size === 1 ? "" : "s"}.</div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => setSelectedEntryIds(new Set(session.entries.map((entry) => entry.id)))} disabled={!session.entries.length}>Selecionar todos</Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelectedEntryIds(new Set())} disabled={!selectedEntryIds.size}>Limpar seleção</Button>
+            <Button size="sm" onClick={() => setBulkConditionOpen(true)} disabled={!selectedEntryIds.size}>Aplicar condição</Button>
+            <Button size="sm" onClick={() => {
+              const first = session.entries.find((entry) => selectedEntryIds.has(entry.id))?.conditions[0]?.name ?? ""
+              setBulkRemoveConditionName(first)
+              setBulkRemoveOpen(true)
+            }} disabled={!selectedEntryIds.size}>Remover condição</Button>
+          </div>
+        </div>
+        {initiativeSystemActions.length ? (
+          <div className="mt-3 border-t border-border pt-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-textMuted">Automações de sistemas customizados</div>
+            <div className="flex flex-wrap gap-2">
+              {initiativeSystemActions.map(({ system, action }) => {
+                const targets = session.entries.filter((entry) => selectedEntryIds.has(entry.id))
+                const targetSide = action.initiative?.targetSide ?? "any"
+                const minimum = Math.max(1, action.initiative?.minimumTargets ?? 1)
+                const maximum = Math.max(minimum, action.initiative?.maximumTargets ?? 50)
+                const valid = targets.length >= minimum
+                  && targets.length <= maximum
+                  && (targetSide === "any" || targets.every((entry) => entry.side === targetSide))
+                return (
+                  <Button
+                    key={`${system.id}:${action.id}`}
+                    size="sm"
+                    variant="secondary"
+                    disabled={!valid}
+                    title={action.description ?? system.name}
+                    onClick={() => executeInitiativeSystemAction(system.id, action.id)}
+                  >
+                    {action.initiative?.label?.trim() || action.name}
+                  </Button>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+      </section>
+
       <section className="grid gap-3 rounded-xl border border-border bg-bg p-4 shadow-theme-sm md:grid-cols-[minmax(0,1fr)_auto]">
         <div>
           <div className="text-sm font-semibold text-textH">Saves de morte na iniciativa</div>
@@ -556,6 +699,37 @@ export function InitiativeView() {
           <InitiativeCards {...rosterProps} cardRefs={cardRefs} />
         )}
       </section>
+
+      {bulkConditionOpen && selectedEntryIds.size ? (
+        <ConditionDialog
+          targetName={`${selectedEntryIds.size} participantes`}
+          targetEntryId={Array.from(selectedEntryIds)[0]}
+          entries={session.entries}
+          activeEntryId={session.activeEntryId}
+          onClose={() => setBulkConditionOpen(false)}
+          onApply={applyBulkCondition}
+        />
+      ) : null}
+
+      {bulkRemoveOpen ? (
+        <Modal title="Remover condição em massa" onClose={() => setBulkRemoveOpen(false)} className="max-w-md">
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-xs text-textMuted">
+              Condição
+              <select className={selectClassName} value={bulkRemoveConditionName} onChange={(event) => setBulkRemoveConditionName(event.target.value)}>
+                <option value="">Selecione</option>
+                {Array.from(new Set(session.entries.filter((entry) => selectedEntryIds.has(entry.id)).flatMap((entry) => entry.conditions.map((condition) => condition.name)))).map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </label>
+            <div className="flex justify-end gap-2 border-t border-border pt-3">
+              <Button variant="ghost" onClick={() => setBulkRemoveOpen(false)}>Cancelar</Button>
+              <Button variant="danger" disabled={!bulkRemoveConditionName.trim()} onClick={removeBulkCondition}>Remover dos selecionados</Button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
 
       {renameTarget ? (
         <Modal title="Nome no combate" onClose={() => setRenameTargetId(undefined)} className="max-w-md">
@@ -770,6 +944,10 @@ function defaultSideForCharacter(type: string): InitiativeSide {
   if (type === "pc") return "ally"
   if (type === "npc") return "neutral"
   return "enemy"
+}
+
+function normalizeLabel(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR")
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

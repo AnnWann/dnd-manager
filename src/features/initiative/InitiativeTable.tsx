@@ -48,6 +48,8 @@ function TableEntryRows({
   patchEntry,
   onOpen,
   onRename,
+  selectedEntryIds,
+  onSelectEntry,
   onCondition,
   onRemove,
   onTrade,
@@ -77,6 +79,15 @@ function TableEntryRows({
         ].join(" ")}
       >
         <td className="px-3 py-3">
+          <div className="flex items-center gap-2">
+            {onSelectEntry ? (
+              <input
+                type="checkbox"
+                checked={selectedEntryIds?.has(entry.id) ?? false}
+                onChange={(event) => onSelectEntry(entry.id, event.target.checked)}
+                aria-label={`Selecionar ${entry.name}`}
+              />
+            ) : null}
           {active ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-1 text-xs font-semibold text-white">
               <Play className="h-3 w-3" /> Atual
@@ -84,6 +95,7 @@ function TableEntryRows({
           ) : (
             <span className="text-textMuted">{entry.order + 1}</span>
           )}
+          </div>
         </td>
         <td className="px-3 py-3">
           <InitiativeEditor

@@ -1,6 +1,6 @@
 import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../characters/sheet/characterState";
 import type { SessionAbilityState } from "../characters/abilities/abilityProtocol";
-import type { SessionConnection, SessionHpState } from "../session/protocol";
+import type { SessionConditionsState, SessionConnection, SessionHpState } from "../session/protocol";
 import {
   characterScope,
   commitSessionMutation,
@@ -20,10 +20,12 @@ import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/sessio
 import {
   addInitiativeEntries,
   advanceInitiativeTurn,
+  applyInitiativeCondition,
   canTradeConsecutiveAllies,
   createInitiativeSession,
   endInitiativeCombat,
   normalizeInitiativeSession,
+  removeInitiativeCondition,
   removeInitiativeEntry,
   rewindInitiativeTurn,
   sortInitiativeEntries,
@@ -39,11 +41,17 @@ import {
   type SessionInitiativeOperation,
   type SessionInitiativeState,
 } from "./initiativeProtocol";
+import {
+  linkedCharacterIdForInitiativeEntry,
+  projectInitiativeSessionFromCharacterState,
+  synchronizeInitiativeEditsToCharacterState,
+} from "./initiativeCharacterProjection";
 
 export const INITIATIVE_STATE_KEY = "initiative-state";
 export const INITIATIVE_SHARED_SCOPE = "initiative:shared";
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
+const CONDITIONS_STATE_KEY = "conditions-state";
 
 type InitiativeAutomationEvent = {
   event: CustomSystemEventType;
@@ -102,10 +110,11 @@ export class SessionActor {
     connection: SessionConnection,
     operation: SessionInitiativeOperation,
   ): Promise<void> {
-    const [state, abilities, hp, runtimeConfig, log] = await Promise.all([
+    const [state, abilities, hp, conditions, runtimeConfig, log] = await Promise.all([
       readInitiativeState(this.ctx.storage),
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
       this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY).then((value) => value ?? {}),
+      this.ctx.storage.get<Record<string, SessionConditionsState>>(CONDITIONS_STATE_KEY).then((value) => value ?? {}),
       readRuntimeConfig(this.ctx.storage),
       readSessionLog(this.ctx.storage),
     ]);
@@ -117,7 +126,7 @@ export class SessionActor {
     const current = normalizeInitiativeSession(state.session as Partial<InitiativeSession>);
     if (connection.role !== "MASTER" && operation.type === "initiative.deathSaves.set") {
       const entry = current.entries.find((candidate) => candidate.id === operation.entryId);
-      const linkedCharacterId = linkedCharacterIdForEntry(entry);
+      const linkedCharacterId = linkedCharacterIdForInitiativeEntry(entry);
       const linkedHp = linkedCharacterId ? hp[linkedCharacterId] : undefined;
       if (
         !entry ||
@@ -132,21 +141,32 @@ export class SessionActor {
     }
 
     const before = structuredClone(state);
-    const result = applyInitiativeOperation(current, operation);
+    const result = applyInitiativeOperation(current, operation, runtimeConfig);
     if (!result.ok) {
       sendError(webSocket, result.code, result.message);
       return;
     }
 
+    const sourceSync = synchronizeInitiativeEditsToCharacterState(
+      current,
+      result.session,
+      { abilities, hp, conditions },
+    );
+    if (!sourceSync.ok) {
+      sendError(webSocket, sourceSync.code, sourceSync.message);
+      return;
+    }
+    let nextSession = sourceSync.session;
+
     const previousAbilities: Record<string, SessionAbilityState> = {};
     const changedAbilityIds = new Set<string>();
 
     const deathSaveEntry = operation.type === "initiative.deathSaves.set"
-      ? result.session.entries.find((entry) => entry.id === operation.entryId)
+      ? nextSession.entries.find((entry) => entry.id === operation.entryId)
       : operation.type === "initiative.entry.update" && "deathSaves" in operation.patch
-        ? result.session.entries.find((entry) => entry.id === operation.entryId)
+        ? nextSession.entries.find((entry) => entry.id === operation.entryId)
         : undefined;
-    const deathSaveCharacterId = linkedCharacterIdForEntry(deathSaveEntry);
+    const deathSaveCharacterId = linkedCharacterIdForInitiativeEntry(deathSaveEntry);
     if (deathSaveEntry?.deathSaves && deathSaveCharacterId) {
       const storedAbility = abilities[deathSaveCharacterId];
       if (storedAbility?.initialized) {
@@ -169,7 +189,7 @@ export class SessionActor {
 
     if (runtimeConfig) {
       try {
-        const events = initiativeAutomationEvents(current, result.session, operation);
+        const events = initiativeAutomationEvents(current, nextSession, operation);
         for (const { event, characterIds } of events) {
           for (const characterId of characterIds) {
             const storedAbility = abilities[characterId];
@@ -205,11 +225,20 @@ export class SessionActor {
       }
     }
 
-    state.session = result.session as unknown as Record<string, unknown>;
+    nextSession = projectInitiativeSessionFromCharacterState(
+      nextSession,
+      { abilities, hp, conditions },
+    ).session;
+    state.session = nextSession as unknown as Record<string, unknown>;
     state.revision += 1;
+    const changedCharacterIds = new Set([
+      ...changedAbilityIds,
+      ...sourceSync.changedHpIds,
+      ...sourceSync.changedConditionIds,
+    ]);
     const affectedScopes = [
       INITIATIVE_SHARED_SCOPE,
-      ...Array.from(changedAbilityIds, characterScope),
+      ...Array.from(changedCharacterIds, characterScope),
     ];
     const record = createSessionLogRecord({
       actorId: connection.userId,
@@ -230,22 +259,38 @@ export class SessionActor {
               ),
             }
           : {}),
+        ...(sourceSync.changedHpIds.size ? { hp: sourceSync.previousHp } : {}),
+        ...(sourceSync.changedConditionIds.size ? { conditions: sourceSync.previousConditions } : {}),
       },
     });
 
     const writes: Record<string, unknown> = { [INITIATIVE_STATE_KEY]: state };
     if (changedAbilityIds.size) writes[ABILITIES_STATE_KEY] = abilities;
+    if (sourceSync.changedHpIds.size) writes[HP_STATE_KEY] = hp;
+    if (sourceSync.changedConditionIds.size) writes[CONDITIONS_STATE_KEY] = conditions;
     await commitSessionMutation(this.ctx.storage, this.ctx.getWebSockets(), {
       writes,
       record,
       currentLog: log,
       maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
-    broadcast(this.ctx.getWebSockets(), { type: "session.initiative.updated", state });
+    broadcastVisibilityFiltered(this.ctx.getWebSockets(), { type: "session.initiative.updated", state });
     for (const characterId of changedAbilityIds) {
       broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
         type: "session.abilities.updated",
         character: abilities[characterId],
+      });
+    }
+    for (const characterId of sourceSync.changedHpIds) {
+      broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
+        type: "session.hp.updated",
+        character: hp[characterId],
+      });
+    }
+    for (const characterId of sourceSync.changedConditionIds) {
+      broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
+        type: "session.conditions.updated",
+        character: conditions[characterId],
       });
     }
   }
@@ -387,6 +432,7 @@ function runtimeDefinitionsForCharacter(
 function applyInitiativeOperation(
   current: InitiativeSession,
   operation: SessionInitiativeOperation,
+  runtimeConfig: SessionRuntimeConfigSnapshot | null,
 ): { ok: true; session: InitiativeSession; operation: SessionInitiativeOperation } | { ok: false; code: string; message: string } {
   switch (operation.type) {
     case "initiative.entries.add": {
@@ -418,6 +464,87 @@ function applyInitiativeOperation(
     case "initiative.entry.remove": {
       if (!current.entries.some((entry) => entry.id === operation.entryId)) return invalid("INITIATIVE_ENTRY_NOT_FOUND", "Initiative entry was not found.");
       return { ok: true, session: removeInitiativeEntry(current, operation.entryId), operation };
+    }
+    case "initiative.conditions.bulk": {
+      const entryIds = Array.from(new Set(operation.entryIds));
+      if (!entryIds.length || entryIds.length > 50) return invalid("INITIATIVE_BULK_TARGETS_INVALID", "Select between 1 and 50 initiative targets.");
+      if (entryIds.some((entryId) => !current.entries.some((entry) => entry.id === entryId))) {
+        return invalid("INITIATIVE_ENTRY_NOT_FOUND", "One or more initiative targets were not found.");
+      }
+      let session = current;
+      if (operation.mode === "add") {
+        const condition = normalizeInitiativeConditionInput(operation.condition);
+        if (!condition) return invalid("INITIATIVE_CONDITION_INVALID", "The initiative condition is invalid.");
+        for (const entryId of entryIds) {
+          session = applyInitiativeCondition(session, entryId, {
+            ...condition,
+            id: crypto.randomUUID(),
+          });
+        }
+      } else {
+        const conditionName = operation.conditionName?.trim();
+        if (!conditionName) return invalid("INITIATIVE_CONDITION_INVALID", "Choose a condition to remove.");
+        const normalizedName = normalizeName(conditionName);
+        for (const entryId of entryIds) {
+          const entry = session.entries.find((candidate) => candidate.id === entryId);
+          if (!entry) continue;
+          for (const condition of entry.conditions.filter((candidate) => normalizeName(candidate.name) === normalizedName)) {
+            session = removeInitiativeCondition(session, entryId, condition.id);
+          }
+        }
+      }
+      if (JSON.stringify(session.entries) === JSON.stringify(current.entries)) {
+        return invalid("INITIATIVE_BULK_NO_CHANGE", "The bulk condition operation did not change any target.");
+      }
+      return { ok: true, session, operation: { ...operation, entryIds } };
+    }
+    case "initiative.customAction.execute": {
+      const system = runtimeConfig?.config.customSystems.find((definition) => definition.id === operation.systemId);
+      const action = system?.actions?.find((candidate) => candidate.id === operation.actionId);
+      if (!system || !action || action.enabled === false || !action.initiative?.enabled) {
+        return invalid("INITIATIVE_CUSTOM_ACTION_NOT_FOUND", "This initiative custom-system action is not available.");
+      }
+      const entryIds = Array.from(new Set(operation.entryIds));
+      const targets = entryIds.flatMap((entryId) => {
+        const entry = current.entries.find((candidate) => candidate.id === entryId);
+        return entry ? [entry] : [];
+      });
+      if (targets.length !== entryIds.length) return invalid("INITIATIVE_ENTRY_NOT_FOUND", "One or more initiative targets were not found.");
+      const minimum = Math.max(1, Math.trunc(action.initiative.minimumTargets ?? 1));
+      const maximum = Math.max(minimum, Math.min(50, Math.trunc(action.initiative.maximumTargets ?? 50)));
+      if (targets.length < minimum || targets.length > maximum) {
+        return invalid("INITIATIVE_CUSTOM_ACTION_TARGET_COUNT", `Select between ${minimum} and ${maximum} targets for this action.`);
+      }
+      const targetSide = action.initiative.targetSide ?? "any";
+      if (targetSide !== "any" && targets.some((target) => target.side !== targetSide)) {
+        return invalid("INITIATIVE_CUSTOM_ACTION_TARGET_SIDE", "One or more selected targets do not match the action target side.");
+      }
+      const changes = action.conditionChanges ?? [];
+      if (!changes.length) return invalid("INITIATIVE_CUSTOM_ACTION_NO_EFFECTS", "This action has no condition changes to apply in initiative.");
+      let session = current;
+      for (const target of targets) {
+        for (const change of changes) {
+          if (change.operation === "add") {
+            session = applyInitiativeCondition(session, target.id, {
+              id: crypto.randomUUID(),
+              name: change.name,
+              description: change.description,
+              duration: customConditionDuration(change.duration, target.id),
+            });
+          } else {
+            const latest = session.entries.find((candidate) => candidate.id === target.id);
+            if (!latest) continue;
+            const normalizedName = normalizeName(change.name);
+            for (const condition of latest.conditions.filter((candidate) => normalizeName(candidate.name) === normalizedName)) {
+              session = removeInitiativeCondition(session, target.id, condition.id);
+            }
+          }
+        }
+      }
+      if (JSON.stringify(session.entries) === JSON.stringify(current.entries)) {
+        return invalid("INITIATIVE_CUSTOM_ACTION_NO_CHANGE", "The custom action did not change any selected target.");
+      }
+      return { ok: true, session, operation: { ...operation, entryIds } };
     }
     case "initiative.sort": {
       if (current.started) return invalid("INITIATIVE_COMBAT_STARTED", "Initiative cannot be manually sorted after combat starts.");
@@ -616,6 +743,54 @@ function normalizeEntryPatch(value: Record<string, unknown>): Partial<Initiative
   return patch;
 }
 
+function normalizeInitiativeConditionInput(value: unknown): Omit<InitiativeEntry["conditions"][number], "id"> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const name = readString(record.name);
+  if (!name || name.length > 200) return null;
+  const description = optionalString(record.description);
+  const duration = normalizeInitiativeDuration(record.duration);
+  if (!duration) return null;
+  return { name, description, duration };
+}
+
+function normalizeInitiativeDuration(value: unknown): InitiativeEntry["conditions"][number]["duration"] | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { type: "manual" };
+  const record = value as Record<string, unknown>;
+  if (record.type === "manual") return { type: "manual" };
+  if (record.type === "turns" || record.type === "rounds") {
+    const remaining = finite(record.remaining);
+    return remaining !== null && remaining >= 0
+      ? { type: record.type, remaining: Math.trunc(remaining) }
+      : null;
+  }
+  if (record.type === "untilTurnStart" || record.type === "untilTurnEnd") {
+    const ownerEntryId = readString(record.ownerEntryId);
+    return ownerEntryId ? { type: record.type, ownerEntryId } : null;
+  }
+  return null;
+}
+
+function customConditionDuration(
+  duration: import("../../../../src/models/characters/CharacterCondition").CharacterConditionDuration & { amount?: number } | undefined,
+  targetEntryId: string,
+): InitiativeEntry["conditions"][number]["duration"] {
+  if (!duration) return { type: "manual" };
+  if (duration.type === "rounds" || duration.type === "turns") {
+    return {
+      type: duration.type,
+      remaining: Math.max(1, Math.trunc(duration.remaining ?? duration.total ?? duration.amount ?? 1)),
+    };
+  }
+  if (duration.type === "until-start-of-turn") return { type: "untilTurnStart", ownerEntryId: targetEntryId };
+  if (duration.type === "until-end-of-turn") return { type: "untilTurnEnd", ownerEntryId: targetEntryId };
+  return { type: "manual" };
+}
+
+function normalizeName(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+}
+
 function emptyInitiativeSession(): InitiativeSession {
   return {
     version: 1,
@@ -634,12 +809,6 @@ function emptyInitiativeSession(): InitiativeSession {
 function finite(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
-function linkedCharacterIdForEntry(entry: InitiativeEntry | undefined): string | undefined {
-  if (!entry?.sourceId?.trim()) return undefined;
-  if (entry.sourceId.startsWith("compendium:")) return undefined;
-  return entry.sourceId.trim();
-}
-
 function normalizeDeathSaves(value: unknown): NonNullable<InitiativeEntry["deathSaves"]> {
   const record = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>

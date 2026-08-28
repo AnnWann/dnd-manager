@@ -3,11 +3,13 @@ import { SessionActor as MissionSessionActor, MISSIONS_SHARED_SCOPE, MISSIONS_ST
 import { parseMissionClientMessage, type SessionMissionState } from "../missions/missionProtocol";
 import { SessionActor as InitiativeSessionActor, INITIATIVE_SHARED_SCOPE, INITIATIVE_STATE_KEY, readInitiativeState } from "../initiative/InitiativeSessionActor";
 import { parseInitiativeClientMessage, type SessionInitiativeState } from "../initiative/initiativeProtocol";
+import { normalizeInitiativeSession } from "../../../../src/models/initiative/Initiative";
+import { projectInitiativeSessionFromCharacterState } from "../initiative/initiativeCharacterProjection";
 import { SessionActor as CustomSystemSessionActor } from "../characters/custom-systems/CustomSystemSessionActor";
 import { parseCustomSystemClientMessage } from "../characters/custom-systems/customSystemProtocol";
 import type { SessionAbilityState } from "../characters/abilities/abilityProtocol";
 import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../characters/sheet/characterState";
-import type { SessionConnection } from "./protocol";
+import type { SessionConditionsState, SessionConnection, SessionHpState } from "./protocol";
 import { parseRuntimeConfigPublishMessage } from "./runtimeConfigProtocol";
 import {
   CharacterTemplate,
@@ -37,6 +39,8 @@ import {
 export { RUNTIME_CONFIG_STATE_KEY } from "./runtimeConfigAccess";
 
 const ABILITIES_STATE_KEY = "abilities-state";
+const HP_STATE_KEY = "hp-state";
+const CONDITIONS_STATE_KEY = "conditions-state";
 
 type SharedDomainActor = {
   webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void>;
@@ -55,6 +59,8 @@ type InitiativeReverse = {
   affectedScopes?: string[];
   snapshot: SessionInitiativeState;
   abilities?: Record<string, SessionAbilityState>;
+  hp?: Record<string, SessionHpState>;
+  conditions?: Record<string, SessionConditionsState>;
 };
 
 type SharedReverse = MissionReverse | InitiativeReverse;
@@ -128,6 +134,7 @@ export class SessionActor extends ComposedSessionActor {
 
     if (parseCustomSystemClientMessage(raw)) {
       await this.customSystemRoute.webSocketMessage(webSocket, message);
+      await this.reconcileInitiativeProjection();
       return;
     }
 
@@ -150,6 +157,27 @@ export class SessionActor extends ComposedSessionActor {
     }
 
     await super.webSocketMessage(webSocket, message);
+    await this.reconcileInitiativeProjection();
+  }
+
+  private async reconcileInitiativeProjection(): Promise<void> {
+    const [initiative, abilities, hp, conditions] = await Promise.all([
+      readInitiativeState(this.ctx.storage),
+      this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
+      this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY).then((value) => value ?? {}),
+      this.ctx.storage.get<Record<string, SessionConditionsState>>(CONDITIONS_STATE_KEY).then((value) => value ?? {}),
+    ]);
+    if (!initiative.initialized) return;
+    const current = normalizeInitiativeSession(initiative.session as Partial<import("../../../../src/models/initiative/Initiative").InitiativeSession>);
+    const projection = projectInitiativeSessionFromCharacterState(current, { abilities, hp, conditions });
+    if (!projection.changed) return;
+    initiative.session = projection.session as unknown as Record<string, unknown>;
+    initiative.revision += 1;
+    await this.ctx.storage.put(INITIATIVE_STATE_KEY, initiative);
+    broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
+      type: "session.initiative.updated",
+      state: initiative,
+    });
   }
 
   private async handleRuntimeConfigPublish(
@@ -309,35 +337,45 @@ export class SessionActor extends ComposedSessionActor {
     scopes: string[],
     reverse: InitiativeReverse,
   ): Promise<void> {
-    const [currentInitiative, abilities] = await Promise.all([
+    const [currentInitiative, abilities, hp, conditions] = await Promise.all([
       readInitiativeState(this.ctx.storage),
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
+      this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY).then((value) => value ?? {}),
+      this.ctx.storage.get<Record<string, SessionConditionsState>>(CONDITIONS_STATE_KEY).then((value) => value ?? {}),
     ]);
     const affectedScopes = scopes.length ? scopes : [INITIATIVE_SHARED_SCOPE];
     const now = new Date().toISOString();
     const restoredAbilityIds = Object.keys(reverse.abilities ?? {});
+    const restoredHpIds = Object.keys(reverse.hp ?? {});
+    const restoredConditionIds = Object.keys(reverse.conditions ?? {});
     const inverseAbilities = Object.fromEntries(
       restoredAbilityIds.flatMap((characterId) => {
         const current = abilities[characterId];
         return current ? [[characterId, structuredClone(current)]] : [];
       }),
     ) as Record<string, SessionAbilityState>;
+    const inverseHp = Object.fromEntries(restoredHpIds.flatMap((characterId) => hp[characterId] ? [[characterId, structuredClone(hp[characterId])]] : [])) as Record<string, SessionHpState>;
+    const inverseConditions = Object.fromEntries(restoredConditionIds.flatMap((characterId) => conditions[characterId] ? [[characterId, structuredClone(conditions[characterId])]] : [])) as Record<string, SessionConditionsState>;
     const inverseReverse: InitiativeReverse = {
       type: "session.initiative.restore",
       characterId: "session",
       affectedScopes,
       snapshot: structuredClone(currentInitiative),
       ...(restoredAbilityIds.length ? { abilities: inverseAbilities } : {}),
+      ...(restoredHpIds.length ? { hp: inverseHp } : {}),
+      ...(restoredConditionIds.length ? { conditions: inverseConditions } : {}),
     };
 
-    for (const [characterId, snapshot] of Object.entries(reverse.abilities ?? {})) {
-      abilities[characterId] = structuredClone(snapshot);
-    }
+    for (const [characterId, snapshot] of Object.entries(reverse.abilities ?? {})) abilities[characterId] = structuredClone(snapshot);
+    for (const [characterId, snapshot] of Object.entries(reverse.hp ?? {})) hp[characterId] = structuredClone(snapshot);
+    for (const [characterId, snapshot] of Object.entries(reverse.conditions ?? {})) conditions[characterId] = structuredClone(snapshot);
 
     const writes: Record<string, unknown> = {
       [INITIATIVE_STATE_KEY]: reverse.snapshot,
     };
     if (restoredAbilityIds.length) writes[ABILITIES_STATE_KEY] = abilities;
+    if (restoredHpIds.length) writes[HP_STATE_KEY] = hp;
+    if (restoredConditionIds.length) writes[CONDITIONS_STATE_KEY] = conditions;
 
     const undoRecord = createSessionLogRecord({
       actorId: connection.userId,
@@ -358,14 +396,21 @@ export class SessionActor extends ComposedSessionActor {
     });
 
     const sockets = this.ctx.getWebSockets();
-    broadcast(sockets, { type: "session.initiative.updated", state: reverse.snapshot });
+    broadcastVisibilityFiltered(sockets, { type: "session.initiative.updated", state: reverse.snapshot });
     for (const characterId of restoredAbilityIds) {
       const snapshot = abilities[characterId];
       if (!snapshot) continue;
-      broadcastVisibilityFiltered(sockets, {
-        type: "session.abilities.updated",
-        character: snapshot,
-      });
+      broadcastVisibilityFiltered(sockets, { type: "session.abilities.updated", character: snapshot });
+    }
+    for (const characterId of restoredHpIds) {
+      const snapshot = hp[characterId];
+      if (!snapshot) continue;
+      broadcastVisibilityFiltered(sockets, { type: "session.hp.updated", character: snapshot });
+    }
+    for (const characterId of restoredConditionIds) {
+      const snapshot = conditions[characterId];
+      if (!snapshot) continue;
+      broadcastVisibilityFiltered(sockets, { type: "session.conditions.updated", character: snapshot });
     }
   }
 }

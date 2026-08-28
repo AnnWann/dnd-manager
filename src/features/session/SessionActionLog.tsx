@@ -330,6 +330,12 @@ function describeSessionOperation(
     case "initiative.viewMode.set": return `Alterou a visualização da iniciativa para ${operation.viewMode === "cards" ? "cartões" : "tabela"}.`
     case "initiative.settings.update": return `Alterou as configurações de saves de morte da iniciativa.`
     case "initiative.deathSaves.set": return `Atualizou os saves de morte de um personagem na iniciativa (${operation.successes} sucessos, ${operation.failures} falhas).`
+    case "initiative.conditions.bulk": return operation.mode === "add" ? `Aplicou uma condição em ${operation.entryIds.length} participantes da iniciativa.` : `Removeu ${operation.conditionName || "uma condição"} de ${operation.entryIds.length} participantes da iniciativa.`
+    case "initiative.customAction.execute": {
+      const definition = customSystemDefinitions.find((entry) => entry.id === operation.systemId)
+      const action = definition?.actions?.find((entry) => entry.id === operation.actionId)
+      return `Executou ${action?.name ?? operation.actionId} em ${operation.entryIds.length} alvo${operation.entryIds.length === 1 ? "" : "s"} da iniciativa${definition ? ` — ${definition.name}` : ""}.`
+    }
     case "initiative.reset": return `Limpou o combate atual.`
     case "character.proficiency.add": return `${characterName} ganhou a proficiência ${operation.proficiency.name}.`
     case "character.proficiency.remove": return `${characterName} perdeu a proficiência ${operation.proficiencyName || "selecionada"}.`
