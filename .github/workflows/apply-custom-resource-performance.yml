@@ -21,10 +21,12 @@ jobs:
           fetch-depth: 0
 
       - name: Apply performance patch
-        run: python .github/patch_custom_resource_performance.py
+        run: |
+          python .github/patch_custom_resource_performance.py
+          python .github/fix_custom_resource_patch_integration.py
 
       - name: Remove temporary patch files
-        run: rm .github/patch_custom_resource_performance.py .github/workflows/apply-custom-resource-performance.yml
+        run: rm .github/patch_custom_resource_performance.py .github/fix_custom_resource_patch_integration.py .github/workflows/apply-custom-resource-performance.yml
 
       - name: Install frontend dependencies
         run: npm install --package-lock=false --ignore-scripts
