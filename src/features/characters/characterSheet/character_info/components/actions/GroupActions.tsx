@@ -13,6 +13,7 @@ import {
 import { Button } from "../../../../../../components/ui/Button"
 import type { ActionType } from "../../../../../../models/actions/Actions"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
+import { useOptionalSessionRuntime } from "../../../../../session-runtime/useSessionRuntime"
 
 type Props = {
   character: CharacterTemplate
@@ -107,20 +108,57 @@ export function GroupActions({
   character,
   updateCharacter,
 }: Props) {
+  const sessionRuntime = useOptionalSessionRuntime()
   const actions = character.get("actionsPerTurn")
   const isPlayerCharacter = character.get("sheet").type === "pc"
   const hasLegendaryResources = LEGENDARY_ACTIONS.some(
     ({ key }) => (actions[key] ?? 0) > 0,
   )
 
+  function applyActionConfiguration(
+    updater: (current: CharacterTemplate) => CharacterTemplate,
+  ) {
+    const characterId = character.get("id")
+
+    if (!sessionRuntime) {
+      updateCharacter(characterId, updater)
+      return
+    }
+
+    if (
+      sessionRuntime.role !== "MASTER" ||
+      sessionRuntime.status !== "connected"
+    ) {
+      console.warn(
+        "[session-runtime] action economy configuration requires a connected MASTER session",
+        { characterId },
+      )
+      return
+    }
+
+    const next = updater(character)
+    const sent = sessionRuntime.dispatchCharacterLifecycleOperation({
+      type: "character.session.resync",
+      characterId,
+      character: next.toJSON(),
+    })
+
+    if (!sent) {
+      console.warn(
+        "[session-runtime] action economy resync was not sent",
+        { characterId },
+      )
+    }
+  }
+
   function setAction(action: ActionType, value: number) {
-    updateCharacter(character.get("id"), (current) =>
+    applyActionConfiguration((current) =>
       current.withAction(action, Math.max(0, Math.min(99, Math.trunc(value)))),
     )
   }
 
   function resetDefaults() {
-    updateCharacter(character.get("id"), (current) => {
+    applyActionConfiguration((current) => {
       let next = current
 
       for (const [action, value] of Object.entries(DEFAULT_PLAYER_ACTIONS)) {
