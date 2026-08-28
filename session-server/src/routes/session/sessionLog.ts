@@ -18,6 +18,7 @@ export type SessionReverseOperation = {
 export type SessionLogRecord = {
   id: string;
   actorId: string;
+  actorName?: string;
   createdAt: string;
   operation: SessionLogOperation;
   reverseOperation: SessionReverseOperation;
@@ -121,7 +122,7 @@ export function sendSessionLogPage(
     socket.send(JSON.stringify({
       type: "session.hp.log",
       ...page,
-      records: page.records.map(toClientLogRecord),
+      records: page.records.map((record) => toClientLogRecord(withResolvedActorName(record, [socket]))),
     }));
   } catch {}
 }
@@ -147,20 +148,23 @@ export async function commitSessionMutation(
   sockets: WebSocket[],
   args: CommitSessionMutationArgs,
 ): Promise<SessionLogRecord[]> {
-  const records = args.currentLog ? [...args.currentLog] : await readSessionLog(storage);
+  const records = (args.currentLog ? [...args.currentLog] : await readSessionLog(storage))
+    .map((record) => withResolvedActorName(record, sockets));
+  const incoming = withResolvedActorName(args.record, sockets);
   const previous = records[records.length - 1];
 
-  if (previous && args.coalesceLatest?.(previous, args.record)) {
+  if (previous && args.coalesceLatest?.(previous, incoming)) {
     records[records.length - 1] = {
-      ...args.record,
+      ...incoming,
       id: previous.id,
       actorId: previous.actorId,
+      actorName: previous.actorName ?? incoming.actorName,
       reverseOperation: previous.reverseOperation,
       undoneAt: previous.undoneAt,
       undoneBy: previous.undoneBy,
     };
   } else {
-    records.push(args.record);
+    records.push(incoming);
   }
 
   const next = trimSessionLog(records, args.maxRecords);
@@ -180,8 +184,9 @@ export async function commitSessionMutations(
   sockets: WebSocket[],
   args: CommitSessionMutationsArgs,
 ): Promise<SessionLogRecord[]> {
-  const current = args.currentLog ? [...args.currentLog] : await readSessionLog(storage);
-  current.push(...args.records);
+  const current = (args.currentLog ? [...args.currentLog] : await readSessionLog(storage))
+    .map((record) => withResolvedActorName(record, sockets));
+  current.push(...args.records.map((record) => withResolvedActorName(record, sockets)));
   const next = trimSessionLog(current, args.maxRecords);
   normalizeSessionLogRecordsInPlace(next);
   await storage.put({ ...args.writes, [SESSION_LOG_KEY]: next });
@@ -364,7 +369,7 @@ export function broadcastSessionLogToMasters(sockets: WebSocket[], records: Sess
   const payload = JSON.stringify({
     type: "session.hp.log",
     ...page,
-    records: page.records.map(toClientLogRecord),
+    records: page.records.map((record) => toClientLogRecord(withResolvedActorName(record, sockets))),
   });
   for (const socket of sockets) {
     const connection = readConnection(socket);
@@ -377,6 +382,7 @@ function toClientLogRecord(record: SessionLogRecord): SessionClientLogRecord {
   return {
     id: record.id,
     actorId: record.actorId,
+    ...(record.actorName ? { actorName: record.actorName } : {}),
     createdAt: record.createdAt,
     operation: record.operation,
     reverseOperation: {
@@ -399,9 +405,20 @@ function sameScopes(left: string[], right: string[]): boolean {
   return right.every((scope) => values.has(scope));
 }
 
-function readConnection(socket: WebSocket): { role?: string } | null {
+function withResolvedActorName(record: SessionLogRecord, sockets: WebSocket[]): SessionLogRecord {
+  if (record.actorName?.trim()) return record;
+  for (const socket of sockets) {
+    const connection = readConnection(socket);
+    if (connection?.userId !== record.actorId) continue;
+    const actorName = connection.userName?.trim();
+    if (actorName) return { ...record, actorName };
+  }
+  return record;
+}
+
+function readConnection(socket: WebSocket): { role?: string; userId?: string; userName?: string } | null {
   try {
-    return socket.deserializeAttachment() as { role?: string } | null;
+    return socket.deserializeAttachment() as { role?: string; userId?: string; userName?: string } | null;
   } catch {
     return null;
   }

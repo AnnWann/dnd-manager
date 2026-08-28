@@ -112,6 +112,7 @@ export type SessionCharacterLifecycleReverseOperation = {
 export type SessionRuntimeLogRecord = {
   id: string
   actorId: string
+  actorName?: string
   createdAt: string
   operation:
     | SessionAbilityOperation

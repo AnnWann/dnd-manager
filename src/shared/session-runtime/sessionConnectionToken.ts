@@ -4,6 +4,8 @@ export type SessionConnectionTokenClaims = {
   v: 1
   sessionId: string
   userId: string
+  /** Authenticated user display name used by session presence/log UI. */
+  userName?: string
   role: SessionConnectionRole
   clientId: string
   issuedAt: number
@@ -155,6 +157,7 @@ function isValidClaims(
 ): value is SessionConnectionTokenClaims {
   if (!isRecord(value) || value.v !== TOKEN_VERSION) return false
   if (!isIdentifier(value.sessionId) || !isIdentifier(value.userId)) return false
+  if (value.userName !== undefined && !isDisplayName(value.userName)) return false
   if (!isIdentifier(value.clientId)) return false
   if (value.role !== "MASTER" && value.role !== "PLAYER") return false
   if (!isValidOwnedCharacterIds(value.ownedCharacterIds)) return false
@@ -181,6 +184,10 @@ function isValidOwnedCharacterIds(value: unknown): boolean {
   if (!Array.isArray(value) || value.length > MAX_OWNED_CHARACTER_IDS) return false
   if (!value.every(isIdentifier)) return false
   return new Set(value).size === value.length
+}
+
+function isDisplayName(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0 && value.length <= MAX_IDENTIFIER_LENGTH
 }
 
 function isIdentifier(value: unknown): value is string {

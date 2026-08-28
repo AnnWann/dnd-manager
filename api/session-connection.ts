@@ -105,6 +105,7 @@ export async function POST(request: Request): Promise<Response> {
         v: 1,
         sessionId,
         userId: session.user.id,
+        userName: session.user.name.trim(),
         role,
         clientId,
         issuedAt,
