@@ -194,8 +194,14 @@ function parseDiceExpression(expression: string): {
   return { count, sides, modifier }
 }
 
+type CryptoRandomSource = {
+  getRandomValues: (buffer: Uint32Array) => Uint32Array
+}
+
 function randomInteger(maxExclusive: number): number {
-  const cryptoObject = globalThis.crypto
+  const cryptoObject = (
+    globalThis as unknown as { crypto?: CryptoRandomSource }
+  ).crypto
   if (cryptoObject?.getRandomValues) {
     const range = 0x1_0000_0000
     const limit = range - (range % maxExclusive)
