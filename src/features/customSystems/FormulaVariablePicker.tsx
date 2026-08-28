@@ -375,5 +375,6 @@ function humanizeSegment(segment: string): string {
 function translateValueType(valueType: CustomFormulaVariable['valueType']): string {
   if (valueType === 'number') return 'Número'
   if (valueType === 'boolean') return 'Verdadeiro/Falso'
+  if (valueType === 'dice') return 'Dado'
   return 'Texto'
 }
