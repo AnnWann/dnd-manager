@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 
 import { createMyCharacter } from "../../api/user-characters"
 import { CharacterCreationWizard } from "../../features/characters/creation/characterCreationWizard"
+import { useUserData } from "../../features/user/UserDataProvider"
 import { ensureCharacterBackgroundFromHistory } from "../../lib/characterCreation/inferCharacterBackground"
 import type { Player } from "../../models/player/Player"
 
@@ -14,6 +15,7 @@ const USER_OWNER: Player = {
 
 export function UserCharacterCreateView() {
   const navigate = useNavigate()
+  const { setCharacters } = useUserData()
   const [saving, setSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
 
@@ -54,6 +56,11 @@ export function UserCharacterCreateView() {
                 visibility: "PRIVATE",
                 data,
               })
+
+              setCharacters((current) => [
+                created,
+                ...current.filter((entry) => entry.id !== created.id),
+              ])
 
               navigate(
                 `/user/characters/${encodeURIComponent(created.id)}/profile`,
