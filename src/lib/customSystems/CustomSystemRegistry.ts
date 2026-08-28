@@ -15,8 +15,8 @@ const definitions = new Map<string, CustomSystemDefinition>()
 const listeners = new Set<() => void>()
 let snapshot: CustomSystemDefinition[] = []
 
-configureCustomFormulaRuntime((systemId) => definitions.get(systemId))
-configureCustomNativeStatOverrides((systemId) => definitions.get(systemId))
+configureCustomFormulaRuntime(getCustomSystemDefinition)
+configureCustomNativeStatOverrides(getCustomSystemDefinition)
 
 function emitChange(): void {
   snapshot = Array.from(definitions.values()).sort((left, right) =>
@@ -55,6 +55,10 @@ export function setCustomSystemDefinitions(
 export function getCustomSystemDefinition(
   systemId: string,
 ): CustomSystemDefinition | undefined {
+  const creationDefinitions = getCreationCustomSystemOverride()
+  if (creationDefinitions) {
+    return creationDefinitions.find((definition) => definition.id === systemId)
+  }
   return definitions.get(systemId)
 }
 
