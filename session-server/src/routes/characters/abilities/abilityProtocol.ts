@@ -25,6 +25,12 @@ export type SessionAbilityOperation =
       activationOptionId?: string;
     }
   | {
+      type: "character.ability.usage.spend";
+      characterId: string;
+      source: SessionAbilitySource;
+      abilityName?: string;
+    }
+  | {
       type: "character.ability.restore";
       characterId: string;
       source: SessionAbilitySource;
@@ -101,6 +107,7 @@ function isAbilityOperation(value: unknown): value is SessionAbilityOperation {
       return isAbilitySource(value.source) &&
         hasValidOptionalName &&
         (value.activationOptionId === undefined || typeof value.activationOptionId === "string");
+    case "character.ability.usage.spend":
     case "character.ability.restore":
     case "character.ability.deactivate":
       return isAbilitySource(value.source) && hasValidOptionalName;
