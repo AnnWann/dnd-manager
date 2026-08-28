@@ -9,7 +9,7 @@ import type { CharacterProfile } from "../../../../../src/models/characters/char
 import type { Proficiency } from "../../../../../src/models/sheet/Proficiency";
 import { SessionActor as RaceSessionActor } from "../race/RaceSessionActor";
 import { parseProfileClientMessage, type SessionProfileOperation } from "./profileProtocol";
-import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
+import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";
 import type { SessionAbilityState } from "../abilities/abilityProtocol";
 import type { SessionConnection, SessionHpState, SessionSkillsState } from "../../session/protocol";
 import {
@@ -109,7 +109,7 @@ export class SessionActor extends RaceSessionActor {
       },
       record,
       currentLog: log,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
       coalesceLatest: (previous, incoming) => canCoalesceProfileLog(previous, incoming, now),
     });
 

@@ -15,7 +15,7 @@ import { isBagOfHoldingItem, type Itemmable } from "../../../../../src/models/it
 import { normalizeItemText } from "../../../../../src/lib/textNormalization";
 import { SessionActor as EquipmentSessionActor } from "../equipment/EquipmentSessionActor";
 import { parseInventoryClientMessage, type SessionInventoryOperation } from "./inventoryProtocol";
-import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
+import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";
 import type { SessionAbilityState } from "../abilities/abilityProtocol";
 import type { SessionConditionsState, SessionConnection, SessionHpState } from "../../session/protocol";
 import {
@@ -163,7 +163,7 @@ export class SessionActor extends EquipmentSessionActor {
       },
       record,
       currentLog: log,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
 
     for (const id of result.changedCharacters) {

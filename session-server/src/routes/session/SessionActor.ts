@@ -8,18 +8,18 @@ import {
   isConcentrationCondition,
 } from "../characters/sheet/concentrationState";
 import {
-  applyHpOperation,
+  applyCharacterStateOperation,
   defaultAttributes,
   defaultSavingThrows,
   defaultSkills,
   defaultStats,
-  MAX_HP_LOG_RECORDS,
+  MAX_CHARACTER_STATE_LOG_RECORDS,
   normalizeAttributesSeed,
-  normalizeHpSeed,
+  normalizeCharacterStateSeed,
   normalizeSavingThrowsSeed,
   normalizeSkillsSeed,
   normalizeStatsSeed,
-} from "../characters/sheet/hpState";
+} from "../characters/sheet/characterState";
 import type { SessionAbilityState } from "../characters/abilities/abilityProtocol";
 import {
   CharacterTemplate,
@@ -172,7 +172,7 @@ export class SessionActor extends DurableObject<Env> {
           await this.handleHpOperation(
             webSocket,
             connection,
-            parsed.operation as Parameters<typeof applyHpOperation>[1],
+            parsed.operation as Parameters<typeof applyCharacterStateOperation>[1],
           );
         }
         break;
@@ -221,7 +221,7 @@ export class SessionActor extends DurableObject<Env> {
     const state = await this.readHpState();
     let changed = false;
     for (const seed of seeds) {
-      const normalized = normalizeHpSeed(seed);
+      const normalized = normalizeCharacterStateSeed(seed);
       const existing = state[seed.characterId];
       if (!existing) {
         state[seed.characterId] = { ...normalized, hitDiceInitialized: seed.hitDice !== undefined };
@@ -295,7 +295,7 @@ export class SessionActor extends DurableObject<Env> {
   private async handleHpOperation(
     webSocket: WebSocket,
     connection: SessionConnection,
-    operation: Parameters<typeof applyHpOperation>[1],
+    operation: Parameters<typeof applyCharacterStateOperation>[1],
   ): Promise<void> {
     if (operation.type === "character.rest.short" || operation.type === "character.rest.long") {
       await this.handleRestOperation(webSocket, connection, operation);
@@ -326,7 +326,7 @@ export class SessionActor extends DurableObject<Env> {
       };
     }
 
-    const result = applyHpOperation(current, effectiveOperation, connection);
+    const result = applyCharacterStateOperation(current, effectiveOperation, connection);
     if (!result.ok) {
       this.sendError(webSocket, result.code, result.message);
       return;
@@ -396,7 +396,7 @@ export class SessionActor extends DurableObject<Env> {
       writes,
       record,
       currentLog: log,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
     this.broadcast({ type: "session.hp.updated", character: result.next });
     if (automationAbility) {
@@ -554,7 +554,7 @@ export class SessionActor extends DurableObject<Env> {
       writes,
       record,
       currentLog: log,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
 
     this.broadcastSessionRaw({ type: "session.abilities.updated", character: nextAbility });
@@ -599,7 +599,7 @@ export class SessionActor extends DurableObject<Env> {
       writes: { [CONDITIONS_STATE_KEY]: conditionsState },
       record: result.record as unknown as SessionLogRecord,
       currentLog: log,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
     this.broadcast({ type: "session.conditions.updated", character: result.next });
   }

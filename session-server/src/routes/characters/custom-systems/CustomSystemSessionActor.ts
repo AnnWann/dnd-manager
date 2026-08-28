@@ -48,7 +48,7 @@ import {
 } from "../../session/sessionLog";
 import { readRuntimeConfig } from "../../session/runtimeConfigAccess";
 import { broadcastVisibilityFiltered } from "../../session/visibilityDelivery";
-import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
+import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";
 import {
   parseCustomSystemClientMessage,
   type SessionCustomSystemOperation,
@@ -286,7 +286,7 @@ export class SessionActor extends BaseSessionActor {
       writes,
       record,
       currentLog: log,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
 
     const sockets = this.ctx.getWebSockets();

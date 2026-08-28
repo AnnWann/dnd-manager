@@ -2,7 +2,7 @@ import { CharacterTemplate, type CharacterTemplateProps } from "../../../../../s
 import type { CharacterRace } from "../../../../../src/models/races/CharacterRace";
 import { SessionActor as ProficiencySessionActor } from "../proficiencies/ProficiencySessionActor";
 import { parseRaceClientMessage, type SessionRaceOperation } from "./raceProtocol";
-import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
+import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";
 import type { SessionAbilityState } from "../abilities/abilityProtocol";
 import type {
   SessionConnection,
@@ -146,7 +146,7 @@ export class SessionActor extends ProficiencySessionActor {
       },
       record,
       currentLog: log,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
 
     broadcast(this.ctx.getWebSockets(), { type: "session.abilities.updated", character: nextAbility });

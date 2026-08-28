@@ -1,4 +1,4 @@
-import { MAX_HP_LOG_RECORDS } from "../characters/sheet/hpState";
+import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../characters/sheet/characterState";
 import type { SessionConnection } from "../session/protocol";
 import {
   commitSessionMutation,
@@ -95,7 +95,7 @@ export class SessionActor {
       writes: { [MISSIONS_STATE_KEY]: state },
       record,
       currentLog: log,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
     broadcast(this.ctx.getWebSockets(), { type: "session.missions.updated", state });
   }

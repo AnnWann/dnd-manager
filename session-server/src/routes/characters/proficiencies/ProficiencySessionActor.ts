@@ -3,7 +3,7 @@ import { getAbilityGrantedProficiencies } from "../../../../../src/models/charac
 import type { Proficiency } from "../../../../../src/models/sheet/Proficiency";
 import { SessionActor as InventorySessionActor } from "../inventory/InventorySessionActor";
 import { parseProficiencyClientMessage, type SessionProficiencyOperation } from "./proficiencyProtocol";
-import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
+import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";
 import type { SessionAbilityState } from "../abilities/abilityProtocol";
 import type { SessionConnection, SessionHpState } from "../../session/protocol";
 import {
@@ -92,7 +92,7 @@ export class SessionActor extends InventorySessionActor {
       writes: { [ABILITIES_STATE_KEY]: abilities },
       record,
       currentLog: log,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
     broadcast(this.ctx.getWebSockets(), { type: "session.abilities.updated", character: nextState });
   }

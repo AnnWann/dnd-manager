@@ -25,7 +25,7 @@ import type { MagicCircleLevel } from "../../../../../src/models/magic/spells/sp
 import type { MetamagicId } from "../../../../../src/models/magic/metamagic/Metamagic";
 import { SessionActor as AbilitySessionActor } from "../abilities/AbilitySessionActor";
 import { parseMagicClientMessage, type SessionMagicOperation } from "./magicProtocol";
-import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
+import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";
 import type { SessionConditionsState, SessionConnection, SessionHpState } from "../../session/protocol";
 import type { SessionAbilityState } from "../abilities/abilityProtocol";
 import {
@@ -177,7 +177,7 @@ export class SessionActor extends AbilitySessionActor {
       writes: { [ABILITIES_STATE_KEY]: abilityState },
       records,
       currentLog: log,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
 
     broadcast(this.ctx.getWebSockets(), {

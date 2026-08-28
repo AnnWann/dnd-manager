@@ -6,7 +6,7 @@ import { parseInitiativeClientMessage, type SessionInitiativeState } from "../in
 import { SessionActor as CustomSystemSessionActor } from "../characters/custom-systems/CustomSystemSessionActor";
 import { parseCustomSystemClientMessage } from "../characters/custom-systems/customSystemProtocol";
 import type { SessionAbilityState } from "../characters/abilities/abilityProtocol";
-import { MAX_HP_LOG_RECORDS } from "../characters/sheet/hpState";
+import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../characters/sheet/characterState";
 import type { SessionConnection } from "./protocol";
 import { parseRuntimeConfigPublishMessage } from "./runtimeConfigProtocol";
 import {
@@ -295,7 +295,7 @@ export class SessionActor extends ComposedSessionActor {
       sourceIndex,
       userId: connection.userId,
       undoRecord,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
       undoneAt: now,
     });
     broadcast(this.ctx.getWebSockets(), { type: "session.missions.updated", state: reverse.snapshot });
@@ -353,7 +353,7 @@ export class SessionActor extends ComposedSessionActor {
       sourceIndex,
       userId: connection.userId,
       undoRecord,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
       undoneAt: now,
     });
 

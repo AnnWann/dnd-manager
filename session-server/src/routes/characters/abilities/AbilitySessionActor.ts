@@ -22,7 +22,7 @@ import {
   type SessionAbilitySource,
   type SessionAbilityState,
 } from "./abilityProtocol";
-import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
+import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";
 import type {
   SessionConditionsState,
   SessionConnection,
@@ -218,7 +218,7 @@ export class SessionActor extends BaseSessionActor {
       },
       record,
       currentLog: log,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
 
     this.broadcastAbility({ type: "session.abilities.updated", character: nextAbilityState });

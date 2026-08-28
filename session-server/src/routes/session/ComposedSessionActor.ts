@@ -14,11 +14,11 @@ import { parseProficiencyClientMessage } from "../characters/proficiencies/profi
 import { parseRaceClientMessage } from "../characters/race/raceProtocol";
 import { parseProfileClientMessage } from "../characters/profile/profileProtocol";
 import {
-  applyHpUndo,
+  applyCharacterStateUndo,
   defaultSavingThrows,
   defaultSkills,
-  MAX_HP_LOG_RECORDS,
-} from "../characters/sheet/hpState";
+  MAX_CHARACTER_STATE_LOG_RECORDS,
+} from "../characters/sheet/characterState";
 import { applyConditionUndo } from "../characters/sheet/conditionState";
 import { applyConcentrationUndo } from "../characters/sheet/concentrationState";
 import type {
@@ -296,7 +296,7 @@ export class SessionActor extends BaseSessionActor {
       return;
     }
 
-    const result = applyHpUndo(
+    const result = applyCharacterStateUndo(
       current,
       source as unknown as SessionHpLogRecord,
       connection,
@@ -313,7 +313,7 @@ export class SessionActor extends BaseSessionActor {
       sourceIndex,
       userId: connection.userId,
       undoRecord: result.record as unknown as SessionLogRecord,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
       undoneAt: result.record.createdAt,
     });
     broadcast(this.ctx.getWebSockets(), { type: "session.hp.updated", character: result.next });
@@ -350,7 +350,7 @@ export class SessionActor extends BaseSessionActor {
       sourceIndex,
       userId: connection.userId,
       undoRecord: result.record as unknown as SessionLogRecord,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
       undoneAt: result.record.createdAt,
     });
     broadcast(this.ctx.getWebSockets(), { type: "session.conditions.updated", character: result.next });
@@ -524,7 +524,7 @@ export class SessionActor extends BaseSessionActor {
       sourceIndex,
       userId: connection.userId,
       undoRecord,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
       undoneAt: now,
     });
     await this.broadcastAuthoritativeStateForReverse(reverse);
@@ -659,7 +659,7 @@ export class SessionActor extends BaseSessionActor {
       },
       record,
       currentLog: log,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
 
     if (operation.type === "character.session.remove") {

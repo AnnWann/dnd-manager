@@ -15,7 +15,7 @@ import { getCharacterConditions, withCharacterConditions } from "../../../../../
 import { getCurrentMaxHp } from "../../../../../src/models/characters/characterHp";
 import { SessionActor as MagicSessionActor } from "../spells/MagicSessionActor";
 import { parseEquipmentClientMessage, type SessionEquipmentOperation } from "./equipmentProtocol";
-import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
+import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";
 import type { SessionAbilityState } from "../abilities/abilityProtocol";
 import type { SessionConditionsState, SessionConnection, SessionHpState } from "../../session/protocol";
 import {
@@ -124,7 +124,7 @@ export class SessionActor extends MagicSessionActor {
       },
       record,
       currentLog: log,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
 
     broadcast(this.ctx.getWebSockets(), { type: "session.abilities.updated", character: nextState });

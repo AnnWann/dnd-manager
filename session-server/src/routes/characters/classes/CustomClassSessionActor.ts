@@ -10,7 +10,7 @@ import {
 } from "../../../../../src/models/characters/customClassConfig";
 import { SessionActor as ProfileSessionActor } from "../profile/ProfileSessionActor";
 import type { SessionAbilityState } from "../abilities/abilityProtocol";
-import { MAX_HP_LOG_RECORDS } from "../sheet/hpState";
+import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";
 import type {
   SessionConditionsState,
   SessionConnection,
@@ -149,7 +149,7 @@ export class SessionActor extends ProfileSessionActor {
       writes: { [ABILITIES_STATE_KEY]: abilities },
       record,
       currentLog: log,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
 
     broadcast(this.ctx.getWebSockets(), {

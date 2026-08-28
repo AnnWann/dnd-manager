@@ -1,4 +1,4 @@
-import { MAX_HP_LOG_RECORDS } from "../characters/sheet/hpState";
+import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../characters/sheet/characterState";
 import type { SessionAbilityState } from "../characters/abilities/abilityProtocol";
 import type { SessionConnection, SessionHpState } from "../session/protocol";
 import {
@@ -190,7 +190,7 @@ export class SessionActor {
       writes,
       record,
       currentLog: log,
-      maxRecords: MAX_HP_LOG_RECORDS,
+      maxRecords: MAX_CHARACTER_STATE_LOG_RECORDS,
     });
     broadcast(this.ctx.getWebSockets(), { type: "session.initiative.updated", state });
     for (const characterId of changedAbilityIds) {
