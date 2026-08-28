@@ -5,9 +5,9 @@ import { useOptionalSessionRuntime } from "./useSessionRuntime"
 
 /**
  * The relational character snapshot is only an entry seed. As soon as the
- * MASTER socket connects, copy missing characters into the Durable Object so
- * every active-session screen can read the authoritative character snapshot
- * from WebSocket state instead of going back to Postgres.
+ * MASTER socket connects and the existing lifecycle snapshot is known, copy
+ * only missing characters into the Durable Object. Waiting for the snapshot
+ * prevents reconnects from racing the server and re-adding active characters.
  */
 export function SessionAuthoritativeBootstrap() {
   const runtime = useOptionalSessionRuntime()
@@ -18,6 +18,7 @@ export function SessionAuthoritativeBootstrap() {
       !runtime ||
       runtime.status !== "connected" ||
       runtime.role !== "MASTER" ||
+      !runtime.characterSnapshotReady ||
       visibleCharacters.length === 0
     ) {
       return
@@ -30,6 +31,7 @@ export function SessionAuthoritativeBootstrap() {
       })),
     )
   }, [
+    runtime?.characterSnapshotReady,
     runtime?.initializeAbilities,
     runtime?.role,
     runtime?.status,
