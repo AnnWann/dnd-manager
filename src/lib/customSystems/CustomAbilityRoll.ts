@@ -40,7 +40,8 @@ export function activateCustomAbilityWithRoll(
     (entry) => entry.systemId === systemId,
   )
   const definition = definitions.find((entry) => entry.id === systemId)
-  if (!state || !definition) {
+  const ability = state?.abilities.find((entry) => entry.id === abilityId)
+  if (!state || !definition || !ability) {
     return {
       character: activateCustomAbility(character, definitions, systemId, abilityId),
     }
@@ -57,7 +58,7 @@ export function activateCustomAbilityWithRoll(
   const resolvedDefinitions = replaceRollValueForAbility(
     definitions,
     systemId,
-    abilityId,
+    ability,
     value,
   )
 
@@ -123,29 +124,21 @@ function resolveRollValue(
 function replaceRollValueForAbility(
   definitions: CustomSystemDefinition[],
   systemId: string,
-  abilityId: string,
+  ability: CustomAbilityInstance,
   rollValue: number,
 ): CustomSystemDefinition[] {
   return definitions.map((definition) => {
     if (definition.id !== systemId) return definition
-    const stateTypeIds = new Set<string>()
 
     return {
       ...definition,
       abilityTypes: definition.abilityTypes.map((type) => {
-        const matchingPresetIds = new Set(
-          (type.predefinedAbilities ?? [])
-            .filter((preset) => preset.id)
-            .map((preset) => preset.id),
-        )
-        const shouldPatchBase = true
-        if (shouldPatchBase) stateTypeIds.add(type.id)
-
+        if (type.id !== ability.abilityTypeId) return type
         return {
           ...type,
           activation: patchActivationRollFormula(type.activation, rollValue),
           predefinedAbilities: type.predefinedAbilities?.map((preset) =>
-            matchingPresetIds.has(preset.id)
+            preset.id === ability.predefinedAbilityId
               ? {
                   ...preset,
                   activation: patchActivationRollFormula(
