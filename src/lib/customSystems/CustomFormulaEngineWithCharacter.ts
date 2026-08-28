@@ -96,7 +96,10 @@ export function evaluateCustomFormula(
     formula,
     definition,
     state,
-    getCharacterFormulaValues(character),
+    getCharacterFormulaValues(
+      character,
+      collectReferencedCharacterPaths(formula, definition, ability?.type),
+    ),
     ability,
   )
 
@@ -116,7 +119,10 @@ export function validateCustomFormula(
     formula,
     definition,
     createMockState(definition),
-    getCharacterFormulaValues(),
+    getCharacterFormulaValues(
+      undefined,
+      collectReferencedCharacterPaths(formula, definition, abilityType),
+    ),
     abilityType ? { type: abilityType } : undefined,
   )
 
@@ -315,6 +321,33 @@ function normalizeAbilityFormulaValue(
   if (typeof value === 'string') return value
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   return valueType === 'dice' ? 'd6' : ''
+}
+
+function collectReferencedCharacterPaths(
+  formula: string,
+  definition: CustomSystemDefinition,
+  abilityType?: CustomAbilityTypeDefinition,
+): string[] {
+  const expressions = [
+    formula,
+    ...definition.fields.flatMap((field) =>
+      field.type === 'formula' ? [field.formula] : [],
+    ),
+    ...definition.resources.flatMap((resource) =>
+      resource.maximumFormula ? [resource.maximumFormula] : [],
+    ),
+    ...(abilityType?.fields.flatMap((field) =>
+      field.type === 'formula' ? [field.formula] : [],
+    ) ?? []),
+  ]
+  const paths = new Set<string>()
+  const pattern = /\bcharacter\.[A-Za-z0-9_.-]+/g
+
+  for (const expression of expressions) {
+    for (const match of expression.matchAll(pattern)) paths.add(match[0])
+  }
+
+  return [...paths]
 }
 
 function replaceIdentifier(

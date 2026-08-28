@@ -203,7 +203,7 @@ export class SessionActor extends BaseSessionActor {
           connection.role === "MASTER" ? "master" : "owner",
           character,
         );
-        if (JSON.stringify(currentState) === JSON.stringify(nextState)) {
+        if (!didOperationChangeState(currentState, nextState, operation)) {
           sendError(webSocket, "CUSTOM_SYSTEM_OPERATION_NO_CHANGE", "The requested custom-system operation does not change the current state.");
           return;
         }
@@ -237,7 +237,10 @@ export class SessionActor extends BaseSessionActor {
         return;
       }
     }
-    if (JSON.stringify(character.toJSON()) === JSON.stringify(nextCharacter.toJSON())) {
+    if (
+      aggregateOperation &&
+      JSON.stringify(character.toJSON()) === JSON.stringify(nextCharacter.toJSON())
+    ) {
       sendError(webSocket, "CUSTOM_SYSTEM_OPERATION_NO_CHANGE", "The requested custom-system operation does not change the current state.");
       return;
     }
@@ -256,8 +259,8 @@ export class SessionActor extends BaseSessionActor {
     const nextConditions = aggregateOperation
       ? projectAggregateConditions(conditions, nextCharacter)
       : conditions;
-    const hpChanged = JSON.stringify(nextHp) !== JSON.stringify(hp);
-    const conditionsChanged = JSON.stringify(nextConditions) !== JSON.stringify(conditions);
+    const hpChanged = aggregateOperation && JSON.stringify(nextHp) !== JSON.stringify(hp);
+    const conditionsChanged = aggregateOperation && JSON.stringify(nextConditions) !== JSON.stringify(conditions);
     if (hpChanged) hpState[operation.characterId] = nextHp;
     if (conditionsChanged) conditionsState[operation.characterId] = nextConditions;
 
@@ -304,6 +307,67 @@ export class SessionActor extends BaseSessionActor {
       });
     }
   }
+}
+
+function didOperationChangeState(
+  before: CharacterCustomSystemState,
+  after: CharacterCustomSystemState,
+  operation: Exclude<SessionCustomSystemOperation, AggregateCustomSystemOperation>,
+): boolean {
+  switch (operation.type) {
+    case "character.customSystem.field.set":
+    case "character.customSystem.field.remove":
+      return !sameSmallJson(before.fields[operation.fieldId], after.fields[operation.fieldId])
+        || Object.prototype.hasOwnProperty.call(before.fields, operation.fieldId)
+          !== Object.prototype.hasOwnProperty.call(after.fields, operation.fieldId);
+    case "character.customSystem.resource.set":
+    case "character.customSystem.resource.adjust":
+    case "character.customSystem.resource.reset":
+      return !sameResourceState(before.resources[operation.resourceId], after.resources[operation.resourceId]);
+    case "character.customSystem.ability.add":
+      return !before.abilities.some((ability) => ability.id === operation.ability.id)
+        && after.abilities.some((ability) => ability.id === operation.ability.id);
+    case "character.customSystem.ability.remove":
+      return before.abilities.some((ability) => ability.id === operation.abilityId)
+        && !after.abilities.some((ability) => ability.id === operation.abilityId);
+    case "character.customSystem.ability.field.set": {
+      const previous = before.abilities.find((ability) => ability.id === operation.abilityId);
+      const next = after.abilities.find((ability) => ability.id === operation.abilityId);
+      return !sameSmallJson(previous?.values[operation.fieldId], next?.values[operation.fieldId]);
+    }
+    case "character.customSystem.ability.learned.set": {
+      const previous = before.abilities.find((ability) => ability.id === operation.abilityId);
+      const next = after.abilities.find((ability) => ability.id === operation.abilityId);
+      return previous?.learned !== next?.learned;
+    }
+    case "character.customSystem.ability.prepared.set": {
+      const previous = before.abilities.find((ability) => ability.id === operation.abilityId);
+      const next = after.abilities.find((ability) => ability.id === operation.abilityId);
+      return previous?.prepared !== next?.prepared;
+    }
+    case "character.customSystem.ability.usage.set": {
+      const previous = before.abilities.find((ability) => ability.id === operation.abilityId);
+      const next = after.abilities.find((ability) => ability.id === operation.abilityId);
+      return previous?.usage?.used !== next?.usage?.used
+        || previous?.usage?.maximum !== next?.usage?.maximum;
+    }
+  }
+}
+
+function sameResourceState(
+  left: CharacterCustomSystemState["resources"][string] | undefined,
+  right: CharacterCustomSystemState["resources"][string] | undefined,
+): boolean {
+  if (!left || !right) return left === right;
+  return left.current === right.current
+    && left.maximum === right.maximum
+    && left.temporary === right.temporary;
+}
+
+function sameSmallJson(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") return false;
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function applyOperation(

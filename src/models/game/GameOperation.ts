@@ -201,6 +201,7 @@ export function compactGameOperationLog(value: unknown): GameOperationRecord[] {
 }
 
 function shouldStoreOperationRecord(record: GameOperationRecord): boolean {
+  if (record.operation.type === "character.replace") return false
   if (!isBulkyOperation(record.operation)) return true
 
   try {

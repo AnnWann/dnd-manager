@@ -25,6 +25,10 @@ export type SessionLogRecord = {
   undoneBy?: string;
 };
 
+export type SessionClientLogRecord = Omit<SessionLogRecord, "reverseOperation"> & {
+  reverseOperation: Pick<SessionReverseOperation, "type" | "characterId" | "affectedScopes">;
+};
+
 export type SessionLogPage = {
   records: SessionLogRecord[];
   hasMore: boolean;
@@ -114,7 +118,11 @@ export function sendSessionLogPage(
 ): void {
   const page = getSessionLogPage(records, beforeLogId);
   try {
-    socket.send(JSON.stringify({ type: "session.hp.log", ...page }));
+    socket.send(JSON.stringify({
+      type: "session.hp.log",
+      ...page,
+      records: page.records.map(toClientLogRecord),
+    }));
   } catch {}
 }
 
@@ -353,12 +361,32 @@ export function inferOperationScopes(
 
 export function broadcastSessionLogToMasters(sockets: WebSocket[], records: SessionLogRecord[]): void {
   const page = getSessionLogPage(records);
-  const payload = JSON.stringify({ type: "session.hp.log", ...page });
+  const payload = JSON.stringify({
+    type: "session.hp.log",
+    ...page,
+    records: page.records.map(toClientLogRecord),
+  });
   for (const socket of sockets) {
     const connection = readConnection(socket);
     if (connection?.role !== "MASTER") continue;
     try { socket.send(payload); } catch {}
   }
+}
+
+function toClientLogRecord(record: SessionLogRecord): SessionClientLogRecord {
+  return {
+    id: record.id,
+    actorId: record.actorId,
+    createdAt: record.createdAt,
+    operation: record.operation,
+    reverseOperation: {
+      type: record.reverseOperation.type,
+      characterId: record.reverseOperation.characterId,
+      affectedScopes: record.reverseOperation.affectedScopes,
+    },
+    ...(record.undoneAt ? { undoneAt: record.undoneAt } : {}),
+    ...(record.undoneBy ? { undoneBy: record.undoneBy } : {}),
+  };
 }
 
 function normalizeScopes(scopes: string[]): string[] {

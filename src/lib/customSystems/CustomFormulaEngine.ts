@@ -26,6 +26,9 @@ type Token =
   | { type: 'comma' }
   | { type: 'eof' }
 
+const FORMULA_TOKEN_CACHE_LIMIT = 512
+const formulaTokenCache = new Map<string, Token[]>()
+
 export function listCustomFormulaVariables(
   definition: CustomSystemDefinition,
 ): CustomFormulaVariable[] {
@@ -72,7 +75,7 @@ export function evaluateCustomFormula(
 ): CustomFormulaResult {
   try {
     const parser = new FormulaParser(
-      tokenize(formula),
+      getFormulaTokens(formula),
       (path) => resolveVariable(path, definition, state),
     )
     const value = parser.parse()
@@ -335,6 +338,16 @@ function toNumber(value: unknown): number {
   const number = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(number)) throw new Error(`“${String(value)}” não é um número válido.`)
   return number
+}
+
+function getFormulaTokens(input: string): Token[] {
+  const cached = formulaTokenCache.get(input)
+  if (cached) return cached
+
+  const tokens = tokenize(input)
+  if (formulaTokenCache.size >= FORMULA_TOKEN_CACHE_LIMIT) formulaTokenCache.clear()
+  formulaTokenCache.set(input, tokens)
+  return tokens
 }
 
 function tokenize(input: string): Token[] {

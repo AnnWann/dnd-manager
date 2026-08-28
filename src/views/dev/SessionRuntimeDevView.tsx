@@ -8,7 +8,10 @@ import { Navigate, useLocation, useSearchParams } from "react-router-dom"
 
 import { SessionRuntimeProvider } from "../../features/session-runtime/SessionRuntimeProvider"
 import type { SessionRuntimeRole } from "../../features/session-runtime/sessionProtocol"
-import { useSessionRuntime } from "../../features/session-runtime/useSessionRuntime"
+import {
+  useSessionRuntime,
+  useSessionRuntimeLog,
+} from "../../features/session-runtime/useSessionRuntime"
 
 const DEV_RUNTIME_PREFIX = "/dev/session-runtime/"
 const DEV_CHARACTER_ID = "dev-character"
@@ -49,6 +52,7 @@ function SessionRuntimeDevPanel({
   initialRole: SessionRuntimeRole
 }) {
   const runtime = useSessionRuntime()
+  const logRuntime = useSessionRuntimeLog()
   const [, setSearchParams] = useSearchParams()
   const [userId, setUserId] = useState(initialUserId)
   const [role, setRole] = useState<SessionRuntimeRole>(initialRole)
@@ -203,9 +207,9 @@ function SessionRuntimeDevPanel({
       {runtime.role === "MASTER" ? (
         <section className="rounded-lg border border-border bg-surface p-4">
           <h2 className="mb-3 text-lg font-medium">MASTER operation log</h2>
-          {runtime.hpLog.length ? (
+          {logRuntime.hpLog.length ? (
             <div className="grid gap-2">
-              {[...runtime.hpLog].reverse().map((record) => (
+              {[...logRuntime.hpLog].reverse().map((record) => (
                 <div key={record.id} className="flex items-center justify-between gap-3 rounded border border-border p-3 text-xs">
                   <div className="min-w-0">
                     <code>{record.operation.type}</code>
@@ -215,7 +219,7 @@ function SessionRuntimeDevPanel({
                     </div>
                   </div>
                   {!record.undoneAt && record.operation.type !== "character.hp.undo" ? (
-                    <DevButton onClick={() => runtime.undoLog(record.id)}>Undo</DevButton>
+                    <DevButton onClick={() => logRuntime.undoLog(record.id)}>Undo</DevButton>
                   ) : null}
                 </div>
               ))}

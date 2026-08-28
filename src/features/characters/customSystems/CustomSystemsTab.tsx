@@ -44,12 +44,16 @@ type Props = {
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) => void
   actor: CustomSystemActor
+  systemIds?: string[]
 }
 
-export function CustomSystemsTab({ character, updateCharacter, actor }: Props) {
+export function CustomSystemsTab({ character, updateCharacter, actor, systemIds }: Props) {
   const definitions = useCustomSystemDefinitions()
   const runtime = useOptionalSessionRuntime()
-  const states = character.get('sheet').customSystems ?? []
+  const allStates = character.get('sheet').customSystems ?? []
+  const states = systemIds?.length
+    ? allStates.filter((state) => systemIds.includes(state.systemId))
+    : allStates
   const [selectedSystemId, setSelectedSystemId] = useState(
     states[0]?.systemId ?? definitions[0]?.id ?? '',
   )
@@ -349,7 +353,7 @@ function ResourceSection({
   resourceId: string
   onRun: (operation: () => CharacterCustomSystemState) => void
 }) {
-  const resource = definition.resources.find((entry) => entry.id === resourceId)
+  const resource = definition.resources.find((entry) => entry.id === resourceId)!
   const resourceState = state.resources[resourceId]
   const authoritativeCurrent = resourceState?.current ?? 0
   const [optimisticCurrent, setOptimisticCurrent] = useState<number | null>(null)

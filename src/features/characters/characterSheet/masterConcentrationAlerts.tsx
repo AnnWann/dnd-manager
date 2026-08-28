@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from "react"
 import { AlertTriangle, X } from "lucide-react"
 
 import { useCharacterContext } from "../../../contexts/characterContext"
-import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
+import {
+  useOptionalSessionRuntime,
+  useOptionalSessionRuntimeLog,
+} from "../../session-runtime/useSessionRuntime"
 
 const ALERT_LIFETIME_MS = 5 * 60 * 1000
 
@@ -22,6 +25,7 @@ export function MasterConcentrationAlerts() {
     visibleCharacters,
   } = useCharacterContext()
   const runtime = useOptionalSessionRuntime()
+  const logRuntime = useOptionalSessionRuntimeLog()
   const seenOperationIds = useRef(new Set<string>())
   const initialized = useRef(false)
   const [alerts, setAlerts] = useState<ConcentrationAlert[]>([])
@@ -29,7 +33,7 @@ export function MasterConcentrationAlerts() {
   useEffect(() => {
     if (!initialized.current) {
       for (const record of operationLog) seenOperationIds.current.add(record.id)
-      for (const record of runtime?.hpLog ?? []) seenOperationIds.current.add(record.id)
+      for (const record of logRuntime?.hpLog ?? []) seenOperationIds.current.add(record.id)
       initialized.current = true
       return
     }
@@ -37,7 +41,7 @@ export function MasterConcentrationAlerts() {
     const incoming: ConcentrationAlert[] = []
     const now = Date.now()
     const records = runtime
-      ? runtime.hpLog
+      ? logRuntime?.hpLog ?? []
       : operationLog
 
     for (const record of records) {
@@ -75,7 +79,7 @@ export function MasterConcentrationAlerts() {
     if (incoming.length) {
       setAlerts((current) => [...current, ...incoming].slice(-5))
     }
-  }, [canAssignOwners, operationLog, runtime, visibleCharacters])
+  }, [canAssignOwners, logRuntime, operationLog, runtime, visibleCharacters])
 
   useEffect(() => {
     if (!alerts.length) return

@@ -83,7 +83,6 @@ export type SessionRuntimeContextValue = {
   inventoryState: SessionSharedInventoryState | null
   missionState: SessionMissionState | null
   initiativeState: SessionInitiativeState | null
-  hpLog: SessionLogRecord[]
   publishRuntimeConfig: (snapshot: SessionRuntimeConfigSnapshot) => boolean
   initializeAbilities: (characters: SessionAbilitySeed[]) => boolean
   initializeHp: (characters: SessionHpSeed[]) => boolean
@@ -107,10 +106,15 @@ export type SessionRuntimeContextValue = {
   dispatchCustomClassOperation: (operation: SessionCustomClassOperation) => boolean
   dispatchCustomSystemOperation: (operation: SessionCustomSystemOperation) => boolean
   dispatchCharacterLifecycleOperation: (operation: SessionCharacterLifecycleOperation) => boolean
+}
+
+export type SessionRuntimeLogContextValue = {
+  hpLog: SessionLogRecord[]
   undoLog: (logId: string) => boolean
 }
 
 export const SessionRuntimeContext = createContext<SessionRuntimeContextValue | null>(null)
+export const SessionRuntimeLogContext = createContext<SessionRuntimeLogContextValue | null>(null)
 
 function getOrCreateClientId(sessionId: string): string {
   const key = `dnd-manager.session-runtime.client-id.${sessionId}`
@@ -367,26 +371,37 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const value = useMemo<SessionRuntimeContextValue>(() => ({
     status, sessionId, clientId, role, presence, lastHeartbeatAckAt, runtimeConfigSnapshot,
     hpByCharacterId, conditionsByCharacterId, abilitiesByCharacterId, sessionCharactersById, characterSnapshotReady,
-    inventoryState, missionState, initiativeState, hpLog,
+    inventoryState, missionState, initiativeState,
     publishRuntimeConfig,
     initializeHp, initializeConditions, initializeAbilities, initializeInventory, initializeMissions, initializeInitiative,
     dispatchSheetOperation, dispatchHpOperation, dispatchConditionOperation,
     dispatchConcentrationOperation, dispatchAbilityOperation, dispatchMagicOperation,
     dispatchEquipmentOperation, dispatchInventoryOperation, dispatchMissionOperation, dispatchInitiativeOperation, dispatchProficiencyOperation,
     dispatchRaceOperation, dispatchProfileOperation, dispatchCustomClassOperation, dispatchCustomSystemOperation,
-    dispatchCharacterLifecycleOperation, undoLog,
+    dispatchCharacterLifecycleOperation,
   }), [
     abilitiesByCharacterId, characterSnapshotReady, clientId, conditionsByCharacterId,
     dispatchAbilityOperation, dispatchCharacterLifecycleOperation, dispatchConditionOperation, dispatchConcentrationOperation,
     dispatchCustomClassOperation, dispatchCustomSystemOperation, dispatchEquipmentOperation, dispatchHpOperation,
     dispatchInitiativeOperation, dispatchInventoryOperation, dispatchMagicOperation, dispatchMissionOperation,
     dispatchProficiencyOperation, dispatchProfileOperation, dispatchRaceOperation, dispatchSheetOperation,
-    hpByCharacterId, hpLog, initializeAbilities, initializeConditions, initializeHp, initializeInitiative, initializeInventory, initializeMissions,
+    hpByCharacterId, initializeAbilities, initializeConditions, initializeHp, initializeInitiative, initializeInventory, initializeMissions,
     initiativeState, inventoryState, lastHeartbeatAckAt, missionState, presence, publishRuntimeConfig, role, runtimeConfigSnapshot,
-    sessionCharactersById, sessionId, status, undoLog,
+    sessionCharactersById, sessionId, status,
   ])
 
-  return <SessionRuntimeContext.Provider value={value}>{children}</SessionRuntimeContext.Provider>
+  const logValue = useMemo<SessionRuntimeLogContextValue>(() => ({
+    hpLog,
+    undoLog,
+  }), [hpLog, undoLog])
+
+  return (
+    <SessionRuntimeContext.Provider value={value}>
+      <SessionRuntimeLogContext.Provider value={logValue}>
+        {children}
+      </SessionRuntimeLogContext.Provider>
+    </SessionRuntimeContext.Provider>
+  )
 }
 
 export function useOptionalSessionRuntime(): SessionRuntimeContextValue | null {

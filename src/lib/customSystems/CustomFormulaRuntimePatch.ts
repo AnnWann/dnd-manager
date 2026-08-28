@@ -24,13 +24,13 @@ export function recalculateCustomSystemState(
   const definition = resolveDefinition?.(state.systemId)
   if (!definition) return state
 
-  let next: CharacterCustomSystemState = {
-    ...state,
-    fields: { ...state.fields },
-    resources: Object.fromEntries(
-      Object.entries(state.resources).map(([id, resource]) => [id, { ...resource }]),
-    ),
-  }
+  const hasCalculatedResources = definition.resources.some((resource) =>
+    Boolean(resource.maximumFormula) && (resource.maximumMode ?? 'formula') !== 'manual',
+  )
+  const hasCalculatedFields = definition.fields.some((field) => field.type === 'formula')
+  if (!hasCalculatedResources && !hasCalculatedFields) return state
+
+  let next = state
 
   for (const resource of definition.resources) {
     if (!resource.maximumFormula) continue
@@ -46,10 +46,27 @@ export function recalculateCustomSystemState(
       character,
     )
     if (!result.ok || typeof result.value !== 'number') continue
-    next.resources[resource.id] = {
-      ...(currentState ?? { current: resource.initialValue ?? 0 }),
-      maximum: result.value,
-      current: Math.min(currentState?.current ?? resource.initialValue ?? 0, result.value),
+
+    const previousCurrent = currentState?.current ?? resource.initialValue ?? 0
+    const nextCurrent = Math.min(previousCurrent, result.value)
+    if (
+      currentState &&
+      currentState.maximum === result.value &&
+      currentState.current === nextCurrent
+    ) {
+      continue
+    }
+
+    next = {
+      ...next,
+      resources: {
+        ...next.resources,
+        [resource.id]: {
+          ...(currentState ?? { current: resource.initialValue ?? 0 }),
+          maximum: result.value,
+          current: nextCurrent,
+        },
+      },
     }
   }
 
@@ -57,10 +74,20 @@ export function recalculateCustomSystemState(
     if (field.type !== 'formula') continue
     const result = evaluateCustomFormula(field.formula, definition, next, character)
     if (!result.ok) {
-      delete next.fields[field.id]
+      if (!(field.id in next.fields)) continue
+      const fields = { ...next.fields }
+      delete fields[field.id]
+      next = { ...next, fields }
       continue
     }
-    next.fields[field.id] = result.value
+    if (Object.is(next.fields[field.id], result.value)) continue
+    next = {
+      ...next,
+      fields: {
+        ...next.fields,
+        [field.id]: result.value,
+      },
+    }
   }
 
   return next
@@ -196,7 +223,7 @@ function installPatch(): void {
       recalculateCustomSystemState(state, updated),
     )
 
-    if (sameSystemStates(systems, recalculated)) return updated
+    if (recalculated.every((state, index) => state === systems[index])) return updated
 
     return originalWithPatch.call(updated, {
       sheet: {
@@ -205,11 +232,4 @@ function installPatch(): void {
       },
     })
   }
-}
-
-function sameSystemStates(
-  left: CharacterCustomSystemState[],
-  right: CharacterCustomSystemState[],
-): boolean {
-  return JSON.stringify(left) === JSON.stringify(right)
 }

@@ -11,7 +11,10 @@ import type { JsonValue } from "../../models/customSystems/CustomGenerals"
 import type { SessionCustomSystemOperation } from "../session-runtime/customSystemSessionProtocol"
 import { isLatestUndoableSessionLog, type SessionLogRecord } from "../session-runtime/sessionLogProtocol"
 import type { SessionSkill } from "../session-runtime/sessionProtocol"
-import { useOptionalSessionRuntime } from "../session-runtime/useSessionRuntime"
+import {
+  useOptionalSessionRuntime,
+  useOptionalSessionRuntimeLog,
+} from "../session-runtime/useSessionRuntime"
 import type {
   GameOperation,
   GameOperationRecord,
@@ -28,7 +31,8 @@ const LOG_PAGE_SIZE = 20
 export function SessionActionLog() {
   const { operationLog, visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
   const runtime = useOptionalSessionRuntime()
-  const sessionLog = (runtime?.hpLog ?? []) as SessionLogRecord[]
+  const logRuntime = useOptionalSessionRuntimeLog()
+  const sessionLog = (logRuntime?.hpLog ?? []) as SessionLogRecord[]
   const customSystemDefinitions = runtime?.runtimeConfigSnapshot?.config.customSystems ?? []
   const [page, setPage] = useState(0)
 
@@ -99,7 +103,7 @@ export function SessionActionLog() {
                 characterNames={characterNames}
                 customSystemDefinitions={customSystemDefinitions}
                 canUndo={runtime?.role === "MASTER" && isLatestUndoableSessionLog(sessionLog, entry.record)}
-                onUndo={() => runtime?.undoLog(entry.record.id)}
+                onUndo={() => logRuntime?.undoLog(entry.record.id)}
               />
             ) : (
               <LegacyLogEntry

@@ -127,22 +127,19 @@ export function CustomSystemsTabWithLibrary({
         </div>
       ) : null}
 
-      {activeStates.map((state) => {
-        const visibleCharacter = character.withSheet('customSystems', [state])
-
-        return (
-          <div
-            key={state.systemId}
-            className="[&>div]:!grid-cols-1 [&>div>aside]:hidden"
-          >
-            <CustomSystemsTab
-              character={visibleCharacter}
-              updateCharacter={updateCharacter}
-              actor={actor}
-            />
-          </div>
-        )
-      })}
+      {activeStates.map((state) => (
+        <div
+          key={state.systemId}
+          className="[&>div]:!grid-cols-1 [&>div>aside]:hidden"
+        >
+          <CustomSystemsTab
+            character={character}
+            updateCharacter={updateCharacter}
+            actor={actor}
+            systemIds={[state.systemId]}
+          />
+        </div>
+      ))}
 
       {open ? (
         <AbilityLibraryModal
