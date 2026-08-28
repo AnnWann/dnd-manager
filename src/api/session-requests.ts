@@ -99,7 +99,7 @@ export async function getSessionContentRequests(
     const cached = requestCache.get(key)
     if (cached) return structuredClone(cached)
     const pending = pendingReads.get(key)
-    if (pending) return pending.then(structuredClone)
+    if (pending) return pending.then((requests) => structuredClone(requests))
   }
 
   const request = apiClient
