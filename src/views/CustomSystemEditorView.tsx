@@ -5,6 +5,8 @@ import { useCustomSystemsContext } from '../contexts/customSystemsContext'
 import { AdvancedSystemEditors } from '../features/customSystems/AdvancedSystemEditors'
 import { CustomAbilityConfigurationEditor } from '../features/customSystems/CustomAbilityConfigurationEditor'
 import { CustomAbilityLibraryEditor } from '../features/customSystems/CustomAbilityLibraryEditor'
+import { CustomAbilityRollEditor } from '../features/customSystems/CustomAbilityRollEditor'
+import { CustomResourceActionsEditor } from '../features/customSystems/CustomResourceActionsEditor'
 import { CustomResourceBehaviorEditor } from '../features/customSystems/CustomResourceBehaviorEditor'
 import {
   CustomSystemFieldsEditor,
@@ -20,6 +22,7 @@ import { CustomSystemPlacementEditor } from '../features/customSystems/CustomSys
 import { CustomSystemPreviewEditor } from '../features/customSystems/CustomSystemPreviewEditor'
 import { CustomSystemRequirementsEditor } from '../features/customSystems/CustomSystemRequirementsEditor'
 import { CustomSystemSheetIntegrationEditor } from '../features/customSystems/CustomSystemSheetIntegrationEditor'
+import { sessionCustomSystemPath } from '../lib/campaignRoutes'
 import { readLocalStorageJson, removeLocalStorage, writeLocalStorageJson } from '../lib/storage'
 import type { CustomSystemDefinition } from '../models/customSystems/CustomSystemDefinition'
 
@@ -47,7 +50,7 @@ const TABS: Array<{ id: CustomSystemEditorTab; label: string }> = [
 ]
 
 export function CustomSystemEditorView() {
-  const { systemId = '', tab } = useParams<{ systemId: string; tab?: string }>()
+  const { campaignId, systemId = '', tab } = useParams<{ campaignId?: string; systemId: string; tab?: string }>()
   const navigate = useNavigate()
   const systems = useCustomSystemsContext()
   const definition = systems.definitions.find((entry) => entry.id === systemId)
@@ -56,6 +59,12 @@ export function CustomSystemEditorView() {
   const [error, setError] = useState('')
   const [savedMessage, setSavedMessage] = useState('')
   const [restoredDraft, setRestoredDraft] = useState(false)
+
+  const listPath = campaignId ? sessionCustomSystemPath(campaignId) : '/custom-systems'
+  const pathFor = (targetSystemId: string, targetTab: CustomSystemEditorTab) =>
+    campaignId
+      ? sessionCustomSystemPath(campaignId, targetSystemId, targetTab)
+      : editorPath(targetSystemId, targetTab)
 
   useEffect(() => {
     if (!definition) return
@@ -68,8 +77,8 @@ export function CustomSystemEditorView() {
 
   useEffect(() => {
     if (tab === activeTab || !systemId) return
-    navigate(editorPath(systemId, activeTab), { replace: true })
-  }, [activeTab, navigate, systemId, tab])
+    navigate(pathFor(systemId, activeTab), { replace: true })
+  }, [activeTab, campaignId, navigate, systemId, tab])
 
   const dirty = useMemo(() => Boolean(draft && definition && !definitionsEqual(draft, definition)), [definition, draft])
 
@@ -95,17 +104,17 @@ export function CustomSystemEditorView() {
     return <section className="mx-auto max-w-3xl rounded-xl border border-border bg-bg p-6 text-center">
       <h1 className="text-xl font-semibold text-textH">Sistema não encontrado</h1>
       <p className="mt-2 text-sm text-text">A definição solicitada não existe ou ainda não foi sincronizada.</p>
-      <div className="mt-4"><ActionButton onClick={() => navigate('/custom-systems')}><ArrowLeft className="h-4 w-4" /> Voltar para sistemas</ActionButton></div>
+      <div className="mt-4"><ActionButton onClick={() => navigate(listPath)}><ArrowLeft className="h-4 w-4" /> Voltar para sistemas</ActionButton></div>
     </section>
   }
 
   function changeTab(nextTab: CustomSystemEditorTab) {
-    navigate(editorPath(systemId, nextTab))
+    navigate(pathFor(systemId, nextTab))
   }
 
   function goBack() {
     if (dirty && !window.confirm('Há alterações não salvas. Elas continuarão guardadas neste dispositivo. Voltar para a lista?')) return
-    navigate('/custom-systems')
+    navigate(listPath)
   }
 
   function saveSystem() {
@@ -131,13 +140,13 @@ export function CustomSystemEditorView() {
     setRestoredDraft(false)
     setError('')
     setSavedMessage('Sistema salvo localmente. A sincronização remota continuará em segundo plano.')
-    if (currentDraft.id !== systemId) navigate(editorPath(currentDraft.id, activeTab), { replace: true })
+    if (currentDraft.id !== systemId) navigate(pathFor(currentDraft.id, activeTab), { replace: true })
   }
 
   function duplicateSystem() {
     if (dirty && !window.confirm('A duplicação usará a última versão salva e ignorará alterações ainda não salvas. Continuar?')) return
     const copy = systems.duplicateDefinition(systemId)
-    if (copy) navigate(editorPath(copy.id, activeTab))
+    if (copy) navigate(pathFor(copy.id, activeTab))
   }
 
   function removeSystem() {
@@ -145,7 +154,7 @@ export function CustomSystemEditorView() {
     if (!window.confirm(`Remover o sistema “${draft.name}”? O estado já salvo nos personagens continuará preservado.`)) return
     removeDraft(systemId)
     systems.removeDefinition(systemId)
-    navigate('/custom-systems', { replace: true })
+    navigate(listPath, { replace: true })
   }
 
   return <div className="mx-auto w-full max-w-7xl">
@@ -195,8 +204,12 @@ export function CustomSystemEditorView() {
         {activeTab === 'resources' ? <div>
           <CustomSystemResourcesEditor draft={draft} setDraft={setDraft} />
           <CustomResourceBehaviorEditor draft={draft} setDraft={setDraft} />
+          <CustomResourceActionsEditor draft={draft} setDraft={setDraft} />
         </div> : null}
-        {activeTab === 'abilities' ? <CustomAbilityConfigurationEditor draft={draft} setDraft={setDraft} definitions={systems.definitions} /> : null}
+        {activeTab === 'abilities' ? <div>
+          <CustomAbilityConfigurationEditor draft={draft} setDraft={setDraft} definitions={systems.definitions} />
+          <CustomAbilityRollEditor draft={draft} setDraft={setDraft} />
+        </div> : null}
         {activeTab === 'sheet' ? <CustomSystemSheetIntegrationEditor draft={draft} setDraft={setDraft} definitions={systems.definitions} /> : null}
         {activeTab === 'requirements' ? <CustomSystemRequirementsEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'library' ? <CustomAbilityLibraryEditor draft={draft} setDraft={setDraft} /> : null}
