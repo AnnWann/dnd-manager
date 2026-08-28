@@ -15,10 +15,17 @@ import {
 import { prisma } from "../../../server/prisma.js"
 import { requireSession } from "../../../server/session.js"
 import { CHARACTER_TYPES } from "../../../src/models/characters/CharacterType.js"
-import type { CustomSystemDefinition } from "../../../src/models/customSystems/CustomSystemDefinition.js"
+import type {
+  CharacterCustomSystemState,
+  CustomSystemDefinition,
+} from "../../../src/models/customSystems/CustomSystemDefinition.js"
 import type { CompendiumCreature } from "../../../src/models/creatures/CompendiumCreature.js"
 import type { Itemmable } from "../../../src/models/items/item.js"
 import type { Spell } from "../../../src/models/magic/spells/Spell.js"
+import {
+  CUSTOM_SYSTEM_SUPPRESSED_FIELD,
+  reconcileConfiguredCustomSystemStates,
+} from "../../../src/lib/customSystems/CustomSystemConfigurationReconciliation.js"
 import type {
   CreationCharacterConfiguration,
   CreationCharacterCustomSystemConfiguration,
@@ -205,6 +212,7 @@ export async function PATCH(
             data: mergeCharacterCreationConfiguration(
               currentData,
               configuration,
+              systems,
             ) as never,
           },
         })
@@ -727,6 +735,17 @@ function readCreationCharacterCustomSystemConfiguration(
     enabled: state.enabled,
   }
 
+  if (state.suppressed !== undefined) {
+    if (typeof state.suppressed !== "boolean") {
+      throw new ApiError(
+        400,
+        "CREATION_CHARACTER_SYSTEM_SUPPRESSED_INVALID",
+        "O estado de remoção do sistema personalizado é inválido.",
+      )
+    }
+    configuration.suppressed = state.suppressed
+  }
+
   if (state.abilityAcquisitionExceptions !== undefined) {
     const exceptions = asRecord(state.abilityAcquisitionExceptions)
     if (!exceptions) {
@@ -899,35 +918,19 @@ function readCreationCustomSystem(value: unknown): CustomSystemDefinition {
 function mergeCharacterCreationConfiguration(
   rawData: unknown,
   configuration: CreationCharacterConfiguration,
+  definitions: CustomSystemDefinition[],
 ): JsonRecord {
   const data = asRecord(rawData) ?? {}
   const sheet = asRecord(data.sheet) ?? {}
   const owner = asRecord(data.owner) ?? {}
-  const currentSystems = Array.isArray(sheet.customSystems)
+  const currentSystems = (Array.isArray(sheet.customSystems)
     ? sheet.customSystems
-    : []
-  const configuredSystems = new Map(
-    configuration.customSystems.map((state) => [state.systemId, state]),
+    : []) as CharacterCustomSystemState[]
+  const reconciledSystems = reconcileConfiguredCustomSystemStates(
+    currentSystems,
+    configuration.customSystems,
+    definitions,
   )
-
-  const mergedSystems = currentSystems.map((value) => {
-    const current = asRecord(value)
-    if (!current || typeof current.systemId !== "string") return value
-    const configured = configuredSystems.get(current.systemId)
-    if (!configured) return value
-    configuredSystems.delete(current.systemId)
-    return {
-      ...current,
-      systemVersion: configured.systemVersion,
-      enabled: configured.enabled,
-      abilityAcquisitionExceptions: configured.abilityAcquisitionExceptions,
-      installationSource: configured.installationSource,
-    }
-  })
-
-  for (const configured of configuredSystems.values()) {
-    mergedSystems.push(configured)
-  }
 
   return {
     ...data,
@@ -940,7 +943,7 @@ function mergeCharacterCreationConfiguration(
       ...sheet,
       type: configuration.type,
       hiddenCharacterTabs: configuration.hiddenCharacterTabs,
-      customSystems: mergedSystems,
+      customSystems: reconciledSystems,
     },
   }
 }
@@ -997,6 +1000,11 @@ function toCustomSystemConfiguration(
         ? state.systemVersion
         : 1,
     enabled: state.enabled !== false,
+  }
+
+  const fields = asRecord(state.fields)
+  if (state.enabled === false && fields?.[CUSTOM_SYSTEM_SUPPRESSED_FIELD] === true) {
+    configuration.suppressed = true
   }
 
   if (
