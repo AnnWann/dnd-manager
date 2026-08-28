@@ -20,11 +20,23 @@ jobs:
           ref: qa
           fetch-depth: 0
 
-      - name: Apply patch
-        run: python .github/patch_initiative_identity_deathsaves.py
+      - name: Apply model and protocol patch
+        shell: bash
+        run: |
+          set +e
+          output="$(python .github/patch_initiative_identity_deathsaves.py 2>&1)"
+          status=$?
+          printf '%s\n' "$output"
+          set -e
+          if [ "$status" -ne 0 ] && ! printf '%s' "$output" | grep -Fq "anchor not found: initiative actor settings/death saves cases"; then
+            exit "$status"
+          fi
+
+      - name: Apply actor and UI continuation
+        run: python .github/patch_initiative_identity_deathsaves_continue.py
 
       - name: Remove temporary patch files
-        run: rm .github/patch_initiative_identity_deathsaves.py .github/workflows/apply-initiative-identity-deathsaves.yml
+        run: rm .github/patch_initiative_identity_deathsaves.py .github/patch_initiative_identity_deathsaves_continue.py .github/workflows/apply-initiative-identity-deathsaves.yml
 
       - name: Install frontend dependencies
         run: npm install --package-lock=false --ignore-scripts
