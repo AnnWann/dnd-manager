@@ -16,9 +16,11 @@ import {
   evaluateCustomFormula,
   getCustomAbilityAvailability,
 } from "../../../../../../lib/customSystems"
-import { activateCustomAbilityWithRoll } from "../../../../../../lib/customSystems/CustomAbilityRoll"
 import {
-  activateCustomSystemAction,
+  activateCustomAbilityWithRoll,
+  activateCustomSystemActionWithRoll,
+} from "../../../../../../lib/customSystems/CustomAbilityRoll"
+import {
   getEffectiveCustomAbilityActivation,
 } from "../../../../../../lib/customSystems/CustomSystemActions"
 import { useCustomSystemDefinitions } from "../../../../../../lib/customSystems/CustomSystemRegistry"
@@ -102,7 +104,9 @@ export function CustomSystemActionsPanel({
       }
 
       if (sessionRuntime && entry.operation) {
-        const operation = entry.operation.type === "character.customSystem.ability.activate" && rollValue !== undefined
+        const acceptsRoll = entry.operation.type === "character.customSystem.ability.activate"
+          || entry.operation.type === "character.customSystem.action.execute"
+        const operation = acceptsRoll && rollValue !== undefined
           ? { ...entry.operation, rollValue }
           : entry.operation
         sessionRuntime.dispatchAbilityOperation(operation)
@@ -239,19 +243,21 @@ function buildEntries(
         description: action.description,
         source: definition.name,
         actionKind: action.actionKind,
+        roll: action.roll,
         operation: {
           type: "character.customSystem.action.execute",
           characterId,
           systemId: definition.id,
           actionId: action.id,
         },
-        activate: (current) =>
-          activateCustomSystemAction(
+        activate: (current, rollValue) =>
+          activateCustomSystemActionWithRoll(
             current,
             definitions,
             definition.id,
             action.id,
-          ),
+            rollValue,
+          ).character,
       })
     }
 
