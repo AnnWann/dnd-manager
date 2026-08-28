@@ -39,6 +39,7 @@ import type {
   CustomAbilityInstance,
   CustomSystemDefinition,
 } from "../../../models/customSystems/CustomSystemDefinition"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 
 type ActionFilter = "action" | "bonusAction" | "reaction" | "free" | "passive"
 
@@ -116,6 +117,7 @@ export function MinimalCharacterActions({
 }) {
   const navigate = useNavigate()
   const definitions = useCustomSystemDefinitions()
+  const sessionRuntime = useOptionalSessionRuntime()
   const { getMetamagicsByIds } = useMagicContext()
   const [filter, setFilter] = useState<ActionFilter>("action")
   const [selected, setSelected] = useState<ActionEntry | null>(null)
@@ -182,9 +184,37 @@ export function MinimalCharacterActions({
     action: "use" | "deactivate",
     optionId?: string,
   ) {
-    if (!entry.abilitySource) return
+    const source = entry.abilitySource
+    if (!source) return
+
+    if (sessionRuntime) {
+      if (sessionRuntime.status !== "connected") {
+        setError("A sessão está desconectada. Não foi possível alterar a habilidade.")
+        return
+      }
+
+      const sent = sessionRuntime.dispatchAbilityOperation({
+        type: action === "use"
+          ? "character.ability.use"
+          : "character.ability.deactivate",
+        characterId: character.get("id"),
+        source,
+        abilityName: entry.ability?.name,
+        ...(action === "use" && optionId
+          ? { activationOptionId: optionId }
+          : {}),
+      })
+
+      if (!sent) {
+        setError("Não foi possível enviar a alteração da habilidade para a sessão.")
+        return
+      }
+
+      setSelected(null)
+      return
+    }
+
     updateCharacter(character.get("id"), (current) => {
-      const source = entry.abilitySource!
       if (source.type === "equipment") {
         return action === "use"
           ? current.useEquipmentAbility(source.itemId, source.abilityId)
@@ -211,6 +241,28 @@ export function MinimalCharacterActions({
     if (!source) return
     try {
       setError("")
+
+      if (sessionRuntime) {
+        if (sessionRuntime.status !== "connected") {
+          setError("A sessão está desconectada. Não foi possível executar esta ação.")
+          return
+        }
+
+        const sent = sessionRuntime.dispatchAbilityOperation({
+          type: "character.customSystem.action.execute",
+          characterId: character.get("id"),
+          systemId: source.systemId,
+          actionId: source.actionId,
+        })
+        if (!sent) {
+          setError("Não foi possível enviar esta ação para a sessão.")
+          return
+        }
+
+        setSelected(null)
+        return
+      }
+
       updateCharacter(character.get("id"), (current) =>
         activateCustomSystemAction(
           current,
@@ -234,6 +286,28 @@ export function MinimalCharacterActions({
     if (!source) return
     try {
       setError("")
+
+      if (sessionRuntime) {
+        if (sessionRuntime.status !== "connected") {
+          setError("A sessão está desconectada. Não foi possível usar esta habilidade.")
+          return
+        }
+
+        const sent = sessionRuntime.dispatchAbilityOperation({
+          type: "character.customSystem.ability.activate",
+          characterId: character.get("id"),
+          systemId: source.systemId,
+          abilityId: source.abilityId,
+        })
+        if (!sent) {
+          setError("Não foi possível enviar esta habilidade para a sessão.")
+          return
+        }
+
+        setSelected(null)
+        return
+      }
+
       const next = activateCustomAbility(
         character,
         definitions,
@@ -263,6 +337,28 @@ export function MinimalCharacterActions({
     }
 
     setError("")
+
+    if (sessionRuntime) {
+      if (sessionRuntime.status !== "connected") {
+        setError("A sessão está desconectada. Não foi possível gastar pontos de feitiçaria.")
+        return
+      }
+
+      const sent = Array.from({ length: cost }).every(() =>
+        sessionRuntime.dispatchMagicOperation({
+          type: "character.sorceryPoint.spend",
+          characterId: character.get("id"),
+        }),
+      )
+      if (!sent) {
+        setError("Não foi possível enviar o gasto de pontos de feitiçaria para a sessão.")
+        return
+      }
+
+      setSelected(null)
+      return
+    }
+
     updateCharacter(character.get("id"), (current) => {
       const currentPool = getSorceryPointPool(current)
       if (currentPool.current < cost) return current
