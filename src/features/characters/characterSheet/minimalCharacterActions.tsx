@@ -7,6 +7,7 @@ import { Modal } from "../../../components/ui/Modal"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
 import {
+  evaluateCustomFormula,
   getCustomAbilityAvailability,
 } from "../../../lib/customSystems"
 import { activateCustomAbilityWithRoll } from "../../../lib/customSystems/CustomAbilityRoll"
@@ -59,6 +60,15 @@ type CustomAbilitySource = {
 type CustomSystemActionSource = {
   systemId: string
   actionId: string
+}
+
+type CustomAbilityCostPreview = {
+  key: string
+  name: string
+  amount?: number
+  current?: number
+  sufficient?: boolean
+  unavailable?: boolean
 }
 
 type ActionEntry = {
@@ -171,6 +181,22 @@ export function MinimalCharacterActions({
   const passiveAbilities = useMemo(
     () => getPassiveAbilities(character),
     [character],
+  )
+  const selectedCustomAbilityCosts = useMemo(() => {
+    if (!selected?.customAbilitySource) return []
+    const previewRollValue =
+      selected.customAbilityRoll?.mode === "manual" && isFiniteInput(manualRollValue)
+        ? Number(manualRollValue)
+        : undefined
+    return resolveCustomAbilityCosts(
+      character,
+      definitions,
+      selected.customAbilitySource,
+      previewRollValue,
+    )
+  }, [character, definitions, manualRollValue, selected])
+  const selectedCustomAbilityCostError = customAbilityCostError(
+    selectedCustomAbilityCosts,
   )
 
   function open(entry: ActionEntry) {
@@ -303,6 +329,14 @@ export function MinimalCharacterActions({
           setError("Informe um resultado numérico válido para a rolagem.")
           return
         }
+      }
+
+      const costError = customAbilityCostError(
+        resolveCustomAbilityCosts(character, definitions, source, rollValue),
+      )
+      if (costError) {
+        setError(costError)
+        return
       }
 
       if (sessionRuntime) {
@@ -465,6 +499,11 @@ export function MinimalCharacterActions({
               {selected.customAbilitySource || selected.customSystemActionSource ? (
                 <span>• Sistema personalizado</span>
               ) : null}
+              {selectedCustomAbilityCosts.map((cost) => (
+                <span key={cost.key}>
+                  • Custo: {formatCustomAbilityCost(cost)}
+                </span>
+              ))}
             </div>
             <p className="whitespace-pre-wrap text-sm leading-6 text-text">{selected.description}</p>
             {selected.customAbilityRoll?.mode === "manual" ? (
@@ -511,9 +550,9 @@ export function MinimalCharacterActions({
                 />
               </label>
             ) : null}
-            {error ? (
+            {error || selectedCustomAbilityCostError ? (
               <div className="rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">
-                {error}
+                {error || selectedCustomAbilityCostError}
               </div>
             ) : null}
             {selected.metamagicCost !== undefined ? (
@@ -539,7 +578,10 @@ export function MinimalCharacterActions({
               <div className="flex justify-end border-t border-border pt-3">
                 <Button
                   variant="primary"
-                  disabled={selected.customAbilityRoll?.mode === "manual" && !isFiniteInput(manualRollValue)}
+                  disabled={
+                    Boolean(selectedCustomAbilityCostError) ||
+                    (selected.customAbilityRoll?.mode === "manual" && !isFiniteInput(manualRollValue))
+                  }
                   onClick={() => useCustomAbility(selected)}
                 >
                   Usar
@@ -831,6 +873,152 @@ function customAbilityEntry(
     },
     customAbilityRoll: activation.roll,
   }
+}
+
+function resolveCustomAbilityCosts(
+  character: CharacterTemplate,
+  definitions: CustomSystemDefinition[],
+  source: CustomAbilitySource,
+  rollValue?: number,
+): CustomAbilityCostPreview[] {
+  const states = (character.get("sheet").customSystems ?? []) as CharacterCustomSystemState[]
+  const state = states.find((entry) => entry.systemId === source.systemId)
+  const definition = definitions.find((entry) => entry.id === source.systemId)
+  const ability = state?.abilities.find((entry) => entry.id === source.abilityId)
+  const type = ability && definition?.abilityTypes.find(
+    (entry) => entry.id === ability.abilityTypeId,
+  )
+  if (!state || !definition || !ability || !type) return []
+
+  const activation = getEffectiveCustomAbilityActivation(type, ability)
+  return (activation.resourceChanges ?? [])
+    .filter((change) => change.operation === "spend")
+    .map((change) => {
+      const amount = resolveCustomAbilityCostAmount(
+        change,
+        definition,
+        state,
+        type,
+        ability,
+        character,
+        rollValue,
+      )
+
+      if (change.target.source === "native") {
+        const current = nativeResourcePreviewValue(character, change.target.resource)
+        const sufficient = amount === undefined
+          ? undefined
+          : change.target.resource === "hitPoints" || current >= amount
+        return {
+          key: change.id,
+          name: nativeResourcePreviewName(change.target.resource),
+          amount,
+          current,
+          sufficient,
+        }
+      }
+
+      const targetState = states.find(
+        (entry) => entry.systemId === change.target.systemId,
+      )
+      const targetDefinition = definitions.find(
+        (entry) => entry.id === change.target.systemId,
+      )
+      const resource = targetDefinition?.resources.find(
+        (entry) => entry.id === change.target.resourceId,
+      )
+      const resourceState = targetState?.resources[change.target.resourceId]
+      if (!resource || !resourceState) {
+        return {
+          key: change.id,
+          name: resource?.name || change.target.resourceId,
+          amount,
+          sufficient: false,
+          unavailable: true,
+        }
+      }
+
+      const minimum = resource.minimum ?? 0
+      return {
+        key: change.id,
+        name: resource.name,
+        amount,
+        current: resourceState.current,
+        sufficient: amount === undefined
+          ? undefined
+          : resourceState.current - amount >= minimum,
+      }
+    })
+}
+
+function resolveCustomAbilityCostAmount(
+  change: NonNullable<ReturnType<typeof getEffectiveCustomAbilityActivation>["resourceChanges"]>[number],
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  type: NonNullable<CustomSystemDefinition["abilityTypes"]>[number],
+  ability: CustomAbilityInstance,
+  character: CharacterTemplate,
+  rollValue?: number,
+): number | undefined {
+  if (!change.formula?.trim()) return Math.max(0, change.amount ?? 0)
+
+  let formula = change.formula
+  if (formula.includes("roll.value")) {
+    if (rollValue === undefined) return undefined
+    formula = formula.replace(
+      /(^|[^A-Za-z0-9_.-])roll\.value(?=$|[^A-Za-z0-9_.-])/g,
+      (_match, prefix: string) => `${prefix}(${rollValue})`,
+    )
+  }
+
+  const result = evaluateCustomFormula(
+    formula,
+    definition,
+    state,
+    character,
+    { type, values: ability.values },
+  )
+  if (!result.ok || typeof result.value !== "number" || !Number.isFinite(result.value)) {
+    return undefined
+  }
+  return Math.max(0, result.value)
+}
+
+function customAbilityCostError(costs: CustomAbilityCostPreview[]): string {
+  const unavailable = costs.find((cost) => cost.unavailable)
+  if (unavailable) return `O recurso “${unavailable.name}” não está disponível.`
+  const insufficient = costs.find((cost) => cost.sufficient === false)
+  return insufficient ? `Não há ${insufficient.name} suficiente.` : ""
+}
+
+function formatCustomAbilityCost(cost: CustomAbilityCostPreview): string {
+  if (cost.amount === undefined) return `variável de ${cost.name}`
+  return `${formatResourceAmount(cost.amount)} ${cost.name}`
+}
+
+function formatResourceAmount(value: number): string {
+  return Number.isInteger(value)
+    ? String(value)
+    : value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })
+}
+
+function nativeResourcePreviewName(
+  resource: "hitPoints" | "temporaryHitPoints" | "inspiration" | "exhaustion",
+): string {
+  if (resource === "hitPoints") return "Pontos de Vida"
+  if (resource === "temporaryHitPoints") return "Pontos de Vida temporários"
+  if (resource === "inspiration") return "Inspiração"
+  return "Exaustão"
+}
+
+function nativeResourcePreviewValue(
+  character: CharacterTemplate,
+  resource: "hitPoints" | "temporaryHitPoints" | "inspiration" | "exhaustion",
+): number {
+  if (resource === "hitPoints") return character.get("sheet").HP.current
+  if (resource === "temporaryHitPoints") return character.get("sheet").HP.temporary ?? 0
+  if (resource === "inspiration") return character.get("sheet").stats.inspiration ? 1 : 0
+  return character.get("sheet").stats.exhaustion ?? 0
 }
 
 function getPassiveAbilities(character: CharacterTemplate): ActionEntry[] {
