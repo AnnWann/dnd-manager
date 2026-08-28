@@ -16,7 +16,7 @@ export type SessionCustomSystemOperation =
   | { type: "character.customSystem.ability.learned.set"; characterId: string; systemId: string; abilityId: string; learned: boolean }
   | { type: "character.customSystem.ability.prepared.set"; characterId: string; systemId: string; abilityId: string; prepared: boolean }
   | { type: "character.customSystem.ability.usage.set"; characterId: string; systemId: string; abilityId: string; used: number }
-  | { type: "character.customSystem.ability.activate"; characterId: string; systemId: string; abilityId: string }
+  | { type: "character.customSystem.ability.activate"; characterId: string; systemId: string; abilityId: string; rollValue?: number }
   | { type: "character.customSystem.action.execute"; characterId: string; systemId: string; actionId: string }
   | { type: "character.customSystem.automation.execute"; characterId: string; systemId: string; automationId: string };
 
@@ -50,8 +50,10 @@ function isOperation(value: unknown): value is SessionCustomSystemOperation {
     case "character.customSystem.ability.add":
       return isAbility(value.ability);
     case "character.customSystem.ability.remove":
-    case "character.customSystem.ability.activate":
       return nonEmpty(value.abilityId);
+    case "character.customSystem.ability.activate":
+      return nonEmpty(value.abilityId)
+        && (value.rollValue === undefined || finite(value.rollValue));
     case "character.customSystem.ability.field.set":
       return nonEmpty(value.abilityId) && nonEmpty(value.fieldId) && isJsonValue(value.value);
     case "character.customSystem.ability.learned.set":
@@ -97,8 +99,12 @@ function isJsonValue(value: unknown): value is JsonValue {
   return Object.values(value).every(isJsonValue);
 }
 
+function finite(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 function finiteNonZero(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value !== 0;
+  return finite(value) && value !== 0;
 }
 
 function nonNegativeInteger(value: unknown): value is number {
