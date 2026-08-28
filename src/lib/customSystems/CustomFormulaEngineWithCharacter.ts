@@ -23,6 +23,8 @@ export type { CustomFormulaResult, CustomFormulaVariable }
 export type CustomAbilityFormulaContext = {
   type: CustomAbilityTypeDefinition
   values?: Record<string, JsonValue>
+  /** Resultado de uma rolagem resolvida para esta ativação. */
+  rollValue?: number
 }
 
 type SystemGroupedFormulaVariable = CustomFormulaVariable & {
@@ -50,6 +52,10 @@ export function listCustomFormulaVariables(
       valueType: formulaValueType(field),
     }))
 
+  const rollVariables: CustomFormulaVariable[] = abilityType?.activation?.roll
+    ? [{ path: 'roll.value', label: 'Resultado da rolagem', valueType: 'number' }]
+    : []
+
   const variables: SystemGroupedFormulaVariable[] = [
     ...listCharacterFormulaVariables(),
     ...listBaseFormulaVariables(definition).map((variable) => ({
@@ -63,6 +69,11 @@ export function listCustomFormulaVariables(
       customSystemName: definition.name,
     })),
     ...abilityVariables.map((variable) => ({
+      ...variable,
+      customSystemId: definition.id,
+      customSystemName: definition.name,
+    })),
+    ...rollVariables.map((variable) => ({
       ...variable,
       customSystemId: definition.id,
       customSystemName: definition.name,
@@ -135,8 +146,15 @@ function transformFormulaContext(
     field,
   }))
 
-  const replacements = [...characterReplacements, ...abilityReplacements]
-    .sort((left, right) => right.path.length - left.path.length)
+  const rollReplacement = ability?.type.activation?.roll
+    ? { path: 'roll.value', fieldId: toVirtualFieldId('__roll', 'value') }
+    : undefined
+
+  const replacements = [
+    ...characterReplacements,
+    ...abilityReplacements,
+    ...(rollReplacement ? [rollReplacement] : []),
+  ].sort((left, right) => right.path.length - left.path.length)
 
   const translate = (expression: string | undefined): string | undefined => {
     if (!expression) return expression
@@ -179,6 +197,15 @@ function transformFormulaContext(
     }
   })
 
+  const rollVirtualFields: CustomFieldDefinition[] = rollReplacement
+    ? [{
+        id: rollReplacement.fieldId,
+        name: 'roll.value',
+        type: 'number',
+        editPermission: 'automaticOnly',
+      }]
+    : []
+
   const abilityStateValues = Object.fromEntries(
     abilityReplacements
       .filter(({ field }) => field.type !== 'formula')
@@ -203,6 +230,7 @@ function transformFormulaContext(
         ),
         ...characterVirtualFields,
         ...abilityVirtualFields,
+        ...rollVirtualFields,
       ],
       resources: definition.resources.map((resource) => ({
         ...resource,
@@ -217,6 +245,7 @@ function transformFormulaContext(
           characterReplacements.map(({ path, fieldId }) => [fieldId, characterValues[path]]),
         ),
         ...abilityStateValues,
+        ...(rollReplacement ? { [rollReplacement.fieldId]: ability?.rollValue ?? 0 } : {}),
       },
     },
   }
