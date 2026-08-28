@@ -19,7 +19,12 @@ export async function POST(request: Request): Promise<Response> {
     const body = await readJsonObject(request)
     const visibility = parseVisibility(body.visibility)
 
-    const access = await requireCampaignAccess(campaignId, session.user.id)
+    // A user that already requested entry may submit the character request in
+    // the same flow. Approval of membership and approval of content remain
+    // independent decisions for the MASTER.
+    const access = await requireCampaignAccess(campaignId, session.user.id, {
+      allowInvited: true,
+    })
     const character = await requireOwnedCharacter(characterId, session.user.id)
 
     if (!access.isMaster) {
@@ -75,30 +80,38 @@ export async function POST(request: Request): Promise<Response> {
       )
     }
 
-    const link = await prisma.campaignCharacter.upsert({
-      where: {
-        campaignId_characterId: {
-          campaignId,
-          characterId,
-        },
-      },
-      update: {
-        visibility,
-      },
-      create: {
-        campaignId,
-        characterId,
-        visibility,
-      },
-      select: {
-        visibility: true,
-        character: {
-          select: {
-            id: true,
-            name: true,
+    const link = await prisma.$transaction(async (tx) => {
+      const linked = await tx.campaignCharacter.upsert({
+        where: {
+          campaignId_characterId: {
+            campaignId,
+            characterId,
           },
         },
-      },
+        update: {
+          visibility,
+        },
+        create: {
+          campaignId,
+          characterId,
+          visibility,
+        },
+        select: {
+          visibility: true,
+          character: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      })
+
+      await tx.campaign.update({
+        where: { id: campaignId },
+        data: { creationRevision: { increment: 1 } },
+      })
+      return linked
     })
 
     return jsonResponse(
@@ -126,14 +139,24 @@ export async function PATCH(request: Request): Promise<Response> {
     await requireCampaignAccess(campaignId, session.user.id)
     await requireOwnedCharacter(characterId, session.user.id)
 
-    const updated = await prisma.campaignCharacter.updateMany({
-      where: {
-        campaignId,
-        characterId,
-      },
-      data: {
-        visibility,
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.campaignCharacter.updateMany({
+        where: {
+          campaignId,
+          characterId,
+        },
+        data: {
+          visibility,
+        },
+      })
+
+      if (result.count) {
+        await tx.campaign.update({
+          where: { id: campaignId },
+          data: { creationRevision: { increment: 1 } },
+        })
+      }
+      return result
     })
 
     if (!updated.count) {
@@ -163,21 +186,27 @@ export async function DELETE(request: Request): Promise<Response> {
     await requireCampaignAccess(campaignId, session.user.id)
     await requireOwnedCharacter(characterId, session.user.id)
 
-    await prisma.$transaction([
-      prisma.campaignCharacter.deleteMany({
+    await prisma.$transaction(async (tx) => {
+      const removed = await tx.campaignCharacter.deleteMany({
         where: {
           campaignId,
           characterId,
         },
-      }),
-      prisma.$executeRaw`
+      })
+      await tx.$executeRaw`
         DELETE FROM "campaign_content_request"
         WHERE "campaignId" = ${campaignId}
           AND "type" = 'CHARACTER'
           AND "sourceId" = ${characterId}
           AND "submittedById" = ${session.user.id}
-      `,
-    ])
+      `
+      if (removed.count) {
+        await tx.campaign.update({
+          where: { id: campaignId },
+          data: { creationRevision: { increment: 1 } },
+        })
+      }
+    })
 
     return new Response(null, { status: 204 })
   } catch (error) {
@@ -233,7 +262,12 @@ function parseVisibility(value: unknown): CharacterVisibility {
 async function requireCampaignAccess(
   campaignId: string,
   userId: string,
-): Promise<{ isMaster: boolean }> {
+  options: { allowInvited?: boolean } = {},
+): Promise<{ isMaster: boolean; status: CampaignMemberStatus }> {
+  const allowedStatuses = options.allowInvited
+    ? [CampaignMemberStatus.ACTIVE, CampaignMemberStatus.INVITED]
+    : [CampaignMemberStatus.ACTIVE]
+
   const campaign = await prisma.campaign.findFirst({
     where: {
       id: campaignId,
@@ -243,7 +277,7 @@ async function requireCampaignAccess(
           members: {
             some: {
               userId,
-              status: CampaignMemberStatus.ACTIVE,
+              status: { in: allowedStatuses },
             },
           },
         },
@@ -254,11 +288,13 @@ async function requireCampaignAccess(
       members: {
         where: {
           userId,
-          status: CampaignMemberStatus.ACTIVE,
+          status: { in: allowedStatuses },
         },
         select: {
           role: true,
+          status: true,
         },
+        take: 1,
       },
     },
   })
@@ -267,14 +303,26 @@ async function requireCampaignAccess(
     throw new ApiError(
       403,
       "CAMPAIGN_ACCESS_DENIED",
-      "Você precisa ser membro ativo desta campanha.",
+      options.allowInvited
+        ? "Você precisa ter uma solicitação de entrada ou ser membro ativo desta campanha."
+        : "Você precisa ser membro ativo desta campanha.",
     )
+  }
+
+  if (campaign.ownerId === userId) {
+    return { isMaster: true, status: CampaignMemberStatus.ACTIVE }
+  }
+
+  const membership = campaign.members[0]
+  if (!membership) {
+    throw new ApiError(403, "CAMPAIGN_ACCESS_DENIED", "Acesso à campanha não encontrado.")
   }
 
   return {
     isMaster:
-      campaign.ownerId === userId ||
-      campaign.members.some((member) => member.role === CampaignRole.MASTER),
+      membership.status === CampaignMemberStatus.ACTIVE &&
+      membership.role === CampaignRole.MASTER,
+    status: membership.status,
   }
 }
 
