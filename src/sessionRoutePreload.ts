@@ -1,4 +1,5 @@
 let commonSessionPreload: Promise<void> | null = null
+let playerSessionPreload: Promise<void> | null = null
 let masterSessionPreload: Promise<void> | null = null
 
 /**
@@ -17,15 +18,20 @@ export function preloadSessionRouteModules(isMaster: boolean): Promise<void> {
     import("./views/PartyInventoryView"),
     import("./views/GroundInventoryView"),
     import("./views/MissionsView"),
+    import("./views/InitiativeRoleView"),
   ]).then(() => undefined)
 
-  if (!isMaster) return common
+  if (!isMaster) {
+    return playerSessionPreload ??= Promise.all([
+      common,
+      import("./views/InitiativePlayerView"),
+    ]).then(() => undefined)
+  }
 
   const master = masterSessionPreload ??= Promise.all([
     common,
-    import("./views/InitiativeRoleView"),
-    // InitiativeRoleView has its own nested lazy boundary. A MASTER always
-    // resolves to InitiativeView, so warm that chunk as part of session entry.
+    // InitiativeRoleView has its own nested lazy boundary. A MASTER resolves
+    // to InitiativeView, so warm that chunk as part of session entry.
     import("./views/InitiativeView"),
     import("./features/creation/CreationEditorRouteOutlet"),
     import("./views/session/SessionCreationSettingsView"),
