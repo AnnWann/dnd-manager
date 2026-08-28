@@ -9,6 +9,11 @@ import type { SessionAbilityState } from "../characters/abilities/abilityProtoco
 import { MAX_HP_LOG_RECORDS } from "../characters/sheet/hpState";
 import type { SessionConnection } from "./protocol";
 import { parseRuntimeConfigPublishMessage } from "./runtimeConfigProtocol";
+import {
+  CharacterTemplate,
+  type CharacterTemplateProps,
+} from "../../../../src/models/characters/CharacterTemplate";
+import { reconcileConfiguredCustomSystemStates } from "../../../../src/lib/customSystems/CustomSystemConfigurationReconciliation";
 import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/session-runtime/sessionRuntimeConfig";
 import {
   RUNTIME_CONFIG_STATE_KEY,
@@ -190,7 +195,18 @@ export class SessionActor extends ComposedSessionActor {
       // canonical DB snapshot is therefore allowed to reconcile one of those
       // legacy collisions in-place. New writes now increment the revision, so
       // this path is recovery rather than the normal update mechanism.
-      await this.ctx.storage.put(RUNTIME_CONFIG_STATE_KEY, structuredClone(snapshot));
+      const reconciledAbilities = await reconcileAbilityCustomSystems(
+        this.ctx.storage,
+        snapshot,
+      );
+      const writes: Record<string, unknown> = {
+        [RUNTIME_CONFIG_STATE_KEY]: structuredClone(snapshot),
+      };
+      if (reconciledAbilities) {
+        writes[ABILITIES_STATE_KEY] = reconciledAbilities;
+      }
+      await this.ctx.storage.put(writes);
+
       const sockets = this.ctx.getWebSockets();
       refreshAllConnectionVisibility(sockets, snapshot);
       broadcastRuntimeConfig(sockets, snapshot);
@@ -352,6 +368,52 @@ export class SessionActor extends ComposedSessionActor {
       });
     }
   }
+}
+
+async function reconcileAbilityCustomSystems(
+  storage: DurableObjectStorage,
+  snapshot: SessionRuntimeConfigSnapshot,
+): Promise<Record<string, SessionAbilityState> | null> {
+  const abilities = (
+    await storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY)
+  ) ?? {};
+  const characterConfigById = new Map(
+    snapshot.config.characters.map((character) => [character.characterId, character]),
+  );
+  let changed = false;
+
+  for (const [characterId, stored] of Object.entries(abilities)) {
+    if (!stored.initialized) continue;
+    const configuration = characterConfigById.get(characterId);
+    if (!configuration) continue;
+
+    let character: CharacterTemplate;
+    try {
+      character = CharacterTemplate.fromJSON(
+        stored.character as Partial<CharacterTemplateProps>,
+      );
+    } catch {
+      continue;
+    }
+
+    const currentSystems = character.get("sheet").customSystems ?? [];
+    const nextSystems = reconcileConfiguredCustomSystemStates(
+      currentSystems,
+      configuration.customSystems,
+      snapshot.config.customSystems,
+    );
+    if (JSON.stringify(currentSystems) === JSON.stringify(nextSystems)) continue;
+
+    const nextCharacter = character.withSheet("customSystems", nextSystems);
+    abilities[characterId] = {
+      ...stored,
+      character: nextCharacter.toJSON() as unknown as Record<string, unknown>,
+      revision: stored.revision + 1,
+    };
+    changed = true;
+  }
+
+  return changed ? abilities : null;
 }
 
 function bindDomainActor<T extends SharedDomainActor>(prototype: T, ctx: DurableObjectState): T {
