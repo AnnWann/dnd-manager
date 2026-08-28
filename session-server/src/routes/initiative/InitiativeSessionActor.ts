@@ -17,6 +17,8 @@ import {
   type CharacterTemplateProps,
 } from "../../../../src/models/characters/CharacterTemplate";
 import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/session-runtime/sessionRuntimeConfig";
+import { resolveDamage, normalizeDamageAffinities, type DamageAffinity } from "../../../../src/models/combat/Damage";
+import { getCreatureEffectiveArmorClass } from "../../../../src/models/creatures/CreatureCombatRuntime";
 import {
   addInitiativeEntries,
   advanceInitiativeTurn,
@@ -46,6 +48,11 @@ import {
   projectInitiativeSessionFromCharacterState,
   synchronizeInitiativeEditsToCharacterState,
 } from "./initiativeCharacterProjection";
+import {
+  COMPENDIUM_SOURCE_PREFIX,
+  creatureIdFromSourceId,
+  projectInitiativeSessionFromCreatureState,
+} from "./initiativeCreatureProjection";
 
 export const INITIATIVE_STATE_KEY = "initiative-state";
 export const INITIATIVE_SHARED_SCOPE = "initiative:shared";
@@ -141,7 +148,7 @@ export class SessionActor {
     }
 
     const before = structuredClone(state);
-    const result = applyInitiativeOperation(current, operation, runtimeConfig);
+    const result = applyInitiativeOperation(current, operation, runtimeConfig, abilities, conditions);
     if (!result.ok) {
       sendError(webSocket, result.code, result.message);
       return;
@@ -237,6 +244,10 @@ export class SessionActor {
     nextSession = projectInitiativeSessionFromCharacterState(
       nextSession,
       { abilities, hp, conditions },
+    ).session;
+    nextSession = projectInitiativeSessionFromCreatureState(
+      nextSession,
+      runtimeConfig,
     ).session;
     state.session = nextSession as unknown as Record<string, unknown>;
     state.revision += 1;
@@ -505,6 +516,8 @@ function applyInitiativeOperation(
   current: InitiativeSession,
   operation: SessionInitiativeOperation,
   runtimeConfig: SessionRuntimeConfigSnapshot | null,
+  abilities: Record<string, SessionAbilityState>,
+  conditions: Record<string, SessionConditionsState>,
 ): { ok: true; session: InitiativeSession; operation: SessionInitiativeOperation } | { ok: false; code: string; message: string } {
   switch (operation.type) {
     case "initiative.entries.add": {
@@ -530,12 +543,106 @@ function applyInitiativeOperation(
       if (!existing) return invalid("INITIATIVE_ENTRY_NOT_FOUND", "Initiative entry was not found.");
       const patch = normalizeEntryPatch(operation.patch);
       if (!Object.keys(patch).length) return invalid("INITIATIVE_PATCH_INVALID", "No supported initiative fields were supplied.");
+      if (patch.armorClass !== undefined && existing.sourceId?.startsWith(COMPENDIUM_SOURCE_PREFIX)) {
+        const creature = findRuntimeCreature(runtimeConfig, existing.sourceId);
+        if (creature) {
+          const base = existing.armorClassOverride ?? creature.armorClass ?? 10;
+          const effective = getCreatureEffectiveArmorClass(creature, existing.conditions, existing);
+          patch.armorClassOverride = patch.armorClass - (effective - base);
+        }
+      }
       const session = updateInitiativeEntry(current, operation.entryId, (entry) => ({ ...entry, ...patch, id: entry.id, order: entry.order, createdAt: entry.createdAt }));
       return { ok: true, session, operation: { ...operation, patch } };
     }
     case "initiative.entry.remove": {
       if (!current.entries.some((entry) => entry.id === operation.entryId)) return invalid("INITIATIVE_ENTRY_NOT_FOUND", "Initiative entry was not found.");
       return { ok: true, session: removeInitiativeEntry(current, operation.entryId), operation };
+    }
+    case "initiative.hp.apply": {
+      const entryIds = Array.from(new Set(operation.entryIds));
+      if (!entryIds.length || entryIds.length > 50) {
+        return invalid("INITIATIVE_HP_TARGETS_INVALID", "Select between 1 and 50 initiative targets.");
+      }
+      if (entryIds.some((entryId) => !current.entries.some((entry) => entry.id === entryId))) {
+        return invalid("INITIATIVE_ENTRY_NOT_FOUND", "One or more initiative targets were not found.");
+      }
+
+      let session = current;
+      const results: NonNullable<typeof operation.results> = [];
+      for (const entryId of entryIds) {
+        const entry = session.entries.find((candidate) => candidate.id === entryId)!;
+        if (operation.mode !== "temporary" && entry.currentHp === undefined) {
+          return invalid("INITIATIVE_HP_UNAVAILABLE", `${entry.name} does not have hit points configured.`);
+        }
+
+        if (operation.mode === "damage") {
+          const affinities = initiativeDamageAffinities(entry, abilities, runtimeConfig);
+          const requested = operation.parts.reduce((total, part) => total + part.amount, 0);
+          const applied = operation.parts.reduce(
+            (total, part) => total + resolveDamage(part.amount, part.damageType, affinities, { magical: part.magical }).applied,
+            0,
+          );
+          const temporary = Math.max(0, entry.temporaryHp ?? 0);
+          const absorbedTemporary = Math.min(temporary, applied);
+          const hpDamage = Math.max(0, applied - absorbedTemporary);
+          const linkedCharacterId = linkedCharacterIdForInitiativeEntry(entry);
+          const concentration = linkedCharacterId
+            ? activeConcentration(conditions[linkedCharacterId])
+            : undefined;
+          session = updateInitiativeEntry(session, entryId, (target) => ({
+            ...target,
+            temporaryHp: Math.max(0, (target.temporaryHp ?? 0) - absorbedTemporary),
+            currentHp: target.currentHp === undefined
+              ? target.currentHp
+              : Math.max(0, target.currentHp - hpDamage),
+          }));
+          results.push({
+            entryId,
+            requested,
+            applied,
+            absorbedTemporary,
+            hpDelta: -hpDamage,
+            ...(concentration && applied > 0 && linkedCharacterId
+              ? {
+                  concentrationCharacterId: linkedCharacterId,
+                  concentrationDc: Math.max(10, Math.floor(applied / 2)),
+                  concentrationSource: concentration.source || concentration.name,
+                }
+              : {}),
+          });
+          continue;
+        }
+
+        if (operation.mode === "heal") {
+          const currentHp = Math.max(0, entry.currentHp ?? 0);
+          const maximum = entry.maxHp === undefined ? currentHp + operation.amount : Math.max(0, entry.maxHp);
+          const nextHp = Math.min(maximum, currentHp + operation.amount);
+          session = updateInitiativeEntry(session, entryId, (target) => ({ ...target, currentHp: nextHp }));
+          results.push({
+            entryId,
+            requested: operation.amount,
+            applied: nextHp - currentHp,
+            absorbedTemporary: 0,
+            hpDelta: nextHp - currentHp,
+          });
+          continue;
+        }
+
+        const previousTemporary = Math.max(0, entry.temporaryHp ?? 0);
+        session = updateInitiativeEntry(session, entryId, (target) => ({
+          ...target,
+          temporaryHp: Math.max(0, (target.temporaryHp ?? 0) + operation.amount),
+        }));
+        results.push({
+          entryId,
+          requested: operation.amount,
+          applied: operation.amount,
+          absorbedTemporary: 0,
+          hpDelta: 0,
+        });
+      }
+
+      return { ok: true, session, operation: { ...operation, entryIds, results } as SessionInitiativeOperation };
     }
     case "initiative.conditions.bulk": {
       const entryIds = Array.from(new Set(operation.entryIds));
@@ -720,6 +827,43 @@ function applyInitiativeOperation(
  * actor naturally waits until the next cycle, while one inserted after it can
  * still act this round.
  */
+function initiativeDamageAffinities(
+  entry: InitiativeEntry,
+  abilities: Record<string, SessionAbilityState>,
+  runtimeConfig: SessionRuntimeConfigSnapshot | null,
+): DamageAffinity[] {
+  const characterId = linkedCharacterIdForInitiativeEntry(entry);
+  if (characterId) {
+    const stored = abilities[characterId];
+    if (stored?.initialized) {
+      try {
+        const character = CharacterTemplate.fromJSON(stored.character as Partial<CharacterTemplateProps>);
+        return normalizeDamageAffinities(character.get("sheet").damageAffinities);
+      } catch {
+        return [];
+      }
+    }
+  }
+  return normalizeDamageAffinities(findRuntimeCreature(runtimeConfig, entry.sourceId)?.damageAffinities);
+}
+
+function findRuntimeCreature(
+  runtimeConfig: SessionRuntimeConfigSnapshot | null,
+  sourceId: string | undefined,
+) {
+  const creatureId = creatureIdFromSourceId(sourceId);
+  if (!creatureId) return undefined;
+  return runtimeConfig?.config.creatureCompendium.find((creature) => creature.id === creatureId);
+}
+
+function activeConcentration(state: SessionConditionsState | undefined): SessionCondition | undefined {
+  return state?.conditions.find((condition) =>
+    condition.duration.type === "concentration"
+    || condition.tags.includes("dnd-manager:concentrating")
+    || normalizeName(condition.name) === "concentrando",
+  );
+}
+
 function addEntriesDuringCombat(current: InitiativeSession, inputs: NewInitiativeEntry[]): InitiativeSession {
   const seeded = addInitiativeEntries({ ...current, started: false }, inputs);
   const additions = seeded.entries

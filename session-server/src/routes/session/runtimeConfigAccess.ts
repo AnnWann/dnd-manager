@@ -113,6 +113,9 @@ export function visibleRuntimeConfigSnapshot(
       characters: snapshot.config.characters.filter((character) =>
         canViewRuntimeCharacter(connection, character),
       ),
+      // Creature stat blocks and real names are MASTER rules data. Initiative
+      // visibility sends only the public projection required by players.
+      creatureCompendium: [],
     },
   };
 }

@@ -1,9 +1,27 @@
 import type { InitiativeSession } from "../../models/initiative/Initiative"
+import type { DamageType } from "../../models/combat/Damage"
 
 export type SessionInitiativeState = {
   initialized: boolean
   revision: number
   session: InitiativeSession
+}
+
+export type InitiativeDamagePart = {
+  amount: number
+  damageType?: DamageType
+  magical?: boolean
+}
+
+export type InitiativeHpApplicationResult = {
+  entryId: string
+  requested: number
+  applied: number
+  absorbedTemporary: number
+  hpDelta: number
+  concentrationCharacterId?: string
+  concentrationDc?: number
+  concentrationSource?: string
 }
 
 export type SessionInitiativeOperation =
@@ -20,6 +38,8 @@ export type SessionInitiativeOperation =
   | { type: "initiative.settings.update"; characterId: "session"; patch: { deathSaveVisibility?: "masterOnly" | "owner" | "everyone"; deathSaveOwnerCanEdit?: boolean } }
   | { type: "initiative.deathSaves.set"; characterId: "session"; entryId: string; successes: number; failures: number }
   | { type: "initiative.conditions.bulk"; characterId: "session"; entryIds: string[]; mode: "add" | "remove"; condition?: Record<string, unknown>; conditionName?: string }
+  | { type: "initiative.hp.apply"; characterId: "session"; entryIds: string[]; mode: "damage"; parts: InitiativeDamagePart[]; results?: InitiativeHpApplicationResult[] }
+  | { type: "initiative.hp.apply"; characterId: "session"; entryIds: string[]; mode: "heal" | "temporary"; amount: number; results?: InitiativeHpApplicationResult[] }
   | { type: "initiative.customAction.execute"; characterId: "session"; systemId: string; actionId: string; entryIds: string[] }
   | { type: "initiative.reset"; characterId: "session" }
 

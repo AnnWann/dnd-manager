@@ -5,6 +5,7 @@ import { SessionActor as InitiativeSessionActor, INITIATIVE_SHARED_SCOPE, INITIA
 import { parseInitiativeClientMessage, type SessionInitiativeState } from "../initiative/initiativeProtocol";
 import { normalizeInitiativeSession } from "../../../../src/models/initiative/Initiative";
 import { projectInitiativeSessionFromCharacterState } from "../initiative/initiativeCharacterProjection";
+import { projectInitiativeSessionFromCreatureState } from "../initiative/initiativeCreatureProjection";
 import { SessionActor as CustomSystemSessionActor } from "../characters/custom-systems/CustomSystemSessionActor";
 import { parseCustomSystemClientMessage } from "../characters/custom-systems/customSystemProtocol";
 import type { SessionAbilityState } from "../characters/abilities/abilityProtocol";
@@ -161,17 +162,19 @@ export class SessionActor extends ComposedSessionActor {
   }
 
   private async reconcileInitiativeProjection(): Promise<void> {
-    const [initiative, abilities, hp, conditions] = await Promise.all([
+    const [initiative, abilities, hp, conditions, runtimeConfig] = await Promise.all([
       readInitiativeState(this.ctx.storage),
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
       this.ctx.storage.get<Record<string, SessionHpState>>(HP_STATE_KEY).then((value) => value ?? {}),
       this.ctx.storage.get<Record<string, SessionConditionsState>>(CONDITIONS_STATE_KEY).then((value) => value ?? {}),
+      readRuntimeConfig(this.ctx.storage),
     ]);
     if (!initiative.initialized) return;
     const current = normalizeInitiativeSession(initiative.session as Partial<import("../../../../src/models/initiative/Initiative").InitiativeSession>);
-    const projection = projectInitiativeSessionFromCharacterState(current, { abilities, hp, conditions });
-    if (!projection.changed) return;
-    initiative.session = projection.session as unknown as Record<string, unknown>;
+    const characterProjection = projectInitiativeSessionFromCharacterState(current, { abilities, hp, conditions });
+    const creatureProjection = projectInitiativeSessionFromCreatureState(characterProjection.session, runtimeConfig);
+    if (!characterProjection.changed && !creatureProjection.changed) return;
+    initiative.session = creatureProjection.session as unknown as Record<string, unknown>;
     initiative.revision += 1;
     await this.ctx.storage.put(INITIATIVE_STATE_KEY, initiative);
     broadcastVisibilityFiltered(this.ctx.getWebSockets(), {

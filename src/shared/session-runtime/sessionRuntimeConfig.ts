@@ -5,6 +5,7 @@ import type {
 } from "../creation/creation.types"
 import type { CharacterType } from "../../models/characters/CharacterType"
 import type { CustomSystemDefinition } from "../../models/customSystems/CustomSystemDefinition"
+import type { CompendiumCreature } from "../../models/creatures/CompendiumCreature"
 import type { Spell } from "../../models/magic/spells/Spell"
 
 /**
@@ -16,6 +17,8 @@ export type SessionRuntimeConfig = {
   characters: SessionRuntimeCharacterConfig[]
   spells: Spell[]
   customSystems: CustomSystemDefinition[]
+  /** MASTER-only rules data used to adjudicate compendium combatants. */
+  creatureCompendium: CompendiumCreature[]
 }
 
 export type SessionRuntimeConfigSnapshot = {
@@ -46,6 +49,7 @@ export function toSessionRuntimeConfig(
     })),
     spells: creation.spells,
     customSystems: creation.customSystems,
+    creatureCompendium: creation.creatureCompendium,
   }
 }
 

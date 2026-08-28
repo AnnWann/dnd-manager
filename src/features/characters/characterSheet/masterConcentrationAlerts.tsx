@@ -50,6 +50,22 @@ export function MasterConcentrationAlerts() {
 
       if (!canAssignOwners || ("undoneAt" in record && record.undoneAt)) continue
       const operation = record.operation
+      if (operation.type === "initiative.hp.apply" && operation.mode === "damage") {
+        for (const [index, result] of (operation.results ?? []).entries()) {
+          if (!result.concentrationCharacterId || !result.concentrationDc || result.applied <= 0) continue
+          const character = visibleCharacters.find((entry) => entry.get("id") === result.concentrationCharacterId)
+          incoming.push({
+            id: `${record.id}:${index}`,
+            characterName: character?.get("name") || "Personagem",
+            damage: Math.max(0, Math.trunc(result.applied)),
+            dc: Math.max(10, Math.trunc(result.concentrationDc)),
+            source: result.concentrationSource || undefined,
+            expiresAt: now + ALERT_LIFETIME_MS,
+          })
+        }
+        continue
+      }
+
       if (
         operation.type !== "character.hp.damage" ||
         operation.requiresConcentrationCheck !== true

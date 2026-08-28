@@ -1,3 +1,22 @@
+import { DAMAGE_TYPES, type DamageType } from "../../../../src/models/combat/Damage";
+
+export type InitiativeDamagePart = {
+  amount: number;
+  damageType?: DamageType;
+  magical?: boolean;
+};
+
+export type InitiativeHpApplicationResult = {
+  entryId: string;
+  requested: number;
+  applied: number;
+  absorbedTemporary: number;
+  hpDelta: number;
+  concentrationCharacterId?: string;
+  concentrationDc?: number;
+  concentrationSource?: string;
+};
+
 export type SessionInitiativeOperation =
   | { type: "initiative.entries.add"; characterId: "session"; entries: Record<string, unknown>[] }
   | { type: "initiative.entry.update"; characterId: "session"; entryId: string; patch: Record<string, unknown> }
@@ -12,6 +31,8 @@ export type SessionInitiativeOperation =
   | { type: "initiative.settings.update"; characterId: "session"; patch: { deathSaveVisibility?: "masterOnly" | "owner" | "everyone"; deathSaveOwnerCanEdit?: boolean } }
   | { type: "initiative.deathSaves.set"; characterId: "session"; entryId: string; successes: number; failures: number }
   | { type: "initiative.conditions.bulk"; characterId: "session"; entryIds: string[]; mode: "add" | "remove"; condition?: Record<string, unknown>; conditionName?: string }
+  | { type: "initiative.hp.apply"; characterId: "session"; entryIds: string[]; mode: "damage"; parts: InitiativeDamagePart[]; results?: InitiativeHpApplicationResult[] }
+  | { type: "initiative.hp.apply"; characterId: "session"; entryIds: string[]; mode: "heal" | "temporary"; amount: number; results?: InitiativeHpApplicationResult[] }
   | { type: "initiative.customAction.execute"; characterId: "session"; systemId: string; actionId: string; entryIds: string[] }
   | { type: "initiative.reset"; characterId: "session" };
 
@@ -55,6 +76,26 @@ export function parseInitiativeClientMessage(raw: string): SessionInitiativeClie
         && (operation.mode !== "remove" || Boolean(readId(operation.conditionName)))
         ? value as SessionInitiativeClientMessage
         : null;
+    case "initiative.hp.apply": {
+      if (!validTargets(operation.entryIds)) return null;
+      if (operation.mode === "damage") {
+        return Array.isArray(operation.parts)
+          && operation.parts.length > 0
+          && operation.parts.length <= 10
+          && operation.parts.every((part) => isRecord(part)
+            && positiveInteger(part.amount)
+            && (part.damageType === undefined || DAMAGE_TYPES.includes(part.damageType as DamageType))
+            && (part.magical === undefined || typeof part.magical === "boolean"))
+          ? value as SessionInitiativeClientMessage
+          : null;
+      }
+      if (operation.mode === "heal" || operation.mode === "temporary") {
+        return positiveInteger(operation.amount)
+          ? value as SessionInitiativeClientMessage
+          : null;
+      }
+      return null;
+    }
     case "initiative.customAction.execute":
       return Boolean(readId(operation.systemId))
         && Boolean(readId(operation.actionId))
@@ -81,6 +122,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 function readId(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function validTargets(value: unknown): boolean {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.length <= 50
+    && value.every((entryId) => Boolean(readId(entryId)));
+}
+function positiveInteger(value: unknown): boolean {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 && value <= 1_000_000;
 }
 
 function integerRange(value: unknown, minimum: number, maximum: number): boolean {
