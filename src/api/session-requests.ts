@@ -56,10 +56,37 @@ export type SessionContentRequest = {
 }
 
 const LOCAL_KEY = "dnd-manager:session-content-requests:v1"
+const requestCache = new Map<string, SessionContentRequest[]>()
+const pendingReads = new Map<string, Promise<SessionContentRequest[]>>()
+
+function cacheKey(
+  campaignId: string,
+  status: SessionContentRequestStatus,
+): string {
+  return `${campaignId}:${status}`
+}
+
+export function primeSessionContentRequests(
+  campaignId: string,
+  status: SessionContentRequestStatus,
+  requests: SessionContentRequest[],
+): void {
+  requestCache.set(cacheKey(campaignId, status), structuredClone(requests))
+}
+
+export function invalidateSessionContentRequests(campaignId: string): void {
+  for (const key of [...requestCache.keys()]) {
+    if (key.startsWith(`${campaignId}:`)) requestCache.delete(key)
+  }
+  for (const key of [...pendingReads.keys()]) {
+    if (key.startsWith(`${campaignId}:`)) pendingReads.delete(key)
+  }
+}
 
 export async function getSessionContentRequests(
   campaignId: string,
   status: SessionContentRequestStatus = "PENDING",
+  options: { force?: boolean } = {},
 ): Promise<SessionContentRequest[]> {
   if (LOCAL_AUTH_BYPASS) {
     return readLocalRequests().filter(
@@ -67,12 +94,31 @@ export async function getSessionContentRequests(
     )
   }
 
-  const response = await apiClient.get<{
-    requests: SessionContentRequest[]
-  }>(`/campaigns/${encodeURIComponent(campaignId)}/requests`, {
-    params: { status },
-  })
-  return response.data.requests ?? []
+  const key = cacheKey(campaignId, status)
+  if (!options.force) {
+    const cached = requestCache.get(key)
+    if (cached) return structuredClone(cached)
+    const pending = pendingReads.get(key)
+    if (pending) return pending.then(structuredClone)
+  }
+
+  const request = apiClient
+    .get<{
+      requests: SessionContentRequest[]
+    }>(`/campaigns/${encodeURIComponent(campaignId)}/requests`, {
+      params: { status },
+    })
+    .then((response) => {
+      const requests = response.data.requests ?? []
+      primeSessionContentRequests(campaignId, status, requests)
+      return structuredClone(requests)
+    })
+    .finally(() => {
+      pendingReads.delete(key)
+    })
+
+  pendingReads.set(key, request)
+  return request
 }
 
 export async function submitSessionContentRequest(
@@ -113,12 +159,14 @@ export async function submitSessionContentRequest(
       ),
       next,
     ])
+    invalidateSessionContentRequests(campaignId)
     return "PENDING"
   }
 
   const response = await apiClient.post<{
     status: "PENDING" | "APPROVED"
   }>(`/campaigns/${encodeURIComponent(campaignId)}/requests`, input)
+  invalidateSessionContentRequests(campaignId)
   if (response.data.status === "APPROVED") {
     notifySessionContentChanged()
   }
@@ -150,6 +198,7 @@ export async function reviewSessionContentRequest(
           : entry,
       ),
     )
+    invalidateSessionContentRequests(campaignId)
     notifySessionContentChanged()
     return
   }
@@ -158,6 +207,7 @@ export async function reviewSessionContentRequest(
     `/campaigns/${encodeURIComponent(campaignId)}/requests/${encodeURIComponent(requestId)}`,
     { status, note },
   )
+  invalidateSessionContentRequests(campaignId)
   notifySessionContentChanged()
 }
 
