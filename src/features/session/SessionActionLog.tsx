@@ -232,6 +232,7 @@ function describeSessionOperation(operation: SessionLogRecord["operation"], char
     case "character.ability.save": return `Atualizou ${operation.ability.name || "uma habilidade"} de ${characterName}.`
     case "character.ability.remove": return `Removeu ${operation.abilityName || "uma habilidade"} de ${characterName}.`
     case "character.ability.use": return `${characterName} usou ${operation.abilityName || "uma habilidade"}.`
+    case "character.ability.usage.spend": return `${characterName} gastou um uso de ${operation.abilityName || "uma habilidade"}.`
     case "character.ability.restore": return `Restaurou uma carga de ${operation.abilityName || "habilidade"} de ${characterName}.`
     case "character.ability.deactivate": return `Desativou ${operation.abilityName || "uma habilidade"} de ${characterName}.`
     case "character.customSystem.field.set": return `${characterName} alterou um campo do sistema ${operation.systemId}.`
