@@ -6,10 +6,14 @@ import type {
 import type {
   CharacterCustomSystemState,
   CustomAbilityInstance,
+  CustomSystemActionDefinition,
   CustomSystemDefinition,
 } from "../../models/customSystems/CustomSystemDefinition"
 import { activateCustomAbility } from "./CustomAbilityActivation"
-import { getEffectiveCustomAbilityActivation } from "./CustomSystemActions"
+import {
+  activateCustomSystemAction,
+  getEffectiveCustomAbilityActivation,
+} from "./CustomSystemActions"
 
 export type CustomAbilityRollResolution = {
   mode: CustomAbilityRollDefinition["mode"]
@@ -54,7 +58,7 @@ export function activateCustomAbilityWithRoll(
     }
   }
 
-  const value = resolveRollValue(roll, suppliedRollValue)
+  const value = resolveRollValue(roll, suppliedRollValue, "habilidade")
   const resolvedDefinitions = replaceRollValueForAbility(
     definitions,
     systemId,
@@ -73,6 +77,49 @@ export function activateCustomAbilityWithRoll(
       mode: roll.mode,
       value,
       dice: roll.dice?.trim() || undefined,
+    },
+  }
+}
+
+export function activateCustomSystemActionWithRoll(
+  character: CharacterTemplate,
+  definitions: CustomSystemDefinition[],
+  systemId: string,
+  actionId: string,
+  suppliedRollValue?: number,
+): { character: CharacterTemplate; roll?: CustomAbilityRollResolution } {
+  const definition = definitions.find((entry) => entry.id === systemId)
+  const action = definition?.actions?.find((entry) => entry.id === actionId)
+  if (!definition || !action || !action.roll) {
+    return {
+      character: activateCustomSystemAction(
+        character,
+        definitions,
+        systemId,
+        actionId,
+      ),
+    }
+  }
+
+  const value = resolveRollValue(action.roll, suppliedRollValue, "ação")
+  const resolvedDefinitions = replaceRollValueForAction(
+    definitions,
+    systemId,
+    action,
+    value,
+  )
+
+  return {
+    character: activateCustomSystemAction(
+      character,
+      resolvedDefinitions,
+      systemId,
+      actionId,
+    ),
+    roll: {
+      mode: action.roll.mode,
+      value,
+      dice: action.roll.dice?.trim() || undefined,
     },
   }
 }
@@ -106,11 +153,12 @@ export function rollCustomAbilityDice(expression: string): number {
 
 function resolveRollValue(
   roll: CustomAbilityRollDefinition,
-  suppliedRollValue?: number,
+  suppliedRollValue: number | undefined,
+  subject: "habilidade" | "ação",
 ): number {
   if (roll.mode === "manual") {
     if (typeof suppliedRollValue !== "number" || !Number.isFinite(suppliedRollValue)) {
-      throw new Error("Informe o resultado da rolagem antes de usar esta habilidade.")
+      throw new Error(`Informe o resultado da rolagem antes de usar esta ${subject}.`)
     }
     return suppliedRollValue
   }
@@ -152,6 +200,32 @@ function replaceRollValueForAbility(
       }),
     }
   })
+}
+
+function replaceRollValueForAction(
+  definitions: CustomSystemDefinition[],
+  systemId: string,
+  action: CustomSystemActionDefinition,
+  rollValue: number,
+): CustomSystemDefinition[] {
+  return definitions.map((definition) =>
+    definition.id !== systemId
+      ? definition
+      : {
+          ...definition,
+          actions: definition.actions?.map((entry) =>
+            entry.id !== action.id
+              ? entry
+              : {
+                  ...entry,
+                  resourceChanges: entry.resourceChanges?.map((change) => ({
+                    ...change,
+                    formula: replaceRollToken(change.formula, rollValue),
+                  })),
+                },
+          ),
+        },
+  )
 }
 
 function patchActivationRollFormula(
