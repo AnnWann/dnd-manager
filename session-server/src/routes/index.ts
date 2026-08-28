@@ -49,6 +49,12 @@ export default {
     forwardedHeaders.set("x-session-user-id", claims.userId);
     forwardedHeaders.set("x-session-role", claims.role);
     forwardedHeaders.set("x-session-expires-at", String(claims.expiresAt));
+    if (claims.ownedCharacterIds !== undefined) {
+      forwardedHeaders.set(
+        "x-session-owned-character-ids",
+        JSON.stringify(claims.ownedCharacterIds),
+      );
+    }
 
     return actor.fetch(
       new Request("https://session-actor.internal/connect", {
