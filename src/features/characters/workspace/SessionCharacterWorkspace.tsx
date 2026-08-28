@@ -2,16 +2,23 @@ import { useCallback, useEffect, useMemo, type ReactNode } from "react"
 
 import { useCharacterContext } from "../../../contexts/characterContext"
 import { useSyncContext } from "../../../contexts/syncContext"
+import { getChannelDivinityPool } from "../../../models/characters/characterChannelDivinity"
+import { getConcentrationCondition } from "../../../models/characters/characterConcentration"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { EquippedItemReference } from "../../../models/characters/characterEquippedItemMovement"
 import type { HandOccupantReference } from "../../../models/characters/characterHands"
+import { getKiPool } from "../../../models/characters/characterKi"
+import { getSorceryPoints } from "../../../models/characters/characterMagic"
+import { getCustomSpellSlotPools } from "../../../models/characters/customClassConfig"
 import type { CustomAbilityInstance } from "../../../models/customSystems/CustomSystemDefinition"
 import type { Itemmable } from "../../../models/items/item"
+import type { MagicCircleLevel } from "../../../models/magic/spells/spellDefinitions"
 import { applySessionAbilityState } from "../../session-runtime/applySessionAbilityState"
 import type { SessionCustomSystemOperation } from "../../session-runtime/customSystemSessionProtocol"
 import type { SessionEquipmentOperation } from "../../session-runtime/equipmentSessionProtocol"
 import type { SessionMagicOperation } from "../../session-runtime/magicSessionProtocol"
 import type { SessionProficiencyOperation } from "../../session-runtime/proficiencySessionProtocol"
+import type { SessionConcentrationOperation } from "../../session-runtime/sessionProtocol"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import {
   CharacterWorkspaceProvider,
@@ -70,6 +77,7 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
     const inventoryChanged = JSON.stringify(current.get("inventory")) !== JSON.stringify(next.get("inventory"))
     const proficienciesChanged = JSON.stringify(current.get("sheet").proficiencies ?? []) !== JSON.stringify(next.get("sheet").proficiencies ?? [])
     const customSystemsChanged = JSON.stringify(current.get("sheet").customSystems ?? []) !== JSON.stringify(next.get("sheet").customSystems ?? [])
+    const concentrationOperation = deriveConcentrationOperation(current, next)
 
     if (ownerChanged) {
       const ownerOnly = current.withPatch({ owner: next.get("owner") })
@@ -89,6 +97,7 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
       const equipmentOperations = deriveEquipmentOperations(current, next)
       if (equipmentOperations.length) {
         for (const operation of equipmentOperations) sessionRuntime.dispatchEquipmentOperation(operation)
+        if (concentrationOperation) sessionRuntime.dispatchConcentrationOperation(concentrationOperation)
         return
       }
       console.warn("[session-runtime] blocked an unrecognized local inventory/equipment mutation", { characterId })
@@ -97,11 +106,12 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
 
     if (magicChanged) {
       const operations = deriveMagicOperations(current, next)
-      if (!operations.length) {
+      if (!operations.length && !concentrationOperation) {
         console.warn("[session-runtime] blocked an unrecognized local magic mutation", { characterId })
         return
       }
       for (const operation of operations) sessionRuntime.dispatchMagicOperation(operation)
+      if (concentrationOperation) sessionRuntime.dispatchConcentrationOperation(concentrationOperation)
       return
     }
 
@@ -122,6 +132,11 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
         return
       }
       for (const operation of operations) sessionRuntime.dispatchAbilityOperation(operation)
+      return
+    }
+
+    if (concentrationOperation) {
+      sessionRuntime.dispatchConcentrationOperation(concentrationOperation)
       return
     }
 
@@ -244,6 +259,34 @@ function resolveHandReference(character: CharacterTemplate, reference: HandOccup
   }
   const item = (equipment.heldItems ?? [])[reference.index]
   return item ? { type: "held-item", itemId: item.id } : null
+}
+
+function deriveConcentrationOperation(
+  current: CharacterTemplate,
+  next: CharacterTemplate,
+): SessionConcentrationOperation | null {
+  const before = getConcentrationCondition(current)
+  const after = getConcentrationCondition(next)
+
+  if (JSON.stringify(before ?? null) === JSON.stringify(after ?? null)) return null
+
+  if (!after) {
+    return before
+      ? { type: "character.concentration.end", characterId: current.get("id"), reason: "manual" }
+      : null
+  }
+
+  const spellIndex = after.notes.startsWith("spell:")
+    ? after.notes.slice("spell:".length).trim()
+    : ""
+  if (!spellIndex) return null
+
+  return {
+    type: "character.concentration.start",
+    characterId: current.get("id"),
+    spellIndex,
+    spellName: after.source || after.name,
+  }
 }
 
 function deriveCustomSystemOperations(current: CharacterTemplate, next: CharacterTemplate): SessionCustomSystemOperation[] {
@@ -561,5 +604,95 @@ function deriveMagicOperations(current: CharacterTemplate, next: CharacterTempla
     if (oldList.length - 1 === newList.length) { const removedIndex = oldList.findIndex((value, index) => newList[index] !== value); operations.push({ type: "character.spell.castingDescription.remove", characterId, spellIndex, descriptionIndex: removedIndex < 0 ? oldList.length - 1 : removedIndex }); continue }
     if (oldList.length === newList.length) for (let index = 0; index < newList.length; index += 1) if (oldList[index] !== newList[index]) operations.push({ type: "character.spell.castingDescription.update", characterId, spellIndex, descriptionIndex: index, description: newList[index] ?? "" })
   }
+
+  const beforeSlots = current.getSpellSlots()
+  const afterSlots = next.getSpellSlots()
+  for (const level of [1, 2, 3, 4, 5, 6, 7, 8, 9] as MagicCircleLevel[]) {
+    appendMagicResourceDelta(
+      operations,
+      beforeSlots[level]?.current ?? 0,
+      afterSlots[level]?.current ?? 0,
+      () => ({ type: "character.spellSlot.spend", characterId, level }),
+      () => ({ type: "character.spellSlot.restore", characterId, level }),
+    )
+  }
+
+  const beforePact = current.getPactSlots()
+  const afterPact = next.getPactSlots()
+  appendMagicResourceDelta(
+    operations,
+    beforePact?.current ?? 0,
+    afterPact?.current ?? 0,
+    () => ({ type: "character.pactSlot.spend", characterId }),
+    () => ({ type: "character.pactSlot.restore", characterId }),
+  )
+
+  appendMagicResourceDelta(
+    operations,
+    getSorceryPoints(current).current,
+    getSorceryPoints(next).current,
+    () => ({ type: "character.sorceryPoint.spend", characterId }),
+    () => ({ type: "character.sorceryPoint.restore", characterId }),
+  )
+
+  appendMagicResourceDelta(
+    operations,
+    getKiPool(current)?.current ?? 0,
+    getKiPool(next)?.current ?? 0,
+    () => ({ type: "character.ki.spend", characterId }),
+    () => ({ type: "character.ki.restore", characterId }),
+  )
+
+  appendMagicResourceDelta(
+    operations,
+    getChannelDivinityPool(current)?.current ?? 0,
+    getChannelDivinityPool(next)?.current ?? 0,
+    () => ({ type: "character.channelDivinity.spend", characterId }),
+    () => ({ type: "character.channelDivinity.restore", characterId }),
+  )
+
+  const beforeCustomPools = new Map(
+    getCustomSpellSlotPools(current).map((pool) => [pool.id, pool]),
+  )
+  for (const afterPool of getCustomSpellSlotPools(next)) {
+    const beforePool = beforeCustomPools.get(afterPool.id)
+    for (const afterSlot of Object.values(afterPool.slots)) {
+      const beforeSlot = beforePool
+        ? Object.values(beforePool.slots).find((slot) => slot.level === afterSlot.level)
+        : undefined
+      appendMagicResourceDelta(
+        operations,
+        beforeSlot?.current ?? afterSlot.current,
+        afterSlot.current,
+        () => ({
+          type: "character.customSpellSlot.spend",
+          characterId,
+          poolId: afterPool.id,
+          level: afterSlot.level,
+        }),
+        () => ({
+          type: "character.customSpellSlot.restore",
+          characterId,
+          poolId: afterPool.id,
+          level: afterSlot.level,
+        }),
+      )
+    }
+  }
+
   return operations
+}
+
+function appendMagicResourceDelta(
+  operations: SessionMagicOperation[],
+  beforeCurrent: number,
+  afterCurrent: number,
+  spend: () => SessionMagicOperation,
+  restore: () => SessionMagicOperation,
+): void {
+  const delta = Math.trunc(afterCurrent) - Math.trunc(beforeCurrent)
+  const operation = delta < 0 ? spend : restore
+  for (let index = 0; index < Math.abs(delta); index += 1) {
+    operations.push(operation())
+  }
 }
