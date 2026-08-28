@@ -37,17 +37,41 @@ export function CampaignCharactersView() {
   const [working, setWorking] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
 
-  // The relational /campaigns/:id/characters endpoint is bootstrap-only.
-  // Once this route is active, the visible character collection comes from the
-  // Durable Object snapshots projected by CharacterProvider.
-  const sessionCharacters = useMemo(
-    () => visibleCharacters.filter((character) => {
-      if (!runtime) return true
-      const lifecycle = runtime.sessionCharactersById[character.get("id")]
-      return lifecycle?.active !== false
-    }),
-    [runtime, visibleCharacters],
+  const projectedById = useMemo(
+    () => new Map(visibleCharacters.map((character) => [character.get("id"), character])),
+    [visibleCharacters],
   )
+
+  const socketCharacters = useMemo(() => {
+    if (!runtime) return []
+
+    return Object.values(runtime.abilitiesByCharacterId)
+      .filter((state) => state.initialized)
+      .filter(
+        (state) => runtime.sessionCharactersById[state.characterId]?.active !== false,
+      )
+      .map((state) => {
+        const projected = projectedById.get(state.characterId)
+        if (projected) return projected
+        return CharacterTemplate.fromJSON(
+          state.character as Partial<CharacterTemplateProps>,
+        )
+      })
+  }, [
+    projectedById,
+    runtime?.abilitiesByCharacterId,
+    runtime?.sessionCharactersById,
+  ])
+
+  // HTTP/relational data is only the seed used before the Durable Object is
+  // initialized. Once the socket has its Creation config, character membership
+  // and payloads come from the authoritative session snapshots.
+  const socketIsAuthoritative = Boolean(
+    runtime?.status === "connected" && runtime.runtimeConfigSnapshot,
+  )
+  const sessionCharacters = socketIsAuthoritative
+    ? socketCharacters
+    : visibleCharacters
 
   const selectorCharacters = useMemo(
     () => sessionCharacters.map(toSessionCharacterSelectorItem),
