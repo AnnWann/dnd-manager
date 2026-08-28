@@ -19,9 +19,16 @@ import { Button } from "../../components/ui/Button"
 import { useCharacterContext } from "../../contexts/characterContext"
 import { CharacterSettingsModal } from "../../features/characters/settings/CharacterSettingsModal"
 import { useCreationEditor } from "../../features/creation/CreationEditorProvider"
+import {
+  isSuppressedConfiguredCustomSystemState,
+  reconcileConfiguredCustomSystemStates,
+} from "../../lib/customSystems/CustomSystemConfigurationReconciliation"
 import { sessionPath } from "../../lib/campaignRoutes"
 import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
-import type { CharacterCustomSystemState } from "../../models/customSystems/CustomSystemDefinition"
+import type {
+  CharacterCustomSystemState,
+  CustomSystemDefinition,
+} from "../../models/customSystems/CustomSystemDefinition"
 import type { Player } from "../../models/player/Player"
 import type {
   CreationCharacterConfiguration,
@@ -86,14 +93,20 @@ export function SessionCreationSettingsView() {
     [editor.draft?.characters],
   )
 
+  const customSystemDefinitions = editor.draft?.customSystems ?? []
+
   const visibleCharacters = useMemo(
     () => sessionCharacters.map((character) => {
       const configuration = creationConfigurationById.get(character.get("id"))
       return configuration
-        ? applyCreationConfiguration(character, configuration)
+        ? applyCreationConfiguration(
+            character,
+            configuration,
+            customSystemDefinitions,
+          )
         : character
     }),
-    [creationConfigurationById, sessionCharacters],
+    [creationConfigurationById, customSystemDefinitions, sessionCharacters],
   )
 
   const selectedCharacter = useMemo(
@@ -186,7 +199,11 @@ export function SessionCreationSettingsView() {
     const currentConfiguration = creationConfigurationById.get(characterId)
     if (!source || !currentConfiguration) return
 
-    const current = applyCreationConfiguration(source, currentConfiguration)
+    const current = applyCreationConfiguration(
+      source,
+      currentConfiguration,
+      customSystemDefinitions,
+    )
     const updated = updater(current)
     const nextConfiguration = toCreationConfiguration(
       updated,
@@ -435,34 +452,15 @@ function MemberRow({
 function applyCreationConfiguration(
   character: CharacterTemplate,
   configuration: CreationCharacterConfiguration,
+  definitions: CustomSystemDefinition[],
 ): CharacterTemplate {
   const currentOwner = character.get("owner")
   const currentSystems = (character.get("sheet").customSystems ?? []) as CharacterCustomSystemState[]
-  const configuredSystems = new Map(
-    configuration.customSystems.map((state) => [state.systemId, state]),
+  const reconciledSystems = reconcileConfiguredCustomSystemStates(
+    currentSystems,
+    configuration.customSystems,
+    definitions,
   )
-
-  const mergedSystems = currentSystems.map((state) => {
-    const configured = configuredSystems.get(state.systemId)
-    if (!configured) return state
-    configuredSystems.delete(state.systemId)
-    return {
-      ...state,
-      systemVersion: configured.systemVersion,
-      enabled: configured.enabled,
-      abilityAcquisitionExceptions: configured.abilityAcquisitionExceptions,
-      installationSource: configured.installationSource,
-    }
-  })
-
-  for (const configured of configuredSystems.values()) {
-    mergedSystems.push({
-      ...configured,
-      fields: {},
-      resources: {},
-      abilities: [],
-    })
-  }
 
   return character
     .with("visibility", configuration.visibility)
@@ -473,7 +471,7 @@ function applyCreationConfiguration(
     })
     .withSheet("type", configuration.type)
     .withSheet("hiddenCharacterTabs", [...configuration.hiddenCharacterTabs])
-    .withSheet("customSystems", mergedSystems)
+    .withSheet("customSystems", reconciledSystems)
 }
 
 function toCreationConfiguration(
@@ -501,6 +499,7 @@ function toCreationCustomSystemConfiguration(
     systemId: state.systemId,
     systemVersion: state.systemVersion,
     enabled: state.enabled,
+    suppressed: isSuppressedConfiguredCustomSystemState(state) || undefined,
     abilityAcquisitionExceptions: state.abilityAcquisitionExceptions,
     installationSource: state.installationSource,
   }
