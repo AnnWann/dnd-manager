@@ -670,11 +670,12 @@ export class SessionActor extends DurableObject<Env> {
     const sessionId = request.headers.get("x-session-id")?.trim();
     const clientId = request.headers.get("x-session-client-id")?.trim();
     const userId = request.headers.get("x-session-user-id")?.trim();
+    const userName = request.headers.get("x-session-user-name")?.trim() || undefined;
     const role = request.headers.get("x-session-role")?.trim();
     const expiresAt = Number(request.headers.get("x-session-expires-at"));
     if (!sessionId || !clientId || !userId || (role !== "MASTER" && role !== "PLAYER") || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
     const now = Date.now();
-    return { sessionId, clientId, userId, role, connectedAt: now, lastHeartbeatAt: now };
+    return { sessionId, clientId, userId, userName, role, connectedAt: now, lastHeartbeatAt: now };
   }
 
   private replaceExistingClientConnection(clientId: string): void {
@@ -716,7 +717,7 @@ export class SessionActor extends DurableObject<Env> {
     const activeSockets = this.activeSockets(now);
     const users: SessionPresenceUser[] = activeSockets.flatMap((webSocket) => {
       const connection = this.getConnection(webSocket);
-      return connection ? [{ userId: connection.userId, clientId: connection.clientId, role: connection.role }] : [];
+      return connection ? [{ userId: connection.userId, userName: connection.userName, clientId: connection.clientId, role: connection.role }] : [];
     });
     const payload = encodeServerSessionMessage({ type: "session.presence", users });
     for (const webSocket of activeSockets) {

@@ -6,6 +6,7 @@ export type SessionConnection = {
   sessionId: string;
   clientId: string;
   userId: string;
+  userName?: string;
   role: SessionRole;
   connectedAt: number;
   lastHeartbeatAt: number;
@@ -215,6 +216,7 @@ export type SessionHpLogRecord = {
   id: string;
   createdAt: string;
   actorId: string;
+  actorName?: string;
   operation: SessionLoggedOperation | { type: "character.hp.undo"; characterId: string; sourceLogId: string };
   reverseOperation: SessionReverseOperation;
   affectedScopes?: string[];
@@ -225,6 +227,7 @@ export type SessionHpLogRecord = {
 
 export type SessionPresenceUser = {
   userId: string;
+  userName?: string;
   clientId: string;
   role: SessionRole;
 };

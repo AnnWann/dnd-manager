@@ -175,7 +175,7 @@ function SessionLogEntry({ record, characterNames, customSystemDefinitions, canU
       <div className={record.undoneAt ? "text-xs leading-5 text-textMuted line-through" : "text-xs leading-5 text-textH"}>{description}</div>
       {record.undoneAt ? <div className="mt-1 text-[10px] font-medium text-textMuted">Desfeito por {record.undoneBy || "MASTER"}.</div> : null}
       <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-textMuted">
-        <span className="truncate" title={record.actorId}>{record.actorId}</span>
+        <span className="truncate" title={record.actorId}>{record.actorName?.trim() || record.actorId}</span>
         <div className="flex items-center gap-2">
           {canUndo ? (
             <button type="button" onClick={onUndo} className="inline-flex items-center gap-1 rounded px-1.5 py-1 font-medium text-textMuted hover:bg-bg-subtle hover:text-textH" title="Desfazer esta alteração">

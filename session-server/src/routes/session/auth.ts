@@ -7,6 +7,7 @@ import type { SessionRole } from "./protocol";
 export interface SessionConnectionClaims {
   sessionId: string;
   userId: string;
+  userName?: string;
   role: SessionRole;
   clientId: string;
   expiresAt: number;
@@ -79,6 +80,7 @@ export async function authenticateSessionConnection(
     claims: {
       sessionId: claims.sessionId,
       userId: claims.userId,
+      userName: claims.userName,
       role: claims.role,
       clientId: claims.clientId,
       expiresAt: claims.expiresAt,
@@ -93,6 +95,7 @@ function authenticateDevelopmentConnection(
 ): SessionAuthResult {
   const url = new URL(request.url);
   const userId = url.searchParams.get("userId")?.trim();
+  const userName = url.searchParams.get("userName")?.trim();
   const role = url.searchParams.get("role")?.trim().toUpperCase();
   const requestedClientId = url.searchParams.get("clientId")?.trim();
 
@@ -113,6 +116,7 @@ function authenticateDevelopmentConnection(
     claims: {
       sessionId,
       userId,
+      userName: userName || undefined,
       role,
       clientId: requestedClientId || crypto.randomUUID(),
       expiresAt: Date.now() + DEVELOPMENT_TOKEN_TTL_MS,

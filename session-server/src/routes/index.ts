@@ -47,6 +47,7 @@ export default {
     forwardedHeaders.set("x-session-id", claims.sessionId);
     forwardedHeaders.set("x-session-client-id", claims.clientId);
     forwardedHeaders.set("x-session-user-id", claims.userId);
+    if (claims.userName) forwardedHeaders.set("x-session-user-name", claims.userName);
     forwardedHeaders.set("x-session-role", claims.role);
     forwardedHeaders.set("x-session-expires-at", String(claims.expiresAt));
     if (claims.ownedCharacterIds !== undefined) {

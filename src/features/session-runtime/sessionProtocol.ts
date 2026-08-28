@@ -1,5 +1,5 @@
 export type SessionRuntimeRole = "MASTER" | "PLAYER"
-export type SessionRuntimePresenceUser = { userId: string; clientId: string; role: SessionRuntimeRole }
+export type SessionRuntimePresenceUser = { userId: string; userName?: string; clientId: string; role: SessionRuntimeRole }
 
 export type SessionDieSides =
   | "d2" | "d3" | "d4" | "d6" | "d8" | "d10" | "d12" | "d20" | "d100"
@@ -157,6 +157,7 @@ export type SessionLoggedOperation = SessionAuthoritativeOperation | SessionCond
 export type SessionHpLogRecord = {
   id: string
   actorId: string
+  actorName?: string
   createdAt: string
   operation: SessionLoggedOperation | { type: "character.hp.undo"; characterId: string; sourceLogId: string }
   reverseOperation:
