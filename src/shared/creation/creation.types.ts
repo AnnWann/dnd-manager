@@ -47,6 +47,12 @@ export type CreationCharacterCustomSystemConfiguration = {
   systemId: string
   systemVersion: number
   enabled: boolean
+  /**
+   * A suppressed installation is intentionally removed by the MASTER while
+   * retaining a lightweight marker so automatic-install rules do not add it
+   * back until the MASTER explicitly reinstalls it.
+   */
+  suppressed?: boolean
   abilityAcquisitionExceptions?: Record<
     string,
     CustomAbilityAcquisitionExceptionState
