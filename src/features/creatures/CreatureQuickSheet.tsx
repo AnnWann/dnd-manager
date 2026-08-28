@@ -56,11 +56,13 @@ export type CombatQuickSheetData = {
 type CreatureQuickSheetProps = {
   data: CombatQuickSheetData
   preferImage?: boolean
+  compact?: boolean
 }
 
 export function CreatureQuickSheet({
   data,
   preferImage = false,
+  compact = false,
 }: CreatureQuickSheetProps) {
   const [mode, setMode] = useState<"summary" | "image">(
     preferImage && data.sheetImageUrl ? "image" : "summary",
@@ -75,7 +77,7 @@ export function CreatureQuickSheet({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-heading text-2xl font-semibold text-textH">
+            <h3 className={`font-heading font-semibold text-textH ${compact ? "text-lg" : "text-2xl"}`}>
               {data.name}
             </h3>
             {data.side ? (
@@ -122,16 +124,16 @@ export function CreatureQuickSheet({
           />
         </div>
       ) : (
-        <QuickSheetSummary data={data} />
+        <QuickSheetSummary data={data} compact={compact} />
       )}
     </div>
   )
 }
 
-function QuickSheetSummary({ data }: { data: CombatQuickSheetData }) {
+function QuickSheetSummary({ data, compact = false }: { data: CombatQuickSheetData; compact?: boolean }) {
   return (
     <div className="grid gap-4">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <div className={`grid gap-2 ${compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"}`}>
         <StatCard label="Iniciativa" value={signed(data.initiativeBonus)} />
         <StatCard label="CA" value={displayNumber(data.armorClass)} />
         <StatCard
@@ -154,7 +156,7 @@ function QuickSheetSummary({ data }: { data: CombatQuickSheetData }) {
       </div>
 
       {data.abilityScores ? (
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+        <div className={`grid gap-2 ${compact ? "grid-cols-3" : "grid-cols-3 sm:grid-cols-6"}`}>
           {Object.entries(data.abilityScores).map(([attribute, score]) => (
             <div
               key={attribute}
@@ -195,7 +197,7 @@ function QuickSheetSummary({ data }: { data: CombatQuickSheetData }) {
         </section>
       ) : null}
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className={`grid gap-3 ${compact ? "grid-cols-1" : "md:grid-cols-2"}`}>
         <OptionalInfo title="Testes de resistência" content={data.savingThrows} />
         <OptionalInfo title="Perícias" content={data.skills} />
         <OptionalInfo title="Vulnerabilidades" content={data.vulnerabilities} />

@@ -8,6 +8,9 @@ import {
   Play,
   RotateCcw,
   Shield,
+  PanelRightOpen,
+  HeartPulse,
+  Zap,
   Swords,
   UserPlus,
 } from "lucide-react"
@@ -20,7 +23,6 @@ import { useCharacterContext } from "../contexts/characterContext"
 import { useCreatureCompendium } from "../contexts/creatureCompendiumContext"
 import { useSyncContext } from "../contexts/syncContext"
 import {
-  CreatureQuickSheet,
   quickSheetFromCharacter,
   quickSheetFromCompendiumCreature,
   quickSheetFromInitiativeEntry,
@@ -34,6 +36,13 @@ import {
   type InitiativeConditionInput,
 } from "../features/initiative/InitiativeDialogs"
 import { InitiativeTable } from "../features/initiative/InitiativeTable"
+import { InitiativeCombatantInspector } from "../features/initiative/InitiativeCombatantInspector"
+import {
+  InitiativeHpActionDialog,
+  type InitiativeHpActionMode,
+  type InitiativeHpActionPayload,
+} from "../features/initiative/InitiativeHpActionDialog"
+import { resolveDamage, type DamageAffinity } from "../models/combat/Damage"
 import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
 import { useInitiativeSession } from "../hooks/useInitiativeSession"
 import type { CompendiumCreature } from "../models/creatures/CompendiumCreature"
@@ -84,7 +93,10 @@ export function InitiativeView() {
   const [bulkRemoveConditionName, setBulkRemoveConditionName] = useState("")
   const [renameTargetId, setRenameTargetId] = useState<string>()
   const [renameValue, setRenameValue] = useState("")
-  const [quickSheetEntryId, setQuickSheetEntryId] = useState<string>()
+  const [inspectedEntryId, setInspectedEntryId] = useState<string>()
+  const [inspectorPinned, setInspectorPinned] = useState(false)
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(false)
+  const [hpAction, setHpAction] = useState<{ entryIds: string[]; mode: InitiativeHpActionMode }>()
   const cardRefs = useRef(new Map<string, HTMLDivElement>())
 
   const selectedCharacter = visibleCharacters.find(
@@ -114,25 +126,38 @@ export function InitiativeView() {
     (entry) => entry.id === conditionTargetId,
   )
   const renameTarget = session.entries.find((entry) => entry.id === renameTargetId)
-  const quickSheetEntry = session.entries.find(
-    (entry) => entry.id === quickSheetEntryId,
+  const inspectedEntry = session.entries.find(
+    (entry) => entry.id === inspectedEntryId,
   )
 
   const quickSheetData = useMemo(
     () =>
-      quickSheetEntry
+      inspectedEntry
         ? resolveQuickSheet(
-            quickSheetEntry,
+            inspectedEntry,
             visibleCharacters,
             creatures,
           )
         : undefined,
-    [creatures, quickSheetEntry, visibleCharacters],
+    [creatures, inspectedEntry, visibleCharacters],
   )
   const quickSheetPrefersImage = Boolean(
-    quickSheetEntry?.sourceId?.startsWith(COMPENDIUM_SOURCE_PREFIX) &&
+    inspectedEntry?.sourceId?.startsWith(COMPENDIUM_SOURCE_PREFIX) &&
       quickSheetData?.sheetImageUrl,
   )
+
+  useEffect(() => {
+    if (inspectorPinned) return
+    const nextId = session.activeEntryId ?? session.entries[0]?.id
+    if (nextId) setInspectedEntryId(nextId)
+  }, [inspectorPinned, session.activeEntryId, session.entries])
+
+  useEffect(() => {
+    if (!inspectedEntryId) return
+    if (session.entries.some((entry) => entry.id === inspectedEntryId)) return
+    setInspectedEntryId(session.activeEntryId ?? session.entries[0]?.id)
+    setInspectorPinned(false)
+  }, [inspectedEntryId, session.activeEntryId, session.entries])
 
   useEffect(() => {
     if (!session.activeEntryId || session.viewMode !== "cards") return
@@ -368,6 +393,58 @@ export function InitiativeView() {
     })
   }
 
+  function openHpAction(entryIds: string[], mode: InitiativeHpActionMode) {
+    if (!entryIds.length) return
+    setHpAction({ entryIds, mode })
+  }
+
+  function damageAffinitiesForEntry(entry: InitiativeEntry): DamageAffinity[] {
+    if (entry.sourceId?.startsWith(COMPENDIUM_SOURCE_PREFIX)) {
+      const creatureId = entry.sourceId.slice(COMPENDIUM_SOURCE_PREFIX.length)
+      return creatures.find((creature) => creature.id === creatureId)?.damageAffinities ?? []
+    }
+    if (entry.sourceId) {
+      return visibleCharacters.find((character) => character.get("id") === entry.sourceId)?.get("sheet").damageAffinities ?? []
+    }
+    return []
+  }
+
+  function applyHpAction(payload: InitiativeHpActionPayload) {
+    if (!hpAction?.entryIds.length) return
+    const entryIds = hpAction.entryIds
+    if (runtime?.initiativeState?.initialized) {
+      runtime.dispatchInitiativeOperation(payload.mode === "damage"
+        ? { type: "initiative.hp.apply", characterId: "session", entryIds, mode: "damage", parts: payload.parts }
+        : { type: "initiative.hp.apply", characterId: "session", entryIds, mode: payload.mode, amount: payload.amount })
+      setHpAction(undefined)
+      return
+    }
+
+    updateSession((current) => ({
+      ...current,
+      entries: current.entries.map((entry) => {
+        if (!entryIds.includes(entry.id)) return entry
+        if (payload.mode === "damage") {
+          const applied = payload.parts.reduce((total, part) => total + resolveDamage(part.amount, part.damageType, damageAffinitiesForEntry(entry), { magical: part.magical }).applied, 0)
+          const temporary = Math.max(0, entry.temporaryHp ?? 0)
+          const absorbed = Math.min(temporary, applied)
+          return {
+            ...entry,
+            temporaryHp: Math.max(0, temporary - absorbed),
+            currentHp: entry.currentHp === undefined ? entry.currentHp : Math.max(0, entry.currentHp - Math.max(0, applied - absorbed)),
+          }
+        }
+        if (payload.mode === "heal") {
+          if (entry.currentHp === undefined) return entry
+          return { ...entry, currentHp: Math.min(entry.maxHp ?? entry.currentHp + payload.amount, entry.currentHp + payload.amount) }
+        }
+        return { ...entry, temporaryHp: Math.max(0, (entry.temporaryHp ?? 0) + payload.amount) }
+      }),
+      updatedAt: Date.now(),
+    }))
+    setHpAction(undefined)
+  }
+
   async function clearCombat() {
     if (!window.confirm("Apagar todo o combate atual?")) return
     await resetSession()
@@ -392,8 +469,12 @@ export function InitiativeView() {
     round: session.round,
     started: session.started,
     patchEntry,
-    onOpen: setQuickSheetEntryId,
+    onOpen: (entryId: string) => {
+      setInspectedEntryId(entryId)
+      setInspectorCollapsed(false)
+    },
     onRename: openRename,
+    onHpAction: (entryId: string, mode: InitiativeHpActionMode) => openHpAction([entryId], mode),
     selectedEntryIds,
     onSelectEntry: toggleSelectedEntry,
     onCondition: setConditionTargetId,
@@ -582,6 +663,12 @@ export function InitiativeView() {
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => setSelectedEntryIds(new Set(session.entries.map((entry) => entry.id)))} disabled={!session.entries.length}>Selecionar todos</Button>
             <Button size="sm" variant="ghost" onClick={() => setSelectedEntryIds(new Set())} disabled={!selectedEntryIds.size}>Limpar seleção</Button>
+            <Button size="sm" variant="danger" onClick={() => openHpAction(Array.from(selectedEntryIds), "damage")} disabled={!selectedEntryIds.size}>
+              <Zap className="h-3.5 w-3.5" /> Dano
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => openHpAction(Array.from(selectedEntryIds), "heal")} disabled={!selectedEntryIds.size}>
+              <HeartPulse className="h-3.5 w-3.5" /> Cura
+            </Button>
             <Button size="sm" onClick={() => setBulkConditionOpen(true)} disabled={!selectedEntryIds.size}>Aplicar condição</Button>
             <Button size="sm" onClick={() => {
               const first = session.entries.find((entry) => selectedEntryIds.has(entry.id))?.conditions[0]?.name ?? ""
@@ -660,45 +747,63 @@ export function InitiativeView() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-bg shadow-theme-sm">
-        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="text-sm font-semibold text-textH">
-              {session.entries.length} participante
-              {session.entries.length === 1 ? "" : "s"}
+      <div className={`grid items-start gap-4 ${inspectorCollapsed ? "grid-cols-1" : "xl:grid-cols-[minmax(0,1fr)_26rem]"}`}>
+        <section className="min-w-0 rounded-xl border border-border bg-bg shadow-theme-sm">
+          <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-sm font-semibold text-textH">
+                  {session.entries.length} participante{session.entries.length === 1 ? "" : "s"}
+                </div>
+                {inspectorCollapsed ? (
+                  <Button size="sm" variant="secondary" onClick={() => setInspectorCollapsed(false)}>
+                    <PanelRightOpen className="h-4 w-4" /> Mostrar ficha
+                  </Button>
+                ) : null}
+              </div>
+              <div className="text-xs text-textMuted">
+                A ficha à direita acompanha o turno; clique em outro participante para inspecioná-lo ou fixe a ficha.
+              </div>
             </div>
-            <div className="text-xs text-textMuted">
-              Clique no nome ou cartão para abrir a ficha rápida.
+            <div className="flex items-center gap-2">
+              <Button size="icon" title="Turno anterior" onClick={() => updateSession(rewindInitiativeTurn)} disabled={!session.started}>
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="primary" onClick={() => updateSession(advanceInitiativeTurn)} disabled={!session.started}>
+                Próximo turno <ArrowRight className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="icon"
-              title="Turno anterior"
-              onClick={() => updateSession(rewindInitiativeTurn)}
-              disabled={!session.started}
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => updateSession(advanceInitiativeTurn)}
-              disabled={!session.started}
-            >
-              Próximo turno
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
 
-        {session.entries.length === 0 ? (
-          <EmptyRoster />
-        ) : session.viewMode === "table" ? (
-          <InitiativeTable {...rosterProps} />
-        ) : (
-          <InitiativeCards {...rosterProps} cardRefs={cardRefs} />
-        )}
-      </section>
+          {session.entries.length === 0 ? (
+            <EmptyRoster />
+          ) : session.viewMode === "table" ? (
+            <InitiativeTable {...rosterProps} />
+          ) : (
+            <InitiativeCards {...rosterProps} cardRefs={cardRefs} />
+          )}
+        </section>
+
+        {!inspectorCollapsed ? (
+          <InitiativeCombatantInspector
+            entry={inspectedEntry}
+            data={quickSheetData}
+            pinned={inspectorPinned}
+            followingTurn={!inspectorPinned && Boolean(inspectedEntry?.id && inspectedEntry.id === session.activeEntryId)}
+            preferImage={quickSheetPrefersImage}
+            onTogglePinned={() => {
+              if (inspectorPinned) {
+                setInspectorPinned(false)
+                setInspectedEntryId(session.activeEntryId ?? inspectedEntry?.id)
+              } else {
+                setInspectorPinned(true)
+              }
+            }}
+            onCollapse={() => setInspectorCollapsed(true)}
+            onHpAction={(mode) => inspectedEntry && openHpAction([inspectedEntry.id], mode)}
+          />
+        ) : null}
+      </div>
 
       {bulkConditionOpen && selectedEntryIds.size ? (
         <ConditionDialog
@@ -800,17 +905,15 @@ export function InitiativeView() {
         />
       ) : null}
 
-      {quickSheetEntry && quickSheetData ? (
-        <Modal
-          title={`Ficha rápida — ${initiativeEntryDisplayName(quickSheetEntry, "master")}`}
-          onClose={() => setQuickSheetEntryId(undefined)}
-          className="max-w-5xl"
-        >
-          <CreatureQuickSheet
-            data={quickSheetData}
-            preferImage={quickSheetPrefersImage}
-          />
-        </Modal>
+      {hpAction ? (
+        <InitiativeHpActionDialog
+          targets={session.entries
+            .filter((entry) => hpAction.entryIds.includes(entry.id))
+            .map((entry) => ({ entry, affinities: damageAffinitiesForEntry(entry) }))}
+          initialMode={hpAction.mode}
+          onClose={() => setHpAction(undefined)}
+          onApply={applyHpAction}
+        />
       ) : null}
     </div>
   )

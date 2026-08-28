@@ -1,4 +1,4 @@
-import { Pencil, Skull, Trash2 } from "lucide-react"
+import { HeartPulse, Pencil, Skull, Trash2, Zap } from "lucide-react"
 
 import { Button } from "../../components/ui/Button"
 import type { InitiativeEntry } from "../../models/initiative/Initiative"
@@ -108,6 +108,17 @@ export function InitiativeCards({
                         {entry.armorClass ?? "—"}
                       </div>
                     </div>
+                  </div>
+                ) : null}
+
+                {!readOnly && props.onHpAction && showPrivateStats ? (
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <Button size="sm" variant="danger" disabled={entry.currentHp === undefined} onClick={() => props.onHpAction?.(entry.id, "damage")}>
+                      <Zap className="h-3.5 w-3.5" /> Dano
+                    </Button>
+                    <Button size="sm" variant="secondary" disabled={entry.currentHp === undefined} onClick={() => props.onHpAction?.(entry.id, "heal")}>
+                      <HeartPulse className="h-3.5 w-3.5" /> Cura
+                    </Button>
                   </div>
                 ) : null}
 

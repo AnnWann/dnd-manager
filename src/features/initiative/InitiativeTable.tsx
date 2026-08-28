@@ -1,4 +1,4 @@
-import { Pencil, Play, Skull, Trash2 } from "lucide-react"
+import { HeartPulse, Pencil, Play, Skull, Trash2, Zap } from "lucide-react"
 
 import { Button } from "../../components/ui/Button"
 import type { InitiativeEntry } from "../../models/initiative/Initiative"
@@ -48,6 +48,7 @@ function TableEntryRows({
   patchEntry,
   onOpen,
   onRename,
+  onHpAction,
   selectedEntryIds,
   onSelectEntry,
   onCondition,
@@ -110,6 +111,16 @@ function TableEntryRows({
         <td className="px-3 py-3">
           <div className="grid gap-2">
             <HitPointEditor entry={entry} patchEntry={patchEntry} />
+            {onHpAction ? (
+              <div className="flex gap-1">
+                <Button size="sm" variant="danger" title="Aplicar dano" disabled={entry.currentHp === undefined} onClick={() => onHpAction(entry.id, "damage")}>
+                  <Zap className="h-3.5 w-3.5" /> −
+                </Button>
+                <Button size="sm" variant="secondary" title="Aplicar cura" disabled={entry.currentHp === undefined} onClick={() => onHpAction(entry.id, "heal")}>
+                  <HeartPulse className="h-3.5 w-3.5" /> +
+                </Button>
+              </div>
+            ) : null}
             <DeathSaveCounter
               entry={entry}
               editable
