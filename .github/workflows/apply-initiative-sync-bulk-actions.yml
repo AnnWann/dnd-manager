@@ -32,7 +32,7 @@ jobs:
             exit "$status"
           fi
 
-      - name: Apply log continuation
+      - name: Apply continuation fixes
         run: python .github/patch_initiative_sync_bulk_actions_continue.py
 
       - name: Remove temporary patch files
