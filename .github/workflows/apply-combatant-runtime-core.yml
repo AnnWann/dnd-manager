@@ -23,8 +23,11 @@ jobs:
       - name: Apply core patch
         run: python .github/patch_combatant_runtime_core.py
 
+      - name: Apply compatibility fix
+        run: python .github/patch_combatant_runtime_core_fix.py
+
       - name: Remove temporary patch files
-        run: rm .github/patch_combatant_runtime_core.py .github/workflows/apply-combatant-runtime-core.yml
+        run: rm .github/patch_combatant_runtime_core.py .github/patch_combatant_runtime_core_fix.py .github/workflows/apply-combatant-runtime-core.yml
 
       - name: Install frontend dependencies
         run: npm install --package-lock=false --ignore-scripts
