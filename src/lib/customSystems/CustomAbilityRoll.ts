@@ -2,7 +2,9 @@ import type { CharacterTemplate } from "../../models/characters/CharacterTemplat
 import type {
   CustomAbilityActivationDefinition,
   CustomAbilityRollDefinition,
+  CustomAbilityTypeDefinition,
 } from "../../models/customSystems/CustomAbilityDefinition"
+import type { JsonValue } from "../../models/customSystems/CustomGenerals"
 import type {
   CharacterCustomSystemState,
   CustomAbilityInstance,
@@ -10,6 +12,10 @@ import type {
   CustomSystemDefinition,
 } from "../../models/customSystems/CustomSystemDefinition"
 import { activateCustomAbility } from "./CustomAbilityActivation"
+import {
+  evaluateCustomFormula,
+  listCustomFormulaVariables,
+} from "./CustomFormulaEngineWithCharacter"
 import {
   activateCustomSystemAction,
   getEffectiveCustomAbilityActivation,
@@ -45,7 +51,10 @@ export function activateCustomAbilityWithRoll(
   )
   const definition = definitions.find((entry) => entry.id === systemId)
   const ability = state?.abilities.find((entry) => entry.id === abilityId)
-  if (!state || !definition || !ability) {
+  const type = ability && definition?.abilityTypes.find(
+    (entry) => entry.id === ability.abilityTypeId,
+  )
+  if (!state || !definition || !ability || !type) {
     return {
       character: activateCustomAbility(character, definitions, systemId, abilityId),
     }
@@ -58,12 +67,21 @@ export function activateCustomAbilityWithRoll(
     }
   }
 
-  const value = resolveRollValue(roll, suppliedRollValue, "habilidade")
+  const resolved = resolveRollValue(
+    roll,
+    suppliedRollValue,
+    "habilidade",
+    definition,
+    state,
+    character,
+    type,
+    ability.values,
+  )
   const resolvedDefinitions = replaceRollValueForAbility(
     definitions,
     systemId,
     ability,
-    value,
+    resolved.value,
   )
 
   return {
@@ -75,8 +93,8 @@ export function activateCustomAbilityWithRoll(
     ),
     roll: {
       mode: roll.mode,
-      value,
-      dice: roll.dice?.trim() || undefined,
+      value: resolved.value,
+      dice: resolved.dice,
     },
   }
 }
@@ -89,8 +107,11 @@ export function activateCustomSystemActionWithRoll(
   suppliedRollValue?: number,
 ): { character: CharacterTemplate; roll?: CustomAbilityRollResolution } {
   const definition = definitions.find((entry) => entry.id === systemId)
+  const state = (character.get("sheet").customSystems ?? []).find(
+    (entry) => entry.systemId === systemId,
+  )
   const action = definition?.actions?.find((entry) => entry.id === actionId)
-  if (!definition || !action || !action.roll) {
+  if (!definition || !state || !action || !action.roll) {
     return {
       character: activateCustomSystemAction(
         character,
@@ -101,12 +122,19 @@ export function activateCustomSystemActionWithRoll(
     }
   }
 
-  const value = resolveRollValue(action.roll, suppliedRollValue, "ação")
+  const resolved = resolveRollValue(
+    action.roll,
+    suppliedRollValue,
+    "ação",
+    definition,
+    state,
+    character,
+  )
   const resolvedDefinitions = replaceRollValueForAction(
     definitions,
     systemId,
     action,
-    value,
+    resolved.value,
   )
 
   return {
@@ -118,8 +146,8 @@ export function activateCustomSystemActionWithRoll(
     ),
     roll: {
       mode: action.roll.mode,
-      value,
-      dice: action.roll.dice?.trim() || undefined,
+      value: resolved.value,
+      dice: resolved.dice,
     },
   }
 }
@@ -140,6 +168,56 @@ export function validateCustomAbilityDiceExpression(
   return undefined
 }
 
+export function validateCustomAbilityDiceSource(
+  expression: string | undefined,
+  definition: CustomSystemDefinition,
+  abilityType?: CustomAbilityTypeDefinition,
+): string | undefined {
+  const value = expression?.trim() ?? ""
+  if (!value) return "Informe os dados da rolagem, por exemplo 1d6, ou selecione uma variável do tipo Dado."
+  if (!validateCustomAbilityDiceExpression(value)) return undefined
+
+  const variable = listCustomFormulaVariables(definition, abilityType).find(
+    (entry) => entry.path === value,
+  )
+  if (variable?.valueType === "dice") return undefined
+
+  return "Use uma notação como 1d6 ou selecione uma variável cujo tipo seja Dado."
+}
+
+export function resolveCustomRollDiceExpression(
+  expression: string | undefined,
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  character?: CharacterTemplate,
+  abilityType?: CustomAbilityTypeDefinition,
+  abilityValues?: Record<string, JsonValue>,
+): string {
+  const value = expression?.trim() ?? ""
+  const literalError = validateCustomAbilityDiceExpression(value)
+  if (!literalError) return value
+
+  if (!value) throw new Error(literalError)
+  const result = evaluateCustomFormula(
+    value,
+    definition,
+    state,
+    character,
+    abilityType ? { type: abilityType, values: abilityValues } : undefined,
+  )
+  if (!result.ok) throw new Error(result.error)
+  if (typeof result.value !== "string") {
+    throw new Error("A variável usada como dado precisa retornar um valor como d6 ou 2d8+1.")
+  }
+
+  const resolved = result.value.trim()
+  const resolvedError = validateCustomAbilityDiceExpression(resolved)
+  if (resolvedError) {
+    throw new Error(`A variável de dado retornou “${resolved}”. ${resolvedError}`)
+  }
+  return resolved
+}
+
 export function rollCustomAbilityDice(expression: string): number {
   const error = validateCustomAbilityDiceExpression(expression)
   if (error) throw new Error(error)
@@ -155,18 +233,40 @@ function resolveRollValue(
   roll: CustomAbilityRollDefinition,
   suppliedRollValue: number | undefined,
   subject: "habilidade" | "ação",
-): number {
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  character: CharacterTemplate,
+  abilityType?: CustomAbilityTypeDefinition,
+  abilityValues?: Record<string, JsonValue>,
+): { value: number; dice?: string } {
   if (roll.mode === "manual") {
     if (typeof suppliedRollValue !== "number" || !Number.isFinite(suppliedRollValue)) {
       throw new Error(`Informe o resultado da rolagem antes de usar esta ${subject}.`)
     }
-    return suppliedRollValue
+    return {
+      value: suppliedRollValue,
+      dice: roll.dice?.trim()
+        ? resolveCustomRollDiceExpression(
+            roll.dice,
+            definition,
+            state,
+            character,
+            abilityType,
+            abilityValues,
+          )
+        : undefined,
+    }
   }
 
-  const dice = roll.dice?.trim() ?? ""
-  const error = validateCustomAbilityDiceExpression(dice)
-  if (error) throw new Error(error)
-  return rollCustomAbilityDice(dice)
+  const dice = resolveCustomRollDiceExpression(
+    roll.dice,
+    definition,
+    state,
+    character,
+    abilityType,
+    abilityValues,
+  )
+  return { value: rollCustomAbilityDice(dice), dice }
 }
 
 function replaceRollValueForAbility(
