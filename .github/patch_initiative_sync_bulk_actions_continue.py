@@ -8,8 +8,16 @@ if old not in text:
     raise SystemExit("anchor not found: exact initiative log operations")
 path.write_text(text.replace(old, new, 1))
 
+path = Path("src/features/initiative/InitiativeTable.tsx")
+text = path.read_text()
+old = '''  onOpen,\n  onRename,\n  onCondition,\n'''
+new = '''  onOpen,\n  onRename,\n  selectedEntryIds,\n  onSelectEntry,\n  onCondition,\n'''
+if old not in text:
+    raise SystemExit("anchor not found: table selection destructuring")
+path.write_text(text.replace(old, new, 1))
+
 trigger = Path("src/qaDeployTrigger.ts")
 if trigger.exists():
     trigger.unlink()
 
-print("initiative log continuation applied")
+print("initiative continuation applied")
