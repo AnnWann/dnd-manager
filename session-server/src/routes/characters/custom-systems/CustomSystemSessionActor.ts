@@ -16,7 +16,7 @@ import {
   setCustomAbilityLearned,
   setCustomAbilityPrepared,
 } from "../../../../../src/lib/customSystems/CustomAbilityManagement";
-import { activateCustomAbility } from "../../../../../src/lib/customSystems/CustomAbilityActivation";
+import { activateCustomAbilityWithRoll } from "../../../../../src/lib/customSystems/CustomAbilityRoll";
 import { activateCustomSystemAction } from "../../../../../src/lib/customSystems/CustomSystemActions";
 import {
   runCustomSystemAutomation,
@@ -149,14 +149,23 @@ export class SessionActor extends BaseSessionActor {
     }
 
     let nextCharacter: CharacterTemplate;
+    let loggedOperation: SessionCustomSystemOperation = operation;
     try {
       if (operation.type === "character.customSystem.ability.activate") {
-        nextCharacter = activateCustomAbility(
+        const activation = activateCustomAbilityWithRoll(
           character,
           activeRuntimeConfig.config.customSystems,
           operation.systemId,
           operation.abilityId,
+          operation.rollValue,
         );
+        nextCharacter = activation.character;
+        if (activation.roll) {
+          loggedOperation = {
+            ...operation,
+            rollValue: activation.roll.value,
+          };
+        }
         nextCharacter = runCustomSystemAutomations(
           nextCharacter,
           activeRuntimeConfig.config.customSystems,
@@ -245,7 +254,7 @@ export class SessionActor extends BaseSessionActor {
 
     const record = createSessionLogRecord({
       actorId: connection.userId,
-      operation,
+      operation: loggedOperation,
       reverseOperation: {
         type: "character.ability.restore",
         characterId: operation.characterId,
