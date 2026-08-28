@@ -12,6 +12,8 @@ type EditorProps = {
   setDraft: (definition: CustomSystemDefinition) => void
 }
 
+type FormulaResultType = Extract<CustomFieldDefinition, { type: 'formula' }>['resultType']
+
 const FIELD_TYPES: Array<{ value: CustomFieldDefinition['type']; label: string }> = [
   { value: 'text', label: 'Texto' },
   { value: 'richText', label: 'Texto longo' },
@@ -154,8 +156,8 @@ function OptionListEditor({ options, onChange }: {
 function FormulaEditor({ definition, formula, resultType, onChange }: {
   definition: CustomSystemDefinition
   formula: string
-  resultType: 'number' | 'text' | 'boolean'
-  onChange: (formula: string, resultType: 'number' | 'text' | 'boolean') => void
+  resultType: FormulaResultType
+  onChange: (formula: string, resultType: FormulaResultType) => void
 }) {
   const variables = listCustomFormulaVariables(definition)
   const error = formula.trim() ? validateCustomFormula(formula, definition) : 'Informe uma expressão.'
@@ -168,13 +170,14 @@ function FormulaEditor({ definition, formula, resultType, onChange }: {
           { value: 'number', label: 'Número' },
           { value: 'text', label: 'Texto' },
           { value: 'boolean', label: 'Sim/Não' },
+          { value: 'dice', label: 'Dado' },
         ]}
-        onChange={(value) => onChange(formula, value as typeof resultType)}
+        onChange={(value) => onChange(formula, value as FormulaResultType)}
       />
       <Input label="Expressão" value={formula} onChange={(value) => onChange(value, resultType)} />
     </div>
     <div className="mt-3"><FormulaVariablePicker variables={variables} onSelect={(path) => onChange(`${formula}${formula.trim() ? ' ' : ''}${path}`, resultType)} /></div>
-    <div className="mt-3 text-xs text-text">Funções: <code>min</code>, <code>max</code>, <code>round</code>, <code>floor</code>, <code>ceil</code>, <code>abs</code>, <code>clamp</code> e <code>if</code>.</div>
+    <div className="mt-3 text-xs text-text">Funções: <code>min</code>, <code>max</code>, <code>round</code>, <code>floor</code>, <code>ceil</code>, <code>abs</code>, <code>clamp</code> e <code>if</code>. Para resultado Dado, a expressão deve produzir algo como <code>d6</code> ou <code>2d8+1</code>.</div>
     <div className={`mt-2 text-xs ${error ? 'text-red-300' : 'text-emerald-300'}`}>{error ?? 'Fórmula válida.'}</div>
   </div>
 }
