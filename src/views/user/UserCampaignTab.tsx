@@ -114,7 +114,10 @@ export function UserCampaignsTab() {
     try {
       await linkCharacterToCampaign(campaign.id, characterId, visibility)
 
-      const needsApproval = !(campaign.isOwner || campaign.role === "MASTER")
+      const canDirectlyAdd =
+        campaign.status === "ACTIVE" &&
+        (campaign.isOwner || campaign.role === "MASTER")
+      const needsApproval = !canDirectlyAdd
       const character = characterById.get(characterId)
 
       if (needsApproval) {
@@ -315,14 +318,17 @@ export function UserCampaignsTab() {
     setNoticeMessage("")
 
     try {
+      const autoApprove =
+        campaign.status === "ACTIVE" &&
+        (campaign.isOwner || campaign.role === "MASTER")
       await submitOwnedHomebrewSpellToCampaign(record, {
         id: campaign.id,
         name: campaign.name,
-        autoApprove: campaign.isOwner || campaign.role === "MASTER",
+        autoApprove,
       })
       setSelectedSpell((current) => ({ ...current, [campaign.id]: "" }))
       setNoticeMessage(
-        campaign.isOwner || campaign.role === "MASTER"
+        autoApprove
           ? `Magia “${record.name}” adicionada à sessão “${campaign.name}”.`
           : `Solicitação para adicionar “${record.name}” à sessão “${campaign.name}” enviada ao mestre.`,
       )
@@ -438,8 +444,10 @@ export function UserCampaignsTab() {
               (record) => !linkedSpellIds.has(record.id),
             )
             const active = campaign.status === "ACTIVE"
+            const canSubmitRequests =
+              campaign.status === "ACTIVE" || campaign.status === "INVITED"
             const canReviewSpells = active && (campaign.isOwner || campaign.role === "MASTER")
-            const canDirectlyAdd = campaign.isOwner || campaign.role === "MASTER"
+            const canDirectlyAdd = active && (campaign.isOwner || campaign.role === "MASTER")
 
             return (
               <Card key={campaign.id}>
@@ -505,6 +513,12 @@ export function UserCampaignsTab() {
                           </Button>
                         </div>
                       </section>
+                    ) : null}
+
+                    {campaign.status === "INVITED" ? (
+                      <div className="rounded-xl border border-accentBorder bg-accentBg p-3 text-xs leading-5 text-text">
+                        Sua entrada ainda está aguardando aprovação. Você já pode enviar personagem e homebrew agora; cada solicitação será revisada separadamente pelo mestre.
+                      </div>
                     ) : null}
 
                     <section>
@@ -583,7 +597,7 @@ export function UserCampaignsTab() {
                         </p>
                       )}
 
-                      {active && availableOwnedSpells.length ? (
+                      {canSubmitRequests && availableOwnedSpells.length ? (
                         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                           <select
                             className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
@@ -694,7 +708,7 @@ export function UserCampaignsTab() {
                         <p className="mt-2 text-xs text-textMuted">Nenhum personagem vinculado.</p>
                       )}
 
-                      {active && availableCharacters.length ? (
+                      {canSubmitRequests && availableCharacters.length ? (
                         <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px_auto]">
                           <select
                             className="h-10 min-w-0 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
