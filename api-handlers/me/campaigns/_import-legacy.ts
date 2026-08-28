@@ -112,7 +112,7 @@ export async function POST(request: Request): Promise<Response> {
           entry.character as unknown as Prisma.InputJsonObject,
         )
         const data = sanitizeCharacterAcquisitionData(itemSafeData, {
-          reason: "legacy-campaign-import",
+          reason: "import",
           sourceType: "legacyImport",
           sourceName: "Importação de campanha legacy",
         })
