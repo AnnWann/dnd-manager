@@ -1,3 +1,4 @@
+import type { CustomFieldDefinition } from '../../models/customSystems/CustomFieldDefinition'
 import type { JsonValue } from '../../models/customSystems/CustomGenerals'
 import type {
   CharacterCustomSystemState,
@@ -11,7 +12,7 @@ export type CustomFormulaResult =
 export type CustomFormulaVariable = {
   path: string
   label: string
-  valueType: 'number' | 'text' | 'boolean'
+  valueType: 'number' | 'text' | 'boolean' | 'dice'
 }
 
 type Token =
@@ -28,18 +29,20 @@ type Token =
 export function listCustomFormulaVariables(
   definition: CustomSystemDefinition,
 ): CustomFormulaVariable[] {
-  const fieldVariables = definition.fields
-    .filter((field) => field.type !== 'formula')
-    .map((field) => ({
-      path: `field.${field.id}`,
-      label: field.name,
-      valueType:
-        field.type === 'number'
+  const fieldVariables = definition.fields.map((field) => ({
+    path: `field.${field.id}`,
+    label: field.type === 'formula' ? `${field.name} — calculado` : field.name,
+    valueType:
+      field.type === 'formula'
+        ? field.resultType
+        : field.type === 'number'
           ? 'number' as const
           : field.type === 'boolean'
             ? 'boolean' as const
-            : 'text' as const,
-    }))
+            : field.type === 'dice'
+              ? 'dice' as const
+              : 'text' as const,
+  }))
 
   const resourceVariables = definition.resources.flatMap((resource) => [
     {
@@ -93,7 +96,7 @@ export function validateCustomFormula(
     fields: Object.fromEntries(
       definition.fields
         .filter((field) => field.type !== 'formula')
-        .map((field) => [field.id, field.type === 'boolean' ? false : field.type === 'number' ? 0 : '']),
+        .map((field) => [field.id, mockValueForField(field)]),
     ),
     resources: Object.fromEntries(
       definition.resources.map((resource) => [resource.id, {
@@ -122,9 +125,14 @@ function resolveVariable(
     if (field.type === 'formula') {
       const result = evaluateCustomFormula(field.formula, definition, state)
       if (!result.ok) throw new Error(result.error)
+      if (field.resultType === 'dice') {
+        if (typeof result.value !== 'string' || !isDiceExpression(result.value)) {
+          throw new Error(`A fórmula “${field.name}” deve retornar um dado válido, como d6 ou 2d8+1.`)
+        }
+      }
       return result.value
     }
-    return state.fields[field.id] ?? field.defaultValue ?? defaultValueForField(field.type)
+    return state.fields[field.id] ?? field.defaultValue ?? defaultValueForField(field)
   }
 
   if (parts[0] === 'resource' && parts.length === 3) {
@@ -148,11 +156,26 @@ function resolveVariable(
   throw new Error(`Variável desconhecida: ${path}`)
 }
 
-function defaultValueForField(type: string): JsonValue {
-  if (type === 'number') return 0
-  if (type === 'boolean') return false
-  if (type === 'multiSelect') return []
+function mockValueForField(field: Exclude<CustomFieldDefinition, { type: 'formula' }>): JsonValue {
+  if (field.defaultValue !== undefined) return field.defaultValue
+  return defaultValueForField(field)
+}
+
+function defaultValueForField(field: CustomFieldDefinition): JsonValue {
+  if (field.type === 'number') return 0
+  if (field.type === 'boolean') return false
+  if (field.type === 'multiSelect') return []
+  if (field.type === 'dice') return field.allowedDice?.[0] ?? 'd6'
   return ''
+}
+
+function isDiceExpression(value: string): boolean {
+  const match = value.trim().match(/^(\d*)d(\d+)(?:\s*([+-])\s*(\d+))?$/i)
+  if (!match) return false
+  const count = match[1] ? Number(match[1]) : 1
+  const sides = Number(match[2])
+  return Number.isInteger(count) && count >= 1 && count <= 100
+    && Number.isInteger(sides) && sides >= 2 && sides <= 1000
 }
 
 function normalizeResult(value: unknown): JsonValue {
