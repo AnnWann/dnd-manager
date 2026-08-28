@@ -51,7 +51,18 @@ import { normalizeAppStateInventory } from "../lib/normalizeAppStateInventory"
 import { type AppStateV1 } from "../lib/remoteState"
 import { useConcurrentRemoteAppState } from "../lib/remoteStateConcurrent"
 import { SESSION_CONTENT_CHANGED_EVENT } from "../lib/sessionEvents"
+import type { Spell } from "../models/magic/spells/Spell"
+import {
+  LEGACY_SESSION_BOOTSTRAP_ASSET_SOURCE,
+  LEGACY_SESSION_BOOTSTRAP_ASSET_TYPE,
+  readLegacySessionBootstrap,
+} from "../shared/legacy/legacyCampaignBackup"
 import { AppRouter } from "../Router"
+
+type SessionCompatibleAppState = AppStateV1 & {
+  partyAdditionalSupplyConsumption?: number
+  missions?: unknown[]
+}
 
 export function CampaignLayout() {
   const navigate = useNavigate()
@@ -155,9 +166,25 @@ export function CampaignLayout() {
             ...entry.data,
             homebrew: true,
           }))
+        const importedSpells = homebrew.assets
+          .filter((asset) => asset.type === "SPELL")
+          .map((asset) => asset.data as unknown as Spell)
+          .filter(
+            (spell) =>
+              Boolean(spell) &&
+              typeof spell.index === "string" &&
+              spell.index.trim().length > 0,
+          )
+        const bootstrapAsset = homebrew.assets.find(
+          (asset) =>
+            asset.type === LEGACY_SESSION_BOOTSTRAP_ASSET_TYPE &&
+            asset.sourceId === LEGACY_SESSION_BOOTSTRAP_ASSET_SOURCE,
+        )
+        const legacyBootstrap = readLegacySessionBootstrap(bootstrapAsset?.data)
         const stateBelongsToThisSession = readSessionStateOwner() === sessionId
 
         setAppState((previous) => {
+          const previousCompatible = previous as SessionCompatibleAppState
           const existingById = stateBelongsToThisSession
             ? new Map(previous.characters.map((character) => [character.id, character]))
             : new Map<string, (typeof previous.characters)[number]>()
@@ -165,14 +192,17 @@ export function CampaignLayout() {
           const characters = sourceSnapshots.map(
             (source) => existingById.get(source.id) ?? source,
           )
-          const activeCharacterId = characters.some(
-            (character) => character.id === previous.activeCharacterId,
-          )
+          const preferredActiveId = stateBelongsToThisSession
             ? previous.activeCharacterId
+            : legacyBootstrap?.activeCharacterId ?? ""
+          const activeCharacterId = characters.some(
+            (character) => character.id === preferredActiveId,
+          )
+            ? preferredActiveId
             : characters[0]?.id ?? ""
 
           const spellMap = new Map(
-            (stateBelongsToThisSession ? previous.spells ?? [] : []).map(
+            (stateBelongsToThisSession ? previous.spells ?? [] : importedSpells).map(
               (spell) => [spell.index, spell],
             ),
           )
@@ -180,6 +210,22 @@ export function CampaignLayout() {
             spellMap.set(spell.index, spell)
           }
           const spells = Array.from(spellMap.values())
+
+          const partyInventory = stateBelongsToThisSession
+            ? previous.partyInventory ?? []
+            : legacyBootstrap?.partyInventory ?? []
+          const groundInventory = stateBelongsToThisSession
+            ? previous.groundInventory ?? []
+            : legacyBootstrap?.groundInventory ?? []
+          const partyCarryCapacity = stateBelongsToThisSession
+            ? previous.partyCarryCapacity ?? 0
+            : legacyBootstrap?.partyCarryCapacity ?? 0
+          const partyAdditionalSupplyConsumption = stateBelongsToThisSession
+            ? previousCompatible.partyAdditionalSupplyConsumption ?? 0
+            : legacyBootstrap?.partyAdditionalSupplyConsumption ?? 0
+          const missions = stateBelongsToThisSession
+            ? previousCompatible.missions ?? []
+            : legacyBootstrap?.missions ?? []
 
           const charactersUnchanged =
             stateBelongsToThisSession &&
@@ -191,15 +237,27 @@ export function CampaignLayout() {
           const spellsUnchanged =
             stateBelongsToThisSession &&
             JSON.stringify(previous.spells ?? []) === JSON.stringify(spells)
+          const sharedStateUnchanged =
+            stateBelongsToThisSession &&
+            JSON.stringify(previous.partyInventory ?? []) === JSON.stringify(partyInventory) &&
+            JSON.stringify(previous.groundInventory ?? []) === JSON.stringify(groundInventory) &&
+            (previous.partyCarryCapacity ?? 0) === partyCarryCapacity &&
+            (previousCompatible.partyAdditionalSupplyConsumption ?? 0) === partyAdditionalSupplyConsumption &&
+            JSON.stringify(previousCompatible.missions ?? []) === JSON.stringify(missions)
 
-          if (charactersUnchanged && spellsUnchanged) return previous
+          if (charactersUnchanged && spellsUnchanged && sharedStateUnchanged) return previous
 
           return {
             ...previous,
             characters,
             activeCharacterId,
             spells,
-          }
+            partyInventory,
+            groundInventory,
+            partyCarryCapacity,
+            partyAdditionalSupplyConsumption,
+            missions,
+          } as SessionCompatibleAppState
         })
 
         rememberSessionStateOwner(sessionId)
@@ -406,11 +464,7 @@ export function CampaignLayout() {
         <PartyInventorySettingsProvider
           carryCapacity={appState.partyCarryCapacity ?? 0}
           additionalSupplyConsumption={
-            (
-              appState as AppStateV1 & {
-                partyAdditionalSupplyConsumption?: number
-              }
-            ).partyAdditionalSupplyConsumption ?? 0
+            (appState as SessionCompatibleAppState).partyAdditionalSupplyConsumption ?? 0
           }
           canEditCarryCapacity={effectiveUserRole === "master"}
           setAppState={setAppState}
