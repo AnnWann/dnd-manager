@@ -463,6 +463,7 @@ function ActionRow({ definition, value, onChange, onRemove }: {
             key={change.id}
             definition={definition}
             value={change}
+            roll={value.roll}
             onChange={(next) =>
               onChange({
                 ...value,
@@ -491,15 +492,25 @@ function ActionRow({ definition, value, onChange, onRemove }: {
   )
 }
 
-function ResourceRow({ definition, value, onChange, onRemove }: {
+function ResourceRow({ definition, value, roll, onChange, onRemove }: {
   definition: CustomSystemDefinition
   value: CustomAbilityResourceChangeDefinition
+  roll?: CustomAbilityRollDefinition
   onChange: (value: CustomAbilityResourceChangeDefinition) => void
   onRemove: () => void
 }) {
   const custom = value.target.source === "customSystem"
+  const formulaAbilityType = roll
+    ? {
+        id: "__system-action-roll",
+        name: "Ação do sistema",
+        fields: [],
+        display: { titleFieldId: "" },
+        activation: { roll },
+      }
+    : undefined
   const formulaError = value.formula?.trim()
-    ? validateCustomFormula(value.formula, definition)
+    ? validateCustomFormula(value.formula, definition, formulaAbilityType)
     : undefined
 
   return (
@@ -554,7 +565,7 @@ function ResourceRow({ definition, value, onChange, onRemove }: {
           onChange={(formula) => onChange({ ...value, formula: formula || undefined })}
         />
         <FormulaVariablePicker
-          variables={listCustomFormulaVariables(definition)}
+          variables={listCustomFormulaVariables(definition, formulaAbilityType)}
           onSelect={(path) => onChange({ ...value, formula: `${value.formula ?? ""}${value.formula?.trim() ? " " : ""}${path}` })}
         />
       </div>
