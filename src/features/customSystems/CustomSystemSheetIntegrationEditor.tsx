@@ -5,8 +5,12 @@ import {
   listCustomFormulaVariables,
   validateCustomFormula,
 } from "../../lib/customSystems"
+import { validateCustomAbilityDiceExpression } from "../../lib/customSystems/CustomAbilityRoll"
 import type { AbilityActionKind } from "../../models/abilities/Ability"
-import type { CustomAbilityResourceChangeDefinition } from "../../models/customSystems/CustomAbilityDefinition"
+import type {
+  CustomAbilityResourceChangeDefinition,
+  CustomAbilityRollDefinition,
+} from "../../models/customSystems/CustomAbilityDefinition"
 import type {
   CustomNativeStatOverrideDefinition,
   CustomNativeStatTarget,
@@ -33,6 +37,12 @@ const ACTIONS: Array<[AbilityActionKind | "", string]> = [
   ["legendaryAction", "Ação lendária"],
   ["legendaryReaction", "Reação lendária"],
   ["legendaryResistance", "Resistência lendária"],
+]
+
+const ROLL_MODES: Array<["" | CustomAbilityRollDefinition["mode"], string]> = [
+  ["", "Sem rolagem"],
+  ["automatic", "Automática"],
+  ["manual", "Manual antes de executar"],
 ]
 
 const STANDARD_ACTIONS: Array<[string, string]> = [
@@ -126,7 +136,7 @@ export function CustomSystemSheetIntegrationEditor({
 
       <Section
         title="Botões do sistema"
-        description="Botões aparecem na seção Ações da ficha. Podem gastar, gerar ou definir recursos e aplicar/remover estados."
+        description="Botões aparecem na seção Ações da ficha. Podem rolar dados, gastar, gerar ou definir recursos e aplicar/remover estados."
         action={
           <AddButton
             label="Botão"
@@ -340,6 +350,27 @@ function ActionRow({ definition, value, onChange, onRemove }: {
 }) {
   const resources = value.resourceChanges ?? []
   const conditions = value.conditionChanges ?? []
+  const rollError = value.roll?.mode === "automatic"
+    ? validateCustomAbilityDiceExpression(value.roll.dice)
+    : value.roll?.dice?.trim()
+      ? validateCustomAbilityDiceExpression(value.roll.dice)
+      : undefined
+
+  function setRollMode(mode: string) {
+    if (!mode) {
+      onChange({ ...value, roll: undefined })
+      return
+    }
+    const nextMode = mode as CustomAbilityRollDefinition["mode"]
+    onChange({
+      ...value,
+      roll: {
+        mode: nextMode,
+        dice: value.roll?.dice ?? (nextMode === "automatic" ? "1d6" : undefined),
+        label: value.roll?.label,
+      },
+    })
+  }
 
   return (
     <div className="rounded-xl border border-border bg-bg-subtle p-4">
@@ -369,6 +400,42 @@ function ActionRow({ definition, value, onChange, onRemove }: {
         value={value.description ?? ""}
         onChange={(description) => onChange({ ...value, description: description || undefined })}
       />
+
+      <section className="mt-4 rounded-xl border border-border bg-bg p-3">
+        <h3 className="text-sm font-semibold text-textH">Rolagem antes de executar</h3>
+        <p className="mt-1 text-xs leading-5 text-textMuted">
+          Opcional. O resultado pode ser usado nas fórmulas abaixo como <code>roll.value</code>.
+        </p>
+        <div className="mt-2 grid gap-3 md:grid-cols-3">
+          <Select
+            label="Modo"
+            value={value.roll?.mode ?? ""}
+            options={ROLL_MODES}
+            onChange={setRollMode}
+          />
+          {value.roll ? (
+            <TextInput
+              label={value.roll.mode === "automatic" ? "Dados" : "Dados / instrução (opcional)"}
+              value={value.roll.dice ?? ""}
+              onChange={(dice) => onChange({ ...value, roll: { ...value.roll!, dice: dice || undefined } })}
+            />
+          ) : null}
+          {value.roll ? (
+            <TextInput
+              label="Rótulo para o jogador (opcional)"
+              value={value.roll.label ?? ""}
+              onChange={(label) => onChange({ ...value, roll: { ...value.roll!, label: label || undefined } })}
+            />
+          ) : null}
+        </div>
+        {value.roll ? (
+          <div className={`mt-2 text-xs ${rollError ? "text-red-300" : "text-emerald-300"}`}>
+            {rollError ?? (value.roll.mode === "automatic"
+              ? "O servidor fará a rolagem ao executar o botão."
+              : "O jogador informará o resultado antes de executar o botão.")}
+          </div>
+        ) : null}
+      </section>
 
       <MiniSection
         title="Alterações de recurso"
