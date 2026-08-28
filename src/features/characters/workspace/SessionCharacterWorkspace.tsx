@@ -3,7 +3,11 @@ import { useCallback, useEffect, useMemo, type ReactNode } from "react"
 import { useCharacterContext } from "../../../contexts/characterContext"
 import { useSyncContext } from "../../../contexts/syncContext"
 import { getChannelDivinityPool } from "../../../models/characters/characterChannelDivinity"
-import { getConcentrationCondition } from "../../../models/characters/characterConcentration"
+import { endConcentration, getConcentrationCondition } from "../../../models/characters/characterConcentration"
+import {
+  getCharacterGrantedSpells,
+  spendGrantedSpellAbilityUse,
+} from "../../../models/characters/characterGrantedSpells"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { EquippedItemReference } from "../../../models/characters/characterEquippedItemMovement"
 import type { HandOccupantReference } from "../../../models/characters/characterHands"
@@ -13,6 +17,7 @@ import { getCustomSpellSlotPools } from "../../../models/characters/customClassC
 import type { CustomAbilityInstance } from "../../../models/customSystems/CustomSystemDefinition"
 import type { Itemmable } from "../../../models/items/item"
 import type { MagicCircleLevel } from "../../../models/magic/spells/spellDefinitions"
+import type { SessionAbilityOperation } from "../../session-runtime/abilitySessionProtocol"
 import { applySessionAbilityState } from "../../session-runtime/applySessionAbilityState"
 import type { SessionCustomSystemOperation } from "../../session-runtime/customSystemSessionProtocol"
 import type { SessionEquipmentOperation } from "../../session-runtime/equipmentSessionProtocol"
@@ -78,6 +83,7 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
     const proficienciesChanged = JSON.stringify(current.get("sheet").proficiencies ?? []) !== JSON.stringify(next.get("sheet").proficiencies ?? [])
     const customSystemsChanged = JSON.stringify(current.get("sheet").customSystems ?? []) !== JSON.stringify(next.get("sheet").customSystems ?? [])
     const concentrationOperation = deriveConcentrationOperation(current, next)
+    const grantedSpellUsageOperation = deriveGrantedSpellUsageOperation(current, next)
 
     if (ownerChanged) {
       const ownerOnly = current.withPatch({ owner: next.get("owner") })
@@ -90,6 +96,12 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
         characterId,
         owner: next.get("owner"),
       })
+      return
+    }
+
+    if (grantedSpellUsageOperation) {
+      sessionRuntime.dispatchAbilityOperation(grantedSpellUsageOperation)
+      if (concentrationOperation) sessionRuntime.dispatchConcentrationOperation(concentrationOperation)
       return
     }
 
@@ -287,6 +299,33 @@ function deriveConcentrationOperation(
     spellIndex,
     spellName: after.source || after.name,
   }
+}
+
+function deriveGrantedSpellUsageOperation(
+  current: CharacterTemplate,
+  next: CharacterTemplate,
+): SessionAbilityOperation | null {
+  const comparableCurrent = endConcentration(current)
+  const comparableNext = endConcentration(next)
+  const currentJson = JSON.stringify(comparableCurrent.toJSON())
+  const nextJson = JSON.stringify(comparableNext.toJSON())
+
+  for (const granted of getCharacterGrantedSpells(comparableCurrent)) {
+    if (!granted.usageSource) continue
+
+    const spent = spendGrantedSpellAbilityUse(comparableCurrent, granted.usageSource)
+    const spentJson = JSON.stringify(spent.toJSON())
+    if (spentJson === currentJson || spentJson !== nextJson) continue
+
+    return {
+      type: "character.ability.usage.spend",
+      characterId: current.get("id"),
+      source: granted.usageSource,
+      abilityName: granted.source.name,
+    }
+  }
+
+  return null
 }
 
 function deriveCustomSystemOperations(current: CharacterTemplate, next: CharacterTemplate): SessionCustomSystemOperation[] {
