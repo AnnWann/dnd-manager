@@ -56,6 +56,17 @@ function matchRoute(request: Request): MatchedRoute | null {
       params: {},
     }
   }
+  if (
+    segments.length === 2 &&
+    segments[0] === "campaigns" &&
+    segments[1] === "import-legacy"
+  ) {
+    return {
+      load: async () =>
+        (await import("../api-handlers/me/campaigns/_import-legacy.js")) as RouteModule,
+      params: {},
+    }
+  }
   if (segments.length === 2 && segments[0] === "campaigns" && segments[1] === "join") {
     return {
       load: async () => (await import("../api-handlers/me/campaigns/_join.js")) as RouteModule,
