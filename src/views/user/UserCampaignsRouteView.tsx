@@ -1,8 +1,11 @@
-import { ArrowRight } from "lucide-react"
+import { ArrowRight, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 
-import type { UserCampaign } from "../../api/user-campaigns"
+import {
+  deleteCampaign,
+  type UserCampaign,
+} from "../../api/user-campaigns"
 import { Button } from "../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../components/ui/Card"
 import { preloadSessionEntry } from "../../features/session-runtime/preloadSessionEntry"
@@ -13,8 +16,9 @@ import { UserCampaignsTab } from "./UserCampaignTab"
 
 export function UserCampaignsRouteView() {
   const navigate = useNavigate()
-  const { campaigns, campaignsLoading } = useUserData()
+  const { campaigns, campaignsLoading, setCampaigns } = useUserData()
   const [preparingCampaignId, setPreparingCampaignId] = useState("")
+  const [deletingCampaignId, setDeletingCampaignId] = useState("")
   const [entryError, setEntryError] = useState("")
 
   const activeCampaigns = campaigns.filter(
@@ -22,7 +26,7 @@ export function UserCampaignsRouteView() {
   )
 
   async function enterCampaign(campaign: UserCampaign) {
-    if (preparingCampaignId) return
+    if (preparingCampaignId || deletingCampaignId) return
     setPreparingCampaignId(campaign.id)
     setEntryError("")
 
@@ -37,6 +41,35 @@ export function UserCampaignsRouteView() {
       )
     } finally {
       setPreparingCampaignId("")
+    }
+  }
+
+  async function deleteOwnedCampaign(campaign: UserCampaign) {
+    if (!campaign.isOwner || preparingCampaignId || deletingCampaignId) return
+
+    const confirmed = window.confirm(
+      `Excluir permanentemente a campanha “${campaign.name}”?\n\n` +
+        "Os vínculos, membros e conteúdos exclusivos da campanha serão removidos. " +
+        "As fichas de personagens continuarão existindo na área do usuário. Esta ação não pode ser desfeita.",
+    )
+    if (!confirmed) return
+
+    setDeletingCampaignId(campaign.id)
+    setEntryError("")
+
+    try {
+      await deleteCampaign(campaign.id)
+      setCampaigns((current) =>
+        current.filter((entry) => entry.id !== campaign.id),
+      )
+    } catch (error) {
+      setEntryError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir a campanha.",
+      )
+    } finally {
+      setDeletingCampaignId("")
     }
   }
 
@@ -71,6 +104,9 @@ export function UserCampaignsRouteView() {
             <div className="grid gap-2">
               {activeCampaigns.map((campaign) => {
                 const preparing = preparingCampaignId === campaign.id
+                const deleting = deletingCampaignId === campaign.id
+                const busy = Boolean(preparingCampaignId || deletingCampaignId)
+
                 return (
                   <div
                     key={campaign.id}
@@ -87,14 +123,29 @@ export function UserCampaignsRouteView() {
                       </div>
                     </div>
 
-                    <Button
-                      size="sm"
-                      disabled={Boolean(preparingCampaignId)}
-                      onClick={() => void enterCampaign(campaign)}
-                    >
-                      {preparing ? "Preparando..." : "Entrar"}
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {campaign.isOwner ? (
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          disabled={busy}
+                          loading={deleting}
+                          onClick={() => void deleteOwnedCampaign(campaign)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Excluir
+                        </Button>
+                      ) : null}
+
+                      <Button
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => void enterCampaign(campaign)}
+                      >
+                        {preparing ? "Preparando..." : "Entrar"}
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 )
               })}
