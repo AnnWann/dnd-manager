@@ -55,12 +55,27 @@ export interface CustomAbilityActivationDefinition {
   actionKindFieldId?: string
   trigger?: Trigger
   triggerFieldId?: string
+  /**
+   * Rolagem opcional resolvida antes dos efeitos. Em modo automático, o
+   * servidor rola `dice`. Em modo manual, o jogador informa o resultado ao
+   * usar a habilidade. O resultado fica disponível nas fórmulas como
+   * `roll.value`.
+   */
+  roll?: CustomAbilityRollDefinition
   /** @deprecated Use resourceChanges com operation='spend'. */
   resourceCosts?: CustomResourceCostDefinition[]
   resourceChanges?: CustomAbilityResourceChangeDefinition[]
   /** Estados aplicados/removidos quando a habilidade é usada. */
   conditionChanges?: CustomAbilityConditionChangeDefinition[]
   usage?: CustomUsageDefinition
+}
+
+export interface CustomAbilityRollDefinition {
+  mode: 'automatic' | 'manual'
+  /** Notação simples de dados, por exemplo 1d6, 2d8+1 ou 1d10-1. Obrigatória no modo automático e opcional como instrução no modo manual. */
+  dice?: string
+  /** Rótulo exibido ao jogador. Ex.: Recuperar Fôlego. */
+  label?: string
 }
 
 export type CustomAbilityResourceReference =
