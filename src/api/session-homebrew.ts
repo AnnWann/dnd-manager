@@ -65,8 +65,24 @@ export type SessionHomebrewCatalog = {
   assets: SessionHomebrewAsset[]
 }
 
+const homebrewCache = new Map<string, SessionHomebrewCatalog>()
+const homebrewRequests = new Map<string, Promise<SessionHomebrewCatalog>>()
+
+export function primeSessionHomebrew(
+  campaignId: string,
+  catalog: SessionHomebrewCatalog,
+): void {
+  homebrewCache.set(campaignId, structuredClone(catalog))
+}
+
+export function invalidateSessionHomebrew(campaignId: string): void {
+  homebrewCache.delete(campaignId)
+  homebrewRequests.delete(campaignId)
+}
+
 export async function getSessionHomebrew(
   campaignId: string,
+  options: { force?: boolean } = {},
 ): Promise<SessionHomebrewCatalog> {
   if (LOCAL_AUTH_BYPASS) {
     const [campaigns, records] = await Promise.all([
@@ -122,13 +138,31 @@ export async function getSessionHomebrew(
     }
   }
 
-  const response = await apiClient.get<SessionHomebrewCatalog>(
-    `/campaigns/${encodeURIComponent(campaignId)}/homebrew`,
-  )
-  return {
-    ...response.data,
-    assets: response.data.assets ?? [],
+  if (!options.force) {
+    const cached = homebrewCache.get(campaignId)
+    if (cached) return structuredClone(cached)
+    const pending = homebrewRequests.get(campaignId)
+    if (pending) return pending.then(structuredClone)
   }
+
+  const request = apiClient
+    .get<SessionHomebrewCatalog>(
+      `/campaigns/${encodeURIComponent(campaignId)}/homebrew`,
+    )
+    .then((response) => {
+      const catalog = {
+        ...response.data,
+        assets: response.data.assets ?? [],
+      }
+      primeSessionHomebrew(campaignId, catalog)
+      return structuredClone(catalog)
+    })
+    .finally(() => {
+      homebrewRequests.delete(campaignId)
+    })
+
+  homebrewRequests.set(campaignId, request)
+  return request
 }
 
 export async function reviewSessionHomebrewSpell(
@@ -139,6 +173,7 @@ export async function reviewSessionHomebrewSpell(
 ): Promise<void> {
   if (LOCAL_AUTH_BYPASS) {
     await reviewCampaignSpell(campaignId, spellId, status, note)
+    invalidateSessionHomebrew(campaignId)
     notifySessionContentChanged()
     return
   }
@@ -150,5 +185,6 @@ export async function reviewSessionHomebrewSpell(
       note,
     },
   )
+  invalidateSessionHomebrew(campaignId)
   notifySessionContentChanged()
 }
