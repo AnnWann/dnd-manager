@@ -351,12 +351,63 @@ function ResourceSection({
 }) {
   const resource = definition.resources.find((entry) => entry.id === resourceId)
   const resourceState = state.resources[resourceId]
+  const authoritativeCurrent = resourceState?.current ?? 0
+  const [optimisticCurrent, setOptimisticCurrent] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (optimisticCurrent === null) return
+
+    const confirmed = authoritativeCurrent === optimisticCurrent
+    const timeout = window.setTimeout(
+      () => setOptimisticCurrent(null),
+      confirmed ? 400 : 3000,
+    )
+    return () => window.clearTimeout(timeout)
+  }, [authoritativeCurrent, optimisticCurrent])
+
   if (!resource || !resourceState) return null
 
   const maximum = resourceState.maximum ?? resource.maximum
+  const displayedCurrent = optimisticCurrent ?? authoritativeCurrent
   const canEdit =
     resource.allowManualAdjustment !== false &&
     !(resource.editPermission === 'masterOnly' && actor !== 'master')
+  const canDecrease =
+    canEdit && (resource.minimum === undefined || displayedCurrent > resource.minimum)
+  const canIncrease =
+    canEdit && (maximum === undefined || displayedCurrent < maximum)
+
+  function stageAdjustment(amount: number) {
+    const next = clampResourceValue(
+      displayedCurrent + amount,
+      resource.minimum,
+      maximum,
+    )
+    if (next === displayedCurrent) return
+    setOptimisticCurrent(next)
+    onRun(() => adjustCustomResource(definition, state, resource.id, amount, actor))
+  }
+
+  function stageSet(value: number) {
+    const next = clampResourceValue(value, resource.minimum, maximum)
+    setOptimisticCurrent(next)
+    onRun(() =>
+      setCustomResourceCurrent(
+        definition,
+        state,
+        resource.id,
+        next,
+        actor,
+      ),
+    )
+  }
+
+  function stageReset() {
+    const nextState = resetCustomResource(definition, state, resource.id, actor)
+    const nextCurrent = nextState.resources[resource.id]?.current
+    if (typeof nextCurrent === 'number') setOptimisticCurrent(nextCurrent)
+    onRun(() => nextState)
+  }
 
   return (
     <section className="rounded-xl border border-border bg-bg p-4">
@@ -371,9 +422,7 @@ function ResourceSection({
           type="button"
           title="Restaurar valor inicial"
           disabled={!canEdit}
-          onClick={() =>
-            onRun(() => resetCustomResource(definition, state, resource.id, actor))
-          }
+          onClick={stageReset}
           className="rounded-lg p-1.5 text-text hover:bg-[color:var(--social-bg)] disabled:opacity-40"
         >
           <RotateCcw className="h-4 w-4" />
@@ -383,38 +432,24 @@ function ResourceSection({
       <div className="mt-3 flex items-center gap-2">
         <button
           type="button"
-          disabled={!canEdit}
-          onClick={() =>
-            onRun(() => adjustCustomResource(definition, state, resource.id, -1, actor))
-          }
+          disabled={!canDecrease}
+          onClick={() => stageAdjustment(-1)}
           className="h-9 w-9 rounded-lg border border-border text-lg text-textH disabled:opacity-40"
         >
           −
         </button>
         <BufferedNumberInput
-          value={resourceState.current}
+          value={displayedCurrent}
           min={resource.minimum}
           max={maximum}
           disabled={!canEdit}
-          onCommit={(value) =>
-            onRun(() =>
-              setCustomResourceCurrent(
-                definition,
-                state,
-                resource.id,
-                value,
-                actor,
-              ),
-            )
-          }
+          onCommit={stageSet}
           className="min-w-0 flex-1 rounded-lg border border-border bg-transparent px-3 py-2 text-center text-textH"
         />
         <button
           type="button"
-          disabled={!canEdit}
-          onClick={() =>
-            onRun(() => adjustCustomResource(definition, state, resource.id, 1, actor))
-          }
+          disabled={!canIncrease}
+          onClick={() => stageAdjustment(1)}
           className="h-9 w-9 rounded-lg border border-border text-lg text-textH disabled:opacity-40"
         >
           +
@@ -425,6 +460,11 @@ function ResourceSection({
       ) : null}
     </section>
   )
+}
+
+function clampResourceValue(value: number, minimum?: number, maximum?: number): number {
+  const lowerBounded = minimum === undefined ? value : Math.max(minimum, value)
+  return maximum === undefined ? lowerBounded : Math.min(maximum, lowerBounded)
 }
 
 function AbilityTypeSection({
