@@ -5,7 +5,7 @@ import {
   listCustomFormulaVariables,
   validateCustomFormula,
 } from "../../lib/customSystems"
-import { validateCustomAbilityDiceExpression } from "../../lib/customSystems/CustomAbilityRoll"
+import { validateCustomAbilityDiceSource } from "../../lib/customSystems/CustomAbilityRoll"
 import type { AbilityActionKind } from "../../models/abilities/Ability"
 import type {
   CustomAbilityResourceChangeDefinition,
@@ -350,10 +350,13 @@ function ActionRow({ definition, value, onChange, onRemove }: {
 }) {
   const resources = value.resourceChanges ?? []
   const conditions = value.conditionChanges ?? []
+  const diceVariables = listCustomFormulaVariables(definition).filter(
+    (variable) => variable.valueType === "dice",
+  )
   const rollError = value.roll?.mode === "automatic"
-    ? validateCustomAbilityDiceExpression(value.roll.dice)
+    ? validateCustomAbilityDiceSource(value.roll.dice, definition)
     : value.roll?.dice?.trim()
-      ? validateCustomAbilityDiceExpression(value.roll.dice)
+      ? validateCustomAbilityDiceSource(value.roll.dice, definition)
       : undefined
 
   function setRollMode(mode: string) {
@@ -404,7 +407,7 @@ function ActionRow({ definition, value, onChange, onRemove }: {
       <section className="mt-4 rounded-xl border border-border bg-bg p-3">
         <h3 className="text-sm font-semibold text-textH">Rolagem antes de executar</h3>
         <p className="mt-1 text-xs leading-5 text-textMuted">
-          Opcional. O resultado pode ser usado nas fórmulas abaixo como <code>roll.value</code>.
+          Opcional. Use dados fixos como <code>1d6</code> ou uma variável do tipo Dado. O resultado fica disponível nas fórmulas abaixo como <code>roll.value</code>.
         </p>
         <div className="mt-2 grid gap-3 md:grid-cols-3">
           <Select
@@ -414,11 +417,25 @@ function ActionRow({ definition, value, onChange, onRemove }: {
             onChange={setRollMode}
           />
           {value.roll ? (
-            <TextInput
-              label={value.roll.mode === "automatic" ? "Dados" : "Dados / instrução (opcional)"}
-              value={value.roll.dice ?? ""}
-              onChange={(dice) => onChange({ ...value, roll: { ...value.roll!, dice: dice || undefined } })}
-            />
+            <div>
+              <TextInput
+                label={value.roll.mode === "automatic" ? "Dados" : "Dados / instrução (opcional)"}
+                value={value.roll.dice ?? ""}
+                onChange={(dice) => onChange({ ...value, roll: { ...value.roll!, dice: dice || undefined } })}
+              />
+              {diceVariables.length ? (
+                <div className="mt-2">
+                  <FormulaVariablePicker
+                    variables={diceVariables}
+                    buttonLabel="Selecionar variável de dado"
+                    onSelect={(path) => onChange({
+                      ...value,
+                      roll: { ...value.roll!, dice: path },
+                    })}
+                  />
+                </div>
+              ) : null}
+            </div>
           ) : null}
           {value.roll ? (
             <TextInput
@@ -431,7 +448,7 @@ function ActionRow({ definition, value, onChange, onRemove }: {
         {value.roll ? (
           <div className={`mt-2 text-xs ${rollError ? "text-red-300" : "text-emerald-300"}`}>
             {rollError ?? (value.roll.mode === "automatic"
-              ? "O servidor fará a rolagem ao executar o botão."
+              ? "O servidor resolverá a variável de dado e fará a rolagem ao executar o botão."
               : "O jogador informará o resultado antes de executar o botão.")}
           </div>
         ) : null}
