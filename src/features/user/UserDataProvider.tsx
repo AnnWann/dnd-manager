@@ -168,7 +168,11 @@ export function UserDataProvider({ children }: { children: ReactNode }) {
     let active = true
     const cachedCharacters = readUserCacheSnapshot<UserCharacterSummary[]>(userId, "characters")
     const cachedCampaigns = readUserCacheSnapshot<UserCampaign[]>(userId, "campaigns")
-    const shouldRefreshCharacters = !cachedCharacters?.fresh
+
+    // A character can be created, deleted, or linked through another route or
+    // client while this cache is still marked fresh. Use the cached list for
+    // the instant paint, but always revalidate it when /user mounts.
+    const shouldRefreshCharacters = true
 
     // Campaign membership can be changed by another user (for example, a
     // MASTER approving a pending join request). Always revalidate campaigns
