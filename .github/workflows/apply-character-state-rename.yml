@@ -52,3 +52,5 @@ jobs:
           git add -A
           git commit -m "refactor: rename authoritative HP state domain"
           git push origin HEAD:qa
+
+# Triggered explicitly after initial workflow creation.
