@@ -20,11 +20,14 @@ jobs:
           ref: agent/session-log-actor-names
           fetch-depth: 0
 
+      - name: Fix actor name patch integration
+        run: python .github/fix_session_log_actor_names_patch.py
+
       - name: Apply actor name patch
         run: python .github/patch_session_log_actor_names.py
 
       - name: Remove temporary patch files
-        run: rm .github/patch_session_log_actor_names.py .github/workflows/apply-session-log-actor-names.yml
+        run: rm .github/fix_session_log_actor_names_patch.py .github/patch_session_log_actor_names.py .github/workflows/apply-session-log-actor-names.yml
 
       - name: Install frontend dependencies
         run: npm install --package-lock=false --ignore-scripts
