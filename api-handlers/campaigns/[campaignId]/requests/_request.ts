@@ -112,73 +112,79 @@ async function applyApprovedContent(
 ): Promise<void> {
   const data = isRecord(entry.data) ? entry.data : {}
 
-  if (entry.type === "CHARACTER") {
-    const character = await prisma.character.findFirst({
-      where: {
-        id: entry.sourceId,
-        ownerId: entry.submittedById,
-      },
-      select: { id: true },
-    })
+  await prisma.$transaction(async (tx) => {
+    if (entry.type === "CHARACTER") {
+      const character = await tx.character.findFirst({
+        where: {
+          id: entry.sourceId,
+          ownerId: entry.submittedById,
+        },
+        select: { id: true },
+      })
 
-    if (!character) {
-      throw new ApiError(
-        404,
-        "CHARACTER_NOT_FOUND",
-        "O personagem solicitado não está mais disponível.",
-      )
-    }
+      if (!character) {
+        throw new ApiError(
+          404,
+          "CHARACTER_NOT_FOUND",
+          "O personagem solicitado não está mais disponível.",
+        )
+      }
 
-    await prisma.campaignCharacter.upsert({
-      where: {
-        campaignId_characterId: {
+      await tx.campaignCharacter.upsert({
+        where: {
+          campaignId_characterId: {
+            campaignId: entry.campaignId,
+            characterId: entry.sourceId,
+          },
+        },
+        update: {
+          visibility: parseVisibility(data.visibility),
+        },
+        create: {
           campaignId: entry.campaignId,
           characterId: entry.sourceId,
+          visibility: parseVisibility(data.visibility),
         },
-      },
-      update: {
-        visibility: parseVisibility(data.visibility),
-      },
-      create: {
-        campaignId: entry.campaignId,
-        characterId: entry.sourceId,
-        visibility: parseVisibility(data.visibility),
-      },
+      })
+    } else {
+      const assetId = crypto.randomUUID()
+      const dataJson = JSON.stringify(data)
+
+      await tx.$executeRaw`
+        INSERT INTO "campaign_homebrew_asset" (
+          "id",
+          "campaignId",
+          "type",
+          "sourceId",
+          "name",
+          "data",
+          "addedById",
+          "createdAt",
+          "updatedAt"
+        ) VALUES (
+          ${assetId},
+          ${entry.campaignId},
+          ${entry.type},
+          ${entry.sourceId},
+          ${entry.title},
+          ${dataJson}::jsonb,
+          ${actorId},
+          CURRENT_TIMESTAMP,
+          CURRENT_TIMESTAMP
+        )
+        ON CONFLICT ("campaignId", "type", "sourceId") DO UPDATE SET
+          "name" = EXCLUDED."name",
+          "data" = EXCLUDED."data",
+          "addedById" = EXCLUDED."addedById",
+          "updatedAt" = CURRENT_TIMESTAMP
+      `
+    }
+
+    await tx.campaign.update({
+      where: { id: entry.campaignId },
+      data: { creationRevision: { increment: 1 } },
     })
-    return
-  }
-
-  const assetId = crypto.randomUUID()
-  const dataJson = JSON.stringify(data)
-
-  await prisma.$executeRaw`
-    INSERT INTO "campaign_homebrew_asset" (
-      "id",
-      "campaignId",
-      "type",
-      "sourceId",
-      "name",
-      "data",
-      "addedById",
-      "createdAt",
-      "updatedAt"
-    ) VALUES (
-      ${assetId},
-      ${entry.campaignId},
-      ${entry.type},
-      ${entry.sourceId},
-      ${entry.title},
-      ${dataJson}::jsonb,
-      ${actorId},
-      CURRENT_TIMESTAMP,
-      CURRENT_TIMESTAMP
-    )
-    ON CONFLICT ("campaignId", "type", "sourceId") DO UPDATE SET
-      "name" = EXCLUDED."name",
-      "data" = EXCLUDED."data",
-      "addedById" = EXCLUDED."addedById",
-      "updatedAt" = CURRENT_TIMESTAMP
-  `
+  })
 }
 
 async function requireMaster(campaignId: string, userId: string): Promise<void> {
