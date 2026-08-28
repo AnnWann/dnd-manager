@@ -87,7 +87,7 @@ export function UserDashboardView() {
         <AppSidebar items={sidebarItems} />
 
         <main className="min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto">
-          <div className="mx-auto w-full min-w-0 max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
+          <div className="mx-auto w-full min-w-0 max-w-7xl px-3 py-4 sm:px-4 sm:py-6">
             <Suspense
               fallback={
                 <AppLoadingScreen
