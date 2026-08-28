@@ -20,11 +20,14 @@ jobs:
           ref: agent/combatant-runtime-sidebar
           fetch-depth: 0
 
+      - name: Fix patch anchor
+        run: python .github/fix_initiative_damage_patch_anchor.py
+
       - name: Apply authoritative damage patch
         run: python .github/patch_initiative_damage_authority.py
 
       - name: Remove temporary patch files
-        run: rm .github/patch_initiative_damage_authority.py .github/workflows/apply-initiative-damage-authority.yml
+        run: rm .github/fix_initiative_damage_patch_anchor.py .github/patch_initiative_damage_authority.py .github/workflows/apply-initiative-damage-authority.yml
 
       - name: Install frontend dependencies
         run: npm install --package-lock=false --ignore-scripts
