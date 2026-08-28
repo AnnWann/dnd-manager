@@ -3,17 +3,20 @@ import { Play } from "lucide-react"
 
 import type { AbilityActionKind } from "../../../../../../models/abilities/Ability"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
-import type { CustomAbilityTypeDefinition } from "../../../../../../models/customSystems/CustomAbilityDefinition"
+import type {
+  CustomAbilityRollDefinition,
+  CustomAbilityTypeDefinition,
+} from "../../../../../../models/customSystems/CustomAbilityDefinition"
 import type {
   CharacterCustomSystemState,
   CustomAbilityInstance,
   CustomSystemDefinition,
 } from "../../../../../../models/customSystems/CustomSystemDefinition"
 import {
-  activateCustomAbility,
   evaluateCustomFormula,
   getCustomAbilityAvailability,
 } from "../../../../../../lib/customSystems"
+import { activateCustomAbilityWithRoll } from "../../../../../../lib/customSystems/CustomAbilityRoll"
 import {
   activateCustomSystemAction,
   getEffectiveCustomAbilityActivation,
@@ -38,8 +41,9 @@ type SheetActionEntry = {
   actionKind: AbilityActionKind
   disabled?: boolean
   status?: string
+  roll?: CustomAbilityRollDefinition
   operation?: SessionCustomSystemOperation
-  activate: (character: CharacterTemplate) => CharacterTemplate
+  activate: (character: CharacterTemplate, rollValue?: number) => CharacterTemplate
 }
 
 const CATEGORY_ORDER: AbilityActionKind[] = [
@@ -76,6 +80,7 @@ export function CustomSystemActionsPanel({
   const definitions = useCustomSystemDefinitions()
   const sessionRuntime = useOptionalSessionRuntime()
   const [error, setError] = useState("")
+  const [manualRollValues, setManualRollValues] = useState<Record<string, string>>({})
   const entries = useMemo(
     () => buildEntries(character, definitions),
     [character, definitions],
@@ -86,11 +91,24 @@ export function CustomSystemActionsPanel({
   function activate(entry: SheetActionEntry) {
     try {
       setError("")
+      let rollValue: number | undefined
+      if (entry.roll?.mode === "manual") {
+        const raw = manualRollValues[entry.key]?.trim() ?? ""
+        if (!raw || !Number.isFinite(Number(raw))) {
+          setError(`Informe um resultado numérico válido para ${entry.roll.label?.trim() || entry.name}.`)
+          return
+        }
+        rollValue = Number(raw)
+      }
+
       if (sessionRuntime && entry.operation) {
-        sessionRuntime.dispatchAbilityOperation(entry.operation)
+        const operation = entry.operation.type === "character.customSystem.ability.activate" && rollValue !== undefined
+          ? { ...entry.operation, rollValue }
+          : entry.operation
+        sessionRuntime.dispatchAbilityOperation(operation)
         return
       }
-      updateCharacter(character.get("id"), (current) => entry.activate(current))
+      updateCharacter(character.get("id"), (current) => entry.activate(current, rollValue))
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -128,39 +146,69 @@ export function CustomSystemActionsPanel({
                 {CATEGORY_LABELS[kind]}
               </h3>
               <div className="grid gap-2">
-                {categoryEntries.map((entry) => (
-                  <article
-                    key={entry.key}
-                    className="rounded-xl border border-border bg-bg-subtle p-3"
-                  >
-                    <div className="flex min-w-0 items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="break-words text-sm font-semibold text-textH">
-                          {entry.name}
+                {categoryEntries.map((entry) => {
+                  const manualValue = manualRollValues[entry.key] ?? ""
+                  const manualInvalid = entry.roll?.mode === "manual"
+                    && (!manualValue.trim() || !Number.isFinite(Number(manualValue)))
+                  return (
+                    <article
+                      key={entry.key}
+                      className="rounded-xl border border-border bg-bg-subtle p-3"
+                    >
+                      <div className="flex min-w-0 items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="break-words text-sm font-semibold text-textH">
+                            {entry.name}
+                          </div>
+                          <div className="mt-1 text-[10px] text-textMuted">
+                            {entry.source}
+                            {entry.status ? ` · ${entry.status}` : ""}
+                          </div>
+                          {entry.description ? (
+                            <p className="mt-2 line-clamp-3 whitespace-pre-wrap break-words text-xs leading-5 text-textMuted">
+                              {entry.description}
+                            </p>
+                          ) : null}
+                          {entry.roll?.mode === "manual" ? (
+                            <label className="mt-3 grid gap-1 rounded-lg border border-accentBorder bg-accentBg/30 p-2">
+                              <span className="text-[11px] font-semibold text-textH">
+                                {entry.roll.label?.trim() || "Resultado da rolagem"}
+                              </span>
+                              <span className="text-[10px] text-textMuted">
+                                {entry.roll.dice?.trim() ? `Role ${entry.roll.dice} e informe o resultado.` : "Informe o resultado obtido antes de usar."}
+                              </span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                value={manualValue}
+                                placeholder="Resultado"
+                                onChange={(event) => setManualRollValues((current) => ({
+                                  ...current,
+                                  [entry.key]: event.target.value,
+                                }))}
+                                className="input-base h-8"
+                              />
+                            </label>
+                          ) : entry.roll?.mode === "automatic" ? (
+                            <div className="mt-2 text-[10px] font-medium text-accent">
+                              Rolagem automática{entry.roll.dice?.trim() ? ` · ${entry.roll.dice}` : ""}
+                            </div>
+                          ) : null}
                         </div>
-                        <div className="mt-1 text-[10px] text-textMuted">
-                          {entry.source}
-                          {entry.status ? ` · ${entry.status}` : ""}
-                        </div>
-                        {entry.description ? (
-                          <p className="mt-2 line-clamp-3 whitespace-pre-wrap break-words text-xs leading-5 text-textMuted">
-                            {entry.description}
-                          </p>
-                        ) : null}
-                      </div>
 
-                      <button
-                        type="button"
-                        disabled={entry.disabled}
-                        onClick={() => activate(entry)}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH hover:bg-bg disabled:cursor-not-allowed disabled:opacity-45"
-                      >
-                        <Play className="h-3.5 w-3.5" />
-                        Usar
-                      </button>
-                    </div>
-                  </article>
-                ))}
+                        <button
+                          type="button"
+                          disabled={entry.disabled || manualInvalid}
+                          onClick={() => activate(entry)}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH hover:bg-bg disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          <Play className="h-3.5 w-3.5" />
+                          Usar
+                        </button>
+                      </div>
+                    </article>
+                  )
+                })}
               </div>
             </div>
           )
@@ -274,14 +322,21 @@ function abilityEntry(
       : usage.maximum === undefined
         ? undefined
         : `${usage.remaining}/${usage.maximum} usos`,
+    roll: activation.roll,
     operation: {
       type: "character.customSystem.ability.activate",
       characterId: character.get("id"),
       systemId: definition.id,
       abilityId: ability.id,
     },
-    activate: (current) =>
-      activateCustomAbility(current, definitions, definition.id, ability.id),
+    activate: (current, rollValue) =>
+      activateCustomAbilityWithRoll(
+        current,
+        definitions,
+        definition.id,
+        ability.id,
+        rollValue,
+      ).character,
   }
 }
 
