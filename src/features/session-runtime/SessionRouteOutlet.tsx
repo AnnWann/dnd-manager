@@ -8,6 +8,7 @@ import { SessionMissionAuthorityProvider } from "../../contexts/missionContext"
 import { useSyncContext } from "../../contexts/syncContext"
 import { rememberActiveSession } from "../../lib/activeCampaign"
 import { toSessionRuntimeConfig } from "../../shared/session-runtime/sessionRuntimeConfig"
+import { SessionAuthoritativeBootstrap } from "./SessionAuthoritativeBootstrap"
 import {
   SessionRuntimeProvider,
   useOptionalSessionRuntime,
@@ -40,6 +41,7 @@ export function SessionRouteOutlet() {
       {userRole === "master" && !isCreationRoute ? (
         <MasterRuntimeConfigPublisher campaignId={campaignId} />
       ) : null}
+      <SessionAuthoritativeBootstrap />
       <SessionMissionAuthorityProvider>
         <Outlet />
       </SessionMissionAuthorityProvider>
