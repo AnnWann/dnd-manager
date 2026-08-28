@@ -1,15 +1,22 @@
 import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { Copy, Download, FileJson, Pencil, Plus, RefreshCw, Search, Trash2, Upload } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useCustomSystemsContext } from '../contexts/customSystemsContext'
+import { sessionCustomSystemPath } from '../lib/campaignRoutes'
 import type { CustomSystemDefinition } from '../models/customSystems/CustomSystemDefinition'
 
 export function CustomSystemsListView() {
   const systems = useCustomSystemsContext()
   const navigate = useNavigate()
+  const { campaignId } = useParams<{ campaignId?: string }>()
   const inputRef = useRef<HTMLInputElement>(null)
   const [search, setSearch] = useState('')
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
+
+  const editorPath = (systemId: string, tab: string) =>
+    campaignId
+      ? sessionCustomSystemPath(campaignId, systemId, tab)
+      : systemEditorPath(systemId, tab)
 
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('pt-BR')
@@ -28,16 +35,16 @@ export function CustomSystemsListView() {
 
   function createSystem() {
     const created = systems.createDefinition()
-    navigate(systemEditorPath(created.id, 'general'))
+    navigate(editorPath(created.id, 'general'))
   }
 
   function editSystem(systemId: string) {
-    navigate(systemEditorPath(systemId, 'general'))
+    navigate(editorPath(systemId, 'general'))
   }
 
   function duplicateSystem(systemId: string) {
     const copy = systems.duplicateDefinition(systemId)
-    if (copy) navigate(systemEditorPath(copy.id, 'general'))
+    if (copy) navigate(editorPath(copy.id, 'general'))
   }
 
   function removeSystem(definition: CustomSystemDefinition) {
