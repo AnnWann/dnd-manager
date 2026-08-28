@@ -20,6 +20,8 @@ export interface CustomResourceDefinition {
   allowTemporaryValue?: boolean
   allowManualAdjustment?: boolean
   editPermission?: CustomSystemEditPermission
+  /** Exibe um controle compacto deste recurso na tela de Ações da ficha. */
+  showInActions?: boolean
   recoveryRules?: CustomResourceRecoveryRule[]
   visibility?: CustomCondition
 }
