@@ -75,7 +75,7 @@ export async function getSessionCreationSettings(
     const cached = settingsCache.get(campaignId)
     if (cached) return structuredClone(cached)
     const pending = settingsRequests.get(campaignId)
-    if (pending) return pending.then(structuredClone)
+    if (pending) return pending.then((settings) => structuredClone(settings))
   }
 
   const request = apiClient
