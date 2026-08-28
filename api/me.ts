@@ -73,6 +73,13 @@ function matchRoute(request: Request): MatchedRoute | null {
       params: {},
     }
   }
+  if (segments.length === 2 && segments[0] === "campaigns") {
+    return {
+      load: async () =>
+        (await import("../api-handlers/me/campaigns/[campaignId]/_campaign.js")) as RouteModule,
+      params: { campaignId: segments[1] },
+    }
+  }
   if (
     segments.length === 4 &&
     segments[0] === "campaigns" &&
