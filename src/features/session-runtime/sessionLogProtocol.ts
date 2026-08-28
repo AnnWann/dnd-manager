@@ -3,6 +3,7 @@ import type {
   SessionCharacterLifecycleOperation,
   SessionCharacterLifecycleState,
 } from "./characterLifecycleSessionProtocol"
+import type { SessionCustomSystemOperation } from "./customSystemSessionProtocol"
 import type { SessionEquipmentOperation } from "./equipmentSessionProtocol"
 import type { SessionInitiativeOperation, SessionInitiativeState } from "./initiativeSessionProtocol"
 import type { SessionInventoryOperation, SessionSharedInventoryState } from "./inventorySessionProtocol"
@@ -123,6 +124,7 @@ export type SessionRuntimeLogRecord = {
     | SessionRaceOperation
     | SessionProfileOperation
     | SessionCharacterLifecycleOperation
+    | SessionCustomSystemOperation
     | SessionRestOperation
     | { type: "character.hp.undo"; characterId: string; sourceLogId: string }
   reverseOperation:
