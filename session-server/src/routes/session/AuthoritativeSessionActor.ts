@@ -178,24 +178,18 @@ export class SessionActor extends ComposedSessionActor {
       return;
     }
 
-    if (
+    const sameRevisionDifferentConfig = Boolean(
       current
       && snapshot.creationRevision === current.creationRevision
-      && JSON.stringify(snapshot.config) !== JSON.stringify(current.config)
-    ) {
-      sendError(
-        webSocket,
-        "CREATION_CONFIG_REVISION_COLLISION",
-        "A different runtime configuration already exists for this Creation revision.",
-      );
-      send(webSocket, {
-        type: "session.config.snapshot",
-        snapshot: visibleRuntimeConfigSnapshot(connection, current),
-      });
-      return;
-    }
+      && JSON.stringify(snapshot.config) !== JSON.stringify(current.config),
+    );
 
-    if (!current || snapshot.creationRevision > current.creationRevision) {
+    if (!current || snapshot.creationRevision > current.creationRevision || sameRevisionDifferentConfig) {
+      // Older builds allowed Creation-relevant database mutations without
+      // incrementing creationRevision. An authenticated MASTER publishing the
+      // canonical DB snapshot is therefore allowed to reconcile one of those
+      // legacy collisions in-place. New writes now increment the revision, so
+      // this path is recovery rather than the normal update mechanism.
       await this.ctx.storage.put(RUNTIME_CONFIG_STATE_KEY, structuredClone(snapshot));
       const sockets = this.ctx.getWebSockets();
       refreshAllConnectionVisibility(sockets, snapshot);
