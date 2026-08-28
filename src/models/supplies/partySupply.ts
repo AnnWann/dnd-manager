@@ -14,6 +14,8 @@ export const STANDARD_PORTIONS_PER_RATION = 1
 export const STANDARD_PORTIONS_PER_BARREL = 40
 export const STANDARD_RATION_WEIGHT_KG = 0.9
 
+const STANDARD_TRAVEL_RATIONS_COMPENDIUM_ID = "compendium-rations"
+
 export type SupplyPackageKind = "ration" | "barrel" | "custom"
 
 export type PartySupplyConsumer = {
@@ -122,19 +124,21 @@ export function calculatePartySupplies(
     0,
   )
   const foodPortions = supplies.reduce(
-    (total, supply) =>
-      supply.supplyCategory === "food" ||
-      supply.supplyCategory === "mixed"
+    (total, supply) => {
+      const category = getSupplyCategory(supply)
+      return category === "food" || category === "mixed"
         ? roundPortions(total + getTotalSupplyPortions(supply))
-        : total,
+        : total
+    },
     0,
   )
   const drinkPortions = supplies.reduce(
-    (total, supply) =>
-      supply.supplyCategory === "drink" ||
-      supply.supplyCategory === "mixed"
+    (total, supply) => {
+      const category = getSupplyCategory(supply)
+      return category === "drink" || category === "mixed"
         ? roundPortions(total + getTotalSupplyPortions(supply))
-        : total,
+        : total
+    },
     0,
   )
 
@@ -178,7 +182,7 @@ export function getTotalSupplyPortions(item: SupplyItem): number {
 
   return (
     Math.max(0, Number(item.quantity) || 0) *
-    Math.max(0, Number(item.supplyUnitsPerItem) || 0)
+    getSupplyUnitsPerItem(item)
   )
 }
 
@@ -288,17 +292,14 @@ export function consumeSelectedSupplies(
 
     if (remaining <= 0) continue
 
-    const portionsPerItem = Math.max(
-      0,
-      Number(item.supplyUnitsPerItem) || 0,
-    )
+    const portionsPerItem = getSupplyUnitsPerItem(item)
     const nextQuantity =
       portionsPerItem > 0
         ? Math.max(1, Math.ceil(remaining / portionsPerItem))
         : Math.max(1, item.quantity ?? 1)
 
     nextItems.push({
-      ...item,
+      ...withCanonicalSupplyMetadata(item),
       quantity: nextQuantity,
       remainingSupplyUnits: remaining,
     })
@@ -312,7 +313,49 @@ export function consumeSelectedSupplies(
 }
 
 function isConsumableSupply(item: Itemmable): item is SupplyItem {
-  return isSupplyItem(item) && item.supplyCategory !== "other"
+  return isSupplyItem(item) && getSupplyCategory(item) !== "other"
+}
+
+function getSupplyCategory(item: SupplyItem) {
+  if (item.supplyCategory) return item.supplyCategory
+  return isStandardTravelRations(item) ? "food" : undefined
+}
+
+function getSupplyUnitsPerItem(item: SupplyItem): number {
+  const configured = Number(item.supplyUnitsPerItem)
+  if (
+    item.supplyUnitsPerItem !== undefined &&
+    Number.isFinite(configured)
+  ) {
+    return Math.max(0, configured)
+  }
+
+  return isStandardTravelRations(item)
+    ? STANDARD_PORTIONS_PER_RATION
+    : 0
+}
+
+function withCanonicalSupplyMetadata(item: SupplyItem): SupplyItem {
+  if (!isStandardTravelRations(item)) return item
+
+  return {
+    ...item,
+    supplyCategory: item.supplyCategory ?? "food",
+    supplyPackage: item.supplyPackage ?? "ration",
+    supplyUnitsPerItem: getSupplyUnitsPerItem(item),
+    supplyUnitLabel: item.supplyUnitLabel ?? "porção padrão",
+  }
+}
+
+function isStandardTravelRations(item: Itemmable): boolean {
+  const sourceId = item.compendiumItemId?.trim()
+  if (sourceId === STANDARD_TRAVEL_RATIONS_COMPENDIUM_ID) return true
+  if (item.id === STANDARD_TRAVEL_RATIONS_COMPENDIUM_ID) return true
+
+  return (
+    item.itemOrigin === "standard" &&
+    normalizeName(item.name) === "racoes de viagem"
+  )
 }
 
 function normalizeSelection(
