@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { useCustomSystemDefinitions } from "../../../lib/customSystems/CustomSystemRegistry"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
+import { DamageAffinityEditor } from "../../combat/DamageAffinityEditor"
 import {
   useCharacterWorkspace,
   type CharacterWorkspaceMode,
@@ -136,6 +137,14 @@ export function CharacterSheetTab({
             updateCharacter={updateCharacter}
           />
           <GroupStats character={character} updateCharacter={updateCharacter} />
+          <DamageAffinityEditor
+            value={character.get("sheet").damageAffinities ?? []}
+            onChange={(damageAffinities) =>
+              updateCharacter(character.get("id"), (current) =>
+                current.withSheet("damageAffinities", damageAffinities),
+              )
+            }
+          />
 
           <div
             className={

@@ -1,3 +1,8 @@
+import type { Ability } from "../abilities/Ability"
+import type { BonusCollection } from "../bonuses/Bonus"
+import type { SpellGrant } from "../magic/spells/SpellGrant"
+import type { Proficiency } from "../sheet/Proficiency"
+
 export type InitiativeSide = "ally" | "enemy" | "neutral"
 
 export type InitiativeSourceType =
@@ -22,6 +27,14 @@ export type InitiativeCondition = {
   id: string
   name: string
   description?: string
+  behavior?: string
+  source?: string
+  notes?: string
+  tags?: string[]
+  bonuses?: BonusCollection
+  grantedSpells?: SpellGrant[]
+  grantedProficiencies?: Proficiency[]
+  grantedAbilities?: Ability[]
   duration: InitiativeConditionDuration
 }
 
@@ -45,6 +58,8 @@ export type InitiativeEntry = {
   dexterity?: number
   side: InitiativeSide
   armorClass?: number
+  /** Manual unconditioned CA override for compendium combatants. */
+  armorClassOverride?: number
   currentHp?: number
   maxHp?: number
   temporaryHp?: number

@@ -8,6 +8,7 @@ import type { CharacterSkills } from "./CharacterSkills"
 import type { CharacterClassInterface } from "./Class"
 import type { HP } from "./HP"
 import type { SavingThrowProficiencies } from "./SavingThrows"
+import type { DamageAffinity } from "../combat/Damage"
 
 export type Sheet = {
   stats: {
@@ -26,6 +27,7 @@ export type Sheet = {
 
   HP: HP
   conditions?: CharacterCondition[]
+  damageAffinities?: DamageAffinity[]
 
   attributes: CharacterAttribute
   skills: CharacterSkills

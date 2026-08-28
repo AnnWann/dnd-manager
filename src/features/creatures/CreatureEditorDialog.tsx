@@ -12,6 +12,8 @@ import { Input } from "../../components/ui/Input"
 import { Modal } from "../../components/ui/Modal"
 import { Textarea } from "../../components/ui/Textarea"
 import { uploadImage } from "../../lib/uploadImage"
+import { DamageAffinityEditor } from "../combat/DamageAffinityEditor"
+import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../../models/combat/Damage"
 import {
   createCreatureFeature,
   normalizeCompendiumCreature,
@@ -19,6 +21,7 @@ import {
   type CreatureAbilityScores,
   type CreatureFeature,
   type CreatureFeatureField,
+  type CreatureFeatureMechanics,
   type CreatureSide,
 } from "../../models/creatures/CompendiumCreature"
 
@@ -432,21 +435,14 @@ export function CreatureEditorDialog({
               placeholder="Percepção +5, Furtividade +7"
               onChange={(skills) => patch({ skills })}
             />
-            <TextInput
-              label="Vulnerabilidades"
-              value={draft.vulnerabilities}
-              onChange={(vulnerabilities) => patch({ vulnerabilities })}
-            />
-            <TextInput
-              label="Resistências"
-              value={draft.resistances}
-              onChange={(resistances) => patch({ resistances })}
-            />
-            <TextInput
-              label="Imunidades"
-              value={draft.immunities}
-              onChange={(immunities) => patch({ immunities })}
-            />
+            <div className="md:col-span-2">
+              <DamageAffinityEditor
+                value={draft.damageAffinities}
+                onChange={(damageAffinities) => patch({ damageAffinities })}
+                title="Imunidades, resistências e vulnerabilidades"
+                description="Estruturadas para que dano aplicado pela iniciativa seja corrigido automaticamente. Campos antigos em texto continuam sendo preservados no JSON."
+              />
+            </div>
             <TextInput
               label="Imunidades a condições"
               value={draft.conditionImmunities}
@@ -599,6 +595,10 @@ function FeatureListEditor({
                     }
                   />
                 </Field>
+                <CreatureFeatureMechanicsEditor
+                  value={feature.mechanics}
+                  onChange={(mechanics) => patchFeature(feature.id, { mechanics })}
+                />
               </div>
             </article>
           ))}
@@ -608,6 +608,101 @@ function FeatureListEditor({
           Nenhuma entrada adicionada.
         </div>
       )}
+    </div>
+  )
+}
+
+function CreatureFeatureMechanicsEditor({
+  value,
+  onChange,
+}: {
+  value?: CreatureFeatureMechanics
+  onChange: (value?: CreatureFeatureMechanics) => void
+}) {
+  const enabled = Boolean(value)
+  const current = value ?? {
+    kind: "attack" as const,
+    attackType: "weapon" as const,
+    rangeType: "melee" as const,
+    attackBonus: 0,
+    attribute: "str" as const,
+    magical: false,
+    damage: [],
+  }
+
+  function patch(patchValue: Partial<CreatureFeatureMechanics>) {
+    onChange({ ...current, ...patchValue })
+  }
+
+  return (
+    <div className="rounded-lg border border-accentBorder/60 bg-accentBg/40 p-3">
+      <label className="flex items-center gap-2 text-xs font-semibold text-textH">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(event) => onChange(event.target.checked ? current : undefined)}
+        />
+        Estruturar mecanicamente como ataque
+      </label>
+      <p className="mt-1 text-[11px] leading-5 text-textMuted">
+        A descrição continua livre. Estes dados permitem que condições alterem ataque/dano e preparam automações da iniciativa.
+      </p>
+
+      {enabled ? (
+        <div className="mt-3 grid gap-3">
+          <div className="grid gap-2 sm:grid-cols-4">
+            <Field label="Origem">
+              <select className={selectClassName} value={current.attackType} onChange={(event) => patch({ attackType: event.target.value as CreatureFeatureMechanics["attackType"] })}>
+                <option value="weapon">Arma</option>
+                <option value="spell">Magia</option>
+                <option value="other">Outro</option>
+              </select>
+            </Field>
+            <Field label="Alcance">
+              <select className={selectClassName} value={current.rangeType} onChange={(event) => patch({ rangeType: event.target.value as CreatureFeatureMechanics["rangeType"] })}>
+                <option value="melee">Corpo a corpo</option>
+                <option value="ranged">À distância</option>
+              </select>
+            </Field>
+            <NumberField label="Bônus de ataque" value={current.attackBonus} onChange={(attackBonus) => patch({ attackBonus: attackBonus ?? 0 })} />
+            <Field label="Atributo">
+              <select className={selectClassName} value={current.attribute ?? "str"} onChange={(event) => patch({ attribute: event.target.value as CreatureFeatureMechanics["attribute"] })}>
+                {(["str", "dex", "con", "int", "wis", "cha"] as const).map((attribute) => <option key={attribute} value={attribute}>{attribute.toUpperCase()}</option>)}
+              </select>
+            </Field>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+            <TextInput label="Alcance/reach" value={current.reach ?? ""} placeholder="Ex.: 1,5 m ou 24/96 m" onChange={(reach) => patch({ reach })} />
+            <label className="flex items-end gap-2 pb-2 text-xs text-textH">
+              <input type="checkbox" checked={current.magical === true} onChange={(event) => patch({ magical: event.target.checked })} />
+              Ataque mágico
+            </label>
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-textH">Componentes de dano</span>
+              <Button size="sm" variant="ghost" onClick={() => patch({ damage: [...current.damage, { formula: "1d6", damageType: "slashing" }] })}>
+                <Plus className="h-3.5 w-3.5" /> Adicionar dano
+              </Button>
+            </div>
+            <div className="grid gap-2">
+              {current.damage.map((part, index) => (
+                <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                  <Input value={part.formula} placeholder="1d6+2" onChange={(event) => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, formula: event.target.value } : item) })} />
+                  <select className={selectClassName} value={part.damageType} onChange={(event) => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, damageType: event.target.value as DamageType } : item) })}>
+                    {DAMAGE_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                  <Button size="icon" variant="ghost" title="Remover dano" onClick={() => patch({ damage: current.damage.filter((_, currentIndex) => currentIndex !== index) })}>
+                    <Trash2 className="h-4 w-4 text-danger" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

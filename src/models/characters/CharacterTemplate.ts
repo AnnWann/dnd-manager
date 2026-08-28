@@ -150,6 +150,7 @@ import type { Proficiency, ProficiencyCategory } from "../sheet/Proficiency"
 import { addProficiency, hasProficiency, removeProficiency, updateProficiency } from "./characterProficiencies"
 import type { CharacterAsi } from "./CharacterAsi"
 import type { CharacterProfile } from "./characterProfile"
+import { normalizeDamageAffinities } from "../combat/Damage"
 
 export type CharacterTemplateProps = {
   id: string,
@@ -218,6 +219,7 @@ export class CharacterTemplate {
           temporary: 0,
           hitDice: {},
         },
+        damageAffinities: normalizeDamageAffinities(props.sheet?.damageAffinities),
         stats: props.sheet?.stats ?? {
           armorClass: 10,
           mobility: 9,
