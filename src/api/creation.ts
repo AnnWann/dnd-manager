@@ -54,7 +54,6 @@ export async function getCreationSnapshot(
   const promise = apiClient
     .get<CreationSnapshot>(
       `/campaigns/${encodeURIComponent(campaignId)}/creation`,
-      { cache: "no-store" },
     )
     .then((response) => {
       primeCreationSnapshot(campaignId, response.data)
