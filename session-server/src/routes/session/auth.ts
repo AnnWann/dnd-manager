@@ -10,6 +10,7 @@ export interface SessionConnectionClaims {
   role: SessionRole;
   clientId: string;
   expiresAt: number;
+  ownedCharacterIds?: string[];
 }
 
 export interface SessionServerEnv {
@@ -81,6 +82,7 @@ export async function authenticateSessionConnection(
       role: claims.role,
       clientId: claims.clientId,
       expiresAt: claims.expiresAt,
+      ownedCharacterIds: claims.ownedCharacterIds,
     },
   };
 }
