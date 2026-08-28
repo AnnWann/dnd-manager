@@ -21,6 +21,7 @@ import type { SessionProficiencyOperation } from "./proficiencySessionProtocol"
 import type { SessionRaceOperation } from "./raceSessionProtocol"
 import type { SessionProfileOperation } from "./profileSessionProtocol"
 import type { SessionCustomClassOperation } from "./customClassSessionProtocol"
+import type { SessionCustomSystemOperation } from "./customSystemSessionProtocol"
 import type {
   SessionCharacterLifecycleOperation,
   SessionCharacterLifecycleState,
@@ -78,6 +79,7 @@ export type SessionRuntimeContextValue = {
   conditionsByCharacterId: Readonly<Record<string, SessionConditionsState>>
   abilitiesByCharacterId: Readonly<Record<string, SessionAbilityState>>
   sessionCharactersById: Readonly<Record<string, SessionCharacterLifecycleState>>
+  characterSnapshotReady: boolean
   inventoryState: SessionSharedInventoryState | null
   missionState: SessionMissionState | null
   initiativeState: SessionInitiativeState | null
@@ -103,6 +105,7 @@ export type SessionRuntimeContextValue = {
   dispatchRaceOperation: (operation: SessionRaceOperation) => boolean
   dispatchProfileOperation: (operation: SessionProfileOperation) => boolean
   dispatchCustomClassOperation: (operation: SessionCustomClassOperation) => boolean
+  dispatchCustomSystemOperation: (operation: SessionCustomSystemOperation) => boolean
   dispatchCharacterLifecycleOperation: (operation: SessionCharacterLifecycleOperation) => boolean
   undoLog: (logId: string) => boolean
 }
@@ -151,6 +154,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const [conditionsByCharacterId, setConditionsByCharacterId] = useState<Record<string, SessionConditionsState>>({})
   const [abilitiesByCharacterId, setAbilitiesByCharacterId] = useState<Record<string, SessionAbilityState>>({})
   const [sessionCharactersById, setSessionCharactersById] = useState<Record<string, SessionCharacterLifecycleState>>({})
+  const [characterSnapshotReady, setCharacterSnapshotReady] = useState(false)
   const [inventoryState, setInventoryState] = useState<SessionSharedInventoryState | null>(null)
   const [missionState, setMissionState] = useState<SessionMissionState | null>(null)
   const [initiativeState, setInitiativeState] = useState<SessionInitiativeState | null>(null)
@@ -167,6 +171,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     setConditionsByCharacterId({})
     setAbilitiesByCharacterId({})
     setSessionCharactersById({})
+    setCharacterSnapshotReady(false)
     setInventoryState(null)
     setMissionState(null)
     setInitiativeState(null)
@@ -218,6 +223,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
         }
         if (message.type === "session.characters.snapshot") {
           setSessionCharactersById(Object.fromEntries(message.characters.map((character) => [character.characterId, character])))
+          setCharacterSnapshotReady(true)
           return
         }
         if (message.type === "session.character.updated") {
@@ -286,6 +292,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const initializeConditions = useCallback((characters: SessionConditionSeed[]) =>
     socketRef.current?.send({ type: "session.conditions.initialize", characters }) ?? false, [])
   const initializeAbilities = useCallback((characters: SessionAbilitySeed[]) => {
+    if (!characterSnapshotReady) return true
     const pending = characters.filter((character) => !sessionCharactersById[character.characterId])
     if (!pending.length) return true
     return pending.every((character) => socketRef.current?.send({
@@ -296,7 +303,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
         character: character.character,
       },
     }) ?? false)
-  }, [sessionCharactersById])
+  }, [characterSnapshotReady, sessionCharactersById])
   const initializeInventory = useCallback((partyInventory: Itemmable[], groundInventory: Itemmable[]) =>
     socketRef.current?.send({ type: "session.inventory.initialize", partyInventory, groundInventory }) ?? false, [])
   const initializeMissions = useCallback((missions: Mission[]) =>
@@ -329,6 +336,8 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     socketRef.current?.send({ type: "session.profile.operation", operation }) ?? false, [])
   const dispatchCustomClassOperation = useCallback((operation: SessionCustomClassOperation) =>
     socketRef.current?.send({ type: "session.custom-class.operation", operation }) ?? false, [])
+  const dispatchCustomSystemOperation = useCallback((operation: SessionCustomSystemOperation) =>
+    socketRef.current?.send({ type: "session.customSystem.operation", operation }) ?? false, [])
   const dispatchCharacterLifecycleOperation = useCallback((operation: SessionCharacterLifecycleOperation) =>
     socketRef.current?.send({ type: "session.character.operation", operation }) ?? false, [])
 
@@ -357,18 +366,21 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
 
   const value = useMemo<SessionRuntimeContextValue>(() => ({
     status, sessionId, clientId, role, presence, lastHeartbeatAckAt, runtimeConfigSnapshot,
-    hpByCharacterId, conditionsByCharacterId, abilitiesByCharacterId, sessionCharactersById, inventoryState, missionState, initiativeState, hpLog,
+    hpByCharacterId, conditionsByCharacterId, abilitiesByCharacterId, sessionCharactersById, characterSnapshotReady,
+    inventoryState, missionState, initiativeState, hpLog,
     publishRuntimeConfig,
     initializeHp, initializeConditions, initializeAbilities, initializeInventory, initializeMissions, initializeInitiative,
     dispatchSheetOperation, dispatchHpOperation, dispatchConditionOperation,
     dispatchConcentrationOperation, dispatchAbilityOperation, dispatchMagicOperation,
     dispatchEquipmentOperation, dispatchInventoryOperation, dispatchMissionOperation, dispatchInitiativeOperation, dispatchProficiencyOperation,
-    dispatchRaceOperation, dispatchProfileOperation, dispatchCustomClassOperation, dispatchCharacterLifecycleOperation, undoLog,
+    dispatchRaceOperation, dispatchProfileOperation, dispatchCustomClassOperation, dispatchCustomSystemOperation,
+    dispatchCharacterLifecycleOperation, undoLog,
   }), [
-    abilitiesByCharacterId, clientId, conditionsByCharacterId,
+    abilitiesByCharacterId, characterSnapshotReady, clientId, conditionsByCharacterId,
     dispatchAbilityOperation, dispatchCharacterLifecycleOperation, dispatchConditionOperation, dispatchConcentrationOperation,
-    dispatchCustomClassOperation, dispatchEquipmentOperation, dispatchHpOperation, dispatchInitiativeOperation, dispatchInventoryOperation,
-    dispatchMagicOperation, dispatchMissionOperation, dispatchProficiencyOperation, dispatchProfileOperation, dispatchRaceOperation, dispatchSheetOperation,
+    dispatchCustomClassOperation, dispatchCustomSystemOperation, dispatchEquipmentOperation, dispatchHpOperation,
+    dispatchInitiativeOperation, dispatchInventoryOperation, dispatchMagicOperation, dispatchMissionOperation,
+    dispatchProficiencyOperation, dispatchProfileOperation, dispatchRaceOperation, dispatchSheetOperation,
     hpByCharacterId, hpLog, initializeAbilities, initializeConditions, initializeHp, initializeInitiative, initializeInventory, initializeMissions,
     initiativeState, inventoryState, lastHeartbeatAckAt, missionState, presence, publishRuntimeConfig, role, runtimeConfigSnapshot,
     sessionCharactersById, sessionId, status, undoLog,
