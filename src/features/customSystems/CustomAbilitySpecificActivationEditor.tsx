@@ -4,12 +4,14 @@ import type { AbilityActionKind, AbilityKind } from '../../models/abilities/Abil
 import type {
   CustomAbilityActivationDefinition,
   CustomAbilityResourceChangeDefinition,
+  CustomAbilityRollDefinition,
   CustomAbilityTypeDefinition,
   CustomPredefinedAbilityDefinition,
   CustomUsageResetKind,
 } from '../../models/customSystems/CustomAbilityDefinition'
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
 import { listCustomFormulaVariables, validateCustomFormula } from '../../lib/customSystems'
+import { validateCustomAbilityDiceExpression } from '../../lib/customSystems/CustomAbilityRoll'
 import {
   AbilityConditionChangesEditor,
   ResourceAmountFormulaField,
@@ -50,6 +52,16 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
   const usageMode = !activation?.usage ? 'inherit' : (activation.usage.mode ?? 'limited')
   const resourceMode = activation?.resourceChanges === undefined ? 'inherit' : 'specific'
   const conditionMode = activation?.conditionChanges === undefined ? 'inherit' : 'specific'
+  const rollMode = activation?.roll?.mode ?? 'inherit'
+  const formulaAbilityType = resolvedAbilityType && activation?.roll
+    ? {
+        ...resolvedAbilityType,
+        activation: {
+          ...resolvedAbilityType.activation,
+          roll: activation.roll,
+        },
+      }
+    : resolvedAbilityType
 
   const setActivation = (next: CustomAbilityActivationDefinition | undefined) =>
     onChange({ ...ability, activation: next })
@@ -80,6 +92,25 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
     })
   }
 
+  function setRollMode(mode: 'inherit' | CustomAbilityRollDefinition['mode']) {
+    const next = { ...(activation ?? {}) }
+    if (mode === 'inherit') {
+      delete next.roll
+    } else {
+      next.roll = {
+        mode,
+        dice: activation?.roll?.dice,
+        label: activation?.roll?.label,
+      }
+    }
+    setActivation(next)
+  }
+
+  function patchRoll(patch: Partial<CustomAbilityRollDefinition>) {
+    if (!activation?.roll) return
+    patchActivation({ roll: { ...activation.roll, ...patch } })
+  }
+
   function setResourceMode(mode: 'inherit' | 'specific') {
     const next = { ...(activation ?? {}) }
     if (mode === 'inherit') delete next.resourceChanges
@@ -96,6 +127,12 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
 
   const setResourceChanges = (resourceChanges: CustomAbilityResourceChangeDefinition[]) =>
     patchActivation({ resourceChanges })
+
+  const rollDiceError = activation?.roll?.dice?.trim()
+    ? validateCustomAbilityDiceExpression(activation.roll.dice)
+    : activation?.roll?.mode === 'automatic'
+      ? 'Informe os dados da rolagem automática.'
+      : undefined
 
   return (
     <section className="rounded-lg border border-border p-3">
@@ -118,7 +155,7 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
 
       {!activation ? (
         <div className="mt-3 rounded-lg border border-dashed border-border p-3 text-xs text-text">
-          Herdando ativação, categoria de ação, usos, recursos e condições do tipo.
+          Herdando ativação, categoria de ação, usos, recursos, rolagem e condições do tipo.
         </div>
       ) : (
         <div className="mt-4 grid gap-4">
@@ -163,13 +200,52 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
             {usageMode === 'limited' ? (
               <FormulaField
                 definition={definition}
-                abilityType={resolvedAbilityType}
+                abilityType={formulaAbilityType}
                 label="Fórmula do máximo"
                 value={activation.usage?.maximumFormula ?? ''}
                 placeholder="Ex.: ability.nivel + character.proficiencyBonus"
                 onChange={(maximumFormula) => patchUsage({ maximumFormula: maximumFormula || undefined })}
               />
             ) : null}
+          </div>
+
+          <div className="rounded-lg border border-border bg-bg-subtle p-3">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <SelectField
+                label="Rolagem"
+                value={rollMode}
+                options={[
+                  ['inherit', 'Herdar do tipo'],
+                  ['automatic', 'Automática'],
+                  ['manual', 'Manual antes de usar'],
+                ]}
+                onChange={(mode) => setRollMode(mode as 'inherit' | CustomAbilityRollDefinition['mode'])}
+              />
+              {activation.roll ? <>
+                <TextField
+                  label="Rótulo"
+                  value={activation.roll.label ?? ''}
+                  placeholder="Ex.: Recuperar Fôlego"
+                  onChange={(label) => patchRoll({ label: label || undefined })}
+                />
+                <TextField
+                  label={`Dados${activation.roll.mode === 'manual' ? ' (opcional)' : ''}`}
+                  value={activation.roll.dice ?? ''}
+                  placeholder="1d6"
+                  mono
+                  onChange={(dice) => patchRoll({ dice: dice || undefined })}
+                />
+              </> : null}
+            </div>
+            {activation.roll ? (
+              <div className="mt-2 text-xs leading-5 text-textMuted">
+                {activation.roll.mode === 'automatic'
+                  ? 'O servidor fará a rolagem ao usar esta habilidade.'
+                  : 'O jogador informará o resultado antes de confirmar o uso.'}
+                {' '}Use <code>roll.value</code> nas fórmulas dos efeitos abaixo.
+              </div>
+            ) : null}
+            {rollDiceError ? <div className="mt-2 text-xs text-red-300">{rollDiceError}</div> : null}
           </div>
 
           <div className="rounded-lg border border-border bg-bg-subtle p-3">
@@ -185,7 +261,7 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
                   <ResourceChangeRow
                     key={change.id}
                     definition={definition}
-                    abilityType={resolvedAbilityType}
+                    abilityType={formulaAbilityType}
                     change={change}
                     onChange={(next) => setResourceChanges(
                       (activation.resourceChanges ?? []).map((entry, current) => current === index ? next : entry),
@@ -339,6 +415,19 @@ function NumberField({ label, value, onChange, placeholder }: {
         const raw = event.target.value.trim()
         onChange(raw ? Math.max(0, Number(raw) || 0) : undefined)
       }} />
+  </label>
+}
+
+function TextField({ label, value, onChange, placeholder, mono = false }: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  mono?: boolean
+}) {
+  return <label className="grid min-w-0 gap-1"><span className="label">{label}</span>
+    <input className={`input-base min-w-0 w-full ${mono ? 'font-mono' : ''}`} value={value} placeholder={placeholder}
+      onChange={(event) => onChange(event.target.value)} />
   </label>
 }
 
