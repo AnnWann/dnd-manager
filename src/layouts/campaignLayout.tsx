@@ -57,6 +57,10 @@ import {
   LEGACY_SESSION_BOOTSTRAP_ASSET_TYPE,
   readLegacySessionBootstrap,
 } from "../shared/legacy/legacyCampaignBackup"
+import {
+  toCampaignUiRole,
+  type CampaignUiRole,
+} from "../shared/campaign/campaignRoles"
 import { AppRouter } from "../Router"
 
 type SessionCompatibleAppState = AppStateV1 & {
@@ -71,9 +75,7 @@ export function CampaignLayout() {
   const { data: authSession } = authClient.useSession()
   const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
   const authenticatedUserId = authSession?.user?.id ?? localUser?.id ?? ""
-  const [resolvedSessionRole, setResolvedSessionRole] = useState<
-    "master" | "player" | null
-  >(null)
+  const [resolvedSessionRole, setResolvedSessionRole] = useState<CampaignUiRole | null>(null)
   const [sessionMembers, setSessionMembers] = useState<CampaignSessionMember[]>([])
   const [sessionReady, setSessionReady] = useState(!sessionId)
   const [sessionLoadError, setSessionLoadError] = useState("")
@@ -156,7 +158,7 @@ export function CampaignLayout() {
       .then(([data, homebrew]) => {
         if (cancelled) return
 
-        setResolvedSessionRole(data.campaign.isMaster ? "master" : "player")
+        setResolvedSessionRole(toCampaignUiRole(data.campaign.role))
         setSessionMembers(data.members ?? [])
 
         const sourceSnapshots = buildSessionCharacterSnapshots(data)
@@ -276,16 +278,37 @@ export function CampaignLayout() {
     }
   }, [sessionContentRevision, sessionId, setAppState])
 
-  const effectiveUserRole = resolvedSessionRole ?? userRole
+  const effectiveUserRole: CampaignUiRole = resolvedSessionRole ?? userRole
   const effectiveUserKey = authenticatedUserId || userKey
   const isCreationMode = Boolean(
     sessionId && location.pathname.startsWith(toSession("creation")),
   )
+  const canAccessCreation =
+    effectiveUserRole === "master" ||
+    effectiveUserRole === "assistant" ||
+    effectiveUserRole === "moderator"
 
   useEffect(() => {
-    if (!sessionReady || effectiveUserRole === "master" || !isCreationMode) return
-    navigate(toSession("characters"), { replace: true })
-  }, [effectiveUserRole, isCreationMode, navigate, sessionReady, toSession])
+    if (!sessionReady || !isCreationMode) return
+    if (!canAccessCreation) {
+      navigate(toSession("characters"), { replace: true })
+      return
+    }
+    if (
+      effectiveUserRole === "moderator" &&
+      location.pathname !== toSession("creation/settings")
+    ) {
+      navigate(toSession("creation/settings"), { replace: true })
+    }
+  }, [
+    canAccessCreation,
+    effectiveUserRole,
+    isCreationMode,
+    location.pathname,
+    navigate,
+    sessionReady,
+    toSession,
+  ])
 
   useEffect(() => {
     if (appState === rawAppState) return
@@ -333,7 +356,7 @@ export function CampaignLayout() {
     },
   ]
 
-  const creationSidebarItems = [
+  const fullCreationSidebarItems = [
     {
       label: "Configuração",
       icon: <IconCompendium />,
@@ -378,8 +401,19 @@ export function CampaignLayout() {
     },
   ]
 
+  const creationSidebarItems = effectiveUserRole === "moderator"
+    ? [
+        {
+          label: "Permissões",
+          icon: <IconCompendium />,
+          active: location.pathname === toSession("creation/settings"),
+          onClick: () => navigate(toSession("creation/settings")),
+        },
+      ]
+    : fullCreationSidebarItems
+
   const sidebarItems = [
-    ...(effectiveUserRole === "master" && isCreationMode
+    ...(canAccessCreation && isCreationMode
       ? creationSidebarItems
       : sessionSidebarItems),
     {
@@ -390,7 +424,7 @@ export function CampaignLayout() {
     },
   ]
 
-  const modeSwitcher = effectiveUserRole === "master" ? (
+  const modeSwitcher = canAccessCreation ? (
     <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-bg p-1">
       <button
         type="button"
@@ -451,7 +485,7 @@ export function CampaignLayout() {
         syncKey,
         setSyncKey,
         userRole: effectiveUserRole,
-        setUserRole,
+        setUserRole: (role) => setUserRole(role === "master" ? "master" : "player"),
         userKey: effectiveUserKey,
         setUserKey,
         canSync,
@@ -472,7 +506,7 @@ export function CampaignLayout() {
           <MissionProvider
             state={rawAppState}
             setState={setRawAppState}
-            userRole={effectiveUserRole}
+            userRole={effectiveUserRole === "master" ? "master" : "player"}
             userKey={effectiveUserKey}
           >
             <CreatureCompendiumProvider>
