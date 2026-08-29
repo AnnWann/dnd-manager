@@ -27,17 +27,10 @@ export function MasterConcentrationAlerts() {
   const runtime = useOptionalSessionRuntime()
   const logRuntime = useOptionalSessionRuntimeLog()
   const seenOperationIds = useRef(new Set<string>())
-  const initialized = useRef(false)
+  const mountedAt = useRef(Date.now())
   const [alerts, setAlerts] = useState<ConcentrationAlert[]>([])
 
   useEffect(() => {
-    if (!initialized.current) {
-      for (const record of operationLog) seenOperationIds.current.add(record.id)
-      for (const record of logRuntime?.hpLog ?? []) seenOperationIds.current.add(record.id)
-      initialized.current = true
-      return
-    }
-
     const incoming: ConcentrationAlert[] = []
     const now = Date.now()
     const records = runtime
@@ -48,6 +41,8 @@ export function MasterConcentrationAlerts() {
       if (seenOperationIds.current.has(record.id)) continue
       seenOperationIds.current.add(record.id)
 
+      const createdAt = new Date(record.createdAt).getTime()
+      if (!Number.isFinite(createdAt) || createdAt <= mountedAt.current) continue
       if (!canAssignOwners || ("undoneAt" in record && record.undoneAt)) continue
       const operation = record.operation
       if (operation.type === "initiative.hp.apply" && operation.mode === "damage") {
