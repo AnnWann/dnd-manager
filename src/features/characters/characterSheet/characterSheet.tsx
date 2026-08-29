@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react"
 
 import { useCustomSystemDefinitions } from "../../../lib/customSystems/CustomSystemRegistry"
+import type { CharacterCondition } from "../../../models/characters/CharacterCondition"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { getCharacterConditions } from "../../../models/characters/characterConditionStorage"
+import type { SessionConditionOperation } from "../../session-runtime/sessionProtocol"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import { DamageAffinityEditor } from "../../combat/DamageAffinityEditor"
 import {
@@ -41,7 +44,11 @@ export function CharacterSheetTab({
   character,
   updateCharacter,
 }: Props) {
-  const { mode, canAssignOwners } = useCharacterWorkspace()
+  const {
+    mode,
+    canAssignOwners,
+    dispatchConditionOperation,
+  } = useCharacterWorkspace()
   const sessionRuntime = useOptionalSessionRuntime()
   const [viewMode, setViewMode] = useState<SheetViewMode>(() =>
     loadSheetViewMode(mode),
@@ -61,6 +68,22 @@ export function CharacterSheetTab({
   useEffect(() => {
     saveSheetViewMode(mode, viewMode)
   }, [mode, viewMode])
+
+  function updateConditions(
+    characterId: string,
+    updater: (current: CharacterTemplate) => CharacterTemplate,
+  ) {
+    if (characterId !== character.get("id")) {
+      updateCharacter(characterId, updater)
+      return
+    }
+
+    const next = updater(character)
+    const operation = deriveConditionOperation(character, next)
+    if (operation && dispatchConditionOperation(operation)) return
+
+    updateCharacter(characterId, updater)
+  }
 
   return (
     <div className="grid gap-4">
@@ -114,7 +137,7 @@ export function CharacterSheetTab({
           />
           <CharacterConditions
             character={character}
-            updateCharacter={updateCharacter}
+            updateCharacter={updateConditions}
           />
         </>
       ) : (
@@ -134,7 +157,7 @@ export function CharacterSheetTab({
           <GroupHP character={character} updateCharacter={updateCharacter} />
           <CharacterConditions
             character={character}
-            updateCharacter={updateCharacter}
+            updateCharacter={updateConditions}
           />
           <GroupStats character={character} updateCharacter={updateCharacter} />
           <DamageAffinityEditor
@@ -186,6 +209,50 @@ export function CharacterSheetTab({
       )}
     </div>
   )
+}
+
+function deriveConditionOperation(
+  before: CharacterTemplate,
+  after: CharacterTemplate,
+): SessionConditionOperation | null {
+  const beforeConditions = getCharacterConditions(before)
+  const afterConditions = getCharacterConditions(after)
+  if (JSON.stringify(beforeConditions) === JSON.stringify(afterConditions)) return null
+
+  const beforeById = new Map(beforeConditions.map((condition) => [condition.id, condition]))
+  const afterById = new Map(afterConditions.map((condition) => [condition.id, condition]))
+  const added = afterConditions.filter((condition) => !beforeById.has(condition.id))
+  const removed = beforeConditions.filter((condition) => !afterById.has(condition.id))
+  const changed = afterConditions.filter((condition) => {
+    const previous = beforeById.get(condition.id)
+    return previous && JSON.stringify(previous) !== JSON.stringify(condition)
+  })
+
+  const characterId = before.get("id")
+  if (added.length === 1 && removed.length === 0 && changed.length === 0) {
+    return {
+      type: "character.condition.add",
+      characterId,
+      condition: added[0] as CharacterCondition,
+    }
+  }
+  if (removed.length === 1 && added.length === 0 && changed.length === 0) {
+    return {
+      type: "character.condition.remove",
+      characterId,
+      conditionId: removed[0].id,
+    }
+  }
+  if (changed.length === 1 && added.length === 0 && removed.length === 0) {
+    return {
+      type: "character.condition.update",
+      characterId,
+      condition: changed[0] as CharacterCondition,
+    }
+  }
+
+  console.warn("[session-runtime] Complex multi-condition mutation was not sent to the authoritative server.")
+  return null
 }
 
 function SessionConfigurationHeader({
