@@ -1,5 +1,9 @@
 import { CLASS_NAMES } from "../../../contexts/consts"
 import { getCharacterGrantedSpells } from "../../../models/characters/characterGrantedSpells"
+import {
+  getCustomClassConfigFromEntry,
+  isCustomClassEntry,
+} from "../../../models/characters/customClassConfig"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Spell } from "../../../models/magic/spells/Spell"
 import type { CharacterSelectorItem } from "./CharacterSelectorItem"
@@ -22,7 +26,11 @@ export function toCampaignCharacterSelectorItem(
   )
 
   const classLabel = classes
-    .map((entry) => CLASS_NAMES[entry.className] ?? entry.className)
+    .map((entry) =>
+      isCustomClassEntry(entry)
+        ? getCustomClassConfigFromEntry(entry)?.name ?? String(entry.className)
+        : CLASS_NAMES[entry.className] ?? entry.className,
+    )
     .filter(Boolean)
     .join(" / ")
 

@@ -251,10 +251,17 @@ function addCustomLevelHp(
     current: { quantity: 0, sides: hitDie },
   }
   const gain = Math.max(1, Math.trunc(hpGain || 1))
+  const currentMax = Number(hp.currentMax)
+  const nextMax = hp.max + gain
+  const nextCurrentMax =
+    Number.isFinite(currentMax) && currentMax < hp.max
+      ? currentMax
+      : nextMax
 
   return character.withSheet("HP", {
     ...hp,
-    max: hp.max + gain,
+    max: nextMax,
+    currentMax: nextCurrentMax,
     current: hp.current + gain,
     hitDice: {
       ...hp.hitDice,

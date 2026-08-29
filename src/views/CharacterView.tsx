@@ -474,10 +474,11 @@ export function CharacterView() {
               character={routeCharacter}
               readOnly={!sessionRuntime || sessionRuntime.status !== "connected"}
               applyLabel="Aplicar na sessão"
-              onApply={(config) => {
+              onApply={(className, config) => {
                 const sent = sessionRuntime?.dispatchCustomClassOperation({
                   type: "character.class.custom.configure",
                   characterId: routeCharacter.get("id"),
+                  className,
                   config,
                 }) ?? false
                 if (!sent) {

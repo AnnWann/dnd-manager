@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../../../components/ui/Button"
 import { Input } from "../../../../components/ui/Input"
@@ -7,15 +7,16 @@ import type { CharacterTemplate } from "../../../../models/characters/CharacterT
 import {
   createCustomSlotPool,
   getCustomCantripsKnownAtLevel,
-  getCustomClassConfig,
+  getCustomClassConfigFromEntry,
   getCustomLeveledSpellsKnownAtLevel,
   getCustomProgressionValueAtLevel,
+  isCustomClassEntry,
   normalizeCustomClassConfig,
   updateCustomClassConfig,
   type CustomClassRuntimeConfig,
 } from "../../../../models/characters/customClassConfig"
 import type { Attribute } from "../../../../models/sheet/Attribute"
-import type { KnownSpellMode } from "../../../../models/sheet/Class"
+import type { ClassName, KnownSpellMode } from "../../../../models/sheet/Class"
 
 const ATTRIBUTES: Array<{ value: Attribute; label: string }> = [
   { value: "str", label: "Força" },
@@ -36,7 +37,10 @@ type TabProps = {
     characterId: string,
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) => void
-  onApply?: (config: CustomClassRuntimeConfig) => void | Promise<void>
+  onApply?: (
+    className: ClassName,
+    config: CustomClassRuntimeConfig,
+  ) => void | Promise<void>
   readOnly?: boolean
   applyLabel?: string
 }
@@ -55,27 +59,89 @@ export function CustomClassConfigurationTab({
   readOnly = false,
   applyLabel,
 }: TabProps) {
-  const config = useMemo(() => getCustomClassConfig(character), [character])
+  const customClasses = useMemo(
+    () => (character.get("sheet").classes ?? []).flatMap((entry) => {
+      if (!isCustomClassEntry(entry)) return []
+      const config = getCustomClassConfigFromEntry(entry)
+      return config
+        ? [{ className: entry.className, level: entry.level, config }]
+        : []
+    }),
+    [character],
+  )
+  const [selectedClassName, setSelectedClassName] = useState<ClassName | null>(
+    () => customClasses[0]?.className ?? null,
+  )
 
-  if (!config) return null
+  useEffect(() => {
+    if (!customClasses.length) {
+      if (selectedClassName !== null) setSelectedClassName(null)
+      return
+    }
+    if (
+      !selectedClassName ||
+      !customClasses.some((entry) => entry.className === selectedClassName)
+    ) {
+      setSelectedClassName(customClasses[0].className)
+    }
+  }, [customClasses, selectedClassName])
+
+  const selectedClass = customClasses.find(
+    (entry) => entry.className === selectedClassName,
+  ) ?? customClasses[0]
+
+  if (!selectedClass) return null
 
   return (
-    <CustomClassConfigurationEditor
-      key={`${character.get("id")}:${JSON.stringify(config)}`}
-      config={config}
-      readOnly={readOnly}
-      applyLabel={applyLabel}
-      onApply={async (nextConfig) => {
-        if (onApply) {
-          await onApply(nextConfig)
-          return
-        }
-        if (!updateCharacter || readOnly) return
-        updateCharacter(character.get("id"), (current) =>
-          updateCustomClassConfig(current, nextConfig),
-        )
-      }}
-    />
+    <div className="grid gap-4">
+      {customClasses.length > 1 ? (
+        <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
+          <div className="text-sm font-semibold text-textH">Classes personalizadas</div>
+          <p className="mt-1 text-xs leading-5 text-textMuted">
+            Selecione qual classe do multiclass você deseja configurar.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {customClasses.map((entry) => {
+              const selected = entry.className === selectedClass.className
+              return (
+                <button
+                  key={String(entry.className)}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setSelectedClassName(entry.className)}
+                  className={[
+                    "rounded-lg border px-3 py-2 text-left text-xs font-semibold transition-colors",
+                    selected
+                      ? "border-accentBorder bg-accentBg text-textH"
+                      : "border-border bg-bg-subtle text-text hover:bg-accentBg",
+                  ].join(" ")}
+                >
+                  <span>{entry.config.name}</span>
+                  <span className="ml-2 font-normal text-textMuted">Nível {entry.level}</span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      <CustomClassConfigurationEditor
+        key={`${character.get("id")}:${String(selectedClass.className)}:${JSON.stringify(selectedClass.config)}`}
+        config={selectedClass.config}
+        readOnly={readOnly}
+        applyLabel={applyLabel}
+        onApply={async (nextConfig) => {
+          if (onApply) {
+            await onApply(selectedClass.className, nextConfig)
+            return
+          }
+          if (!updateCharacter || readOnly) return
+          updateCharacter(character.get("id"), (current) =>
+            updateCustomClassConfig(current, nextConfig, selectedClass.className),
+          )
+        }}
+      />
+    </div>
   )
 }
 

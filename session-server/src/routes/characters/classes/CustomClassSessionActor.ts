@@ -101,7 +101,7 @@ export class SessionActor extends ProfileSessionActor {
       return;
     }
 
-    if (!getCustomClassConfig(character)) {
+    if (!getCustomClassConfig(character, operation.className)) {
       sendError(
         webSocket,
         "CUSTOM_CLASS_NOT_FOUND",
@@ -111,7 +111,7 @@ export class SessionActor extends ProfileSessionActor {
     }
 
     const normalized = normalizeCustomClassConfig(operation.config);
-    const next = updateCustomClassConfig(character, normalized);
+    const next = updateCustomClassConfig(character, normalized, operation.className);
     if (JSON.stringify(character.toJSON()) === JSON.stringify(next.toJSON())) {
       sendError(
         webSocket,
