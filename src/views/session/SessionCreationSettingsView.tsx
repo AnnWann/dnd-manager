@@ -170,7 +170,10 @@ export function SessionCreationSettingsView() {
 
   async function changeMember(
     member: SessionSettingsMember,
-    input: { status: "ACTIVE" | "REMOVED"; role?: "MASTER" | "PLAYER" },
+    input: {
+      status: "ACTIVE" | "REMOVED"
+      role?: SessionSettingsMember["role"]
+    },
   ) {
     if (!campaignId || workingUserId) return
     setWorkingUserId(member.id)
@@ -399,7 +402,7 @@ function MemberRow({
   member: SessionSettingsMember
   owner?: boolean
   working?: boolean
-  onRoleChange?: (role: "MASTER" | "PLAYER") => void
+  onRoleChange?: (role: SessionSettingsMember["role"]) => void
   onRemove?: () => void
 }) {
   return (
@@ -426,11 +429,13 @@ function MemberRow({
             value={member.role}
             disabled={working}
             onChange={(event) =>
-              onRoleChange?.(event.target.value as "MASTER" | "PLAYER")
+              onRoleChange?.(event.target.value as SessionSettingsMember["role"])
             }
             className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH outline-none"
           >
             <option value="PLAYER">Jogador</option>
+            <option value="ASSISTANT">Assistente</option>
+            <option value="MODERATOR">Moderador</option>
             <option value="MASTER">Mestre</option>
           </select>
 
