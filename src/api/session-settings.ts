@@ -1,12 +1,16 @@
 import { LOCAL_AUTH_BYPASS } from "../auth/local-auth"
 import { apiClient } from "./api-client"
-import { getMyCampaigns, reviewCampaignMember } from "./user-campaigns"
+import {
+  getMyCampaigns,
+  reviewCampaignMember,
+  type CampaignRole,
+} from "./user-campaigns"
 
 export type SessionSettingsMember = {
   id: string
   name: string
   email?: string | null
-  role: "MASTER" | "PLAYER"
+  role: CampaignRole
   status: "ACTIVE" | "INVITED" | "REMOVED"
 }
 
@@ -14,10 +18,11 @@ export type SessionCreationSettings = {
   campaign: {
     id: string
     name: string
-    inviteCode?: string
+    inviteCode?: string | null
   }
   owner: SessionSettingsMember
   members: SessionSettingsMember[]
+  canManageMembers: boolean
 }
 
 type SettingsResponse = {
@@ -68,6 +73,7 @@ export async function getSessionCreationSettings(
         role: "PLAYER",
         status: "INVITED",
       })),
+      canManageMembers: true,
     }
   }
 
@@ -99,7 +105,7 @@ export async function updateSessionMember(
   userId: string,
   input: {
     status: "ACTIVE" | "REMOVED"
-    role?: "MASTER" | "PLAYER"
+    role?: CampaignRole
   },
 ): Promise<void> {
   if (LOCAL_AUTH_BYPASS) {
