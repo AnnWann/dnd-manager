@@ -14,6 +14,9 @@ permissions:
 jobs:
   patch:
     runs-on: ubuntu-latest
+    env:
+      DIRECT_URL: postgresql://user:password@localhost:5432/dummy
+      DATABASE_URL: postgresql://user:password@localhost:5432/dummy
     steps:
       - uses: actions/checkout@v4
         with:
