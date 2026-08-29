@@ -29,10 +29,10 @@ jobs:
         run: python3 scripts/implement-ability-resource-costs.py
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Install session-server dependencies
-        run: npm --prefix session-server ci
+        run: npm --prefix session-server install --no-audit --no-fund
 
       - name: Check shared Select boundary
         run: npm run check:native-selects
