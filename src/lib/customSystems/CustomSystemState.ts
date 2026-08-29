@@ -806,14 +806,14 @@ function assertCanEdit(
   path: string,
 ): void {
   const effectivePermission = permission ?? 'ownerAndMaster'
-  const allowed =
-    effectivePermission === 'ownerAndMaster'
+  const allowed = actor === 'automation'
+    || (effectivePermission === 'ownerAndMaster'
       ? actor === 'owner' || actor === 'master'
       : effectivePermission === 'owner'
         ? actor === 'owner'
         : effectivePermission === 'masterOnly'
           ? actor === 'master'
-          : actor === 'automation'
+          : false)
 
   if (!allowed) {
     throwOperationError({
