@@ -199,6 +199,7 @@ export function setCustomAbilityAcquisitionException(
   const learnedLimitFormulaOverride = normalizeFormula(value.learnedLimitFormulaOverride)
   const preparedLimitFormulaOverride = normalizeFormula(value.preparedLimitFormulaOverride)
   const normalized: CustomAbilityAcquisitionExceptionState = {
+    presetId: value.presetId?.trim() || undefined,
     learnedLimitFormulaOverride,
     preparedLimitFormulaOverride,
     extraLearnedSlots: normalizeBonus(value.extraLearnedSlots),
@@ -207,7 +208,8 @@ export function setCustomAbilityAcquisitionException(
     alwaysPreparedAbilityIds,
   }
   const hasValue = Boolean(
-    learnedLimitFormulaOverride
+    normalized.presetId
+      || learnedLimitFormulaOverride
       || preparedLimitFormulaOverride
       || normalized.extraLearnedSlots
       || normalized.extraPreparedSlots

@@ -1,4 +1,5 @@
 import { X } from 'lucide-react'
+import { Select as SharedSelect } from '../../../components/ui/Select'
 
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
 import type { CustomAbilityTypeDefinition } from '../../../models/customSystems/CustomAbilityDefinition'
@@ -11,6 +12,7 @@ import type {
 import {
   countCustomAbilities,
   getCustomAbilityAcquisitionException,
+  getCustomAbilityAcquisitionExceptionPresets,
   getCustomAbilityLimit,
   setCustomAbilityAcquisitionException,
 } from '../../../lib/customSystems'
@@ -48,6 +50,26 @@ export function CustomSystemAcquisitionExceptionsModal({
         updater(current),
       ),
     )
+  }
+
+  function applyPreset(type: CustomAbilityTypeDefinition, presetId: string) {
+    if (!presetId) {
+      updateException(type.id, (current) => ({ ...current, presetId: undefined }))
+      return
+    }
+
+    const preset = getCustomAbilityAcquisitionExceptionPresets(definition, type)
+      .find((entry) => entry.id === presetId)
+    if (!preset) return
+
+    updateException(type.id, (current) => ({
+      ...current,
+      presetId: preset.id,
+      learnedLimitFormulaOverride: preset.learnedLimitFormulaOverride,
+      preparedLimitFormulaOverride: preset.preparedLimitFormulaOverride,
+      extraLearnedSlots: preset.extraLearnedSlots,
+      extraPreparedSlots: preset.extraPreparedSlots,
+    }))
   }
 
   function toggleAlways(
@@ -116,6 +138,8 @@ export function CustomSystemAcquisitionExceptionsModal({
           <div className="grid gap-4">
             {configurableTypes.map((type) => {
               const exception = getCustomAbilityAcquisitionException(state, type.id)
+              const presets = getCustomAbilityAcquisitionExceptionPresets(definition, type)
+              const selectedPreset = presets.find((preset) => preset.id === exception.presetId)
               const abilities = state.abilities.filter(
                 (ability) => ability.abilityTypeId === type.id,
               )
@@ -166,6 +190,41 @@ export function CustomSystemAcquisitionExceptionsModal({
                     </div>
                   </div>
 
+                  {presets.length ? (
+                    <div className="mt-4 rounded-lg border border-accentBorder bg-accentBg/40 p-3">
+                      <label className="block text-xs text-text">
+                        Exceção esperada
+                        <SharedSelect
+                          value={exception.presetId ?? ''}
+                          onChange={(event) => applyPreset(type, event.target.value)}
+                          className="mt-1 w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH"
+                        >
+                          <option value="">Personalizada / sem preset</option>
+                          {presets.map((preset) => (
+                            <option key={preset.id} value={preset.id}>{preset.name}</option>
+                          ))}
+                        </SharedSelect>
+                      </label>
+                      {selectedPreset?.description ? (
+                        <p className="mt-2 text-xs leading-5 text-textMuted">{selectedPreset.description}</p>
+                      ) : null}
+                      {selectedPreset?.alwaysLearnedSelectionCount || selectedPreset?.alwaysPreparedSelectionCount ? (
+                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-text">
+                          {selectedPreset.alwaysLearnedSelectionCount ? (
+                            <span className="rounded-full border border-border bg-bg px-2 py-1">
+                              Sempre aprendidas: {countSelectedAlwaysLearned(exception)} / {selectedPreset.alwaysLearnedSelectionCount}
+                            </span>
+                          ) : null}
+                          {selectedPreset.alwaysPreparedSelectionCount ? (
+                            <span className="rounded-full border border-border bg-bg px-2 py-1">
+                              Sempre preparadas: {exception.alwaysPreparedAbilityIds?.length ?? 0} / {selectedPreset.alwaysPreparedSelectionCount}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
                     {usesLearned(type) ? (
                       <LimitExceptionEditor
@@ -181,12 +240,14 @@ export function CustomSystemAcquisitionExceptionsModal({
                         onFormulaChange={(value) =>
                           updateException(type.id, (current) => ({
                             ...current,
+                            presetId: undefined,
                             learnedLimitFormulaOverride: value,
                           }))
                         }
                         onExtraSlotsChange={(value) =>
                           updateException(type.id, (current) => ({
                             ...current,
+                            presetId: undefined,
                             extraLearnedSlots: value,
                           }))
                         }
@@ -207,12 +268,14 @@ export function CustomSystemAcquisitionExceptionsModal({
                         onFormulaChange={(value) =>
                           updateException(type.id, (current) => ({
                             ...current,
+                            presetId: undefined,
                             preparedLimitFormulaOverride: value,
                           }))
                         }
                         onExtraSlotsChange={(value) =>
                           updateException(type.id, (current) => ({
                             ...current,
+                            presetId: undefined,
                             extraPreparedSlots: value,
                           }))
                         }
@@ -369,6 +432,15 @@ function AbilityExceptionRow({
       </div>
     </div>
   )
+}
+
+function countSelectedAlwaysLearned(
+  exception: CustomAbilityAcquisitionExceptionState,
+): number {
+  return new Set([
+    ...(exception.alwaysLearnedAbilityIds ?? []),
+    ...(exception.alwaysPreparedAbilityIds ?? []),
+  ]).size
 }
 
 function abilityName(

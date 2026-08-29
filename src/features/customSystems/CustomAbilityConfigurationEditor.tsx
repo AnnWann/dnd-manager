@@ -3,10 +3,15 @@ import { Plus, Trash2 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 
 import { Select } from '../../components/ui/Select'
-import { listCustomFormulaVariables, validateCustomFormula } from '../../lib/customSystems'
+import {
+  getCustomAbilityAcquisitionExceptionPresets,
+  listCustomFormulaVariables,
+  validateCustomFormula,
+} from '../../lib/customSystems'
 import type { AbilityActionKind, AbilityKind } from '../../models/abilities/Ability'
 import type {
   CustomAbilityAcquisitionDefinition,
+  CustomAbilityAcquisitionExceptionPresetDefinition,
   CustomAbilityResourceChangeDefinition,
   CustomAbilityTypeDefinition,
   CustomUsageResetKind,
@@ -177,6 +182,170 @@ export function CustomAbilityConfigurationEditor({
   )
 }
 
+
+function AcquisitionExceptionPresetsEditor({
+  type,
+  definition,
+  onChange,
+}: {
+  type: CustomAbilityTypeDefinition
+  definition: CustomSystemDefinition
+  onChange: (type: CustomAbilityTypeDefinition) => void
+}) {
+  const presets = getCustomAbilityAcquisitionExceptionPresets(definition, type)
+
+  function setPresets(next: CustomAbilityAcquisitionExceptionPresetDefinition[]) {
+    onChange({ ...type, acquisitionExceptionPresets: next })
+  }
+
+  function addPreset() {
+    const id = uniqueId('excecao', presets.map((preset) => preset.id))
+    setPresets([
+      ...presets,
+      {
+        id,
+        name: 'Nova exceção esperada',
+      },
+    ])
+  }
+
+  function patchPreset(
+    index: number,
+    patch: Partial<CustomAbilityAcquisitionExceptionPresetDefinition>,
+  ) {
+    setPresets(
+      presets.map((preset, currentIndex) =>
+        currentIndex === index ? { ...preset, ...patch } : preset,
+      ),
+    )
+  }
+
+  function removePreset(index: number) {
+    setPresets(presets.filter((_, currentIndex) => currentIndex !== index))
+  }
+
+  return (
+    <div className="mt-5 border-t border-border pt-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-textH">Exceções esperadas</h3>
+          <p className="mt-1 text-xs leading-5 text-textMuted">
+            Cadastre subclasses, talentos ou outras regras conhecidas que alteram os limites deste tipo. Na configuração do personagem, o mestre poderá aplicá-las por um select.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={addPreset}
+          className="inline-flex items-center gap-2 rounded-lg border border-accentBorder px-3 py-2 text-xs font-medium text-textH hover:bg-accentBg"
+        >
+          <Plus className="h-4 w-4" /> Adicionar exceção
+        </button>
+      </div>
+
+      <div className="mt-3 grid gap-3">
+        {presets.map((preset, index) => (
+          <div key={`${preset.id}-${index}`} className="rounded-xl border border-border bg-bg-subtle p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="text-sm font-medium text-textH">{preset.name || preset.id}</div>
+              <button
+                type="button"
+                onClick={() => removePreset(index)}
+                className="rounded-lg border border-red-500/40 p-2 text-red-300 hover:bg-red-500/10"
+                aria-label={`Remover exceção ${preset.name || preset.id}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <TextField
+                label="Nome"
+                value={preset.name}
+                onChange={(name) => patchPreset(index, { name })}
+              />
+              <TextField
+                label="ID"
+                value={preset.id}
+                onChange={(id) => patchPreset(index, { id: slug(id) })}
+              />
+              <div className="md:col-span-2">
+                <TextArea
+                  label="Descrição"
+                  value={preset.description ?? ''}
+                  onChange={(description) => patchPreset(index, { description: description || undefined })}
+                />
+              </div>
+              {usesLearned(type.acquisition?.mode ?? 'learned') ? (
+                <FormulaField
+                  definition={definition}
+                  label="Fórmula alternativa — aprendidas"
+                  value={preset.learnedLimitFormulaOverride ?? ''}
+                  placeholder="Vazio = manter regra do sistema"
+                  onChange={(learnedLimitFormulaOverride) =>
+                    patchPreset(index, {
+                      learnedLimitFormulaOverride: learnedLimitFormulaOverride || undefined,
+                    })
+                  }
+                />
+              ) : null}
+              {usesPrepared(type.acquisition?.mode ?? 'learned') ? (
+                <FormulaField
+                  definition={definition}
+                  label="Fórmula alternativa — preparadas"
+                  value={preset.preparedLimitFormulaOverride ?? ''}
+                  placeholder="Vazio = manter regra do sistema"
+                  onChange={(preparedLimitFormulaOverride) =>
+                    patchPreset(index, {
+                      preparedLimitFormulaOverride: preparedLimitFormulaOverride || undefined,
+                    })
+                  }
+                />
+              ) : null}
+              {usesLearned(type.acquisition?.mode ?? 'learned') ? (
+                <NumberField
+                  label="Espaços adicionais — aprendidas"
+                  value={preset.extraLearnedSlots}
+                  placeholder="0"
+                  onChange={(extraLearnedSlots) => patchPreset(index, { extraLearnedSlots })}
+                />
+              ) : null}
+              {usesPrepared(type.acquisition?.mode ?? 'learned') ? (
+                <NumberField
+                  label="Espaços adicionais — preparadas"
+                  value={preset.extraPreparedSlots}
+                  placeholder="0"
+                  onChange={(extraPreparedSlots) => patchPreset(index, { extraPreparedSlots })}
+                />
+              ) : null}
+              {usesLearned(type.acquisition?.mode ?? 'learned') ? (
+                <NumberField
+                  label="Quantidade esperada — sempre aprendidas"
+                  value={preset.alwaysLearnedSelectionCount}
+                  placeholder="0"
+                  onChange={(alwaysLearnedSelectionCount) => patchPreset(index, { alwaysLearnedSelectionCount })}
+                />
+              ) : null}
+              {usesPrepared(type.acquisition?.mode ?? 'learned') ? (
+                <NumberField
+                  label="Quantidade esperada — sempre preparadas"
+                  value={preset.alwaysPreparedSelectionCount}
+                  placeholder="0"
+                  onChange={(alwaysPreparedSelectionCount) => patchPreset(index, { alwaysPreparedSelectionCount })}
+                />
+              ) : null}
+            </div>
+          </div>
+        ))}
+        {!presets.length ? (
+          <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center text-xs text-textMuted">
+            Nenhuma exceção esperada configurada.
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 function TypeEditor({
   type,
   currentSystem,
@@ -306,6 +475,11 @@ function TypeEditor({
           {usesLearned(acquisition.mode) ? <Check label="Novas começam aprendidas" checked={acquisition.defaultLearned !== false} onChange={(defaultLearned) => patchAcquisition({ defaultLearned })} /> : null}
           {usesPrepared(acquisition.mode) ? <Check label="Novas começam preparadas" checked={Boolean(acquisition.defaultPrepared)} onChange={(defaultPrepared) => patchAcquisition({ defaultPrepared })} /> : null}
         </div>
+        <AcquisitionExceptionPresetsEditor
+          type={type}
+          definition={currentSystem}
+          onChange={onChange}
+        />
       </Section>
 
       <Section title="5. Ativação e ação" description="Esta é a regra padrão. Se houver exceção, configure-a diretamente na habilidade do compêndio.">
