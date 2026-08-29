@@ -16,7 +16,7 @@
     "typecheck:session-server": "npm --prefix session-server run typecheck",
     "check:user-workspace-boundaries": "node scripts/check-user-workspace-boundaries.mjs",
     "check:vercel-functions": "node scripts/check-vercel-functions.mjs",
-    "build": "npm run check:user-workspace-boundaries && npm run check:vercel-functions && tsc -b && vite build",
+    "build": "npm run db:migrate && npm run check:user-workspace-boundaries && npm run check:vercel-functions && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "db:migrate": "node scripts/migrate-relational.mjs",
