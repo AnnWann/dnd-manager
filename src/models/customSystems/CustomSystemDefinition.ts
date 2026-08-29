@@ -201,8 +201,6 @@ export interface CharacterCustomSystemState {
 }
 
 export interface CustomAbilityAcquisitionExceptionState {
-  /** Preset de exceção aplicado; valores manuais podem limpar esta referência. */
-  presetId?: string
   /** Substitui a fórmula de limite definida pelo sistema apenas neste personagem. */
   learnedLimitFormulaOverride?: FormulaExpression
   preparedLimitFormulaOverride?: FormulaExpression

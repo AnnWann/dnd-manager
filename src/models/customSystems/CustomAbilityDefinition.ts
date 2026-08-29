@@ -17,8 +17,6 @@ export interface CustomAbilityTypeDefinition {
   visibility?: CustomCondition
   /** Biblioteca definida pelo mestre. O jogador escolhe entradas desta lista para aprender/adicionar. */
   predefinedAbilities?: CustomPredefinedAbilityDefinition[]
-  /** Presets de exceção de aquisição/preparo esperados para personagens específicos. */
-  acquisitionExceptionPresets?: CustomAbilityAcquisitionExceptionPresetDefinition[]
   /** Mantém disponível a criação de uma habilidade completamente livre. Padrão: somente o mestre. */
   allowCustomCreation?: boolean
 }
@@ -49,20 +47,6 @@ export interface CustomAbilityAcquisitionDefinition {
   defaultLearned?: boolean
   defaultPrepared?: boolean
   preparationReset?: 'manual' | 'shortRest' | 'longRest'
-}
-
-export interface CustomAbilityAcquisitionExceptionPresetDefinition {
-  id: string
-  name: string
-  description?: string
-  learnedLimitFormulaOverride?: FormulaExpression
-  preparedLimitFormulaOverride?: FormulaExpression
-  extraLearnedSlots?: number
-  extraPreparedSlots?: number
-  /** Quantas habilidades o mestre normalmente deve marcar como sempre aprendidas ao aplicar o preset. */
-  alwaysLearnedSelectionCount?: number
-  /** Quantas habilidades o mestre normalmente deve marcar como sempre preparadas ao aplicar o preset. */
-  alwaysPreparedSelectionCount?: number
 }
 
 export interface CustomAbilityActivationDefinition {
