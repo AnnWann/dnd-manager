@@ -20,6 +20,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: qa
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -27,7 +28,7 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Apply implementation
+      - name: Apply refinement
         run: python3 scripts/implement-ability-resource-costs.py
 
       - name: Install frontend dependencies
@@ -52,10 +53,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git restore --source=cfe8de69ccf1ad468a5fecacd58bfbcf6167a7a5 -- session-server/package-lock.json session-server/worker-configuration.d.ts
           git add src session-server
           if git diff --cached --quiet; then
             echo "No generated changes to commit."
             exit 0
           fi
-          git commit -m "feat: add resource costs to normal abilities"
+          git commit -m "feat: complete resource costs for normal abilities"
           git push origin HEAD:qa
