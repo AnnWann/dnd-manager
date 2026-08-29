@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 
@@ -263,8 +264,8 @@ export function LevelUpSpellSelectionModal({
           </div>
           <div className={kind === "leveled" ? "grid gap-2 md:grid-cols-[minmax(0,2fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_auto]" : "grid gap-2 md:grid-cols-[minmax(0,2fr)_minmax(10rem,1fr)_auto]"}>
             <Input value={query} placeholder="Buscar por nome ou descrição" onChange={(event) => setQuery(event.target.value)} />
-            {kind === "leveled" ? <select className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH" value={levelFilter} onChange={(event) => setLevelFilter(event.target.value as LevelFilter)}><option value="all">Todos os círculos</option>{Array.from({ length: Math.max(0, Number(rule.maxSpellLevel)) }, (_, index) => index + 1).map((level) => <option key={level} value={level}>{level}º círculo</option>)}</select> : null}
-            <select className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH" value={schoolFilter} onChange={(event) => setSchoolFilter(event.target.value)}><option value="all">Todas as escolas</option>{availableSchools.map((school) => <option key={school.value} value={school.value}>{school.label}</option>)}</select>
+            {kind === "leveled" ? <SharedSelect className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH" value={levelFilter} onChange={(event) => setLevelFilter(event.target.value as LevelFilter)}><option value="all">Todos os círculos</option>{Array.from({ length: Math.max(0, Number(rule.maxSpellLevel)) }, (_, index) => index + 1).map((level) => <option key={level} value={level}>{level}º círculo</option>)}</SharedSelect> : null}
+            <SharedSelect className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH" value={schoolFilter} onChange={(event) => setSchoolFilter(event.target.value)}><option value="all">Todas as escolas</option>{availableSchools.map((school) => <option key={school.value} value={school.value}>{school.label}</option>)}</SharedSelect>
             <label className="flex items-center gap-2 rounded-lg border border-border bg-bg px-3 text-xs text-text"><input type="checkbox" checked={selectedOnly} onChange={(event) => setSelectedOnly(event.target.checked)} />Selecionadas</label>
           </div>
         </div>

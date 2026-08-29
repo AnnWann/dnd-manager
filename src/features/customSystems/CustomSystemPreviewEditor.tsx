@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../components/ui/Select"
 import { useMemo, useState } from 'react'
 import {
   ChevronDown,
@@ -183,8 +184,8 @@ function PreviewItem({
 function MockField({ field, disabled }: { field: CustomFieldDefinition; disabled: boolean }) {
   const className = 'w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-textH disabled:opacity-60'
   if (field.type === 'boolean') return <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-textH"><input type="checkbox" disabled={disabled} readOnly /> Não</label>
-  if (field.type === 'select') return <select className={className} disabled={disabled} defaultValue=""><option value="">Selecione</option>{field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
-  if (field.type === 'multiSelect') return <select className={`${className} min-h-24`} multiple disabled={disabled}>{field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+  if (field.type === 'select') return <SharedSelect className={className} disabled={disabled} defaultValue=""><option value="">Selecione</option>{field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</SharedSelect>
+  if (field.type === 'multiSelect') return <SharedSelect className={`${className} min-h-24`} multiple disabled={disabled}>{field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</SharedSelect>
   if (field.type === 'richText') return <textarea className={`${className} min-h-24`} disabled={disabled} placeholder={field.placeholder || 'Texto longo'} />
   if (field.type === 'formula') return <div className="rounded-lg border border-border bg-[color:var(--social-bg)] px-3 py-2 text-sm text-text">Resultado calculado</div>
   if (field.type === 'number') return <input className={className} type="number" disabled={disabled} placeholder="0" />

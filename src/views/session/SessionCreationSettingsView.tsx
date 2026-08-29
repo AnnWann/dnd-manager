@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../components/ui/Select"
 import {
   Copy,
   Inbox,
@@ -425,7 +426,7 @@ function MemberRow({
         <div className="text-xs font-medium text-textMuted">Mestre</div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <SharedSelect
             value={member.role}
             disabled={working}
             onChange={(event) =>
@@ -437,7 +438,7 @@ function MemberRow({
             <option value="ASSISTANT">Assistente</option>
             <option value="MODERATOR">Moderador</option>
             <option value="MASTER">Mestre</option>
-          </select>
+          </SharedSelect>
 
           <Button
             size="sm"

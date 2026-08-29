@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
 
@@ -315,7 +316,7 @@ export function UserCharacterMagicTab({ character }: Props) {
               onChange={(event) => setSearch(event.target.value)}
             />
 
-            <select
+            <SharedSelect
               className="h-10 rounded-xl border border-border bg-bg px-3 text-sm text-textH"
               value={levelFilter}
               onChange={(event) =>
@@ -329,9 +330,9 @@ export function UserCharacterMagicTab({ character }: Props) {
                   {level}º círculo
                 </option>
               ))}
-            </select>
+            </SharedSelect>
 
-            <select
+            <SharedSelect
               className="h-10 rounded-xl border border-border bg-bg px-3 text-sm text-textH"
               value={sourceFilter}
               onChange={(event) =>
@@ -344,7 +345,7 @@ export function UserCharacterMagicTab({ character }: Props) {
                   {sourceTypeLabel(type)}
                 </option>
               ))}
-            </select>
+            </SharedSelect>
           </div>
         </CardHeader>
 

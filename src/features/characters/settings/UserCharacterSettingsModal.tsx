@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../../components/ui/Select"
 import { Eye, EyeOff, Trash2, X } from "lucide-react"
 import { useEffect, useState } from "react"
 
@@ -131,7 +132,7 @@ export function UserCharacterSettingsModal({
 
             <label className="grid gap-1.5 text-xs text-text">
               Visibilidade
-              <select
+              <SharedSelect
                 className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
                 value={visibility}
                 onChange={(event) =>
@@ -143,7 +144,7 @@ export function UserCharacterSettingsModal({
                 <option value="private">Privado</option>
                 <option value="party">Campanhas vinculadas</option>
                 <option value="master">Somente mestres vinculados</option>
-              </select>
+              </SharedSelect>
             </label>
           </div>
 

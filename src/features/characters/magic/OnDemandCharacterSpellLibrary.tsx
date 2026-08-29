@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useEffect, useMemo, useState } from "react"
 
 import {
@@ -336,7 +337,7 @@ export function OnDemandCharacterSpellLibrary({
             placeholder="Buscar magia"
             onChange={(event) => setQuery(event.target.value)}
           />
-          <select
+          <SharedSelect
             className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text"
             value={originFilter}
             onChange={(event) =>
@@ -346,8 +347,8 @@ export function OnDemandCharacterSpellLibrary({
             <option value="all">Oficiais e homebrew</option>
             <option value="official">Somente oficiais</option>
             <option value="homebrew">Somente homebrew</option>
-          </select>
-          <select
+          </SharedSelect>
+          <SharedSelect
             className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text"
             value={levelFilter}
             onChange={(event) =>
@@ -361,8 +362,8 @@ export function OnDemandCharacterSpellLibrary({
                 {level}º nível
               </option>
             ))}
-          </select>
-          <select
+          </SharedSelect>
+          <SharedSelect
             className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text"
             value={schoolFilter}
             onChange={(event) => setSchoolFilter(event.target.value)}
@@ -373,8 +374,8 @@ export function OnDemandCharacterSpellLibrary({
                 {school.label}
               </option>
             ))}
-          </select>
-          <select
+          </SharedSelect>
+          <SharedSelect
             className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text"
             value={classFilter}
             onChange={(event) =>
@@ -387,7 +388,7 @@ export function OnDemandCharacterSpellLibrary({
                 {label}
               </option>
             ))}
-          </select>
+          </SharedSelect>
         </div>
         <label className="mt-3 flex items-center gap-2 text-xs text-textMuted">
           <input
@@ -474,7 +475,7 @@ export function OnDemandCharacterSpellLibrary({
         >
           <label className="grid gap-1 text-sm text-text">
             Origem da magia
-            <select
+            <SharedSelect
               className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text"
               value={selectedSource}
               onChange={(event) => {
@@ -508,13 +509,13 @@ export function OnDemandCharacterSpellLibrary({
               ) : (
                 <option value="ability">Habilidade</option>
               )}
-            </select>
+            </SharedSelect>
           </label>
 
           {showManualAttribute ? (
             <label className="grid gap-1 text-sm text-text">
               Atributo de conjuração
-              <select
+              <SharedSelect
                 className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text"
                 value={manualAttribute}
                 onChange={(event) =>
@@ -526,7 +527,7 @@ export function OnDemandCharacterSpellLibrary({
                     {option.label}
                   </option>
                 ))}
-              </select>
+              </SharedSelect>
             </label>
           ) : null}
 

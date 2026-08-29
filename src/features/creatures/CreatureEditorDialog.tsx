@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../components/ui/Select"
 import {
   ClipboardPaste,
   FileImage,
@@ -343,7 +344,7 @@ export function CreatureEditorDialog({
               />
 
               <Field label="Lado padrão">
-                <select
+                <SharedSelect
                   className={selectClassName}
                   value={draft.defaultSide}
                   onChange={(event) =>
@@ -353,7 +354,7 @@ export function CreatureEditorDialog({
                   <option value="enemy">Inimigo</option>
                   <option value="ally">Aliado</option>
                   <option value="neutral">Neutro</option>
-                </select>
+                </SharedSelect>
               </Field>
 
               <label className="flex items-center gap-3 rounded-lg border border-border bg-bg p-3 text-sm text-textH sm:col-span-2">
@@ -652,23 +653,23 @@ function CreatureFeatureMechanicsEditor({
         <div className="mt-3 grid gap-3">
           <div className="grid gap-2 sm:grid-cols-4">
             <Field label="Origem">
-              <select className={selectClassName} value={current.attackType} onChange={(event) => patch({ attackType: event.target.value as CreatureFeatureMechanics["attackType"] })}>
+              <SharedSelect className={selectClassName} value={current.attackType} onChange={(event) => patch({ attackType: event.target.value as CreatureFeatureMechanics["attackType"] })}>
                 <option value="weapon">Arma</option>
                 <option value="spell">Magia</option>
                 <option value="other">Outro</option>
-              </select>
+              </SharedSelect>
             </Field>
             <Field label="Alcance">
-              <select className={selectClassName} value={current.rangeType} onChange={(event) => patch({ rangeType: event.target.value as CreatureFeatureMechanics["rangeType"] })}>
+              <SharedSelect className={selectClassName} value={current.rangeType} onChange={(event) => patch({ rangeType: event.target.value as CreatureFeatureMechanics["rangeType"] })}>
                 <option value="melee">Corpo a corpo</option>
                 <option value="ranged">À distância</option>
-              </select>
+              </SharedSelect>
             </Field>
             <NumberField label="Bônus de ataque" value={current.attackBonus} onChange={(attackBonus) => patch({ attackBonus: attackBonus ?? 0 })} />
             <Field label="Atributo">
-              <select className={selectClassName} value={current.attribute ?? "str"} onChange={(event) => patch({ attribute: event.target.value as CreatureFeatureMechanics["attribute"] })}>
+              <SharedSelect className={selectClassName} value={current.attribute ?? "str"} onChange={(event) => patch({ attribute: event.target.value as CreatureFeatureMechanics["attribute"] })}>
                 {(["str", "dex", "con", "int", "wis", "cha"] as const).map((attribute) => <option key={attribute} value={attribute}>{attribute.toUpperCase()}</option>)}
-              </select>
+              </SharedSelect>
             </Field>
           </div>
 
@@ -691,9 +692,9 @@ function CreatureFeatureMechanicsEditor({
               {current.damage.map((part, index) => (
                 <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
                   <Input value={part.formula} placeholder="1d6+2" onChange={(event) => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, formula: event.target.value } : item) })} />
-                  <select className={selectClassName} value={part.damageType} onChange={(event) => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, damageType: event.target.value as DamageType } : item) })}>
+                  <SharedSelect className={selectClassName} value={part.damageType} onChange={(event) => patch({ damage: current.damage.map((item, currentIndex) => currentIndex === index ? { ...item, damageType: event.target.value as DamageType } : item) })}>
                     {DAMAGE_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
+                  </SharedSelect>
                   <Button size="icon" variant="ghost" title="Remover dano" onClick={() => patch({ damage: current.damage.filter((_, currentIndex) => currentIndex !== index) })}>
                     <Trash2 className="h-4 w-4 text-danger" />
                   </Button>

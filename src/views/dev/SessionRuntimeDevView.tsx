@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../components/ui/Select"
 import {
   useMemo,
   useState,
@@ -118,10 +119,10 @@ function SessionRuntimeDevPanel({
         </label>
         <label className="grid gap-1 text-sm">
           <span className="text-textMuted">Role</span>
-          <select value={role} onChange={(event) => setRole(event.target.value as SessionRuntimeRole)} className="rounded border border-border bg-background px-3 py-2">
+          <SharedSelect value={role} onChange={(event) => setRole(event.target.value as SessionRuntimeRole)} className="rounded border border-border bg-background px-3 py-2">
             <option value="PLAYER">PLAYER</option>
             <option value="MASTER">MASTER</option>
-          </select>
+          </SharedSelect>
         </label>
         <button type="submit" className="self-end rounded border border-border px-4 py-2 text-sm">Reconnect</button>
       </form>

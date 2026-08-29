@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useEffect, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 
@@ -283,7 +284,7 @@ export function SpellCard({
                     <div className="mt-3 grid gap-3">
                       <label className="grid gap-1 text-xs text-textMuted">
                         Recurso de conjuração deste personagem
-                        <select
+                        <SharedSelect
                           className="h-10 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-textH outline-none"
                           value={resourceOverride ? "custom" : "inherit"}
                           onChange={(event) =>
@@ -294,7 +295,7 @@ export function SpellCard({
                         >
                           <option value="inherit">Usar padrão da magia</option>
                           <option value="custom">Personalizar</option>
-                        </select>
+                        </SharedSelect>
                       </label>
 
                       {!resourceOverride ? (

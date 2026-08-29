@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useMemo, useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
@@ -220,7 +221,7 @@ export function CharacterSpellLibrary({
             onChange={(event) => setQuery(event.target.value)}
           />
 
-          <select
+          <SharedSelect
             className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text"
             value={originFilter}
             onChange={(event) => setOriginFilter(event.target.value as OriginFilter)}
@@ -228,9 +229,9 @@ export function CharacterSpellLibrary({
             <option value="all">Oficiais e homebrew</option>
             <option value="official">Somente oficiais</option>
             <option value="homebrew">Somente homebrew</option>
-          </select>
+          </SharedSelect>
 
-          <select
+          <SharedSelect
             className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text"
             value={levelFilter}
             onChange={(event) => setLevelFilter(event.target.value as LevelFilter)}
@@ -240,9 +241,9 @@ export function CharacterSpellLibrary({
             {Array.from({ length: 9 }, (_, index) => index + 1).map((level) => (
               <option key={level} value={level}>{level}º nível</option>
             ))}
-          </select>
+          </SharedSelect>
 
-          <select
+          <SharedSelect
             className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text"
             value={schoolFilter}
             onChange={(event) => setSchoolFilter(event.target.value)}
@@ -251,9 +252,9 @@ export function CharacterSpellLibrary({
             {schools.map((school) => (
               <option key={school.value} value={school.value}>{school.label}</option>
             ))}
-          </select>
+          </SharedSelect>
 
-          <select
+          <SharedSelect
             className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text"
             value={classFilter}
             onChange={(event) => setClassFilter(event.target.value as ClassFilter)}
@@ -262,7 +263,7 @@ export function CharacterSpellLibrary({
             {Object.entries(CLASS_NAMES).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
-          </select>
+          </SharedSelect>
         </div>
 
         <label className="mt-3 flex items-center gap-2 text-xs text-textMuted">
@@ -417,7 +418,7 @@ export function CharacterSpellLibrary({
             <div className="grid gap-4 p-4">
               <label className="grid gap-1 text-sm text-text">
                 Origem da magia
-                <select
+                <SharedSelect
                   className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text"
                   value={selectedSource}
                   onChange={(event) => {
@@ -434,7 +435,7 @@ export function CharacterSpellLibrary({
                       Classe: {CLASS_NAMES[classData.className]}
                     </option>
                   ))}
-                </select>
+                </SharedSelect>
               </label>
 
               {selectedClassName ? (

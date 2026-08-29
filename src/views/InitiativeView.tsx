@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../components/ui/Select"
 import {
   ArrowLeft,
   ArrowRight,
@@ -518,7 +519,7 @@ export function InitiativeView() {
             Adicionar ficha existente
           </div>
           <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_9rem_auto]">
-            <select
+            <SharedSelect
               className={selectClassName}
               value={selectedCharacterId}
               onChange={(event) => setSelectedCharacterId(event.target.value)}
@@ -541,8 +542,8 @@ export function InitiativeView() {
                   </option>
                 )
               })}
-            </select>
-            <select
+            </SharedSelect>
+            <SharedSelect
               className={selectClassName}
               value={selectedCharacterSide}
               onChange={(event) =>
@@ -552,7 +553,7 @@ export function InitiativeView() {
               <option value="ally">Aliado</option>
               <option value="enemy">Inimigo</option>
               <option value="neutral">Neutro</option>
-            </select>
+            </SharedSelect>
             <Button
               variant="primary"
               onClick={addSelectedCharacter}
@@ -570,7 +571,7 @@ export function InitiativeView() {
             Adicionar do Compêndio de Criaturas
           </div>
           <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_5rem_auto_auto]">
-            <select
+            <SharedSelect
               className={selectClassName}
               value={selectedCreatureId}
               onChange={(event) => setSelectedCreatureId(event.target.value)}
@@ -595,7 +596,7 @@ export function InitiativeView() {
                   </option>
                 )
               })}
-            </select>
+            </SharedSelect>
             <Input
               type="number"
               min={1}
@@ -718,7 +719,7 @@ export function InitiativeView() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <SharedSelect
             className={selectClassName}
             value={session.deathSaveVisibility}
             onChange={(event) =>
@@ -732,7 +733,7 @@ export function InitiativeView() {
             <option value="masterOnly">Oculto dos jogadores</option>
             <option value="owner">Visível apenas ao dono</option>
             <option value="everyone">Visível para todos</option>
-          </select>
+          </SharedSelect>
           <label className="flex h-10 items-center gap-2 rounded-lg border border-border bg-bg px-3 text-xs text-textH">
             <input
               type="checkbox"
@@ -824,12 +825,12 @@ export function InitiativeView() {
           <div className="grid gap-3">
             <label className="grid gap-1 text-xs text-textMuted">
               Condição
-              <select className={selectClassName} value={bulkRemoveConditionName} onChange={(event) => setBulkRemoveConditionName(event.target.value)}>
+              <SharedSelect className={selectClassName} value={bulkRemoveConditionName} onChange={(event) => setBulkRemoveConditionName(event.target.value)}>
                 <option value="">Selecione</option>
                 {Array.from(new Set(session.entries.filter((entry) => selectedEntryIds.has(entry.id)).flatMap((entry) => entry.conditions.map((condition) => condition.name)))).map((name) => (
                   <option key={name} value={name}>{name}</option>
                 ))}
-              </select>
+              </SharedSelect>
             </label>
             <div className="flex justify-end gap-2 border-t border-border pt-3">
               <Button variant="ghost" onClick={() => setBulkRemoveOpen(false)}>Cancelar</Button>

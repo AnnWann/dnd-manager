@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../components/ui/Select"
 import { BookPlus } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { useParams } from "react-router-dom"
@@ -144,7 +145,7 @@ export function MagicView() {
             <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_9rem]">
               <label className="grid gap-1 text-xs text-text">
                 Recurso
-                <select
+                <SharedSelect
                   className="h-9 w-full rounded-xl border border-accentBorder bg-bg px-3 text-text outline-none transition-colors focus:border-accent"
                   value={resourceType}
                   onChange={(event) =>
@@ -159,7 +160,7 @@ export function MagicView() {
                       {option.label}
                     </option>
                   ))}
-                </select>
+                </SharedSelect>
               </label>
 
               {resourceType !== "slot" ? (

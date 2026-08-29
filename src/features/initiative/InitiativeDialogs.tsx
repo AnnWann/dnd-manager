@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../components/ui/Select"
 import { useEffect, useState, type ReactNode } from "react"
 
 import { Button } from "../../components/ui/Button"
@@ -88,7 +89,7 @@ export function CustomEntryDialog({
         </Field>
 
         <Field label="Tipo">
-          <select
+          <SharedSelect
             className={selectClassName}
             value={draft.sourceType}
             onChange={(event) =>
@@ -101,11 +102,11 @@ export function CustomEntryDialog({
             <option value="monster">Monstro</option>
             <option value="npc">NPC</option>
             <option value="custom">Outro</option>
-          </select>
+          </SharedSelect>
         </Field>
 
         <Field label="Lado">
-          <select
+          <SharedSelect
             className={selectClassName}
             value={draft.side}
             onChange={(event) =>
@@ -118,7 +119,7 @@ export function CustomEntryDialog({
             <option value="enemy">Inimigo</option>
             <option value="ally">Aliado</option>
             <option value="neutral">Neutro</option>
-          </select>
+          </SharedSelect>
         </Field>
 
         <Field label="Quantidade">
@@ -273,7 +274,7 @@ export function ConditionDialog({
     <Modal title={`Condição em ${targetName}`} onClose={onClose}>
       <div className="grid gap-4">
         <Field label="Condição padrão">
-          <select
+          <SharedSelect
             className={selectClassName}
             value=""
             onChange={(event) => {
@@ -290,7 +291,7 @@ export function ConditionDialog({
           >
             <option value="">Preencher a partir das condições da ficha…</option>
             {STANDARD_CONDITION_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
-          </select>
+          </SharedSelect>
         </Field>
 
         <Field label="Condição">
@@ -352,7 +353,7 @@ export function ConditionDialog({
         />
 
         <Field label="Duração">
-          <select
+          <SharedSelect
             className={selectClassName}
             value={draft.durationType}
             onChange={(event) =>
@@ -368,7 +369,7 @@ export function ConditionDialog({
             <option value="rounds">Rodadas completas</option>
             <option value="untilTurnStart">Até o início de um turno</option>
             <option value="untilTurnEnd">Até o fim de um turno</option>
-          </select>
+          </SharedSelect>
         </Field>
 
         {draft.durationType === "turns" ||
@@ -391,7 +392,7 @@ export function ConditionDialog({
         {draft.durationType === "untilTurnStart" ||
         draft.durationType === "untilTurnEnd" ? (
           <Field label="Turno de referência">
-            <select
+            <SharedSelect
               className={selectClassName}
               value={draft.ownerEntryId}
               onChange={(event) =>
@@ -406,7 +407,7 @@ export function ConditionDialog({
                   {entry.name}
                 </option>
               ))}
-            </select>
+            </SharedSelect>
           </Field>
         ) : null}
       </div>

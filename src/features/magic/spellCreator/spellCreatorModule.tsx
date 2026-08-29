@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useEffect, useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
@@ -252,7 +253,7 @@ export function SpellCreatorModule({
           <div className="grid grid-cols-2 gap-3">
             <label className="text-xs text-text">
               Nível
-              <select
+              <SharedSelect
                 className="h-9 w-full rounded-xl border border-accentBorder bg-bg px-3 text-text outline-none transition-colors focus:border-accent"
                 value={spell.slotLevel}
                 onChange={(e) =>
@@ -272,12 +273,12 @@ export function SpellCreatorModule({
                 <option value={7}>7º círculo</option>
                 <option value={8}>8º círculo</option>
                 <option value={9}>9º círculo</option>
-              </select>
+              </SharedSelect>
             </label>
 
             <label className="text-xs text-text">
               Escola
-              <select
+              <SharedSelect
                 className="h-9 w-full rounded-xl border border-accentBorder bg-bg px-3 text-text outline-none transition-colors focus:border-accent"
                 value={schoolMode}
                 onChange={(e) => {
@@ -298,7 +299,7 @@ export function SpellCreatorModule({
                 ))}
 
                 <option value="other">Outra</option>
-              </select>
+              </SharedSelect>
 
               {schoolMode === "other" && (
                 <Input
@@ -366,7 +367,7 @@ export function SpellCreatorModule({
 
             <label className="text-xs text-text">
               Tipo
-              <select
+              <SharedSelect
                 className="h-9 w-full rounded-xl border border-accentBorder bg-bg px-3 text-text outline-none transition-colors focus:border-accent"
                 value={spell.castingTime.type}
                 onChange={(e) =>
@@ -381,7 +382,7 @@ export function SpellCreatorModule({
                 <option value="minute">Minuto</option>
                 <option value="hour">Hora</option>
                 <option value="special">Especial</option>
-              </select>
+              </SharedSelect>
             </label>
           </div>
 
@@ -408,7 +409,7 @@ export function SpellCreatorModule({
           <div className="grid grid-cols-2 gap-3">
             <label className="text-xs text-text">
               Origem do alcance
-              <select
+              <SharedSelect
                 className="h-9 w-full rounded-xl border border-accentBorder bg-bg px-3 text-text outline-none transition-colors focus:border-accent"
                 value={spell.range.origin}
                 onChange={(e) =>
@@ -423,7 +424,7 @@ export function SpellCreatorModule({
                 <option value="target">Alvo</option>
                 <option value="ally">Aliado</option>
                 <option value="enemy">Inimigo</option>
-              </select>
+              </SharedSelect>
             </label>
 
             {hasDistance && (
@@ -481,7 +482,7 @@ export function SpellCreatorModule({
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <label className="text-xs text-text">
                   Forma da área
-                  <select
+                  <SharedSelect
                     className="h-9 w-full rounded-xl border border-accentBorder bg-bg px-3 text-text outline-none transition-colors focus:border-accent"
                     value={spell.range.area.shape}
                     onChange={(e) =>
@@ -496,7 +497,7 @@ export function SpellCreatorModule({
                     <option value="square">Quadrado</option>
                     <option value="cone">Cone</option>
                     <option value="line">Linha</option>
-                  </select>
+                  </SharedSelect>
                 </label>
 
                 <label className="text-xs text-text">
@@ -569,7 +570,7 @@ export function SpellCreatorModule({
 
             <label className="text-xs text-text">
               Unidade
-              <select
+              <SharedSelect
                 className="h-9 w-full rounded-xl border border-accentBorder bg-bg px-3 text-text outline-none transition-colors focus:border-accent"
                 value={spell.duration.unit}
                 onChange={(e) =>
@@ -582,7 +583,7 @@ export function SpellCreatorModule({
                 <option value="hour">Hora</option>
                 <option value="day">Dia</option>
                 <option value="special">Especial</option>
-              </select>
+              </SharedSelect>
             </label>
           </div>
 

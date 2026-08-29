@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { Check, Search, X } from "lucide-react"
@@ -226,7 +227,7 @@ export function ProgressionSpellSelectionModal() {
               onChange={(event) => setQuery(event.target.value)}
             />
           </div>
-          <select
+          <SharedSelect
             className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
             value={levelFilter}
             disabled={target.fullPreparedList}
@@ -237,8 +238,8 @@ export function ProgressionSpellSelectionModal() {
             {Array.from({ length: 9 }, (_, index) => index + 1).map((level) => (
               <option key={level} value={level}>{level}º nível</option>
             ))}
-          </select>
-          <select
+          </SharedSelect>
+          <SharedSelect
             className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
             value={schoolFilter}
             onChange={(event) => setSchoolFilter(event.target.value)}
@@ -247,7 +248,7 @@ export function ProgressionSpellSelectionModal() {
             {schools.map((school) => (
               <option key={school.value} value={school.value}>{school.label}</option>
             ))}
-          </select>
+          </SharedSelect>
           <label className="flex items-center gap-2 rounded-lg border border-border bg-bg px-3 text-xs text-text">
             <input
               type="checkbox"

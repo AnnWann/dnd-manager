@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../components/ui/Select"
 import { Button } from "../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../components/ui/Card"
 import { Input } from "../components/ui/Input"
@@ -56,7 +57,7 @@ export function SyncView() {
 
             <label className="flex items-center gap-2 text-xs text-text">
               <span className="min-w-16 font-medium text-textH">Papel</span>
-              <select
+              <SharedSelect
                 className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-text outline-none transition-colors focus:border-accent"
                 value={userRole}
                 onChange={(e) =>
@@ -65,7 +66,7 @@ export function SyncView() {
               >
                 <option value="player">Player</option>
                 <option value="master">Master</option>
-              </select>
+              </SharedSelect>
             </label>
 
             <label className="flex items-center gap-2 text-xs text-text">

@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../components/ui/Select"
 import {
   Archive,
   BookOpen,
@@ -163,7 +164,7 @@ export function CreaturesCompendiumView() {
             />
           </label>
 
-          <select
+          <SharedSelect
             className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH shadow-theme-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/25"
             value={sideFilter}
             onChange={(event) =>
@@ -174,7 +175,7 @@ export function CreaturesCompendiumView() {
             <option value="enemy">Inimigos</option>
             <option value="ally">Aliados</option>
             <option value="neutral">Neutros</option>
-          </select>
+          </SharedSelect>
         </div>
       </section>
 

@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../components/ui/Select"
 import { useMemo, useState } from "react"
 import { HeartPulse, Plus, ShieldPlus, Trash2, Zap } from "lucide-react"
 
@@ -119,14 +120,14 @@ export function InitiativeHpActionDialog({
                 </label>
                 <label className="grid gap-1 text-xs text-textMuted">
                   Tipo
-                  <select
+                  <SharedSelect
                     className={selectClassName}
                     value={part.damageType ?? ""}
                     onChange={(event) => setParts((current) => current.map((entry, currentIndex) => currentIndex === index ? { ...entry, damageType: event.target.value ? event.target.value as DamageType : undefined } : entry))}
                   >
                     <option value="">Sem tipo / ignorar afinidades</option>
                     {DAMAGE_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
+                  </SharedSelect>
                 </label>
                 <label className="flex h-10 items-center gap-2 rounded-lg border border-border bg-bg px-3 text-xs text-textH">
                   <input

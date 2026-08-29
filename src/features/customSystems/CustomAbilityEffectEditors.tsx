@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../components/ui/Select"
 import { Plus, Trash2 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 
@@ -97,10 +98,10 @@ export function AbilityConditionChangesEditor({ value, onChange, emptyLabel = 'N
               )}
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
-              <select className="input-base min-w-[9rem] text-xs" value={change.operation} onChange={(event) => onChange(value.map((entry, current) => current === index ? { ...entry, operation: event.target.value as 'add' | 'remove' } : entry))}>
+              <SharedSelect className="input-base min-w-[9rem] text-xs" value={change.operation} onChange={(event) => onChange(value.map((entry, current) => current === index ? { ...entry, operation: event.target.value as 'add' | 'remove' } : entry))}>
                 <option value="add">Aplicar / renovar</option>
                 <option value="remove">Remover</option>
-              </select>
+              </SharedSelect>
               {change.operation === 'add' ? (
                 <button type="button" onClick={() => setEditingIndex(index)} className="rounded-lg border border-border px-3 py-2 text-xs text-textH hover:bg-accentBg">Editar condição</button>
               ) : (

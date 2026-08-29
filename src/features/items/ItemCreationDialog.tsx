@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../components/ui/Select"
 import { Check, ClipboardCopy, FileJson, FormInput } from "lucide-react"
 import { useEffect, useState } from "react"
 
@@ -316,7 +317,7 @@ export function ItemCreationDialog({
               {draft.kind === "currency" ? (
                 <label className="grid min-w-0 gap-2 md:col-span-3">
                   <span className="text-xs text-text">Denominação</span>
-                  <select
+                  <SharedSelect
                     className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH shadow-theme-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/25"
                     value={currencyTypeOf(draft)}
                     onChange={(event) =>
@@ -333,7 +334,7 @@ export function ItemCreationDialog({
                         {CURRENCY_DEFINITIONS[type].label} ({CURRENCY_DEFINITIONS[type].shortLabel})
                       </option>
                     ))}
-                  </select>
+                  </SharedSelect>
                 </label>
               ) : null}
 

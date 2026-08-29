@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 
 import {
@@ -590,7 +591,7 @@ function isFullSpell(spell: LibrarySpell): spell is Spell {
 }
 function booleanFilterValue(filter: BooleanFilter): boolean | undefined { return filter === "all" ? undefined : filter === "yes" }
 function ModalFrame({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) { return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true"><div className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-bg shadow-xl"><div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-bg p-4"><h2 className="text-lg font-semibold text-textH">{title}</h2><Button size="sm" variant="secondary" onClick={onClose}>Fechar</Button></div><div className="grid gap-4 p-4">{children}</div></div></div> }
-function FilterSelect<T extends string>({ value, onChange, children }: { value: T; onChange: (value: T) => void; children: ReactNode }) { return <select className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent" value={value} onChange={(event) => onChange(event.target.value as T)}>{children}</select> }
+function FilterSelect<T extends string>({ value, onChange, children }: { value: T; onChange: (value: T) => void; children: ReactNode }) { return <SharedSelect className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent" value={value} onChange={(event) => onChange(event.target.value as T)}>{children}</SharedSelect> }
 function LibraryBadge({ label }: { label: string }) { return <span className="rounded-full border border-accentBorder bg-accentBg px-2.5 py-1 text-textH">{label}</span> }
 function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border border-border bg-bg-subtle p-3"><div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">{label}</div><div className="mt-1 text-sm text-textH">{value}</div></div> }
 function matchesBoolean(filter: BooleanFilter, value: boolean): boolean { return filter === "all" || (filter === "yes" ? value : !value) }

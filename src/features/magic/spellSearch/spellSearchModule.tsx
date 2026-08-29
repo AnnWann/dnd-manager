@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useEffect, useMemo, useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
@@ -213,7 +214,7 @@ export function SpellSearchModule({ onEditSpell }: Props) {
                 placeholder="Buscar por nome"
               />
 
-              <select
+              <SharedSelect
                 className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
                 value={levelFilter}
                 onChange={(e) =>
@@ -231,9 +232,9 @@ export function SpellSearchModule({ onEditSpell }: Props) {
                 <option value="7">7º círculo</option>
                 <option value="8">8º círculo</option>
                 <option value="9">9º círculo</option>
-              </select>
+              </SharedSelect>
 
-              <select
+              <SharedSelect
                 className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
                 value={schoolFilter}
                 onChange={(e) => setSchoolFilter(e.target.value)}
@@ -245,9 +246,9 @@ export function SpellSearchModule({ onEditSpell }: Props) {
                     {MAGIC_SCHOOLS_MAP[school] ?? school}
                   </option>
                 ))}
-              </select>
+              </SharedSelect>
 
-              <select
+              <SharedSelect
                 className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
                 value={classFilter}
                 onChange={(e) =>
@@ -261,9 +262,9 @@ export function SpellSearchModule({ onEditSpell }: Props) {
                     {label}
                   </option>
                 ))}
-              </select>
+              </SharedSelect>
 
-              <select
+              <SharedSelect
                 className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
                 value={concentrationFilter}
                 onChange={(e) =>
@@ -277,7 +278,7 @@ export function SpellSearchModule({ onEditSpell }: Props) {
                 <option value="non-concentration">
                   Sem concentração
                 </option>
-              </select>
+              </SharedSelect>
             </div>
 
             {filteredSpells.length === 0 ? (
@@ -434,7 +435,7 @@ export function SpellSearchModule({ onEditSpell }: Props) {
               <label className="grid gap-1 text-sm text-text">
                 Personagem
 
-                <select
+                <SharedSelect
                   className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
                   value={selectedCharacterId}
                   onChange={(e) => {
@@ -454,13 +455,13 @@ export function SpellSearchModule({ onEditSpell }: Props) {
                       {character.get("name")}
                     </option>
                   ))}
-                </select>
+                </SharedSelect>
               </label>
 
               <label className="grid gap-1 text-sm text-text">
                 Origem da magia
 
-                <select
+                <SharedSelect
                   className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
                   value={selectedSource}
                   onChange={(e) => {
@@ -484,7 +485,7 @@ export function SpellSearchModule({ onEditSpell }: Props) {
                         Classe: {CLASS_NAMES[classData.className]}
                       </option>
                     ))}
-                </select>
+                </SharedSelect>
               </label>
 
               {selectedClassName ? (

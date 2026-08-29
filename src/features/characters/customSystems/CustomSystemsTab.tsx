@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useEffect, useState, type ReactNode } from 'react'
 import { Pencil, Play, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
@@ -955,7 +956,7 @@ function FieldEditor({
           {value === true ? 'Ativo' : 'Inativo'}
         </label>
       ) : field.type === 'select' ? (
-        <select
+        <SharedSelect
           className={commonClass}
           value={typeof value === 'string' ? value : ''}
           disabled={disabled}
@@ -965,9 +966,9 @@ function FieldEditor({
           {field.options.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
-        </select>
+        </SharedSelect>
       ) : field.type === 'multiSelect' ? (
-        <select
+        <SharedSelect
           multiple
           className={`${commonClass} min-h-28`}
           value={Array.isArray(value) ? value.map(String) : []}
@@ -981,7 +982,7 @@ function FieldEditor({
           {field.options.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
-        </select>
+        </SharedSelect>
       ) : field.type === 'richText' ? (
         <BufferedTextArea
           className={`${commonClass} min-h-28 resize-y`}
@@ -991,7 +992,7 @@ function FieldEditor({
           onCommit={onChange}
         />
       ) : field.type === 'dice' ? (
-        <select
+        <SharedSelect
           className={commonClass}
           value={typeof value === 'string' ? value : ''}
           disabled={disabled}
@@ -1001,7 +1002,7 @@ function FieldEditor({
           {(field.allowedDice ?? ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100']).map(
             (die) => <option key={die} value={die}>{die}</option>,
           )}
-        </select>
+        </SharedSelect>
       ) : field.type === 'reference' ? (
         <BufferedTextInput
           className={commonClass}

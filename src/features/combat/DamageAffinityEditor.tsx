@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../components/ui/Select"
 import { Plus, Trash2 } from "lucide-react"
 
 import { Button } from "../../components/ui/Button"
@@ -55,7 +56,7 @@ export function DamageAffinityEditor({
               key={`${entry.damageType}:${entry.kind}:${index}`}
               className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-2 sm:grid-cols-[1fr_1fr_1fr_auto]"
             >
-              <select
+              <SharedSelect
                 className={selectClassName}
                 value={entry.kind}
                 aria-label="Reação ao dano"
@@ -64,8 +65,8 @@ export function DamageAffinityEditor({
                 <option value="resistance">{damageAffinityLabel("resistance")}</option>
                 <option value="immunity">{damageAffinityLabel("immunity")}</option>
                 <option value="vulnerability">{damageAffinityLabel("vulnerability")}</option>
-              </select>
-              <select
+              </SharedSelect>
+              <SharedSelect
                 className={selectClassName}
                 value={entry.damageType}
                 aria-label="Tipo de dano"
@@ -74,8 +75,8 @@ export function DamageAffinityEditor({
                 {DAMAGE_TYPE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
-              </select>
-              <select
+              </SharedSelect>
+              <SharedSelect
                 className={selectClassName}
                 value={entry.qualifier ?? "any"}
                 aria-label="Qualificador do dano"
@@ -84,7 +85,7 @@ export function DamageAffinityEditor({
                 <option value="any">Qualquer origem</option>
                 <option value="nonmagical">Somente não mágico</option>
                 <option value="magical">Somente mágico</option>
-              </select>
+              </SharedSelect>
               <Button
                 size="icon"
                 variant="ghost"

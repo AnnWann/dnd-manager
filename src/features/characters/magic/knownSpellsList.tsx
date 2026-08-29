@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useEffect, useState } from "react"
 
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
@@ -385,7 +386,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
         <div className="mt-3 grid gap-2 md:grid-cols-4">
           <label className="grid gap-1 text-[11px] text-textMuted">
             Visualização
-            <select
+            <SharedSelect
               className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
               value={viewMode}
               onChange={(event) =>
@@ -397,12 +398,12 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
             >
               <option value="detailed">Completa</option>
               <option value="compact">Simplificada</option>
-            </select>
+            </SharedSelect>
           </label>
 
           <label className="grid gap-1 text-[11px] text-textMuted">
             Disponibilidade
-            <select
+            <SharedSelect
               className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
               value={preparedFilter}
               onChange={(event) =>
@@ -415,12 +416,12 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
               <option value="all">Todas as magias</option>
               <option value="prepared">Apenas disponíveis</option>
               <option value="not-prepared">Apenas indisponíveis</option>
-            </select>
+            </SharedSelect>
           </label>
 
           <label className="grid gap-1 text-[11px] text-textMuted">
             Forma de aquisição
-            <select
+            <SharedSelect
               className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent"
               value={effectiveSourceTypeFilter}
               onChange={(event) =>
@@ -437,12 +438,12 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
                   {getSourceTypeLabel(type)}
                 </option>
               ))}
-            </select>
+            </SharedSelect>
           </label>
 
           <label className="grid gap-1 text-[11px] text-textMuted">
             Origem específica
-            <select
+            <SharedSelect
               className="h-10 min-w-0 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent disabled:opacity-60"
               value={effectiveSpecificSourceFilter}
               disabled={specificSourceOptions.length === 0}
@@ -459,7 +460,7 @@ export function KnownSpellsList({ character, updateCharacter }: Props) {
                   {option.label} ({option.count})
                 </option>
               ))}
-            </select>
+            </SharedSelect>
           </label>
         </div>
 

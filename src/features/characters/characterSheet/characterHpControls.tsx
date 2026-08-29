@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
@@ -262,14 +263,14 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
 
             <label className="grid gap-1 text-xs text-textMuted">
               Aplicar em
-              <select
+              <SharedSelect
                 className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
                 value={healingTarget}
                 onChange={(event) => setHealingTarget(event.target.value as HealingTarget)}
               >
                 <option value="current">Vida atual</option>
                 <option value="temporary">Vida temporária</option>
-              </select>
+              </SharedSelect>
             </label>
 
             <div className="flex justify-end border-t border-border pt-3">

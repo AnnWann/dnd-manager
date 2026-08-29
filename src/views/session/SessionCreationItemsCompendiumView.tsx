@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../components/ui/Select"
 import {
   Copy,
   Eye,
@@ -209,7 +210,7 @@ export function SessionCreationItemsCompendiumView() {
 
                 <label className="mt-4 grid gap-1 text-xs text-textMuted">
                   Visibilidade
-                  <select
+                  <SharedSelect
                     className="h-9 rounded-lg border border-border bg-bg px-3 text-sm text-textH outline-none"
                     value={entry.visibility}
                     onChange={(event) =>
@@ -221,7 +222,7 @@ export function SessionCreationItemsCompendiumView() {
                   >
                     <option value="PUBLIC">Público</option>
                     <option value="MASTER">Somente mestre</option>
-                  </select>
+                  </SharedSelect>
                 </label>
 
                 <div className="mt-4 flex flex-wrap gap-2">

@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../components/ui/Select"
 import { Check, Copy, Link2, LogOut, Plus, Unlink } from "lucide-react"
 import { useMemo, useState } from "react"
 
@@ -599,7 +600,7 @@ export function UserCampaignsTab() {
 
                       {canSubmitRequests && availableOwnedSpells.length ? (
                         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                          <select
+                          <SharedSelect
                             className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
                             value={selectedSpell[campaign.id] ?? ""}
                             onChange={(event) =>
@@ -613,7 +614,7 @@ export function UserCampaignsTab() {
                             {availableOwnedSpells.map((record) => (
                               <option key={record.id} value={record.id}>{record.name}</option>
                             ))}
-                          </select>
+                          </SharedSelect>
                           <Button
                             disabled={!selectedSpell[campaign.id] || working}
                             onClick={() => void submitSpell(campaign)}
@@ -677,7 +678,7 @@ export function UserCampaignsTab() {
                             >
                               <span className="text-sm font-medium text-textH">{character.name}</span>
                               <div className="flex flex-col gap-2 sm:flex-row">
-                                <select
+                                <SharedSelect
                                   className="h-9 rounded-lg border border-border bg-bg px-3 text-xs text-textH"
                                   value={character.visibility}
                                   disabled={working || !active}
@@ -690,7 +691,7 @@ export function UserCampaignsTab() {
                                   }
                                 >
                                   <VisibilityOptions />
-                                </select>
+                                </SharedSelect>
                                 <Button
                                   size="sm"
                                   variant="secondary"
@@ -710,7 +711,7 @@ export function UserCampaignsTab() {
 
                       {canSubmitRequests && availableCharacters.length ? (
                         <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px_auto]">
-                          <select
+                          <SharedSelect
                             className="h-10 min-w-0 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
                             value={selectedCharacter[campaign.id] ?? ""}
                             onChange={(event) =>
@@ -724,8 +725,8 @@ export function UserCampaignsTab() {
                             {availableCharacters.map((character) => (
                               <option key={character.id} value={character.id}>{character.name}</option>
                             ))}
-                          </select>
-                          <select
+                          </SharedSelect>
+                          <SharedSelect
                             className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
                             value={selectedVisibility[campaign.id] ?? "PARTY"}
                             onChange={(event) =>
@@ -736,7 +737,7 @@ export function UserCampaignsTab() {
                             }
                           >
                             <VisibilityOptions />
-                          </select>
+                          </SharedSelect>
                           <Button
                             disabled={!selectedCharacter[campaign.id] || working}
                             onClick={() => void linkCharacter(campaign)}

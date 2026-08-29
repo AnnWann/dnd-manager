@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../components/ui/Select"
 import type { ReactNode } from 'react'
 
 import type { AbilityActionKind, AbilityKind } from '../../models/abilities/Ability'
@@ -397,9 +398,9 @@ function SelectField({ label, value, options, onChange }: {
   onChange: (value: string) => void
 }) {
   return <label className="grid min-w-0 gap-1"><span className="label">{label}</span>
-    <select className="input-base min-w-0 w-full" value={value} onChange={(event) => onChange(event.target.value)}>
+    <SharedSelect className="input-base min-w-0 w-full" value={value} onChange={(event) => onChange(event.target.value)}>
       {options.map(([id, name]) => <option key={id || 'inherit'} value={id}>{name}</option>)}
-    </select>
+    </SharedSelect>
   </label>
 }
 

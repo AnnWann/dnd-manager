@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../components/ui/Select"
 import { Plus, Trash2 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 
@@ -520,7 +521,7 @@ function ReferenceSelect({ label, value, fields, onChange, allowEmpty }: { label
 }
 
 function FieldListSelect({ label, values, fields, onChange }: { label: string; values: string[]; fields: CustomFieldDefinition[]; onChange: (values: string[]) => void }) {
-  return <div className="min-w-0"><div className="label mb-1">{label}</div><div className="grid gap-2">{values.map((value, index) => <div key={`${value}-${index}`} className="flex min-w-0 gap-2"><select className="input-base min-w-0 flex-1" value={value} onChange={(event) => onChange(values.map((entry, current) => current === index ? event.target.value : entry))}>{fields.map((field) => <option key={field.id} value={field.id}>{field.name}</option>)}</select><button type="button" onClick={() => onChange(values.filter((_, current) => current !== index))} className="shrink-0 rounded-lg border border-border p-2 text-textMuted hover:text-red-300"><Trash2 className="h-4 w-4" /></button></div>)}<button type="button" disabled={!fields.length} onClick={() => fields[0] && onChange([...values, fields[0].id])} className="justify-self-start rounded-lg border border-border px-3 py-2 text-xs text-textH disabled:opacity-40">Adicionar</button></div></div>
+  return <div className="min-w-0"><div className="label mb-1">{label}</div><div className="grid gap-2">{values.map((value, index) => <div key={`${value}-${index}`} className="flex min-w-0 gap-2"><SharedSelect className="input-base min-w-0 flex-1" value={value} onChange={(event) => onChange(values.map((entry, current) => current === index ? event.target.value : entry))}>{fields.map((field) => <option key={field.id} value={field.id}>{field.name}</option>)}</SharedSelect><button type="button" onClick={() => onChange(values.filter((_, current) => current !== index))} className="shrink-0 rounded-lg border border-border p-2 text-textMuted hover:text-red-300"><Trash2 className="h-4 w-4" /></button></div>)}<button type="button" disabled={!fields.length} onClick={() => fields[0] && onChange([...values, fields[0].id])} className="justify-self-start rounded-lg border border-border px-3 py-2 text-xs text-textH disabled:opacity-40">Adicionar</button></div></div>
 }
 
 function Empty({ children }: { children: ReactNode }) {

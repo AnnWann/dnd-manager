@@ -1,3 +1,4 @@
+import { Select as SharedSelect } from "../../components/ui/Select"
 import { Send } from "lucide-react"
 import { useMemo, useState } from "react"
 
@@ -134,7 +135,7 @@ export function UserSpellsTab() {
             <div className="mt-4 grid gap-4">
               <label className="grid gap-1.5 text-xs text-text">
                 Magia homebrew
-                <select
+                <SharedSelect
                   className="h-10 rounded-xl border border-border bg-bg px-3 text-sm text-textH outline-none"
                   value={selectedSpellId}
                   onChange={(event) => setSelectedSpellId(event.target.value)}
@@ -142,12 +143,12 @@ export function UserSpellsTab() {
                   {ownedRecords.map((record) => (
                     <option key={record.id} value={record.id}>{record.name}</option>
                   ))}
-                </select>
+                </SharedSelect>
               </label>
 
               <label className="grid gap-1.5 text-xs text-text">
                 Sessão
-                <select
+                <SharedSelect
                   className="h-10 rounded-xl border border-border bg-bg px-3 text-sm text-textH outline-none"
                   value={selectedCampaignId}
                   onChange={(event) => setSelectedCampaignId(event.target.value)}
@@ -160,7 +161,7 @@ export function UserSpellsTab() {
                       </option>
                     )
                   })}
-                </select>
+                </SharedSelect>
               </label>
 
               {sendMessage ? (
