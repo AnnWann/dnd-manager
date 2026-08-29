@@ -28,14 +28,12 @@ export async function GET(
     const session = await requireSession(request)
     const campaignId = await resolveCampaignId(request, context)
 
-    const campaign = await prisma.campaign.findFirst({
-      where: {
-        id: campaignId,
-        ownerId: session.user.id,
-      },
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: campaignId },
       select: {
         id: true,
         name: true,
+        ownerId: true,
         inviteCode: true,
         owner: {
           select: {
@@ -70,10 +68,24 @@ export async function GET(
     })
 
     if (!campaign) {
+      throw new ApiError(404, "CAMPAIGN_NOT_FOUND", "Campanha não encontrada.")
+    }
+
+    const isOwner = campaign.ownerId === session.user.id
+    const membership = campaign.members.find(
+      (member) =>
+        member.userId === session.user.id &&
+        member.status === CampaignMemberStatus.ACTIVE,
+    )
+    const role = isOwner ? CampaignRole.MASTER : membership?.role
+    const canViewPermissions =
+      role === CampaignRole.MASTER || role === CampaignRole.MODERATOR
+
+    if (!canViewPermissions) {
       throw new ApiError(
         403,
-        "MASTER_REQUIRED",
-        "Somente o mestre pode acessar as configurações da sessão.",
+        "PERMISSIONS_REQUIRED",
+        "Somente mestres e moderadores podem acessar as permissões da sessão.",
       )
     }
 
@@ -82,7 +94,7 @@ export async function GET(
         campaign: {
           id: campaign.id,
           name: campaign.name,
-          inviteCode: campaign.inviteCode,
+          inviteCode: isOwner ? campaign.inviteCode : null,
         },
         owner: {
           ...campaign.owner,
@@ -94,6 +106,7 @@ export async function GET(
           role: member.role,
           status: member.status,
         })),
+        canManageMembers: isOwner,
       },
     })
   } catch (error) {
