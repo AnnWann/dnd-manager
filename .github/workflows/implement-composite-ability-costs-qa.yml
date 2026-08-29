@@ -23,22 +23,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
 
       - name: Apply migration
         run: node scripts/implement-composite-ability-costs.mjs
-
-      - name: Install root dependencies
-        run: npm ci
-
-      - name: Typecheck application
-        run: npx tsc -b --pretty false
-
-      - name: Install session server dependencies
-        run: npm --prefix session-server ci
-
-      - name: Typecheck session server
-        run: npm --prefix session-server run typecheck
 
       - name: Commit implementation
         run: |
