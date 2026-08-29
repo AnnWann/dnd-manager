@@ -42,7 +42,7 @@ export function runCustomSystemAutomations(
 
     for (const automation of definition.automations ?? []) {
       if (automation.enabled === false || automation.event !== event) continue
-      const result = runAutomation(nextCharacter, definition, automation)
+      const result = runAutomation(nextCharacter, definitions, definition, automation)
       nextCharacter = result.character
       if (result.applied) {
         applied.push({
@@ -74,7 +74,7 @@ export function runCustomSystemAutomation(
     throw new Error("Only manual automations can be executed directly.")
   }
 
-  const result = runAutomation(character, definition, automation)
+  const result = runAutomation(character, definitions, definition, automation)
   return {
     character: result.character,
     applied: result.applied
@@ -89,6 +89,7 @@ export function runCustomSystemAutomation(
 
 function runAutomation(
   character: CharacterTemplate,
+  definitions: CustomSystemDefinition[],
   definition: CustomSystemDefinition,
   automation: CustomAutomationDefinition,
 ): { character: CharacterTemplate; applied: boolean } {
@@ -98,18 +99,18 @@ function runAutomation(
     return { character, applied: false }
   }
 
-  const nextState = applyEffects(
+  const nextCharacter = applyEffects(
     automation,
+    definitions,
     definition,
-    state,
     character,
   )
-  if (JSON.stringify(nextState) === JSON.stringify(state)) {
+  if (customSystemsEqual(nextCharacter, character)) {
     return { character, applied: false }
   }
 
   return {
-    character: replaceState(character, nextState),
+    character: nextCharacter,
     applied: true,
   }
 }
@@ -131,75 +132,107 @@ function conditionsPass(
 
 function applyEffects(
   automation: CustomAutomationDefinition,
-  definition: CustomSystemDefinition,
-  initial: CharacterCustomSystemState,
+  definitions: CustomSystemDefinition[],
+  sourceDefinition: CustomSystemDefinition,
   character: CharacterTemplate,
-): CharacterCustomSystemState {
-  let state = initial
+): CharacterTemplate {
+  let nextCharacter = character
 
   for (const effect of automation.effects ?? []) {
-    state = applyEffect(effect, definition, state, character)
+    nextCharacter = applyEffect(
+      effect,
+      definitions,
+      sourceDefinition,
+      nextCharacter,
+    )
   }
 
-  return state
+  return nextCharacter
 }
 
 function applyEffect(
   effect: CustomEffectDefinition,
-  definition: CustomSystemDefinition,
-  state: CharacterCustomSystemState,
+  definitions: CustomSystemDefinition[],
+  sourceDefinition: CustomSystemDefinition,
   character: CharacterTemplate,
-): CharacterCustomSystemState {
-  if (effect.type === "modifyResource") {
-    const resource = definition.resources.find((entry) => entry.id === effect.resourceId)
-    const current = state.resources[effect.resourceId]
-    if (!resource || !current) return state
+): CharacterTemplate {
+  const sourceState = findEnabledState(character, sourceDefinition.id)
+  if (!sourceState) return character
 
-    const operand = numericEffectValue(effect, definition, state, character)
+  const targetSystemId = effect.systemId ?? sourceDefinition.id
+  const targetDefinition = definitions.find((entry) => entry.id === targetSystemId)
+  const targetState = findEnabledState(character, targetSystemId)
+  if (!targetDefinition || !targetState) return character
+
+  if (effect.type === "modifyResource") {
+    const resource = targetDefinition.resources.find((entry) => entry.id === effect.resourceId)
+    const current = targetState.resources[effect.resourceId]
+    if (!resource || !current) return character
+
+    const operand = numericEffectValue(
+      effect,
+      sourceDefinition,
+      sourceState,
+      character,
+    )
     const maximum = current.maximum ?? resource.maximum
     const nextCurrent = effect.operation === "resetToMaximum"
       ? maximum ?? current.current
       : applyNumeric(current.current, effect.operation, operand)
 
-    return setCustomResourceState(
-      definition,
-      state,
-      effect.resourceId,
-      {
-        ...current,
-        current: nextCurrent,
-      },
-      "automation",
+    return replaceState(
+      character,
+      setCustomResourceState(
+        targetDefinition,
+        targetState,
+        effect.resourceId,
+        {
+          ...current,
+          current: nextCurrent,
+        },
+        "automation",
+      ),
     )
   }
 
   if (effect.type === "setField") {
     const value = effect.formula?.trim()
-      ? formulaValue(effect.formula, definition, state, character)
+      ? formulaValue(effect.formula, sourceDefinition, sourceState, character)
       : effect.value
-    if (value === undefined) return state
-    return setCustomFieldValue(
-      definition,
-      state,
-      effect.fieldId,
-      value,
-      "automation",
+    if (value === undefined) return character
+    return replaceState(
+      character,
+      setCustomFieldValue(
+        targetDefinition,
+        targetState,
+        effect.fieldId,
+        value,
+        "automation",
+      ),
     )
   }
 
-  const current = state.fields[effect.fieldId]
-  if (typeof current !== "number") return state
-  const operand = numericEffectValue(effect, definition, state, character)
+  const current = targetState.fields[effect.fieldId]
+  if (typeof current !== "number") return character
+  const operand = numericEffectValue(
+    effect,
+    sourceDefinition,
+    sourceState,
+    character,
+  )
   const nextValue = effect.operation === "resetToMaximum"
     ? current
     : applyNumeric(current, effect.operation, operand)
 
-  return setCustomFieldValue(
-    definition,
-    state,
-    effect.fieldId,
-    nextValue,
-    "automation",
+  return replaceState(
+    character,
+    setCustomFieldValue(
+      targetDefinition,
+      targetState,
+      effect.fieldId,
+      nextValue,
+      "automation",
+    ),
   )
 }
 
@@ -239,14 +272,22 @@ function resolveOperand(
   character: CharacterTemplate,
 ) {
   if (operand.type === "literal") return operand.value
-  if (operand.type === "field") return state.fields[operand.fieldId]
+  if (operand.type === "field") {
+    const targetState = operand.systemId
+      ? findState(character, operand.systemId)
+      : state
+    return targetState?.fields[operand.fieldId]
+  }
   if (operand.type === "resource") {
-    const resource = state.resources[operand.resourceId]
+    const targetState = operand.systemId
+      ? findState(character, operand.systemId)
+      : state
+    const resource = targetState?.resources[operand.resourceId]
     if (!resource) return undefined
     return resource[operand.property ?? "current"]
   }
   if (operand.type === "characterPath") {
-    return getCharacterFormulaValues(character)[operand.path]
+    return getCharacterFormulaValues(character, [operand.path])[operand.path]
   }
   return formulaValue(operand.formula, definition, state, character)
 }
@@ -293,8 +334,18 @@ function findEnabledState(
   character: CharacterTemplate,
   systemId: string,
 ): CharacterCustomSystemState | undefined {
+  return findState(character, systemId, true)
+}
+
+function findState(
+  character: CharacterTemplate,
+  systemId: string,
+  enabledOnly = false,
+): CharacterCustomSystemState | undefined {
   return (character.get("sheet").customSystems ?? []).find(
-    (state) => state.systemId === systemId && state.enabled !== false,
+    (state) =>
+      state.systemId === systemId &&
+      (!enabledOnly || state.enabled !== false),
   )
 }
 
@@ -309,4 +360,12 @@ function replaceState(
       state.systemId === nextState.systemId ? nextState : state,
     ),
   )
+}
+
+function customSystemsEqual(
+  left: CharacterTemplate,
+  right: CharacterTemplate,
+): boolean {
+  return JSON.stringify(left.get("sheet").customSystems ?? []) ===
+    JSON.stringify(right.get("sheet").customSystems ?? [])
 }
