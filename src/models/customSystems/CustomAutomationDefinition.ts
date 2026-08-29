@@ -31,10 +31,14 @@ export interface CustomCondition {
   right?: CustomOperand
 }
 
+/**
+ * `systemId` is optional for backwards compatibility. When omitted, field and
+ * resource operands refer to the system that owns the automation.
+ */
 export type CustomOperand =
   | { type: 'literal'; value: JsonValue }
-  | { type: 'field'; fieldId: string }
-  | { type: 'resource'; resourceId: string; property?: 'current' | 'maximum' | 'temporary' }
+  | { type: 'field'; fieldId: string; systemId?: string }
+  | { type: 'resource'; resourceId: string; property?: 'current' | 'maximum' | 'temporary'; systemId?: string }
   | { type: 'characterPath'; path: string }
   | { type: 'formula'; formula: FormulaExpression }
 
@@ -55,8 +59,14 @@ export type CustomEffectDefinition =
   | CustomSetFieldEffect
   | CustomModifyFieldEffect
 
+/**
+ * `systemId` follows the same compatibility rule as operands: undefined means
+ * the system that owns the automation. Supplying it allows an automation to
+ * update a resource or field from another installed custom system.
+ */
 export interface CustomModifyResourceEffect {
   type: 'modifyResource'
+  systemId?: string
   resourceId: string
   operation: CustomNumericOperation
   value?: number
@@ -65,6 +75,7 @@ export interface CustomModifyResourceEffect {
 
 export interface CustomSetFieldEffect {
   type: 'setField'
+  systemId?: string
   fieldId: string
   value?: JsonValue
   formula?: FormulaExpression
@@ -72,6 +83,7 @@ export interface CustomSetFieldEffect {
 
 export interface CustomModifyFieldEffect {
   type: 'modifyField'
+  systemId?: string
   fieldId: string
   operation: CustomNumericOperation
   value?: number
