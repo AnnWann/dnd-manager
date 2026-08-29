@@ -5,7 +5,7 @@ def replace_once(path: str, old: str, new: str) -> None:
     file = Path(path)
     text = file.read_text(encoding="utf-8")
     if old not in text:
-        raise RuntimeError(f"Expected snippet not found in {path}: {old[:120]!r}")
+        raise RuntimeError(f"Expected snippet not found in {path}: {old[:160]!r}")
     file.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
@@ -15,26 +15,17 @@ def write(path: str, content: str) -> None:
     file.write_text(content, encoding="utf-8")
 
 
-# 1. Shared Select must always render above portaled modals.
-replace_once(
-    "src/components/ui/Select.tsx",
-    'className="fixed z-[1000] overflow-y-auto rounded-xl border border-borderStrong bg-bg-elevated p-1 shadow-theme-lg outline-none"',
-    'className="fixed z-[2147483647] overflow-y-auto rounded-xl border border-borderStrong bg-bg-elevated p-1 shadow-theme-lg outline-none"',
-)
-
-# 2. Normal abilities gain first-class composite activation costs.
 replace_once(
     "src/models/abilities/Ability.ts",
-    "export interface Ability {\n",
-    '''export type AbilityResourceCostKind =\n  | "spellSlot"\n  | "pactSlot"\n  | "ki"\n  | "sorceryPoints"\n  | "channelDivinity"\n  | "customSystem"\n\nexport type AbilityResourceCostGroupMode = "all" | "oneOf"\n\nexport interface AbilityResourceUpcastDefinition {\n  enabled: boolean\n  /** Nível de referência da habilidade antes de escalar. */\n  baseLevel: number\n  /** Limite opcional do nível escolhido na ativação. */\n  maximumLevel?: number\n}\n\nexport interface AbilityResourceCostDefinition {\n  id: string\n  kind: AbilityResourceCostKind\n  /** Quantidade base consumida. Espaços normalmente usam 1. */\n  amount: number\n  /** Nível do espaço na ativação base. */\n  slotLevel?: number\n  /** Quantidade adicional consumida por nível de upcast. */\n  amountPerLevel?: number\n  /** Referência para recursos de Custom Systems. */\n  systemId?: string\n  resourceId?: string\n  systemName?: string\n  resourceName?: string\n}\n\nexport interface AbilityResourceCostGroup {\n  id: string\n  /** all = E; oneOf = OU. Todos os grupos, por sua vez, são cumulativos (E). */\n  mode: AbilityResourceCostGroupMode\n  costs: AbilityResourceCostDefinition[]\n}\n\nexport interface AbilityResourceSelection {\n  /** Nível escolhido quando a habilidade permite upcast/escalonamento. */\n  activationLevel?: number\n  /** Em grupos OU, mapeia groupId para o costId escolhido. */\n  alternatives?: Record<string, string>\n}\n\nexport interface Ability {\n''',
+    '  | "channelDivinity"\n  | "customSystem"',
+    '  | "channelDivinity"\n  | "customSpellSlot"\n  | "customSystem"',
 )
 replace_once(
     "src/models/abilities/Ability.ts",
-    "  usage?: Usage\n",
-    '''  usage?: Usage\n  /** Custos externos consumidos atomicamente ao ativar a habilidade. */\n  resourceCosts?: AbilityResourceCostGroup[]\n  /** Permite escolher um nível maior no momento do uso. */\n  resourceUpcast?: AbilityResourceUpcastDefinition\n''',
+    '  /** Referência para recursos de Custom Systems. */\n  systemId?: string',
+    '  /** Referência para pools de espaços de uma classe customizada. */\n  poolId?: string\n  poolName?: string\n  /** Referência para recursos de Custom Systems. */\n  systemId?: string',
 )
 
-# 3. Shared runtime for validation and atomic resource spending.
 write(
     "src/models/abilities/abilityResourceCosts.ts",
     r'''import type {
@@ -44,6 +35,10 @@ write(
 } from "./Ability"
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import { getChannelDivinityPool, spendChannelDivinity } from "../characters/characterChannelDivinity"
+import {
+  getCustomSpellSlotPools,
+  spendCustomSpellSlot,
+} from "../characters/customClassConfig"
 import { getKiPool, spendKi } from "../characters/characterKi"
 import type { MagicCircleLevel } from "../magic/spells/spellDefinitions"
 
@@ -58,7 +53,7 @@ export type ResolvedAbilityResourceCost = {
 }
 
 export function hasAbilityResourceCosts(ability: Ability): boolean {
-  return (ability.resourceCosts ?? []).some((group) => group.costs.length > 0)
+  return (ability.resourceCosts ?? []).some((group) => group.costs.some(isConfiguredCost))
 }
 
 export function getAbilityActivationLevel(
@@ -68,7 +63,7 @@ export function getAbilityActivationLevel(
   const upcast = ability.resourceUpcast
   if (!upcast?.enabled) return undefined
   const base = normalizeLevel(upcast.baseLevel, 1)
-  const maximum = normalizeLevel(upcast.maximumLevel, 9)
+  const maximum = Math.max(base, normalizeLevel(upcast.maximumLevel, 9))
   const requested = selection?.activationLevel ?? base
   if (!Number.isInteger(requested) || requested < base || requested > maximum) return undefined
   return requested
@@ -113,21 +108,36 @@ export function spendAbilityResourceCosts(
   return { ok: true, character: next, costs: validation.costs }
 }
 
-export function abilityResourceCostLabel(cost: AbilityResourceCostDefinition): string {
-  const amount = normalizeAmount(cost.amount)
+export function resolveAbilityResourceCostPreview(
+  ability: Ability,
+  cost: AbilityResourceCostDefinition,
+  selection?: AbilityResourceSelection,
+): ResolvedAbilityResourceCost {
+  return resolveCost(ability, cost, selection)
+}
+
+export function abilityResourceCostLabel(
+  cost: AbilityResourceCostDefinition,
+  resolved?: Pick<ResolvedAbilityResourceCost, "amount" | "slotLevel">,
+): string {
+  const amount = resolved?.amount ?? normalizeAmount(cost.amount)
+  const level = resolved?.slotLevel ?? cost.slotLevel
+  const scale = (cost.amountPerLevel ?? 0) > 0 ? ` (+${Math.floor(cost.amountPerLevel ?? 0)}/nível)` : ""
   switch (cost.kind) {
     case "spellSlot":
-      return `${amount} espaço(s) de magia — nível ${normalizeLevel(cost.slotLevel, 1)}`
+      return `${amount} espaço(s) de magia — nível ${normalizeLevel(level, 1)}${scale}`
     case "pactSlot":
-      return `${amount} espaço(s) de pacto — nível base ${normalizeLevel(cost.slotLevel, 1)}`
+      return `${amount} espaço(s) de pacto${level ? ` — nível ${level}` : " — nível atual do pacto"}${scale}`
+    case "customSpellSlot":
+      return `${amount} espaço(s) de ${cost.poolName?.trim() || cost.poolId?.trim() || "classe customizada"} — nível ${normalizeLevel(level, 1)}${scale}`
     case "ki":
-      return `${amount} Ki`
+      return `${amount} Ki${scale}`
     case "sorceryPoints":
-      return `${amount} ponto(s) de feitiçaria`
+      return `${amount} ponto(s) de feitiçaria${scale}`
     case "channelDivinity":
-      return `${amount} uso(s) de Canalizar Divindade`
+      return `${amount} uso(s) de Canalizar Divindade${scale}`
     case "customSystem":
-      return `${amount} ${cost.resourceName?.trim() || cost.resourceId?.trim() || "recurso customizado"}`
+      return `${amount} ${cost.resourceName?.trim() || cost.resourceId?.trim() || "recurso customizado"}${scale}`
   }
 }
 
@@ -163,25 +173,44 @@ function resolvePlan(
   costs: AbilityResourceCostDefinition[],
   selection?: AbilityResourceSelection,
 ): ResolvedAbilityResourceCost[] | null {
+  if (ability.resourceUpcast?.enabled && getAbilityActivationLevel(ability, selection) === undefined) return null
+  return costs.map((cost) => resolveCost(ability, cost, selection))
+}
+
+function resolveCost(
+  ability: Ability,
+  cost: AbilityResourceCostDefinition,
+  selection?: AbilityResourceSelection,
+): ResolvedAbilityResourceCost {
   const upcast = ability.resourceUpcast
   const activationLevel = upcast?.enabled
     ? getAbilityActivationLevel(ability, selection)
     : undefined
-  if (upcast?.enabled && activationLevel === undefined) return null
-
   const baseActivationLevel = upcast?.enabled ? normalizeLevel(upcast.baseLevel, 1) : undefined
   const levelDelta = activationLevel !== undefined && baseActivationLevel !== undefined
     ? activationLevel - baseActivationLevel
     : 0
+  const amount = normalizeAmount(cost.amount) + Math.max(0, Math.floor(cost.amountPerLevel ?? 0)) * levelDelta
 
-  return costs.map((cost) => {
-    const amount = normalizeAmount(cost.amount) + Math.max(0, Math.floor(cost.amountPerLevel ?? 0)) * levelDelta
+  if (cost.kind === "pactSlot") {
+    return {
+      cost,
+      amount,
+      // Sem upcast, um custo de pacto consome o nível atual do pacto sem exigir configuração estática.
+      slotLevel: upcast?.enabled ? activationLevel : undefined,
+    }
+  }
+
+  if (cost.kind === "spellSlot" || cost.kind === "customSpellSlot") {
     const baseSlotLevel = normalizeLevel(cost.slotLevel, upcast?.baseLevel ?? 1)
-    const slotLevel = cost.kind === "spellSlot" || cost.kind === "pactSlot"
-      ? normalizeLevel(baseSlotLevel + levelDelta, baseSlotLevel)
-      : undefined
-    return { cost, amount, slotLevel }
-  })
+    return {
+      cost,
+      amount,
+      slotLevel: normalizeLevel(baseSlotLevel + levelDelta, baseSlotLevel),
+    }
+  }
+
+  return { cost, amount }
 }
 
 function canAffordPlan(character: CharacterTemplate, costs: ResolvedAbilityResourceCost[]): boolean {
@@ -200,7 +229,8 @@ function canAffordPlan(character: CharacterTemplate, costs: ResolvedAbilityResou
 function resourceKey(resolved: ResolvedAbilityResourceCost): string {
   switch (resolved.cost.kind) {
     case "spellSlot": return `spellSlot:${resolved.slotLevel ?? 1}`
-    case "pactSlot": return `pactSlot:${resolved.slotLevel ?? 1}`
+    case "pactSlot": return resolved.slotLevel ? `pactSlot:${resolved.slotLevel}` : "pactSlot:any"
+    case "customSpellSlot": return `customSpellSlot:${resolved.cost.poolId ?? ""}:${resolved.slotLevel ?? 1}`
     case "ki": return "ki"
     case "sorceryPoints": return "sorceryPoints"
     case "channelDivinity": return "channelDivinity"
@@ -214,15 +244,28 @@ function availableForKey(character: CharacterTemplate, key: string): number {
     return character.getSpellSlots()[level]?.current ?? 0
   }
   if (key.startsWith("pactSlot:")) {
-    const expectedLevel = Number(key.slice("pactSlot:".length))
     const pact = character.getPactSlots()
-    return pact && pact.level === expectedLevel ? pact.current : 0
+    if (!pact) return 0
+    const suffix = key.slice("pactSlot:".length)
+    return suffix === "any" || pact.level === Number(suffix) ? pact.current : 0
+  }
+  if (key.startsWith("customSpellSlot:")) {
+    const remainder = key.slice("customSpellSlot:".length)
+    const separator = remainder.lastIndexOf(":")
+    if (separator < 0) return 0
+    const poolId = remainder.slice(0, separator)
+    const level = Number(remainder.slice(separator + 1))
+    return getCustomSpellSlotPools(character).find((pool) => pool.id === poolId)?.slots[level]?.current ?? 0
   }
   if (key === "ki") return getKiPool(character)?.current ?? 0
   if (key === "sorceryPoints") return character.getSorceryPoints().current
   if (key === "channelDivinity") return getChannelDivinityPool(character)?.current ?? 0
   if (key.startsWith("custom:")) {
-    const [, systemId, resourceId] = key.split(":")
+    const remainder = key.slice("custom:".length)
+    const separator = remainder.indexOf(":")
+    if (separator < 0) return 0
+    const systemId = remainder.slice(0, separator)
+    const resourceId = remainder.slice(separator + 1)
     const state = character.get("sheet").customSystems?.find((entry) => entry.systemId === systemId && entry.enabled)
     return Math.max(0, Number(state?.resources?.[resourceId]?.current ?? 0))
   }
@@ -245,6 +288,13 @@ function spendResolvedCost(
     case "pactSlot":
       for (let index = 0; index < amount; index += 1) next = next.spendPactSlot()
       return next
+    case "customSpellSlot": {
+      const poolId = resolved.cost.poolId?.trim()
+      const level = resolved.slotLevel ?? 1
+      if (!poolId) return next
+      for (let index = 0; index < amount; index += 1) next = spendCustomSpellSlot(next, poolId, level)
+      return next
+    }
     case "ki":
       return spendKi(next, amount)
     case "sorceryPoints":
@@ -277,8 +327,9 @@ function spendResolvedCost(
 
 function isConfiguredCost(cost: AbilityResourceCostDefinition): boolean {
   if (!cost.id?.trim() || normalizeAmount(cost.amount) <= 0) return false
-  if (cost.kind !== "customSystem") return true
-  return Boolean(cost.systemId?.trim() && cost.resourceId?.trim())
+  if (cost.kind === "customSystem") return Boolean(cost.systemId?.trim() && cost.resourceId?.trim())
+  if (cost.kind === "customSpellSlot") return Boolean(cost.poolId?.trim())
+  return true
 }
 
 function normalizeAmount(value: number | undefined): number {
@@ -292,12 +343,13 @@ function normalizeLevel(value: number | undefined, fallback: number): number {
 ''',
 )
 
-# 4. Editor for normal ability costs.
 write(
     "src/features/characters/abilities/abilityResourceCostsEditor.tsx",
     r'''import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { getCustomSpellSlotPools } from "../../../models/characters/customClassConfig"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import type {
   Ability,
@@ -306,12 +358,14 @@ import type {
   AbilityResourceCostKind,
 } from "../../../models/abilities/Ability"
 
-export function AbilityResourceCostsEditor({ ability, onChange }: {
+export function AbilityResourceCostsEditor({ ability, character, onChange }: {
   ability: Ability
+  character?: CharacterTemplate
   onChange: (ability: Ability) => void
 }) {
   const runtime = useOptionalSessionRuntime()
   const customSystems = runtime?.runtimeConfigSnapshot?.config.customSystems ?? []
+  const customSlotPools = character ? getCustomSpellSlotPools(character) : []
   const groups = ability.resourceCosts ?? []
   const upcast = ability.resourceUpcast
 
@@ -321,6 +375,13 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
 
   function updateGroup(groupId: string, updater: (group: AbilityResourceCostGroup) => AbilityResourceCostGroup) {
     updateGroups(groups.map((group) => group.id === groupId ? updater(group) : group))
+  }
+
+  function updateCost(groupId: string, costId: string, next: AbilityResourceCostDefinition) {
+    updateGroup(groupId, (group) => ({
+      ...group,
+      costs: group.costs.map((cost) => cost.id === costId ? next : cost),
+    }))
   }
 
   function addGroup() {
@@ -340,7 +401,7 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
         <div>
           <div className="text-xs font-semibold text-textH">Custos ao ativar</div>
           <p className="mt-1 max-w-2xl text-[11px] leading-5 text-textMuted">
-            Consuma espaços de magia/pacto, Ki, pontos de feitiçaria, Canalizar Divindade ou recursos de Custom Systems. Todos os grupos são cumulativos (E); grupos marcados como OU escolhem uma alternativa.
+            Consuma espaços de magia ou pacto, pools de espaços de classes customizadas, Ki, pontos de feitiçaria, Canalizar Divindade ou recursos de Custom Systems. Grupos são combinados com E; dentro de cada grupo você escolhe E ou OU.
           </p>
         </div>
         <Button size="sm" variant="secondary" onClick={addGroup}>+ Grupo de custo</Button>
@@ -357,7 +418,7 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
               <span>
                 <span className="block text-xs font-semibold text-textH">Permitir upcast / escalonamento</span>
                 <span className="mt-0.5 block text-[10px] leading-4 text-textMuted">
-                  O jogador escolhe um nível ao usar. Espaços sobem de nível e custos com “+ por nível” aumentam juntos.
+                  O jogador escolhe o nível ao usar. Espaços normais e de classe customizada sobem de nível; uma alternativa de pacto usa o nível atual do pacto; outros recursos podem ganhar custo adicional por nível.
                 </span>
               </span>
               <input
@@ -374,16 +435,23 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
             {upcast?.enabled ? (
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <label className="grid gap-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Nível base</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Nível base da habilidade</span>
                   <Input
                     type="number"
                     min={1}
                     max={9}
                     value={upcast.baseLevel}
-                    onChange={(event) => onChange({
-                      ...ability,
-                      resourceUpcast: { ...upcast, baseLevel: clampLevel(event.target.value) },
-                    })}
+                    onChange={(event) => {
+                      const baseLevel = clampLevel(event.target.value)
+                      onChange({
+                        ...ability,
+                        resourceUpcast: {
+                          ...upcast,
+                          baseLevel,
+                          maximumLevel: Math.max(baseLevel, upcast.maximumLevel ?? 9),
+                        },
+                      })
+                    }}
                   />
                 </label>
                 <label className="grid gap-1">
@@ -412,12 +480,12 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
                 <div>
                   <div className="text-xs font-semibold text-textH">Grupo {groupIndex + 1}</div>
                   <div className="mt-0.5 text-[10px] text-textMuted">
-                    {group.mode === "all" ? "E — todos os recursos abaixo são consumidos." : "OU — apenas uma alternativa abaixo será consumida."}
+                    {group.mode === "all" ? "E — todos os recursos abaixo são consumidos." : "OU — o jogador escolhe uma alternativa abaixo."}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Select
-                    className="min-w-40"
+                    className="min-w-44"
                     value={group.mode}
                     onChange={(event) => updateGroup(group.id, (current) => ({
                       ...current,
@@ -447,26 +515,21 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
                 {group.costs.map((cost, costIndex) => {
                   const selectedSystem = customSystems.find((system) => system.id === cost.systemId)
                   const resources = selectedSystem?.resources ?? []
+                  const selectedPool = customSlotPools.find((pool) => pool.id === cost.poolId)
                   return (
                     <div key={cost.id} className="rounded-lg border border-border bg-bg-subtle p-3">
-                      <div className="grid gap-2 lg:grid-cols-[minmax(180px,1.4fr)_110px_110px_auto]">
+                      <div className="grid gap-2 lg:grid-cols-[minmax(190px,1.5fr)_110px_minmax(120px,0.8fr)_auto]">
                         <label className="grid gap-1">
                           <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
                             {group.mode === "oneOf" ? `Alternativa ${costIndex + 1}` : `Recurso ${costIndex + 1}`}
                           </span>
                           <Select
                             value={cost.kind}
-                            onChange={(event) => updateCost(group.id, cost.id, {
-                              ...cost,
-                              kind: event.target.value as AbilityResourceCostKind,
-                              systemId: undefined,
-                              resourceId: undefined,
-                              systemName: undefined,
-                              resourceName: undefined,
-                            })}
+                            onChange={(event) => updateCost(group.id, cost.id, resetCostKind(cost, event.target.value as AbilityResourceCostKind))}
                           >
                             <option value="spellSlot">Espaço de magia</option>
                             <option value="pactSlot">Espaço de pacto</option>
+                            <option value="customSpellSlot">Espaço de classe customizada</option>
                             <option value="ki">Ki</option>
                             <option value="sorceryPoints">Pontos de feitiçaria</option>
                             <option value="channelDivinity">Canalizar Divindade</option>
@@ -488,9 +551,9 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
                           />
                         </label>
 
-                        {cost.kind === "spellSlot" || cost.kind === "pactSlot" ? (
+                        {cost.kind === "spellSlot" || cost.kind === "customSpellSlot" ? (
                           <label className="grid gap-1">
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Nível base</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Nível base do espaço</span>
                             <Input
                               type="number"
                               min={1}
@@ -502,21 +565,11 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
                               })}
                             />
                           </label>
-                        ) : upcast?.enabled ? (
-                          <label className="grid gap-1">
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">+ por nível</span>
-                            <Input
-                              type="number"
-                              min={0}
-                              step={1}
-                              value={cost.amountPerLevel ?? 0}
-                              onChange={(event) => updateCost(group.id, cost.id, {
-                                ...cost,
-                                amountPerLevel: Math.max(0, Math.floor(Number(event.target.value) || 0)),
-                              })}
-                            />
-                          </label>
-                        ) : <div />}
+                        ) : (
+                          <div className="flex items-end text-[10px] leading-4 text-textMuted">
+                            {cost.kind === "pactSlot" ? "Usa o nível atual do pacto." : ""}
+                          </div>
+                        )}
 
                         <div className="flex items-end">
                           <Button
@@ -531,6 +584,62 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
                           </Button>
                         </div>
                       </div>
+
+                      {upcast?.enabled ? (
+                        <label className="mt-2 grid max-w-xs gap-1">
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">+ quantidade consumida por nível</span>
+                          <Input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={cost.amountPerLevel ?? 0}
+                            onChange={(event) => updateCost(group.id, cost.id, {
+                              ...cost,
+                              amountPerLevel: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+                            })}
+                          />
+                        </label>
+                      ) : null}
+
+                      {cost.kind === "customSpellSlot" ? (
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          {customSlotPools.length > 0 ? (
+                            <label className="grid gap-1 sm:col-span-2">
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Pool da classe customizada</span>
+                              <Select
+                                value={cost.poolId ?? ""}
+                                onChange={(event) => {
+                                  const pool = customSlotPools.find((item) => item.id === event.target.value)
+                                  updateCost(group.id, cost.id, {
+                                    ...cost,
+                                    poolId: pool?.id,
+                                    poolName: pool?.name,
+                                  })
+                                }}
+                              >
+                                <option value="">Selecione o pool</option>
+                                {customSlotPools.map((pool) => <option key={pool.id} value={pool.id}>{pool.name}</option>)}
+                              </Select>
+                              {selectedPool ? (
+                                <span className="text-[10px] text-textMuted">
+                                  Níveis disponíveis agora: {Object.keys(selectedPool.slots).join(", ") || "nenhum"}.
+                                </span>
+                              ) : null}
+                            </label>
+                          ) : (
+                            <>
+                              <label className="grid gap-1">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">ID do pool</span>
+                                <Input value={cost.poolId ?? ""} onChange={(event) => updateCost(group.id, cost.id, { ...cost, poolId: event.target.value })} />
+                              </label>
+                              <label className="grid gap-1">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Nome do pool</span>
+                                <Input value={cost.poolName ?? ""} onChange={(event) => updateCost(group.id, cost.id, { ...cost, poolName: event.target.value })} />
+                              </label>
+                            </>
+                          )}
+                        </div>
+                      ) : null}
 
                       {cost.kind === "customSystem" ? (
                         <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -598,13 +707,6 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
       )}
     </div>
   )
-
-  function updateCost(groupId: string, costId: string, next: AbilityResourceCostDefinition) {
-    updateGroup(groupId, (group) => ({
-      ...group,
-      costs: group.costs.map((cost) => cost.id === costId ? next : cost),
-    }))
-  }
 }
 
 function createCost(kind: AbilityResourceCostKind): AbilityResourceCostDefinition {
@@ -612,7 +714,20 @@ function createCost(kind: AbilityResourceCostKind): AbilityResourceCostDefinitio
     id: crypto.randomUUID(),
     kind,
     amount: 1,
-    slotLevel: kind === "spellSlot" || kind === "pactSlot" ? 1 : undefined,
+    slotLevel: kind === "spellSlot" || kind === "customSpellSlot" ? 1 : undefined,
+  }
+}
+
+function resetCostKind(
+  cost: AbilityResourceCostDefinition,
+  kind: AbilityResourceCostKind,
+): AbilityResourceCostDefinition {
+  return {
+    id: cost.id,
+    kind,
+    amount: cost.amount,
+    amountPerLevel: cost.amountPerLevel,
+    slotLevel: kind === "spellSlot" || kind === "customSpellSlot" ? (cost.slotLevel ?? 1) : undefined,
   }
 }
 
@@ -622,278 +737,46 @@ function clampLevel(value: string | number): number {
 ''',
 )
 
-# 5. Activation modal used at play time for alternatives and upcast level.
-write(
+replace_once(
+    "src/features/characters/abilities/abilityDialog.tsx",
+    'import type {\n  Ability,',
+    'import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"\nimport type {\n  Ability,',
+)
+replace_once(
+    "src/features/characters/abilities/abilityDialog.tsx",
+    '  fixedCategory?: AbilityCategory\n  onClose:',
+    '  fixedCategory?: AbilityCategory\n  character?: CharacterTemplate\n  onClose:',
+)
+replace_once(
+    "src/features/characters/abilities/abilityDialog.tsx",
+    '  fixedCategory,\n  onClose,',
+    '  fixedCategory,\n  character,\n  onClose,',
+)
+replace_once(
+    "src/features/characters/abilities/abilityDialog.tsx",
+    '<AbilityResourceCostsEditor ability={draft} onChange={setDraft} />',
+    '<AbilityResourceCostsEditor ability={draft} character={character} onChange={setDraft} />',
+)
+replace_once(
+    "src/features/characters/abilities/characterAbilities.tsx",
+    '        ability={editingAbility}\n        onClose=',
+    '        ability={editingAbility}\n        character={displayCharacter}\n        onClose=',
+)
+
+replace_once(
     "src/features/characters/abilities/abilityResourceActivationModal.tsx",
-    r'''import { useMemo, useState } from "react"
-
-import { Button } from "../../../components/ui/Button"
-import { Modal } from "../../../components/ui/Modal"
-import { Select } from "../../../components/ui/Select"
-import type {
-  Ability,
-  AbilityResourceSelection,
-} from "../../../models/abilities/Ability"
-import {
-  abilityResourceCostLabel,
-  canPayAbilityResourceCosts,
-} from "../../../models/abilities/abilityResourceCosts"
-import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-
-export function AbilityResourceActivationModal({
-  ability,
-  character,
-  onClose,
-  onConfirm,
-}: {
-  ability: Ability
-  character: CharacterTemplate
-  onClose: () => void
-  onConfirm: (optionId: string | undefined, selection: AbilityResourceSelection | undefined) => void
-}) {
-  const baseLevel = ability.resourceUpcast?.enabled ? Math.max(1, ability.resourceUpcast.baseLevel || 1) : undefined
-  const maximumLevel = ability.resourceUpcast?.enabled
-    ? Math.max(baseLevel ?? 1, Math.min(9, ability.resourceUpcast.maximumLevel ?? 9))
-    : undefined
-  const [activationLevel, setActivationLevel] = useState(baseLevel)
-  const [optionId, setOptionId] = useState(ability.activationOptions?.[0]?.id ?? "")
-  const [alternatives, setAlternatives] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      (ability.resourceCosts ?? [])
-        .filter((group) => group.mode === "oneOf" && group.costs[0])
-        .map((group) => [group.id, group.costs[0]!.id]),
-    ),
-  )
-
-  const selection = useMemo<AbilityResourceSelection | undefined>(() => {
-    if (!(ability.resourceCosts?.length) && !ability.resourceUpcast?.enabled) return undefined
-    return {
-      activationLevel,
-      alternatives: Object.keys(alternatives).length ? alternatives : undefined,
-    }
-  }, [ability.resourceCosts?.length, ability.resourceUpcast?.enabled, activationLevel, alternatives])
-
-  const payment = canPayAbilityResourceCosts(character, ability, selection)
-  const optionRequired = (ability.activationOptions?.length ?? 0) > 0
-  const canConfirm = payment.ok && (!optionRequired || Boolean(optionId))
-
-  return (
-    <Modal title={`Usar habilidade — ${ability.name}`} onClose={onClose} className="max-w-xl">
-      <div className="grid gap-4">
-        {ability.activationOptions?.length ? (
-          <label className="grid gap-1">
-            <span className="text-xs font-semibold text-textH">Opção da habilidade</span>
-            <Select value={optionId} onChange={(event) => setOptionId(event.target.value)}>
-              {ability.activationOptions.map((option) => (
-                <option key={option.id} value={option.id}>{option.ability?.name || option.name}</option>
-              ))}
-            </Select>
-            {ability.activationOptions.find((option) => option.id === optionId)?.description ? (
-              <span className="text-[11px] leading-5 text-textMuted">
-                {ability.activationOptions.find((option) => option.id === optionId)?.description}
-              </span>
-            ) : null}
-          </label>
-        ) : null}
-
-        {ability.resourceUpcast?.enabled && baseLevel !== undefined && maximumLevel !== undefined ? (
-          <label className="grid gap-1">
-            <span className="text-xs font-semibold text-textH">Nível de ativação</span>
-            <Select value={String(activationLevel ?? baseLevel)} onChange={(event) => setActivationLevel(Number(event.target.value))}>
-              {Array.from({ length: maximumLevel - baseLevel + 1 }, (_, index) => baseLevel + index).map((level) => (
-                <option key={level} value={level}>Nível {level}{level === baseLevel ? " — base" : " — upcast"}</option>
-              ))}
-            </Select>
-          </label>
-        ) : null}
-
-        {(ability.resourceCosts ?? []).length > 0 ? (
-          <div className="grid gap-2">
-            <div>
-              <div className="text-xs font-semibold text-textH">Recursos consumidos</div>
-              <p className="mt-1 text-[11px] leading-5 text-textMuted">
-                A operação só é concluída se todos os grupos obrigatórios puderem ser pagos. Nada é consumido parcialmente.
-              </p>
-            </div>
-            {(ability.resourceCosts ?? []).map((group, index) => (
-              <div key={group.id} className="rounded-lg border border-border bg-bg-subtle p-3">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-                  Grupo {index + 1} · {group.mode === "all" ? "E" : "OU"}
-                </div>
-                {group.mode === "oneOf" ? (
-                  <Select
-                    className="mt-2"
-                    value={alternatives[group.id] ?? group.costs[0]?.id ?? ""}
-                    onChange={(event) => setAlternatives((current) => ({ ...current, [group.id]: event.target.value }))}
-                  >
-                    {group.costs.map((cost) => <option key={cost.id} value={cost.id}>{abilityResourceCostLabel(cost)}</option>)}
-                  </Select>
-                ) : (
-                  <div className="mt-2 grid gap-1 text-xs text-textH">
-                    {group.costs.map((cost) => <div key={cost.id}>• {abilityResourceCostLabel(cost)}</div>)}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {!payment.ok ? (
-          <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
-            {payment.reason}
-          </div>
-        ) : null}
-
-        <div className="flex justify-end gap-2 border-t border-border pt-3">
-          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button
-            variant="primary"
-            disabled={!canConfirm}
-            onClick={() => onConfirm(optionId || undefined, selection)}
-          >
-            Usar habilidade
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-''',
+    '  abilityResourceCostLabel,\n  canPayAbilityResourceCosts,',
+    '  abilityResourceCostLabel,\n  canPayAbilityResourceCosts,\n  resolveAbilityResourceCostPreview,',
+)
+replace_once(
+    "src/features/characters/abilities/abilityResourceActivationModal.tsx",
+    '''                    onChange={(event) => setAlternatives((current) => ({ ...current, [group.id]: event.target.value }))}\n                  >\n                    {group.costs.map((cost) => <option key={cost.id} value={cost.id}>{abilityResourceCostLabel(cost)}</option>)}''',
+    '''                    onChange={(event) => {\n                      const cost = group.costs.find((entry) => entry.id === event.target.value)\n                      setAlternatives((current) => ({ ...current, [group.id]: event.target.value }))\n                      if (cost?.kind === "pactSlot" && ability.resourceUpcast?.enabled) {\n                        const pactLevel = character.getPactSlots()?.level\n                        if (pactLevel && pactLevel >= (baseLevel ?? 1) && pactLevel <= (maximumLevel ?? 9)) setActivationLevel(pactLevel)\n                      }\n                    }}\n                  >\n                    {group.costs.map((cost) => {\n                      const preview = resolveAbilityResourceCostPreview(ability, cost, selection)\n                      return <option key={cost.id} value={cost.id}>{abilityResourceCostLabel(cost, preview)}</option>\n                    })}''',
+)
+replace_once(
+    "src/features/characters/abilities/abilityResourceActivationModal.tsx",
+    '{group.costs.map((cost) => <div key={cost.id}>• {abilityResourceCostLabel(cost)}</div>)}',
+    '''{group.costs.map((cost) => {\n                      const preview = resolveAbilityResourceCostPreview(ability, cost, selection)\n                      return <div key={cost.id}>• {abilityResourceCostLabel(cost, preview)}</div>\n                    })}''',
 )
 
-# 6. Wire the resource editor into the normal AbilityDialog.
-replace_once(
-    "src/features/characters/abilities/abilityDialog.tsx",
-    'import { AbilityAdvancedEffectsEditor } from "./abilityAdvancedEffectsEditor"\n',
-    'import { AbilityAdvancedEffectsEditor } from "./abilityAdvancedEffectsEditor"\nimport { AbilityResourceCostsEditor } from "./abilityResourceCostsEditor"\n',
-)
-replace_once(
-    "src/features/characters/abilities/abilityDialog.tsx",
-    '  const hasConfiguredResource =\n    sharedClassResource || hasUsage || Boolean(draft.usage?.sharedResourceId)\n',
-    '  const hasConfiguredResource =\n    sharedClassResource || hasUsage || Boolean(draft.usage?.sharedResourceId) || (draft.resourceCosts?.length ?? 0) > 0\n',
-)
-replace_once(
-    "src/features/characters/abilities/abilityDialog.tsx",
-    '''              )}\n            </div>\n          ) : null}\n\n          {tab === "effects" ? (''',
-    '''              )}\n\n              <AbilityResourceCostsEditor ability={draft} onChange={setDraft} />\n            </div>\n          ) : null}\n\n          {tab === "effects" ? (''',
-)
-
-# 7. Client protocol carries the chosen cost branch/upcast level.
-replace_once(
-    "src/features/session-runtime/abilitySessionProtocol.ts",
-    'import type { Ability } from "../../models/abilities/Ability"\n',
-    'import type { Ability, AbilityResourceSelection } from "../../models/abilities/Ability"\n',
-)
-replace_once(
-    "src/features/session-runtime/abilitySessionProtocol.ts",
-    '      activationOptionId?: string\n',
-    '      activationOptionId?: string\n      resourceSelection?: AbilityResourceSelection\n',
-)
-
-# 8. Replace the old option-only modal with the unified ability activation modal and spend resources offline too.
-replace_once(
-    "src/features/characters/abilities/characterAbilities.tsx",
-    'import { Modal } from "../../../components/ui/Modal"\n',
-    '',
-)
-replace_once(
-    "src/features/characters/abilities/characterAbilities.tsx",
-    'import type { Ability } from "../../../models/abilities/Ability"\n',
-    'import type { Ability, AbilityResourceSelection } from "../../../models/abilities/Ability"\n',
-)
-replace_once(
-    "src/features/characters/abilities/characterAbilities.tsx",
-    'import { AbilityDialog } from "./abilityDialog"\n',
-    'import { AbilityDialog } from "./abilityDialog"\nimport { AbilityResourceActivationModal } from "./abilityResourceActivationModal"\nimport { hasAbilityResourceCosts, spendAbilityResourceCosts } from "../../../models/abilities/abilityResourceCosts"\n',
-)
-replace_once(
-    "src/features/characters/abilities/characterAbilities.tsx",
-    '''  function requestUseAbility(ability: Ability) {\n    if ((ability.activationOptions?.length ?? 0) > 0) {\n      setActivationChoice(ability)\n      return\n    }\n    useAbility(ability.id)\n  }\n\n  function useAbility(id: string, optionId?: string) {''',
-    '''  function requestUseAbility(ability: Ability) {\n    if ((ability.activationOptions?.length ?? 0) > 0 || hasAbilityResourceCosts(ability) || ability.resourceUpcast?.enabled) {\n      setActivationChoice(ability)\n      return\n    }\n    useAbility(ability.id)\n  }\n\n  function useAbility(id: string, optionId?: string, resourceSelection?: AbilityResourceSelection) {''',
-)
-replace_once(
-    "src/features/characters/abilities/characterAbilities.tsx",
-    '''        source,\n        activationOptionId: optionId,\n      })) {''',
-    '''        source,\n        activationOptionId: optionId,\n        resourceSelection,\n      })) {''',
-)
-replace_once(
-    "src/features/characters/abilities/characterAbilities.tsx",
-    '''    updateCharacter(displayCharacter.get("id"), (current) => {\n      if (ability && isEquipmentAbility(ability)) {\n        return current.useEquipmentAbility(ability.sourceItemId, ability.originalAbilityId)\n      }\n\n      if (ability && isRaceAbility(ability)) {\n        return updateRaceAbilityState(\n          current,\n          ability.originalAbilityId,\n          "use",\n          optionId,\n        )\n      }\n\n      return useCharacterAbility(current, id, optionId)\n    })''',
-    '''    updateCharacter(displayCharacter.get("id"), (current) => {\n      const payment = ability\n        ? spendAbilityResourceCosts(current, ability, resourceSelection)\n        : { ok: true as const, character: current, costs: [] }\n      if (!payment.ok) return current\n      const paidCharacter = payment.character\n\n      if (ability && isEquipmentAbility(ability)) {\n        return paidCharacter.useEquipmentAbility(ability.sourceItemId, ability.originalAbilityId)\n      }\n\n      if (ability && isRaceAbility(ability)) {\n        return updateRaceAbilityState(\n          paidCharacter,\n          ability.originalAbilityId,\n          "use",\n          optionId,\n        )\n      }\n\n      return useCharacterAbility(paidCharacter, id, optionId)\n    })''',
-)
-# Replace the entire old activation-choice Modal block.
-start = '      {activationChoice ? (\n        <Modal\n          title={`Escolher habilidade — ${activationChoice.name}`}\n'
-file = Path("src/features/characters/abilities/characterAbilities.tsx")
-text = file.read_text(encoding="utf-8")
-start_index = text.find(start)
-if start_index < 0:
-    raise RuntimeError("Old activation modal start not found")
-end_marker = '      ) : null}\n    </>'
-end_index = text.find(end_marker, start_index)
-if end_index < 0:
-    raise RuntimeError("Old activation modal end not found")
-replacement = '''      {activationChoice ? (\n        <AbilityResourceActivationModal\n          ability={activationChoice}\n          character={displayCharacter}\n          onClose={() => setActivationChoice(null)}\n          onConfirm={(optionId, resourceSelection) => useAbility(activationChoice.id, optionId, resourceSelection)}\n        />\n      ) : null}\n    </>'''
-text = text[:start_index] + replacement + text[end_index + len(end_marker):]
-file.write_text(text, encoding="utf-8")
-
-# 9. Server protocol validates the same selection shape.
-replace_once(
-    "session-server/src/routes/characters/abilities/abilityProtocol.ts",
-    'export type SessionAbilitySource =\n',
-    'import type { AbilityResourceSelection } from "../../../../../src/models/abilities/Ability";\n\nexport type SessionAbilitySource =\n',
-)
-replace_once(
-    "session-server/src/routes/characters/abilities/abilityProtocol.ts",
-    '      activationOptionId?: string;\n',
-    '      activationOptionId?: string;\n      resourceSelection?: AbilityResourceSelection;\n',
-)
-replace_once(
-    "session-server/src/routes/characters/abilities/abilityProtocol.ts",
-    '''        hasValidOptionalName &&\n        (value.activationOptionId === undefined || typeof value.activationOptionId === "string");''',
-    '''        hasValidOptionalName &&\n        (value.activationOptionId === undefined || typeof value.activationOptionId === "string") &&\n        (value.resourceSelection === undefined || isResourceSelection(value.resourceSelection));''',
-)
-replace_once(
-    "session-server/src/routes/characters/abilities/abilityProtocol.ts",
-    'function isAbilityName(value: unknown): value is string {\n',
-    '''function isResourceSelection(value: unknown): value is AbilityResourceSelection {\n  if (!isRecord(value)) return false;\n  if (value.activationLevel !== undefined && (!Number.isInteger(value.activationLevel) || value.activationLevel < 1 || value.activationLevel > 9)) {\n    return false;\n  }\n  if (value.alternatives !== undefined) {\n    if (!isRecord(value.alternatives)) return false;\n    for (const [groupId, costId] of Object.entries(value.alternatives)) {\n      if (!groupId.trim() || typeof costId !== "string" || !costId.trim()) return false;\n    }\n  }\n  return true;\n}\n\nfunction isAbilityName(value: unknown): value is string {\n''',
-)
-
-# 10. Server applies the cost atomically before the existing semantic ability use.
-replace_once(
-    "session-server/src/routes/characters/abilities/AbilitySessionActor.ts",
-    '''import {\n  endAbilityEffect,\n  restoreAbilityUse,\n  useAbilityEffect,\n} from "../../../../../src/models/abilities/abilityActivation";''',
-    '''import {\n  canActivateAbility,\n  endAbilityEffect,\n  restoreAbilityUse,\n  useAbilityEffect,\n} from "../../../../../src/models/abilities/abilityActivation";\nimport { spendAbilityResourceCosts } from "../../../../../src/models/abilities/abilityResourceCosts";\nimport { getChannelDivinityPool } from "../../../../../src/models/characters/characterChannelDivinity";\nimport { getKiPool } from "../../../../../src/models/characters/characterKi";''',
-)
-replace_once(
-    "session-server/src/routes/characters/abilities/AbilitySessionActor.ts",
-    '''  const { source } = operation;\n  switch (source.type) {''',
-    '''  const { source } = operation;\n  let nextCharacter = character;\n  if (operation.type === "character.ability.use") {\n    const ability = findAbilityForSource(character, source);\n    if (!ability || !canActivateAbility(character, ability)) return null;\n    if ((source.type === "character" || source.type === "condition") && ability.category === "channelDivinity" && (getChannelDivinityPool(character)?.current ?? 0) <= 0) return null;\n    if ((source.type === "character" || source.type === "condition") && ability.category === "martialArts" && (getKiPool(character)?.current ?? 0) <= 0) return null;\n    const payment = spendAbilityResourceCosts(character, ability, operation.resourceSelection);\n    if (!payment.ok) return null;\n    nextCharacter = payment.character;\n  }\n\n  switch (source.type) {''',
-)
-# Apply the existing semantic use to the paid character, while restore/deactivate keep original semantics.
-replace_once(
-    "session-server/src/routes/characters/abilities/AbilitySessionActor.ts",
-    '        return character.useAbility(source.abilityId, operation.activationOptionId);',
-    '        return nextCharacter.useAbility(source.abilityId, operation.activationOptionId);',
-)
-replace_once(
-    "session-server/src/routes/characters/abilities/AbilitySessionActor.ts",
-    '        return character.useEquipmentAbility(source.itemId, source.abilityId);',
-    '        return nextCharacter.useEquipmentAbility(source.itemId, source.abilityId);',
-)
-replace_once(
-    "session-server/src/routes/characters/abilities/AbilitySessionActor.ts",
-    '        return character.useAbility(projectedId, operation.activationOptionId);',
-    '        return nextCharacter.useAbility(projectedId, operation.activationOptionId);',
-)
-replace_once(
-    "session-server/src/routes/characters/abilities/AbilitySessionActor.ts",
-    '''      return updateRaceAbilityState(\n        character,''',
-    '''      return updateRaceAbilityState(\n        operation.type === "character.ability.use" ? nextCharacter : character,''',
-)
-replace_once(
-    "session-server/src/routes/characters/abilities/AbilitySessionActor.ts",
-    'function updateRaceAbilityState(\n',
-    '''function findAbilityForSource(\n  character: CharacterTemplate,\n  source: SessionAbilitySource,\n): Ability | undefined {\n  if (source.type === "race") {\n    return character.get("sheet").race.naturalAbilities?.find((ability) => ability.id === source.abilityId);\n  }\n  if (source.type === "equipment") {\n    return character.getEquipmentAbilities().find((ability) =>\n      ability.sourceItemId === source.itemId && ability.originalAbilityId === source.abilityId\n    );\n  }\n  if (source.type === "condition") {\n    return character.getCharacterAbilities().find((ability) =>\n      ability.source === "condition" &&\n      ability.sourceConditionId === source.conditionId &&\n      ability.originalAbilityId === source.abilityId\n    );\n  }\n  return character.getCharacterAbilities().find((ability) =>\n    ability.id === source.abilityId && ability.source !== "equipment" && ability.source !== "condition"\n  );\n}\n\nfunction updateRaceAbilityState(\n''',
-)
-
-print("Ability resource costs and Select overlay patch applied.")
+print("Normal ability resource costs refined with custom class slot pools and pact-slot semantics.")
