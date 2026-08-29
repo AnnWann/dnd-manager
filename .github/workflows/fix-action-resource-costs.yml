@@ -117,7 +117,7 @@ jobs:
           PY
 
       - name: Install frontend dependencies
-        run: npm install --ignore-scripts --no-audit --no-fund
+        run: npm install --no-audit --no-fund
 
       - name: Install session-server dependencies
         run: npm --prefix session-server install --ignore-scripts --no-audit --no-fund
