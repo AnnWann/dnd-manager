@@ -1,0 +1,147 @@
+name: Fix action resource cost integration
+
+on:
+  push:
+    branches:
+      - qa
+    paths:
+      - ".github/workflows/fix-action-resource-costs.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    env:
+      DIRECT_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+    steps:
+      - name: Checkout qa
+        uses: actions/checkout@v4
+        with:
+          ref: qa
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Patch action resource integration
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              if old not in text:
+                  raise RuntimeError(f"Expected snippet not found in {path}: {old[:160]!r}")
+              file.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          path = "src/features/characters/characterSheet/minimalCharacterActions.tsx"
+
+          replace_once(
+              path,
+              '''import type {\n  Ability,\n  AbilityActionKind,\n} from "../../../models/abilities/Ability"\n''',
+              '''import type {\n  Ability,\n  AbilityActionKind,\n  AbilityResourceSelection,\n} from "../../../models/abilities/Ability"\n''',
+          )
+
+          replace_once(
+              path,
+              '''import {\n  abilityRequiresActivation,\n  endAbilityEffect,\n  getAbilityUsageMax,\n  isAbilityBenefitsActive,\n  useAbilityEffect,\n} from "../../../models/abilities/abilityActivation"\n''',
+              '''import {\n  abilityRequiresActivation,\n  endAbilityEffect,\n  getAbilityUsageMax,\n  isAbilityBenefitsActive,\n  useAbilityEffect,\n} from "../../../models/abilities/abilityActivation"\nimport {\n  canPayAbilityResourceCosts,\n  hasAbilityResourceCosts,\n  spendAbilityResourceCosts,\n} from "../../../models/abilities/abilityResourceCosts"\n''',
+          )
+
+          replace_once(
+              path,
+              '''import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"\nimport { CustomSystemActionResources } from "./CustomSystemActionResources"\n''',
+              '''import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"\nimport { AbilityResourceActivationModal } from "../abilities/abilityResourceActivationModal"\nimport { CustomSystemActionResources } from "./CustomSystemActionResources"\n''',
+          )
+
+          replace_once(
+              path,
+              '''  const [selected, setSelected] = useState<ActionEntry | null>(null)\n  const [error, setError] = useState("")\n''',
+              '''  const [selected, setSelected] = useState<ActionEntry | null>(null)\n  const [abilityResourceEntry, setAbilityResourceEntry] = useState<ActionEntry | null>(null)\n  const [error, setError] = useState("")\n''',
+          )
+
+          old_change = '''  function changeAbilityState(\n    entry: ActionEntry,\n    action: "use" | "deactivate",\n    optionId?: string,\n  ) {\n    const source = entry.abilitySource\n    if (!source) return\n\n    if (sessionRuntime) {\n      if (sessionRuntime.status !== "connected") {\n        setError("A sessão está desconectada. Não foi possível alterar a habilidade.")\n        return\n      }\n\n      const sent = sessionRuntime.dispatchAbilityOperation({\n        type: action === "use"\n          ? "character.ability.use"\n          : "character.ability.deactivate",\n        characterId: character.get("id"),\n        source,\n        abilityName: entry.ability?.name,\n        ...(action === "use" && optionId\n          ? { activationOptionId: optionId }\n          : {}),\n      })\n\n      if (!sent) {\n        setError("Não foi possível enviar a alteração da habilidade para a sessão.")\n        return\n      }\n\n      setSelected(null)\n      return\n    }\n\n    updateCharacter(character.get("id"), (current) => {\n      if (source.type === "equipment") {\n        return action === "use"\n          ? current.useEquipmentAbility(source.itemId, source.abilityId)\n          : current.deactivateEquipmentAbility(source.itemId, source.abilityId)\n      }\n      if (source.type === "race") {\n        const ability = (current.get("sheet").race.naturalAbilities ?? []).find(\n          (item) => item.id === source.abilityId,\n        )\n        if (!ability) return current\n        return action === "use"\n          ? useAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" }, optionId)\n          : endAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })\n      }\n      return action === "use"\n        ? useCharacterAbility(current, source.abilityId, optionId)\n        : current.deactivateAbility(source.abilityId)\n    })\n    setSelected(null)\n  }\n'''
+
+          new_change = '''  function changeAbilityState(\n    entry: ActionEntry,\n    action: "use" | "deactivate",\n    optionId?: string,\n    resourceSelection?: AbilityResourceSelection,\n  ) {\n    const source = entry.abilitySource\n    if (!source) return\n\n    if (\n      action === "use" &&\n      entry.ability &&\n      (hasAbilityResourceCosts(entry.ability) || entry.ability.resourceUpcast?.enabled)\n    ) {\n      const payment = canPayAbilityResourceCosts(character, entry.ability, resourceSelection)\n      if (!payment.ok) {\n        setError(payment.reason)\n        return\n      }\n    }\n\n    if (sessionRuntime) {\n      if (sessionRuntime.status !== "connected") {\n        setError("A sessão está desconectada. Não foi possível alterar a habilidade.")\n        return\n      }\n\n      const sent = sessionRuntime.dispatchAbilityOperation({\n        type: action === "use"\n          ? "character.ability.use"\n          : "character.ability.deactivate",\n        characterId: character.get("id"),\n        source,\n        abilityName: entry.ability?.name,\n        ...(action === "use" && optionId\n          ? { activationOptionId: optionId }\n          : {}),\n        ...(action === "use" && resourceSelection\n          ? { resourceSelection }\n          : {}),\n      })\n\n      if (!sent) {\n        setError("Não foi possível enviar a alteração da habilidade para a sessão.")\n        return\n      }\n\n      setAbilityResourceEntry(null)\n      setSelected(null)\n      return\n    }\n\n    updateCharacter(character.get("id"), (current) => {\n      let paidCurrent = current\n      if (action === "use" && entry.ability) {\n        const payment = spendAbilityResourceCosts(current, entry.ability, resourceSelection)\n        if (!payment.ok) return current\n        paidCurrent = payment.character\n      }\n\n      if (source.type === "equipment") {\n        return action === "use"\n          ? paidCurrent.useEquipmentAbility(source.itemId, source.abilityId)\n          : current.deactivateEquipmentAbility(source.itemId, source.abilityId)\n      }\n      if (source.type === "race") {\n        const ability = (current.get("sheet").race.naturalAbilities ?? []).find(\n          (item) => item.id === source.abilityId,\n        )\n        if (!ability) return current\n        return action === "use"\n          ? useAbilityEffect(paidCurrent, ability, { type: "race", sourceLabel: "Raça" }, optionId)\n          : endAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })\n      }\n      return action === "use"\n        ? useCharacterAbility(paidCurrent, source.abilityId, optionId)\n        : current.deactivateAbility(source.abilityId)\n    })\n    setAbilityResourceEntry(null)\n    setSelected(null)\n  }\n'''
+          replace_once(path, old_change, new_change)
+
+          replace_once(
+              path,
+              '''                ) : (selected.ability.activationOptions?.length ?? 0) > 0 ? (\n                  <>\n''',
+              '''                ) : hasAbilityResourceCosts(selected.ability) || selected.ability.resourceUpcast?.enabled ? (\n                  <div className="flex justify-end">\n                    <Button variant="primary" onClick={() => setAbilityResourceEntry(selected)}>\n                      Configurar e usar\n                    </Button>\n                  </div>\n                ) : (selected.ability.activationOptions?.length ?? 0) > 0 ? (\n                  <>\n''',
+          )
+
+          replace_once(
+              path,
+              '''      {selected ? (\n        <Modal title={selected.name} onClose={() => setSelected(null)} className="max-w-lg">\n''',
+              '''      {selected ? (\n        <Modal\n          title={selected.name}\n          onClose={() => {\n            setAbilityResourceEntry(null)\n            setSelected(null)\n          }}\n          className="max-w-lg"\n        >\n''',
+          )
+
+          replace_once(
+              path,
+              '''      ) : null}\n    </section>\n''',
+              '''      ) : null}\n\n      {abilityResourceEntry?.ability ? (\n        <AbilityResourceActivationModal\n          key={abilityResourceEntry.id}\n          ability={abilityResourceEntry.ability}\n          character={character}\n          onClose={() => setAbilityResourceEntry(null)}\n          onConfirm={(optionId, resourceSelection) =>\n            changeAbilityState(abilityResourceEntry, "use", optionId, resourceSelection)\n          }\n        />\n      ) : null}\n    </section>\n''',
+          )
+
+          modal = "src/features/characters/abilities/abilityResourceActivationModal.tsx"
+          replace_once(
+              modal,
+              '''import { useMemo, useState } from "react"\n''',
+              '''import { useEffect, useMemo, useState } from "react"\n''',
+          )
+
+          replace_once(
+              modal,
+              '''  const [activationLevel, setActivationLevel] = useState(baseLevel)\n  const [optionId, setOptionId] = useState(ability.activationOptions?.[0]?.id ?? "")\n''',
+              '''  const pactLevel = character.getPactSlots()?.level\n  const defaultUsesPact = (ability.resourceCosts ?? []).some((group) =>\n    group.mode === "all"\n      ? group.costs.some((cost) => cost.kind === "pactSlot")\n      : group.costs[0]?.kind === "pactSlot",\n  )\n  const [activationLevel, setActivationLevel] = useState(() =>\n    ability.resourceUpcast?.enabled && defaultUsesPact && pactLevel &&\n    pactLevel >= (baseLevel ?? 1) && pactLevel <= (maximumLevel ?? 9)\n      ? pactLevel\n      : baseLevel,\n  )\n  const [optionId, setOptionId] = useState(ability.activationOptions?.[0]?.id ?? "")\n''',
+          )
+
+          replace_once(
+              modal,
+              '''  const selection = useMemo<AbilityResourceSelection | undefined>(() => {\n''',
+              '''  const selectedUsesPact = useMemo(() =>\n    (ability.resourceCosts ?? []).some((group) => {\n      if (group.mode === "all") return group.costs.some((cost) => cost.kind === "pactSlot")\n      const selectedId = alternatives[group.id] ?? group.costs[0]?.id\n      return group.costs.find((cost) => cost.id === selectedId)?.kind === "pactSlot"\n    }),\n  [ability.resourceCosts, alternatives])\n\n  useEffect(() => {\n    if (!ability.resourceUpcast?.enabled || !selectedUsesPact || !pactLevel) return\n    if (pactLevel < (baseLevel ?? 1) || pactLevel > (maximumLevel ?? 9)) return\n    setActivationLevel(pactLevel)\n  }, [ability.resourceUpcast?.enabled, baseLevel, maximumLevel, pactLevel, selectedUsesPact])\n\n  const selection = useMemo<AbilityResourceSelection | undefined>(() => {\n''',
+          )
+
+          replace_once(
+              modal,
+              '''        {ability.resourceUpcast?.enabled && baseLevel !== undefined && maximumLevel !== undefined ? (\n          <label className="grid gap-1">\n            <span className="text-xs font-semibold text-textH">Nível de ativação</span>\n            <Select value={String(activationLevel ?? baseLevel)} onChange={(event) => setActivationLevel(Number(event.target.value))}>\n              {Array.from({ length: maximumLevel - baseLevel + 1 }, (_, index) => baseLevel + index).map((level) => (\n                <option key={level} value={level}>Nível {level}{level === baseLevel ? " — base" : " — upcast"}</option>\n              ))}\n            </Select>\n          </label>\n        ) : null}\n''',
+              '''        {ability.resourceUpcast?.enabled && baseLevel !== undefined && maximumLevel !== undefined ? (\n          selectedUsesPact && pactLevel ? (\n            <div className="grid gap-1 rounded-lg border border-border bg-bg-subtle p-3">\n              <span className="text-xs font-semibold text-textH">Nível de ativação</span>\n              <span className="text-sm text-textH">Nível {pactLevel} — espaço de pacto atual</span>\n              <span className="text-[11px] leading-5 text-textMuted">\n                Espaços de pacto são sempre usados no nível atual do pacto; não há um slot de pacto inferior para escolher.\n              </span>\n            </div>\n          ) : (\n            <label className="grid gap-1">\n              <span className="text-xs font-semibold text-textH">Nível de ativação</span>\n              <Select value={String(activationLevel ?? baseLevel)} onChange={(event) => setActivationLevel(Number(event.target.value))}>\n                {Array.from({ length: maximumLevel - baseLevel + 1 }, (_, index) => baseLevel + index).map((level) => (\n                  <option key={level} value={level}>Nível {level}{level === baseLevel ? " — base" : " — upcast"}</option>\n                ))}\n              </Select>\n            </label>\n          )\n        ) : null}\n''',
+          )
+
+          print("Action resource integration patched.")
+          PY
+
+      - name: Install frontend dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Install session-server dependencies
+        run: npm --prefix session-server install --ignore-scripts --no-audit --no-fund
+
+      - name: Check shared Select boundary
+        run: npm run check:native-selects
+
+      - name: Typecheck frontend
+        run: npx tsc -b --pretty false
+
+      - name: Typecheck session server
+        run: npm --prefix session-server run typecheck
+
+      - name: Build frontend
+        run: npx vite build
+
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/features/characters/characterSheet/minimalCharacterActions.tsx src/features/characters/abilities/abilityResourceActivationModal.tsx
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "fix: consume ability resources from character actions"
+          git push origin HEAD:qa
