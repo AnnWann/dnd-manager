@@ -12,6 +12,14 @@ import type {
 } from "./CharacterCondition"
 
 const CONDITION_NOTE_PREFIX = "__dnd_manager_conditions__:"
+const IMMOBILIZING_STANDARD_CONDITIONS = new Set([
+  "agarrado",
+  "atordoado",
+  "impedido",
+  "inconsciente",
+  "paralisado",
+  "petrificado",
+])
 
 export function getCharacterConditions(
   character: CharacterTemplate,
@@ -141,10 +149,11 @@ export function adjustConditionRemaining(
 
 function normalizeCondition(value: unknown): CharacterCondition {
   const raw = isRecord(value) ? value : {}
+  const name = readString(raw.name) || "Condição"
 
   return {
     id: readString(raw.id) || crypto.randomUUID(),
-    name: readString(raw.name) || "Condição",
+    name,
     description: readString(raw.description),
     behavior: readString(raw.behavior),
     source: readString(raw.source),
@@ -152,7 +161,7 @@ function normalizeCondition(value: unknown): CharacterCondition {
     tags: Array.isArray(raw.tags)
       ? raw.tags.map(readString).filter(Boolean)
       : [],
-    bonuses: normalizeBonuses(raw.bonuses),
+    bonuses: applyStandardConditionBonuses(name, normalizeBonuses(raw.bonuses)),
     grantedSpells: normalizeGrantedSpells(raw.grantedSpells),
     grantedProficiencies: normalizeGrantedProficiencies(raw.grantedProficiencies),
     grantedAbilities: normalizeGrantedAbilities(raw.grantedAbilities),
@@ -165,6 +174,26 @@ function normalizeCondition(value: unknown): CharacterCondition {
     sourceCharacterId: optionalString(raw.sourceCharacterId),
     linkedCombatantId: optionalString(raw.linkedCombatantId),
     initiativeEffectId: optionalString(raw.initiativeEffectId),
+  }
+}
+
+function applyStandardConditionBonuses(
+  name: string,
+  bonuses: BonusCollection | undefined,
+): BonusCollection | undefined {
+  const normalizedName = name.trim().toLocaleLowerCase("pt-BR")
+  if (!IMMOBILIZING_STANDARD_CONDITIONS.has(normalizedName)) return bonuses
+  if (bonuses?.speed?.length) return bonuses
+
+  return {
+    ...(bonuses ?? {}),
+    speed: [
+      {
+        type: "flat",
+        value: 0,
+        label: `Condição: ${name}`,
+      },
+    ],
   }
 }
 
