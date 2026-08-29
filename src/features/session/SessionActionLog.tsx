@@ -1,4 +1,4 @@
-import { History, Undo2 } from "lucide-react"
+import { History, PanelRightClose, PanelRightOpen, Undo2 } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
@@ -27,6 +27,7 @@ type DisplayRecord =
 
 const REST_LEGACY_MATCH_WINDOW_MS = 3_000
 const LOG_PAGE_SIZE = 20
+const MASTER_LOG_COLLAPSED_STORAGE_KEY = "dnd-manager:session-action-log:collapsed"
 
 export function SessionActionLog() {
   const { operationLog, visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
@@ -35,6 +36,11 @@ export function SessionActionLog() {
   const sessionLog = (logRuntime?.hpLog ?? []) as SessionLogRecord[]
   const customSystemDefinitions = runtime?.runtimeConfigSnapshot?.config.customSystems ?? []
   const [page, setPage] = useState(0)
+  const [collapsedForMaster, setCollapsedForMaster] = useState(() => {
+    if (typeof window === "undefined") return false
+    return window.localStorage.getItem(MASTER_LOG_COLLAPSED_STORAGE_KEY) === "1"
+  })
+  const canToggleVisibility = runtime?.role === "MASTER"
 
   const characterNames = useMemo(
     () => new Map(visibleCharacters.map((character) => [character.get("id"), character.get("name")])),
@@ -83,14 +89,51 @@ export function SessionActionLog() {
     setPage(Math.max(0, pageCount - 1))
   }, [page, pageCount])
 
+  useEffect(() => {
+    if (!canToggleVisibility || typeof window === "undefined") return
+    window.localStorage.setItem(
+      MASTER_LOG_COLLAPSED_STORAGE_KEY,
+      collapsedForMaster ? "1" : "0",
+    )
+  }, [canToggleVisibility, collapsedForMaster])
+
+  if (canToggleVisibility && collapsedForMaster) {
+    return (
+      <aside className="hidden w-14 shrink-0 flex-col items-center border-l border-border bg-bg-elevated xl:flex">
+        <div className="flex h-16 w-full shrink-0 items-center justify-center border-b border-border">
+          <button
+            type="button"
+            onClick={() => setCollapsedForMaster(false)}
+            className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-bg-subtle text-textMuted transition-colors hover:border-accentBorder hover:bg-accentBg hover:text-textH"
+            title="Mostrar logs da sessão"
+            aria-label="Mostrar logs da sessão"
+          >
+            <PanelRightOpen className="h-4 w-4" />
+          </button>
+        </div>
+      </aside>
+    )
+  }
+
   return (
     <aside className="hidden w-80 shrink-0 flex-col border-l border-border bg-bg-elevated xl:flex">
       <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4">
         <div className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-bg-subtle text-textMuted"><History className="h-4 w-4" /></div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-textH">Logs da sessão</div>
           <div className="text-xs text-textMuted">{records.length} ações recentes</div>
         </div>
+        {canToggleVisibility ? (
+          <button
+            type="button"
+            onClick={() => setCollapsedForMaster(true)}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-textMuted transition-colors hover:bg-bg-subtle hover:text-textH"
+            title="Ocultar logs da sessão"
+            aria-label="Ocultar logs da sessão"
+          >
+            <PanelRightClose className="h-4 w-4" />
+          </button>
+        ) : null}
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
