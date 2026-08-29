@@ -29,6 +29,7 @@ import {
 } from "../magic/grantedSpellsEditor"
 import { GrantedProficienciesEditor } from "../proficiencies/grantedProficienciesEditor"
 import { AbilityAdvancedEffectsEditor } from "./abilityAdvancedEffectsEditor"
+import { AbilityResourceCostsEditor } from "./abilityResourceCostsEditor"
 import {
   ABILITY_ACTION_OPTIONS,
   ABILITY_KIND_OPTIONS,
@@ -158,7 +159,7 @@ export function AbilityDialog({
     (draft.activationOptions?.length ?? 0) > 0 ||
     Object.values(draft.bonuses ?? {}).some((value) => Array.isArray(value) && value.length > 0)
   const hasConfiguredResource =
-    sharedClassResource || hasUsage || Boolean(draft.usage?.sharedResourceId)
+    sharedClassResource || hasUsage || Boolean(draft.usage?.sharedResourceId) || (draft.resourceCosts?.length ?? 0) > 0
 
   function updateUsageMaximum(rawValue: string) {
     if (!draft.usage) return
@@ -575,6 +576,8 @@ export function AbilityDialog({
                   ) : null}
                 </div>
               )}
+
+              <AbilityResourceCostsEditor ability={draft} onChange={setDraft} />
             </div>
           ) : null}
 

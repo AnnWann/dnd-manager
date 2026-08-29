@@ -3,11 +3,10 @@ import { useEffect, useMemo, useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
-import { Modal } from "../../../components/ui/Modal"
 import { Select } from "../../../components/ui/Select"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import type { SessionAbilitySource } from "../../session-runtime/abilitySessionProtocol"
-import type { Ability } from "../../../models/abilities/Ability"
+import type { Ability, AbilityResourceSelection } from "../../../models/abilities/Ability"
 import {
   endAbilityEffect,
   useAbilityEffect,
@@ -18,6 +17,8 @@ import { useAbility as useCharacterAbility } from "../../../models/characters/ch
 import { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { AbilityCard } from "./abilityCard"
 import { AbilityDialog } from "./abilityDialog"
+import { AbilityResourceActivationModal } from "./abilityResourceActivationModal"
+import { hasAbilityResourceCosts, spendAbilityResourceCosts } from "../../../models/abilities/abilityResourceCosts"
 import { CompactAbilityCard } from "./compactAbilityCard"
 
 type Props = {
@@ -179,14 +180,14 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   }
 
   function requestUseAbility(ability: Ability) {
-    if ((ability.activationOptions?.length ?? 0) > 0) {
+    if ((ability.activationOptions?.length ?? 0) > 0 || hasAbilityResourceCosts(ability) || ability.resourceUpcast?.enabled) {
       setActivationChoice(ability)
       return
     }
     useAbility(ability.id)
   }
 
-  function useAbility(id: string, optionId?: string) {
+  function useAbility(id: string, optionId?: string, resourceSelection?: AbilityResourceSelection) {
     const ability = abilities.find((entry) => entry.id === id)
     if (ability) {
       const source = toSessionAbilitySource(ability)
@@ -195,6 +196,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
         characterId: displayCharacter.get("id"),
         source,
         activationOptionId: optionId,
+        resourceSelection,
       })) {
         setActivationChoice(null)
         return
@@ -202,20 +204,26 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
     }
 
     updateCharacter(displayCharacter.get("id"), (current) => {
+      const payment = ability
+        ? spendAbilityResourceCosts(current, ability, resourceSelection)
+        : { ok: true as const, character: current, costs: [] }
+      if (!payment.ok) return current
+      const paidCharacter = payment.character
+
       if (ability && isEquipmentAbility(ability)) {
-        return current.useEquipmentAbility(ability.sourceItemId, ability.originalAbilityId)
+        return paidCharacter.useEquipmentAbility(ability.sourceItemId, ability.originalAbilityId)
       }
 
       if (ability && isRaceAbility(ability)) {
         return updateRaceAbilityState(
-          current,
+          paidCharacter,
           ability.originalAbilityId,
           "use",
           optionId,
         )
       }
 
-      return useCharacterAbility(current, id, optionId)
+      return useCharacterAbility(paidCharacter, id, optionId)
     })
     setActivationChoice(null)
   }
@@ -374,48 +382,12 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       />
 
       {activationChoice ? (
-        <Modal
-          title={`Escolher habilidade — ${activationChoice.name}`}
+        <AbilityResourceActivationModal
+          ability={activationChoice}
+          character={displayCharacter}
           onClose={() => setActivationChoice(null)}
-          className="max-w-lg"
-        >
-          <div className="grid gap-2">
-            <p className="text-xs leading-5 text-textMuted">
-              Escolha qual mini-habilidade será concedida. O recurso da habilidade principal só é consumido depois da escolha.
-            </p>
-            {(activationChoice.activationOptions ?? []).map((option) => {
-              const mini = option.ability
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => useAbility(activationChoice.id, option.id)}
-                  className="rounded-xl border border-border bg-bg-subtle p-3 text-left transition-colors hover:border-accentBorder hover:bg-accentBg"
-                >
-                  <div className="text-sm font-semibold text-textH">
-                    {mini?.name || option.name}
-                  </div>
-                  {(mini?.description || option.description) ? (
-                    <div className="mt-1 whitespace-pre-wrap text-xs leading-5 text-textMuted">
-                      {mini?.description || option.description}
-                    </div>
-                  ) : null}
-                  {mini ? (
-                    <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-wide text-accent">
-                      <span>{mini.kind === "feature" ? "Característica" : mini.kind === "passive" ? "Passiva" : "Ativa"}</span>
-                      {mini.usage ? <span>• {Math.max(0, mini.usage.max - mini.usage.used)}/{mini.usage.max} usos</span> : null}
-                      {option.duration?.customLabel ? <span>• {option.duration.customLabel}</span> : null}
-                    </div>
-                  ) : option.condition?.name ? (
-                    <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-accent">
-                      Aplica: {option.condition.name}
-                    </div>
-                  ) : null}
-                </button>
-              )
-            })}
-          </div>
-        </Modal>
+          onConfirm={(optionId, resourceSelection) => useAbility(activationChoice.id, optionId, resourceSelection)}
+        />
       ) : null}
     </>
   )

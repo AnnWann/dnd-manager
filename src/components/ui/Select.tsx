@@ -328,7 +328,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
                     : undefined
                 }
                 onKeyDown={handleMenuKeyDown}
-                className="fixed z-[1000] overflow-y-auto rounded-xl border border-borderStrong bg-bg-elevated p-1 shadow-theme-lg outline-none"
+                className="fixed z-[2147483647] overflow-y-auto rounded-xl border border-borderStrong bg-bg-elevated p-1 shadow-theme-lg outline-none"
                 style={{
                   left: position.left,
                   top: position.top,

@@ -27,11 +27,63 @@ export type AbilityActivationOption = {
   condition?: CharacterConditionGrant
 }
 
+export type AbilityResourceCostKind =
+  | "spellSlot"
+  | "pactSlot"
+  | "ki"
+  | "sorceryPoints"
+  | "channelDivinity"
+  | "customSystem"
+
+export type AbilityResourceCostGroupMode = "all" | "oneOf"
+
+export interface AbilityResourceUpcastDefinition {
+  enabled: boolean
+  /** Nível de referência da habilidade antes de escalar. */
+  baseLevel: number
+  /** Limite opcional do nível escolhido na ativação. */
+  maximumLevel?: number
+}
+
+export interface AbilityResourceCostDefinition {
+  id: string
+  kind: AbilityResourceCostKind
+  /** Quantidade base consumida. Espaços normalmente usam 1. */
+  amount: number
+  /** Nível do espaço na ativação base. */
+  slotLevel?: number
+  /** Quantidade adicional consumida por nível de upcast. */
+  amountPerLevel?: number
+  /** Referência para recursos de Custom Systems. */
+  systemId?: string
+  resourceId?: string
+  systemName?: string
+  resourceName?: string
+}
+
+export interface AbilityResourceCostGroup {
+  id: string
+  /** all = E; oneOf = OU. Todos os grupos, por sua vez, são cumulativos (E). */
+  mode: AbilityResourceCostGroupMode
+  costs: AbilityResourceCostDefinition[]
+}
+
+export interface AbilityResourceSelection {
+  /** Nível escolhido quando a habilidade permite upcast/escalonamento. */
+  activationLevel?: number
+  /** Em grupos OU, mapeia groupId para o costId escolhido. */
+  alternatives?: Record<string, string>
+}
+
 export interface Ability {
   id: string
   name: string
   description?: string
   usage?: Usage
+  /** Custos externos consumidos atomicamente ao ativar a habilidade. */
+  resourceCosts?: AbilityResourceCostGroup[]
+  /** Permite escolher um nível maior no momento do uso. */
+  resourceUpcast?: AbilityResourceUpcastDefinition
   kind?: AbilityKind
   category?: AbilityCategory
   actionKind?: AbilityActionKind

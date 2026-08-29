@@ -1,3 +1,5 @@
+import type { AbilityResourceSelection } from "../../../../../src/models/abilities/Ability";
+
 export type SessionAbilitySource =
   | { type: "character"; abilityId: string }
   | { type: "race"; abilityId: string }
@@ -23,6 +25,7 @@ export type SessionAbilityOperation =
       source: SessionAbilitySource;
       abilityName?: string;
       activationOptionId?: string;
+      resourceSelection?: AbilityResourceSelection;
     }
   | {
       type: "character.ability.usage.spend";
@@ -106,7 +109,8 @@ function isAbilityOperation(value: unknown): value is SessionAbilityOperation {
     case "character.ability.use":
       return isAbilitySource(value.source) &&
         hasValidOptionalName &&
-        (value.activationOptionId === undefined || typeof value.activationOptionId === "string");
+        (value.activationOptionId === undefined || typeof value.activationOptionId === "string") &&
+        (value.resourceSelection === undefined || isResourceSelection(value.resourceSelection));
     case "character.ability.usage.spend":
     case "character.ability.restore":
     case "character.ability.deactivate":
@@ -118,6 +122,20 @@ function isAbilityOperation(value: unknown): value is SessionAbilityOperation {
     default:
       return false;
   }
+}
+
+function isResourceSelection(value: unknown): value is AbilityResourceSelection {
+  if (!isRecord(value)) return false;
+  if (value.activationLevel !== undefined && (!Number.isInteger(value.activationLevel) || value.activationLevel < 1 || value.activationLevel > 9)) {
+    return false;
+  }
+  if (value.alternatives !== undefined) {
+    if (!isRecord(value.alternatives)) return false;
+    for (const [groupId, costId] of Object.entries(value.alternatives)) {
+      if (!groupId.trim() || typeof costId !== "string" || !costId.trim()) return false;
+    }
+  }
+  return true;
 }
 
 function isAbilityName(value: unknown): value is string {

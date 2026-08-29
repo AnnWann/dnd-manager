@@ -1,4 +1,4 @@
-import type { Ability } from "../../models/abilities/Ability"
+import type { Ability, AbilityResourceSelection } from "../../models/abilities/Ability"
 import type { CharacterTemplateProps } from "../../models/characters/CharacterTemplate"
 import type { SessionCustomSystemOperation } from "./customSystemSessionProtocol"
 
@@ -27,6 +27,7 @@ export type SessionAbilityOperation =
       source: SessionAbilitySource
       abilityName?: string
       activationOptionId?: string
+      resourceSelection?: AbilityResourceSelection
     }
   | {
       type: "character.ability.usage.spend"

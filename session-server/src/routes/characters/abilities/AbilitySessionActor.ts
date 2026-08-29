@@ -1,9 +1,13 @@
 import type { Ability } from "../../../../../src/models/abilities/Ability";
 import {
+  canActivateAbility,
   endAbilityEffect,
   restoreAbilityUse,
   useAbilityEffect,
 } from "../../../../../src/models/abilities/abilityActivation";
+import { spendAbilityResourceCosts } from "../../../../../src/models/abilities/abilityResourceCosts";
+import { getChannelDivinityPool } from "../../../../../src/models/characters/characterChannelDivinity";
+import { getKiPool } from "../../../../../src/models/characters/characterKi";
 import {
   getCharacterConditions,
   withCharacterConditions,
@@ -359,10 +363,21 @@ function applyAbilityOperation(
   }
 
   const { source } = operation;
+  let nextCharacter = character;
+  if (operation.type === "character.ability.use") {
+    const ability = findAbilityForSource(character, source);
+    if (!ability || !canActivateAbility(character, ability)) return null;
+    if ((source.type === "character" || source.type === "condition") && ability.category === "channelDivinity" && (getChannelDivinityPool(character)?.current ?? 0) <= 0) return null;
+    if ((source.type === "character" || source.type === "condition") && ability.category === "martialArts" && (getKiPool(character)?.current ?? 0) <= 0) return null;
+    const payment = spendAbilityResourceCosts(character, ability, operation.resourceSelection);
+    if (!payment.ok) return null;
+    nextCharacter = payment.character;
+  }
+
   switch (source.type) {
     case "character":
       if (operation.type === "character.ability.use") {
-        return character.useAbility(source.abilityId, operation.activationOptionId);
+        return nextCharacter.useAbility(source.abilityId, operation.activationOptionId);
       }
       if (operation.type === "character.ability.restore") {
         return character.restoreAbility(source.abilityId);
@@ -371,7 +386,7 @@ function applyAbilityOperation(
 
     case "equipment":
       if (operation.type === "character.ability.use") {
-        return character.useEquipmentAbility(source.itemId, source.abilityId);
+        return nextCharacter.useEquipmentAbility(source.itemId, source.abilityId);
       }
       if (operation.type === "character.ability.restore") {
         return character.restoreEquipmentAbility(source.itemId, source.abilityId);
@@ -381,7 +396,7 @@ function applyAbilityOperation(
     case "condition": {
       const projectedId = `condition:${source.conditionId}:${source.abilityId}`;
       if (operation.type === "character.ability.use") {
-        return character.useAbility(projectedId, operation.activationOptionId);
+        return nextCharacter.useAbility(projectedId, operation.activationOptionId);
       }
       if (operation.type === "character.ability.restore") {
         return character.restoreAbility(projectedId);
@@ -391,7 +406,7 @@ function applyAbilityOperation(
 
     case "race":
       return updateRaceAbilityState(
-        character,
+        operation.type === "character.ability.use" ? nextCharacter : character,
         source,
         operation.type === "character.ability.use"
           ? "use"
@@ -403,6 +418,30 @@ function applyAbilityOperation(
           : undefined,
       );
   }
+}
+
+function findAbilityForSource(
+  character: CharacterTemplate,
+  source: SessionAbilitySource,
+): Ability | undefined {
+  if (source.type === "race") {
+    return character.get("sheet").race.naturalAbilities?.find((ability) => ability.id === source.abilityId);
+  }
+  if (source.type === "equipment") {
+    return character.getEquipmentAbilities().find((ability) =>
+      ability.sourceItemId === source.itemId && ability.originalAbilityId === source.abilityId
+    );
+  }
+  if (source.type === "condition") {
+    return character.getCharacterAbilities().find((ability) =>
+      ability.source === "condition" &&
+      ability.sourceConditionId === source.conditionId &&
+      ability.originalAbilityId === source.abilityId
+    );
+  }
+  return character.getCharacterAbilities().find((ability) =>
+    ability.id === source.abilityId && ability.source !== "equipment" && ability.source !== "condition"
+  );
 }
 
 function updateRaceAbilityState(
