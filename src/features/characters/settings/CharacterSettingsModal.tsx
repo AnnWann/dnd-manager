@@ -1,4 +1,5 @@
 import { Eye, EyeOff, Plus, Settings2, Trash2, X } from 'lucide-react'
+import { useState } from 'react'
 import type { Player } from '../../../models/player/Player'
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
 import type {
@@ -22,6 +23,7 @@ import {
   isActiveSystemState,
   isSuppressedSystemState,
 } from '../customSystems/CustomSystemsTabWithLibrary'
+import { CustomSystemAcquisitionExceptionsModal } from './CustomSystemAcquisitionExceptionsModal'
 
 const SUPPRESSED_SYSTEM_MARKER = '__customSystemSuppressed'
 
@@ -56,6 +58,7 @@ export function CharacterSettingsModal({
   createOwner,
 }: Props) {
   const definitions = useCustomSystemDefinitions()
+  const [exceptionSystemId, setExceptionSystemId] = useState('')
 
   if (!open || !canAssignOwners) return null
 
@@ -72,6 +75,12 @@ export function CharacterSettingsModal({
         (state) =>
           state.systemId === definition.id && !isSuppressedSystemState(state),
       ),
+  )
+  const exceptionState = states.find(
+    (state) => state.systemId === exceptionSystemId && isActiveSystemState(state),
+  )
+  const exceptionDefinition = definitions.find(
+    (definition) => definition.id === exceptionSystemId,
   )
 
   function setTabVisible(tab: CharacterTab, visible: boolean) {
@@ -99,6 +108,14 @@ export function CharacterSettingsModal({
       const currentStates = (current.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
       return current.withSheet('customSystems', updater(currentStates))
     })
+  }
+
+  function replaceSystemState(nextState: CharacterCustomSystemState) {
+    updateSystemStates((current) =>
+      current.map((state) =>
+        state.systemId === nextState.systemId ? nextState : state,
+      ),
+    )
   }
 
   function hideSystem(systemId: string) {
@@ -155,15 +172,6 @@ export function CharacterSettingsModal({
           )
         : [...current, next]
     })
-  }
-
-  function openCharacterExceptions() {
-    const trigger = document.querySelector<HTMLButtonElement>(
-      'button[title="Configurar exceções de aprendizagem e preparo"]',
-    )
-    if (!trigger) return
-    onClose()
-    window.setTimeout(() => trigger.click(), 0)
   }
 
   return (
@@ -293,8 +301,8 @@ export function CharacterSettingsModal({
                   name={systemName(definitions, state.systemId)}
                   status="Visível na ficha"
                 >
-                  {definition && hasConfigurableAbilityLimits(definition) ? (
-                    <SmallAction onClick={openCharacterExceptions}>
+                  {definition && hasConfigurableAbilityAcquisition(definition) ? (
+                    <SmallAction onClick={() => setExceptionSystemId(state.systemId)}>
                       <Settings2 className="h-4 w-4" /> Exceções
                     </SmallAction>
                   ) : null}
@@ -355,6 +363,16 @@ export function CharacterSettingsModal({
           </div>
         </section>
       </section>
+
+      {exceptionState && exceptionDefinition ? (
+        <CustomSystemAcquisitionExceptionsModal
+          character={character}
+          definition={exceptionDefinition}
+          state={exceptionState}
+          onChange={replaceSystemState}
+          onClose={() => setExceptionSystemId('')}
+        />
+      ) : null}
     </div>
   )
 }
@@ -424,18 +442,11 @@ function systemName(
   return definitions.find((definition) => definition.id === systemId)?.name ?? systemId
 }
 
-function hasConfigurableAbilityLimits(definition: CustomSystemDefinition): boolean {
+function hasConfigurableAbilityAcquisition(definition: CustomSystemDefinition): boolean {
   return definition.abilityTypes.some((type) => {
-    const acquisition = type.acquisition
-    if (!acquisition) return false
-
-    const learned =
-      (acquisition.mode === 'learned' || acquisition.mode === 'learnedAndPrepared') &&
-      (acquisition.learnedLimit !== undefined || Boolean(acquisition.learnedLimitFormula?.trim()))
-    const prepared =
-      (acquisition.mode === 'prepared' || acquisition.mode === 'learnedAndPrepared') &&
-      (acquisition.preparedLimit !== undefined || Boolean(acquisition.preparedLimitFormula?.trim()))
-
-    return learned || prepared
+    const mode = type.acquisition?.mode
+    return mode === 'learned'
+      || mode === 'prepared'
+      || mode === 'learnedAndPrepared'
   })
 }
