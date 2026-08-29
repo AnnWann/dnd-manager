@@ -171,6 +171,8 @@ model CharacterDomainMutation {
 
 enum CampaignRole {
   MASTER
+  ASSISTANT
+  MODERATOR
   PLAYER
 }
 
