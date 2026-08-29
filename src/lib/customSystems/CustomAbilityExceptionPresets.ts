@@ -23,8 +23,9 @@ const BATTLE_MASTER_PRESET: CustomAbilityAcquisitionExceptionPresetDefinition = 
   id: 'battle-master',
   name: 'Mestre de Batalha',
   description:
-    'No 3º nível de Guerreiro, soma as 3 técnicas da subclasse às 2 recebidas pelo Guerreiro. Nos marcos seguintes de Guerreiro, aprende 3 técnicas em vez de 2. As três técnicas concedidas pela subclasse devem ser marcadas como Sempre preparadas.',
+    'No 3º nível de Guerreiro, soma as 3 técnicas da subclasse às técnicas recebidas pelo Guerreiro. Nos marcos seguintes de Guerreiro, aprende 3 técnicas em vez de 2. As três técnicas concedidas pela subclasse ficam sempre preparadas e não contam contra o limite normal.',
   learnedLimitFormulaOverride: BATTLE_MASTER_MARTIAL_TECHNIQUES_FORMULA,
+  preparedLimitFormulaOverride: 'character.proficiencyBonus * 2',
   alwaysPreparedSelectionCount: 3,
 }
 
