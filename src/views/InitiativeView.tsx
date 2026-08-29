@@ -72,9 +72,12 @@ const selectClassName =
 
 export function InitiativeView() {
   const { visibleCharacters } = useCharacterContext()
-  const { creatures } = useCreatureCompendium()
+  const { creatures: localCreatures } = useCreatureCompendium()
   const { userRole } = useSyncContext()
   const runtime = useOptionalSessionRuntime()
+  const creatures = runtime?.runtimeConfigSnapshot
+    ? runtime.runtimeConfigSnapshot.config.creatureCompendium
+    : localCreatures
   const { session, updateSession, resetSession, hydrated } =
     useInitiativeSession()
 
