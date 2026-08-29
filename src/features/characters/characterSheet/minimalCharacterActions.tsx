@@ -19,6 +19,7 @@ import { useCustomSystemDefinitions } from "../../../lib/customSystems/CustomSys
 import type {
   Ability,
   AbilityActionKind,
+  AbilityResourceSelection,
 } from "../../../models/abilities/Ability"
 import {
   abilityRequiresActivation,
@@ -27,6 +28,11 @@ import {
   isAbilityBenefitsActive,
   useAbilityEffect,
 } from "../../../models/abilities/abilityActivation"
+import {
+  canPayAbilityResourceCosts,
+  hasAbilityResourceCosts,
+  spendAbilityResourceCosts,
+} from "../../../models/abilities/abilityResourceCosts"
 import { useAbility as useCharacterAbility } from "../../../models/characters/characterAbilities"
 import { getChannelDivinityPool } from "../../../models/characters/characterChannelDivinity"
 import { getKiPool } from "../../../models/characters/characterKi"
@@ -42,6 +48,7 @@ import type {
   CustomSystemDefinition,
 } from "../../../models/customSystems/CustomSystemDefinition"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
+import { AbilityResourceActivationModal } from "../abilities/abilityResourceActivationModal"
 import { CustomSystemActionResources } from "./CustomSystemActionResources"
 
 type ActionFilter = "action" | "bonusAction" | "reaction" | "free" | "passive"
@@ -134,6 +141,7 @@ export function MinimalCharacterActions({
   const { getMetamagicsByIds } = useMagicContext()
   const [filter, setFilter] = useState<ActionFilter>("action")
   const [selected, setSelected] = useState<ActionEntry | null>(null)
+  const [abilityResourceEntry, setAbilityResourceEntry] = useState<ActionEntry | null>(null)
   const [error, setError] = useState("")
   const [variableMetamagicCost, setVariableMetamagicCost] = useState(1)
   const [manualRollValue, setManualRollValue] = useState("")
@@ -214,9 +222,22 @@ export function MinimalCharacterActions({
     entry: ActionEntry,
     action: "use" | "deactivate",
     optionId?: string,
+    resourceSelection?: AbilityResourceSelection,
   ) {
     const source = entry.abilitySource
     if (!source) return
+
+    if (
+      action === "use" &&
+      entry.ability &&
+      (hasAbilityResourceCosts(entry.ability) || entry.ability.resourceUpcast?.enabled)
+    ) {
+      const payment = canPayAbilityResourceCosts(character, entry.ability, resourceSelection)
+      if (!payment.ok) {
+        setError(payment.reason)
+        return
+      }
+    }
 
     if (sessionRuntime) {
       if (sessionRuntime.status !== "connected") {
@@ -234,6 +255,9 @@ export function MinimalCharacterActions({
         ...(action === "use" && optionId
           ? { activationOptionId: optionId }
           : {}),
+        ...(action === "use" && resourceSelection
+          ? { resourceSelection }
+          : {}),
       })
 
       if (!sent) {
@@ -241,14 +265,22 @@ export function MinimalCharacterActions({
         return
       }
 
+      setAbilityResourceEntry(null)
       setSelected(null)
       return
     }
 
     updateCharacter(character.get("id"), (current) => {
+      let paidCurrent = current
+      if (action === "use" && entry.ability) {
+        const payment = spendAbilityResourceCosts(current, entry.ability, resourceSelection)
+        if (!payment.ok) return current
+        paidCurrent = payment.character
+      }
+
       if (source.type === "equipment") {
         return action === "use"
-          ? current.useEquipmentAbility(source.itemId, source.abilityId)
+          ? paidCurrent.useEquipmentAbility(source.itemId, source.abilityId)
           : current.deactivateEquipmentAbility(source.itemId, source.abilityId)
       }
       if (source.type === "race") {
@@ -257,13 +289,14 @@ export function MinimalCharacterActions({
         )
         if (!ability) return current
         return action === "use"
-          ? useAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" }, optionId)
+          ? useAbilityEffect(paidCurrent, ability, { type: "race", sourceLabel: "Raça" }, optionId)
           : endAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
       }
       return action === "use"
-        ? useCharacterAbility(current, source.abilityId, optionId)
+        ? useCharacterAbility(paidCurrent, source.abilityId, optionId)
         : current.deactivateAbility(source.abilityId)
     })
+    setAbilityResourceEntry(null)
     setSelected(null)
   }
 
@@ -476,7 +509,14 @@ export function MinimalCharacterActions({
       />
 
       {selected ? (
-        <Modal title={selected.name} onClose={() => setSelected(null)} className="max-w-lg">
+        <Modal
+          title={selected.name}
+          onClose={() => {
+            setAbilityResourceEntry(null)
+            setSelected(null)
+          }}
+          className="max-w-lg"
+        >
           <div className="grid gap-3">
             <div className="flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-wide text-textMuted">
               <span>{filterLabel(selected.filter)}</span>
@@ -593,6 +633,12 @@ export function MinimalCharacterActions({
                   <div className="flex justify-end">
                     <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>Encerrar efeito</Button>
                   </div>
+                ) : hasAbilityResourceCosts(selected.ability) || selected.ability.resourceUpcast?.enabled ? (
+                  <div className="flex justify-end">
+                    <Button variant="primary" onClick={() => setAbilityResourceEntry(selected)}>
+                      Configurar e usar
+                    </Button>
+                  </div>
                 ) : (selected.ability.activationOptions?.length ?? 0) > 0 ? (
                   <>
                     <div className="text-xs font-semibold text-textH">Escolha o efeito</div>
@@ -624,6 +670,18 @@ export function MinimalCharacterActions({
             ) : null}
           </div>
         </Modal>
+      ) : null}
+
+      {abilityResourceEntry?.ability ? (
+        <AbilityResourceActivationModal
+          key={abilityResourceEntry.id}
+          ability={abilityResourceEntry.ability}
+          character={character}
+          onClose={() => setAbilityResourceEntry(null)}
+          onConfirm={(optionId, resourceSelection) =>
+            changeAbilityState(abilityResourceEntry, "use", optionId, resourceSelection)
+          }
+        />
       ) : null}
     </section>
   )

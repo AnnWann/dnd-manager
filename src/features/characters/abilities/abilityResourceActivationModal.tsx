@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { Modal } from "../../../components/ui/Modal"
@@ -29,7 +29,18 @@ export function AbilityResourceActivationModal({
   const maximumLevel = ability.resourceUpcast?.enabled
     ? Math.max(baseLevel ?? 1, Math.min(9, ability.resourceUpcast.maximumLevel ?? 9))
     : undefined
-  const [activationLevel, setActivationLevel] = useState(baseLevel)
+  const pactLevel = character.getPactSlots()?.level
+  const defaultUsesPact = (ability.resourceCosts ?? []).some((group) =>
+    group.mode === "all"
+      ? group.costs.some((cost) => cost.kind === "pactSlot")
+      : group.costs[0]?.kind === "pactSlot",
+  )
+  const [activationLevel, setActivationLevel] = useState(() =>
+    ability.resourceUpcast?.enabled && defaultUsesPact && pactLevel &&
+    pactLevel >= (baseLevel ?? 1) && pactLevel <= (maximumLevel ?? 9)
+      ? pactLevel
+      : baseLevel,
+  )
   const [optionId, setOptionId] = useState(ability.activationOptions?.[0]?.id ?? "")
   const [alternatives, setAlternatives] = useState<Record<string, string>>(() =>
     Object.fromEntries(
@@ -38,6 +49,20 @@ export function AbilityResourceActivationModal({
         .map((group) => [group.id, group.costs[0]!.id]),
     ),
   )
+
+  const selectedUsesPact = useMemo(() =>
+    (ability.resourceCosts ?? []).some((group) => {
+      if (group.mode === "all") return group.costs.some((cost) => cost.kind === "pactSlot")
+      const selectedId = alternatives[group.id] ?? group.costs[0]?.id
+      return group.costs.find((cost) => cost.id === selectedId)?.kind === "pactSlot"
+    }),
+  [ability.resourceCosts, alternatives])
+
+  useEffect(() => {
+    if (!ability.resourceUpcast?.enabled || !selectedUsesPact || !pactLevel) return
+    if (pactLevel < (baseLevel ?? 1) || pactLevel > (maximumLevel ?? 9)) return
+    setActivationLevel(pactLevel)
+  }, [ability.resourceUpcast?.enabled, baseLevel, maximumLevel, pactLevel, selectedUsesPact])
 
   const selection = useMemo<AbilityResourceSelection | undefined>(() => {
     if (!(ability.resourceCosts?.length) && !ability.resourceUpcast?.enabled) return undefined
@@ -71,14 +96,24 @@ export function AbilityResourceActivationModal({
         ) : null}
 
         {ability.resourceUpcast?.enabled && baseLevel !== undefined && maximumLevel !== undefined ? (
-          <label className="grid gap-1">
-            <span className="text-xs font-semibold text-textH">Nível de ativação</span>
-            <Select value={String(activationLevel ?? baseLevel)} onChange={(event) => setActivationLevel(Number(event.target.value))}>
-              {Array.from({ length: maximumLevel - baseLevel + 1 }, (_, index) => baseLevel + index).map((level) => (
-                <option key={level} value={level}>Nível {level}{level === baseLevel ? " — base" : " — upcast"}</option>
-              ))}
-            </Select>
-          </label>
+          selectedUsesPact && pactLevel ? (
+            <div className="grid gap-1 rounded-lg border border-border bg-bg-subtle p-3">
+              <span className="text-xs font-semibold text-textH">Nível de ativação</span>
+              <span className="text-sm text-textH">Nível {pactLevel} — espaço de pacto atual</span>
+              <span className="text-[11px] leading-5 text-textMuted">
+                Espaços de pacto são sempre usados no nível atual do pacto; não há um slot de pacto inferior para escolher.
+              </span>
+            </div>
+          ) : (
+            <label className="grid gap-1">
+              <span className="text-xs font-semibold text-textH">Nível de ativação</span>
+              <Select value={String(activationLevel ?? baseLevel)} onChange={(event) => setActivationLevel(Number(event.target.value))}>
+                {Array.from({ length: maximumLevel - baseLevel + 1 }, (_, index) => baseLevel + index).map((level) => (
+                  <option key={level} value={level}>Nível {level}{level === baseLevel ? " — base" : " — upcast"}</option>
+                ))}
+              </Select>
+            </label>
+          )
         ) : null}
 
         {(ability.resourceCosts ?? []).length > 0 ? (
