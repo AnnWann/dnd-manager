@@ -13,6 +13,8 @@ permissions:
 jobs:
   implement:
     runs-on: ubuntu-latest
+    env:
+      DIRECT_URL: postgresql://ci:ci@127.0.0.1:5432/ci
     steps:
       - name: Checkout qa
         uses: actions/checkout@v4
