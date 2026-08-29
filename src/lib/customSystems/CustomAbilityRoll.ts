@@ -45,6 +45,7 @@ export function activateCustomAbilityWithRoll(
   systemId: string,
   abilityId: string,
   suppliedRollValue?: number,
+  activationLevel?: number,
 ): { character: CharacterTemplate; roll?: CustomAbilityRollResolution } {
   const state = (character.get("sheet").customSystems ?? []).find(
     (entry) => entry.systemId === systemId,
@@ -56,14 +57,14 @@ export function activateCustomAbilityWithRoll(
   )
   if (!state || !definition || !ability || !type) {
     return {
-      character: activateCustomAbility(character, definitions, systemId, abilityId),
+      character: activateCustomAbility(character, definitions, systemId, abilityId, activationLevel),
     }
   }
 
   const roll = getCustomAbilityRollDefinition(definition, state, abilityId)
   if (!roll) {
     return {
-      character: activateCustomAbility(character, definitions, systemId, abilityId),
+      character: activateCustomAbility(character, definitions, systemId, abilityId, activationLevel),
     }
   }
 
@@ -90,6 +91,7 @@ export function activateCustomAbilityWithRoll(
       resolvedDefinitions,
       systemId,
       abilityId,
+      activationLevel,
     ),
     roll: {
       mode: roll.mode,

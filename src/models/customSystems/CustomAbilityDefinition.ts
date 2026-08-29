@@ -101,6 +101,15 @@ export interface CustomAbilityResourceChangeDefinition {
   /** Mantido para compatibilidade e valores numéricos simples. Fórmula tem precedência. */
   amount?: number
   formula?: FormulaExpression
+  /**
+   * Conector entre custos consecutivos. Ausente equivale a `and` para manter
+   * compatibilidade com definições antigas. `or` inicia uma nova alternativa.
+   */
+  costJoin?: 'and' | 'or'
+  /** Nível em que o custo base é aplicado quando a habilidade permite upcast. */
+  upcastBaseLevel?: number
+  /** Quantidade adicionada ao custo para cada nível acima de upcastBaseLevel. */
+  upcastAmountPerLevel?: number
 }
 
 /**

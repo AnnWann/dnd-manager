@@ -31,6 +31,7 @@ export function activateCustomAbility(
   definitions: CustomSystemDefinition[],
   sourceSystemId: string,
   abilityId: string,
+  activationLevel?: number,
 ): CharacterTemplate {
   const originalStates = (character.get('sheet').customSystems ?? []) as CharacterCustomSystemState[]
   const explicitEvents = resolveExplicitTableEventsForAbility(
@@ -61,16 +62,49 @@ export function activateCustomAbility(
     throw new Error('A habilidade não possui usos restantes.')
   }
 
-  const resolvedChanges = (activation.resourceChanges ?? []).map((change) => ({
+  const resourceChanges = effectiveResourceChanges(activation, sourceSystemId)
+  const resolvedChanges = resourceChanges.map((change) => ({
     change,
-    amount: resolveAmount(change, sourceDefinition, sourceState, type, ability, character),
+    amount: resolveAmount(
+      change,
+      sourceDefinition,
+      sourceState,
+      type,
+      ability,
+      character,
+      activationLevel,
+    ),
   }))
 
-  validateResourceChanges(character, definitions, states, resolvedChanges)
+  const costBranches = buildSpendBranches(resolvedChanges)
+  const selectedCostBranch = selectAffordableSpendBranch(
+    character,
+    definitions,
+    states,
+    costBranches,
+  )
+  if (costBranches.length > 0 && !selectedCostBranch) {
+    throw new Error('Nenhuma combinação de custos possui recursos suficientes para usar a habilidade.')
+  }
 
   let nextCharacter = character
-  for (const resolved of resolvedChanges) {
-    nextCharacter = applyResourceChange(nextCharacter, definitions, states, resolved.change, resolved.amount)
+  for (const resolved of selectedCostBranch ?? []) {
+    nextCharacter = applyResourceChange(
+      nextCharacter,
+      definitions,
+      states,
+      resolved.change,
+      resolved.amount,
+    )
+  }
+  for (const resolved of resolvedChanges.filter(({ change }) => change.operation !== 'spend')) {
+    nextCharacter = applyResourceChange(
+      nextCharacter,
+      definitions,
+      states,
+      resolved.change,
+      resolved.amount,
+    )
   }
 
   const abilityName = resolveAbilityName(type, ability, preset)
@@ -107,6 +141,7 @@ function mergeActivation(base: CustomAbilityActivationDefinition | undefined, pr
     ...base,
     ...preset.activation,
     usage: preset.activation.usage ?? base?.usage,
+    resourceCosts: preset.activation.resourceCosts ?? base?.resourceCosts,
     resourceChanges: preset.activation.resourceChanges ?? base?.resourceChanges,
     conditionChanges: preset.activation.conditionChanges ?? base?.conditionChanges,
   }
@@ -124,31 +159,112 @@ function resolveUsage(activation: CustomAbilityActivationDefinition, definition:
   return { limited: true, used: ability.usage?.used ?? 0, maximum }
 }
 
-function resolveAmount(change: CustomAbilityResourceChangeDefinition, definition: CustomSystemDefinition, state: CharacterCustomSystemState, type: CustomAbilityTypeDefinition, ability: CustomAbilityInstance, character: CharacterTemplate): number {
+type ResolvedResourceChange = {
+  change: CustomAbilityResourceChangeDefinition
+  amount: number
+}
+
+function effectiveResourceChanges(
+  activation: CustomAbilityActivationDefinition,
+  sourceSystemId: string,
+): CustomAbilityResourceChangeDefinition[] {
+  if (activation.resourceChanges !== undefined) return activation.resourceChanges
+  return (activation.resourceCosts ?? []).map((cost, index) => ({
+    id: `legacy-cost:${index}`,
+    target: {
+      source: 'customSystem' as const,
+      systemId: sourceSystemId,
+      resourceId: cost.resourceId,
+    },
+    operation: 'spend' as const,
+    amount: cost.amount,
+    formula: cost.formula,
+    costJoin: 'and' as const,
+  }))
+}
+
+function resolveAmount(
+  change: CustomAbilityResourceChangeDefinition,
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  type: CustomAbilityTypeDefinition,
+  ability: CustomAbilityInstance,
+  character: CharacterTemplate,
+  activationLevel?: number,
+): number {
+  let baseAmount = Math.max(0, change.amount ?? 0)
   if (change.formula?.trim()) {
     const result = evaluateCustomFormula(change.formula, definition, state, character, { type, values: ability.values })
     if (!result.ok || typeof result.value !== 'number' || !Number.isFinite(result.value)) throw new Error(`A fórmula do efeito de recurso “${change.id}” não retornou um número válido.`)
-    return Math.max(0, result.value)
+    baseAmount = Math.max(0, result.value)
   }
-  return Math.max(0, change.amount ?? 0)
+
+  if (change.operation !== 'spend') return baseAmount
+  const perLevel = Math.max(0, change.upcastAmountPerLevel ?? 0)
+  if (perLevel <= 0) return baseAmount
+  const baseLevel = Math.max(1, Math.floor(change.upcastBaseLevel ?? 1))
+  const resolvedLevel = Math.max(baseLevel, Math.floor(activationLevel ?? baseLevel))
+  return baseAmount + ((resolvedLevel - baseLevel) * perLevel)
 }
 
-function validateResourceChanges(character: CharacterTemplate, definitions: CustomSystemDefinition[], states: CharacterCustomSystemState[], changes: Array<{ change: CustomAbilityResourceChangeDefinition; amount: number }>) {
-  for (const { change, amount } of changes) {
-    if (change.operation !== 'spend') continue
-    if (change.target.source === 'native') {
-      const available = nativeResourceValue(character, change.target.resource)
-      if (available < amount && change.target.resource !== 'hitPoints') throw new Error('Recurso nativo insuficiente para usar a habilidade.')
-      continue
-    }
-    const state = requireState(states, change.target.systemId)
-    const definition = requireDefinition(definitions, change.target.systemId)
-    const resource = definition.resources.find((entry) => entry.id === change.target.resourceId)
-    const resourceState = state.resources[change.target.resourceId]
-    if (!resource || !resourceState) throw new Error(`O recurso “${change.target.resourceId}” não está disponível.`)
-    const minimum = resource.minimum ?? 0
-    if (resourceState.current - amount < minimum) throw new Error(`Não há ${resource.name} suficiente para usar a habilidade.`)
+function buildSpendBranches(changes: ResolvedResourceChange[]): ResolvedResourceChange[][] {
+  const branches: ResolvedResourceChange[][] = []
+  for (const resolved of changes) {
+    if (resolved.change.operation !== 'spend') continue
+    if (branches.length === 0 || resolved.change.costJoin === 'or') branches.push([])
+    branches[branches.length - 1].push(resolved)
   }
+  return branches
+}
+
+function selectAffordableSpendBranch(
+  character: CharacterTemplate,
+  definitions: CustomSystemDefinition[],
+  states: CharacterCustomSystemState[],
+  branches: ResolvedResourceChange[][],
+): ResolvedResourceChange[] | undefined {
+  for (const branch of branches) {
+    const simulatedStates = states.map(cloneState)
+    let simulatedCharacter = character
+    let affordable = true
+    try {
+      for (const { change, amount } of branch) {
+        assertSpendAvailable(simulatedCharacter, definitions, simulatedStates, change, amount)
+        simulatedCharacter = applyResourceChange(
+          simulatedCharacter,
+          definitions,
+          simulatedStates,
+          change,
+          amount,
+        )
+      }
+    } catch {
+      affordable = false
+    }
+    if (affordable) return branch
+  }
+  return undefined
+}
+
+function assertSpendAvailable(
+  character: CharacterTemplate,
+  definitions: CustomSystemDefinition[],
+  states: CharacterCustomSystemState[],
+  change: CustomAbilityResourceChangeDefinition,
+  amount: number,
+) {
+  if (change.target.source === 'native') {
+    const available = nativeResourceValue(character, change.target.resource)
+    if (available < amount) throw new Error('Recurso nativo insuficiente para usar a habilidade.')
+    return
+  }
+  const state = requireState(states, change.target.systemId)
+  const definition = requireDefinition(definitions, change.target.systemId)
+  const resource = definition.resources.find((entry) => entry.id === change.target.resourceId)
+  const resourceState = state.resources[change.target.resourceId]
+  if (!resource || !resourceState) throw new Error(`O recurso “${change.target.resourceId}” não está disponível.`)
+  const minimum = resource.minimum ?? 0
+  if (resourceState.current - amount < minimum) throw new Error(`Não há ${resource.name} suficiente para usar a habilidade.`)
 }
 
 function applyResourceChange(character: CharacterTemplate, definitions: CustomSystemDefinition[], states: CharacterCustomSystemState[], change: CustomAbilityResourceChangeDefinition, amount: number): CharacterTemplate {

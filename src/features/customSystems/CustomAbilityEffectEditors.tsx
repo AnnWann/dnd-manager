@@ -58,6 +58,59 @@ export function ResourceAmountFormulaField({
           <span className="text-[11px] text-textMuted">Aceita número fixo ou expressão.</span>
         )}
       </div>
+      {change.operation === 'spend' ? (
+        <div className="mt-2 grid gap-2 rounded-lg border border-border bg-bg-subtle p-2">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="grid gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Relação com custo anterior</span>
+              <SharedSelect
+                className="input-base min-w-0 w-full text-xs"
+                value={change.costJoin ?? 'and'}
+                onChange={(event) => onChange({ ...change, costJoin: event.target.value as 'and' | 'or' })}
+              >
+                <option value="and">E — exige ambos</option>
+                <option value="or">OU — alternativa</option>
+              </SharedSelect>
+            </label>
+            <label className="flex items-center gap-2 self-end rounded-lg border border-border px-2 py-2 text-xs text-textH">
+              <input
+                type="checkbox"
+                checked={change.upcastAmountPerLevel !== undefined}
+                onChange={(event) => onChange(event.target.checked
+                  ? { ...change, upcastBaseLevel: change.upcastBaseLevel ?? 1, upcastAmountPerLevel: change.upcastAmountPerLevel ?? 1 }
+                  : { ...change, upcastBaseLevel: undefined, upcastAmountPerLevel: undefined })}
+              />
+              Escala com nível de uso
+            </label>
+          </div>
+          {change.upcastAmountPerLevel !== undefined ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="grid gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Nível base</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  className="input-base min-w-0 w-full text-xs"
+                  value={change.upcastBaseLevel ?? 1}
+                  onChange={(event) => onChange({ ...change, upcastBaseLevel: Math.max(1, Math.floor(Number(event.target.value) || 1)) })}
+                />
+              </label>
+              <label className="grid gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">+ custo por nível</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  className="input-base min-w-0 w-full text-xs"
+                  value={change.upcastAmountPerLevel}
+                  onChange={(event) => onChange({ ...change, upcastAmountPerLevel: Math.max(0, Number(event.target.value) || 0) })}
+                />
+              </label>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -44,8 +44,9 @@ type SheetActionEntry = {
   disabled?: boolean
   status?: string
   roll?: CustomAbilityRollDefinition
+  minimumActivationLevel?: number
   operation?: SessionCustomSystemOperation
-  activate: (character: CharacterTemplate, rollValue?: number) => CharacterTemplate
+  activate: (character: CharacterTemplate, rollValue?: number, activationLevel?: number) => CharacterTemplate
 }
 
 const CATEGORY_ORDER: AbilityActionKind[] = [
@@ -83,6 +84,7 @@ export function CustomSystemActionsPanel({
   const sessionRuntime = useOptionalSessionRuntime()
   const [error, setError] = useState("")
   const [manualRollValues, setManualRollValues] = useState<Record<string, string>>({})
+  const [activationLevels, setActivationLevels] = useState<Record<string, string>>({})
   const entries = useMemo(
     () => buildEntries(character, definitions),
     [character, definitions],
@@ -103,16 +105,29 @@ export function CustomSystemActionsPanel({
         rollValue = Number(raw)
       }
 
+      let activationLevel: number | undefined
+      if (entry.minimumActivationLevel !== undefined) {
+        const rawLevel = activationLevels[entry.key]?.trim() || String(entry.minimumActivationLevel)
+        const parsedLevel = Number(rawLevel)
+        if (!Number.isInteger(parsedLevel) || parsedLevel < entry.minimumActivationLevel) {
+          setError(`Informe um nível de uso inteiro igual ou maior que ${entry.minimumActivationLevel} para ${entry.name}.`)
+          return
+        }
+        activationLevel = parsedLevel
+      }
+
       if (sessionRuntime && entry.operation) {
-        const acceptsRoll = entry.operation.type === "character.customSystem.ability.activate"
-          || entry.operation.type === "character.customSystem.action.execute"
-        const operation = acceptsRoll && rollValue !== undefined
-          ? { ...entry.operation, rollValue }
-          : entry.operation
+        let operation: SessionCustomSystemOperation = entry.operation
+        if (operation.type === "character.customSystem.ability.activate" && activationLevel !== undefined) {
+          operation = { ...operation, activationLevel }
+        }
+        if ((operation.type === "character.customSystem.ability.activate" || operation.type === "character.customSystem.action.execute") && rollValue !== undefined) {
+          operation = { ...operation, rollValue }
+        }
         sessionRuntime.dispatchAbilityOperation(operation)
         return
       }
-      updateCharacter(character.get("id"), (current) => entry.activate(current, rollValue))
+      updateCharacter(character.get("id"), (current) => entry.activate(current, rollValue, activationLevel))
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -172,6 +187,23 @@ export function CustomSystemActionsPanel({
                             <p className="mt-2 line-clamp-3 whitespace-pre-wrap break-words text-xs leading-5 text-textMuted">
                               {entry.description}
                             </p>
+                          ) : null}
+                          {entry.minimumActivationLevel !== undefined ? (
+                            <label className="mt-3 grid gap-1 rounded-lg border border-accentBorder bg-accentBg/30 p-2">
+                              <span className="text-[11px] font-semibold text-textH">Nível de uso</span>
+                              <span className="text-[10px] text-textMuted">
+                                Custos escaláveis usam este nível para calcular o consumo.
+                              </span>
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min={entry.minimumActivationLevel}
+                                step={1}
+                                value={activationLevels[entry.key] ?? String(entry.minimumActivationLevel)}
+                                onChange={(event) => setActivationLevels((current) => ({ ...current, [entry.key]: event.target.value }))}
+                                className="input-base h-8"
+                              />
+                            </label>
                           ) : null}
                           {entry.roll?.mode === "manual" ? (
                             <label className="mt-3 grid gap-1 rounded-lg border border-accentBorder bg-accentBg/30 p-2">
@@ -311,6 +343,12 @@ function abilityEntry(
     state,
     character,
   )
+  const scalableCosts = (activation.resourceChanges ?? []).filter(
+    (change) => change.operation === "spend" && (change.upcastAmountPerLevel ?? 0) > 0,
+  )
+  const minimumActivationLevel = scalableCosts.length > 0
+    ? Math.min(...scalableCosts.map((change) => Math.max(1, Math.floor(change.upcastBaseLevel ?? 1))))
+    : undefined
   const title = displayValue(ability.values[type.display.titleFieldId]) || type.name
   const description = type.display.descriptionFieldId
     ? displayValue(ability.values[type.display.descriptionFieldId])
@@ -329,19 +367,21 @@ function abilityEntry(
         ? undefined
         : `${usage.remaining}/${usage.maximum} usos`,
     roll: activation.roll,
+    minimumActivationLevel,
     operation: {
       type: "character.customSystem.ability.activate",
       characterId: character.get("id"),
       systemId: definition.id,
       abilityId: ability.id,
     },
-    activate: (current, rollValue) =>
+    activate: (current, rollValue, activationLevel) =>
       activateCustomAbilityWithRoll(
         current,
         definitions,
         definition.id,
         ability.id,
         rollValue,
+        activationLevel,
       ).character,
   }
 }
