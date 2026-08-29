@@ -30,7 +30,8 @@
   "git": {
     "deploymentEnabled": {
       "*": false,
-      "qa": true
+      "qa": true,
+      "master": true
     }
   }
 }
