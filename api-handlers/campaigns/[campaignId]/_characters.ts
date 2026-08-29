@@ -88,11 +88,12 @@ export async function GET(
       ? CampaignRole.MASTER
       : membership?.role ?? CampaignRole.PLAYER
     const isMaster = role === CampaignRole.MASTER
+    const canAccessAllCharacters = isMaster || role === CampaignRole.MODERATOR
 
     const links = await prisma.campaignCharacter.findMany({
       where: {
         campaignId,
-        ...(isMaster
+        ...(canAccessAllCharacters
           ? {}
           : {
               character: {
@@ -141,6 +142,7 @@ export async function GET(
         name: campaign.name,
         role,
         isMaster,
+        canAccessAllCharacters,
       },
       members: [
         {
