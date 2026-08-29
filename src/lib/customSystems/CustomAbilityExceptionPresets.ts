@@ -9,7 +9,8 @@ const MARTIAL_TECHNIQUE_TYPE_ID = 'tec_marcial'
 
 /**
  * Battle Master replaces only the Fighter contribution to techniques learned.
- * Every other class keeps its own independent multiclass contribution.
+ * Every other class keeps its own independent multiclass contribution, so the
+ * final limit remains additive for multiclass characters.
  *
  * Fighter/Battle Master contribution:
  * 1-2: 2, 3-5: 7, 6-8: 10, 9-11: 13, 12-14: 16,
