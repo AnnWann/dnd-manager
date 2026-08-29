@@ -5,13 +5,14 @@ import { useLocation } from "react-router-dom"
 import { SessionRuntimeProvider } from "../features/session-runtime/SessionRuntimeProvider"
 import { sessionIdFromPathname } from "../lib/campaignRoutes"
 import type { SyncStatus } from "../lib/remoteState"
+import type { CampaignUiRole } from "../shared/campaign/campaignRoles"
 
 export type SyncContextValue = {
   syncKey: string
   setSyncKey: (value: string) => void
 
-  userRole: "master" | "player"
-  setUserRole: (value: "master" | "player") => void
+  userRole: CampaignUiRole
+  setUserRole: (value: CampaignUiRole) => void
 
   userKey: string
   setUserKey: (value: string) => void
