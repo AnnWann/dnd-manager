@@ -374,6 +374,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       <AbilityDialog
         open={creating || editingAbility !== null}
         ability={editingAbility}
+        character={displayCharacter}
         onClose={() => {
           setCreating(false)
           setEditingAbility(null)

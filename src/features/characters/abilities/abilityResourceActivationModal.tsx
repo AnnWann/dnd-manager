@@ -10,6 +10,7 @@ import type {
 import {
   abilityResourceCostLabel,
   canPayAbilityResourceCosts,
+  resolveAbilityResourceCostPreview,
 } from "../../../models/abilities/abilityResourceCosts"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 
@@ -97,13 +98,26 @@ export function AbilityResourceActivationModal({
                   <Select
                     className="mt-2"
                     value={alternatives[group.id] ?? group.costs[0]?.id ?? ""}
-                    onChange={(event) => setAlternatives((current) => ({ ...current, [group.id]: event.target.value }))}
+                    onChange={(event) => {
+                      const cost = group.costs.find((entry) => entry.id === event.target.value)
+                      setAlternatives((current) => ({ ...current, [group.id]: event.target.value }))
+                      if (cost?.kind === "pactSlot" && ability.resourceUpcast?.enabled) {
+                        const pactLevel = character.getPactSlots()?.level
+                        if (pactLevel && pactLevel >= (baseLevel ?? 1) && pactLevel <= (maximumLevel ?? 9)) setActivationLevel(pactLevel)
+                      }
+                    }}
                   >
-                    {group.costs.map((cost) => <option key={cost.id} value={cost.id}>{abilityResourceCostLabel(cost)}</option>)}
+                    {group.costs.map((cost) => {
+                      const preview = resolveAbilityResourceCostPreview(ability, cost, selection)
+                      return <option key={cost.id} value={cost.id}>{abilityResourceCostLabel(cost, preview)}</option>
+                    })}
                   </Select>
                 ) : (
                   <div className="mt-2 grid gap-1 text-xs text-textH">
-                    {group.costs.map((cost) => <div key={cost.id}>• {abilityResourceCostLabel(cost)}</div>)}
+                    {group.costs.map((cost) => {
+                      const preview = resolveAbilityResourceCostPreview(ability, cost, selection)
+                      return <div key={cost.id}>• {abilityResourceCostLabel(cost, preview)}</div>
+                    })}
                   </div>
                 )}
               </div>

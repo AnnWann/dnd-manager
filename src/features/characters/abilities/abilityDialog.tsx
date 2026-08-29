@@ -7,6 +7,7 @@ import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
 import { validateCharacterSheetFormula } from "../../../lib/customSystems/CharacterSheetFormula"
 import { normalizeAbilityText } from "../../../lib/textNormalization"
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type {
   Ability,
   AbilityActionKind,
@@ -43,6 +44,7 @@ type Props = {
   ability: Ability | null
   title?: string
   fixedCategory?: AbilityCategory
+  character?: CharacterTemplate
   onClose: () => void
   onSave: (ability: Ability) => void
 }
@@ -112,6 +114,7 @@ export function AbilityDialog({
   ability,
   title,
   fixedCategory,
+  character,
   onClose,
   onSave,
 }: Props) {
@@ -577,7 +580,7 @@ export function AbilityDialog({
                 </div>
               )}
 
-              <AbilityResourceCostsEditor ability={draft} onChange={setDraft} />
+              <AbilityResourceCostsEditor ability={draft} character={character} onChange={setDraft} />
             </div>
           ) : null}
 

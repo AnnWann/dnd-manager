@@ -5,6 +5,10 @@ import type {
 } from "./Ability"
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import { getChannelDivinityPool, spendChannelDivinity } from "../characters/characterChannelDivinity"
+import {
+  getCustomSpellSlotPools,
+  spendCustomSpellSlot,
+} from "../characters/customClassConfig"
 import { getKiPool, spendKi } from "../characters/characterKi"
 import type { MagicCircleLevel } from "../magic/spells/spellDefinitions"
 
@@ -19,7 +23,7 @@ export type ResolvedAbilityResourceCost = {
 }
 
 export function hasAbilityResourceCosts(ability: Ability): boolean {
-  return (ability.resourceCosts ?? []).some((group) => group.costs.length > 0)
+  return (ability.resourceCosts ?? []).some((group) => group.costs.some(isConfiguredCost))
 }
 
 export function getAbilityActivationLevel(
@@ -29,7 +33,7 @@ export function getAbilityActivationLevel(
   const upcast = ability.resourceUpcast
   if (!upcast?.enabled) return undefined
   const base = normalizeLevel(upcast.baseLevel, 1)
-  const maximum = normalizeLevel(upcast.maximumLevel, 9)
+  const maximum = Math.max(base, normalizeLevel(upcast.maximumLevel, 9))
   const requested = selection?.activationLevel ?? base
   if (!Number.isInteger(requested) || requested < base || requested > maximum) return undefined
   return requested
@@ -74,21 +78,36 @@ export function spendAbilityResourceCosts(
   return { ok: true, character: next, costs: validation.costs }
 }
 
-export function abilityResourceCostLabel(cost: AbilityResourceCostDefinition): string {
-  const amount = normalizeAmount(cost.amount)
+export function resolveAbilityResourceCostPreview(
+  ability: Ability,
+  cost: AbilityResourceCostDefinition,
+  selection?: AbilityResourceSelection,
+): ResolvedAbilityResourceCost {
+  return resolveCost(ability, cost, selection)
+}
+
+export function abilityResourceCostLabel(
+  cost: AbilityResourceCostDefinition,
+  resolved?: Pick<ResolvedAbilityResourceCost, "amount" | "slotLevel">,
+): string {
+  const amount = resolved?.amount ?? normalizeAmount(cost.amount)
+  const level = resolved?.slotLevel ?? cost.slotLevel
+  const scale = (cost.amountPerLevel ?? 0) > 0 ? ` (+${Math.floor(cost.amountPerLevel ?? 0)}/nível)` : ""
   switch (cost.kind) {
     case "spellSlot":
-      return `${amount} espaço(s) de magia — nível ${normalizeLevel(cost.slotLevel, 1)}`
+      return `${amount} espaço(s) de magia — nível ${normalizeLevel(level, 1)}${scale}`
     case "pactSlot":
-      return `${amount} espaço(s) de pacto — nível base ${normalizeLevel(cost.slotLevel, 1)}`
+      return `${amount} espaço(s) de pacto${level ? ` — nível ${level}` : " — nível atual do pacto"}${scale}`
+    case "customSpellSlot":
+      return `${amount} espaço(s) de ${cost.poolName?.trim() || cost.poolId?.trim() || "classe customizada"} — nível ${normalizeLevel(level, 1)}${scale}`
     case "ki":
-      return `${amount} Ki`
+      return `${amount} Ki${scale}`
     case "sorceryPoints":
-      return `${amount} ponto(s) de feitiçaria`
+      return `${amount} ponto(s) de feitiçaria${scale}`
     case "channelDivinity":
-      return `${amount} uso(s) de Canalizar Divindade`
+      return `${amount} uso(s) de Canalizar Divindade${scale}`
     case "customSystem":
-      return `${amount} ${cost.resourceName?.trim() || cost.resourceId?.trim() || "recurso customizado"}`
+      return `${amount} ${cost.resourceName?.trim() || cost.resourceId?.trim() || "recurso customizado"}${scale}`
   }
 }
 
@@ -124,25 +143,44 @@ function resolvePlan(
   costs: AbilityResourceCostDefinition[],
   selection?: AbilityResourceSelection,
 ): ResolvedAbilityResourceCost[] | null {
+  if (ability.resourceUpcast?.enabled && getAbilityActivationLevel(ability, selection) === undefined) return null
+  return costs.map((cost) => resolveCost(ability, cost, selection))
+}
+
+function resolveCost(
+  ability: Ability,
+  cost: AbilityResourceCostDefinition,
+  selection?: AbilityResourceSelection,
+): ResolvedAbilityResourceCost {
   const upcast = ability.resourceUpcast
   const activationLevel = upcast?.enabled
     ? getAbilityActivationLevel(ability, selection)
     : undefined
-  if (upcast?.enabled && activationLevel === undefined) return null
-
   const baseActivationLevel = upcast?.enabled ? normalizeLevel(upcast.baseLevel, 1) : undefined
   const levelDelta = activationLevel !== undefined && baseActivationLevel !== undefined
     ? activationLevel - baseActivationLevel
     : 0
+  const amount = normalizeAmount(cost.amount) + Math.max(0, Math.floor(cost.amountPerLevel ?? 0)) * levelDelta
 
-  return costs.map((cost) => {
-    const amount = normalizeAmount(cost.amount) + Math.max(0, Math.floor(cost.amountPerLevel ?? 0)) * levelDelta
+  if (cost.kind === "pactSlot") {
+    return {
+      cost,
+      amount,
+      // Sem upcast, um custo de pacto consome o nível atual do pacto sem exigir configuração estática.
+      slotLevel: upcast?.enabled ? activationLevel : undefined,
+    }
+  }
+
+  if (cost.kind === "spellSlot" || cost.kind === "customSpellSlot") {
     const baseSlotLevel = normalizeLevel(cost.slotLevel, upcast?.baseLevel ?? 1)
-    const slotLevel = cost.kind === "spellSlot" || cost.kind === "pactSlot"
-      ? normalizeLevel(baseSlotLevel + levelDelta, baseSlotLevel)
-      : undefined
-    return { cost, amount, slotLevel }
-  })
+    return {
+      cost,
+      amount,
+      slotLevel: normalizeLevel(baseSlotLevel + levelDelta, baseSlotLevel),
+    }
+  }
+
+  return { cost, amount }
 }
 
 function canAffordPlan(character: CharacterTemplate, costs: ResolvedAbilityResourceCost[]): boolean {
@@ -161,7 +199,8 @@ function canAffordPlan(character: CharacterTemplate, costs: ResolvedAbilityResou
 function resourceKey(resolved: ResolvedAbilityResourceCost): string {
   switch (resolved.cost.kind) {
     case "spellSlot": return `spellSlot:${resolved.slotLevel ?? 1}`
-    case "pactSlot": return `pactSlot:${resolved.slotLevel ?? 1}`
+    case "pactSlot": return resolved.slotLevel ? `pactSlot:${resolved.slotLevel}` : "pactSlot:any"
+    case "customSpellSlot": return `customSpellSlot:${resolved.cost.poolId ?? ""}:${resolved.slotLevel ?? 1}`
     case "ki": return "ki"
     case "sorceryPoints": return "sorceryPoints"
     case "channelDivinity": return "channelDivinity"
@@ -175,15 +214,28 @@ function availableForKey(character: CharacterTemplate, key: string): number {
     return character.getSpellSlots()[level]?.current ?? 0
   }
   if (key.startsWith("pactSlot:")) {
-    const expectedLevel = Number(key.slice("pactSlot:".length))
     const pact = character.getPactSlots()
-    return pact && pact.level === expectedLevel ? pact.current : 0
+    if (!pact) return 0
+    const suffix = key.slice("pactSlot:".length)
+    return suffix === "any" || pact.level === Number(suffix) ? pact.current : 0
+  }
+  if (key.startsWith("customSpellSlot:")) {
+    const remainder = key.slice("customSpellSlot:".length)
+    const separator = remainder.lastIndexOf(":")
+    if (separator < 0) return 0
+    const poolId = remainder.slice(0, separator)
+    const level = Number(remainder.slice(separator + 1))
+    return getCustomSpellSlotPools(character).find((pool) => pool.id === poolId)?.slots[level]?.current ?? 0
   }
   if (key === "ki") return getKiPool(character)?.current ?? 0
   if (key === "sorceryPoints") return character.getSorceryPoints().current
   if (key === "channelDivinity") return getChannelDivinityPool(character)?.current ?? 0
   if (key.startsWith("custom:")) {
-    const [, systemId, resourceId] = key.split(":")
+    const remainder = key.slice("custom:".length)
+    const separator = remainder.indexOf(":")
+    if (separator < 0) return 0
+    const systemId = remainder.slice(0, separator)
+    const resourceId = remainder.slice(separator + 1)
     const state = character.get("sheet").customSystems?.find((entry) => entry.systemId === systemId && entry.enabled)
     return Math.max(0, Number(state?.resources?.[resourceId]?.current ?? 0))
   }
@@ -206,6 +258,13 @@ function spendResolvedCost(
     case "pactSlot":
       for (let index = 0; index < amount; index += 1) next = next.spendPactSlot()
       return next
+    case "customSpellSlot": {
+      const poolId = resolved.cost.poolId?.trim()
+      const level = resolved.slotLevel ?? 1
+      if (!poolId) return next
+      for (let index = 0; index < amount; index += 1) next = spendCustomSpellSlot(next, poolId, level)
+      return next
+    }
     case "ki":
       return spendKi(next, amount)
     case "sorceryPoints":
@@ -238,8 +297,9 @@ function spendResolvedCost(
 
 function isConfiguredCost(cost: AbilityResourceCostDefinition): boolean {
   if (!cost.id?.trim() || normalizeAmount(cost.amount) <= 0) return false
-  if (cost.kind !== "customSystem") return true
-  return Boolean(cost.systemId?.trim() && cost.resourceId?.trim())
+  if (cost.kind === "customSystem") return Boolean(cost.systemId?.trim() && cost.resourceId?.trim())
+  if (cost.kind === "customSpellSlot") return Boolean(cost.poolId?.trim())
+  return true
 }
 
 function normalizeAmount(value: number | undefined): number {

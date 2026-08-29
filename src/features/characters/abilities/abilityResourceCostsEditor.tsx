@@ -1,6 +1,8 @@
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { getCustomSpellSlotPools } from "../../../models/characters/customClassConfig"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import type {
   Ability,
@@ -9,12 +11,14 @@ import type {
   AbilityResourceCostKind,
 } from "../../../models/abilities/Ability"
 
-export function AbilityResourceCostsEditor({ ability, onChange }: {
+export function AbilityResourceCostsEditor({ ability, character, onChange }: {
   ability: Ability
+  character?: CharacterTemplate
   onChange: (ability: Ability) => void
 }) {
   const runtime = useOptionalSessionRuntime()
   const customSystems = runtime?.runtimeConfigSnapshot?.config.customSystems ?? []
+  const customSlotPools = character ? getCustomSpellSlotPools(character) : []
   const groups = ability.resourceCosts ?? []
   const upcast = ability.resourceUpcast
 
@@ -24,6 +28,13 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
 
   function updateGroup(groupId: string, updater: (group: AbilityResourceCostGroup) => AbilityResourceCostGroup) {
     updateGroups(groups.map((group) => group.id === groupId ? updater(group) : group))
+  }
+
+  function updateCost(groupId: string, costId: string, next: AbilityResourceCostDefinition) {
+    updateGroup(groupId, (group) => ({
+      ...group,
+      costs: group.costs.map((cost) => cost.id === costId ? next : cost),
+    }))
   }
 
   function addGroup() {
@@ -43,7 +54,7 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
         <div>
           <div className="text-xs font-semibold text-textH">Custos ao ativar</div>
           <p className="mt-1 max-w-2xl text-[11px] leading-5 text-textMuted">
-            Consuma espaços de magia/pacto, Ki, pontos de feitiçaria, Canalizar Divindade ou recursos de Custom Systems. Todos os grupos são cumulativos (E); grupos marcados como OU escolhem uma alternativa.
+            Consuma espaços de magia ou pacto, pools de espaços de classes customizadas, Ki, pontos de feitiçaria, Canalizar Divindade ou recursos de Custom Systems. Grupos são combinados com E; dentro de cada grupo você escolhe E ou OU.
           </p>
         </div>
         <Button size="sm" variant="secondary" onClick={addGroup}>+ Grupo de custo</Button>
@@ -60,7 +71,7 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
               <span>
                 <span className="block text-xs font-semibold text-textH">Permitir upcast / escalonamento</span>
                 <span className="mt-0.5 block text-[10px] leading-4 text-textMuted">
-                  O jogador escolhe um nível ao usar. Espaços sobem de nível e custos com “+ por nível” aumentam juntos.
+                  O jogador escolhe o nível ao usar. Espaços normais e de classe customizada sobem de nível; uma alternativa de pacto usa o nível atual do pacto; outros recursos podem ganhar custo adicional por nível.
                 </span>
               </span>
               <input
@@ -77,16 +88,23 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
             {upcast?.enabled ? (
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <label className="grid gap-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Nível base</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Nível base da habilidade</span>
                   <Input
                     type="number"
                     min={1}
                     max={9}
                     value={upcast.baseLevel}
-                    onChange={(event) => onChange({
-                      ...ability,
-                      resourceUpcast: { ...upcast, baseLevel: clampLevel(event.target.value) },
-                    })}
+                    onChange={(event) => {
+                      const baseLevel = clampLevel(event.target.value)
+                      onChange({
+                        ...ability,
+                        resourceUpcast: {
+                          ...upcast,
+                          baseLevel,
+                          maximumLevel: Math.max(baseLevel, upcast.maximumLevel ?? 9),
+                        },
+                      })
+                    }}
                   />
                 </label>
                 <label className="grid gap-1">
@@ -115,12 +133,12 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
                 <div>
                   <div className="text-xs font-semibold text-textH">Grupo {groupIndex + 1}</div>
                   <div className="mt-0.5 text-[10px] text-textMuted">
-                    {group.mode === "all" ? "E — todos os recursos abaixo são consumidos." : "OU — apenas uma alternativa abaixo será consumida."}
+                    {group.mode === "all" ? "E — todos os recursos abaixo são consumidos." : "OU — o jogador escolhe uma alternativa abaixo."}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Select
-                    className="min-w-40"
+                    className="min-w-44"
                     value={group.mode}
                     onChange={(event) => updateGroup(group.id, (current) => ({
                       ...current,
@@ -150,26 +168,21 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
                 {group.costs.map((cost, costIndex) => {
                   const selectedSystem = customSystems.find((system) => system.id === cost.systemId)
                   const resources = selectedSystem?.resources ?? []
+                  const selectedPool = customSlotPools.find((pool) => pool.id === cost.poolId)
                   return (
                     <div key={cost.id} className="rounded-lg border border-border bg-bg-subtle p-3">
-                      <div className="grid gap-2 lg:grid-cols-[minmax(180px,1.4fr)_110px_110px_auto]">
+                      <div className="grid gap-2 lg:grid-cols-[minmax(190px,1.5fr)_110px_minmax(120px,0.8fr)_auto]">
                         <label className="grid gap-1">
                           <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
                             {group.mode === "oneOf" ? `Alternativa ${costIndex + 1}` : `Recurso ${costIndex + 1}`}
                           </span>
                           <Select
                             value={cost.kind}
-                            onChange={(event) => updateCost(group.id, cost.id, {
-                              ...cost,
-                              kind: event.target.value as AbilityResourceCostKind,
-                              systemId: undefined,
-                              resourceId: undefined,
-                              systemName: undefined,
-                              resourceName: undefined,
-                            })}
+                            onChange={(event) => updateCost(group.id, cost.id, resetCostKind(cost, event.target.value as AbilityResourceCostKind))}
                           >
                             <option value="spellSlot">Espaço de magia</option>
                             <option value="pactSlot">Espaço de pacto</option>
+                            <option value="customSpellSlot">Espaço de classe customizada</option>
                             <option value="ki">Ki</option>
                             <option value="sorceryPoints">Pontos de feitiçaria</option>
                             <option value="channelDivinity">Canalizar Divindade</option>
@@ -191,9 +204,9 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
                           />
                         </label>
 
-                        {cost.kind === "spellSlot" || cost.kind === "pactSlot" ? (
+                        {cost.kind === "spellSlot" || cost.kind === "customSpellSlot" ? (
                           <label className="grid gap-1">
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Nível base</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Nível base do espaço</span>
                             <Input
                               type="number"
                               min={1}
@@ -205,21 +218,11 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
                               })}
                             />
                           </label>
-                        ) : upcast?.enabled ? (
-                          <label className="grid gap-1">
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">+ por nível</span>
-                            <Input
-                              type="number"
-                              min={0}
-                              step={1}
-                              value={cost.amountPerLevel ?? 0}
-                              onChange={(event) => updateCost(group.id, cost.id, {
-                                ...cost,
-                                amountPerLevel: Math.max(0, Math.floor(Number(event.target.value) || 0)),
-                              })}
-                            />
-                          </label>
-                        ) : <div />}
+                        ) : (
+                          <div className="flex items-end text-[10px] leading-4 text-textMuted">
+                            {cost.kind === "pactSlot" ? "Usa o nível atual do pacto." : ""}
+                          </div>
+                        )}
 
                         <div className="flex items-end">
                           <Button
@@ -234,6 +237,62 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
                           </Button>
                         </div>
                       </div>
+
+                      {upcast?.enabled ? (
+                        <label className="mt-2 grid max-w-xs gap-1">
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">+ quantidade consumida por nível</span>
+                          <Input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={cost.amountPerLevel ?? 0}
+                            onChange={(event) => updateCost(group.id, cost.id, {
+                              ...cost,
+                              amountPerLevel: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+                            })}
+                          />
+                        </label>
+                      ) : null}
+
+                      {cost.kind === "customSpellSlot" ? (
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          {customSlotPools.length > 0 ? (
+                            <label className="grid gap-1 sm:col-span-2">
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Pool da classe customizada</span>
+                              <Select
+                                value={cost.poolId ?? ""}
+                                onChange={(event) => {
+                                  const pool = customSlotPools.find((item) => item.id === event.target.value)
+                                  updateCost(group.id, cost.id, {
+                                    ...cost,
+                                    poolId: pool?.id,
+                                    poolName: pool?.name,
+                                  })
+                                }}
+                              >
+                                <option value="">Selecione o pool</option>
+                                {customSlotPools.map((pool) => <option key={pool.id} value={pool.id}>{pool.name}</option>)}
+                              </Select>
+                              {selectedPool ? (
+                                <span className="text-[10px] text-textMuted">
+                                  Níveis disponíveis agora: {Object.keys(selectedPool.slots).join(", ") || "nenhum"}.
+                                </span>
+                              ) : null}
+                            </label>
+                          ) : (
+                            <>
+                              <label className="grid gap-1">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">ID do pool</span>
+                                <Input value={cost.poolId ?? ""} onChange={(event) => updateCost(group.id, cost.id, { ...cost, poolId: event.target.value })} />
+                              </label>
+                              <label className="grid gap-1">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Nome do pool</span>
+                                <Input value={cost.poolName ?? ""} onChange={(event) => updateCost(group.id, cost.id, { ...cost, poolName: event.target.value })} />
+                              </label>
+                            </>
+                          )}
+                        </div>
+                      ) : null}
 
                       {cost.kind === "customSystem" ? (
                         <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -301,13 +360,6 @@ export function AbilityResourceCostsEditor({ ability, onChange }: {
       )}
     </div>
   )
-
-  function updateCost(groupId: string, costId: string, next: AbilityResourceCostDefinition) {
-    updateGroup(groupId, (group) => ({
-      ...group,
-      costs: group.costs.map((cost) => cost.id === costId ? next : cost),
-    }))
-  }
 }
 
 function createCost(kind: AbilityResourceCostKind): AbilityResourceCostDefinition {
@@ -315,7 +367,20 @@ function createCost(kind: AbilityResourceCostKind): AbilityResourceCostDefinitio
     id: crypto.randomUUID(),
     kind,
     amount: 1,
-    slotLevel: kind === "spellSlot" || kind === "pactSlot" ? 1 : undefined,
+    slotLevel: kind === "spellSlot" || kind === "customSpellSlot" ? 1 : undefined,
+  }
+}
+
+function resetCostKind(
+  cost: AbilityResourceCostDefinition,
+  kind: AbilityResourceCostKind,
+): AbilityResourceCostDefinition {
+  return {
+    id: cost.id,
+    kind,
+    amount: cost.amount,
+    amountPerLevel: cost.amountPerLevel,
+    slotLevel: kind === "spellSlot" || kind === "customSpellSlot" ? (cost.slotLevel ?? 1) : undefined,
   }
 }
 

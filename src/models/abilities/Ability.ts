@@ -33,6 +33,7 @@ export type AbilityResourceCostKind =
   | "ki"
   | "sorceryPoints"
   | "channelDivinity"
+  | "customSpellSlot"
   | "customSystem"
 
 export type AbilityResourceCostGroupMode = "all" | "oneOf"
@@ -54,6 +55,9 @@ export interface AbilityResourceCostDefinition {
   slotLevel?: number
   /** Quantidade adicional consumida por nível de upcast. */
   amountPerLevel?: number
+  /** Referência para pools de espaços de uma classe customizada. */
+  poolId?: string
+  poolName?: string
   /** Referência para recursos de Custom Systems. */
   systemId?: string
   resourceId?: string
