@@ -139,11 +139,13 @@ function parseStatus(value: unknown): CampaignMemberStatus {
 function parseRole(value: unknown): CampaignRole | undefined {
   if (value === undefined) return undefined
   if (value === CampaignRole.PLAYER) return CampaignRole.PLAYER
+  if (value === CampaignRole.ASSISTANT) return CampaignRole.ASSISTANT
+  if (value === CampaignRole.MODERATOR) return CampaignRole.MODERATOR
   if (value === CampaignRole.MASTER) return CampaignRole.MASTER
 
   throw new ApiError(
     400,
     "INVALID_MEMBER_ROLE",
-    "O papel precisa ser PLAYER ou MASTER.",
+    "O papel precisa ser PLAYER, ASSISTANT, MODERATOR ou MASTER.",
   )
 }
