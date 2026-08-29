@@ -57,6 +57,7 @@ import {
 } from "../models/characters/characterEquippedItemMovement"
 import type { Player } from "../models/player/Player"
 import type { LongRestSupplySelection } from "../models/supplies/partySupply"
+import type { CampaignUiRole } from "../shared/campaign/campaignRoles"
 
 export type { InventoryLocation } from "../models/game/GameOperation"
 export type TransferItemRequest = TransferItemOperationRequest
@@ -111,7 +112,7 @@ type CharacterProviderProps = {
   children: ReactNode
   appState: AppStateV1
   setAppState: Dispatch<SetStateAction<AppStateV1>>
-  userRole: "master" | "player"
+  userRole: CampaignUiRole
   userKey: string
 }
 
@@ -215,7 +216,7 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
   )
 
   const canAssignOwners = userRole === "master"
-  const canEditCharacterType = userRole === "master"
+  const canEditCharacterType = userRole === "master" || userRole === "assistant"
   const normalizedUserKey = userKey.trim()
   const actorId = normalizedUserKey || userRole
 
@@ -295,23 +296,36 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
     return Array.from(keys).sort((left, right) => left.localeCompare(right))
   }, [characters, normalizedUserKey])
 
+  function ownsCharacter(character: CharacterTemplate): boolean {
+    return character.get("owner")?.id?.trim() === normalizedUserKey
+  }
+
+  function canEditCharacter(characterId: string): boolean {
+    const character = characters.find((entry) => entry.get("id") === characterId)
+    if (!character) return false
+    return userRole === "master" || userRole === "moderator" || ownsCharacter(character)
+  }
+
   function canViewCharacterDetails(characterId: string): boolean {
     const character = characters.find((entry) => entry.get("id") === characterId)
     if (!character) return false
-    if (userRole === "master") return true
-    const isOwned = character.get("owner")?.id?.trim() === normalizedUserKey
+    if (userRole === "master" || userRole === "moderator") return true
+    const isOwned = ownsCharacter(character)
+    if (userRole === "assistant") return isOwned
     return isOwned || character.get("visibility") === "party"
   }
 
   const visibleCharacters = useMemo(() => {
-    if (userRole === "master") return characters
+    if (userRole === "master" || userRole === "moderator") return characters
     if (!normalizedUserKey) return []
-    return characters.filter((character) => character.get("owner")?.id?.trim() === normalizedUserKey || character.get("visibility") === "party")
+    if (userRole === "assistant") return characters.filter(ownsCharacter)
+    return characters.filter((character) => ownsCharacter(character) || character.get("visibility") === "party")
   }, [characters, normalizedUserKey, userRole])
 
   const transferCharacters = useMemo(() => {
-    if (userRole === "master") return characters
-    return characters.filter((character) => character.get("owner")?.id?.trim() === normalizedUserKey || character.get("visibility") !== "master")
+    if (userRole === "master" || userRole === "moderator") return characters
+    if (userRole === "assistant") return characters.filter(ownsCharacter)
+    return characters.filter((character) => ownsCharacter(character) || character.get("visibility") !== "master")
   }, [characters, normalizedUserKey, userRole])
 
   const activeCharacter = useMemo(
@@ -398,6 +412,7 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
   function updateCharacterDomain(characterId: string, domain: CharacterDomainName, updater: (c: CharacterTemplate) => CharacterTemplate) { replaceCharacter(characterId, updater, domain) }
 
   function replaceCharacter(characterId: string, updater: (c: CharacterTemplate) => CharacterTemplate, declaredDomain?: CharacterDomainName) {
+    if (!canEditCharacter(characterId)) return
     let interceptedConditionOperation: SessionConditionOperation | null = null
 
     if (sessionRuntime) {
@@ -442,7 +457,7 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
       const rawCharacter = previous.characters.find((entry) => entry.id === characterId)
       if (!rawCharacter) return previous
       const restedCharacter = CharacterTemplate.fromJSON(rawCharacter)
-      const canRest = userRole === "master" || restedCharacter.get("owner")?.id?.trim() === normalizedUserKey
+      const canRest = userRole === "master" || userRole === "moderator" || restedCharacter.get("owner")?.id?.trim() === normalizedUserKey
       if (!canRest) return previous
       const previousSheet = restedCharacter.get("sheet")
       const previousHp = previousSheet.HP
@@ -478,6 +493,7 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
   }
 
   function deleteCharacter(characterId: string) {
+    if (userRole !== "master" && userRole !== "moderator" && !canEditCharacter(characterId)) return
     dispatchGameOperation({ type: "character.delete", characterId })
     setSelectedCharacterId((current) => current === characterId ? "" : current)
   }
@@ -506,6 +522,7 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
   }
 
   function dropHandOccupant(characterId: string, reference: HandOccupantReference) {
+    if (!canEditCharacter(characterId)) return
     setAppState((previous) => {
       const rawCharacter = previous.characters.find((entry) => entry.id === characterId)
       if (!rawCharacter) return previous
@@ -521,6 +538,7 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
       updateCharacterDomain(characterId, "equipment", (current) => moveEquippedItemToCharacterStorage(current, reference, destination))
       return
     }
+    if (!canEditCharacter(characterId)) return
     setAppState((previous) => {
       const rawCharacter = previous.characters.find((entry) => entry.id === characterId)
       if (!rawCharacter) return previous
@@ -532,8 +550,8 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
   }
 
   function canTransferFromCharacter(characterId: string): boolean {
-    if (userRole === "master") return true
-    return characters.some((character) => character.get("id") === characterId && character.get("owner")?.id?.trim() === normalizedUserKey)
+    if (userRole === "master" || userRole === "moderator") return true
+    return characters.some((character) => character.get("id") === characterId && ownsCharacter(character))
   }
 
   function transferItem(request: TransferItemRequest) {
@@ -607,16 +625,17 @@ function locationKey(location: InventoryLocation): string {
   return `character:${location.characterId}`
 }
 
-function canUseCharacterAsSource(character: CharacterTemplate | undefined, userRole: "master" | "player", userKey: string): boolean {
+function canUseCharacterAsSource(character: CharacterTemplate | undefined, userRole: CampaignUiRole, userKey: string): boolean {
   if (!character) return false
-  if (userRole === "master") return true
+  if (userRole === "master" || userRole === "moderator") return true
   return character.get("owner")?.id?.trim() === userKey
 }
 
-function canUseCharacterAsTarget(character: CharacterTemplate | undefined, userRole: "master" | "player", userKey: string): boolean {
+function canUseCharacterAsTarget(character: CharacterTemplate | undefined, userRole: CampaignUiRole, userKey: string): boolean {
   if (!character) return false
-  if (userRole === "master") return true
+  if (userRole === "master" || userRole === "moderator") return true
   const isOwned = character.get("owner")?.id?.trim() === userKey
+  if (userRole === "assistant") return isOwned
   return isOwned || character.get("visibility") !== "master"
 }
 
