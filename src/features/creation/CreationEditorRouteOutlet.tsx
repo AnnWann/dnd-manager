@@ -3,11 +3,17 @@ import { Navigate, Outlet, useParams } from "react-router-dom"
 import { Button } from "../../components/ui/Button"
 import { useCreatureCompendium } from "../../contexts/creatureCompendiumContext"
 import { useCustomSystemsContext } from "../../contexts/customSystemsContext"
+import { useSyncContext } from "../../contexts/syncContext"
 import { CreationEditorProvider, useCreationEditor } from "./CreationEditorProvider"
 
 export function CreationEditorRouteOutlet() {
   const { campaignId } = useParams<{ campaignId?: string }>()
+  const { userRole } = useSyncContext()
   if (!campaignId) return <Navigate to="/not-found" replace />
+
+  if (userRole === "moderator") {
+    return <Outlet />
+  }
 
   return (
     <CreationEditorProvider key={campaignId} campaignId={campaignId}>
