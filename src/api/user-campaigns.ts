@@ -6,7 +6,7 @@ import {
 } from "../auth/local-auth"
 import { apiClient } from "./api-client"
 
-export type CampaignRole = "MASTER" | "PLAYER"
+export type CampaignRole = "MASTER" | "ASSISTANT" | "MODERATOR" | "PLAYER"
 export type CampaignMemberStatus = "ACTIVE" | "INVITED" | "REMOVED"
 export type CampaignCharacterVisibility = "PRIVATE" | "PARTY" | "MASTER"
 export type CampaignSpellStatus =
