@@ -5,6 +5,8 @@ export type BonusRollDefinition = {
   mode: "automatic" | "manual"
   /** Notação simples de dados, por exemplo 1d6, 2d8+1 ou 1d10-1. */
   dice: string
+  /** Parcela calculada com a ficha e somada ao resultado dos dados. */
+  formula?: string
 }
 
 export type BonusRollResolution = {
@@ -15,7 +17,7 @@ export type BonusRollResolution = {
   dice: string
   /** Resultado somente dos dados (incluindo modificador escrito na notação). */
   diceValue: number
-  /** Parcela adicional calculada pela fórmula do bônus. */
+  /** Parcela adicional calculada pela fórmula da rolagem. */
   formulaBonus: number
   /** Valor final usado pelo bônus. */
   total: number
@@ -25,10 +27,7 @@ export type Bonus = {
   type: "add" | "sub" | "flat"
   /** Fallback numérico e compatibilidade com bônus antigos. */
   value: number
-  /**
-   * Fórmula recalculada com as variáveis atuais da ficha. Quando `roll` existe,
-   * esta fórmula é somada ao resultado dos dados em vez de substituir o valor.
-   */
+  /** Fórmula recalculada com as variáveis atuais da ficha. */
   formula?: string
   /** Rolagem resolvida quando a habilidade que concede este bônus é usada. */
   roll?: BonusRollDefinition
