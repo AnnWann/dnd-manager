@@ -10,9 +10,8 @@ import {
   evaluateCustomFormula,
   getCustomAbilityAvailability,
 } from "../../../lib/customSystems"
-import { activateCustomAbilityWithRoll } from "../../../lib/customSystems/CustomAbilityRoll"
+import { activateCustomAbilityWithRoll, activateCustomSystemActionWithRoll } from "../../../lib/customSystems/CustomAbilityRoll"
 import {
-  activateCustomSystemAction,
   getEffectiveCustomAbilityActivation,
 } from "../../../lib/customSystems/CustomSystemActions"
 import { useCustomSystemDefinitions } from "../../../lib/customSystems/CustomSystemRegistry"
@@ -41,6 +40,7 @@ import {
   setSorceryPointCurrent,
 } from "../../../models/characters/characterSorceryPoints"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { hasManualBonusRolls, resolveBonusCollectionRolls } from "../../../models/bonuses/BonusRoll"
 import type { CustomAbilityRollDefinition } from "../../../models/customSystems/CustomAbilityDefinition"
 import type {
   CharacterCustomSystemState,
@@ -145,6 +145,13 @@ export function MinimalCharacterActions({
   const [error, setError] = useState("")
   const [variableMetamagicCost, setVariableMetamagicCost] = useState(1)
   const [manualRollValue, setManualRollValue] = useState("")
+  const [rollFeedback, setRollFeedback] = useState<Array<{
+    label: string
+    dice?: string
+    diceValue: number
+    formulaBonus?: number
+    total: number
+  }>>([])
   const standardActions = useMemo(
     () => getStandardActions(character, filter, definitions),
     [character, filter, definitions],
@@ -214,6 +221,7 @@ export function MinimalCharacterActions({
     }
     setError("")
     setManualRollValue("")
+    setRollFeedback([])
     if (entry.metamagicCost === "spell-level") setVariableMetamagicCost(1)
     setSelected(entry)
   }
@@ -223,6 +231,7 @@ export function MinimalCharacterActions({
     action: "use" | "deactivate",
     optionId?: string,
     resourceSelection?: AbilityResourceSelection,
+    bonusRollValues?: Record<string, number>,
   ) {
     const source = entry.abilitySource
     if (!source) return
@@ -235,6 +244,34 @@ export function MinimalCharacterActions({
       const payment = canPayAbilityResourceCosts(character, entry.ability, resourceSelection)
       if (!payment.ok) {
         setError(payment.reason)
+        return
+      }
+    }
+
+    let resolvedBonusRollValues = bonusRollValues
+    let hasResolvedRolls = false
+    if (action === "use" && entry.ability) {
+      try {
+        const resolved = resolveBonusCollectionRolls(
+          character,
+          entry.ability.bonuses,
+          bonusRollValues,
+        )
+        if (resolved.results.length > 0) {
+          hasResolvedRolls = true
+          resolvedBonusRollValues = Object.fromEntries(
+            resolved.results.map((result) => [result.key, result.diceValue]),
+          )
+          setRollFeedback(resolved.results.map((result) => ({
+            label: result.label,
+            dice: result.dice,
+            diceValue: result.diceValue,
+            formulaBonus: result.formulaBonus,
+            total: result.total,
+          })))
+        }
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Não foi possível resolver a rolagem da habilidade.")
         return
       }
     }
@@ -258,6 +295,9 @@ export function MinimalCharacterActions({
         ...(action === "use" && resourceSelection
           ? { resourceSelection }
           : {}),
+        ...(action === "use" && resolvedBonusRollValues
+          ? { bonusRollValues: resolvedBonusRollValues }
+          : {}),
       })
 
       if (!sent) {
@@ -266,7 +306,7 @@ export function MinimalCharacterActions({
       }
 
       setAbilityResourceEntry(null)
-      setSelected(null)
+      if (!hasResolvedRolls) setSelected(null)
       return
     }
 
@@ -280,7 +320,7 @@ export function MinimalCharacterActions({
 
       if (source.type === "equipment") {
         return action === "use"
-          ? paidCurrent.useEquipmentAbility(source.itemId, source.abilityId)
+          ? paidCurrent.useEquipmentAbility(source.itemId, source.abilityId, resolvedBonusRollValues)
           : current.deactivateEquipmentAbility(source.itemId, source.abilityId)
       }
       if (source.type === "race") {
@@ -289,15 +329,15 @@ export function MinimalCharacterActions({
         )
         if (!ability) return current
         return action === "use"
-          ? useAbilityEffect(paidCurrent, ability, { type: "race", sourceLabel: "Raça" }, optionId)
+          ? useAbilityEffect(paidCurrent, ability, { type: "race", sourceLabel: "Raça" }, optionId, resolvedBonusRollValues)
           : endAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
       }
       return action === "use"
-        ? useCharacterAbility(paidCurrent, source.abilityId, optionId)
+        ? useCharacterAbility(paidCurrent, source.abilityId, optionId, resolvedBonusRollValues)
         : current.deactivateAbility(source.abilityId)
     })
     setAbilityResourceEntry(null)
-    setSelected(null)
+    if (!hasResolvedRolls) setSelected(null)
   }
 
   function useCustomSystemAction(entry: ActionEntry) {
@@ -305,6 +345,32 @@ export function MinimalCharacterActions({
     if (!source) return
     try {
       setError("")
+      let rollValue: number | undefined
+      if (entry.customAbilityRoll?.mode === "manual") {
+        const raw = manualRollValue.trim()
+        if (!raw || !Number.isFinite(Number(raw))) {
+          setError("Informe um resultado numérico válido para a rolagem.")
+          return
+        }
+        rollValue = Number(raw)
+      }
+      const resolved = activateCustomSystemActionWithRoll(
+        character,
+        definitions,
+        source.systemId,
+        source.actionId,
+        rollValue,
+      )
+      if (resolved.roll) {
+        rollValue = resolved.roll.value
+        setRollFeedback([{
+          label: entry.customAbilityRoll?.label?.trim() || entry.name,
+          dice: resolved.roll.dice,
+          diceValue: resolved.roll.value,
+          formulaBonus: (resolved.roll.total ?? resolved.roll.value) - resolved.roll.value,
+          total: resolved.roll.total ?? resolved.roll.value,
+        }])
+      }
 
       if (sessionRuntime) {
         if (sessionRuntime.status !== "connected") {
@@ -317,25 +383,19 @@ export function MinimalCharacterActions({
           characterId: character.get("id"),
           systemId: source.systemId,
           actionId: source.actionId,
+          ...(rollValue !== undefined ? { rollValue } : {}),
         })
         if (!sent) {
           setError("Não foi possível enviar esta ação para a sessão.")
           return
         }
 
-        setSelected(null)
+        if (!resolved.roll) setSelected(null)
         return
       }
 
-      updateCharacter(character.get("id"), (current) =>
-        activateCustomSystemAction(
-          current,
-          definitions,
-          source.systemId,
-          source.actionId,
-        ),
-      )
-      setSelected(null)
+      updateCharacter(character.get("id"), () => resolved.character)
+      if (!resolved.roll) setSelected(null)
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -364,6 +424,24 @@ export function MinimalCharacterActions({
         }
       }
 
+      const resolved = activateCustomAbilityWithRoll(
+        character,
+        definitions,
+        source.systemId,
+        source.abilityId,
+        rollValue,
+      )
+      if (resolved.roll) {
+        rollValue = resolved.roll.value
+        setRollFeedback([{
+          label: entry.customAbilityRoll?.label?.trim() || entry.name,
+          dice: resolved.roll.dice,
+          diceValue: resolved.roll.value,
+          formulaBonus: (resolved.roll.total ?? resolved.roll.value) - resolved.roll.value,
+          total: resolved.roll.total ?? resolved.roll.value,
+        }])
+      }
+
       const costError = customAbilityCostError(
         resolveCustomAbilityCosts(character, definitions, source, rollValue),
       )
@@ -390,19 +468,12 @@ export function MinimalCharacterActions({
           return
         }
 
-        setSelected(null)
+        if (!resolved.roll) setSelected(null)
         return
       }
 
-      const next = activateCustomAbilityWithRoll(
-        character,
-        definitions,
-        source.systemId,
-        source.abilityId,
-        rollValue,
-      ).character
-      updateCharacter(character.get("id"), () => next)
-      setSelected(null)
+      updateCharacter(character.get("id"), () => resolved.character)
+      if (!resolved.roll) setSelected(null)
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -546,6 +617,24 @@ export function MinimalCharacterActions({
               ))}
             </div>
             <p className="whitespace-pre-wrap text-sm leading-6 text-text">{selected.description}</p>
+            {rollFeedback.length > 0 ? (
+              <div className="grid gap-2 rounded-xl border border-accentBorder bg-accentBg/30 p-3">
+                <div className="text-xs font-semibold text-textH">Resultado da rolagem</div>
+                {rollFeedback.map((result, index) => (
+                  <div key={`${result.label}-${index}`} className="rounded-lg border border-border bg-bg px-3 py-2 text-xs">
+                    <div className="font-semibold text-textH">{result.label}</div>
+                    <div className="mt-1 text-textMuted">
+                      {result.dice ? `${result.dice} = ` : "Dado = "}
+                      <span className="font-semibold text-textH">{result.diceValue}</span>
+                      {result.formulaBonus ? (
+                        <> {result.formulaBonus > 0 ? "+" : "−"} {Math.abs(result.formulaBonus)} de fórmula</>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 font-semibold text-accent">Total: {result.total}</div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {selected.customAbilityRoll?.mode === "manual" ? (
               <label className="grid gap-1 rounded-xl border border-accentBorder bg-accentBg/30 p-3">
                 <span className="text-xs font-semibold text-textH">
@@ -612,7 +701,11 @@ export function MinimalCharacterActions({
               </div>
             ) : selected.customSystemActionSource ? (
               <div className="flex justify-end border-t border-border pt-3">
-                <Button variant="primary" onClick={() => useCustomSystemAction(selected)}>Usar</Button>
+                <Button
+                  variant="primary"
+                  disabled={selected.customAbilityRoll?.mode === "manual" && !isFiniteInput(manualRollValue)}
+                  onClick={() => useCustomSystemAction(selected)}
+                >Usar</Button>
               </div>
             ) : selected.customAbilitySource ? (
               <div className="flex justify-end border-t border-border pt-3">
@@ -633,7 +726,7 @@ export function MinimalCharacterActions({
                   <div className="flex justify-end">
                     <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>Encerrar efeito</Button>
                   </div>
-                ) : hasAbilityResourceCosts(selected.ability) || selected.ability.resourceUpcast?.enabled ? (
+                ) : hasAbilityResourceCosts(selected.ability) || selected.ability.resourceUpcast?.enabled || hasManualBonusRolls(selected.ability.bonuses) ? (
                   <div className="flex justify-end">
                     <Button variant="primary" onClick={() => setAbilityResourceEntry(selected)}>
                       Configurar e usar
@@ -678,8 +771,8 @@ export function MinimalCharacterActions({
           ability={abilityResourceEntry.ability}
           character={character}
           onClose={() => setAbilityResourceEntry(null)}
-          onConfirm={(optionId, resourceSelection) =>
-            changeAbilityState(abilityResourceEntry, "use", optionId, resourceSelection)
+          onConfirm={(optionId, resourceSelection, bonusRollValues) =>
+            changeAbilityState(abilityResourceEntry, "use", optionId, resourceSelection, bonusRollValues)
           }
         />
       ) : null}
@@ -780,6 +873,7 @@ function getCustomSystemActions(
         description: action.description?.trim() || "Esta ação não possui uma descrição cadastrada.",
         filter,
         source: definition.name,
+        customAbilityRoll: action.roll,
         customSystemActionSource: {
           systemId: definition.id,
           actionId: action.id,

@@ -19,6 +19,7 @@ import { AbilityCard } from "./abilityCard"
 import { AbilityDialog } from "./abilityDialog"
 import { AbilityResourceActivationModal } from "./abilityResourceActivationModal"
 import { hasAbilityResourceCosts, spendAbilityResourceCosts } from "../../../models/abilities/abilityResourceCosts"
+import { hasManualBonusRolls } from "../../../models/bonuses/BonusRoll"
 import { CompactAbilityCard } from "./compactAbilityCard"
 
 type Props = {
@@ -180,14 +181,14 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   }
 
   function requestUseAbility(ability: Ability) {
-    if ((ability.activationOptions?.length ?? 0) > 0 || hasAbilityResourceCosts(ability) || ability.resourceUpcast?.enabled) {
+    if ((ability.activationOptions?.length ?? 0) > 0 || hasAbilityResourceCosts(ability) || ability.resourceUpcast?.enabled || hasManualBonusRolls(ability.bonuses)) {
       setActivationChoice(ability)
       return
     }
     useAbility(ability.id)
   }
 
-  function useAbility(id: string, optionId?: string, resourceSelection?: AbilityResourceSelection) {
+  function useAbility(id: string, optionId?: string, resourceSelection?: AbilityResourceSelection, bonusRollValues?: Record<string, number>) {
     const ability = abilities.find((entry) => entry.id === id)
     if (ability) {
       const source = toSessionAbilitySource(ability)
@@ -195,8 +196,10 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
         type: "character.ability.use",
         characterId: displayCharacter.get("id"),
         source,
+        abilityName: ability.name,
         activationOptionId: optionId,
         resourceSelection,
+        bonusRollValues,
       })) {
         setActivationChoice(null)
         return
@@ -211,7 +214,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
       const paidCharacter = payment.character
 
       if (ability && isEquipmentAbility(ability)) {
-        return paidCharacter.useEquipmentAbility(ability.sourceItemId, ability.originalAbilityId)
+        return paidCharacter.useEquipmentAbility(ability.sourceItemId, ability.originalAbilityId, bonusRollValues)
       }
 
       if (ability && isRaceAbility(ability)) {
@@ -220,10 +223,11 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
           ability.originalAbilityId,
           "use",
           optionId,
+          bonusRollValues,
         )
       }
 
-      return useCharacterAbility(paidCharacter, id, optionId)
+      return useCharacterAbility(paidCharacter, id, optionId, bonusRollValues)
     })
     setActivationChoice(null)
   }
@@ -387,7 +391,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
           ability={activationChoice}
           character={displayCharacter}
           onClose={() => setActivationChoice(null)}
-          onConfirm={(optionId, resourceSelection) => useAbility(activationChoice.id, optionId, resourceSelection)}
+          onConfirm={(optionId, resourceSelection, bonusRollValues) => useAbility(activationChoice.id, optionId, resourceSelection, bonusRollValues)}
         />
       ) : null}
     </>
@@ -468,6 +472,7 @@ function updateRaceAbilityState(
   abilityId: string,
   action: "use" | "restore" | "deactivate",
   optionId?: string,
+  bonusRollValues?: Record<string, number>,
 ): CharacterTemplate {
   const race = character.get("sheet").race
   const ability = (race.naturalAbilities ?? []).find((current) => current.id === abilityId)
@@ -477,7 +482,7 @@ function updateRaceAbilityState(
     return useAbilityEffect(character, ability, {
       type: "race",
       sourceLabel: "Raça",
-    }, optionId)
+    }, optionId, bonusRollValues)
   }
   if (action === "deactivate") {
     return endAbilityEffect(character, ability, {

@@ -96,9 +96,11 @@ export function resolveBonusCollectionRolls(
     if (diceError) throw new Error(`${label}: ${diceError}`)
 
     const supplied = suppliedRollValues[key]
-    const diceValue = bonus.roll.mode === "automatic"
-      ? rollBonusDice(dice)
-      : supplied
+    const diceValue = typeof supplied === "number" && Number.isFinite(supplied)
+      ? supplied
+      : bonus.roll.mode === "automatic"
+        ? rollBonusDice(dice)
+        : supplied
 
     if (typeof diceValue !== "number" || !Number.isFinite(diceValue)) {
       throw new Error(`Informe o resultado da rolagem de ${label} antes de usar a habilidade.`)

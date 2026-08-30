@@ -783,6 +783,7 @@ export function useEquipmentAbility(
   character: CharacterTemplate,
   itemId: string,
   abilityId: string,
+  bonusRollValues?: Record<string, number>,
 ): CharacterTemplate {
   const ability = getEquipmentAbilities(character).find(
     (current) =>
@@ -800,6 +801,8 @@ export function useEquipmentAbility(
       itemId,
       sourceLabel: `Equipamento: ${sourceItemName}`,
     },
+    undefined,
+    bonusRollValues,
   )
 }
 

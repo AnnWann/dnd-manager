@@ -8,6 +8,7 @@ import type {
   CustomSystemDefinition,
 } from "../../models/customSystems/CustomSystemDefinition"
 import type { JsonValue } from "../../models/customSystems/CustomGenerals"
+import type { BonusRollResolution } from "../../models/bonuses/Bonus"
 import type { SessionCustomSystemOperation } from "../session-runtime/customSystemSessionProtocol"
 import { isLatestUndoableSessionLog, type SessionLogRecord } from "../session-runtime/sessionLogProtocol"
 import type { SessionSkill } from "../session-runtime/sessionProtocol"
@@ -293,7 +294,7 @@ function describeSessionOperation(
     case "character.rest.long": return `${characterName} concluiu um descanso longo${operation.recovery === "partial" ? " parcial" : ""}.`
     case "character.ability.save": return `Atualizou ${operation.ability.name || "uma habilidade"} de ${characterName}.`
     case "character.ability.remove": return `Removeu ${operation.abilityName || "uma habilidade"} de ${characterName}.`
-    case "character.ability.use": return `${characterName} usou ${operation.abilityName || "uma habilidade"}.`
+    case "character.ability.use": return `${characterName} usou ${operation.abilityName || "uma habilidade"}.${formatBonusRollResults(operation.bonusRollResults)}`
     case "character.ability.usage.spend": return `${characterName} gastou um uso de ${operation.abilityName || "uma habilidade"}.`
     case "character.ability.restore": return `Restaurou uma carga de ${operation.abilityName || "habilidade"} de ${characterName}.`
     case "character.ability.deactivate": return `Desativou ${operation.abilityName || "uma habilidade"} de ${characterName}.`
@@ -479,17 +480,39 @@ function describeCustomSystemOperation(
     }
     case "character.customSystem.ability.activate": {
       const abilityName = customAbilityNameById(definition, previous, operation.abilityId)
-      return `${characterName} usou ${abilityName}${suffix}`
+      return `${characterName} usou ${abilityName}${customRollDetails(operation)}${suffix}`
     }
     case "character.customSystem.action.execute": {
       const actionName = definition?.actions?.find((action) => action.id === operation.actionId)?.name ?? operation.actionId
-      return `${characterName} executou ${actionName}${suffix}`
+      return `${characterName} executou ${actionName}${customRollDetails(operation)}${suffix}`
     }
     case "character.customSystem.automation.execute": {
       const automationName = definition?.automations.find((automation) => automation.id === operation.automationId)?.name ?? operation.automationId
       return `${characterName} executou a automação ${automationName}${suffix}`
     }
   }
+}
+
+function formatBonusRollResults(results: BonusRollResolution[] | undefined): string {
+  if (!results?.length) return ""
+  return ` Rolagem: ${results.map((result) => {
+    const formula = result.formulaBonus !== 0
+      ? ` ${result.formulaBonus >= 0 ? "+" : "−"} ${Math.abs(result.formulaBonus)} fórmula`
+      : ""
+    return `${result.dice} = ${result.diceValue}${formula}; total ${result.total}`
+  }).join(" · ")}.`
+}
+
+function customRollDetails(
+  operation: Extract<SessionCustomSystemOperation, {
+    type: "character.customSystem.ability.activate" | "character.customSystem.action.execute"
+  }>,
+): string {
+  if (operation.rollValue === undefined) return ""
+  const dice = operation.rollDice?.trim()
+  const base = dice ? ` — rolagem ${dice} = ${operation.rollValue}` : ` — rolagem = ${operation.rollValue}`
+  if (operation.rollTotal === undefined || operation.rollTotal === operation.rollValue) return base
+  return `${base}; total com fórmula ${operation.rollTotal}`
 }
 
 function previousCustomSystemState(

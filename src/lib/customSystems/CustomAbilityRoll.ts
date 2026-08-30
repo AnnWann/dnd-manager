@@ -23,8 +23,11 @@ import {
 
 export type CustomAbilityRollResolution = {
   mode: CustomAbilityRollDefinition["mode"]
+  /** Resultado dos dados / valor manual antes da fórmula do efeito. */
   value: number
   dice?: string
+  /** Primeiro total numérico de uma fórmula de efeito que use roll.value. */
+  total?: number
 }
 
 export function getCustomAbilityRollDefinition(
@@ -85,6 +88,7 @@ export function activateCustomAbilityWithRoll(
     resolved.value,
   )
 
+  const activation = getEffectiveCustomAbilityActivation(type, ability)
   return {
     character: activateCustomAbility(
       character,
@@ -97,6 +101,15 @@ export function activateCustomAbilityWithRoll(
       mode: roll.mode,
       value: resolved.value,
       dice: resolved.dice,
+      total: resolveRollFormulaTotal(
+        activation.resourceChanges,
+        resolved.value,
+        definition,
+        state,
+        character,
+        type,
+        ability.values,
+      ),
     },
   }
 }
@@ -150,6 +163,13 @@ export function activateCustomSystemActionWithRoll(
       mode: action.roll.mode,
       value: resolved.value,
       dice: resolved.dice,
+      total: resolveRollFormulaTotal(
+        action.resourceChanges,
+        resolved.value,
+        definition,
+        state,
+        character,
+      ),
     },
   }
 }
@@ -241,10 +261,7 @@ function resolveRollValue(
   abilityType?: CustomAbilityTypeDefinition,
   abilityValues?: Record<string, JsonValue>,
 ): { value: number; dice?: string } {
-  if (roll.mode === "manual") {
-    if (typeof suppliedRollValue !== "number" || !Number.isFinite(suppliedRollValue)) {
-      throw new Error(`Informe o resultado da rolagem antes de usar esta ${subject}.`)
-    }
+  if (typeof suppliedRollValue === "number" && Number.isFinite(suppliedRollValue)) {
     return {
       value: suppliedRollValue,
       dice: roll.dice?.trim()
@@ -260,6 +277,10 @@ function resolveRollValue(
     }
   }
 
+  if (roll.mode === "manual") {
+    throw new Error(`Informe o resultado da rolagem antes de usar esta ${subject}.`)
+  }
+
   const dice = resolveCustomRollDiceExpression(
     roll.dice,
     definition,
@@ -269,6 +290,34 @@ function resolveRollValue(
     abilityValues,
   )
   return { value: rollCustomAbilityDice(dice), dice }
+}
+
+function resolveRollFormulaTotal(
+  changes: CustomAbilityActivationDefinition["resourceChanges"] | undefined,
+  rollValue: number,
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  character: CharacterTemplate,
+  abilityType?: CustomAbilityTypeDefinition,
+  abilityValues?: Record<string, JsonValue>,
+): number {
+  for (const change of changes ?? []) {
+    const formula = change.formula?.trim()
+    if (!formula?.includes("roll.value")) continue
+    const replaced = replaceRollToken(formula, rollValue)
+    if (!replaced) continue
+    const result = evaluateCustomFormula(
+      replaced,
+      definition,
+      state,
+      character,
+      abilityType ? { type: abilityType, values: abilityValues } : undefined,
+    )
+    if (result.ok && typeof result.value === "number" && Number.isFinite(result.value)) {
+      return result.value
+    }
+  }
+  return rollValue
 }
 
 function replaceRollValueForAbility(
