@@ -1,4 +1,5 @@
 import type { AbilityResourceSelection } from "../../../../../src/models/abilities/Ability";
+import type { BonusRollResolution } from "../../../../../src/models/bonuses/Bonus";
 import {
   DAMAGE_TYPES,
   type DamageAffinity,
@@ -30,6 +31,8 @@ export type SessionAbilityOperation =
       abilityName?: string;
       activationOptionId?: string;
       resourceSelection?: AbilityResourceSelection;
+      bonusRollValues?: Record<string, number>;
+      bonusRollResults?: BonusRollResolution[];
     }
   | {
       type: "character.ability.usage.spend";
@@ -119,7 +122,8 @@ function isAbilityOperation(value: unknown): value is SessionAbilityOperation {
       return isAbilitySource(value.source) &&
         hasValidOptionalName &&
         (value.activationOptionId === undefined || typeof value.activationOptionId === "string") &&
-        (value.resourceSelection === undefined || isResourceSelection(value.resourceSelection));
+        (value.resourceSelection === undefined || isResourceSelection(value.resourceSelection)) &&
+        (value.bonusRollValues === undefined || isFiniteNumberRecord(value.bonusRollValues));
     case "character.ability.usage.spend":
     case "character.ability.restore":
     case "character.ability.deactivate":
@@ -155,6 +159,13 @@ function isResourceSelection(value: unknown): value is AbilityResourceSelection 
     }
   }
   return true;
+}
+
+function isFiniteNumberRecord(value: unknown): value is Record<string, number> {
+  if (!isRecord(value)) return false;
+  return Object.entries(value).every(
+    ([key, candidate]) => key.trim().length > 0 && typeof candidate === "number" && Number.isFinite(candidate),
+  );
 }
 
 function isAbilityName(value: unknown): value is string {
