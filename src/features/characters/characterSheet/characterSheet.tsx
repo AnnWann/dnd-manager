@@ -168,19 +168,17 @@ export function CharacterSheetTab({
             updateCharacter={updateCharacter}
           />
 
-          <div className="grid items-start gap-4 xl:grid-cols-[minmax(320px,0.8fr)_minmax(420px,1.2fr)]">
-            <DamageAffinityEditor
-              title="Afinidades de dano"
-              description="Resistências, imunidades e vulnerabilidades estruturais do personagem. Benefícios temporários de habilidades e condições são somados durante o jogo."
-              value={character.get("sheet").damageAffinities ?? []}
-              onChange={updateDamageAffinities}
-            />
+          <DamageAffinityEditor
+            title="Afinidades de dano"
+            description="Resistências, imunidades e vulnerabilidades estruturais do personagem. Benefícios temporários de habilidades e condições são somados durante o jogo."
+            value={character.get("sheet").damageAffinities ?? []}
+            onChange={updateDamageAffinities}
+          />
 
-            <Skills
-              character={character}
-              updateCharacter={updateCharacter}
-            />
-          </div>
+          <Skills
+            character={character}
+            updateCharacter={updateCharacter}
+          />
         </>
       )}
     </div>
