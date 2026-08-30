@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react"
 
-import { useCustomSystemDefinitions } from "../../../lib/customSystems/CustomSystemRegistry"
+import { Input } from "../../../components/ui/Input"
 import type { CharacterCondition } from "../../../models/characters/CharacterCondition"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getCharacterConditions } from "../../../models/characters/characterConditionStorage"
+import { setMaxHp } from "../../../models/characters/characterHp"
 import type { SessionConditionOperation } from "../../session-runtime/sessionProtocol"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import { DamageAffinityEditor } from "../../combat/DamageAffinityEditor"
@@ -12,21 +13,12 @@ import {
   type CharacterWorkspaceMode,
 } from "../workspace/CharacterWorkspaceContext"
 
-import { AttributeCalculators } from "./attributeCalculators"
-import { Attributes } from "./attributes"
 import { CharacterConditions } from "./characterConditions"
 import { CharacterIdentity } from "./character_info/characterIdentity"
-import {
-  CustomSystemActionsPanel,
-  hasCustomSystemSheetActions,
-} from "./character_info/components/actions/CustomSystemActionsPanel"
-import { GroupActions } from "./character_info/components/actions/GroupActions"
-import { GroupHP } from "./character_info/components/hp/GroupHP"
-import { GroupStats } from "./character_info/components/stats/GroupStats"
 import { MinimalCharacterSheet } from "./minimalCharacterSheet"
 import { MinimalMagicActions } from "./minimalMagicActions"
-import { SavingThrows } from "./savingThrows"
 import { Skills } from "./skills/skills"
+import { UserCharacterStatistics } from "./userCharacterStatistics"
 
 type Props = {
   character: CharacterTemplate
@@ -46,20 +38,12 @@ export function CharacterSheetTab({
 }: Props) {
   const {
     mode,
-    canAssignOwners,
     dispatchConditionOperation,
   } = useCharacterWorkspace()
   const sessionRuntime = useOptionalSessionRuntime()
   const [viewMode, setViewMode] = useState<SheetViewMode>(() =>
     loadSheetViewMode(mode),
   )
-  const customSystemDefinitions = useCustomSystemDefinitions()
-  const showActionEconomy = canAssignOwners
-  const showCustomActions = hasCustomSystemSheetActions(
-    character,
-    customSystemDefinitions,
-  )
-  const showActionsColumn = showActionEconomy || showCustomActions
 
   useEffect(() => {
     setViewMode(loadSheetViewMode(mode))
@@ -93,7 +77,7 @@ export function CharacterSheetTab({
           <div className="text-[10px] text-textMuted">
             {viewMode === "play"
               ? "Use a visão de jogo para consultar e alterar o que importa durante a partida."
-              : "Use a configuração para ajustar a estrutura e os valores completos da ficha."}
+              : "Use a configuração para ajustar os dados estruturais da ficha."}
           </div>
         </div>
 
@@ -154,60 +138,72 @@ export function CharacterSheetTab({
             updateCharacter={updateCharacter}
           />
 
-          <GroupHP character={character} updateCharacter={updateCharacter} />
-          <CharacterConditions
+          <MaximumHpConfiguration
             character={character}
-            updateCharacter={updateConditions}
-          />
-          <GroupStats character={character} updateCharacter={updateCharacter} />
-          <DamageAffinityEditor
-            value={character.get("sheet").damageAffinities ?? []}
-            onChange={(damageAffinities) =>
-              updateCharacter(character.get("id"), (current) =>
-                current.withSheet("damageAffinities", damageAffinities),
-              )
-            }
+            updateCharacter={updateCharacter}
           />
 
-          <div
-            className={
-              showActionsColumn
-                ? "grid items-start gap-4 xl:grid-cols-[280px_minmax(360px,1fr)_minmax(320px,0.9fr)]"
-                : "grid items-start gap-4 xl:grid-cols-[280px_minmax(360px,1fr)]"
-            }
-          >
-            <div className="grid gap-4">
-              <Attributes character={character} updateCharacter={updateCharacter} />
-              <SavingThrows
-                character={character}
-                updateCharacter={updateCharacter}
-              />
-            </div>
+          <UserCharacterStatistics
+            character={character}
+            updateCharacter={updateCharacter}
+          />
 
-            <Skills character={character} updateCharacter={updateCharacter} />
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(320px,0.8fr)_minmax(420px,1.2fr)]">
+            <DamageAffinityEditor
+              title="Afinidades de dano"
+              description="Resistências, imunidades e vulnerabilidades estruturais do personagem. Benefícios temporários de habilidades e condições são somados durante o jogo."
+              value={character.get("sheet").damageAffinities ?? []}
+              onChange={(damageAffinities) =>
+                updateCharacter(character.get("id"), (current) =>
+                  current.withSheet("damageAffinities", damageAffinities),
+                )
+              }
+            />
 
-            {showActionsColumn ? (
-              <div className="grid gap-4">
-                {showCustomActions ? (
-                  <CustomSystemActionsPanel
-                    character={character}
-                    updateCharacter={updateCharacter}
-                  />
-                ) : null}
-                {showActionEconomy ? (
-                  <GroupActions
-                    character={character}
-                    updateCharacter={updateCharacter}
-                  />
-                ) : null}
-              </div>
-            ) : null}
+            <Skills
+              character={character}
+              updateCharacter={updateCharacter}
+            />
           </div>
-
-          <AttributeCalculators character={character} />
         </>
       )}
     </div>
+  )
+}
+
+function MaximumHpConfiguration({
+  character,
+  updateCharacter,
+}: Props) {
+  const maxHp = character.get("sheet").HP.max
+
+  return (
+    <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold text-textH">
+          Pontos de vida máximos
+        </h2>
+        <p className="mt-1 text-xs text-textMuted">
+          Valor estrutural da ficha. Vida atual e temporária pertencem à visão em jogo.
+        </p>
+      </div>
+
+      <label className="grid max-w-48 gap-1 text-xs text-textMuted">
+        Vida máxima
+        <Input
+          type="number"
+          min={1}
+          inputMode="numeric"
+          value={maxHp}
+          onChange={(event) => {
+            const value = Math.max(1, Math.trunc(Number(event.target.value) || 1))
+            updateCharacter(character.get("id"), (current) =>
+              setMaxHp(current, value),
+            )
+          }}
+        />
+      </label>
+    </section>
   )
 }
 
@@ -269,7 +265,7 @@ function SessionConfigurationHeader({
           Configuração da ficha na sessão
         </div>
         <div className="mt-0.5 text-xs text-textMuted">
-          Ajuste os dados completos da ficha. Operações suportadas são validadas e sincronizadas pela sessão.
+          Ajuste os dados estruturais da ficha. Operações suportadas são validadas e sincronizadas pela sessão.
         </div>
       </div>
 
