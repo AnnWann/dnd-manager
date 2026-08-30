@@ -5,6 +5,8 @@ import { HeartPulse, Plus, ShieldPlus, Trash2, Zap } from "lucide-react"
 import { Button } from "../../components/ui/Button"
 import { Input } from "../../components/ui/Input"
 import { Modal } from "../../components/ui/Modal"
+import { useCharacterContext } from "../../contexts/characterContext"
+import { getEffectiveDamageAffinities } from "../../models/characters/characterDamageAffinities"
 import {
   DAMAGE_TYPE_OPTIONS,
   damageAffinityLabel,
@@ -41,14 +43,28 @@ export function InitiativeHpActionDialog({
   onClose: () => void
   onApply: (payload: InitiativeHpActionPayload) => void
 }) {
+  const { visibleCharacters } = useCharacterContext()
   const [mode, setMode] = useState<InitiativeHpActionMode>(initialMode)
   const [amount, setAmount] = useState(1)
   const [parts, setParts] = useState<InitiativeDamagePart[]>([
     { amount: 1, damageType: undefined, magical: false },
   ])
 
+  const targetsWithEffectiveAffinities = useMemo(
+    () => targets.map(({ entry, affinities }) => {
+      const character = entry.sourceId
+        ? visibleCharacters.find((candidate) => candidate.get("id") === entry.sourceId)
+        : undefined
+      return {
+        entry,
+        affinities: character ? getEffectiveDamageAffinities(character) : affinities,
+      }
+    }),
+    [targets, visibleCharacters],
+  )
+
   const previews = useMemo(() =>
-    targets.map(({ entry, affinities }) => {
+    targetsWithEffectiveAffinities.map(({ entry, affinities }) => {
       if (mode !== "damage") return { entry, requested: amount, applied: amount, rules: [] as string[] }
       const resolved = parts.map((part) => resolveDamage(part.amount, part.damageType, affinities, { magical: part.magical }))
       return {
@@ -58,7 +74,7 @@ export function InitiativeHpActionDialog({
         rules: Array.from(new Set(resolved.flatMap((result) => result.affinity ? [damageAffinityLabel(result.affinity)] : []))),
       }
     }),
-  [amount, mode, parts, targets])
+  [amount, mode, parts, targetsWithEffectiveAffinities])
 
   const valid = mode === "damage"
     ? parts.length > 0 && parts.every((part) => Number.isInteger(part.amount) && part.amount > 0)
