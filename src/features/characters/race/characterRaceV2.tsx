@@ -1,4 +1,6 @@
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import type { DamageAffinity } from "../../../models/combat/Damage"
+import { DamageAffinityEditor } from "../../combat/DamageAffinityEditor"
 import type { SessionAbilityOperation } from "../../session-runtime/abilitySessionProtocol"
 import { CharacterWorkspaceProvider, useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
@@ -24,10 +26,22 @@ export function CharacterRaceTab({ character, updateCharacter }: Props) {
         disabled={mutationsDisabled}
         className="m-0 min-w-0 border-0 p-0 disabled:opacity-75"
       >
-        <BaseCharacterRaceTab
-          character={character}
-          updateCharacter={updateCharacter}
-        />
+        <div className="grid gap-4">
+          <BaseCharacterRaceTab
+            character={character}
+            updateCharacter={updateCharacter}
+          />
+          <DamageAffinityEditor
+            value={character.get("sheet").damageAffinities ?? []}
+            onChange={(damageAffinities) =>
+              updateCharacter(character.get("id"), (current) =>
+                current.withSheet("damageAffinities", damageAffinities),
+              )
+            }
+            title="Afinidades de dano raciais"
+            description="Configure resistências, imunidades e vulnerabilidades concedidas pela raça. Elas entram no mesmo cálculo automático usado pela ficha e pela iniciativa."
+          />
+        </div>
       </fieldset>
     )
   }
@@ -35,12 +49,29 @@ export function CharacterRaceTab({ character, updateCharacter }: Props) {
   const authoritativeCharacter =
     workspace.characters.find((entry) => entry.get("id") === character.get("id")) ?? character
 
+  const setDamageAffinities = (damageAffinities: DamageAffinity[]) => {
+    runtime.dispatchAbilityOperation({
+      type: "character.damageAffinities.set",
+      characterId: authoritativeCharacter.get("id"),
+      damageAffinities,
+    })
+  }
+
   const sessionUpdateCharacter = (
     characterId: string,
     updater: (current: CharacterTemplate) => CharacterTemplate,
   ) => {
     if (characterId !== authoritativeCharacter.get("id")) return
     const next = updater(authoritativeCharacter)
+
+    if (
+      JSON.stringify(authoritativeCharacter.get("sheet").damageAffinities ?? []) !==
+      JSON.stringify(next.get("sheet").damageAffinities ?? [])
+    ) {
+      setDamageAffinities(next.get("sheet").damageAffinities ?? [])
+      return
+    }
+
     const operation = deriveRacialAbilityOperation(authoritativeCharacter, next)
     if (operation) {
       runtime.dispatchAbilityOperation(operation)
@@ -97,10 +128,18 @@ export function CharacterRaceTab({ character, updateCharacter }: Props) {
 
   return (
     <CharacterWorkspaceProvider value={value}>
-      <BaseCharacterRaceTab
-        character={authoritativeCharacter}
-        updateCharacter={sessionUpdateCharacter}
-      />
+      <div className="grid gap-4">
+        <BaseCharacterRaceTab
+          character={authoritativeCharacter}
+          updateCharacter={sessionUpdateCharacter}
+        />
+        <DamageAffinityEditor
+          value={authoritativeCharacter.get("sheet").damageAffinities ?? []}
+          onChange={setDamageAffinities}
+          title="Afinidades de dano raciais"
+          description="Configure resistências, imunidades e vulnerabilidades concedidas pela raça. Elas entram no mesmo cálculo automático usado pela ficha e pela iniciativa."
+        />
+      </div>
     </CharacterWorkspaceProvider>
   )
 }
