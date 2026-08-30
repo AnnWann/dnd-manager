@@ -228,15 +228,17 @@ export function flattenBonuses(
       continue
     }
 
-    if (option.value === "attribute" || option.value === "attributeModifier") {
-      const values = bonuses[option.value] ?? []
+    const target = option.value as Exclude<BonusTarget, "damageAffinity">
+
+    if (target === "attribute" || target === "attributeModifier") {
+      const values = bonuses[target] ?? []
       values.forEach((entry, index) => {
         entries.push({
-          id: `${option.value}-${index}`,
+          id: `${target}-${index}`,
           label: `${option.label} ${attributeShort(entry.attribute)}: ${formatBonus(entry.bonus)}`,
           remove: (current) => ({
             ...current,
-            [option.value]: (current[option.value] ?? []).filter(
+            [target]: (current[target] ?? []).filter(
               (_, currentIndex) => currentIndex !== index,
             ),
           }),
@@ -245,18 +247,18 @@ export function flattenBonuses(
       continue
     }
 
-    if (isScopedTarget(option.value)) {
-      const values = bonuses[option.value] ?? []
+    if (isScopedTarget(target)) {
+      const values = bonuses[target] ?? []
       values.forEach((entry, index) => {
         const scope = entry.attribute
           ? ` ${attributeShort(entry.attribute)}`
           : " — todos os atributos"
         entries.push({
-          id: `${option.value}-${index}`,
+          id: `${target}-${index}`,
           label: `${option.label}${scope}: ${formatBonus(entry.bonus)}`,
           remove: (current) => ({
             ...current,
-            [option.value]: (current[option.value] ?? []).filter(
+            [target]: (current[target] ?? []).filter(
               (_, currentIndex) => currentIndex !== index,
             ),
           }),
@@ -265,14 +267,14 @@ export function flattenBonuses(
       continue
     }
 
-    const values = bonuses[option.value] ?? []
+    const values = bonuses[target] ?? []
     values.forEach((bonus, index) => {
       entries.push({
-        id: `${option.value}-${index}`,
+        id: `${target}-${index}`,
         label: `${option.label}: ${formatBonus(bonus)}`,
         remove: (current) => ({
           ...current,
-          [option.value]: (current[option.value] ?? []).filter(
+          [target]: (current[target] ?? []).filter(
             (_, currentIndex) => currentIndex !== index,
           ),
         }),
