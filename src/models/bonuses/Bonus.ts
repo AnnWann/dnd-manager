@@ -1,12 +1,39 @@
 import type { DamageAffinity } from "../combat/Damage"
 import type { Attribute } from "../sheet/Attribute"
 
+export type BonusRollDefinition = {
+  mode: "automatic" | "manual"
+  /** Notação simples de dados, por exemplo 1d6, 2d8+1 ou 1d10-1. */
+  dice: string
+}
+
+export type BonusRollResolution = {
+  /** Chave estável dentro da coleção de bônus usada para rolagens manuais. */
+  key: string
+  label: string
+  mode: BonusRollDefinition["mode"]
+  dice: string
+  /** Resultado somente dos dados (incluindo modificador escrito na notação). */
+  diceValue: number
+  /** Parcela adicional calculada pela fórmula do bônus. */
+  formulaBonus: number
+  /** Valor final usado pelo bônus. */
+  total: number
+}
+
 export type Bonus = {
   type: "add" | "sub" | "flat"
   /** Fallback numérico e compatibilidade com bônus antigos. */
   value: number
-  /** Fórmula recalculada com as variáveis atuais da ficha. */
+  /**
+   * Fórmula recalculada com as variáveis atuais da ficha. Quando `roll` existe,
+   * esta fórmula é somada ao resultado dos dados em vez de substituir o valor.
+   */
   formula?: string
+  /** Rolagem resolvida quando a habilidade que concede este bônus é usada. */
+  roll?: BonusRollDefinition
+  /** Última resolução autoritativa; é substituída a cada novo uso. */
+  rollResult?: BonusRollResolution
   label?: string
 }
 
