@@ -21,7 +21,9 @@ jobs:
           node-version: 22
 
       - name: Apply integration patch
-        run: python .github/apply_ability_roll_affinity_fixes.py
+        run: |
+          python .github/repair_ability_roll_patcher.py
+          rm -f .github/repair_ability_roll_patcher.py
 
       - name: Install dependencies
         run: npm install --package-lock=false --ignore-scripts
