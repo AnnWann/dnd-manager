@@ -75,20 +75,66 @@ export function UserCharacterStatistics({
   character,
   updateCharacter,
 }: Props) {
-  const { isEditing = false, mode } = useCharacterWorkspace()
+  const {
+    isEditing = false,
+    mode,
+    dispatchStatOperation,
+    dispatchAttributeOperation,
+    dispatchSavingThrowOperation,
+  } = useCharacterWorkspace()
   const canEdit = mode === "campaign" || isEditing
   const characterId = character.get("id")
   const exhaustion = character.get("sheet").stats.exhaustion ?? 0
   const inspiration = character.get("sheet").stats.inspiration ?? false
   const proficiency = character.getProficiencyBonus()
 
+  function dispatchCalculatedStat(
+    definition: CalculatedStatDefinition,
+    value: number,
+    calculatedValue: number,
+  ): boolean {
+    switch (definition.key) {
+      case "armorClass":
+        return dispatchStatOperation({
+          type: "character.stat.armorClass.set",
+          characterId,
+          value,
+          calculatedValue,
+        })
+      case "initiative":
+        return dispatchStatOperation({
+          type: "character.stat.initiative.set",
+          characterId,
+          value,
+          calculatedValue,
+        })
+      case "mobility":
+        return dispatchStatOperation({
+          type: "character.stat.mobility.set",
+          characterId,
+          value,
+          calculatedValue,
+        })
+      case "passive_perception":
+        return dispatchStatOperation({
+          type: "character.stat.passivePerception.set",
+          characterId,
+          value,
+          calculatedValue,
+        })
+    }
+  }
+
   function updateCalculatedStat(definition: CalculatedStatDefinition, value: number) {
     if (!canEdit || !Number.isFinite(value)) return
 
+    const calculated = definition.getCalculatedValue(character)
+    if (dispatchCalculatedStat(definition, value, calculated)) return
+
     updateCharacter(characterId, (current) => {
-      const calculated = definition.getCalculatedValue(current)
+      const currentCalculated = definition.getCalculatedValue(current)
       const adjustmentKey = getStatAdjustmentKey(definition.key)
-      const adjustment = cleanNumber(value - calculated)
+      const adjustment = cleanNumber(value - currentCalculated)
       return current.withStat(adjustmentKey, adjustment)
     })
   }
@@ -96,28 +142,68 @@ export function UserCharacterStatistics({
   function updateAttribute(attribute: Attribute, requestedValue: number) {
     if (!canEdit || !Number.isFinite(requestedValue)) return
 
-    updateCharacter(characterId, (current) => {
-      const currentBase = current.get("sheet").attributes[attribute]
-      const currentEffective = current.getEffectiveAttribute(attribute)
-      const nextEffective = clampInt(requestedValue, 1, 30)
-      const nextBase = clampInt(
-        currentBase + nextEffective - currentEffective,
-        1,
-        30,
-      )
+    const currentBase = character.get("sheet").attributes[attribute]
+    const currentEffective = character.getEffectiveAttribute(attribute)
+    const nextEffective = clampInt(requestedValue, 1, 30)
+    const nextBase = clampInt(
+      currentBase + nextEffective - currentEffective,
+      1,
+      30,
+    )
 
-      return current.withSheet("attributes", {
+    if (dispatchAttributeOperation({
+      type: "character.attribute.set",
+      characterId,
+      attribute,
+      value: nextBase,
+    })) return
+
+    updateCharacter(characterId, (current) =>
+      current.withSheet("attributes", {
         ...current.get("sheet").attributes,
         [attribute]: nextBase,
-      })
-    })
+      }),
+    )
   }
 
   function toggleSavingThrow(attribute: Attribute) {
     if (!canEdit) return
     const proficient = character.isSavingThrowProficient(attribute)
+
+    if (dispatchSavingThrowOperation({
+      type: "character.savingThrow.set",
+      characterId,
+      attribute,
+      proficient: !proficient,
+    })) return
+
     updateCharacter(characterId, (current) =>
       current.setSavingThrowProficiency(attribute, !proficient),
+    )
+  }
+
+  function setExhaustion(value: number) {
+    const next = clampInt(value, 0, 6)
+    if (dispatchStatOperation({
+      type: "character.stat.exhaustion.set",
+      characterId,
+      value: next,
+    })) return
+
+    updateCharacter(characterId, (current) =>
+      current.withStat("exhaustion", next),
+    )
+  }
+
+  function setInspiration(value: boolean) {
+    if (dispatchStatOperation({
+      type: "character.stat.inspiration.set",
+      characterId,
+      value,
+    })) return
+
+    updateCharacter(characterId, (current) =>
+      current.withStat("inspiration", value),
     )
   }
 
@@ -152,12 +238,7 @@ export function UserCharacterStatistics({
               max={6}
               className="h-10 text-center text-lg font-semibold"
               value={exhaustion}
-              onChange={(event) => {
-                const next = clampInt(Number(event.target.value), 0, 6)
-                updateCharacter(characterId, (current) =>
-                  current.withStat("exhaustion", next),
-                )
-              }}
+              onChange={(event) => setExhaustion(Number(event.target.value))}
             />
           ) : (
             <StatValue value={String(exhaustion)} />
@@ -169,11 +250,7 @@ export function UserCharacterStatistics({
             type="button"
             disabled={!canEdit}
             aria-pressed={inspiration}
-            onClick={() =>
-              updateCharacter(characterId, (current) =>
-                current.withStat("inspiration", !inspiration),
-              )
-            }
+            onClick={() => setInspiration(!inspiration)}
             className={cn(
               "flex h-10 w-full items-center justify-center gap-1.5 rounded-lg border text-xs font-semibold",
               inspiration
@@ -193,6 +270,9 @@ export function UserCharacterStatistics({
       </div>
 
       <div className="mt-4 border-t border-border pt-4">
+        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-textMuted">
+          Atributos
+        </div>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
           {ATTRIBUTE_KEYS.map((attribute) => {
             const score = character.getEffectiveAttribute(attribute)
