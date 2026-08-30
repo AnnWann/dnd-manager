@@ -1,5 +1,6 @@
 import { evaluateCharacterSheetFormula } from "../../lib/customSystems/CharacterSheetFormula"
 import type { Bonus } from "../bonuses/Bonus"
+import { resolveBonusCollectionRolls } from "../bonuses/BonusRoll"
 import type {
   CharacterCondition,
   CharacterConditionDuration,
@@ -98,18 +99,28 @@ export function useAbilityEffect(
   ability: Ability,
   source: AbilityEffectSource,
   activationOptionId?: string,
+  bonusRollValues?: Record<string, number>,
 ): CharacterTemplate {
   if (!abilityRequiresActivation(ability) || !canActivateAbility(character, ability)) return character
 
-  const selectedOption = ability.activationOptions?.find((entry) => entry.id === activationOptionId)
-  const duration = getAbilityEffectDuration(ability)
-  const persists = ability.effectPersistence === "permanent"
+  const resolvedRolls = resolveBonusCollectionRolls(
+    character,
+    ability.bonuses,
+    bonusRollValues,
+  )
+  const resolvedAbility: Ability = {
+    ...ability,
+    bonuses: resolvedRolls.bonuses,
+  }
+  const selectedOption = resolvedAbility.activationOptions?.find((entry) => entry.id === activationOptionId)
+  const duration = getAbilityEffectDuration(resolvedAbility)
+  const persists = resolvedAbility.effectPersistence === "permanent"
   const previousEffectiveMaxHp = character.getEffectiveMaxHp()
   const previousCurrentHp = character.get("sheet").HP.current
-  const nextAbility = activateAbilityBenefits(character, ability)
+  const nextAbility = activateAbilityBenefits(character, resolvedAbility)
   let next = replaceAbilityAtSource(character, nextAbility, source)
 
-  const maxHpBonuses = resolveBonuses(character, ability.bonuses?.maxHp ?? [])
+  const maxHpBonuses = resolveBonuses(character, resolvedAbility.bonuses?.maxHp ?? [])
   if (maxHpBonuses.length > 0) {
     if (duration === "instant" && !persists) {
       const currentBaseMax = next.get("sheet").HP.max
@@ -124,16 +135,16 @@ export function useAbilityEffect(
     }
   }
 
-  const temporaryHpBonuses = resolveBonuses(character, ability.bonuses?.temporaryHp ?? [])
+  const temporaryHpBonuses = resolveBonuses(character, resolvedAbility.bonuses?.temporaryHp ?? [])
   if (temporaryHpBonuses.length > 0) {
     const currentTemporaryHp = next.get("sheet").HP.temporary
     next = next.setTemporaryHp(Math.max(0, applyBonuses(currentTemporaryHp, temporaryHpBonuses)))
   }
 
-  if (duration === "lasting") next = upsertAbilityCondition(next, ability, source)
+  if (duration === "lasting") next = upsertAbilityCondition(next, resolvedAbility, source)
 
-  if (ability.conditionOnUse) {
-    next = upsertGrantedCondition(next, ability, source, ability.conditionOnUse, "base")
+  if (resolvedAbility.conditionOnUse) {
+    next = upsertGrantedCondition(next, resolvedAbility, source, resolvedAbility.conditionOnUse, "base")
   }
 
   if (selectedOption) {
@@ -141,16 +152,16 @@ export function useAbilityEffect(
     if (optionAbilities.length > 0) {
       next = upsertGrantedCondition(
         next,
-        ability,
+        resolvedAbility,
         source,
-        optionAbilitiesGrant(selectedOption, ability, optionAbilities),
+        optionAbilitiesGrant(selectedOption, resolvedAbility, optionAbilities),
         `${selectedOption.id}:abilities`,
         selectedOption.name,
       )
     } else if (selectedOption.condition) {
       next = upsertGrantedCondition(
         next,
-        ability,
+        resolvedAbility,
         source,
         selectedOption.condition,
         selectedOption.id,
