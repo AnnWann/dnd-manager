@@ -1,5 +1,6 @@
 import type { Ability, AbilityResourceSelection } from "../../models/abilities/Ability"
 import type { CharacterTemplateProps } from "../../models/characters/CharacterTemplate"
+import type { DamageAffinity } from "../../models/combat/Damage"
 import type { SessionCustomSystemOperation } from "./customSystemSessionProtocol"
 
 export type SessionAbilitySource =
@@ -57,6 +58,11 @@ export type SessionAbilityOperation =
       characterId: string
       abilityId: string
       abilityName?: string
+    }
+  | {
+      type: "character.damageAffinities.set"
+      characterId: string
+      damageAffinities: DamageAffinity[]
     }
   | SessionCustomSystemOperation
 
