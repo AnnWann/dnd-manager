@@ -471,7 +471,7 @@ function enrichCustomInitiativeActionConditions(
     const previous = previousConditions[characterId];
     if (!state?.initialized || !previous?.initialized) continue;
 
-    const previousIds = new Set(previous.conditions.map((condition) => [condition.id, condition]));
+    const previousIds = new Set(previous.conditions.map((condition) => condition.id));
     const unmatched = state.conditions.filter((condition) =>
       !previousIds.has(condition.id)
       && condition.linkedCombatantId === entryId,
