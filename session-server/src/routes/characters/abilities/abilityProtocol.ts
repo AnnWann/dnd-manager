@@ -1,4 +1,8 @@
 import type { AbilityResourceSelection } from "../../../../../src/models/abilities/Ability";
+import {
+  DAMAGE_TYPES,
+  type DamageAffinity,
+} from "../../../../../src/models/combat/Damage";
 
 export type SessionAbilitySource =
   | { type: "character"; abilityId: string }
@@ -55,6 +59,11 @@ export type SessionAbilityOperation =
       characterId: string;
       abilityId: string;
       abilityName?: string;
+    }
+  | {
+      type: "character.damageAffinities.set";
+      characterId: string;
+      damageAffinities: DamageAffinity[];
     };
 
 export type SessionAbilityClientMessage =
@@ -119,9 +128,19 @@ function isAbilityOperation(value: unknown): value is SessionAbilityOperation {
       return isRecord(value.ability) && typeof value.ability.id === "string" && typeof value.ability.name === "string";
     case "character.ability.remove":
       return typeof value.abilityId === "string" && value.abilityId.trim().length > 0 && hasValidOptionalName;
+    case "character.damageAffinities.set":
+      return Array.isArray(value.damageAffinities) && value.damageAffinities.every(isDamageAffinity);
     default:
       return false;
   }
+}
+
+function isDamageAffinity(value: unknown): value is DamageAffinity {
+  if (!isRecord(value)) return false;
+  if (!DAMAGE_TYPES.includes(value.damageType as DamageAffinity["damageType"])) return false;
+  if (value.kind !== "resistance" && value.kind !== "immunity" && value.kind !== "vulnerability") return false;
+  if (value.qualifier !== undefined && value.qualifier !== "any" && value.qualifier !== "magical" && value.qualifier !== "nonmagical") return false;
+  return value.label === undefined || typeof value.label === "string";
 }
 
 function isResourceSelection(value: unknown): value is AbilityResourceSelection {
