@@ -103,8 +103,12 @@ export function CampaignCharactersView() {
     : visibleCharacters
 
   const selectorCharacters = useMemo(
-    () => sessionCharacters.map(toSessionCharacterSelectorItem),
-    [sessionCharacters],
+    () => sessionCharacters.map((character) => {
+      const item = toSessionCharacterSelectorItem(character)
+      if (!socketIsAuthoritative || projectedById.has(item.id)) return item
+      return { ...item, secondaryBadge: "Somente na sessão" }
+    }),
+    [projectedById, sessionCharacters, socketIsAuthoritative],
   )
   const inactiveSelectorCharacters = useMemo(
     () => inactiveCharacters.map(toSessionCharacterSelectorItem),
