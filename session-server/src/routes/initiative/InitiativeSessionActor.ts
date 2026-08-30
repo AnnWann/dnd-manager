@@ -16,6 +16,7 @@ import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from "../../../../src/models/characters/CharacterTemplate";
+import { getEffectiveDamageAffinities } from "../../../../src/models/characters/characterDamageAffinities";
 import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/session-runtime/sessionRuntimeConfig";
 import { resolveDamage, normalizeDamageAffinities, type DamageAffinity } from "../../../../src/models/combat/Damage";
 import { getCreatureEffectiveArmorClass } from "../../../../src/models/creatures/CreatureCombatRuntime";
@@ -470,7 +471,7 @@ function enrichCustomInitiativeActionConditions(
     const previous = previousConditions[characterId];
     if (!state?.initialized || !previous?.initialized) continue;
 
-    const previousIds = new Set(previous.conditions.map((condition) => condition.id));
+    const previousIds = new Set(previous.conditions.map((condition) => [condition.id, condition]));
     const unmatched = state.conditions.filter((condition) =>
       !previousIds.has(condition.id)
       && condition.linkedCombatantId === entryId,
@@ -740,20 +741,20 @@ function applyInitiativeOperation(
       return { ok: true, session: sortInitiativeEntries(current), operation };
     }
     case "initiative.combat.start": {
-      if (current.started) return invalid("INITIATIVE_ALREADY_STARTED", "Combat is already running.");
-      if (!current.entries.length) return invalid("INITIATIVE_EMPTY", "Add at least one creature before starting combat.");
+      if (current.started) return invalid("INITIATIVE_ALREADY_STARTED", "Initiative is already running.");
+      if (!current.entries.length) return invalid("INITIATIVE_EMPTY", "Add at least one initiative entry before starting combat.");
       return { ok: true, session: startInitiativeCombat(current), operation };
     }
     case "initiative.combat.end": {
-      if (!current.started) return invalid("INITIATIVE_NOT_STARTED", "Combat is not running.");
+      if (!current.started) return invalid("INITIATIVE_NOT_STARTED", "Initiative is not running.");
       return { ok: true, session: endInitiativeCombat(current), operation };
     }
     case "initiative.turn.next": {
-      if (!current.started) return invalid("INITIATIVE_NOT_STARTED", "Combat is not running.");
+      if (!current.started) return invalid("INITIATIVE_NOT_STARTED", "Initiative is not running.");
       return { ok: true, session: advanceInitiativeTurn(current), operation };
     }
     case "initiative.turn.previous": {
-      if (!current.started) return invalid("INITIATIVE_NOT_STARTED", "Combat is not running.");
+      if (!current.started) return invalid("INITIATIVE_NOT_STARTED", "Initiative is not running.");
       return { ok: true, session: rewindInitiativeTurn(current), operation };
     }
     case "initiative.allies.trade": {
@@ -838,7 +839,7 @@ function initiativeDamageAffinities(
     if (stored?.initialized) {
       try {
         const character = CharacterTemplate.fromJSON(stored.character as Partial<CharacterTemplateProps>);
-        return normalizeDamageAffinities(character.get("sheet").damageAffinities);
+        return getEffectiveDamageAffinities(character);
       } catch {
         return [];
       }
