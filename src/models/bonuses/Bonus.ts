@@ -1,3 +1,4 @@
+import type { DamageAffinity } from "../combat/Damage"
 import type { Attribute } from "../sheet/Attribute"
 
 export type Bonus = {
@@ -21,6 +22,8 @@ export type BonusCollection = {
   maxHp?: Bonus[]
   temporaryHp?: Bonus[]
   passivePerception?: Bonus[]
+  /** Afinidades de dano concedidas enquanto a fonte deste conjunto de bônus estiver ativa. */
+  damageAffinities?: DamageAffinity[]
   /** Bônus global aplicado a qualquer jogada de ataque. */
   attackBonus?: Bonus[]
   /** Bônus aplicado apenas a ataques com armas. */
@@ -90,3 +93,4 @@ export type BonusTarget =
   | ScopedBonusKey
   | "attribute"
   | "attributeModifier"
+  | "damageAffinity"
