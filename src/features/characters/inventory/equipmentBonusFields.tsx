@@ -11,6 +11,15 @@ import type {
   ScopedBonusKey,
 } from "../../../models/bonuses/Bonus"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import {
+  DAMAGE_TYPE_OPTIONS,
+  damageAffinityLabel,
+  damageTypeLabel,
+  type DamageAffinity,
+  type DamageAffinityKind,
+  type DamageAffinityQualifier,
+  type DamageType,
+} from "../../../models/combat/Damage"
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
 import type { Itemmable } from "../../../models/items/item"
 import type { Attribute } from "../../../models/sheet/Attribute"
@@ -34,6 +43,7 @@ const TARGET_OPTIONS: Array<{ value: BonusTarget; label: string }> = [
   { value: "maxHp", label: "HP máximo" },
   { value: "temporaryHp", label: "HP temporário" },
   { value: "passivePerception", label: "Percepção passiva" },
+  { value: "damageAffinity", label: "Afinidade a dano" },
   { value: "attackBonus", label: "Ataques — global" },
   { value: "weaponAttackBonus", label: "Ataques com arma" },
   { value: "spellAttackBonus", label: "Ataques mágicos" },
@@ -146,27 +156,35 @@ export function BonusesFields({
         open={dialogOpen}
         character={character}
         onClose={() => setDialogOpen(false)}
-        onAdd={({ target, attribute, scopeAttribute, bonus }) => {
-          if (target === "attribute" || target === "attributeModifier") {
+        onAdd={(entry) => {
+          if (entry.target === "damageAffinity") {
             onChange({
               ...bonuses,
-              [target]: [
-                ...(bonuses[target] ?? []),
-                { attribute, bonus },
+              damageAffinities: [
+                ...(bonuses.damageAffinities ?? []),
+                entry.affinity,
               ],
             })
-          } else if (isScopedTarget(target)) {
+          } else if (entry.target === "attribute" || entry.target === "attributeModifier") {
             onChange({
               ...bonuses,
-              [target]: [
-                ...(bonuses[target] ?? []),
-                { attribute: scopeAttribute, bonus },
+              [entry.target]: [
+                ...(bonuses[entry.target] ?? []),
+                { attribute: entry.attribute, bonus: entry.bonus },
+              ],
+            })
+          } else if (isScopedTarget(entry.target)) {
+            onChange({
+              ...bonuses,
+              [entry.target]: [
+                ...(bonuses[entry.target] ?? []),
+                { attribute: entry.scopeAttribute, bonus: entry.bonus },
               ],
             })
           } else {
             onChange({
               ...bonuses,
-              [target]: [...(bonuses[target] ?? []), bonus],
+              [entry.target]: [...(bonuses[entry.target] ?? []), entry.bonus],
             })
           }
           setDialogOpen(false)
@@ -188,6 +206,28 @@ export function flattenBonuses(
   const entries: FlatBonusEntry[] = []
 
   for (const option of TARGET_OPTIONS) {
+    if (option.value === "damageAffinity") {
+      const values = bonuses.damageAffinities ?? []
+      values.forEach((affinity, index) => {
+        const qualifier = affinity.qualifier === "magical"
+          ? "mágico"
+          : affinity.qualifier === "nonmagical"
+            ? "não mágico"
+            : "qualquer origem"
+        entries.push({
+          id: `damageAffinity-${index}`,
+          label: `${damageAffinityLabel(affinity.kind)} a ${damageTypeLabel(affinity.damageType)} — ${qualifier}`,
+          remove: (current) => ({
+            ...current,
+            damageAffinities: (current.damageAffinities ?? []).filter(
+              (_, currentIndex) => currentIndex !== index,
+            ),
+          }),
+        })
+      })
+      continue
+    }
+
     if (option.value === "attribute" || option.value === "attributeModifier") {
       const values = bonuses[option.value] ?? []
       values.forEach((entry, index) => {
@@ -250,6 +290,18 @@ function formatBonus(bonus: Bonus): string {
   return `+ (${value})`
 }
 
+type AddBonusEntry =
+  | {
+      target: "damageAffinity"
+      affinity: DamageAffinity
+    }
+  | {
+      target: Exclude<BonusTarget, "damageAffinity">
+      attribute: Attribute
+      scopeAttribute?: Attribute
+      bonus: Bonus
+    }
+
 function AddBonusDialog({
   open,
   character,
@@ -259,12 +311,7 @@ function AddBonusDialog({
   open: boolean
   character?: CharacterTemplate
   onClose: () => void
-  onAdd: (entry: {
-    target: BonusTarget
-    attribute: Attribute
-    scopeAttribute?: Attribute
-    bonus: Bonus
-  }) => void
+  onAdd: (entry: AddBonusEntry) => void
 }) {
   const [target, setTarget] = useState<BonusTarget>("armorClass")
   const [attribute, setAttribute] = useState<Attribute>("str")
@@ -273,13 +320,19 @@ function AddBonusDialog({
   const [value, setValue] = useState(1)
   const [useFormula, setUseFormula] = useState(false)
   const [formula, setFormula] = useState("")
+  const [damageType, setDamageType] = useState<DamageType>("fire")
+  const [affinityKind, setAffinityKind] = useState<DamageAffinityKind>("resistance")
+  const [affinityQualifier, setAffinityQualifier] = useState<DamageAffinityQualifier>("any")
 
   if (!open) return null
 
+  const isDamageAffinity = target === "damageAffinity"
   const needsAttribute =
     target === "attribute" || target === "attributeModifier"
   const supportsAttributeScope = isScopedTarget(target)
-  const formulaError = useFormula ? validateCharacterSheetFormula(formula, character) : undefined
+  const formulaError = !isDamageAffinity && useFormula
+    ? validateCharacterSheetFormula(formula, character)
+    : undefined
 
   function close() {
     setTarget("armorClass")
@@ -289,6 +342,9 @@ function AddBonusDialog({
     setValue(1)
     setUseFormula(false)
     setFormula("")
+    setDamageType("fire")
+    setAffinityKind("resistance")
+    setAffinityQualifier("any")
     onClose()
   }
 
@@ -330,83 +386,129 @@ function AddBonusDialog({
             </Select>
           </label>
 
-          {needsAttribute ? (
-            <label className="grid gap-1">
-              <span className="text-xs font-medium text-textH">Atributo</span>
-              <Select value={attribute} onChange={(event) => setAttribute(event.target.value as Attribute)}>
-                {ATTRIBUTES.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </Select>
-            </label>
-          ) : null}
-
-          {supportsAttributeScope ? (
-            <label className="grid gap-1">
-              <span className="text-xs font-medium text-textH">Limitar ao atributo</span>
-              <Select
-                value={scopeAttribute}
-                onChange={(event) =>
-                  setScopeAttribute(event.target.value as "all" | Attribute)
-                }
-              >
-                <option value="all">Todos os atributos</option>
-                {ATTRIBUTES.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </Select>
-            </label>
-          ) : null}
-
-          <label className="flex items-center gap-2 text-xs font-medium text-textH">
-            <input
-              type="checkbox"
-              checked={useFormula}
-              onChange={(event) => setUseFormula(event.target.checked)}
-            />
-            Calcular o valor por fórmula
-          </label>
-
-          <div className="grid grid-cols-[1fr_120px] gap-2">
-            <label className="grid gap-1">
-              <span className="text-xs font-medium text-textH">Operação</span>
-              <Select value={type} onChange={(event) => setType(event.target.value as Bonus["type"])}>
-                <option value="add">Somar</option>
-                <option value="sub">Subtrair</option>
-                <option value="flat">Definir valor</option>
-              </Select>
-            </label>
-            {!useFormula ? (
+          {isDamageAffinity ? (
+            <div className="grid gap-3">
               <label className="grid gap-1">
-                <span className="text-xs font-medium text-textH">Valor</span>
-                <Input type="number" value={value} onChange={(event) => setValue(Number(event.target.value) || 0)} />
+                <span className="text-xs font-medium text-textH">Afinidade</span>
+                <Select
+                  value={affinityKind}
+                  onChange={(event) => setAffinityKind(event.target.value as DamageAffinityKind)}
+                >
+                  <option value="resistance">Resistência</option>
+                  <option value="immunity">Imunidade</option>
+                  <option value="vulnerability">Vulnerabilidade</option>
+                </Select>
               </label>
-            ) : null}
-          </div>
 
-          {useFormula ? (
-            <div className="grid gap-2">
               <label className="grid gap-1">
-                <span className="text-xs font-medium text-textH">Fórmula</span>
-                <Input
-                  value={formula}
-                  placeholder="Ex.: character.level * 2 + character.proficiencyBonus"
-                  onChange={(event) => setFormula(event.target.value)}
-                />
+                <span className="text-xs font-medium text-textH">Tipo de dano</span>
+                <Select
+                  value={damageType}
+                  onChange={(event) => setDamageType(event.target.value as DamageType)}
+                >
+                  {DAMAGE_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </Select>
               </label>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <FormulaVariablePicker
-                  variables={listCharacterFormulaVariables(character)}
-                  onSelect={(path) => setFormula((current) => current ? current + " " + path : path)}
-                />
-                {formulaError ? (
-                  <span className="text-xs text-danger">{formulaError}</span>
-                ) : (
-                  <span className="text-xs text-success">Fórmula válida</span>
-                )}
-              </div>
+
+              <label className="grid gap-1">
+                <span className="text-xs font-medium text-textH">Origem</span>
+                <Select
+                  value={affinityQualifier}
+                  onChange={(event) => setAffinityQualifier(event.target.value as DamageAffinityQualifier)}
+                >
+                  <option value="any">Qualquer origem</option>
+                  <option value="nonmagical">Somente não mágico</option>
+                  <option value="magical">Somente mágico</option>
+                </Select>
+              </label>
+
+              <p className="text-[11px] leading-5 text-textMuted">
+                Em habilidades e condições, esta afinidade só vale enquanto os benefícios da fonte estiverem ativos.
+              </p>
             </div>
-          ) : null}
+          ) : (
+            <>
+              {needsAttribute ? (
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-textH">Atributo</span>
+                  <Select value={attribute} onChange={(event) => setAttribute(event.target.value as Attribute)}>
+                    {ATTRIBUTES.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </Select>
+                </label>
+              ) : null}
+
+              {supportsAttributeScope ? (
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-textH">Limitar ao atributo</span>
+                  <Select
+                    value={scopeAttribute}
+                    onChange={(event) =>
+                      setScopeAttribute(event.target.value as "all" | Attribute)
+                    }
+                  >
+                    <option value="all">Todos os atributos</option>
+                    {ATTRIBUTES.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </Select>
+                </label>
+              ) : null}
+
+              <label className="flex items-center gap-2 text-xs font-medium text-textH">
+                <input
+                  type="checkbox"
+                  checked={useFormula}
+                  onChange={(event) => setUseFormula(event.target.checked)}
+                />
+                Calcular o valor por fórmula
+              </label>
+
+              <div className="grid grid-cols-[1fr_120px] gap-2">
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-textH">Operação</span>
+                  <Select value={type} onChange={(event) => setType(event.target.value as Bonus["type"])}>
+                    <option value="add">Somar</option>
+                    <option value="sub">Subtrair</option>
+                    <option value="flat">Definir valor</option>
+                  </Select>
+                </label>
+                {!useFormula ? (
+                  <label className="grid gap-1">
+                    <span className="text-xs font-medium text-textH">Valor</span>
+                    <Input type="number" value={value} onChange={(event) => setValue(Number(event.target.value) || 0)} />
+                  </label>
+                ) : null}
+              </div>
+
+              {useFormula ? (
+                <div className="grid gap-2">
+                  <label className="grid gap-1">
+                    <span className="text-xs font-medium text-textH">Fórmula</span>
+                    <Input
+                      value={formula}
+                      placeholder="Ex.: character.level * 2 + character.proficiencyBonus"
+                      onChange={(event) => setFormula(event.target.value)}
+                    />
+                  </label>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <FormulaVariablePicker
+                      variables={listCharacterFormulaVariables(character)}
+                      onSelect={(path) => setFormula((current) => current ? current + " " + path : path)}
+                    />
+                    {formulaError ? (
+                      <span className="text-xs text-danger">{formulaError}</span>
+                    ) : (
+                      <span className="text-xs text-success">Fórmula válida</span>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-border pt-4">
@@ -414,16 +516,30 @@ function AddBonusDialog({
           <Button
             variant="primary"
             disabled={Boolean(formulaError)}
-            onClick={() => onAdd({
-               target,
-               attribute,
-               scopeAttribute: scopeAttribute === "all" ? undefined : scopeAttribute,
-               bonus: {
-                type,
-                value: Math.abs(value),
-                formula: useFormula ? formula.trim() : undefined,
-              },
-            })}
+            onClick={() => {
+              if (isDamageAffinity) {
+                onAdd({
+                  target: "damageAffinity",
+                  affinity: {
+                    kind: affinityKind,
+                    damageType,
+                    qualifier: affinityQualifier,
+                  },
+                })
+                return
+              }
+
+              onAdd({
+                target: target as Exclude<BonusTarget, "damageAffinity">,
+                attribute,
+                scopeAttribute: scopeAttribute === "all" ? undefined : scopeAttribute,
+                bonus: {
+                  type,
+                  value: Math.abs(value),
+                  formula: useFormula ? formula.trim() : undefined,
+                },
+              })
+            }}
           >
             Adicionar
           </Button>
