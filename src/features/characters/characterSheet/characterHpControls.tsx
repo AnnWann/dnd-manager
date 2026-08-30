@@ -17,6 +17,14 @@ import {
   endConcentration,
   getConcentrationCondition,
 } from "../../../models/characters/characterConcentration"
+import { getEffectiveDamageAffinities } from "../../../models/characters/characterDamageAffinities"
+import {
+  DAMAGE_TYPE_OPTIONS,
+  damageAffinityLabel,
+  damageTypeLabel,
+  resolveDamage,
+  type DamageType,
+} from "../../../models/combat/Damage"
 import { GroupHitDice } from "./character_info/components/hitdice/groupHitDice"
 
 type Props = {
@@ -34,8 +42,26 @@ type PendingCheck = {
   spellName?: string
 }
 
+type CharacterDamagePart = {
+  id: string
+  amount: number
+  damageType?: DamageType
+  magical: boolean
+}
+
 type HpModal = "heal" | "damage" | "maximum"
 type HealingTarget = "current" | "temporary"
+
+let damagePartSequence = 0
+
+function createDamagePart(): CharacterDamagePart {
+  damagePartSequence += 1
+  return {
+    id: `character-damage-part-${damagePartSequence}`,
+    amount: 0,
+    magical: false,
+  }
+}
 
 export function CharacterHpControls({ character, updateCharacter, compact = false }: Props) {
   const { dispatchGameOperation, mode } = useCharacterWorkspace()
@@ -45,12 +71,35 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
   const [amountText, setAmountText] = useState("")
   const [realMaxText, setRealMaxText] = useState("")
   const [healingTarget, setHealingTarget] = useState<HealingTarget>("current")
+  const [damageParts, setDamageParts] = useState<CharacterDamagePart[]>(() => [createDamagePart()])
   const [pendingCheck, setPendingCheck] = useState<PendingCheck | null>(null)
   const concentration = getConcentrationCondition(character)
   const characterId = character.get("id")
   const hp = character.get("sheet").HP
   const currentMax = getCurrentMaxHp(character)
   const effectiveMax = character.getEffectiveMaxHp()
+  const effectiveDamageAffinities = getEffectiveDamageAffinities(character)
+  const damageResolutions = damageParts.map((part) => ({
+    part,
+    resolution: resolveDamage(
+      Math.max(0, Math.trunc(part.amount || 0)),
+      part.damageType,
+      effectiveDamageAffinities,
+      { magical: part.magical },
+    ),
+  }))
+  const requestedDamage = damageResolutions.reduce(
+    (total, entry) => total + entry.resolution.requested,
+    0,
+  )
+  const appliedDamage = damageResolutions.reduce(
+    (total, entry) => total + entry.resolution.applied,
+    0,
+  )
+  const absorbedTemporaryHp = Math.min(Math.max(0, hp.temporary), appliedDamage)
+  const hpDamage = Math.max(0, appliedDamage - absorbedTemporaryHp)
+  const resultingTemporaryHp = Math.max(0, hp.temporary - absorbedTemporaryHp)
+  const resultingCurrentHp = Math.max(0, hp.current - hpDamage)
 
   function parseAmount(value: string): number {
     return Math.max(0, Math.trunc(Number(value) || 0))
@@ -71,46 +120,60 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
     setAmountText("")
     setRealMaxText(next === "maximum" ? String(hp.max) : "")
     setHealingTarget("current")
+    if (next === "damage") setDamageParts([createDamagePart()])
   }
 
   function closeModal() {
     setModal(null)
     setAmountText("")
     setRealMaxText("")
+    setDamageParts([createDamagePart()])
+  }
+
+  function updateDamagePart(
+    partId: string,
+    updater: (part: CharacterDamagePart) => CharacterDamagePart,
+  ) {
+    setDamageParts((current) =>
+      current.map((part) => (part.id === partId ? updater(part) : part)),
+    )
   }
 
   function applyDamage() {
-    const amount = parseAmount(amountText)
-    if (amount <= 0) return
+    const amount = appliedDamage
+    if (requestedDamage <= 0) return
 
     const concentrationBeforeDamage = getConcentrationCondition(character)
     const concentrationDc = Math.max(10, Math.floor(amount / 2))
-    const runtimeHandled = sendAuthoritativeHp({
-      type: "character.hp.damage",
-      characterId,
-      amount,
-      requiresConcentrationCheck: Boolean(concentrationBeforeDamage),
-      concentrationDc: concentrationBeforeDamage ? concentrationDc : undefined,
-      concentrationSource: concentrationBeforeDamage?.source || undefined,
-    })
 
-    if (!runtimeHandled) {
-      if (dispatchGameOperation) {
-        dispatchGameOperation({
-          type: "character.hp.damage",
-          characterId,
-          amount,
-          requiresConcentrationCheck: Boolean(concentrationBeforeDamage),
-          concentrationDc: concentrationBeforeDamage ? concentrationDc : undefined,
-          concentrationSource: concentrationBeforeDamage?.source || undefined,
-        })
-      } else {
-        updateCharacter(characterId, (current) => current.takeDamage(amount))
+    if (amount > 0) {
+      const runtimeHandled = sendAuthoritativeHp({
+        type: "character.hp.damage",
+        characterId,
+        amount,
+        requiresConcentrationCheck: Boolean(concentrationBeforeDamage),
+        concentrationDc: concentrationBeforeDamage ? concentrationDc : undefined,
+        concentrationSource: concentrationBeforeDamage?.source || undefined,
+      })
+
+      if (!runtimeHandled) {
+        if (dispatchGameOperation) {
+          dispatchGameOperation({
+            type: "character.hp.damage",
+            characterId,
+            amount,
+            requiresConcentrationCheck: Boolean(concentrationBeforeDamage),
+            concentrationDc: concentrationBeforeDamage ? concentrationDc : undefined,
+            concentrationSource: concentrationBeforeDamage?.source || undefined,
+          })
+        } else {
+          updateCharacter(characterId, (current) => current.takeDamage(amount))
+        }
       }
     }
     closeModal()
 
-    if (concentrationBeforeDamage) {
+    if (concentrationBeforeDamage && amount > 0) {
       setPendingCheck({
         damage: amount,
         dc: concentrationDc,
@@ -283,38 +346,158 @@ export function CharacterHpControls({ character, updateCharacter, compact = fals
       ) : null}
 
       {modal === "damage" ? (
-        <Modal title="Aplicar dano" onClose={closeModal} className="max-w-md">
+        <Modal
+          title="Aplicar dano"
+          description="Adicione os componentes do dano para aplicar automaticamente resistências, imunidades e vulnerabilidades."
+          onClose={closeModal}
+          className="max-w-3xl"
+        >
           <div className="grid gap-4">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <HpSummary label="Vida atual" value={hp.current} />
               <HpSummary label="Vida temporária" value={hp.temporary} />
+              <HpSummary label="Dano informado" value={requestedDamage} />
+              <HpSummary label="Dano aplicado" value={appliedDamage} />
             </div>
 
-            <label className="grid gap-1 text-xs text-textMuted">
-              Valor do dano
-              <Input
-                autoFocus
-                type="number"
-                min={0}
-                inputMode="numeric"
-                value={amountText}
-                placeholder="0"
-                onChange={(event) => setAmountText(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") applyDamage()
-                }}
-              />
-            </label>
+            <section className="grid gap-2 rounded-xl border border-border bg-bg-subtle p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold text-textH">Componentes do dano</div>
+                  <div className="mt-0.5 text-[11px] text-textMuted">
+                    Informe o valor, tipo e se o dano é mágico.
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setDamageParts((current) => [...current, createDamagePart()])}
+                >
+                  + Componente
+                </Button>
+              </div>
 
-            {concentration ? (
+              <div className="grid gap-2">
+                {damageResolutions.map(({ part, resolution }, index) => (
+                  <div
+                    key={part.id}
+                    className="grid gap-2 rounded-lg border border-border bg-bg p-3 md:grid-cols-[110px_minmax(180px,1fr)_auto_auto] md:items-end"
+                  >
+                    <label className="grid gap-1 text-xs text-textMuted">
+                      Dano
+                      <Input
+                        autoFocus={index === 0}
+                        type="number"
+                        min={0}
+                        inputMode="numeric"
+                        value={part.amount || ""}
+                        placeholder="0"
+                        onChange={(event) =>
+                          updateDamagePart(part.id, (current) => ({
+                            ...current,
+                            amount: Math.max(0, Math.trunc(Number(event.target.value) || 0)),
+                          }))
+                        }
+                      />
+                    </label>
+
+                    <label className="grid gap-1 text-xs text-textMuted">
+                      Tipo
+                      <SharedSelect
+                        value={part.damageType ?? ""}
+                        onChange={(event) =>
+                          updateDamagePart(part.id, (current) => ({
+                            ...current,
+                            damageType: event.target.value
+                              ? event.target.value as DamageType
+                              : undefined,
+                          }))
+                        }
+                      >
+                        <option value="">Sem tipo</option>
+                        {DAMAGE_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </SharedSelect>
+                    </label>
+
+                    <label className="flex h-10 items-center gap-2 rounded-lg border border-border bg-bg-subtle px-3 text-xs text-textH">
+                      <input
+                        type="checkbox"
+                        checked={part.magical}
+                        onChange={(event) =>
+                          updateDamagePart(part.id, (current) => ({
+                            ...current,
+                            magical: event.target.checked,
+                          }))
+                        }
+                      />
+                      Mágico
+                    </label>
+
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={damageParts.length === 1}
+                      onClick={() =>
+                        setDamageParts((current) =>
+                          current.filter((currentPart) => currentPart.id !== part.id),
+                        )
+                      }
+                    >
+                      Remover
+                    </Button>
+
+                    {part.amount > 0 && part.damageType ? (
+                      <div className="text-[11px] text-textMuted md:col-span-4">
+                        {damageTypeLabel(part.damageType)}: {resolution.requested} → {resolution.applied}
+                        {resolution.affinity
+                          ? ` (${damageAffinityLabel(resolution.affinity)})`
+                          : ""}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {effectiveDamageAffinities.length > 0 ? (
+              <section className="rounded-xl border border-border bg-bg-subtle p-3">
+                <div className="text-xs font-semibold text-textH">Afinidades efetivas</div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {effectiveDamageAffinities.map((affinity, index) => (
+                    <span
+                      key={`${affinity.kind}:${affinity.damageType}:${affinity.qualifier ?? "any"}:${index}`}
+                      className="rounded-full border border-border bg-bg px-2 py-1 text-[10px] text-textMuted"
+                    >
+                      {damageAffinityLabel(affinity.kind)} · {damageTypeLabel(affinity.damageType)}
+                      {affinity.qualifier === "nonmagical"
+                        ? " · não mágico"
+                        : affinity.qualifier === "magical"
+                          ? " · mágico"
+                          : ""}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            <div className="grid grid-cols-2 gap-2">
+              <HpSummary label="Vida após" value={resultingCurrentHp} />
+              <HpSummary label="Vida temporária após" value={resultingTemporaryHp} />
+            </div>
+
+            {concentration && appliedDamage > 0 ? (
               <div className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs text-text">
-                Este personagem está concentrando{concentration.source ? ` em ${concentration.source}` : ""}. Ao sofrer dano, será solicitado um teste de concentração.
+                Este personagem está concentrando{concentration.source ? ` em ${concentration.source}` : ""}. Ao sofrer {appliedDamage} de dano, será solicitado um teste de concentração CD {Math.max(10, Math.floor(appliedDamage / 2))}.
               </div>
             ) : null}
 
             <div className="flex justify-end border-t border-border pt-3">
-              <Button variant="primary" onClick={applyDamage} disabled={amount <= 0}>
-                Aplicar dano
+              <Button variant="primary" onClick={applyDamage} disabled={requestedDamage <= 0}>
+                Aplicar {appliedDamage} de dano
               </Button>
             </div>
           </div>
