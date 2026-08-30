@@ -1,0 +1,55 @@
+name: Apply front roll UI
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  apply-build-and-commit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply roll integration
+        run: |
+          python .github/repair_ability_roll_patcher.py
+          rm -f .github/repair_ability_roll_patcher.py
+          python .github/apply_front_roll_feedback.py
+
+      - name: Install app dependencies
+        run: npm install --package-lock=false
+
+      - name: Build app
+        run: npm run build
+
+      - name: Install session server dependencies
+        run: npm --prefix session-server install --package-lock=false --ignore-scripts
+
+      - name: Typecheck session server
+        run: npm run typecheck:session-server
+
+      - name: Commit validated implementation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "feat: expose ability roll configuration and results"
+          git push origin HEAD:master
