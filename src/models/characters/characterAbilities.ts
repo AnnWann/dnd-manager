@@ -178,6 +178,7 @@ export function useAbility(
   character: CharacterTemplate,
   abilityId: string,
   activationOptionId?: string,
+  bonusRollValues?: Record<string, number>,
 ): CharacterTemplate {
   const directAbility = findStoredCharacterAbility(character, abilityId)
   const projected = directAbility ? undefined : findConditionAbility(character, abilityId)
@@ -200,6 +201,7 @@ export function useAbility(
       { ...ability, usage: undefined },
       source,
       activationOptionId,
+      bonusRollValues,
     )
     return spendChannelDivinity(activated)
   }
@@ -212,11 +214,18 @@ export function useAbility(
       { ...ability, usage: undefined },
       source,
       activationOptionId,
+      bonusRollValues,
     )
     return spendKi(activated)
   }
 
-  return useAbilityEffect(character, ability, source, activationOptionId)
+  return useAbilityEffect(
+    character,
+    ability,
+    source,
+    activationOptionId,
+    bonusRollValues,
+  )
 }
 
 export function deactivateAbility(
