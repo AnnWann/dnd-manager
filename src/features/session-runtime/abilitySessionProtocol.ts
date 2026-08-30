@@ -1,4 +1,5 @@
 import type { Ability, AbilityResourceSelection } from "../../models/abilities/Ability"
+import type { BonusRollResolution } from "../../models/bonuses/Bonus"
 import type { CharacterTemplateProps } from "../../models/characters/CharacterTemplate"
 import type { DamageAffinity } from "../../models/combat/Damage"
 import type { SessionCustomSystemOperation } from "./customSystemSessionProtocol"
@@ -29,6 +30,10 @@ export type SessionAbilityOperation =
       abilityName?: string
       activationOptionId?: string
       resourceSelection?: AbilityResourceSelection
+      /** Resultados dos dados informados pelo jogador para bônus em modo manual. */
+      bonusRollValues?: Record<string, number>
+      /** Preenchido pelo servidor para auditoria e exibição no log. */
+      bonusRollResults?: BonusRollResolution[]
     }
   | {
       type: "character.ability.usage.spend"
