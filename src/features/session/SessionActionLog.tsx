@@ -403,6 +403,7 @@ function describeSessionOperation(
     case "character.session.resync": return `Ressincronizou ${characterName} com a sessão.`
     case "character.hp.undo": return `Desfez uma alteração de ${characterName}.`
   }
+  return "Registrou uma ação na sessão."
 }
 
 function describeCustomSystemOperation(
