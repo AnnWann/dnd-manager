@@ -75,14 +75,15 @@ export function UserCharacterStatistics({
   character,
   updateCharacter,
 }: Props) {
-  const { isEditing = false } = useCharacterWorkspace()
+  const { isEditing = false, mode } = useCharacterWorkspace()
+  const canEdit = mode === "campaign" || isEditing
   const characterId = character.get("id")
   const exhaustion = character.get("sheet").stats.exhaustion ?? 0
   const inspiration = character.get("sheet").stats.inspiration ?? false
   const proficiency = character.getProficiencyBonus()
 
   function updateCalculatedStat(definition: CalculatedStatDefinition, value: number) {
-    if (!isEditing || !Number.isFinite(value)) return
+    if (!canEdit || !Number.isFinite(value)) return
 
     updateCharacter(characterId, (current) => {
       const calculated = definition.getCalculatedValue(current)
@@ -93,7 +94,7 @@ export function UserCharacterStatistics({
   }
 
   function updateAttribute(attribute: Attribute, requestedValue: number) {
-    if (!isEditing || !Number.isFinite(requestedValue)) return
+    if (!canEdit || !Number.isFinite(requestedValue)) return
 
     updateCharacter(characterId, (current) => {
       const currentBase = current.get("sheet").attributes[attribute]
@@ -113,7 +114,7 @@ export function UserCharacterStatistics({
   }
 
   function toggleSavingThrow(attribute: Attribute) {
-    if (!isEditing) return
+    if (!canEdit) return
     const proficient = character.isSavingThrowProficient(attribute)
     updateCharacter(characterId, (current) =>
       current.setSavingThrowProficiency(attribute, !proficient),
@@ -127,7 +128,7 @@ export function UserCharacterStatistics({
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
         {CALCULATED_STATS.map((definition) => (
           <StatCell key={definition.key} label={definition.label}>
-            {isEditing ? (
+            {canEdit ? (
               <Input
                 type="number"
                 step="any"
@@ -144,7 +145,7 @@ export function UserCharacterStatistics({
         ))}
 
         <StatCell label="Exaustão">
-          {isEditing ? (
+          {canEdit ? (
             <Input
               type="number"
               min={0}
@@ -166,7 +167,7 @@ export function UserCharacterStatistics({
         <StatCell label="Inspiração">
           <button
             type="button"
-            disabled={!isEditing}
+            disabled={!canEdit}
             aria-pressed={inspiration}
             onClick={() =>
               updateCharacter(characterId, (current) =>
@@ -178,7 +179,7 @@ export function UserCharacterStatistics({
               inspiration
                 ? "border-accentBorder bg-accentBg text-textH"
                 : "border-border bg-bg-subtle text-textMuted",
-              isEditing && "hover:border-accentBorder",
+              canEdit && "hover:border-accentBorder",
             )}
           >
             <Sparkles className="h-4 w-4" />
@@ -206,7 +207,7 @@ export function UserCharacterStatistics({
                   {attributeShort(attribute)}
                 </div>
 
-                {isEditing ? (
+                {canEdit ? (
                   <Input
                     type="number"
                     min={1}
@@ -245,7 +246,7 @@ export function UserCharacterStatistics({
               <button
                 key={attribute}
                 type="button"
-                disabled={!isEditing}
+                disabled={!canEdit}
                 aria-pressed={proficient}
                 onClick={() => toggleSavingThrow(attribute)}
                 className={cn(
@@ -253,7 +254,7 @@ export function UserCharacterStatistics({
                   proficient
                     ? "border-accentBorder bg-accentBg"
                     : "border-border bg-bg-subtle",
-                  isEditing && "hover:border-accentBorder",
+                  canEdit && "hover:border-accentBorder",
                 )}
               >
                 <span className="flex min-w-0 items-center gap-1.5">
