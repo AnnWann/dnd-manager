@@ -250,7 +250,14 @@ function parseDiceExpression(expression: string): {
 }
 
 function randomInteger(maxExclusive: number): number {
-  const cryptoObject = globalThis.crypto
+  const cryptoObject = (
+    globalThis as typeof globalThis & {
+      crypto?: {
+        getRandomValues?: (buffer: Uint32Array) => Uint32Array
+      }
+    }
+  ).crypto
+
   if (cryptoObject?.getRandomValues) {
     const range = 0x1_0000_0000
     const limit = range - (range % maxExclusive)
