@@ -18,6 +18,7 @@ import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from "../../../../../src/models/characters/CharacterTemplate";
+import { normalizeDamageAffinities } from "../../../../../src/models/combat/Damage";
 import { SessionActor as BaseSessionActor } from "../../session/SessionActor";
 import {
   parseAbilityClientMessage,
@@ -357,6 +358,12 @@ function applyAbilityOperation(
   }
   if (operation.type === "character.ability.remove") {
     return character.removeAbility(operation.abilityId);
+  }
+  if (operation.type === "character.damageAffinities.set") {
+    return character.withSheet(
+      "damageAffinities",
+      normalizeDamageAffinities(operation.damageAffinities),
+    );
   }
   if (operation.type === "character.ability.usage.spend") {
     return spendGrantedSpellAbilityUse(character, operation.source);
