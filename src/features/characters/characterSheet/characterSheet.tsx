@@ -5,6 +5,7 @@ import type { CharacterCondition } from "../../../models/characters/CharacterCon
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getCharacterConditions } from "../../../models/characters/characterConditionStorage"
 import { setMaxHp } from "../../../models/characters/characterHp"
+import type { DamageAffinity } from "../../../models/combat/Damage"
 import type { SessionConditionOperation } from "../../session-runtime/sessionProtocol"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import { DamageAffinityEditor } from "../../combat/DamageAffinityEditor"
@@ -67,6 +68,25 @@ export function CharacterSheetTab({
     if (operation && dispatchConditionOperation(operation)) return
 
     updateCharacter(characterId, updater)
+  }
+
+  function updateDamageAffinities(damageAffinities: DamageAffinity[]) {
+    if (mode === "campaign" && sessionRuntime) {
+      if (sessionRuntime.status !== "connected") {
+        console.warn("[session-runtime] Damage-affinity change ignored while the authoritative session server is disconnected.")
+        return
+      }
+      sessionRuntime.dispatchAbilityOperation({
+        type: "character.damageAffinities.set",
+        characterId: character.get("id"),
+        damageAffinities,
+      })
+      return
+    }
+
+    updateCharacter(character.get("id"), (current) =>
+      current.withSheet("damageAffinities", damageAffinities),
+    )
   }
 
   return (
@@ -153,11 +173,7 @@ export function CharacterSheetTab({
               title="Afinidades de dano"
               description="Resistências, imunidades e vulnerabilidades estruturais do personagem. Benefícios temporários de habilidades e condições são somados durante o jogo."
               value={character.get("sheet").damageAffinities ?? []}
-              onChange={(damageAffinities) =>
-                updateCharacter(character.get("id"), (current) =>
-                  current.withSheet("damageAffinities", damageAffinities),
-                )
-              }
+              onChange={updateDamageAffinities}
             />
 
             <Skills
@@ -175,7 +191,28 @@ function MaximumHpConfiguration({
   character,
   updateCharacter,
 }: Props) {
+  const { mode } = useCharacterWorkspace()
+  const sessionRuntime = useOptionalSessionRuntime()
   const maxHp = character.get("sheet").HP.max
+
+  function updateMaximumHp(value: number) {
+    if (mode === "campaign" && sessionRuntime) {
+      if (sessionRuntime.status !== "connected") {
+        console.warn("[session-runtime] Max-HP change ignored while the authoritative session server is disconnected.")
+        return
+      }
+      sessionRuntime.dispatchHpOperation({
+        type: "character.hp.max.set",
+        characterId: character.get("id"),
+        value,
+      })
+      return
+    }
+
+    updateCharacter(character.get("id"), (current) =>
+      setMaxHp(current, value),
+    )
+  }
 
   return (
     <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
@@ -195,12 +232,11 @@ function MaximumHpConfiguration({
           min={1}
           inputMode="numeric"
           value={maxHp}
-          onChange={(event) => {
-            const value = Math.max(1, Math.trunc(Number(event.target.value) || 1))
-            updateCharacter(character.get("id"), (current) =>
-              setMaxHp(current, value),
+          onChange={(event) =>
+            updateMaximumHp(
+              Math.max(1, Math.trunc(Number(event.target.value) || 1)),
             )
-          }}
+          }
         />
       </label>
     </section>
