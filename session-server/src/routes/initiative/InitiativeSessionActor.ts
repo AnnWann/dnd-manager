@@ -17,6 +17,7 @@ import {
   type CharacterTemplateProps,
 } from "../../../../src/models/characters/CharacterTemplate";
 import { getEffectiveDamageAffinities } from "../../../../src/models/characters/characterDamageAffinities";
+import type { CharacterCondition } from "../../../../src/models/characters/CharacterCondition";
 import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/session-runtime/sessionRuntimeConfig";
 import { resolveDamage, normalizeDamageAffinities, type DamageAffinity } from "../../../../src/models/combat/Damage";
 import { getCreatureEffectiveArmorClass } from "../../../../src/models/creatures/CreatureCombatRuntime";
@@ -577,7 +578,7 @@ function applyInitiativeOperation(
         }
 
         if (operation.mode === "damage") {
-          const affinities = initiativeDamageAffinities(entry, abilities, runtimeConfig);
+          const affinities = initiativeDamageAffinities(entry, abilities, conditions, runtimeConfig);
           const requested = operation.parts.reduce((total, part) => total + part.amount, 0);
           const applied = operation.parts.reduce(
             (total, part) => total + resolveDamage(part.amount, part.damageType, affinities, { magical: part.magical }).applied,
@@ -831,6 +832,7 @@ function applyInitiativeOperation(
 function initiativeDamageAffinities(
   entry: InitiativeEntry,
   abilities: Record<string, SessionAbilityState>,
+  conditions: Record<string, SessionConditionsState>,
   runtimeConfig: SessionRuntimeConfigSnapshot | null,
 ): DamageAffinity[] {
   const characterId = linkedCharacterIdForInitiativeEntry(entry);
@@ -839,7 +841,13 @@ function initiativeDamageAffinities(
     if (stored?.initialized) {
       try {
         const character = CharacterTemplate.fromJSON(stored.character as Partial<CharacterTemplateProps>);
-        return getEffectiveDamageAffinities(character);
+        const authoritativeConditions = conditions[characterId];
+        return getEffectiveDamageAffinities(
+          character,
+          authoritativeConditions?.initialized
+            ? authoritativeConditions.conditions as unknown as CharacterCondition[]
+            : undefined,
+        );
       } catch {
         return [];
       }

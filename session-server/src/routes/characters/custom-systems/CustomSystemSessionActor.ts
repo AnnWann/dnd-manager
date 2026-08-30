@@ -167,6 +167,8 @@ export class SessionActor extends BaseSessionActor {
           loggedOperation = {
             ...operation,
             rollValue: activation.roll.value,
+            rollDice: activation.roll.dice,
+            rollTotal: activation.roll.total,
           };
         }
         nextCharacter = runCustomSystemAutomations(
@@ -187,6 +189,8 @@ export class SessionActor extends BaseSessionActor {
           loggedOperation = {
             ...operation,
             rollValue: activation.roll.value,
+            rollDice: activation.roll.dice,
+            rollTotal: activation.roll.total,
           };
         }
       } else if (operation.type === "character.customSystem.automation.execute") {

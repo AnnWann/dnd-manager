@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
+import { Input } from "../../../components/ui/Input"
 import { Modal } from "../../../components/ui/Modal"
 import { Select } from "../../../components/ui/Select"
 import type {
@@ -13,6 +14,7 @@ import {
   resolveAbilityResourceCostPreview,
 } from "../../../models/abilities/abilityResourceCosts"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { listBonusRollRequirements } from "../../../models/bonuses/BonusRoll"
 
 export function AbilityResourceActivationModal({
   ability,
@@ -23,7 +25,7 @@ export function AbilityResourceActivationModal({
   ability: Ability
   character: CharacterTemplate
   onClose: () => void
-  onConfirm: (optionId: string | undefined, selection: AbilityResourceSelection | undefined) => void
+  onConfirm: (optionId: string | undefined, selection: AbilityResourceSelection | undefined, bonusRollValues?: Record<string, number>) => void
 }) {
   const baseLevel = ability.resourceUpcast?.enabled ? Math.max(1, ability.resourceUpcast.baseLevel || 1) : undefined
   const maximumLevel = ability.resourceUpcast?.enabled
@@ -49,6 +51,11 @@ export function AbilityResourceActivationModal({
         .map((group) => [group.id, group.costs[0]!.id]),
     ),
   )
+  const manualRollRequirements = useMemo(
+    () => listBonusRollRequirements(ability.bonuses).filter((entry) => entry.mode === "manual"),
+    [ability.bonuses],
+  )
+  const [manualRollValues, setManualRollValues] = useState<Record<string, string>>({})
 
   const selectedUsesPact = useMemo(() =>
     (ability.resourceCosts ?? []).some((group) => {
@@ -74,7 +81,11 @@ export function AbilityResourceActivationModal({
 
   const payment = canPayAbilityResourceCosts(character, ability, selection)
   const optionRequired = (ability.activationOptions?.length ?? 0) > 0
-  const canConfirm = payment.ok && (!optionRequired || Boolean(optionId))
+  const manualRollsValid = manualRollRequirements.every((entry) => {
+    const raw = manualRollValues[entry.key]?.trim() ?? ""
+    return raw !== "" && Number.isFinite(Number(raw))
+  })
+  const canConfirm = payment.ok && (!optionRequired || Boolean(optionId)) && manualRollsValid
 
   return (
     <Modal title={`Usar habilidade — ${ability.name}`} onClose={onClose} className="max-w-xl">
@@ -160,6 +171,33 @@ export function AbilityResourceActivationModal({
           </div>
         ) : null}
 
+        {manualRollRequirements.length > 0 ? (
+          <div className="grid gap-2 rounded-xl border border-accentBorder bg-accentBg/20 p-3">
+            <div>
+              <div className="text-xs font-semibold text-textH">Rolagens manuais dos bônus</div>
+              <p className="mt-1 text-[11px] leading-5 text-textMuted">
+                Informe apenas o resultado dos dados. O bônus por fórmula é calculado e somado automaticamente.
+              </p>
+            </div>
+            {manualRollRequirements.map((entry) => (
+              <label key={entry.key} className="grid gap-1">
+                <span className="text-xs font-medium text-textH">{entry.label}</span>
+                <span className="text-[10px] text-textMuted">Role {entry.dice}{entry.formula?.trim() ? " + fórmula" : ""}.</span>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={manualRollValues[entry.key] ?? ""}
+                  placeholder="Resultado dos dados"
+                  onChange={(event) => setManualRollValues((current) => ({
+                    ...current,
+                    [entry.key]: event.target.value,
+                  }))}
+                />
+              </label>
+            ))}
+          </div>
+        ) : null}
+
         {!payment.ok ? (
           <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
             {payment.reason}
@@ -171,7 +209,15 @@ export function AbilityResourceActivationModal({
           <Button
             variant="primary"
             disabled={!canConfirm}
-            onClick={() => onConfirm(optionId || undefined, selection)}
+            onClick={() => onConfirm(
+              optionId || undefined,
+              selection,
+              manualRollRequirements.length
+                ? Object.fromEntries(
+                    manualRollRequirements.map((entry) => [entry.key, Number(manualRollValues[entry.key])]),
+                  )
+                : undefined,
+            )}
           >
             Usar habilidade
           </Button>

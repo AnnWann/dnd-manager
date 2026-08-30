@@ -19,6 +19,7 @@ import {
   type CharacterTemplateProps,
 } from "../../../../../src/models/characters/CharacterTemplate";
 import { normalizeDamageAffinities } from "../../../../../src/models/combat/Damage";
+import { listResolvedBonusRolls } from "../../../../../src/models/bonuses/BonusRoll";
 import { SessionActor as BaseSessionActor } from "../../session/SessionActor";
 import {
   parseAbilityClientMessage,
@@ -201,9 +202,18 @@ export class SessionActor extends BaseSessionActor {
     if (hpChanged) hpState[operation.characterId] = nextHp;
     if (conditionsChanged) conditionsState[operation.characterId] = nextConditions;
 
+    let loggedOperation = operation;
+    if (operation.type === "character.ability.use") {
+      const resolvedAbility = findAbilityForSource(next, operation.source);
+      const bonusRollResults = listResolvedBonusRolls(resolvedAbility?.bonuses);
+      if (bonusRollResults.length > 0) {
+        loggedOperation = { ...operation, bonusRollResults };
+      }
+    }
+
     const record = createSessionLogRecord({
       actorId: connection.userId,
-      operation,
+      operation: loggedOperation,
       reverseOperation: {
         type: "character.ability.restore",
         characterId: operation.characterId,
@@ -384,7 +394,7 @@ function applyAbilityOperation(
   switch (source.type) {
     case "character":
       if (operation.type === "character.ability.use") {
-        return nextCharacter.useAbility(source.abilityId, operation.activationOptionId);
+        return nextCharacter.useAbility(source.abilityId, operation.activationOptionId, operation.bonusRollValues);
       }
       if (operation.type === "character.ability.restore") {
         return character.restoreAbility(source.abilityId);
@@ -393,7 +403,7 @@ function applyAbilityOperation(
 
     case "equipment":
       if (operation.type === "character.ability.use") {
-        return nextCharacter.useEquipmentAbility(source.itemId, source.abilityId);
+        return nextCharacter.useEquipmentAbility(source.itemId, source.abilityId, operation.bonusRollValues);
       }
       if (operation.type === "character.ability.restore") {
         return character.restoreEquipmentAbility(source.itemId, source.abilityId);
@@ -403,7 +413,7 @@ function applyAbilityOperation(
     case "condition": {
       const projectedId = `condition:${source.conditionId}:${source.abilityId}`;
       if (operation.type === "character.ability.use") {
-        return nextCharacter.useAbility(projectedId, operation.activationOptionId);
+        return nextCharacter.useAbility(projectedId, operation.activationOptionId, operation.bonusRollValues);
       }
       if (operation.type === "character.ability.restore") {
         return character.restoreAbility(projectedId);
@@ -422,6 +432,9 @@ function applyAbilityOperation(
             : "deactivate",
         operation.type === "character.ability.use"
           ? operation.activationOptionId
+          : undefined,
+        operation.type === "character.ability.use"
+          ? operation.bonusRollValues
           : undefined,
       );
   }
@@ -456,6 +469,7 @@ function updateRaceAbilityState(
   source: Extract<SessionAbilitySource, { type: "race" }>,
   action: "use" | "restore" | "deactivate",
   optionId?: string,
+  bonusRollValues?: Record<string, number>,
 ): CharacterTemplate {
   const race = character.get("sheet").race;
   const ability = (race.naturalAbilities ?? []).find(
@@ -469,6 +483,7 @@ function updateRaceAbilityState(
       ability,
       { type: "race", sourceLabel: "Raça" },
       optionId,
+      bonusRollValues,
     );
   }
   if (action === "deactivate") {

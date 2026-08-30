@@ -30,6 +30,7 @@ import {
 } from "../magic/grantedSpellsEditor"
 import { GrantedProficienciesEditor } from "../proficiencies/grantedProficienciesEditor"
 import { AbilityAdvancedEffectsEditor } from "./abilityAdvancedEffectsEditor"
+import { AbilityBonusRollEditor } from "./abilityBonusRollEditor"
 import { AbilityResourceCostsEditor } from "./abilityResourceCostsEditor"
 import {
   ABILITY_ACTION_OPTIONS,
@@ -596,8 +597,16 @@ export function AbilityDialog({
               <div className="border-t border-border pt-4">
                 <BonusesFields
                   bonuses={draft.bonuses ?? {}}
+                  character={character}
                   onChange={(bonuses) => setDraft({ ...draft, bonuses })}
                 />
+                <div className="mt-3">
+                  <AbilityBonusRollEditor
+                    bonuses={draft.bonuses ?? {}}
+                    character={character}
+                    onChange={(bonuses) => setDraft({ ...draft, bonuses })}
+                  />
+                </div>
               </div>
             </div>
           ) : null}

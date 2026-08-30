@@ -371,7 +371,7 @@ export class CharacterTemplate {
   updateAbility(ability: Ability): CharacterTemplate {return updateAbility(this, ability)}
   removeAbility(abilityId: string): CharacterTemplate {return removeAbility(this, abilityId)}
   saveAbility(ability: Ability): CharacterTemplate {return saveAbility(this, ability)}
-  useAbility(abilityId: string, activationOptionId?: string): CharacterTemplate {return useAbility(this, abilityId, activationOptionId)}
+  useAbility(abilityId: string, activationOptionId?: string, bonusRollValues?: Record<string, number>): CharacterTemplate {return useAbility(this, abilityId, activationOptionId, bonusRollValues)}
   restoreAbility(abilityId: string): CharacterTemplate {return restoreAbility(this, abilityId)}
   deactivateAbility(abilityId: string): CharacterTemplate {return deactivateAbility(this, abilityId)}
   resetAbility(abilityId: string): CharacterTemplate {return resetAbility(this, abilityId)}
@@ -416,7 +416,7 @@ export class CharacterTemplate {
   addSpellToEquipment(itemId: string,spell: { index: string; usage: Usage }): CharacterTemplate {return addSpellToEquipment(this, itemId, spell)}
   updateEquipmentSpell(itemId: string,spell: { index: string; usage: Usage }): CharacterTemplate {return updateEquipmentSpell(this, itemId, spell)}
   removeEquipmentSpell(itemId: string,spellIndex: string): CharacterTemplate {return removeEquipmentSpell(this, itemId, spellIndex)}
-  useEquipmentAbility(itemId: string, abilityId: string): CharacterTemplate {return useEquipmentAbility(this, itemId, abilityId)}
+  useEquipmentAbility(itemId: string, abilityId: string, bonusRollValues?: Record<string, number>): CharacterTemplate {return useEquipmentAbility(this, itemId, abilityId, bonusRollValues)}
   restoreEquipmentAbility(itemId: string, abilityId: string): CharacterTemplate {return restoreEquipmentAbility(this, itemId, abilityId)}
   deactivateEquipmentAbility(itemId: string, abilityId: string): CharacterTemplate {return deactivateEquipmentAbility(this, itemId, abilityId)}
   /**
