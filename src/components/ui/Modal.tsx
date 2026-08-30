@@ -7,12 +7,13 @@ import { Button } from "./Button"
 
 type ModalProps = {
   title: string
+  description?: string
   onClose: () => void
   children: ReactNode
   className?: string
 }
 
-export function Modal({ title, onClose, children, className }: ModalProps) {
+export function Modal({ title, description, onClose, children, className }: ModalProps) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onClose()
@@ -49,9 +50,16 @@ export function Modal({ title, onClose, children, className }: ModalProps) {
         )}
       >
         <header className="sticky top-0 z-20 flex shrink-0 items-center justify-between gap-3 border-b border-border bg-bg-elevated/95 px-4 py-3 backdrop-blur sm:px-5">
-          <h2 className="min-w-0 break-words font-heading text-lg font-semibold text-textH">
-            {title}
-          </h2>
+          <div className="min-w-0">
+            <h2 className="break-words font-heading text-lg font-semibold text-textH">
+              {title}
+            </h2>
+            {description ? (
+              <p className="mt-1 text-xs leading-5 text-textMuted">
+                {description}
+              </p>
+            ) : null}
+          </div>
           <Button
             className="shrink-0"
             size="icon"
