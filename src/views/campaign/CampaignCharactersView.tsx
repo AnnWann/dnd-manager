@@ -1,8 +1,13 @@
-import { Download, Upload } from "lucide-react"
-import { useMemo, useRef, useState } from "react"
+import { Archive, Download, RotateCcw, Upload } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 
 import { Button } from "../../components/ui/Button"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+} from "../../components/ui/Card"
 import { useCharacterContext } from "../../contexts/characterContext"
 import { useMagicContext } from "../../contexts/magicContext"
 import { CharacterSelectorList } from "../../features/characters/selector/CharacterSelectorList"
@@ -36,6 +41,10 @@ export function CampaignCharactersView() {
   const { savedSpells, spellByIndex, saveSpell } = useMagicContext()
   const [working, setWorking] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
+  const [selectedSessionCharacterId, setSelectedSessionCharacterId] = useState(
+    activeCharacter?.get("id") ?? "",
+  )
+  const [selectedInactiveCharacterId, setSelectedInactiveCharacterId] = useState("")
 
   const projectedById = useMemo(
     () => new Map(visibleCharacters.map((character) => [character.get("id"), character])),
@@ -63,6 +72,26 @@ export function CampaignCharactersView() {
     runtime?.sessionCharactersById,
   ])
 
+  const inactiveCharacters = useMemo(() => {
+    if (!runtime) return []
+
+    return Object.values(runtime.sessionCharactersById)
+      .filter((state) => state.active === false)
+      .flatMap((state) => {
+        const projected = projectedById.get(state.characterId)
+        if (projected) return [projected]
+
+        try {
+          return [CharacterTemplate.fromJSON({
+            ...(state.character as Partial<CharacterTemplateProps>),
+            id: state.characterId,
+          })]
+        } catch {
+          return []
+        }
+      })
+  }, [projectedById, runtime?.sessionCharactersById])
+
   // HTTP/relational data is only the seed used before the Durable Object is
   // initialized. Once the socket has its Creation config, character membership
   // and payloads come from the authoritative session snapshots.
@@ -77,12 +106,55 @@ export function CampaignCharactersView() {
     () => sessionCharacters.map(toSessionCharacterSelectorItem),
     [sessionCharacters],
   )
+  const inactiveSelectorCharacters = useMemo(
+    () => inactiveCharacters.map(toSessionCharacterSelectorItem),
+    [inactiveCharacters],
+  )
 
-  const selectedCharacter = useMemo(() => {
+  useEffect(() => {
+    if (!sessionCharacters.length) {
+      if (selectedSessionCharacterId) setSelectedSessionCharacterId("")
+      return
+    }
+
+    if (sessionCharacters.some(
+      (character) => character.get("id") === selectedSessionCharacterId,
+    )) return
+
     const activeId = activeCharacter?.get("id")
-    if (!activeId) return undefined
-    return sessionCharacters.find((character) => character.get("id") === activeId)
-  }, [activeCharacter, sessionCharacters])
+    const preferredId = activeId && sessionCharacters.some(
+      (character) => character.get("id") === activeId,
+    )
+      ? activeId
+      : sessionCharacters[0].get("id")
+    setSelectedSessionCharacterId(preferredId)
+  }, [activeCharacter, selectedSessionCharacterId, sessionCharacters])
+
+  useEffect(() => {
+    if (!inactiveCharacters.length) {
+      if (selectedInactiveCharacterId) setSelectedInactiveCharacterId("")
+      return
+    }
+
+    if (!inactiveCharacters.some(
+      (character) => character.get("id") === selectedInactiveCharacterId,
+    )) {
+      setSelectedInactiveCharacterId(inactiveCharacters[0].get("id"))
+    }
+  }, [inactiveCharacters, selectedInactiveCharacterId])
+
+  const selectedCharacter = useMemo(
+    () => sessionCharacters.find(
+      (character) => character.get("id") === selectedSessionCharacterId,
+    ),
+    [selectedSessionCharacterId, sessionCharacters],
+  )
+  const selectedInactiveCharacter = useMemo(
+    () => inactiveCharacters.find(
+      (character) => character.get("id") === selectedInactiveCharacterId,
+    ),
+    [inactiveCharacters, selectedInactiveCharacterId],
+  )
 
   const loading = Boolean(
     runtime &&
@@ -94,6 +166,46 @@ export function CampaignCharactersView() {
   const runtimeError = runtime?.status === "error"
     ? "Não foi possível conectar ao estado autoritativo da sessão."
     : ""
+  const canManageLifecycle = Boolean(
+    runtime?.status === "connected" && runtime.role === "MASTER",
+  )
+
+  function selectSessionCharacter(characterId: string) {
+    setSelectedSessionCharacterId(characterId)
+    setSelectedCharacterId(characterId)
+  }
+
+  function inactivateSelectedCharacter() {
+    if (!runtime || !canManageLifecycle || !selectedCharacter || working) return
+
+    const characterName = selectedCharacter.get("name") || "este personagem"
+    if (!window.confirm(
+      `Inativar ${characterName}? Ele sairá da lista principal da sessão, mas continuará disponível em Personagens inativos.`,
+    )) return
+
+    setErrorMessage("")
+    const sent = runtime.dispatchCharacterLifecycleOperation({
+      type: "character.session.remove",
+      characterId: selectedCharacter.get("id"),
+    })
+    if (!sent) {
+      setErrorMessage("Não foi possível inativar o personagem no estado da sessão.")
+    }
+  }
+
+  function reactivateSelectedCharacter() {
+    if (!runtime || !canManageLifecycle || !selectedInactiveCharacter || working) return
+
+    setErrorMessage("")
+    const sent = runtime.dispatchCharacterLifecycleOperation({
+      type: "character.session.add",
+      characterId: selectedInactiveCharacter.get("id"),
+      character: selectedInactiveCharacter.toJSON() as unknown as Record<string, unknown>,
+    })
+    if (!sent) {
+      setErrorMessage("Não foi possível reativar o personagem no estado da sessão.")
+    }
+  }
 
   function exportSelectedCharacter() {
     if (!selectedCharacter || working) return
@@ -179,21 +291,33 @@ export function CampaignCharactersView() {
   if (!campaignId) return <Navigate to="/not-found" replace />
 
   return (
-    <>
+    <div className="grid gap-5">
       <CharacterSelectorList
         title="Personagens"
         description="Clique uma vez para selecionar e novamente para abrir a ficha."
         characters={selectorCharacters}
-        selectedCharacterId={activeCharacter?.get("id") ?? ""}
+        selectedCharacterId={selectedSessionCharacterId}
         loading={loading}
         errorMessage={errorMessage || runtimeError}
         emptyMessage="Nenhum personagem disponível no estado da sessão."
-        onSelectCharacter={setSelectedCharacterId}
+        onSelectCharacter={selectSessionCharacter}
         onOpenCharacter={(characterId) =>
           navigate(sessionCharacterPath(campaignId, characterId, "sheet"))
         }
         headerActions={
           <>
+            {canManageLifecycle ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!selectedCharacter || working}
+                title="Move o personagem para a área de inativos sem apagar sua ficha."
+                onClick={inactivateSelectedCharacter}
+              >
+                <Archive className="h-4 w-4" />
+                Inativar
+              </Button>
+            ) : null}
             <Button
               size="sm"
               variant="secondary"
@@ -217,6 +341,16 @@ export function CampaignCharactersView() {
         }
       />
 
+      {runtime?.role === "MASTER" ? (
+        <InactiveCharactersPanel
+          characters={inactiveSelectorCharacters}
+          selectedCharacterId={selectedInactiveCharacterId}
+          onSelectCharacter={setSelectedInactiveCharacterId}
+          onReactivate={reactivateSelectedCharacter}
+          disabled={!canManageLifecycle || !selectedInactiveCharacter || working}
+        />
+      ) : null}
+
       <input
         ref={fileInputRef}
         type="file"
@@ -226,7 +360,85 @@ export function CampaignCharactersView() {
           void importIntoSelectedCharacter(event.target.files?.[0])
         }
       />
-    </>
+    </div>
+  )
+}
+
+function InactiveCharactersPanel({
+  characters,
+  selectedCharacterId,
+  onSelectCharacter,
+  onReactivate,
+  disabled,
+}: {
+  characters: ReturnType<typeof toSessionCharacterSelectorItem>[]
+  selectedCharacterId: string
+  onSelectCharacter: (characterId: string) => void
+  onReactivate: () => void
+  disabled: boolean
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-textH">Personagens inativos</div>
+            <p className="mt-1 text-xs text-text">
+              Personagens mortos, aposentados ou removidos da sessão ficam preservados aqui.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={disabled}
+            onClick={onReactivate}
+          >
+            <RotateCcw className="h-4 w-4" />
+            Reativar selecionado
+          </Button>
+        </div>
+      </CardHeader>
+
+      <CardContent>
+        {characters.length ? (
+          <div className="flex flex-col gap-2">
+            {characters.map((character) => {
+              const selected = character.id === selectedCharacterId
+              return (
+                <button
+                  key={character.id}
+                  type="button"
+                  className={
+                    selected
+                      ? "flex w-full items-center justify-between gap-3 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-left"
+                      : "flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-bg px-3 py-2 text-left hover:bg-[color:var(--social-bg)]"
+                  }
+                  onClick={() => onSelectCharacter(character.id)}
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-textH">{character.name}</div>
+                    <div className="text-xs text-text">
+                      {character.spellCount ? `${character.spellCount} magias • ` : ""}
+                      {character.classLabel ? `${character.classLabel} • ` : ""}
+                      {character.level} nv
+                    </div>
+                  </div>
+                  {selected ? (
+                    <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-1 text-[10px] text-textH">
+                      Selecionado
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-border bg-bg-subtle px-4 py-8 text-center text-sm text-textMuted">
+            Nenhum personagem inativo nesta sessão.
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
