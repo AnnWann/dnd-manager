@@ -297,6 +297,7 @@ function describeSessionOperation(
     case "character.ability.usage.spend": return `${characterName} gastou um uso de ${operation.abilityName || "uma habilidade"}.`
     case "character.ability.restore": return `Restaurou uma carga de ${operation.abilityName || "habilidade"} de ${characterName}.`
     case "character.ability.deactivate": return `Desativou ${operation.abilityName || "uma habilidade"} de ${characterName}.`
+    case "character.damageAffinities.set": return `Atualizou as afinidades de dano de ${characterName}.`
     case "character.customSystem.field.set":
     case "character.customSystem.field.remove":
     case "character.customSystem.resource.set":
