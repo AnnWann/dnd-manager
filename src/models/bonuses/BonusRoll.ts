@@ -104,12 +104,12 @@ export function resolveBonusCollectionRolls(
       throw new Error(`Informe o resultado da rolagem de ${label} antes de usar a habilidade.`)
     }
 
-    const formula = bonus.formula?.trim()
+    const formula = bonus.roll.formula?.trim()
     const evaluated = formula
       ? evaluateCharacterSheetFormula(formula, character)
       : 0
     if (formula && evaluated === undefined) {
-      throw new Error(`Não foi possível calcular a fórmula do bônus ${label}.`)
+      throw new Error(`Não foi possível calcular a fórmula da rolagem ${label}.`)
     }
 
     const formulaBonus = evaluated ?? 0
@@ -220,7 +220,7 @@ function pushRequirement(
     label: bonus.label?.trim() || fallbackLabel,
     mode: bonus.roll.mode,
     dice: bonus.roll.dice,
-    formula: bonus.formula,
+    formula: bonus.roll.formula,
   })
 }
 
