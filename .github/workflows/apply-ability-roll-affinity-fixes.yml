@@ -11,6 +11,9 @@ permissions:
 jobs:
   apply-and-build:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
         with:
