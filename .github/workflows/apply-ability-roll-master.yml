@@ -33,6 +33,11 @@ jobs:
           path = Path('.github/apply_front_roll_feedback.py')
           text = path.read_text()
           text = text.replace(
+              '    text = target.read_text()\n',
+              '    text = target.read_text()\n    if "function resolveRollFormulaTotal(" in new and "function resolveRollFormulaTotal(" in text:\n        return\n',
+              1,
+          )
+          text = text.replace(
               '        raise SystemExit(f"anchor not found in {path}: {old[:120]!r}")',
               '        print(f"anchor already applied or unavailable in {path}: {old[:80]!r}")\n        return',
           )
