@@ -48,22 +48,27 @@ export type CampaignSessionCharacters = {
 }
 
 type CachedSessionRequest = {
+  campaignId: string
+  viewerId: string
   expiresAt: number
   promise: Promise<CampaignSessionCharacters>
 }
 
 // This cache is intentionally longer than a normal request-dedupe window.
-// The user area loads the relational bootstrap before navigation; once the
-// session opens, the Durable Object/WebSocket becomes the gameplay authority.
+// The response is permission-dependent (role, membership and visible
+// characters), so entries MUST be partitioned by the authenticated viewer.
 const SESSION_REQUEST_CACHE_MS = 10 * 60_000
 const sessionRequestCache = new Map<string, CachedSessionRequest>()
 
 export function invalidateCampaignSessionCharacters(campaignId: string): void {
-  sessionRequestCache.delete(campaignId)
+  for (const [key, entry] of sessionRequestCache) {
+    if (entry.campaignId === campaignId) sessionRequestCache.delete(key)
+  }
 }
 
 export async function getCampaignSessionCharacters(
   campaignId: string,
+  viewerId: string,
 ): Promise<CampaignSessionCharacters> {
   if (LOCAL_AUTH_BYPASS) {
     const campaigns = await getMyCampaigns()
@@ -108,8 +113,14 @@ export async function getCampaignSessionCharacters(
     return data
   }
 
+  const normalizedViewerId = viewerId.trim()
+  if (!normalizedViewerId) {
+    throw new Error("Usuário autenticado não disponível para carregar a sessão.")
+  }
+
   const now = Date.now()
-  const cached = sessionRequestCache.get(campaignId)
+  const cacheKey = `${normalizedViewerId}:${campaignId}`
+  const cached = sessionRequestCache.get(cacheKey)
   if (cached && cached.expiresAt > now) return cached.promise
 
   const promise = apiClient
@@ -122,11 +133,13 @@ export async function getCampaignSessionCharacters(
       return data
     })
     .catch((error) => {
-      sessionRequestCache.delete(campaignId)
+      sessionRequestCache.delete(cacheKey)
       throw error
     })
 
-  sessionRequestCache.set(campaignId, {
+  sessionRequestCache.set(cacheKey, {
+    campaignId,
+    viewerId: normalizedViewerId,
     expiresAt: now + SESSION_REQUEST_CACHE_MS,
     promise,
   })
