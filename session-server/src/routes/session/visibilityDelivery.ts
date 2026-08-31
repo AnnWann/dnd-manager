@@ -1,6 +1,6 @@
 import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/session-runtime/sessionRuntimeConfig";
+import type { SessionCharacterLifecycleState } from "./characterLifecycleProtocol";
 import type { SessionConnection } from "./protocol";
-import { canViewRuntimeCharacter } from "./runtimeConfigAccess";
 
 const CHARACTER_SNAPSHOT_TYPES = new Set([
   "session.hp.snapshot",
@@ -17,35 +17,43 @@ const CHARACTER_UPDATE_TYPES = new Set([
 ]);
 
 type OwnershipAwareSessionConnection = SessionConnection & {
+  /** Ephemeral projection of characters owned by this user in characters-state. */
   ownedCharacterIds?: string[];
+  /** Runtime-config visibility kept separate so ownership changes can be applied synchronously. */
+  partyVisibleCharacterIds?: string[];
 };
 
 export function refreshConnectionVisibility(
   socket: WebSocket,
   snapshot: SessionRuntimeConfigSnapshot | null,
+  lifecycleState?: Record<string, SessionCharacterLifecycleState>,
 ): void {
-  const connection = readConnection(socket);
+  const connection = readConnection(socket) as OwnershipAwareSessionConnection | null;
   if (!connection) return;
 
   if (connection.role === "MASTER") {
     connection.runtimeConfigRevision = snapshot?.creationRevision;
+    delete connection.ownedCharacterIds;
+    delete connection.partyVisibleCharacterIds;
     delete connection.visibleCharacterIds;
     socket.serializeAttachment(connection);
     return;
   }
 
-  const ownedCharacterIds = readOwnedCharacterIds(connection) ?? [];
-  const configuredCharacterIds = snapshot
+  if (lifecycleState !== undefined) {
+    connection.ownedCharacterIds = deriveOwnedCharacterIds(
+      connection.userId,
+      lifecycleState,
+    );
+  }
+
+  connection.partyVisibleCharacterIds = snapshot
     ? snapshot.config.characters
-        .filter((character) => canViewRuntimeCharacter(connection, character))
+        .filter((character) => character.visibility === "party")
         .map((character) => character.characterId)
     : [];
-
   connection.runtimeConfigRevision = snapshot?.creationRevision;
-  connection.visibleCharacterIds = Array.from(new Set([
-    ...ownedCharacterIds,
-    ...configuredCharacterIds,
-  ]));
+  recomputeVisibleCharacterIds(connection);
   socket.serializeAttachment(connection);
 }
 
@@ -57,6 +65,13 @@ export function refreshAllConnectionVisibility(
 }
 
 export function sendVisibilityFiltered(socket: WebSocket, message: unknown): void {
+  const lifecycleDelivery = transformLifecycleVisibilityMessage(socket, message);
+  if (lifecycleDelivery.handled) {
+    if (lifecycleDelivery.message === null) return;
+    try { socket.send(JSON.stringify(lifecycleDelivery.message)); } catch {}
+    return;
+  }
+
   const filtered = filterMessageForSocket(socket, message);
   if (filtered === null) return;
   try { socket.send(JSON.stringify(filtered)); } catch {}
@@ -136,9 +151,7 @@ function createVisibilityFilteredSocket(socket: WebSocket): WebSocket {
             return;
           }
 
-          const filtered = filterMessageForSocket(target, message);
-          if (filtered === null) return;
-          try { target.send(JSON.stringify(filtered)); } catch {}
+          sendVisibilityFiltered(target, message);
         };
       }
 
@@ -146,6 +159,64 @@ function createVisibilityFilteredSocket(socket: WebSocket): WebSocket {
       return typeof value === "function" ? value.bind(target) : value;
     },
   }) as WebSocket;
+}
+
+function transformLifecycleVisibilityMessage(
+  socket: WebSocket,
+  message: unknown,
+): { handled: boolean; message: unknown | null } {
+  const connection = readConnection(socket) as OwnershipAwareSessionConnection | null;
+  if (!connection || connection.role === "MASTER") {
+    return { handled: false, message };
+  }
+  if (!message || typeof message !== "object" || Array.isArray(message)) {
+    return { handled: false, message };
+  }
+
+  const record = message as Record<string, unknown>;
+  const type = typeof record.type === "string" ? record.type : "";
+  if (type !== "session.character.updated" && type !== "session.character.removed") {
+    return { handled: false, message };
+  }
+
+  const characterId = type === "session.character.removed"
+    ? (typeof record.characterId === "string" ? record.characterId.trim() : "")
+    : readCharacterId(record.character) ?? "";
+  if (!characterId) return { handled: true, message: null };
+
+  const wasVisible = canReceiveCharacter(connection, characterId);
+  const ownedCharacterIds = new Set(readOwnedCharacterIds(connection) ?? []);
+
+  if (type === "session.character.removed") {
+    ownedCharacterIds.delete(characterId);
+  } else {
+    const character = record.character as Record<string, unknown>;
+    const ownerUserId = typeof character.ownerUserId === "string"
+      ? character.ownerUserId.trim()
+      : "";
+    const active = character.active !== false;
+    if (active && ownerUserId === connection.userId) {
+      ownedCharacterIds.add(characterId);
+    } else {
+      ownedCharacterIds.delete(characterId);
+    }
+  }
+
+  connection.ownedCharacterIds = [...ownedCharacterIds];
+  recomputeVisibleCharacterIds(connection);
+  socket.serializeAttachment(connection);
+
+  const isVisible = canReceiveCharacter(connection, characterId);
+  if (type === "session.character.removed") {
+    return { handled: true, message: wasVisible ? message : null };
+  }
+  if (wasVisible && !isVisible) {
+    return {
+      handled: true,
+      message: { type: "session.character.removed", characterId },
+    };
+  }
+  return { handled: true, message: isVisible ? message : null };
 }
 
 function filterMessageForSocket(socket: WebSocket, message: unknown): unknown | null {
@@ -237,6 +308,27 @@ function filterInitiativeMessageForPlayer(
       },
     },
   };
+}
+
+function deriveOwnedCharacterIds(
+  userId: string,
+  lifecycleState: Record<string, SessionCharacterLifecycleState>,
+): string[] {
+  return Object.values(lifecycleState)
+    .filter((character) =>
+      character.active
+      && character.ownerUserId?.trim() === userId,
+    )
+    .map((character) => character.characterId);
+}
+
+function recomputeVisibleCharacterIds(
+  connection: OwnershipAwareSessionConnection,
+): void {
+  connection.visibleCharacterIds = Array.from(new Set([
+    ...(connection.ownedCharacterIds ?? []),
+    ...(connection.partyVisibleCharacterIds ?? []),
+  ]));
 }
 
 function canReceiveCharacter(
