@@ -15,6 +15,7 @@ import {
   type CampaignRole,
 } from "./user-campaigns"
 import type { UserCharacterDomain } from "./user-characters"
+import type { CreationCharacterConfiguration } from "../shared/creation/creation.types"
 
 export type CampaignSessionMember = {
   id: string
@@ -33,6 +34,7 @@ export type CampaignSessionCharacter = {
     id: string
     name: string
   }
+  configuration?: CreationCharacterConfiguration | null
   addedAt?: string
 }
 
@@ -161,8 +163,22 @@ export function buildSessionCharacterSnapshots(
       },
     }).toJSON()
 
-    return CharacterTemplate.fromJSON(
+    let snapshot = CharacterTemplate.fromJSON(
       applyCharacterDomains(legacyBase, character.domains ?? []),
-    ).toJSON()
+    )
+    const configuration = character.configuration
+    if (configuration) {
+      snapshot = snapshot
+        .with("visibility", configuration.visibility)
+        .with("unique", configuration.unique)
+        .with("owner", {
+          id: configuration.ownerId,
+          name: configuration.ownerName?.trim() || character.owner.name || configuration.ownerId,
+          role: "player",
+        })
+        .withSheet("type", configuration.type)
+        .withSheet("hiddenCharacterTabs", [...configuration.hiddenCharacterTabs])
+    }
+    return snapshot.toJSON()
   })
 }

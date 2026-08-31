@@ -159,6 +159,7 @@ export async function POST(request: Request): Promise<Response> {
             campaignId: createdCampaign.id,
             characterId: entry.newId,
             visibility: entry.visibility,
+            assignedUserId: session.user.id,
           },
         })
       }

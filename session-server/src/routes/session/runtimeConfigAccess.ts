@@ -40,51 +40,36 @@ export function authorizeCharacterMutation(
     };
   }
 
-  const ownedCharacterIds = readOwnedCharacterIds(connection);
-  if (ownedCharacterIds !== undefined) {
-    if (ownedCharacterIds.includes(characterId)) {
+  // Once Creation configuration exists, it is the live session authority.
+  // Token ownership is only an initial/fallback claim and must not keep access
+  // after a character is transferred to another player.
+  if (snapshot) {
+    const character = getRuntimeCharacterConfig(snapshot, characterId);
+    if (!character) {
       return {
-        ok: true,
-        character: getRuntimeCharacterConfig(snapshot, characterId),
+        ok: false,
+        code: "CHARACTER_NOT_IN_CREATION",
+        message: "This character is not part of the active Creation configuration.",
       };
     }
-
+    if (character.ownerId === connection.userId) return { ok: true, character };
     return {
       ok: false,
       code: "CHARACTER_ACCESS_DENIED",
-      message: "You cannot change a character owned by another player.",
+      message: "You cannot change a character assigned to another player.",
     };
   }
 
-  // Compatibility fallback for connections created before ownership claims were
-  // added. Session tokens are short-lived, so new connections use the
-  // authoritative campaign linkage above.
-  if (!snapshot) {
-    return {
-      ok: false,
-      code: "RUNTIME_CONFIG_NOT_INITIALIZED",
-      message: "The MASTER must publish the saved Creation configuration before players can change character state.",
-    };
+  const ownedCharacterIds = readOwnedCharacterIds(connection);
+  if (ownedCharacterIds?.includes(characterId)) {
+    return { ok: true, character: null };
   }
 
-  const character = getRuntimeCharacterConfig(snapshot, characterId);
-  if (!character) {
-    return {
-      ok: false,
-      code: "CHARACTER_NOT_IN_CREATION",
-      message: "This character is not part of the active Creation configuration.",
-    };
-  }
-
-  if (character.ownerId !== connection.userId) {
-    return {
-      ok: false,
-      code: "CHARACTER_ACCESS_DENIED",
-      message: "You cannot change a character owned by another player.",
-    };
-  }
-
-  return { ok: true, character };
+  return {
+    ok: false,
+    code: "RUNTIME_CONFIG_NOT_INITIALIZED",
+    message: "The MASTER must publish the saved Creation configuration before players can change character state.",
+  };
 }
 
 export function canViewRuntimeCharacter(
@@ -92,12 +77,7 @@ export function canViewRuntimeCharacter(
   character: SessionRuntimeCharacterConfig,
 ): boolean {
   if (connection.role === "MASTER") return true;
-
-  const ownedCharacterIds = readOwnedCharacterIds(connection);
-  if (ownedCharacterIds?.includes(character.characterId)) return true;
-  if (ownedCharacterIds === undefined && character.ownerId === connection.userId) {
-    return true;
-  }
+  if (character.ownerId === connection.userId) return true;
   return character.visibility === "party";
 }
 

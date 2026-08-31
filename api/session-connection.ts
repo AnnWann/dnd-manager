@@ -71,9 +71,7 @@ export async function POST(request: Request): Promise<Response> {
       ? await prisma.campaignCharacter.findMany({
           where: {
             campaignId: sessionId,
-            character: {
-              ownerId: session.user.id,
-            },
+            assignedUserId: session.user.id,
           },
           select: {
             characterId: true,

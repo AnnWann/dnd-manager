@@ -1,6 +1,7 @@
 import {
   CampaignMemberStatus,
   CampaignRole,
+  CharacterVisibility,
 } from "../../../generated/prisma/client.js"
 import {
   ApiError,
@@ -89,21 +90,39 @@ export async function GET(
       : membership?.role ?? CampaignRole.PLAYER
     const isMaster = role === CampaignRole.MASTER
     const canAccessAllCharacters = isMaster || role === CampaignRole.MODERATOR
+    const scopedCharacterAccess = canAccessAllCharacters
+      ? {}
+      : role === CampaignRole.ASSISTANT
+        ? {
+            OR: [
+              { assignedUserId: session.user.id },
+              { assignedUserId: null, character: { ownerId: session.user.id } },
+            ],
+          }
+        : {
+            OR: [
+              { assignedUserId: session.user.id },
+              { visibility: CharacterVisibility.PARTY },
+              { assignedUserId: null, character: { ownerId: session.user.id } },
+            ],
+          }
 
     const links = await prisma.campaignCharacter.findMany({
       where: {
         campaignId,
-        ...(canAccessAllCharacters
-          ? {}
-          : {
-              character: {
-                ownerId: session.user.id,
-              },
-            }),
+        ...scopedCharacterAccess,
       },
       select: {
         visibility: true,
         addedAt: true,
+        assignedUserId: true,
+        configuration: true,
+        assignedUser: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         character: {
           select: {
             id: true,
@@ -164,7 +183,8 @@ export async function GET(
         data: link.character.data,
         revision: link.character.revision,
         visibility: link.visibility,
-        owner: link.character.owner,
+        owner: link.assignedUser ?? link.character.owner,
+        configuration: link.configuration,
         addedAt: link.addedAt,
         domains: link.character.domains.map((domain) => ({
           domain: domain.domain.toLowerCase(),

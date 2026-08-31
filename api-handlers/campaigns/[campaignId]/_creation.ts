@@ -24,7 +24,6 @@ import type { Itemmable } from "../../../src/models/items/item.js"
 import type { Spell } from "../../../src/models/magic/spells/Spell.js"
 import {
   CUSTOM_SYSTEM_SUPPRESSED_FIELD,
-  reconcileConfiguredCustomSystemStates,
 } from "../../../src/lib/customSystems/CustomSystemConfigurationReconciliation.js"
 import type {
   CreationCharacterConfiguration,
@@ -142,9 +141,6 @@ export async function PATCH(
           characters: {
             select: {
               characterId: true,
-              character: {
-                select: { data: true },
-              },
             },
           },
         },
@@ -183,10 +179,6 @@ export async function PATCH(
         campaign.ownerId,
         ...campaign.members.map((member) => member.userId),
       ])
-      const characterDataById = new Map(
-        campaign.characters.map((link) => [link.characterId, link.character.data]),
-      )
-
       for (const configuration of incomingCharacters) {
         if (!allowedOwnerIds.has(configuration.ownerId)) {
           throw new ApiError(
@@ -195,27 +187,6 @@ export async function PATCH(
             "O jogador atribuído precisa ser membro ativo da campanha.",
           )
         }
-
-        const currentData = characterDataById.get(configuration.characterId)
-        if (currentData === undefined) {
-          throw new ApiError(
-            400,
-            "CREATION_CHARACTER_NOT_FOUND",
-            "Um personagem da Criação não pertence mais à campanha.",
-          )
-        }
-
-        await tx.character.update({
-          where: { id: configuration.characterId },
-          data: {
-            ownerId: configuration.ownerId,
-            data: mergeCharacterCreationConfiguration(
-              currentData,
-              configuration,
-              systems,
-            ) as never,
-          },
-        })
 
         await tx.campaignCharacter.update({
           where: {
@@ -226,6 +197,8 @@ export async function PATCH(
           },
           data: {
             visibility: toDatabaseVisibility(configuration.visibility),
+            assignedUserId: configuration.ownerId,
+            configuration: configuration as never,
           },
         })
       }
@@ -404,11 +377,24 @@ async function buildCreationSnapshot(campaignId: string) {
       where: { campaignId },
       select: {
         visibility: true,
+        assignedUserId: true,
+        configuration: true,
+        assignedUser: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         character: {
           select: {
             id: true,
             data: true,
             ownerId: true,
+            owner: {
+              select: {
+                name: true,
+              },
+            },
             updatedAt: true,
           },
         },
@@ -470,11 +456,15 @@ async function buildCreationSnapshot(campaignId: string) {
 
   const characters = characterLinks.map((link) => {
     updatedAt = laterDate(updatedAt, link.character.updatedAt)
-    return toCreationCharacter(
+    return toCreationCharacterLink(
       link.character.id,
+      link.assignedUserId,
+      link.assignedUser?.name,
       link.character.ownerId,
+      link.character.owner.name,
       link.visibility,
       link.character.data,
+      link.configuration,
     )
   })
 
@@ -688,6 +678,10 @@ function readCreationCharacterConfiguration(
   return {
     characterId,
     ownerId,
+    ownerName:
+      typeof configuration.ownerName === "string"
+        ? configuration.ownerName.trim() || undefined
+        : undefined,
     type: type as CreationCharacterConfiguration["type"],
     visibility,
     unique: configuration.unique,
@@ -915,36 +909,38 @@ function readCreationCustomSystem(value: unknown): CustomSystemDefinition {
   } as unknown as CustomSystemDefinition
 }
 
-function mergeCharacterCreationConfiguration(
+function toCreationCharacterLink(
+  characterId: string,
+  assignedUserId: string | null,
+  assignedUserName: string | undefined,
+  personalOwnerId: string,
+  personalOwnerName: string,
+  visibility: CharacterVisibility,
   rawData: unknown,
-  configuration: CreationCharacterConfiguration,
-  definitions: CustomSystemDefinition[],
-): JsonRecord {
-  const data = asRecord(rawData) ?? {}
-  const sheet = asRecord(data.sheet) ?? {}
-  const owner = asRecord(data.owner) ?? {}
-  const currentSystems = (Array.isArray(sheet.customSystems)
-    ? sheet.customSystems
-    : []) as CharacterCustomSystemState[]
-  const reconciledSystems = reconcileConfiguredCustomSystemStates(
-    currentSystems,
-    configuration.customSystems,
-    definitions,
-  )
+  rawConfiguration: unknown,
+): CreationCharacterConfiguration {
+  const ownerId = assignedUserId?.trim() || personalOwnerId
+  const ownerName = assignedUserName?.trim() || personalOwnerName || ownerId
+  const fallback = {
+    ...toCreationCharacter(characterId, ownerId, visibility, rawData),
+    ownerId,
+    ownerName,
+  }
+  const persisted = asRecord(rawConfiguration)
+  if (!persisted) return fallback
 
-  return {
-    ...data,
-    unique: configuration.unique,
-    owner: {
-      ...owner,
-      id: configuration.ownerId,
-    },
-    sheet: {
-      ...sheet,
-      type: configuration.type,
-      hiddenCharacterTabs: configuration.hiddenCharacterTabs,
-      customSystems: reconciledSystems,
-    },
+  try {
+    return readCreationCharacterConfiguration({
+      ...persisted,
+      characterId,
+      ownerId,
+      ownerName,
+      visibility: toCreationVisibility(visibility),
+    })
+  } catch {
+    // Old/partial link data should never prevent the MASTER from opening
+    // Creation. It is normalized on the next successful save.
+    return fallback
   }
 }
 

@@ -34,18 +34,14 @@ export function refreshConnectionVisibility(
     return;
   }
 
-  const ownedCharacterIds = readOwnedCharacterIds(connection) ?? [];
   const configuredCharacterIds = snapshot
     ? snapshot.config.characters
         .filter((character) => canViewRuntimeCharacter(connection, character))
         .map((character) => character.characterId)
-    : [];
+    : readOwnedCharacterIds(connection) ?? [];
 
   connection.runtimeConfigRevision = snapshot?.creationRevision;
-  connection.visibleCharacterIds = Array.from(new Set([
-    ...ownedCharacterIds,
-    ...configuredCharacterIds,
-  ]));
+  connection.visibleCharacterIds = Array.from(new Set(configuredCharacterIds));
   socket.serializeAttachment(connection);
 }
 

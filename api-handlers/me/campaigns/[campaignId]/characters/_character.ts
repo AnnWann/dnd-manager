@@ -95,6 +95,7 @@ export async function POST(request: Request): Promise<Response> {
           campaignId,
           characterId,
           visibility,
+          assignedUserId: session.user.id,
         },
         select: {
           visibility: true,

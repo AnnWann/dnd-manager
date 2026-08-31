@@ -24,6 +24,8 @@ import { sessionIdFromPathname } from "../lib/campaignRoutes"
 import { newCharacterTemplate } from "../lib/newCharacterTemplate"
 import type { AppStateV1 } from "../lib/remoteState"
 import { getChangedCharacterDomains } from "../lib/characterDomains"
+import { reconcileConfiguredCustomSystemStates } from "../lib/customSystems/CustomSystemConfigurationReconciliation"
+import type { SessionRuntimeCharacterConfig } from "../shared/session-runtime/sessionRuntimeConfig"
 import type { CharacterDomainName } from "../lib/relationalApi"
 import {
   CharacterTemplate,
@@ -145,15 +147,63 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
     [appState.characters],
   )
 
+  const sessionLifecycleCharacters = useMemo(() => {
+    if (!sessionRuntime?.characterSnapshotReady) return null
+
+    const lifecycleEntries = Object.values(sessionRuntime.sessionCharactersById)
+    const knownIds = new Set(lifecycleEntries.map((entry) => entry.characterId))
+    const result = new Map<string, CharacterTemplate>()
+
+    for (const entry of lifecycleEntries) {
+      if (entry.active === false) continue
+      try {
+        const character = CharacterTemplate.fromJSON(entry.character)
+        result.set(entry.characterId, character)
+      } catch (error) {
+        console.error("[session-runtime] invalid authoritative character snapshot", {
+          characterId: entry.characterId,
+          error,
+        })
+      }
+    }
+
+    // MASTER keeps relational seeds only for characters the Durable Object has
+    // never seen. SessionAuthoritativeBootstrap will add those missing ids.
+    if (sessionRuntime.role === "MASTER") {
+      for (const character of sourceCharacters) {
+        const characterId = character.get("id")
+        if (!knownIds.has(characterId)) result.set(characterId, character)
+      }
+    }
+
+    return Array.from(result.values())
+  }, [
+    sessionRuntime?.characterSnapshotReady,
+    sessionRuntime?.role,
+    sessionRuntime?.sessionCharactersById,
+    sourceCharacters,
+  ])
+
   const characters = useMemo(
-    () => sourceCharacters.map((character) => {
+    () => (sessionLifecycleCharacters ?? sourceCharacters).map((character) => {
       const characterId = character.get("id")
       const authoritativeAbility = sessionRuntime?.abilitiesByCharacterId[characterId]
       const authoritative = sessionRuntime?.hpByCharacterId[characterId]
       const authoritativeConditions = sessionRuntime?.conditionsByCharacterId[characterId]
+      const runtimeCharacterConfig = sessionRuntime?.runtimeConfigSnapshot?.config.characters.find(
+        (entry) => entry.characterId === characterId,
+      )
       let projected = authoritativeAbility?.initialized
         ? CharacterTemplate.fromJSON(authoritativeAbility.character)
         : character
+
+      if (runtimeCharacterConfig && sessionRuntime?.runtimeConfigSnapshot) {
+        projected = applySessionCharacterConfiguration(
+          projected,
+          runtimeCharacterConfig,
+          sessionRuntime.runtimeConfigSnapshot.config.customSystems,
+        )
+      }
 
       if (authoritative) {
         const sheet = projected.get("sheet")
@@ -208,9 +258,11 @@ function CharacterProviderInner({ children, appState, setAppState, userRole, use
       return projected
     }),
     [
+      sessionLifecycleCharacters,
       sessionRuntime?.abilitiesByCharacterId,
       sessionRuntime?.conditionsByCharacterId,
       sessionRuntime?.hpByCharacterId,
+      sessionRuntime?.runtimeConfigSnapshot,
       sourceCharacters,
     ],
   )
@@ -637,6 +689,34 @@ function canUseCharacterAsTarget(character: CharacterTemplate | undefined, userR
   const isOwned = character.get("owner")?.id?.trim() === userKey
   if (userRole === "assistant") return isOwned
   return isOwned || character.get("visibility") !== "master"
+}
+
+function applySessionCharacterConfiguration(
+  character: CharacterTemplate,
+  configuration: SessionRuntimeCharacterConfig,
+  definitions: import("../models/customSystems/CustomSystemDefinition").CustomSystemDefinition[],
+): CharacterTemplate {
+  const currentOwner = character.get("owner")
+  const currentSystems = character.get("sheet").customSystems ?? []
+  const customSystems = reconcileConfiguredCustomSystemStates(
+    currentSystems,
+    configuration.customSystems,
+    definitions,
+  )
+
+  return character
+    .with("visibility", configuration.visibility)
+    .with("unique", configuration.unique)
+    .with("owner", {
+      id: configuration.ownerId,
+      name: configuration.ownerName?.trim()
+        || (currentOwner?.id === configuration.ownerId ? currentOwner.name : "")
+        || configuration.ownerId,
+      role: "player",
+    })
+    .withSheet("type", configuration.type)
+    .withSheet("hiddenCharacterTabs", [...configuration.hiddenCharacterTabs])
+    .withSheet("customSystems", customSystems)
 }
 
 export function useCharacterContext() {

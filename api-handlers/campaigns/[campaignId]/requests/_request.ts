@@ -144,6 +144,7 @@ async function applyApprovedContent(
           campaignId: entry.campaignId,
           characterId: entry.sourceId,
           visibility: parseVisibility(data.visibility),
+          assignedUserId: entry.submittedById,
         },
       })
     } else {

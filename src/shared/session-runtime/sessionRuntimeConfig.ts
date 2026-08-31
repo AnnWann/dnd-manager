@@ -32,6 +32,8 @@ export type SessionRuntimeCharacterConfig = {
   visibility: "private" | "party" | "master"
   unique: boolean
   ownerId: string
+  ownerName?: string
+  hiddenCharacterTabs: string[]
   customSystems: CreationCharacterCustomSystemConfiguration[]
 }
 
@@ -45,6 +47,8 @@ export function toSessionRuntimeConfig(
       visibility: character.visibility,
       unique: character.unique,
       ownerId: character.ownerId,
+      ownerName: character.ownerName,
+      hiddenCharacterTabs: [...character.hiddenCharacterTabs],
       customSystems: character.customSystems,
     })),
     spells: creation.spells,

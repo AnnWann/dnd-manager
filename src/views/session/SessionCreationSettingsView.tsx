@@ -104,10 +104,11 @@ export function SessionCreationSettingsView() {
             character,
             configuration,
             customSystemDefinitions,
+            resolveSessionOwner(settings, configuration.ownerId, getOwner),
           )
         : character
     }),
-    [creationConfigurationById, customSystemDefinitions, sessionCharacters],
+    [creationConfigurationById, customSystemDefinitions, getOwner, sessionCharacters, settings],
   )
 
   const selectedCharacter = useMemo(
@@ -207,6 +208,7 @@ export function SessionCreationSettingsView() {
       source,
       currentConfiguration,
       customSystemDefinitions,
+      resolveSessionOwner(settings, currentConfiguration.ownerId, getOwner),
     )
     const updated = updater(current)
     const nextConfiguration = toCreationConfiguration(
@@ -365,6 +367,24 @@ export function SessionCreationSettingsView() {
   )
 }
 
+function resolveSessionOwner(
+  settings: SessionCreationSettings | null,
+  ownerId: string,
+  fallback: (ownerId: string) => Player,
+): Player {
+  const member = settings
+    ? [settings.owner, ...settings.members].find(
+        (entry) => entry.status === "ACTIVE" && entry.id === ownerId,
+      )
+    : undefined
+  if (!member) return fallback(ownerId)
+  return {
+    id: member.id,
+    name: member.name,
+    role: member.role === "MASTER" ? "master" : "player",
+  }
+}
+
 function CharacterConfigurationCard({
   character,
   onConfigure,
@@ -459,6 +479,7 @@ function applyCreationConfiguration(
   character: CharacterTemplate,
   configuration: CreationCharacterConfiguration,
   definitions: CustomSystemDefinition[],
+  configuredOwner?: Player,
 ): CharacterTemplate {
   const currentOwner = character.get("owner")
   const currentSystems = (character.get("sheet").customSystems ?? []) as CharacterCustomSystemState[]
@@ -471,9 +492,10 @@ function applyCreationConfiguration(
   return character
     .with("visibility", configuration.visibility)
     .with("unique", configuration.unique)
-    .with("owner", {
-      ...currentOwner,
+    .with("owner", configuredOwner ?? {
       id: configuration.ownerId,
+      name: configuration.ownerName?.trim() || currentOwner?.name || configuration.ownerId,
+      role: "player",
     })
     .withSheet("type", configuration.type)
     .withSheet("hiddenCharacterTabs", [...configuration.hiddenCharacterTabs])
@@ -493,6 +515,7 @@ function toCreationConfiguration(
     visibility: character.get("visibility"),
     unique: character.get("unique"),
     ownerId: character.get("owner")?.id || previous.ownerId,
+    ownerName: character.get("owner")?.name || previous.ownerName,
     hiddenCharacterTabs: [...(sheet.hiddenCharacterTabs ?? [])],
     customSystems: states.map(toCreationCustomSystemConfiguration),
   }

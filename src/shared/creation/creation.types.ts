@@ -34,6 +34,8 @@ export type CreationCharacterConfiguration = {
   visibility: "private" | "party" | "master"
   unique: boolean
   ownerId: string
+  /** Display projection for the session assignment; refreshed from campaign membership. */
+  ownerName?: string
   hiddenCharacterTabs: string[]
   customSystems: CreationCharacterCustomSystemConfiguration[]
 }

@@ -31,6 +31,7 @@ model User {
 
   ownedCampaigns      Campaign[]       @relation("CampaignOwner")
   campaignMemberships CampaignMember[]
+  assignedCampaignCharacters CampaignCharacter[] @relation("CampaignCharacterAssignedUser")
 
   @@unique([email])
   @@map("user")
@@ -234,11 +235,19 @@ model CampaignCharacter {
   characterId String
   character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
 
+  /// Session/campaign assignment. This must never change Character.ownerId.
+  assignedUserId String?
+  assignedUser   User? @relation("CampaignCharacterAssignedUser", fields: [assignedUserId], references: [id], onDelete: SetNull)
+
+  /// Session-only character configuration authored in Creation.
+  configuration Json?
+
   addedAt DateTime @default(now())
 
   @@unique([campaignId, characterId])
   @@index([campaignId])
   @@index([characterId])
+  @@index([assignedUserId], map: "campaign_character_assignedUserId_idx")
   @@map("campaign_character")
 }
 
