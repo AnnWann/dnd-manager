@@ -8,30 +8,36 @@ import type { UserCampaign } from "../../api/user-campaigns"
 /**
  * Loads the relational/bootstrap context while the user is still in /user.
  *
+ * Explicit entry always revalidates campaign membership/role first. That role
+ * can be promoted or demoted while the browser still has a valid cache entry.
  * After navigation, gameplay reads character/inventory/etc. from the session
- * WebSocket. These requests exist only to seed a new/uninitialized Durable
- * Object and to warm the MASTER Creation context before the active session.
+ * WebSocket; these requests seed/warm the relational Creation context only.
  */
 export async function preloadSessionEntry(
   campaign: UserCampaign,
   viewerId: string,
 ): Promise<void> {
-  const isMaster = campaign.isOwner || campaign.role === "MASTER"
+  const [sessionData] = await Promise.all([
+    getCampaignSessionCharacters(campaign.id, viewerId, { force: true }),
+    getSessionHomebrew(campaign.id, { force: true }),
+  ])
 
-  const common = [
-    getCampaignSessionCharacters(campaign.id, viewerId),
-    getSessionHomebrew(campaign.id),
-  ]
+  const role = sessionData.campaign.role
+  const canEditCreationContent = role === "MASTER" || role === "ASSISTANT"
+  const canOpenCreationSettings =
+    role === "MASTER" || role === "ASSISTANT" || role === "MODERATOR"
 
-  if (!isMaster) {
-    await Promise.all(common)
-    return
-  }
+  if (!canEditCreationContent && !canOpenCreationSettings) return
 
   await Promise.all([
-    ...common,
-    getCreationSnapshot(campaign.id),
-    getSessionCreationSettings(campaign.id),
-    getSessionContentRequests(campaign.id, "PENDING"),
+    ...(canEditCreationContent
+      ? [
+          getCreationSnapshot(campaign.id, { force: true }),
+          getSessionContentRequests(campaign.id, "PENDING", { force: true }),
+        ]
+      : []),
+    ...(canOpenCreationSettings
+      ? [getSessionCreationSettings(campaign.id, { force: true })]
+      : []),
   ])
 }
