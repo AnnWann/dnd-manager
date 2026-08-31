@@ -7,11 +7,13 @@ import { SessionActor } from "./session/BootstrapGuardSessionActor";
 export { SessionActor };
 
 const SESSION_CONNECT_ROUTE = /^\/session\/([^/]+)\/connect\/?$/;
-const SESSION_PROTOCOL_VERSION = 2;
+const SESSION_PROTOCOL_VERSION = 3;
 const SESSION_PROTOCOL_CAPABILITIES = [
   "character.damageAffinities.set",
   "character.bootstrap.guard",
   "character.legacy.reconcile",
+  "character.readAny",
+  "character.writeAny",
 ] as const;
 
 export default {
@@ -58,6 +60,12 @@ export default {
     if (claims.userName) forwardedHeaders.set("x-session-user-name", claims.userName);
     forwardedHeaders.set("x-session-role", claims.role);
     forwardedHeaders.set("x-session-expires-at", String(claims.expiresAt));
+    if (claims.canReadAnyCharacter) {
+      forwardedHeaders.set("x-session-can-read-any-character", "1");
+    }
+    if (claims.canWriteAnyCharacter) {
+      forwardedHeaders.set("x-session-can-write-any-character", "1");
+    }
 
     return actor.fetch(
       new Request("https://session-actor.internal/connect", {
