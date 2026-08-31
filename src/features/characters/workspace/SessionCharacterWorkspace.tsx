@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 
 import { useCharacterContext } from "../../../contexts/characterContext"
 import { useSyncContext } from "../../../contexts/syncContext"
@@ -8,7 +8,10 @@ import {
   getCharacterGrantedSpells,
   spendGrantedSpellAbilityUse,
 } from "../../../models/characters/characterGrantedSpells"
-import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import {
+  CharacterTemplate,
+  type CharacterTemplateProps,
+} from "../../../models/characters/CharacterTemplate"
 import type { EquippedItemReference } from "../../../models/characters/characterEquippedItemMovement"
 import type { HandOccupantReference } from "../../../models/characters/characterHands"
 import { getKiPool } from "../../../models/characters/characterKi"
@@ -34,34 +37,40 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
   const characterContext = useCharacterContext()
   const sessionRuntime = useOptionalSessionRuntime()
   const { userKey } = useSyncContext()
-
-  useEffect(() => {
-    if (!sessionRuntime || sessionRuntime.status !== "connected" || sessionRuntime.role !== "MASTER" || characterContext.visibleCharacters.length === 0) return
-    sessionRuntime.initializeAbilities(characterContext.visibleCharacters.map((character) => ({
-      characterId: character.get("id"),
-      character: character.toJSON(),
-    })))
-  }, [characterContext.visibleCharacters, sessionRuntime?.initializeAbilities, sessionRuntime?.role, sessionRuntime?.status])
+  const [selectedCharacterId, setSelectedCharacterId] = useState("")
 
   useEffect(() => {
     if (!sessionRuntime || sessionRuntime.status !== "connected" || sessionRuntime.role !== "MASTER") return
     sessionRuntime.initializeInventory(characterContext.partyInventory, characterContext.groundInventory)
   }, [characterContext.groundInventory, characterContext.partyInventory, sessionRuntime?.initializeInventory, sessionRuntime?.role, sessionRuntime?.status])
 
-  const projectedCharacters = useMemo(
-    () => characterContext.visibleCharacters
-      .filter((character) => sessionRuntime?.sessionCharactersById[character.get("id")]?.active !== false)
-      .map((character) =>
-        applySessionAbilityState(character, sessionRuntime?.abilitiesByCharacterId[character.get("id")]),
-      ),
-    [characterContext.visibleCharacters, sessionRuntime?.abilitiesByCharacterId, sessionRuntime?.sessionCharactersById],
-  )
+  const projectedCharacters = useMemo(() => {
+    if (!sessionRuntime) return characterContext.visibleCharacters
+
+    return Object.values(sessionRuntime.abilitiesByCharacterId).flatMap((abilityState) => {
+      const lifecycle = sessionRuntime.sessionCharactersById[abilityState.characterId]
+      if (lifecycle?.active === false) return []
+
+      try {
+        const authoritativeCharacter = CharacterTemplate.fromJSON(
+          abilityState.character as Partial<CharacterTemplateProps>,
+        )
+        return [applySessionAbilityState(authoritativeCharacter, abilityState)]
+      } catch (error) {
+        console.error("[session-runtime] invalid authoritative character snapshot", {
+          characterId: abilityState.characterId,
+          error,
+        })
+        return []
+      }
+    })
+  }, [characterContext.visibleCharacters, sessionRuntime?.abilitiesByCharacterId, sessionRuntime?.sessionCharactersById])
 
   const projectedActiveCharacter = useMemo(() => {
-    const activeId = characterContext.activeCharacter?.get("id")
+    const activeId = selectedCharacterId || characterContext.activeCharacter?.get("id")
     if (!activeId) return undefined
     return projectedCharacters.find((character) => character.get("id") === activeId)
-  }, [characterContext.activeCharacter, projectedCharacters])
+  }, [characterContext.activeCharacter, projectedCharacters, selectedCharacterId])
 
   const updateCharacter = useCallback((
     characterId: string,
@@ -198,13 +207,23 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
   const normalizedUserKey = userKey.trim()
   const currentOwner = normalizedUserKey ? characterContext.getOwner(normalizedUserKey) : undefined
   const sharedInventory = sessionRuntime?.inventoryState?.initialized ? sessionRuntime.inventoryState : null
+  const canViewCharacterDetails = useCallback((characterId: string) => {
+    if (!sessionRuntime) return characterContext.canViewCharacterDetails(characterId)
+    return projectedCharacters.some((character) => character.get("id") === characterId)
+  }, [characterContext, projectedCharacters, sessionRuntime])
+  const canTransferFromCharacter = useCallback((characterId: string) => {
+    if (!sessionRuntime) return characterContext.canTransferFromCharacter(characterId)
+    if (sessionRuntime.role === "MASTER") return true
+    const character = projectedCharacters.find((entry) => entry.get("id") === characterId)
+    return character?.get("owner")?.id?.trim() === normalizedUserKey
+  }, [characterContext, normalizedUserKey, projectedCharacters, sessionRuntime])
 
   const value: CharacterWorkspaceValue = {
     mode: "campaign",
     characters: projectedCharacters,
     activeCharacter: projectedActiveCharacter,
     selectedCharacterId: projectedActiveCharacter?.get("id"),
-    setSelectedCharacterId: characterContext.setSelectedCharacterId,
+    setSelectedCharacterId,
     updateCharacter,
     updateCharacterDomain: characterContext.updateCharacterDomain,
     dispatchStatOperation: characterContext.dispatchStatOperation,
@@ -248,8 +267,8 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
           : "session"
       sessionRuntime.dispatchInventoryOperation({ type: "inventory.item.transfer", characterId, request })
     },
-    canTransferFromCharacter: characterContext.canTransferFromCharacter,
-    canViewCharacterDetails: characterContext.canViewCharacterDetails,
+    canTransferFromCharacter,
+    canViewCharacterDetails,
     canAssignOwners: characterContext.canAssignOwners,
     canEditCharacterType: characterContext.canEditCharacterType,
     owners,
