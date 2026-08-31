@@ -10,14 +10,11 @@ export type SessionConnectionTokenClaims = {
   clientId: string
   issuedAt: number
   expiresAt: number
-  /** Campaign-linked characters this user owns. Optional for short-lived legacy tokens. */
-  ownedCharacterIds?: string[]
 }
 
 const TOKEN_VERSION = 1
 const MAX_TOKEN_LENGTH = 4096
 const MAX_IDENTIFIER_LENGTH = 256
-const MAX_OWNED_CHARACTER_IDS = 64
 const MAX_TOKEN_TTL_MS = 90_000
 const CLOCK_SKEW_MS = 5_000
 const MIN_SECRET_BYTES = 32
@@ -160,7 +157,6 @@ function isValidClaims(
   if (value.userName !== undefined && !isDisplayName(value.userName)) return false
   if (!isIdentifier(value.clientId)) return false
   if (value.role !== "MASTER" && value.role !== "PLAYER") return false
-  if (!isValidOwnedCharacterIds(value.ownedCharacterIds)) return false
 
   const issuedAt = value.issuedAt
   const expiresAt = value.expiresAt
@@ -177,13 +173,6 @@ function isValidClaims(
   if (expiresAt <= issuedAt) return false
   if (expiresAt - issuedAt > MAX_TOKEN_TTL_MS) return false
   return true
-}
-
-function isValidOwnedCharacterIds(value: unknown): boolean {
-  if (value === undefined) return true
-  if (!Array.isArray(value) || value.length > MAX_OWNED_CHARACTER_IDS) return false
-  if (!value.every(isIdentifier)) return false
-  return new Set(value).size === value.length
 }
 
 function isDisplayName(value: unknown): value is string {
