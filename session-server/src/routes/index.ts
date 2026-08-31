@@ -7,6 +7,12 @@ import { SessionActor } from "./session/BootstrapGuardSessionActor";
 export { SessionActor };
 
 const SESSION_CONNECT_ROUTE = /^\/session\/([^/]+)\/connect\/?$/;
+const SESSION_PROTOCOL_VERSION = 2;
+const SESSION_PROTOCOL_CAPABILITIES = [
+  "character.damageAffinities.set",
+  "character.bootstrap.guard",
+  "character.legacy.reconcile",
+] as const;
 
 export default {
   async fetch(request: Request, env: SessionServerEnv): Promise<Response> {
@@ -16,6 +22,8 @@ export default {
       return Response.json({
         ok: true,
         service: "session-server",
+        protocolVersion: SESSION_PROTOCOL_VERSION,
+        capabilities: SESSION_PROTOCOL_CAPABILITIES,
         serverTime: Date.now(),
       });
     }
