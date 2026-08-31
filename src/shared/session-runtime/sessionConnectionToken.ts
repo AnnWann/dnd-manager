@@ -12,6 +12,10 @@ export type SessionConnectionTokenClaims = {
   expiresAt: number
   /** Campaign-linked characters this user owns. Optional for short-lived legacy tokens. */
   ownedCharacterIds?: string[]
+  /** Allows this connection to receive every authoritative character in the session. */
+  canReadAnyCharacter?: boolean
+  /** Allows this connection to mutate authoritative state for any session character. */
+  canWriteAnyCharacter?: boolean
 }
 
 const TOKEN_VERSION = 1
@@ -161,6 +165,9 @@ function isValidClaims(
   if (!isIdentifier(value.clientId)) return false
   if (value.role !== "MASTER" && value.role !== "PLAYER") return false
   if (!isValidOwnedCharacterIds(value.ownedCharacterIds)) return false
+  if (value.canReadAnyCharacter !== undefined && typeof value.canReadAnyCharacter !== "boolean") return false
+  if (value.canWriteAnyCharacter !== undefined && typeof value.canWriteAnyCharacter !== "boolean") return false
+  if (value.canWriteAnyCharacter === true && value.canReadAnyCharacter !== true) return false
 
   const issuedAt = value.issuedAt
   const expiresAt = value.expiresAt
