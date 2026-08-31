@@ -1,0 +1,76 @@
+name: Patch session character ownership decoupling
+
+on:
+  push:
+    branches:
+      - fix/session-character-ownership-decoupling
+    paths:
+      - scripts/patch-session-character-ownership-decoupling.py
+      - .github/workflows/patch-session-character-ownership-decoupling.yml
+
+permissions:
+  contents: write
+
+env:
+  DIRECT_URL: postgresql://user:pass@localhost:5432/db
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/session-character-ownership-decoupling
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply patch
+        run: python3 scripts/patch-session-character-ownership-decoupling.py
+
+      - name: Install frontend dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Validate frontend
+        run: |
+          npm run check:user-workspace-boundaries
+          npm run check:vercel-functions
+          npm run check:native-selects
+          npx tsc -b
+          npx vite build
+
+      - name: Install session server dependencies
+        run: npm --prefix session-server ci --ignore-scripts
+
+      - name: Validate session server
+        run: npm --prefix session-server run typecheck
+
+      - name: Commit validated patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm scripts/patch-session-character-ownership-decoupling.py
+          git rm .github/workflows/patch-session-character-ownership-decoupling.yml
+          git add prisma/schema.prisma
+          git add prisma/migrations/20260831013000_decouple_session_character_assignment/migration.sql
+          git add src/shared/creation/creation.types.ts
+          git add src/shared/session-runtime/sessionRuntimeConfig.ts
+          git add api-handlers/campaigns/[campaignId]/_creation.ts
+          git add api-handlers/campaigns/[campaignId]/_characters.ts
+          git add api/session-connection.ts
+          git add api-handlers/me/campaigns/[campaignId]/characters/_character.ts
+          git add api-handlers/campaigns/[campaignId]/requests/_request.ts
+          git add api-handlers/me/campaigns/_import-legacy.ts
+          git add src/api/campaign-session.ts
+          git add src/views/session/SessionCreationSettingsView.tsx
+          git add session-server/src/routes/session/runtimeConfigAccess.ts
+          git add session-server/src/routes/session/visibilityDelivery.ts
+          git add src/contexts/characterContext.tsx
+          git commit -m "fix: decouple session character assignment from user ownership"
+          git push origin HEAD:fix/session-character-ownership-decoupling
