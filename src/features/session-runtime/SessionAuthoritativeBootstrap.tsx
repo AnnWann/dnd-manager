@@ -12,10 +12,14 @@ import { useOptionalSessionRuntime } from "./useSessionRuntime"
 type LegacyImportState = "checking" | "legacy" | "regular"
 
 /**
- * The relational character snapshot is only an entry seed. As soon as the
- * MASTER socket connects and the existing lifecycle snapshot is known, copy
- * only missing characters into the Durable Object. Waiting for the snapshot
- * prevents reconnects from racing the server and re-adding active characters.
+ * Relational character data is only an entry seed. A seed may enter the
+ * Durable Object only after both the existing lifecycle snapshot and the
+ * session's authoritative Creation/runtime configuration are known.
+ *
+ * This is deliberately stricter than trusting CharacterProvider. That provider
+ * may briefly contain state from a previously visited campaign while the
+ * relational route is switching. The runtime config is scoped to the current
+ * Durable Object and is therefore the hard campaign boundary for bootstrap.
  *
  * Imported legacy campaigns also get a one-time identity reconciliation pass.
  * Only structurally unique session-only/canonical pairs are proposed; the
@@ -65,21 +69,39 @@ export function SessionAuthoritativeBootstrap({ campaignId }: { campaignId: stri
       runtime.status !== "connected" ||
       runtime.role !== "MASTER" ||
       !runtime.characterSnapshotReady ||
+      !runtime.runtimeConfigSnapshot ||
       visibleCharacters.length === 0
     ) {
       return
     }
 
-    runtime.initializeAbilities(
-      visibleCharacters.map((character) => ({
-        characterId: character.get("id"),
-        character: character.toJSON(),
-      })),
+    const configuredIds = new Set(
+      runtime.runtimeConfigSnapshot.config.characters.map(
+        (character) => character.characterId,
+      ),
     )
+
+    const seeds = visibleCharacters.filter((character) =>
+      configuredIds.has(character.get("id")),
+    )
+
+    for (const character of seeds) {
+      const characterId = character.get("id")
+      if (runtime.sessionCharactersById[characterId]) continue
+
+      runtime.dispatchCharacterLifecycleOperation({
+        type: "character.session.add",
+        characterId,
+        character: character.toJSON(),
+        origin: "bootstrap",
+      })
+    }
   }, [
     runtime?.characterSnapshotReady,
-    runtime?.initializeAbilities,
+    runtime?.dispatchCharacterLifecycleOperation,
     runtime?.role,
+    runtime?.runtimeConfigSnapshot,
+    runtime?.sessionCharactersById,
     runtime?.status,
     visibleCharacters,
   ])
@@ -97,11 +119,18 @@ export function SessionAuthoritativeBootstrap({ campaignId }: { campaignId: stri
       return
     }
 
-    const canonicalIds = new Set(
-      visibleCharacters.map((character) => character.get("id")),
+    const configuredIds = new Set(
+      runtime.runtimeConfigSnapshot.config.characters.map(
+        (character) => character.characterId,
+      ),
     )
+    const canonicalCharacters = visibleCharacters.filter((character) =>
+      configuredIds.has(character.get("id")),
+    )
+    if (canonicalCharacters.length === 0) return
+
     const canonicalBySignature = uniqueCharacterIdsBySignature(
-      visibleCharacters.map((character) => ({
+      canonicalCharacters.map((character) => ({
         characterId: character.get("id"),
         character: character.toJSON(),
       })),
@@ -109,7 +138,7 @@ export function SessionAuthoritativeBootstrap({ campaignId }: { campaignId: stri
     const sessionOnlyBySignature = uniqueCharacterIdsBySignature(
       Object.values(runtime.abilitiesByCharacterId)
         .filter((state) => state.initialized)
-        .filter((state) => !canonicalIds.has(state.characterId))
+        .filter((state) => !configuredIds.has(state.characterId))
         .filter(
           (state) => runtime.sessionCharactersById[state.characterId]?.active !== false,
         )
