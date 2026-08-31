@@ -41,7 +41,7 @@ export function SessionRouteOutlet() {
       {userRole === "master" && !isCreationRoute ? (
         <MasterRuntimeConfigPublisher campaignId={campaignId} />
       ) : null}
-      <SessionAuthoritativeBootstrap />
+      <SessionAuthoritativeBootstrap campaignId={campaignId} />
       <SessionMissionAuthorityProvider>
         <Outlet />
       </SessionMissionAuthorityProvider>

@@ -20,6 +20,18 @@ export type SessionCharacterLifecycleOperation =
       characterId: string
       character: Record<string, unknown>
     }
+  | {
+      /**
+       * Maintenance-only operation intercepted by the final session actor.
+       * It never enters the normal lifecycle mutation path.
+       */
+      type: "character.session.reconcile"
+      characterId: "session"
+      pairs: Array<{
+        sourceCharacterId: string
+        targetCharacterId: string
+      }>
+    }
 
 export type SessionCharacterLifecycleClientMessage = {
   type: "session.character.operation"
