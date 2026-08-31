@@ -47,7 +47,7 @@ export async function PATCH(
             members: {
               some: {
                 userId: session.user.id,
-                role: CampaignRole.MASTER,
+                role: { in: [CampaignRole.MASTER, CampaignRole.ASSISTANT] },
                 status: CampaignMemberStatus.ACTIVE,
               },
             },
@@ -61,7 +61,7 @@ export async function PATCH(
       throw new ApiError(
         403,
         "CAMPAIGN_SPELL_REVIEW_FORBIDDEN",
-        "Somente um mestre ativo da campanha pode revisar magias homebrew.",
+        "Somente mestres e assistentes ativos podem revisar magias homebrew.",
       )
     }
 
