@@ -1,23 +1,22 @@
 import { SessionActor as BaseSessionActor } from "./AuthoritativeSessionActor";
 import { SessionActor as CustomClassSessionActor } from "../characters/classes/CustomClassSessionActor";
 import { parseCustomClassClientMessage } from "../characters/classes/customClassProtocol";
+import type { SessionCharacterLifecycleState } from "./characterLifecycleProtocol";
 import type { SessionConnection } from "./protocol";
 import {
   authorizeCharacterMutation,
   readRuntimeConfig,
+  visibleRuntimeConfigSnapshot,
 } from "./runtimeConfigAccess";
 import {
   createVisibilityFilteredContext,
   refreshConnectionVisibility,
   sendAllVisibleCharacterSnapshots,
+  sendVisibilityFiltered,
 } from "./visibilityDelivery";
 
 type DomainActor = {
   webSocketMessage(webSocket: WebSocket, message: string | ArrayBuffer): Promise<void>;
-};
-
-type OwnershipAwareSessionConnection = SessionConnection & {
-  ownedCharacterIds?: string[];
 };
 
 /**
@@ -35,9 +34,6 @@ export class SessionActor extends BaseSessionActor {
     const response = await super.fetch(request);
     if (response.status !== 101) return response;
 
-    const rawOwnedCharacterIds = request.headers.get("x-session-owned-character-ids");
-    if (rawOwnedCharacterIds === null) return response;
-
     const clientId = request.headers.get("x-session-client-id")?.trim();
     if (!clientId) return response;
 
@@ -47,29 +43,29 @@ export class SessionActor extends BaseSessionActor {
     });
     if (!socket) return response;
 
-    const ownedCharacterIds = parseOwnedCharacterIds(rawOwnedCharacterIds);
-    if (!ownedCharacterIds) {
-      socket.close(1011, "Invalid owned character metadata");
-      return response;
-    }
+    const [runtimeConfig, lifecycleState] = await Promise.all([
+      readRuntimeConfig(this.ctx.storage),
+      this.ctx.storage
+        .get<Record<string, SessionCharacterLifecycleState>>("characters-state")
+        .then((value) => value ?? {}),
+    ]);
 
-    const connection = readConnection(socket) as OwnershipAwareSessionConnection | null;
+    // Ownership is a projection of the Durable Object lifecycle state. The
+    // connection token authenticates access only and never supplies ownership.
+    refreshConnectionVisibility(socket, runtimeConfig, lifecycleState);
+
+    const connection = readConnection(socket);
     if (!connection) {
       socket.close(1011, "Missing connection attachment");
       return response;
     }
 
-    connection.ownedCharacterIds = ownedCharacterIds;
-    socket.serializeAttachment(connection);
-
-    refreshConnectionVisibility(
-      socket,
-      await readRuntimeConfig(this.ctx.storage),
-    );
-    // The base actor sends initial snapshots before this final layer attaches
-    // database-backed ownership. Re-send the character snapshots once so a
-    // PLAYER immediately receives their own character even when it is absent
-    // from the active Creation configuration.
+    // Earlier actor layers intentionally send only party-visible data until
+    // authoritative ownership is hydrated. Re-send the player projection now.
+    sendVisibilityFiltered(socket, {
+      type: "session.config.snapshot",
+      snapshot: visibleRuntimeConfigSnapshot(connection, runtimeConfig),
+    });
     await sendAllVisibleCharacterSnapshots(this.ctx.storage, socket);
 
     return response;
@@ -127,20 +123,6 @@ function bindDomainActor<T extends DomainActor>(prototype: T, ctx: DurableObject
 function readConnection(socket: WebSocket): SessionConnection | null {
   try {
     return socket.deserializeAttachment() as SessionConnection;
-  } catch {
-    return null;
-  }
-}
-
-function parseOwnedCharacterIds(raw: string): string[] | null {
-  try {
-    const value = JSON.parse(raw) as unknown;
-    if (!Array.isArray(value) || value.length > 64) return null;
-    if (!value.every((entry) => typeof entry === "string" && entry.trim().length > 0 && entry.length <= 256)) {
-      return null;
-    }
-    const normalized = value.map((entry) => entry.trim());
-    return new Set(normalized).size === normalized.length ? normalized : null;
   } catch {
     return null;
   }
