@@ -2,7 +2,6 @@ import { Clock3, Grid2X2, List, Shield, Swords } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Button } from "../components/ui/Button"
-import { useCharacterContext } from "../contexts/characterContext"
 import { useSyncContext } from "../contexts/syncContext"
 import { InitiativeCards } from "../features/initiative/InitiativeCards"
 import { DeathSaveCounter } from "../features/initiative/InitiativeEntryParts"
@@ -15,24 +14,24 @@ type PlayerViewMode = "table" | "cards"
 export function InitiativePlayerView() {
   const { session, hydrated } = useInitiativeSession()
   const runtime = useOptionalSessionRuntime()
-  const { visibleCharacters } = useCharacterContext()
   const { userKey } = useSyncContext()
   const [viewMode, setViewMode] = useState<PlayerViewMode>("table")
   const cardRefs = useRef(new Map<string, HTMLDivElement>())
 
   const ownedCharacterIds = useMemo(() => {
     const normalizedUserKey = userKey.trim()
-    if (!normalizedUserKey) return new Set<string>()
+    if (!normalizedUserKey || !runtime) return new Set<string>()
 
     return new Set(
-      visibleCharacters
+      Object.values(runtime.sessionCharactersById)
         .filter(
           (character) =>
-            character.get("owner")?.id?.trim() === normalizedUserKey,
+            character.active &&
+            character.ownerUserId?.trim() === normalizedUserKey,
         )
-        .map((character) => character.get("id")),
+        .map((character) => character.characterId),
     )
-  }, [userKey, visibleCharacters])
+  }, [runtime?.sessionCharactersById, userKey])
 
   const entries = useMemo(
     () => session.entries.filter((entry) => !entry.hidden),
