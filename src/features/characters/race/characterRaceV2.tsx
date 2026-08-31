@@ -1,5 +1,8 @@
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import type { DamageAffinity } from "../../../models/combat/Damage"
+import {
+  normalizeDamageAffinities,
+  type DamageAffinity,
+} from "../../../models/combat/Damage"
 import { DamageAffinityEditor } from "../../combat/DamageAffinityEditor"
 import type { SessionAbilityOperation } from "../../session-runtime/abilitySessionProtocol"
 import { CharacterWorkspaceProvider, useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
@@ -53,7 +56,10 @@ export function CharacterRaceTab({ character, updateCharacter }: Props) {
     runtime.dispatchAbilityOperation({
       type: "character.damageAffinities.set",
       characterId: authoritativeCharacter.get("id"),
-      damageAffinities,
+      // Normalize at the session boundary as well as when hydrating a character.
+      // This keeps legacy aliases or stale optional fields from turning an
+      // otherwise valid update into a protocol-level INVALID_MESSAGE.
+      damageAffinities: normalizeDamageAffinities(damageAffinities),
     })
   }
 
