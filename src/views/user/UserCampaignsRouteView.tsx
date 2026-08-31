@@ -16,7 +16,7 @@ import { UserCampaignsTab } from "./UserCampaignTab"
 
 export function UserCampaignsRouteView() {
   const navigate = useNavigate()
-  const { campaigns, campaignsLoading, setCampaigns } = useUserData()
+  const { userId, campaigns, campaignsLoading, setCampaigns } = useUserData()
   const [preparingCampaignId, setPreparingCampaignId] = useState("")
   const [deletingCampaignId, setDeletingCampaignId] = useState("")
   const [entryError, setEntryError] = useState("")
@@ -31,7 +31,7 @@ export function UserCampaignsRouteView() {
     setEntryError("")
 
     try {
-      await preloadSessionEntry(campaign)
+      await preloadSessionEntry(campaign, userId)
       navigate(sessionPath(campaign.id, "characters"))
     } catch (error) {
       setEntryError(
@@ -147,7 +147,7 @@ export function UserCampaignsRouteView() {
                       </Button>
                     </div>
                   </div>
-                )
+                )}
               })}
             </div>
           )}
