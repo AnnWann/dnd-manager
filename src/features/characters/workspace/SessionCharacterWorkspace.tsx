@@ -4,6 +4,8 @@ import { useCharacterContext } from "../../../contexts/characterContext"
 import { useSyncContext } from "../../../contexts/syncContext"
 import { getChannelDivinityPool } from "../../../models/characters/characterChannelDivinity"
 import { endConcentration, getConcentrationCondition } from "../../../models/characters/characterConcentration"
+import type { CharacterCondition } from "../../../models/characters/CharacterCondition"
+import { withCharacterConditions } from "../../../models/characters/characterConditionStorage"
 import {
   getCharacterGrantedSpells,
   spendGrantedSpellAbilityUse,
@@ -26,7 +28,10 @@ import type { SessionCustomSystemOperation } from "../../session-runtime/customS
 import type { SessionEquipmentOperation } from "../../session-runtime/equipmentSessionProtocol"
 import type { SessionMagicOperation } from "../../session-runtime/magicSessionProtocol"
 import type { SessionProficiencyOperation } from "../../session-runtime/proficiencySessionProtocol"
-import type { SessionConcentrationOperation } from "../../session-runtime/sessionProtocol"
+import type {
+  SessionConcentrationOperation,
+  SessionDieSides,
+} from "../../session-runtime/sessionProtocol"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import {
   CharacterWorkspaceProvider,
@@ -48,23 +53,86 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
     if (!sessionRuntime) return characterContext.visibleCharacters
 
     return Object.values(sessionRuntime.abilitiesByCharacterId).flatMap((abilityState) => {
-      const lifecycle = sessionRuntime.sessionCharactersById[abilityState.characterId]
+      const characterId = abilityState.characterId
+      const lifecycle = sessionRuntime.sessionCharactersById[characterId]
       if (lifecycle?.active === false) return []
 
       try {
         const authoritativeCharacter = CharacterTemplate.fromJSON(
           abilityState.character as Partial<CharacterTemplateProps>,
         )
-        return [applySessionAbilityState(authoritativeCharacter, abilityState)]
+        let projected = applySessionAbilityState(authoritativeCharacter, abilityState)
+        const authoritativeHp = sessionRuntime.hpByCharacterId[characterId]
+        const authoritativeConditions = sessionRuntime.conditionsByCharacterId[characterId]
+
+        if (authoritativeHp) {
+          const sheet = projected.get("sheet")
+          const authoritativeHitDice = Object.fromEntries(
+            Object.entries(authoritativeHp.hitDice ?? {}).flatMap(([side, pool]) =>
+              pool ? [[side, {
+                current: { quantity: pool.current, sides: side as SessionDieSides },
+                max: { quantity: pool.max, sides: side as SessionDieSides },
+              }]] : [],
+            ),
+          ) as typeof sheet.HP.hitDice
+
+          projected = projected.withPatch({
+            sheet: {
+              ...sheet,
+              attributes: authoritativeHp.attributesInitialized
+                ? { ...authoritativeHp.attributes }
+                : sheet.attributes,
+              savingThrowProficiencies: authoritativeHp.savingThrowsInitialized
+                ? { ...authoritativeHp.savingThrows }
+                : sheet.savingThrowProficiencies,
+              skills: authoritativeHp.skillsInitialized
+                ? { ...authoritativeHp.skills }
+                : sheet.skills,
+              stats: authoritativeHp.statsInitialized ? {
+                ...sheet.stats,
+                armorClassAdjustment: authoritativeHp.stats.armorClassAdjustment,
+                initiativeAdjustment: authoritativeHp.stats.initiativeAdjustment,
+                mobilityAdjustment: authoritativeHp.stats.mobilityAdjustment,
+                passivePerceptionAdjustment: authoritativeHp.stats.passivePerceptionAdjustment,
+                exhaustion: authoritativeHp.stats.exhaustion,
+                inspiration: authoritativeHp.stats.inspiration,
+                experience: authoritativeHp.stats.experience,
+              } : sheet.stats,
+              HP: {
+                ...sheet.HP,
+                current: authoritativeHp.current,
+                temporary: authoritativeHp.temporary,
+                max: authoritativeHp.max,
+                currentMax: authoritativeHp.currentMax,
+                hitDice: authoritativeHitDice,
+              },
+            },
+          })
+        }
+
+        if (authoritativeConditions?.initialized) {
+          projected = withCharacterConditions(
+            projected,
+            authoritativeConditions.conditions as CharacterCondition[],
+          )
+        }
+
+        return [projected]
       } catch (error) {
         console.error("[session-runtime] invalid authoritative character snapshot", {
-          characterId: abilityState.characterId,
+          characterId,
           error,
         })
         return []
       }
     })
-  }, [characterContext.visibleCharacters, sessionRuntime?.abilitiesByCharacterId, sessionRuntime?.sessionCharactersById])
+  }, [
+    characterContext.visibleCharacters,
+    sessionRuntime?.abilitiesByCharacterId,
+    sessionRuntime?.conditionsByCharacterId,
+    sessionRuntime?.hpByCharacterId,
+    sessionRuntime?.sessionCharactersById,
+  ])
 
   const projectedActiveCharacter = useMemo(() => {
     const activeId = selectedCharacterId || characterContext.activeCharacter?.get("id")
