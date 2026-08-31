@@ -21,6 +21,10 @@ type OwnershipAwareSessionConnection = SessionConnection & {
   ownedCharacterIds?: string[];
   /** Runtime-config visibility kept separate so ownership changes can be applied synchronously. */
   partyVisibleCharacterIds?: string[];
+  /** Signed campaign capability; MODERATOR and MASTER have this capability. */
+  canReadAnyCharacter?: boolean;
+  /** Signed campaign capability; retained on the attachment for mutation authorization. */
+  canWriteAnyCharacter?: boolean;
 };
 
 export function refreshConnectionVisibility(
@@ -31,7 +35,7 @@ export function refreshConnectionVisibility(
   const connection = readConnection(socket) as OwnershipAwareSessionConnection | null;
   if (!connection) return;
 
-  if (connection.role === "MASTER") {
+  if (canReadEveryCharacter(connection)) {
     connection.runtimeConfigRevision = snapshot?.creationRevision;
     delete connection.ownedCharacterIds;
     delete connection.partyVisibleCharacterIds;
@@ -166,7 +170,7 @@ function transformLifecycleVisibilityMessage(
   message: unknown,
 ): { handled: boolean; message: unknown | null } {
   const connection = readConnection(socket) as OwnershipAwareSessionConnection | null;
-  if (!connection || connection.role === "MASTER") {
+  if (!connection || canReadEveryCharacter(connection)) {
     return { handled: false, message };
   }
   if (!message || typeof message !== "object" || Array.isArray(message)) {
@@ -220,8 +224,8 @@ function transformLifecycleVisibilityMessage(
 }
 
 function filterMessageForSocket(socket: WebSocket, message: unknown): unknown | null {
-  const connection = readConnection(socket);
-  if (!connection || connection.role === "MASTER") return message;
+  const connection = readConnection(socket) as OwnershipAwareSessionConnection | null;
+  if (!connection || canReadEveryCharacter(connection)) return message;
   if (!message || typeof message !== "object" || Array.isArray(message)) return message;
 
   const record = message as Record<string, unknown>;
@@ -335,8 +339,14 @@ function canReceiveCharacter(
   connection: SessionConnection,
   characterId: string,
 ): boolean {
-  if (connection.role === "MASTER") return true;
+  if (canReadEveryCharacter(connection as OwnershipAwareSessionConnection)) return true;
   return connection.visibleCharacterIds?.includes(characterId) ?? false;
+}
+
+function canReadEveryCharacter(
+  connection: OwnershipAwareSessionConnection,
+): boolean {
+  return connection.role === "MASTER" || connection.canReadAnyCharacter === true;
 }
 
 function readCharacterId(value: unknown): string | null {
