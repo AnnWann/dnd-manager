@@ -18,7 +18,6 @@ import {
 
 const CONNECTION_TOKEN_TTL_MS = 60_000
 const MAX_IDENTIFIER_LENGTH = 256
-const MAX_OWNED_CHARACTER_IDS = 64
 
 export async function POST(request: Request): Promise<Response> {
   try {
@@ -67,25 +66,6 @@ export async function POST(request: Request): Promise<Response> {
       )
     }
 
-    const ownedCharacterLinks = role === "PLAYER"
-      ? await prisma.campaignCharacter.findMany({
-          where: {
-            campaignId: sessionId,
-            character: {
-              ownerId: session.user.id,
-            },
-          },
-          select: {
-            characterId: true,
-          },
-          orderBy: {
-            addedAt: "asc",
-          },
-          take: MAX_OWNED_CHARACTER_IDS,
-        })
-      : []
-    const ownedCharacterIds = ownedCharacterLinks.map((link) => link.characterId)
-
     const secret = process.env.SESSION_CONNECTION_SECRET?.trim()
     if (!isValidSessionConnectionSecret(secret)) {
       console.error(
@@ -110,7 +90,6 @@ export async function POST(request: Request): Promise<Response> {
         clientId,
         issuedAt,
         expiresAt,
-        ownedCharacterIds,
       },
       secret,
     )
