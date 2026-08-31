@@ -45,7 +45,7 @@ export async function PATCH(
   try {
     const session = await requireSession(request)
     const { campaignId, requestId } = await resolveRouteParams(request, context)
-    await requireMaster(campaignId, session.user.id)
+    await requireContentManager(campaignId, session.user.id)
     const body = await readJsonObject(request)
     const status = parseReviewStatus(body.status)
     const note =
@@ -187,7 +187,10 @@ async function applyApprovedContent(
   })
 }
 
-async function requireMaster(campaignId: string, userId: string): Promise<void> {
+async function requireContentManager(
+  campaignId: string,
+  userId: string,
+): Promise<void> {
   const campaign = await prisma.campaign.findFirst({
     where: {
       id: campaignId,
@@ -198,7 +201,7 @@ async function requireMaster(campaignId: string, userId: string): Promise<void> 
             some: {
               userId,
               status: CampaignMemberStatus.ACTIVE,
-              role: CampaignRole.MASTER,
+              role: { in: [CampaignRole.MASTER, CampaignRole.ASSISTANT] },
             },
           },
         },
@@ -210,8 +213,8 @@ async function requireMaster(campaignId: string, userId: string): Promise<void> 
   if (!campaign) {
     throw new ApiError(
       403,
-      "CAMPAIGN_MASTER_REQUIRED",
-      "Somente mestres podem revisar solicitações da sessão.",
+      "CAMPAIGN_CONTENT_MANAGER_REQUIRED",
+      "Somente mestres e assistentes podem revisar solicitações da sessão.",
     )
   }
 }
