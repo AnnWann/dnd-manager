@@ -147,7 +147,7 @@ export function UserCampaignsRouteView() {
                       </Button>
                     </div>
                   </div>
-                )}
+                )
               })}
             </div>
           )}
