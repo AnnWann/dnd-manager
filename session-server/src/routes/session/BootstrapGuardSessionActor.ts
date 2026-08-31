@@ -14,6 +14,7 @@ const CHARACTER_WRITE_ENVELOPES = new Set([
   "session.conditions.operation",
   "session.abilities.operation",
   "session.magic.operation",
+  "session.magic.operations",
   "session.equipment.operation",
   "session.inventory.operation",
   "session.proficiency.operation",
@@ -39,9 +40,10 @@ type CapabilityAwareConnection = SessionConnection & {
  * stale browser/appState data from ever crossing campaign boundaries.
  *
  * Character-wide campaign capabilities are also materialized on the socket here.
- * MODERATOR remains a PLAYER runtime role for every MASTER-only operation, but
- * character mutations are temporarily evaluated with MASTER ownership bypass
- * when the signed token explicitly grants characters.writeAny.
+ * MODERATOR remains a PLAYER runtime role for every MASTER-only operation. For
+ * character mutations only, a socket proxy exposes MASTER ownership bypass to
+ * the existing domain validators without ever persisting MASTER on the actual
+ * connection attachment.
  */
 export class SessionActor extends BaseSessionActor {
   override async fetch(request: Request): Promise<Response> {
@@ -137,21 +139,10 @@ export class SessionActor extends BaseSessionActor {
       && connection.canWriteAnyCharacter === true
       && isCharacterWriteMessage(raw)
     ) {
-      const originalRole = connection.role;
-      webSocket.serializeAttachment({ ...connection, role: "MASTER" });
-      try {
-        await super.webSocketMessage(webSocket, message);
-      } finally {
-        try {
-          const latest = readConnection(webSocket) as CapabilityAwareConnection | null;
-          if (latest) {
-            latest.role = originalRole;
-            latest.canReadAnyCharacter = connection.canReadAnyCharacter;
-            latest.canWriteAnyCharacter = connection.canWriteAnyCharacter;
-            webSocket.serializeAttachment(latest);
-          }
-        } catch {}
-      }
+      await super.webSocketMessage(
+        createCharacterWriteAuthorizedSocket(webSocket, connection),
+        message,
+      );
       return;
     }
 
@@ -195,18 +186,78 @@ function isCharacterWriteMessage(raw: string): boolean {
     return false;
   }
 
-  const operation = value.operation;
-  if (
-    !isRecord(operation)
-    || typeof operation.type !== "string"
-    || !operation.type.startsWith("character.")
-    || typeof operation.characterId !== "string"
-    || !operation.characterId.trim()
-  ) {
-    return false;
+  if (value.type === "session.magic.operations") {
+    return Array.isArray(value.operations)
+      && value.operations.length > 0
+      && value.operations.every(isCharacterOperation);
   }
 
-  return !operation.type.startsWith("character.session.");
+  const operation = value.operation;
+  if (!isRecord(operation)) return false;
+  if (isCharacterOperation(operation)) return true;
+
+  if (value.type === "session.inventory.operation" && operation.type === "inventory.item.transfer") {
+    const request = operation.request;
+    if (!isRecord(request)) return false;
+    return isCharacterLocation(request.from) || isCharacterLocation(request.to);
+  }
+
+  return false;
+}
+
+function isCharacterOperation(operation: unknown): boolean {
+  if (!isRecord(operation)) return false;
+  return (
+    typeof operation.type === "string"
+    && operation.type.startsWith("character.")
+    && !operation.type.startsWith("character.session.")
+    && typeof operation.characterId === "string"
+    && operation.characterId.trim().length > 0
+  );
+}
+
+function isCharacterLocation(value: unknown): boolean {
+  return isRecord(value)
+    && value.type === "character"
+    && typeof value.characterId === "string"
+    && value.characterId.trim().length > 0;
+}
+
+function createCharacterWriteAuthorizedSocket(
+  socket: WebSocket,
+  originalConnection: CapabilityAwareConnection,
+): WebSocket {
+  return new Proxy(socket, {
+    get(target, property, receiver) {
+      if (property === "deserializeAttachment") {
+        return () => {
+          const current = readConnection(target) as CapabilityAwareConnection | null;
+          if (!current) return current;
+          return {
+            ...current,
+            role: "MASTER" as const,
+            canReadAnyCharacter: originalConnection.canReadAnyCharacter,
+            canWriteAnyCharacter: originalConnection.canWriteAnyCharacter,
+          };
+        };
+      }
+
+      if (property === "serializeAttachment") {
+        return (attachment: unknown) => {
+          const next = isRecord(attachment)
+            ? { ...attachment }
+            : { ...originalConnection };
+          next.role = originalConnection.role;
+          next.canReadAnyCharacter = originalConnection.canReadAnyCharacter;
+          next.canWriteAnyCharacter = originalConnection.canWriteAnyCharacter;
+          target.serializeAttachment(next);
+        };
+      }
+
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as WebSocket;
 }
 
 function readConnection(webSocket: WebSocket): SessionConnection | null {
@@ -223,6 +274,6 @@ function sendError(webSocket: WebSocket, code: string, message: string): void {
   } catch {}
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): value is Record<string, any> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
