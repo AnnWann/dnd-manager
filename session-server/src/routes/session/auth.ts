@@ -12,6 +12,8 @@ export interface SessionConnectionClaims {
   clientId: string;
   expiresAt: number;
   ownedCharacterIds?: string[];
+  canReadAnyCharacter?: boolean;
+  canWriteAnyCharacter?: boolean;
 }
 
 export interface SessionServerEnv {
@@ -85,6 +87,8 @@ export async function authenticateSessionConnection(
       clientId: claims.clientId,
       expiresAt: claims.expiresAt,
       ownedCharacterIds: claims.ownedCharacterIds,
+      canReadAnyCharacter: claims.canReadAnyCharacter,
+      canWriteAnyCharacter: claims.canWriteAnyCharacter,
     },
   };
 }
@@ -120,6 +124,8 @@ function authenticateDevelopmentConnection(
       role,
       clientId: requestedClientId || crypto.randomUUID(),
       expiresAt: Date.now() + DEVELOPMENT_TOKEN_TTL_MS,
+      canReadAnyCharacter: role === "MASTER",
+      canWriteAnyCharacter: role === "MASTER",
     },
   };
 }
