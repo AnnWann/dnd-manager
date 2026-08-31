@@ -58,7 +58,7 @@ export async function GET(
   try {
     const session = await requireSession(request)
     const campaignId = await resolveCampaignId(request, context)
-    await requireCreationMaster(campaignId, session.user.id)
+    await requireCreationContentEditor(campaignId, session.user.id)
     return jsonResponse(await buildCreationSnapshot(campaignId))
   } catch (error) {
     return handleApiError(error)
@@ -72,7 +72,7 @@ export async function PATCH(
   try {
     const session = await requireSession(request)
     const campaignId = await resolveCampaignId(request, context)
-    await requireCreationMaster(campaignId, session.user.id)
+    await requireCreationContentEditor(campaignId, session.user.id)
 
     const body = await readJsonObject(request)
     const baseRevision = readRevision(body.baseRevision)
@@ -350,7 +350,7 @@ export async function PATCH(
   }
 }
 
-async function requireCreationMaster(
+async function requireCreationContentEditor(
   campaignId: string,
   userId: string,
 ): Promise<void> {
@@ -372,15 +372,19 @@ async function requireCreationMaster(
     throw new ApiError(404, "CAMPAIGN_NOT_FOUND", "Campanha não encontrada.")
   }
 
-  const isMaster =
+  const canEditCreationContent =
     campaign.ownerId === userId ||
-    campaign.members.some((member) => member.role === CampaignRole.MASTER)
+    campaign.members.some(
+      (member) =>
+        member.role === CampaignRole.MASTER ||
+        member.role === CampaignRole.ASSISTANT,
+    )
 
-  if (!isMaster) {
+  if (!canEditCreationContent) {
     throw new ApiError(
       403,
       "CREATION_ACCESS_FORBIDDEN",
-      "Somente o mestre pode acessar o estado de Criação da sessão.",
+      "Somente mestres e assistentes podem acessar o estado de Criação da sessão.",
     )
   }
 }
