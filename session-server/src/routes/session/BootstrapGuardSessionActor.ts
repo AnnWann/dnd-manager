@@ -1,9 +1,21 @@
 import { SessionActor as BaseSessionActor } from "./LegacyReconciliationSessionActor";
 import type { SessionConnection } from "./protocol";
 import { readRuntimeConfig } from "./runtimeConfigAccess";
+import type { SessionCharacterLifecycleState } from "./characterLifecycleProtocol";
+import {
+  refreshConnectionVisibility,
+  sendAllVisibleCharacterSnapshots,
+} from "./visibilityDelivery";
+
+const CHARACTER_LIFECYCLE_STATE_KEY = "characters-state";
 
 type BootstrapCharacterAdd = {
   characterId: string;
+};
+
+type CapabilityAwareConnection = SessionConnection & {
+  canReadAnyCharacter?: boolean;
+  canWriteAnyCharacter?: boolean;
 };
 
 /**
@@ -15,6 +27,42 @@ type BootstrapCharacterAdd = {
  * stale browser/appState data from ever crossing campaign boundaries.
  */
 export class SessionActor extends BaseSessionActor {
+  override async fetch(request: Request): Promise<Response> {
+    const response = await super.fetch(request);
+    if (response.status !== 101) return response;
+
+    const clientId = request.headers.get("x-session-client-id")?.trim();
+    if (!clientId) return response;
+
+    const canReadAnyCharacter =
+      request.headers.get("x-session-can-read-any-character") === "1";
+    const canWriteAnyCharacter =
+      request.headers.get("x-session-can-write-any-character") === "1";
+    if (!canReadAnyCharacter && !canWriteAnyCharacter) return response;
+
+    const socket = this.ctx.getWebSockets().find((candidate) => {
+      const connection = readConnection(candidate);
+      return connection?.clientId === clientId;
+    });
+    if (!socket) return response;
+
+    const connection = readConnection(socket) as CapabilityAwareConnection | null;
+    if (!connection) return response;
+    connection.canReadAnyCharacter = canReadAnyCharacter;
+    connection.canWriteAnyCharacter = canWriteAnyCharacter;
+    socket.serializeAttachment(connection);
+
+    const [runtimeConfig, lifecycleState] = await Promise.all([
+      readRuntimeConfig(this.ctx.storage),
+      this.ctx.storage
+        .get<Record<string, SessionCharacterLifecycleState>>(CHARACTER_LIFECYCLE_STATE_KEY)
+        .then((value) => value ?? {}),
+    ]);
+    refreshConnectionVisibility(socket, runtimeConfig, lifecycleState);
+    await sendAllVisibleCharacterSnapshots(this.ctx.storage, socket);
+    return response;
+  }
+
   override async webSocketMessage(
     webSocket: WebSocket,
     message: string | ArrayBuffer,
