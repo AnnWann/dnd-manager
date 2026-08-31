@@ -8,6 +8,18 @@ import {
 } from "./visibilityDelivery";
 
 const CHARACTER_LIFECYCLE_STATE_KEY = "characters-state";
+const CHARACTER_WRITE_ENVELOPES = new Set([
+  "session.hp.operation",
+  "session.sheet.operation",
+  "session.conditions.operation",
+  "session.abilities.operation",
+  "session.magic.operation",
+  "session.equipment.operation",
+  "session.inventory.operation",
+  "session.proficiency.operation",
+  "session.race.operation",
+  "session.profile.operation",
+]);
 
 type BootstrapCharacterAdd = {
   characterId: string;
@@ -25,6 +37,11 @@ type CapabilityAwareConnection = SessionConnection & {
  * an intentional feature. Automatic bootstrap adds are different: they must be
  * members of the current session's Creation/runtime configuration. This keeps
  * stale browser/appState data from ever crossing campaign boundaries.
+ *
+ * Character-wide campaign capabilities are also materialized on the socket here.
+ * MODERATOR remains a PLAYER runtime role for every MASTER-only operation, but
+ * character mutations are temporarily evaluated with MASTER ownership bypass
+ * when the signed token explicitly grants characters.writeAny.
  */
 export class SessionActor extends BaseSessionActor {
   override async fetch(request: Request): Promise<Response> {
@@ -72,44 +89,69 @@ export class SessionActor extends BaseSessionActor {
       : new TextDecoder().decode(message);
     const bootstrapAdd = parseBootstrapCharacterAdd(raw);
 
-    if (!bootstrapAdd) {
+    if (bootstrapAdd) {
+      const connection = readConnection(webSocket);
+      if (!connection) {
+        webSocket.close(1011, "Missing connection attachment");
+        return;
+      }
+      if (connection.role !== "MASTER") {
+        sendError(
+          webSocket,
+          "MASTER_REQUIRED",
+          "Only the MASTER can bootstrap session characters.",
+        );
+        return;
+      }
+
+      const runtimeConfig = await readRuntimeConfig(this.ctx.storage);
+      if (!runtimeConfig) {
+        sendError(
+          webSocket,
+          "SESSION_CONFIG_NOT_INITIALIZED",
+          "Session configuration must be loaded before characters can be bootstrapped.",
+        );
+        return;
+      }
+
+      const configured = runtimeConfig.config.characters.some(
+        (character) => character.characterId === bootstrapAdd.characterId,
+      );
+      if (!configured) {
+        sendError(
+          webSocket,
+          "BOOTSTRAP_CHARACTER_NOT_CONFIGURED",
+          "The bootstrap character does not belong to this session configuration.",
+        );
+        return;
+      }
+
       await super.webSocketMessage(webSocket, message);
       return;
     }
 
-    const connection = readConnection(webSocket);
-    if (!connection) {
-      webSocket.close(1011, "Missing connection attachment");
-      return;
-    }
-    if (connection.role !== "MASTER") {
-      sendError(
-        webSocket,
-        "MASTER_REQUIRED",
-        "Only the MASTER can bootstrap session characters.",
-      );
-      return;
-    }
-
-    const runtimeConfig = await readRuntimeConfig(this.ctx.storage);
-    if (!runtimeConfig) {
-      sendError(
-        webSocket,
-        "SESSION_CONFIG_NOT_INITIALIZED",
-        "Session configuration must be loaded before characters can be bootstrapped.",
-      );
-      return;
-    }
-
-    const configured = runtimeConfig.config.characters.some(
-      (character) => character.characterId === bootstrapAdd.characterId,
-    );
-    if (!configured) {
-      sendError(
-        webSocket,
-        "BOOTSTRAP_CHARACTER_NOT_CONFIGURED",
-        "The bootstrap character does not belong to this session configuration.",
-      );
+    const connection = readConnection(webSocket) as CapabilityAwareConnection | null;
+    if (
+      connection
+      && connection.role !== "MASTER"
+      && connection.canWriteAnyCharacter === true
+      && isCharacterWriteMessage(raw)
+    ) {
+      const originalRole = connection.role;
+      webSocket.serializeAttachment({ ...connection, role: "MASTER" });
+      try {
+        await super.webSocketMessage(webSocket, message);
+      } finally {
+        try {
+          const latest = readConnection(webSocket) as CapabilityAwareConnection | null;
+          if (latest) {
+            latest.role = originalRole;
+            latest.canReadAnyCharacter = connection.canReadAnyCharacter;
+            latest.canWriteAnyCharacter = connection.canWriteAnyCharacter;
+            webSocket.serializeAttachment(latest);
+          }
+        } catch {}
+      }
       return;
     }
 
@@ -140,6 +182,31 @@ function parseBootstrapCharacterAdd(raw: string): BootstrapCharacterAdd | null {
   }
 
   return { characterId: operation.characterId.trim() };
+}
+
+function isCharacterWriteMessage(raw: string): boolean {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return false;
+  }
+  if (!isRecord(value) || !CHARACTER_WRITE_ENVELOPES.has(String(value.type))) {
+    return false;
+  }
+
+  const operation = value.operation;
+  if (
+    !isRecord(operation)
+    || typeof operation.type !== "string"
+    || !operation.type.startsWith("character.")
+    || typeof operation.characterId !== "string"
+    || !operation.characterId.trim()
+  ) {
+    return false;
+  }
+
+  return !operation.type.startsWith("character.session.");
 }
 
 function readConnection(webSocket: WebSocket): SessionConnection | null {
