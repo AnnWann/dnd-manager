@@ -147,12 +147,22 @@ export function CampaignLayout() {
       return
     }
 
+    if (!authenticatedUserId) {
+      setResolvedSessionRole(null)
+      setSessionMembers([])
+      setSessionLoadError("")
+      setSessionReady(false)
+      return
+    }
+
     let cancelled = false
+    setResolvedSessionRole(null)
+    setSessionMembers([])
     setSessionReady(false)
     setSessionLoadError("")
 
     void Promise.all([
-      getCampaignSessionCharacters(sessionId),
+      getCampaignSessionCharacters(sessionId, authenticatedUserId),
       getSessionHomebrew(sessionId),
     ])
       .then(([data, homebrew]) => {
@@ -276,7 +286,7 @@ export function CampaignLayout() {
     return () => {
       cancelled = true
     }
-  }, [sessionContentRevision, sessionId, setAppState])
+  }, [authenticatedUserId, sessionContentRevision, sessionId, setAppState])
 
   const effectiveUserRole: CampaignUiRole = resolvedSessionRole ?? userRole
   const effectiveUserKey = authenticatedUserId || userKey
