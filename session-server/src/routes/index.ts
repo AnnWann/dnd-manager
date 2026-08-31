@@ -58,8 +58,14 @@ export default {
     forwardedHeaders.set("x-session-client-id", claims.clientId);
     forwardedHeaders.set("x-session-user-id", claims.userId);
     if (claims.userName) forwardedHeaders.set("x-session-user-name", claims.userName);
+    else forwardedHeaders.delete("x-session-user-name");
     forwardedHeaders.set("x-session-role", claims.role);
     forwardedHeaders.set("x-session-expires-at", String(claims.expiresAt));
+
+    // Capability headers are internal authentication metadata. Never preserve
+    // caller-supplied values when the signed token does not grant them.
+    forwardedHeaders.delete("x-session-can-read-any-character");
+    forwardedHeaders.delete("x-session-can-write-any-character");
     if (claims.canReadAnyCharacter) {
       forwardedHeaders.set("x-session-can-read-any-character", "1");
     }
