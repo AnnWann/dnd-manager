@@ -80,14 +80,22 @@ export async function GET(
     const role = isOwner ? CampaignRole.MASTER : membership?.role
     const canViewPermissions =
       role === CampaignRole.MASTER || role === CampaignRole.MODERATOR
+    const canEditCreationContent =
+      role === CampaignRole.MASTER || role === CampaignRole.ASSISTANT
 
-    if (!canViewPermissions) {
+    if (!canViewPermissions && !canEditCreationContent) {
       throw new ApiError(
         403,
-        "PERMISSIONS_REQUIRED",
-        "Somente mestres e moderadores podem acessar as permissões da sessão.",
+        "SETTINGS_ACCESS_REQUIRED",
+        "Seu papel na sessão não permite acessar estas configurações.",
       )
     }
+
+    const visibleMembers = canViewPermissions
+      ? campaign.members
+      : campaign.members.filter(
+          (member) => member.status === CampaignMemberStatus.ACTIVE,
+        )
 
     return jsonResponse({
       settings: {
@@ -97,12 +105,16 @@ export async function GET(
           inviteCode: isOwner ? campaign.inviteCode : null,
         },
         owner: {
-          ...campaign.owner,
+          id: campaign.owner.id,
+          name: campaign.owner.name,
+          email: canViewPermissions ? campaign.owner.email : null,
           role: CampaignRole.MASTER,
           status: CampaignMemberStatus.ACTIVE,
         },
-        members: campaign.members.map((member) => ({
-          ...member.user,
+        members: visibleMembers.map((member) => ({
+          id: member.user.id,
+          name: member.user.name,
+          email: canViewPermissions ? member.user.email : null,
           role: member.role,
           status: member.status,
         })),

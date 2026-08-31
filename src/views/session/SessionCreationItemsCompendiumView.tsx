@@ -67,7 +67,7 @@ export function SessionCreationItemsCompendiumView() {
     )
   }, [compendiumItems, query])
 
-  if (userRole !== "master") {
+  if (userRole !== "master" && userRole !== "assistant") {
     return <Navigate to="/character" replace />
   }
 

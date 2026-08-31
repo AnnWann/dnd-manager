@@ -75,7 +75,7 @@ export function CreaturesCompendiumView() {
     })
   }, [creatures, query, sideFilter])
 
-  if (userRole !== "master") {
+  if (userRole !== "master" && userRole !== "assistant") {
     return (
       <div className="mx-auto max-w-xl rounded-xl border border-border bg-bg p-6">
         <div className="flex items-center gap-3">
@@ -85,7 +85,7 @@ export function CreaturesCompendiumView() {
               Compêndio de Criaturas
             </h1>
             <p className="mt-1 text-sm text-text">
-              Esta página só pode ser acessada com o perfil de mestre.
+              Esta página só pode ser acessada por mestre ou assistente.
             </p>
           </div>
         </div>
@@ -132,7 +132,7 @@ export function CreaturesCompendiumView() {
               </span>
             </div>
             <p className="mt-2 max-w-3xl text-sm text-text">
-              Fichas enxutas para o mestre: estatísticas de combate, habilidades,
+              Fichas enxutas para a Criação: estatísticas de combate, habilidades,
               ações, notas e uma imagem opcional da ficha original.
             </p>
           </div>

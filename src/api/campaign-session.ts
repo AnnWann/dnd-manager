@@ -57,6 +57,8 @@ type CachedSessionRequest = {
 // This cache is intentionally longer than a normal request-dedupe window.
 // The response is permission-dependent (role, membership and visible
 // characters), so entries MUST be partitioned by the authenticated viewer.
+// Explicit session entry forces a revalidation because the viewer's campaign
+// role can change without either the viewer id or campaign id changing.
 const SESSION_REQUEST_CACHE_MS = 10 * 60_000
 const sessionRequestCache = new Map<string, CachedSessionRequest>()
 
@@ -69,6 +71,7 @@ export function invalidateCampaignSessionCharacters(campaignId: string): void {
 export async function getCampaignSessionCharacters(
   campaignId: string,
   viewerId: string,
+  options: { force?: boolean } = {},
 ): Promise<CampaignSessionCharacters> {
   if (LOCAL_AUTH_BYPASS) {
     const campaigns = await getMyCampaigns()
@@ -121,7 +124,7 @@ export async function getCampaignSessionCharacters(
   const now = Date.now()
   const cacheKey = `${normalizedViewerId}:${campaignId}`
   const cached = sessionRequestCache.get(cacheKey)
-  if (cached && cached.expiresAt > now) return cached.promise
+  if (!options.force && cached && cached.expiresAt > now) return cached.promise
 
   const promise = apiClient
     .get<CampaignSessionCharacters>(
@@ -133,7 +136,9 @@ export async function getCampaignSessionCharacters(
       return data
     })
     .catch((error) => {
-      sessionRequestCache.delete(cacheKey)
+      if (sessionRequestCache.get(cacheKey)?.promise === promise) {
+        sessionRequestCache.delete(cacheKey)
+      }
       throw error
     })
 

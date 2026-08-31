@@ -18,8 +18,9 @@ import {
 } from "../../api/session-settings"
 import { Button } from "../../components/ui/Button"
 import { useCharacterContext } from "../../contexts/characterContext"
+import { useSyncContext } from "../../contexts/syncContext"
 import { CharacterSettingsModal } from "../../features/characters/settings/CharacterSettingsModal"
-import { useCreationEditor } from "../../features/creation/CreationEditorProvider"
+import { useOptionalCreationEditor } from "../../features/creation/CreationEditorProvider"
 import {
   isSuppressedConfiguredCustomSystemState,
   reconcileConfiguredCustomSystemStates,
@@ -39,7 +40,9 @@ import type {
 export function SessionCreationSettingsView() {
   const { campaignId } = useParams<{ campaignId?: string }>()
   const navigate = useNavigate()
-  const editor = useCreationEditor()
+  const { userRole } = useSyncContext()
+  const editor = useOptionalCreationEditor()
+  const canViewPermissions = userRole === "master" || userRole === "moderator"
   const {
     visibleCharacters: sessionCharacters,
     canAssignOwners,
@@ -86,15 +89,15 @@ export function SessionCreationSettingsView() {
 
   const creationConfigurationById = useMemo(
     () => new Map(
-      (editor.draft?.characters ?? []).map((configuration) => [
+      (editor?.draft?.characters ?? []).map((configuration) => [
         configuration.characterId,
         configuration,
       ]),
     ),
-    [editor.draft?.characters],
+    [editor?.draft?.characters],
   )
 
-  const customSystemDefinitions = editor.draft?.customSystems ?? []
+  const customSystemDefinitions = editor?.draft?.customSystems ?? []
 
   const visibleCharacters = useMemo(
     () => sessionCharacters.map((character) => {
@@ -166,7 +169,7 @@ export function SessionCreationSettingsView() {
 
   async function reloadUsers() {
     if (!campaignId) return
-    setSettings(await getSessionCreationSettings(campaignId))
+    setSettings(await getSessionCreationSettings(campaignId, { force: true }))
   }
 
   async function changeMember(
@@ -176,7 +179,7 @@ export function SessionCreationSettingsView() {
       role?: SessionSettingsMember["role"]
     },
   ) {
-    if (!campaignId || workingUserId) return
+    if (!campaignId || workingUserId || !settings?.canManageMembers) return
     setWorkingUserId(member.id)
     setErrorMessage("")
     try {
@@ -197,6 +200,7 @@ export function SessionCreationSettingsView() {
     characterId: string,
     updater: (character: CharacterTemplate) => CharacterTemplate,
   ) {
+    if (!editor) return
     const source = sessionCharacters.find(
       (character) => character.get("id") === characterId,
     )
@@ -234,7 +238,9 @@ export function SessionCreationSettingsView() {
           <div>
             <h1 className="text-xl font-semibold text-textH">Configuração</h1>
             <p className="mt-1 text-sm text-textMuted">
-              Configure as cópias de personagem e os usuários ativos desta sessão. Novas entradas são revisadas em Solicitações.
+              {editor
+                ? "Configure as cópias de personagem desta sessão. Alterações de Criação ficam no rascunho até salvar."
+                : "Consulte as permissões e os usuários ativos desta sessão."}
             </p>
           </div>
         </div>
@@ -246,109 +252,118 @@ export function SessionCreationSettingsView() {
         </div>
       ) : null}
 
-      <section className="rounded-xl border border-border bg-bg shadow-theme-sm">
-        <header className="border-b border-border p-4">
-          <h2 className="font-semibold text-textH">Personagens da sessão</h2>
-          <p className="mt-1 text-xs text-textMuted">
-            Alterações de personagem ficam no rascunho de Criação até você salvar.
-          </p>
-        </header>
-
-        <div className="grid gap-3 p-4 md:grid-cols-2 2xl:grid-cols-3">
-          {visibleCharacters.length ? (
-            visibleCharacters.map((character) => (
-              <CharacterConfigurationCard
-                key={character.get("id")}
-                character={character}
-                onConfigure={() => setSelectedCharacterId(character.get("id"))}
-              />
-            ))
-          ) : (
-            <div className="col-span-full rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-textMuted">
-              Nenhum personagem está carregado nesta sessão.
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="rounded-xl border border-border bg-bg shadow-theme-sm">
-        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <UsersRound className="h-4 w-4 text-accent" />
-              <h2 className="font-semibold text-textH">Usuários da sessão</h2>
-            </div>
+      {editor ? (
+        <section className="rounded-xl border border-border bg-bg shadow-theme-sm">
+          <header className="border-b border-border p-4">
+            <h2 className="font-semibold text-textH">Personagens da sessão</h2>
             <p className="mt-1 text-xs text-textMuted">
-              Gerencie papéis e acesso dos membros já aprovados. Esta administração continua sendo aplicada imediatamente e não faz parte do rascunho de Criação.
+              Alterações de personagem ficam no rascunho de Criação até você salvar.
             </p>
-          </div>
+          </header>
 
-          <div className="flex flex-wrap gap-2">
-            {pendingMemberCount ? (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => navigate(sessionPath(campaignId, "creation/requests"))}
-              >
-                <Inbox className="h-4 w-4" />
-                {pendingMemberCount} solicitação(ões)
-              </Button>
-            ) : null}
-
-            {settings?.campaign.inviteCode ? (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => void navigator.clipboard.writeText(settings.campaign.inviteCode ?? "")}
-              >
-                <Copy className="h-4 w-4" />
-                Copiar convite
-              </Button>
-            ) : null}
-          </div>
-        </header>
-
-        <div className="p-4">
-          {loading ? (
-            <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-textMuted">
-              Carregando usuários...
-            </div>
-          ) : settings ? (
-            <div className="grid gap-3">
-              <MemberRow member={settings.owner} owner />
-              {activeMembers.map((member) => (
-                <MemberRow
-                  key={member.id}
-                  member={member}
-                  working={workingUserId === member.id}
-                  onRoleChange={(role) =>
-                    void changeMember(member, {
-                      status: "ACTIVE",
-                      role,
-                    })
-                  }
-                  onRemove={() => {
-                    if (
-                      window.confirm(
-                        `Remover ${member.name} da sessão? Os personagens vinculados desse usuário também serão desvinculados da campanha.`,
-                      )
-                    ) {
-                      void changeMember(member, { status: "REMOVED" })
-                    }
-                  }}
+          <div className="grid gap-3 p-4 md:grid-cols-2 2xl:grid-cols-3">
+            {visibleCharacters.length ? (
+              visibleCharacters.map((character) => (
+                <CharacterConfigurationCard
+                  key={character.get("id")}
+                  character={character}
+                  onConfigure={() => setSelectedCharacterId(character.get("id"))}
                 />
-              ))}
-              {!activeMembers.length ? (
-                <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-textMuted">
-                  Nenhum outro usuário ativo participa desta sessão.
-                </div>
+              ))
+            ) : (
+              <div className="col-span-full rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-textMuted">
+                Nenhum personagem está carregado nesta sessão.
+              </div>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {canViewPermissions ? (
+        <section className="rounded-xl border border-border bg-bg shadow-theme-sm">
+          <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <UsersRound className="h-4 w-4 text-accent" />
+                <h2 className="font-semibold text-textH">Usuários da sessão</h2>
+              </div>
+              <p className="mt-1 text-xs text-textMuted">
+                {settings?.canManageMembers
+                  ? "Gerencie papéis e acesso dos membros já aprovados. Esta administração é aplicada imediatamente e não faz parte do rascunho de Criação."
+                  : "Visualização das permissões e papéis atuais da sessão."}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {pendingMemberCount ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => navigate(sessionPath(campaignId, "creation/requests"))}
+                >
+                  <Inbox className="h-4 w-4" />
+                  {pendingMemberCount} solicitação(ões)
+                </Button>
+              ) : null}
+
+              {settings?.campaign.inviteCode ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => void navigator.clipboard.writeText(settings.campaign.inviteCode ?? "")}
+                >
+                  <Copy className="h-4 w-4" />
+                  Copiar convite
+                </Button>
               ) : null}
             </div>
-          ) : null}
-        </div>
-      </section>
+          </header>
 
-      {selectedCharacter ? (
+          <div className="p-4">
+            {loading ? (
+              <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-textMuted">
+                Carregando usuários...
+              </div>
+            ) : settings ? (
+              <div className="grid gap-3">
+                <MemberRow member={settings.owner} owner />
+                {activeMembers.map((member) => (
+                  <MemberRow
+                    key={member.id}
+                    member={member}
+                    working={workingUserId === member.id}
+                    onRoleChange={settings.canManageMembers
+                      ? (role) =>
+                          void changeMember(member, {
+                            status: "ACTIVE",
+                            role,
+                          })
+                      : undefined}
+                    onRemove={settings.canManageMembers
+                      ? () => {
+                          if (
+                            window.confirm(
+                              `Remover ${member.name} da sessão? Os personagens vinculados desse usuário também serão desvinculados da campanha.`,
+                            )
+                          ) {
+                            void changeMember(member, { status: "REMOVED" })
+                          }
+                        }
+                      : undefined}
+                  />
+                ))}
+                {!activeMembers.length ? (
+                  <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-textMuted">
+                    Nenhum outro usuário ativo participa desta sessão.
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {editor && selectedCharacter ? (
         <CharacterSettingsModal
           open
           onClose={() => setSelectedCharacterId("")}
@@ -406,6 +421,8 @@ function MemberRow({
   onRoleChange?: (role: SessionSettingsMember["role"]) => void
   onRemove?: () => void
 }) {
+  const editable = Boolean(onRoleChange || onRemove)
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-3">
       <div className="min-w-0">
@@ -424,7 +441,7 @@ function MemberRow({
 
       {owner ? (
         <div className="text-xs font-medium text-textMuted">Mestre</div>
-      ) : (
+      ) : editable ? (
         <div className="flex flex-wrap items-center gap-2">
           <SharedSelect
             value={member.role}
@@ -440,19 +457,32 @@ function MemberRow({
             <option value="MASTER">Mestre</option>
           </SharedSelect>
 
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={working}
-            onClick={onRemove}
-          >
-            <Trash2 className="h-4 w-4" />
-            Remover
-          </Button>
+          {onRemove ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={working}
+              onClick={onRemove}
+            >
+              <Trash2 className="h-4 w-4" />
+              Remover
+            </Button>
+          ) : null}
+        </div>
+      ) : (
+        <div className="text-xs font-medium text-textMuted">
+          {roleLabel(member.role)}
         </div>
       )}
     </div>
   )
+}
+
+function roleLabel(role: SessionSettingsMember["role"]): string {
+  if (role === "MASTER") return "Mestre"
+  if (role === "ASSISTANT") return "Assistente"
+  if (role === "MODERATOR") return "Moderador"
+  return "Jogador"
 }
 
 function applyCreationConfiguration(

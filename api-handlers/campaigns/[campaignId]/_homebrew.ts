@@ -82,6 +82,9 @@ export async function GET(
     const isMaster =
       campaign.ownerId === session.user.id ||
       campaign.members.some((member) => member.role === CampaignRole.MASTER)
+    const canManageContent =
+      isMaster ||
+      campaign.members.some((member) => member.role === CampaignRole.ASSISTANT)
 
     const [links, assets] = await Promise.all([
       prisma.campaignHomebrewSpell.findMany({
@@ -90,7 +93,7 @@ export async function GET(
           spell: {
             status: HomebrewSpellStatus.ACTIVE,
           },
-          ...(isMaster
+          ...(canManageContent
             ? {}
             : {
                 OR: [

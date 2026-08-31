@@ -365,7 +365,6 @@ export function useCustomSystemsContext(): CustomSystemsContextValue {
     const updateCreationDefinitions = (
       updater: (current: CustomSystemDefinition[]) => CustomSystemDefinition[],
     ) => {
-      if (!context.canManage) return
       editor.updateDraft((draft) => ({
         ...draft,
         customSystems: normalizeDefinitions(updater(draft.customSystems)),
@@ -378,7 +377,7 @@ export function useCustomSystemsContext(): CustomSystemsContextValue {
         ? { kind: 'saving' as const }
         : { kind: 'idle' as const },
       hydrated: creationMigrationReady,
-      canManage: context.canManage,
+      canManage: true,
       createDefinition: () => {
         const definition = createEmptyDefinition()
         updateCreationDefinitions((current) => [...current, definition])
