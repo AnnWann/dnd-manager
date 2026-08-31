@@ -20,6 +20,8 @@ const CHARACTER_WRITE_ENVELOPES = new Set([
   "session.proficiency.operation",
   "session.race.operation",
   "session.profile.operation",
+  "session.customSystem.operation",
+  "session.custom-class.operation",
 ]);
 
 type BootstrapCharacterAdd = {
