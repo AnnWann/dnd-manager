@@ -1,8 +1,8 @@
 import { useEffect, useMemo } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 
-import { useCharacterContext } from "../contexts/characterContext"
 import { CharacterSpellRuntime } from "../features/characters/workspace/CharacterSpellRuntime"
+import { useCharacterWorkspace } from "../features/characters/workspace/CharacterWorkspaceContext"
 import { SessionCharacterWorkspace } from "../features/characters/workspace/SessionCharacterWorkspace"
 import { sessionCharacterPath } from "../lib/campaignRoutes"
 import {
@@ -23,7 +23,15 @@ type CharacterIndexLocationState = {
 }
 
 export function CharacterIndexView() {
-  const { visibleCharacters } = useCharacterContext()
+  return (
+    <SessionCharacterWorkspace>
+      <CharacterIndexContent />
+    </SessionCharacterWorkspace>
+  )
+}
+
+function CharacterIndexContent() {
+  const { characters } = useCharacterWorkspace()
   const { campaignId = "" } = useParams<{ campaignId?: string }>()
   const location = useLocation()
   const navigate = useNavigate()
@@ -42,10 +50,10 @@ export function CharacterIndexView() {
     )
     if (!cached?.characterId) return undefined
 
-    return visibleCharacters.find(
+    return characters.find(
       (character) => character.get("id") === cached.characterId,
     )
-  }, [shouldAutoOpen, visibleCharacters])
+  }, [characters, shouldAutoOpen])
 
   useEffect(() => {
     if (!shouldAutoOpen || !cachedCharacter || !campaignId) return
@@ -62,11 +70,9 @@ export function CharacterIndexView() {
   if (shouldAutoOpen && cachedCharacter) return null
 
   return (
-    <SessionCharacterWorkspace>
-      <CharacterSpellRuntime>
-        <CharacterView />
-      </CharacterSpellRuntime>
-    </SessionCharacterWorkspace>
+    <CharacterSpellRuntime>
+      <CharacterView />
+    </CharacterSpellRuntime>
   )
 }
 
