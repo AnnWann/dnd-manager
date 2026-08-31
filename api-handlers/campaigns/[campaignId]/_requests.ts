@@ -80,11 +80,11 @@ export async function GET(
     const campaignId = await resolveCampaignId(request, context)
     const access = await requireCampaignAccess(campaignId, session.user.id)
 
-    if (!access.isMaster) {
+    if (!access.canManageContent) {
       throw new ApiError(
         403,
-        "CAMPAIGN_MASTER_REQUIRED",
-        "Somente mestres podem visualizar as solicitações da sessão.",
+        "CAMPAIGN_CONTENT_MANAGER_REQUIRED",
+        "Somente mestres e assistentes podem visualizar as solicitações da sessão.",
       )
     }
 
@@ -233,7 +233,7 @@ export async function POST(
       title = character.name
     }
 
-    if (access.isMaster) {
+    if (access.canManageContent) {
       await applyApprovedContent({
         campaignId,
         type,
@@ -392,7 +392,11 @@ export async function requireCampaignAccess(
   campaignId: string,
   userId: string,
   options: { allowInvited?: boolean } = {},
-): Promise<{ isMaster: boolean; status: CampaignMemberStatus }> {
+): Promise<{
+  isMaster: boolean
+  canManageContent: boolean
+  status: CampaignMemberStatus
+}> {
   const allowedStatuses = options.allowInvited
     ? [CampaignMemberStatus.ACTIVE, CampaignMemberStatus.INVITED]
     : [CampaignMemberStatus.ACTIVE]
@@ -439,7 +443,11 @@ export async function requireCampaignAccess(
   }
 
   if (campaign.ownerId === userId) {
-    return { isMaster: true, status: CampaignMemberStatus.ACTIVE }
+    return {
+      isMaster: true,
+      canManageContent: true,
+      status: CampaignMemberStatus.ACTIVE,
+    }
   }
 
   const membership = campaign.members[0]
@@ -447,10 +455,16 @@ export async function requireCampaignAccess(
     throw new ApiError(403, "CAMPAIGN_ACCESS_DENIED", "Acesso à sessão não encontrado.")
   }
 
+  const active = membership.status === CampaignMemberStatus.ACTIVE
+  const isMaster = active && membership.role === CampaignRole.MASTER
+  const canManageContent =
+    active &&
+    (membership.role === CampaignRole.MASTER ||
+      membership.role === CampaignRole.ASSISTANT)
+
   return {
-    isMaster:
-      membership.status === CampaignMemberStatus.ACTIVE &&
-      membership.role === CampaignRole.MASTER,
+    isMaster,
+    canManageContent,
     status: membership.status,
   }
 }
