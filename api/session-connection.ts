@@ -1,6 +1,6 @@
 import {
   CampaignMemberStatus,
-  type CampaignRole,
+  CampaignRole,
 } from "../generated/prisma/client.js"
 import {
   ApiError,
@@ -10,6 +10,10 @@ import {
 } from "../server/api.js"
 import { prisma } from "../server/prisma.js"
 import { requireSession } from "../server/session.js"
+import {
+  canReadAnyCharacter,
+  canWriteAnyCharacter,
+} from "../src/shared/campaign/campaignRoles.js"
 import {
   isValidSessionConnectionSecret,
   signSessionConnectionToken,
@@ -53,18 +57,23 @@ export async function POST(request: Request): Promise<Response> {
       )
     }
 
-    const role = resolveRole(
+    const campaignRole = resolveCampaignRole(
       campaign.ownerId,
       session.user.id,
       campaign.members[0],
     )
-    if (!role) {
+    if (!campaignRole) {
       throw new ApiError(
         403,
         "SESSION_ACCESS_DENIED",
         "Você não possui acesso ativo a esta sessão.",
       )
     }
+
+    const role: SessionConnectionRole =
+      campaignRole === CampaignRole.MASTER ? "MASTER" : "PLAYER"
+    const readAnyCharacter = canReadAnyCharacter(campaignRole)
+    const writeAnyCharacter = canWriteAnyCharacter(campaignRole)
 
     const secret = process.env.SESSION_CONNECTION_SECRET?.trim()
     if (!isValidSessionConnectionSecret(secret)) {
@@ -90,6 +99,8 @@ export async function POST(request: Request): Promise<Response> {
         clientId,
         issuedAt,
         expiresAt,
+        canReadAnyCharacter: readAnyCharacter,
+        canWriteAnyCharacter: writeAnyCharacter,
       },
       secret,
     )
@@ -98,13 +109,16 @@ export async function POST(request: Request): Promise<Response> {
       token,
       expiresAt,
       role,
+      campaignRole,
+      canReadAnyCharacter: readAnyCharacter,
+      canWriteAnyCharacter: writeAnyCharacter,
     })
   } catch (error) {
     return handleApiError(error)
   }
 }
 
-function resolveRole(
+function resolveCampaignRole(
   ownerId: string,
   userId: string,
   membership:
@@ -113,12 +127,12 @@ function resolveRole(
         status: CampaignMemberStatus
       }
     | undefined,
-): SessionConnectionRole | null {
-  if (ownerId === userId) return "MASTER"
+): CampaignRole | null {
+  if (ownerId === userId) return CampaignRole.MASTER
   if (!membership || membership.status !== CampaignMemberStatus.ACTIVE) {
     return null
   }
-  return membership.role === "MASTER" ? "MASTER" : "PLAYER"
+  return membership.role
 }
 
 function readIdentifier(value: unknown, field: string): string {
