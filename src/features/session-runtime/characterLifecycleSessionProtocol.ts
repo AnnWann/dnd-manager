@@ -5,6 +5,12 @@ export type SessionCharacterLifecycleOperation =
       type: "character.session.add"
       characterId: string
       character: Record<string, unknown>
+      /**
+       * Bootstrap adds are relational/Creation seeds, not normal session-only
+       * lifecycle mutations. The server validates them against the active
+       * session runtime config before accepting them.
+       */
+      origin?: "bootstrap"
     }
   | {
       type: "character.session.remove"
