@@ -12,11 +12,14 @@ import type { UserCampaign } from "../../api/user-campaigns"
  * WebSocket. These requests exist only to seed a new/uninitialized Durable
  * Object and to warm the MASTER Creation context before the active session.
  */
-export async function preloadSessionEntry(campaign: UserCampaign): Promise<void> {
+export async function preloadSessionEntry(
+  campaign: UserCampaign,
+  viewerId: string,
+): Promise<void> {
   const isMaster = campaign.isOwner || campaign.role === "MASTER"
 
   const common = [
-    getCampaignSessionCharacters(campaign.id),
+    getCampaignSessionCharacters(campaign.id, viewerId),
     getSessionHomebrew(campaign.id),
   ]
 
