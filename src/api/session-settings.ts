@@ -1,4 +1,8 @@
 import { LOCAL_AUTH_BYPASS } from "../auth/local-auth"
+import type {
+  CampaignCapability,
+  CampaignCapabilityOverrides,
+} from "../shared/campaign/campaignRoles"
 import { apiClient } from "./api-client"
 import {
   getMyCampaigns,
@@ -12,6 +16,8 @@ export type SessionSettingsMember = {
   email?: string | null
   role: CampaignRole
   status: "ACTIVE" | "INVITED" | "REMOVED"
+  permissions: CampaignCapabilityOverrides
+  capabilities: CampaignCapability[]
 }
 
 export type SessionCreationSettings = {
@@ -22,6 +28,7 @@ export type SessionCreationSettings = {
   }
   owner: SessionSettingsMember
   members: SessionSettingsMember[]
+  viewerCapabilities: CampaignCapability[]
   canManageMembers: boolean
 }
 
@@ -65,6 +72,8 @@ export async function getSessionCreationSettings(
         name: campaign.owner.name,
         role: "MASTER",
         status: "ACTIVE",
+        permissions: {},
+        capabilities: [],
       },
       members: campaign.pendingMembers.map((member) => ({
         id: member.id,
@@ -72,7 +81,10 @@ export async function getSessionCreationSettings(
         email: member.email,
         role: "PLAYER",
         status: "INVITED",
+        permissions: {},
+        capabilities: [],
       })),
+      viewerCapabilities: [],
       canManageMembers: true,
     }
   }
@@ -106,6 +118,7 @@ export async function updateSessionMember(
   input: {
     status: "ACTIVE" | "REMOVED"
     role?: CampaignRole
+    permissions?: CampaignCapabilityOverrides
   },
 ): Promise<void> {
   if (LOCAL_AUTH_BYPASS) {
