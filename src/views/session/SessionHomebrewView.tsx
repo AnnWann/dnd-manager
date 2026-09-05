@@ -10,6 +10,7 @@ import {
 import { Button } from "../../components/ui/Button"
 import { useCustomSystemsContext } from "../../contexts/customSystemsContext"
 import { useMagicContext } from "../../contexts/magicContext"
+import { useSyncContext } from "../../contexts/syncContext"
 import { sessionPath } from "../../lib/campaignRoutes"
 import type { CustomSystemDefinition } from "../../models/customSystems/CustomSystemDefinition"
 import type { Spell } from "../../models/magic/spells/Spell"
@@ -17,6 +18,7 @@ import type { Spell } from "../../models/magic/spells/Spell"
 export function SessionHomebrewView() {
   const { campaignId } = useParams<{ campaignId?: string }>()
   const navigate = useNavigate()
+  const { campaignCapabilities } = useSyncContext()
   const { savedSpells } = useMagicContext()
   const { definitions, saveDefinitions } = useCustomSystemsContext()
   const [catalog, setCatalog] = useState<SessionHomebrewCatalog | null>(null)
@@ -24,6 +26,9 @@ export function SessionHomebrewView() {
   const [errorMessage, setErrorMessage] = useState("")
   const [viewingSpell, setViewingSpell] = useState<Spell | null>(null)
   const [viewingAsset, setViewingAsset] = useState<SessionHomebrewAsset | null>(null)
+
+  const canManageMagic = campaignCapabilities.includes("creation.magic.manage")
+  const canManageSystems = campaignCapabilities.includes("creation.systems.manage")
 
   useEffect(() => {
     if (!campaignId) return
@@ -125,6 +130,7 @@ export function SessionHomebrewView() {
   }, [definitions, systemAssets])
 
   useEffect(() => {
+    if (!canManageSystems) return
     const installedIds = new Set(definitions.map((definition) => definition.id))
     const missing = systemAssets
       .map((asset) => toCustomSystemDefinition(asset.data))
@@ -132,7 +138,7 @@ export function SessionHomebrewView() {
       .filter((definition) => !installedIds.has(definition.id))
 
     if (missing.length) saveDefinitions(missing)
-  }, [definitions, saveDefinitions, systemAssets])
+  }, [canManageSystems, definitions, saveDefinitions, systemAssets])
 
   if (!campaignId) return <Navigate to="/not-found" replace />
 
@@ -180,13 +186,15 @@ export function SessionHomebrewView() {
               Inclui criações/importações do mestre e magias aprovadas em Solicitações.
             </p>
           </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => navigate(sessionPath(campaignId, "creation/magic"))}
-          >
-            Abrir biblioteca de magias
-          </Button>
+          {canManageMagic ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => navigate(sessionPath(campaignId, "creation/magic"))}
+            >
+              Abrir biblioteca de magias
+            </Button>
+          ) : null}
         </header>
 
         <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
@@ -233,13 +241,15 @@ export function SessionHomebrewView() {
               Sistemas criados pelo mestre e sistemas aprovados enviados por jogadores.
             </p>
           </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => navigate(sessionPath(campaignId, "creation/custom-systems"))}
-          >
-            Gerenciar sistemas
-          </Button>
+          {canManageSystems ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => navigate(sessionPath(campaignId, "creation/custom-systems"))}
+            >
+              Gerenciar sistemas
+            </Button>
+          ) : null}
         </header>
 
         <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
@@ -299,37 +309,22 @@ export function SessionHomebrewView() {
           role="dialog"
           aria-modal="true"
         >
-          <div className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-border bg-bg shadow-xl">
-            <header className="sticky top-0 flex items-start justify-between gap-3 border-b border-border bg-bg p-4">
+          <div className="flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-bg shadow-theme-lg">
+            <header className="flex items-start justify-between gap-3 border-b border-border p-4">
               <div>
-                <h2 className="text-lg font-semibold text-textH">
-                  {spellName(viewingSpell)}
-                </h2>
+                <h2 className="text-lg font-semibold text-textH">{spellName(viewingSpell)}</h2>
                 <p className="mt-1 text-xs text-textMuted">
-                  {viewingSpell.slotLevel === 0 ? "Truque" : `${viewingSpell.slotLevel}º nível`} · {viewingSpell.school}
+                  {viewingSpell.slotLevel === 0 ? "Truque" : `${viewingSpell.slotLevel}º nível`}
                 </p>
               </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setViewingSpell(null)}
-              >
+              <Button size="sm" variant="secondary" onClick={() => setViewingSpell(null)}>
                 Fechar
               </Button>
             </header>
-            <div className="grid gap-4 p-4 text-sm text-text">
-              <section>
-                <h3 className="font-semibold text-textH">Descrição</h3>
-                <p className="mt-2 whitespace-pre-wrap leading-6">
-                  {viewingSpell.description?.trim() || "Sem descrição."}
-                </p>
-              </section>
-              <section>
-                <h3 className="font-semibold text-textH">Em níveis superiores</h3>
-                <p className="mt-2 whitespace-pre-wrap leading-6">
-                  {viewingSpell.higherLevelText?.trim() || "Sem efeito adicional."}
-                </p>
-              </section>
+            <div className="min-h-0 overflow-y-auto p-4">
+              <pre className="whitespace-pre-wrap rounded-xl border border-border bg-bg-subtle p-4 text-xs leading-5 text-text">
+                {JSON.stringify(viewingSpell, null, 2)}
+              </pre>
             </div>
           </div>
         </div>
@@ -341,30 +336,50 @@ export function SessionHomebrewView() {
           role="dialog"
           aria-modal="true"
         >
-          <div className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-border bg-bg shadow-xl">
-            <header className="sticky top-0 flex items-start justify-between gap-3 border-b border-border bg-bg p-4">
+          <div className="flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-bg shadow-theme-lg">
+            <header className="flex items-start justify-between gap-3 border-b border-border p-4">
               <div>
                 <h2 className="text-lg font-semibold text-textH">{viewingAsset.name}</h2>
                 <p className="mt-1 text-xs text-textMuted">
-                  {assetTypeLabel(viewingAsset.type)} · adicionado por {viewingAsset.addedBy.name}
+                  {viewingAsset.type} · adicionado por {viewingAsset.addedBy.name}
                 </p>
               </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setViewingAsset(null)}
-              >
+              <Button size="sm" variant="secondary" onClick={() => setViewingAsset(null)}>
                 Fechar
               </Button>
             </header>
-            <div className="p-4">
-              <pre className="max-h-[65dvh] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-border bg-bg-subtle p-3 text-xs leading-5 text-text">
+            <div className="min-h-0 overflow-y-auto p-4">
+              <pre className="whitespace-pre-wrap rounded-xl border border-border bg-bg-subtle p-4 text-xs leading-5 text-text">
                 {JSON.stringify(viewingAsset.data, null, 2)}
               </pre>
             </div>
           </div>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function CountBadge({ label, count }: { label: string; count: number }) {
+  return (
+    <span className="rounded-full border border-border bg-bg-subtle px-2.5 py-1 text-textMuted">
+      {label}: {count}
+    </span>
+  )
+}
+
+function ContentBadge({ label }: { label: string }) {
+  return (
+    <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] font-medium text-textH">
+      {label}
+    </span>
+  )
+}
+
+function EmptyCard({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="col-span-full rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-textMuted">
+      {children}
     </div>
   )
 }
@@ -382,6 +397,7 @@ function AssetSection({
   empty: string
   onView: (asset: SessionHomebrewAsset) => void
 }) {
+  if (!assets.length && !empty) return null
   return (
     <section className="rounded-xl border border-border bg-bg shadow-theme-sm">
       <header className="border-b border-border p-4">
@@ -402,7 +418,7 @@ function AssetSection({
             >
               <div className="font-medium text-textH">{asset.name}</div>
               <div className="mt-1 text-xs text-textMuted">
-                {assetTypeLabel(asset.type)} · {asset.addedBy.name}
+                Adicionado por {asset.addedBy.name}
               </div>
             </button>
           ))
@@ -414,43 +430,13 @@ function AssetSection({
   )
 }
 
-function EmptyCard({ children }: { children: string }) {
-  return (
-    <div className="col-span-full rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-textMuted">
-      {children}
-    </div>
-  )
-}
-
-function ContentBadge({ label }: { label: string }) {
-  return (
-    <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
-      {label}
-    </span>
-  )
-}
-
-function CountBadge({ label, count }: { label: string; count: number }) {
-  return (
-    <span className="rounded-full border border-accentBorder bg-accentBg px-2.5 py-1 text-textH">
-      {label}: {count}
-    </span>
-  )
-}
-
 function spellName(spell: Spell): string {
-  return spell.displayName?.trim() || spell.name
+  return spell.name?.trim() || spell.index
 }
 
-function assetTypeLabel(type: SessionHomebrewAsset["type"]): string {
-  if (type === "SYSTEM") return "Sistema homebrew"
-  if (type === "CLASS") return "Classe homebrew"
-  return "Homebrew"
-}
-
-function toCustomSystemDefinition(
-  value: Record<string, unknown>,
-): CustomSystemDefinition | null {
-  if (typeof value.id !== "string" || typeof value.name !== "string") return null
-  return value as unknown as CustomSystemDefinition
+function toCustomSystemDefinition(value: unknown): CustomSystemDefinition | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  const definition = value as CustomSystemDefinition
+  if (!definition.id || !definition.name) return null
+  return definition
 }
