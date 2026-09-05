@@ -1,4 +1,8 @@
 import { LOCAL_AUTH_BYPASS } from "../auth/local-auth"
+import {
+  notifySessionContentChanged,
+  notifySessionMemberKick,
+} from "../lib/sessionEvents"
 import type {
   CampaignCapability,
   CampaignCapabilityOverrides,
@@ -124,6 +128,10 @@ export async function updateSessionMember(
   if (LOCAL_AUTH_BYPASS) {
     await reviewCampaignMember(campaignId, userId, input.status)
     invalidateSessionCreationSettings(campaignId)
+    if (input.status === "REMOVED") {
+      notifySessionMemberKick(campaignId, userId)
+      notifySessionContentChanged()
+    }
     return
   }
 
@@ -132,4 +140,11 @@ export async function updateSessionMember(
     input,
   )
   invalidateSessionCreationSettings(campaignId)
+  if (input.status === "REMOVED") {
+    // The database membership is authoritative for future connections. Signal
+    // the already-connected MASTER runtime as well so existing sockets are
+    // closed and the member's active session characters are inactivated now.
+    notifySessionMemberKick(campaignId, userId)
+    notifySessionContentChanged()
+  }
 }
