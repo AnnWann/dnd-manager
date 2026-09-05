@@ -81,40 +81,50 @@ export async function PATCH(
       )
     }
 
-    const updated = await prisma.campaignMember.update({
-      where: { id: existing.id },
-      data: {
-        status,
-        ...(role ? { role } : {}),
-        ...(permissions !== undefined ? { permissions } : {}),
-      },
-      select: {
-        role: true,
-        status: true,
-        permissions: true,
-      },
-    })
-
-    if (status === CampaignMemberStatus.REMOVED) {
-      await prisma.campaignCharacter.deleteMany({
-        where: {
-          campaignId,
-          character: {
-            ownerId: userId,
-          },
+    const result = await prisma.$transaction(async (tx) => {
+      const updated = await tx.campaignMember.update({
+        where: { id: existing.id },
+        data: {
+          status,
+          ...(role ? { role } : {}),
+          ...(permissions !== undefined ? { permissions } : {}),
+        },
+        select: {
+          role: true,
+          status: true,
+          permissions: true,
         },
       })
-    }
 
-    const normalizedPermissions = normalizeCampaignCapabilityOverrides(updated.permissions)
+      if (status === CampaignMemberStatus.REMOVED) {
+        const removedCharacters = await tx.campaignCharacter.deleteMany({
+          where: {
+            campaignId,
+            character: {
+              ownerId: userId,
+            },
+          },
+        })
+        if (removedCharacters.count > 0) {
+          await tx.campaign.update({
+            where: { id: campaignId },
+            data: { creationRevision: { increment: 1 } },
+          })
+        }
+      }
+
+      return updated
+    })
+
+    const normalizedPermissions = normalizeCampaignCapabilityOverrides(result.permissions)
     return jsonResponse({
       member: {
         userId,
-        status: updated.status,
-        role: updated.role,
+        status: result.status,
+        role: result.role,
         permissions: normalizedPermissions,
         capabilities: resolveEffectiveCampaignCapabilities(
-          updated.role,
+          result.role,
           normalizedPermissions,
         ),
       },
