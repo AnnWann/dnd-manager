@@ -13,6 +13,8 @@ import { requireSession } from "../server/session.js"
 import {
   canReadAnyCharacter,
   canWriteAnyCharacter,
+  normalizeCampaignCapabilityOverrides,
+  resolveEffectiveCampaignCapabilities,
 } from "../src/shared/campaign/campaignRoles.js"
 import {
   isValidSessionConnectionSecret,
@@ -43,6 +45,7 @@ export async function POST(request: Request): Promise<Response> {
           select: {
             role: true,
             status: true,
+            permissions: true,
           },
           take: 1,
         },
@@ -57,12 +60,12 @@ export async function POST(request: Request): Promise<Response> {
       )
     }
 
-    const campaignRole = resolveCampaignRole(
-      campaign.ownerId,
-      session.user.id,
-      campaign.members[0],
-    )
-    if (!campaignRole) {
+    const membership = campaign.members[0]
+    const isOwner = campaign.ownerId === session.user.id
+    if (
+      !isOwner &&
+      (!membership || membership.status !== CampaignMemberStatus.ACTIVE)
+    ) {
       throw new ApiError(
         403,
         "SESSION_ACCESS_DENIED",
@@ -70,10 +73,13 @@ export async function POST(request: Request): Promise<Response> {
       )
     }
 
-    const role: SessionConnectionRole =
-      campaignRole === CampaignRole.MASTER ? "MASTER" : "PLAYER"
-    const readAnyCharacter = canReadAnyCharacter(campaignRole)
-    const writeAnyCharacter = canWriteAnyCharacter(campaignRole)
+    const campaignRole = isOwner ? CampaignRole.MASTER : membership!.role
+    const permissions = isOwner
+      ? {}
+      : normalizeCampaignCapabilityOverrides(membership!.permissions)
+    const role: SessionConnectionRole = isOwner ? "MASTER" : "PLAYER"
+    const readAnyCharacter = canReadAnyCharacter(campaignRole, permissions)
+    const writeAnyCharacter = canWriteAnyCharacter(campaignRole, permissions)
 
     const secret = process.env.SESSION_CONNECTION_SECRET?.trim()
     if (!isValidSessionConnectionSecret(secret)) {
@@ -110,29 +116,14 @@ export async function POST(request: Request): Promise<Response> {
       expiresAt,
       role,
       campaignRole,
+      permissions,
+      capabilities: resolveEffectiveCampaignCapabilities(campaignRole, permissions),
       canReadAnyCharacter: readAnyCharacter,
       canWriteAnyCharacter: writeAnyCharacter,
     })
   } catch (error) {
     return handleApiError(error)
   }
-}
-
-function resolveCampaignRole(
-  ownerId: string,
-  userId: string,
-  membership:
-    | {
-        role: CampaignRole
-        status: CampaignMemberStatus
-      }
-    | undefined,
-): CampaignRole | null {
-  if (ownerId === userId) return CampaignRole.MASTER
-  if (!membership || membership.status !== CampaignMemberStatus.ACTIVE) {
-    return null
-  }
-  return membership.role
 }
 
 function readIdentifier(value: unknown, field: string): string {
