@@ -205,9 +205,10 @@ model Campaign {
 }
 
 model CampaignMember {
-  id     String               @id @default(uuid())
-  role   CampaignRole         @default(PLAYER)
-  status CampaignMemberStatus @default(ACTIVE)
+  id          String               @id @default(uuid())
+  role        CampaignRole         @default(PLAYER)
+  status      CampaignMemberStatus @default(ACTIVE)
+  permissions Json                 @default("{}")
 
   campaignId String
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
