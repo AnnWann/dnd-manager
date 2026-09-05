@@ -74,6 +74,7 @@ type SessionConnectionTokenResponse = {
 const HEARTBEAT_MIN_MS = 27_000
 const HEARTBEAT_MAX_MS = 33_000
 const RECONNECT_MAX_MS = 10_000
+const SESSION_KICKED_CLOSE_CODE = 4002
 
 export class SessionSocket {
   private socket: WebSocket | null = null
@@ -222,9 +223,23 @@ export class SessionSocket {
       }
     }
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       if (this.socket === socket) this.socket = null
       this.clearHeartbeatTimer()
+
+      if (event.code === SESSION_KICKED_CLOSE_CODE) {
+        this.stopped = true
+        this.connectionAttempt += 1
+        this.clearReconnectTimer()
+        this.pendingMagicOperations = []
+        this.magicFlushQueued = false
+        this.latestAbilityStates.clear()
+        setCreationCustomSystemOverride(null)
+        this.options.onStatusChange("disconnected")
+        window.location.assign("/user")
+        return
+      }
+
       if (!this.stopped) this.scheduleReconnect()
     }
     socket.onerror = () => {
