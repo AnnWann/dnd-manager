@@ -3,6 +3,17 @@ import type { EquippedItemReference } from "../../models/characters/characterEqu
 import type { TransferItemOperationRequest } from "../../models/game/GameOperation"
 import type { Itemmable } from "../../models/items/item"
 
+/**
+ * Privacy-safe projection of a character that contributes to the shared
+ * supply budget. Individual race/consumption details remain in the character
+ * snapshot and are therefore visible only to clients that may read that
+ * character. The aggregate consumption is authoritative for every client.
+ */
+export type SessionSupplyConsumerSummary = {
+  characterId: string
+  name: string
+}
+
 export type SessionSharedInventoryState = {
   initialized: boolean
   revision: number
@@ -10,6 +21,10 @@ export type SessionSharedInventoryState = {
   groundInventory: Itemmable[]
   carryCapacity?: number
   additionalSupplyConsumption?: number
+  /** Active session consumers, calculated from unfiltered authoritative state. */
+  supplyConsumers?: SessionSupplyConsumerSummary[]
+  /** Sum of character consumption only; additionalSupplyConsumption is separate. */
+  supplyPerLongRest?: number
 }
 
 export type SessionInventoryOperation =
