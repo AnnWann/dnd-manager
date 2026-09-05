@@ -53,19 +53,30 @@ import { useConcurrentRemoteAppState } from "../lib/remoteStateConcurrent"
 import { SESSION_CONTENT_CHANGED_EVENT } from "../lib/sessionEvents"
 import type { Spell } from "../models/magic/spells/Spell"
 import {
+  fromCampaignUiRole,
+  resolveEffectiveCampaignCapabilities,
+  toCampaignUiRole,
+  type CampaignCapability,
+  type CampaignUiRole,
+} from "../shared/campaign/campaignRoles"
+import {
   LEGACY_SESSION_BOOTSTRAP_ASSET_SOURCE,
   LEGACY_SESSION_BOOTSTRAP_ASSET_TYPE,
   readLegacySessionBootstrap,
 } from "../shared/legacy/legacyCampaignBackup"
-import {
-  toCampaignUiRole,
-  type CampaignUiRole,
-} from "../shared/campaign/campaignRoles"
 import { AppRouter } from "../Router"
 
 type SessionCompatibleAppState = AppStateV1 & {
   partyAdditionalSupplyConsumption?: number
   missions?: unknown[]
+}
+
+type CreationNavItem = {
+  label: string
+  path: string
+  icon: React.ReactNode
+  capability?: CampaignCapability
+  permissionOrSettings?: boolean
 }
 
 export function CampaignLayout() {
@@ -76,6 +87,7 @@ export function CampaignLayout() {
   const localUser = LOCAL_AUTH_BYPASS ? getLocalUser() : null
   const authenticatedUserId = authSession?.user?.id ?? localUser?.id ?? ""
   const [resolvedSessionRole, setResolvedSessionRole] = useState<CampaignUiRole | null>(null)
+  const [resolvedSessionCapabilities, setResolvedSessionCapabilities] = useState<CampaignCapability[]>([])
   const [sessionMembers, setSessionMembers] = useState<CampaignSessionMember[]>([])
   const [sessionReady, setSessionReady] = useState(!sessionId)
   const [sessionLoadError, setSessionLoadError] = useState("")
@@ -141,6 +153,7 @@ export function CampaignLayout() {
   useEffect(() => {
     if (!sessionId) {
       setResolvedSessionRole(null)
+      setResolvedSessionCapabilities([])
       setSessionMembers([])
       setSessionLoadError("")
       setSessionReady(true)
@@ -149,6 +162,7 @@ export function CampaignLayout() {
 
     if (!authenticatedUserId) {
       setResolvedSessionRole(null)
+      setResolvedSessionCapabilities([])
       setSessionMembers([])
       setSessionLoadError("")
       setSessionReady(false)
@@ -157,6 +171,7 @@ export function CampaignLayout() {
 
     let cancelled = false
     setResolvedSessionRole(null)
+    setResolvedSessionCapabilities([])
     setSessionMembers([])
     setSessionReady(false)
     setSessionLoadError("")
@@ -169,6 +184,13 @@ export function CampaignLayout() {
         if (cancelled) return
 
         setResolvedSessionRole(toCampaignUiRole(data.campaign.role))
+        setResolvedSessionCapabilities(
+          data.campaign.capabilities
+          ?? resolveEffectiveCampaignCapabilities(
+            data.campaign.role,
+            data.campaign.permissions ?? {},
+          ),
+        )
         setSessionMembers(data.members ?? [])
 
         const sourceSnapshots = buildSessionCharacterSnapshots(data)
@@ -278,6 +300,7 @@ export function CampaignLayout() {
       .catch(() => {
         if (cancelled) return
         setResolvedSessionRole(null)
+        setResolvedSessionCapabilities([])
         setSessionMembers([])
         setSessionLoadError("Não foi possível carregar o conteúdo vinculado a esta sessão.")
         setSessionReady(true)
@@ -290,13 +313,62 @@ export function CampaignLayout() {
 
   const effectiveUserRole: CampaignUiRole = resolvedSessionRole ?? userRole
   const effectiveUserKey = authenticatedUserId || userKey
+  const effectiveCapabilities = useMemo(
+    () => sessionId
+      ? resolvedSessionCapabilities
+      : resolveEffectiveCampaignCapabilities(fromCampaignUiRole(effectiveUserRole)),
+    [effectiveUserRole, resolvedSessionCapabilities, sessionId],
+  )
+  const capabilitySet = useMemo(
+    () => new Set(effectiveCapabilities),
+    [effectiveCapabilities],
+  )
   const isCreationMode = Boolean(
     sessionId && location.pathname.startsWith(toSession("creation")),
   )
-  const canAccessCreation =
-    effectiveUserRole === "master" ||
-    effectiveUserRole === "assistant" ||
-    effectiveUserRole === "moderator"
+
+  const canManageSettings = capabilitySet.has("creation.settings.manage")
+  const canReadPermissions = capabilitySet.has("creation.permissions.read")
+  const creationNavItems = useMemo<CreationNavItem[]>(() => [
+    ...(canManageSettings || canReadPermissions
+      ? [{
+          label: canReadPermissions && !canManageSettings ? "Permissões" : "Configuração",
+          path: "creation/settings",
+          icon: <IconCompendium />,
+          permissionOrSettings: true,
+        }]
+      : []),
+    ...(capabilitySet.has("creation.requests.manage")
+      ? [{ label: "Solicitações", path: "creation/requests", icon: <IconNotes />, capability: "creation.requests.manage" as const }]
+      : []),
+    ...(capabilitySet.has("creation.homebrew.manage")
+      ? [{ label: "Homebrew", path: "creation/homebrew", icon: <IconCompendium />, capability: "creation.homebrew.manage" as const }]
+      : []),
+    ...(capabilitySet.has("creation.items.manage")
+      ? [{ label: "Compêndio de Itens", path: "creation/items-compendium", icon: <IconEquipment />, capability: "creation.items.manage" as const }]
+      : []),
+    ...(capabilitySet.has("creation.creatures.manage")
+      ? [{ label: "Compêndio de Criaturas", path: "creation/creatures-compendium", icon: <IconCompendium />, capability: "creation.creatures.manage" as const }]
+      : []),
+    ...(capabilitySet.has("creation.systems.manage")
+      ? [{ label: "Sistemas personalizados", path: "creation/custom-systems", icon: <IconCompendium />, capability: "creation.systems.manage" as const }]
+      : []),
+    ...(capabilitySet.has("creation.magic.manage")
+      ? [{ label: "Magia", path: "creation/magic", icon: <IconMagic />, capability: "creation.magic.manage" as const }]
+      : []),
+  ], [canManageSettings, canReadPermissions, capabilitySet])
+
+  const canAccessCreation = creationNavItems.length > 0
+  const firstCreationPath = creationNavItems[0]?.path ?? "characters"
+
+  const isAllowedCreationPath = useCallback((pathname: string) => {
+    return creationNavItems.some((item) => {
+      const destination = toSession(item.path)
+      return item.path === "creation/custom-systems"
+        ? pathname === destination || pathname.startsWith(`${destination}/`)
+        : pathname === destination
+    })
+  }, [creationNavItems, toSession])
 
   useEffect(() => {
     if (!sessionReady || !isCreationMode) return
@@ -304,15 +376,13 @@ export function CampaignLayout() {
       navigate(toSession("characters"), { replace: true })
       return
     }
-    if (
-      effectiveUserRole === "moderator" &&
-      location.pathname !== toSession("creation/settings")
-    ) {
-      navigate(toSession("creation/settings"), { replace: true })
+    if (!isAllowedCreationPath(location.pathname)) {
+      navigate(toSession(firstCreationPath), { replace: true })
     }
   }, [
     canAccessCreation,
-    effectiveUserRole,
+    firstCreationPath,
+    isAllowedCreationPath,
     isCreationMode,
     location.pathname,
     navigate,
@@ -366,61 +436,14 @@ export function CampaignLayout() {
     },
   ]
 
-  const fullCreationSidebarItems = [
-    {
-      label: "Configuração",
-      icon: <IconCompendium />,
-      active: location.pathname === toSession("creation/settings"),
-      onClick: () => navigate(toSession("creation/settings")),
-    },
-    {
-      label: "Solicitações",
-      icon: <IconNotes />,
-      active: location.pathname === toSession("creation/requests"),
-      onClick: () => navigate(toSession("creation/requests")),
-    },
-    {
-      label: "Homebrew",
-      icon: <IconCompendium />,
-      active: location.pathname === toSession("creation/homebrew"),
-      onClick: () => navigate(toSession("creation/homebrew")),
-    },
-    {
-      label: "Compêndio de Itens",
-      icon: <IconEquipment />,
-      active: location.pathname === toSession("creation/items-compendium"),
-      onClick: () => navigate(toSession("creation/items-compendium")),
-    },
-    {
-      label: "Compêndio de Criaturas",
-      icon: <IconCompendium />,
-      active: location.pathname === toSession("creation/creatures-compendium"),
-      onClick: () => navigate(toSession("creation/creatures-compendium")),
-    },
-    {
-      label: "Sistemas personalizados",
-      icon: <IconCompendium />,
-      active: location.pathname.startsWith(toSession("creation/custom-systems")),
-      onClick: () => navigate(toSession("creation/custom-systems")),
-    },
-    {
-      label: "Magia",
-      icon: <IconMagic />,
-      active: location.pathname === toSession("creation/magic"),
-      onClick: () => navigate(toSession("creation/magic")),
-    },
-  ]
-
-  const creationSidebarItems = effectiveUserRole === "moderator"
-    ? [
-        {
-          label: "Permissões",
-          icon: <IconCompendium />,
-          active: location.pathname === toSession("creation/settings"),
-          onClick: () => navigate(toSession("creation/settings")),
-        },
-      ]
-    : fullCreationSidebarItems
+  const creationSidebarItems = creationNavItems.map((item) => ({
+    label: item.label,
+    icon: item.icon,
+    active: item.path === "creation/custom-systems"
+      ? location.pathname === toSession(item.path) || location.pathname.startsWith(`${toSession(item.path)}/`)
+      : location.pathname === toSession(item.path),
+    onClick: () => navigate(toSession(item.path)),
+  }))
 
   const sidebarItems = [
     ...(canAccessCreation && isCreationMode
@@ -449,7 +472,7 @@ export function CampaignLayout() {
       </button>
       <button
         type="button"
-        onClick={() => navigate(toSession("creation/settings"))}
+        onClick={() => navigate(toSession(firstCreationPath))}
         className={
           isCreationMode
             ? "rounded-md bg-accentBg px-2 py-2 text-xs font-semibold text-textH"
@@ -496,6 +519,7 @@ export function CampaignLayout() {
         setSyncKey,
         userRole: effectiveUserRole,
         setUserRole: (role) => setUserRole(role === "master" ? "master" : "player"),
+        campaignCapabilities: effectiveCapabilities,
         userKey: effectiveUserKey,
         setUserKey,
         canSync,
