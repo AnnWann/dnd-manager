@@ -10,6 +10,11 @@ import {
 } from "../../../../../server/api.js"
 import { prisma } from "../../../../../server/prisma.js"
 import { requireSession } from "../../../../../server/session.js"
+import {
+  normalizeCampaignCapabilityOverrides,
+  resolveEffectiveCampaignCapabilities,
+  type CampaignCapabilityOverrides,
+} from "../../../../../src/shared/campaign/campaignRoles.js"
 
 type RouteContext = {
   params?:
@@ -46,31 +51,49 @@ export async function PATCH(
       throw new ApiError(
         403,
         "MASTER_REQUIRED",
-        "Somente o mestre da campanha pode revisar membros.",
+        "Somente o mestre da campanha pode revisar membros e delegar permissões.",
       )
     }
 
     const status = parseStatus(body.status)
     const role = parseRole(body.role)
+    const permissions = parsePermissions(body.permissions)
 
-    const updated = await prisma.campaignMember.updateMany({
+    const existing = await prisma.campaignMember.findUnique({
       where: {
-        campaignId,
-        userId,
+        campaignId_userId: {
+          campaignId,
+          userId,
+        },
       },
-      data: {
-        status,
-        ...(role ? { role } : {}),
+      select: {
+        id: true,
+        role: true,
+        permissions: true,
       },
     })
 
-    if (!updated.count) {
+    if (!existing) {
       throw new ApiError(
         404,
         "MEMBERSHIP_NOT_FOUND",
         "Solicitação de participação não encontrada.",
       )
     }
+
+    const updated = await prisma.campaignMember.update({
+      where: { id: existing.id },
+      data: {
+        status,
+        ...(role ? { role } : {}),
+        ...(permissions !== undefined ? { permissions } : {}),
+      },
+      select: {
+        role: true,
+        status: true,
+        permissions: true,
+      },
+    })
 
     if (status === CampaignMemberStatus.REMOVED) {
       await prisma.campaignCharacter.deleteMany({
@@ -83,11 +106,17 @@ export async function PATCH(
       })
     }
 
+    const normalizedPermissions = normalizeCampaignCapabilityOverrides(updated.permissions)
     return jsonResponse({
       member: {
         userId,
-        status,
-        role: role ?? CampaignRole.PLAYER,
+        status: updated.status,
+        role: updated.role,
+        permissions: normalizedPermissions,
+        capabilities: resolveEffectiveCampaignCapabilities(
+          updated.role,
+          normalizedPermissions,
+        ),
       },
     })
   } catch (error) {
@@ -148,4 +177,16 @@ function parseRole(value: unknown): CampaignRole | undefined {
     "INVALID_MEMBER_ROLE",
     "O papel precisa ser PLAYER, ASSISTANT, MODERATOR ou MASTER.",
   )
+}
+
+function parsePermissions(value: unknown): CampaignCapabilityOverrides | undefined {
+  if (value === undefined) return undefined
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ApiError(
+      400,
+      "INVALID_MEMBER_PERMISSIONS",
+      "As permissões personalizadas precisam ser um objeto de capacidades booleanas.",
+    )
+  }
+  return normalizeCampaignCapabilityOverrides(value)
 }
