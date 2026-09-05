@@ -7,7 +7,7 @@ import {
   type CSSProperties,
   type TouchEvent,
 } from "react"
-import { ArrowLeft, Settings2, TrendingUp } from "lucide-react"
+import { ArrowLeft, Settings2, Swords, TrendingUp } from "lucide-react"
 import { useNavigate, useParams } from "react-router-dom"
 import { CharacterAbilitiesTab } from "../features/characters/abilities/characterAbilities"
 import { CharacterSelector } from "../features/characters/characterSelector"
@@ -84,6 +84,9 @@ export function CharacterView() {
     ? characters.find((character) => character.get("id") === characterId)
     : undefined
   const characterHasCustomClass = Boolean(routeCharacter && hasCustomClass(routeCharacter))
+  const combatActive = Boolean(
+    campaignId && sessionRuntime?.initiativeState?.session.started,
+  )
 
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [swipeDragging, setSwipeDragging] = useState(false)
@@ -381,7 +384,7 @@ export function CharacterView() {
         updateCharacter={updateCharacter}
       />
 
-      <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
+      <header className="relative flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
         <button
           type="button"
           onClick={() => navigate(characterIndexPath(mode, campaignId))}
@@ -398,6 +401,18 @@ export function CharacterView() {
             {routeCharacter.get("id")}
           </div>
         </div>
+
+        {combatActive && campaignId ? (
+          <button
+            type="button"
+            onClick={() => navigate(campaignPath(campaignId, "initiative"))}
+            className="order-last mx-auto inline-flex w-full items-center justify-center gap-2 rounded-lg border border-danger bg-dangerBg px-4 py-2 text-sm font-semibold text-danger transition hover:brightness-110 sm:absolute sm:left-1/2 sm:top-1/2 sm:order-none sm:w-auto sm:-translate-x-1/2 sm:-translate-y-1/2"
+            title="Abrir iniciativa"
+          >
+            <Swords className="h-4 w-4" />
+            Em combate
+          </button>
+        ) : null}
 
         <div className="flex shrink-0 items-center gap-2">
           <button
