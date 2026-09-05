@@ -1,13 +1,13 @@
 import {
-  CampaignMemberStatus,
-  CampaignRole,
-} from "../../../generated/prisma/client.js"
-import {
   ApiError,
   handleApiError,
   jsonResponse,
   readJsonObject,
 } from "../../../server/api.js"
+import {
+  accessCanManageCreationSection,
+  getCampaignAccess,
+} from "../../../server/campaign-capabilities.js"
 import { prisma } from "../../../server/prisma.js"
 import { requireSession } from "../../../server/session.js"
 
@@ -43,8 +43,9 @@ export async function GET(
     const session = await requireSession(request)
     const campaignId = await resolveCampaignId(request, context)
     const access = await requireCampaignAccess(campaignId, session.user.id)
+    const canManageItems = accessCanManageCreationSection(access, "items")
 
-    const rows = access.isMaster
+    const rows = canManageItems
       ? await prisma.$queryRaw<RawCompendiumRow[]>`
           SELECT
             "id",
@@ -86,7 +87,8 @@ export async function GET(
     return jsonResponse({
       campaign: {
         id: campaignId,
-        isMaster: access.isMaster,
+        isMaster: access.isOwner,
+        canManageItems,
       },
       entries: rows,
     })
@@ -104,11 +106,11 @@ export async function POST(
     const campaignId = await resolveCampaignId(request, context)
     const access = await requireCampaignAccess(campaignId, session.user.id)
 
-    if (!access.isMaster) {
+    if (!accessCanManageCreationSection(access, "items")) {
       throw new ApiError(
         403,
-        "CAMPAIGN_MASTER_REQUIRED",
-        "Somente mestres podem alterar o compêndio de itens da sessão.",
+        "CAMPAIGN_ITEM_MANAGER_REQUIRED",
+        "Sua função na sessão não permite alterar o compêndio de itens.",
       )
     }
 
@@ -175,50 +177,16 @@ export async function POST(
   }
 }
 
-async function requireCampaignAccess(
-  campaignId: string,
-  userId: string,
-): Promise<{ isMaster: boolean }> {
-  const campaign = await prisma.campaign.findFirst({
-    where: {
-      id: campaignId,
-      OR: [
-        { ownerId: userId },
-        {
-          members: {
-            some: {
-              userId,
-              status: CampaignMemberStatus.ACTIVE,
-            },
-          },
-        },
-      ],
-    },
-    select: {
-      ownerId: true,
-      members: {
-        where: {
-          userId,
-          status: CampaignMemberStatus.ACTIVE,
-        },
-        select: { role: true },
-      },
-    },
-  })
-
-  if (!campaign) {
+async function requireCampaignAccess(campaignId: string, userId: string) {
+  const access = await getCampaignAccess(campaignId, userId)
+  if (!access) {
     throw new ApiError(
       403,
       "CAMPAIGN_ACCESS_DENIED",
       "Você precisa ser membro ativo desta sessão.",
     )
   }
-
-  return {
-    isMaster:
-      campaign.ownerId === userId ||
-      campaign.members.some((member) => member.role === CampaignRole.MASTER),
-  }
+  return access
 }
 
 function parseVisibility(value: unknown): ItemVisibility {
