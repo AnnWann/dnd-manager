@@ -1,4 +1,3 @@
-import { Input } from "../../../../../components/ui/Input"
 import { Select } from "../../../../../components/ui/Select"
 import type { CharacterTemplate } from "../../../../../models/characters/CharacterTemplate"
 import type { Player } from "../../../../../models/player/Player"
@@ -11,6 +10,7 @@ type Props = {
   ) => void
   playerKeys: string[]
   getOwner: (ownerName: string) => Player
+  /** Kept for caller compatibility; session ownership must come from a real account. */
   createOwner: (ownerName: string) => Player
 }
 
@@ -19,7 +19,6 @@ export function SelectCharacterOwner({
   updateCharacter,
   playerKeys,
   getOwner,
-  createOwner,
 }: Props) {
   const owner = character.get("owner")
 
@@ -47,16 +46,10 @@ export function SelectCharacterOwner({
         })}
       </Select>
 
-      <Input
-        className="mt-2 w-full"
-        value={owner.name ?? ""}
-        onChange={(event) =>
-          updateCharacter(character.get("id"), (current) =>
-            current.with("owner", createOwner(event.target.value)),
-          )
-        }
-        placeholder="Ou digite um novo nome de jogador"
-      />
+      <p className="mt-2 text-[11px] leading-4 text-textMuted">
+        Selecione um membro ativo da campanha. O vínculo usa o ID da conta do
+        jogador, não um nome digitado manualmente.
+      </p>
     </div>
   )
 }
