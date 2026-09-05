@@ -1,12 +1,12 @@
 import {
-  CampaignMemberStatus,
-  CampaignRole,
-} from "../../../../generated/prisma/client.js"
-import {
   ApiError,
   handleApiError,
   jsonResponse,
 } from "../../../../server/api.js"
+import {
+  accessCanManageCreationSection,
+  getCampaignAccess,
+} from "../../../../server/campaign-capabilities.js"
 import { prisma } from "../../../../server/prisma.js"
 import { requireSession } from "../../../../server/session.js"
 
@@ -29,13 +29,13 @@ export async function DELETE(
   try {
     const session = await requireSession(request)
     const { campaignId, templateId } = await resolveRouteParams(request, context)
-    const access = await requireCampaignAccess(campaignId, session.user.id)
+    const access = await getCampaignAccess(campaignId, session.user.id)
 
-    if (!access.isMaster) {
+    if (!access || !accessCanManageCreationSection(access, "items")) {
       throw new ApiError(
         403,
-        "CAMPAIGN_MASTER_REQUIRED",
-        "Somente mestres podem alterar o compêndio de itens da sessão.",
+        "CAMPAIGN_ITEM_MANAGER_REQUIRED",
+        "Sua função na sessão não permite alterar o compêndio de itens.",
       )
     }
 
@@ -48,52 +48,6 @@ export async function DELETE(
     return jsonResponse({ ok: true })
   } catch (error) {
     return handleApiError(error)
-  }
-}
-
-async function requireCampaignAccess(
-  campaignId: string,
-  userId: string,
-): Promise<{ isMaster: boolean }> {
-  const campaign = await prisma.campaign.findFirst({
-    where: {
-      id: campaignId,
-      OR: [
-        { ownerId: userId },
-        {
-          members: {
-            some: {
-              userId,
-              status: CampaignMemberStatus.ACTIVE,
-            },
-          },
-        },
-      ],
-    },
-    select: {
-      ownerId: true,
-      members: {
-        where: {
-          userId,
-          status: CampaignMemberStatus.ACTIVE,
-        },
-        select: { role: true },
-      },
-    },
-  })
-
-  if (!campaign) {
-    throw new ApiError(
-      403,
-      "CAMPAIGN_ACCESS_DENIED",
-      "Você precisa ser membro ativo desta sessão.",
-    )
-  }
-
-  return {
-    isMaster:
-      campaign.ownerId === userId ||
-      campaign.members.some((member) => member.role === CampaignRole.MASTER),
   }
 }
 
