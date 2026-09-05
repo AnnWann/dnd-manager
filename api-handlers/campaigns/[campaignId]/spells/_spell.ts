@@ -1,14 +1,14 @@
-import {
-  CampaignMemberStatus,
-  CampaignRole,
-  CampaignSpellApprovalStatus,
-} from "../../../../generated/prisma/client.js"
+import { CampaignSpellApprovalStatus } from "../../../../generated/prisma/client.js"
 import {
   ApiError,
   handleApiError,
   jsonResponse,
   readJsonObject,
 } from "../../../../server/api.js"
+import {
+  accessCanManageCreationSection,
+  getCampaignAccess,
+} from "../../../../server/campaign-capabilities.js"
 import { prisma } from "../../../../server/prisma.js"
 import { requireSession } from "../../../../server/session.js"
 
@@ -31,39 +31,21 @@ export async function PATCH(
   try {
     const session = await requireSession(request)
     const { campaignId, spellId } = await resolveRouteParams(request, context)
+    const access = await getCampaignAccess(campaignId, session.user.id)
+    if (!access || !accessCanManageCreationSection(access, "homebrew")) {
+      throw new ApiError(
+        403,
+        "CAMPAIGN_SPELL_REVIEW_FORBIDDEN",
+        "Sua função na sessão não permite revisar magias homebrew.",
+      )
+    }
+
     const body = await readJsonObject(request)
     const status = parseReviewStatus(body.status)
     const note =
       typeof body.note === "string"
         ? body.note.trim().slice(0, 1000) || null
         : null
-
-    const campaign = await prisma.campaign.findFirst({
-      where: {
-        id: campaignId,
-        OR: [
-          { ownerId: session.user.id },
-          {
-            members: {
-              some: {
-                userId: session.user.id,
-                role: { in: [CampaignRole.MASTER, CampaignRole.ASSISTANT] },
-                status: CampaignMemberStatus.ACTIVE,
-              },
-            },
-          },
-        ],
-      },
-      select: { id: true },
-    })
-
-    if (!campaign) {
-      throw new ApiError(
-        403,
-        "CAMPAIGN_SPELL_REVIEW_FORBIDDEN",
-        "Somente mestres e assistentes ativos podem revisar magias homebrew.",
-      )
-    }
 
     const existing = await prisma.campaignHomebrewSpell.findUnique({
       where: {
