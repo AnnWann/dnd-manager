@@ -70,7 +70,8 @@ function buildAuthoritativeSupplyProjection(
   for (const state of Object.values(abilities)) {
     if (!state?.initialized) continue;
     const characterId = state.characterId?.trim();
-    if (!characterId || lifecycle[characterId]?.active === false) continue;
+    const lifecycleState = characterId ? lifecycle[characterId] : undefined;
+    if (!characterId || lifecycleState?.active !== true) continue;
 
     try {
       const character = CharacterTemplate.fromJSON(
