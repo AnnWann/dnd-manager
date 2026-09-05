@@ -1,6 +1,4 @@
 import {
-  CampaignMemberStatus,
-  CampaignRole,
   CampaignSpellApprovalStatus,
   HomebrewSpellStatus,
 } from "../../../generated/prisma/client.js"
@@ -9,6 +7,10 @@ import {
   handleApiError,
   jsonResponse,
 } from "../../../server/api.js"
+import {
+  accessCanManageCreationSection,
+  getCampaignAccess,
+} from "../../../server/campaign-capabilities.js"
 import { prisma } from "../../../server/prisma.js"
 import { requireSession } from "../../../server/session.js"
 
@@ -41,37 +43,9 @@ export async function GET(
   try {
     const session = await requireSession(request)
     const campaignId = await resolveCampaignId(request, context)
+    const access = await getCampaignAccess(campaignId, session.user.id)
 
-    const campaign = await prisma.campaign.findFirst({
-      where: {
-        id: campaignId,
-        OR: [
-          { ownerId: session.user.id },
-          {
-            members: {
-              some: {
-                userId: session.user.id,
-                status: CampaignMemberStatus.ACTIVE,
-              },
-            },
-          },
-        ],
-      },
-      select: {
-        id: true,
-        name: true,
-        ownerId: true,
-        members: {
-          where: {
-            userId: session.user.id,
-            status: CampaignMemberStatus.ACTIVE,
-          },
-          select: { role: true },
-        },
-      },
-    })
-
-    if (!campaign) {
+    if (!access) {
       throw new ApiError(
         403,
         "CAMPAIGN_ACCESS_DENIED",
@@ -79,12 +53,18 @@ export async function GET(
       )
     }
 
-    const isMaster =
-      campaign.ownerId === session.user.id ||
-      campaign.members.some((member) => member.role === CampaignRole.MASTER)
-    const canManageContent =
-      isMaster ||
-      campaign.members.some((member) => member.role === CampaignRole.ASSISTANT)
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: { id: true, name: true },
+    })
+    if (!campaign) {
+      throw new ApiError(404, "CAMPAIGN_NOT_FOUND", "Campanha não encontrada.")
+    }
+
+    const canManageContent = accessCanManageCreationSection(
+      access,
+      "homebrew",
+    )
 
     const [links, assets] = await Promise.all([
       prisma.campaignHomebrewSpell.findMany({
@@ -161,7 +141,8 @@ export async function GET(
       campaign: {
         id: campaign.id,
         name: campaign.name,
-        isMaster,
+        isMaster: access.isOwner,
+        canManageContent,
       },
       spells: links.map((link) => ({
         linkId: link.id,

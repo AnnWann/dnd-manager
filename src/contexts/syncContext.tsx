@@ -5,7 +5,10 @@ import { useLocation } from "react-router-dom"
 import { SessionRuntimeProvider } from "../features/session-runtime/SessionRuntimeProvider"
 import { sessionIdFromPathname } from "../lib/campaignRoutes"
 import type { SyncStatus } from "../lib/remoteState"
-import type { CampaignUiRole } from "../shared/campaign/campaignRoles"
+import type {
+  CampaignCapability,
+  CampaignUiRole,
+} from "../shared/campaign/campaignRoles"
 
 export type SyncContextValue = {
   syncKey: string
@@ -13,6 +16,7 @@ export type SyncContextValue = {
 
   userRole: CampaignUiRole
   setUserRole: (value: CampaignUiRole) => void
+  campaignCapabilities: CampaignCapability[]
 
   userKey: string
   setUserKey: (value: string) => void
@@ -32,6 +36,11 @@ export function useSyncContext() {
   }
 
   return ctx
+}
+
+export function useCampaignCapability(capability: CampaignCapability): boolean {
+  const { campaignCapabilities } = useSyncContext()
+  return campaignCapabilities.includes(capability)
 }
 
 export function SyncProvider({

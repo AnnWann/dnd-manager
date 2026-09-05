@@ -36,7 +36,7 @@ import {
 } from "../models/creatures/CompendiumCreature"
 
 export function CreaturesCompendiumView() {
-  const { userRole } = useSyncContext()
+  const { campaignCapabilities } = useSyncContext()
   const {
     creatures,
     hydrated,
@@ -75,7 +75,7 @@ export function CreaturesCompendiumView() {
     })
   }, [creatures, query, sideFilter])
 
-  if (userRole !== "master" && userRole !== "assistant") {
+  if (!campaignCapabilities.includes("creation.creatures.manage")) {
     return (
       <div className="mx-auto max-w-xl rounded-xl border border-border bg-bg p-6">
         <div className="flex items-center gap-3">
@@ -85,7 +85,7 @@ export function CreaturesCompendiumView() {
               Compêndio de Criaturas
             </h1>
             <p className="mt-1 text-sm text-text">
-              Esta página só pode ser acessada por mestre ou assistente.
+              Sua função nesta sessão não possui acesso ao compêndio de criaturas.
             </p>
           </div>
         </div>

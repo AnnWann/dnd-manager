@@ -9,6 +9,11 @@ import {
 } from "../../../server/api.js"
 import { prisma } from "../../../server/prisma.js"
 import { requireSession } from "../../../server/session.js"
+import {
+  canReadAnyCharacter,
+  normalizeCampaignCapabilityOverrides,
+  resolveEffectiveCampaignCapabilities,
+} from "../../../src/shared/campaign/campaignRoles.js"
 
 type RouteContext = {
   params?:
@@ -48,6 +53,7 @@ export async function GET(
             userId: true,
             role: true,
             status: true,
+            permissions: true,
             user: {
               select: {
                 id: true,
@@ -87,8 +93,12 @@ export async function GET(
     const role = isOwner
       ? CampaignRole.MASTER
       : membership?.role ?? CampaignRole.PLAYER
-    const isMaster = role === CampaignRole.MASTER
-    const canAccessAllCharacters = isMaster || role === CampaignRole.MODERATOR
+    const permissions = isOwner
+      ? {}
+      : normalizeCampaignCapabilityOverrides(membership?.permissions)
+    const isMaster = isOwner
+    const canAccessAllCharacters = canReadAnyCharacter(role, permissions)
+    const capabilities = resolveEffectiveCampaignCapabilities(role, permissions)
 
     const links = await prisma.campaignCharacter.findMany({
       where: {
@@ -143,6 +153,8 @@ export async function GET(
         role,
         isMaster,
         canAccessAllCharacters,
+        permissions,
+        capabilities,
       },
       members: [
         {

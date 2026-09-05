@@ -1,6 +1,5 @@
 import {
   CampaignMemberStatus,
-  CampaignRole,
   CampaignSpellApprovalStatus,
   CharacterVisibility,
   HomebrewSpellStatus,
@@ -12,6 +11,11 @@ import {
   jsonResponse,
   readJsonObject,
 } from "../../../server/api.js"
+import {
+  accessCanManageCreationSection,
+  getCampaignAccess,
+  type CampaignAccess,
+} from "../../../server/campaign-capabilities.js"
 import { prisma } from "../../../server/prisma.js"
 import { requireSession } from "../../../server/session.js"
 import { CHARACTER_TYPES } from "../../../src/models/characters/CharacterType.js"
@@ -30,6 +34,8 @@ import type {
   CreationCharacterConfiguration,
   CreationCharacterCustomSystemConfiguration,
   CreationItemCompendiumEntry,
+  CreationManagedDomains,
+  CreationSnapshot,
   CreationState,
 } from "../../../src/shared/creation/creation.types.js"
 
@@ -48,6 +54,14 @@ type CreationAsset = {
   updatedAt: Date
 }
 
+type CreationDomainAccess = {
+  settings: boolean
+  items: boolean
+  creatures: boolean
+  systems: boolean
+  magic: boolean
+}
+
 const CREATION_META_TYPE = "CREATION_STATE"
 const CREATION_META_SOURCE = "v1"
 
@@ -58,8 +72,11 @@ export async function GET(
   try {
     const session = await requireSession(request)
     const campaignId = await resolveCampaignId(request, context)
-    await requireCreationContentEditor(campaignId, session.user.id)
-    return jsonResponse(await buildCreationSnapshot(campaignId))
+    const access = await requireCreationDocumentAccess(campaignId, session.user.id)
+    const domains = resolveCreationDomainAccess(access)
+    return jsonResponse(
+      projectCreationSnapshot(await buildCreationSnapshot(campaignId), domains),
+    )
   } catch (error) {
     return handleApiError(error)
   }
@@ -72,62 +89,90 @@ export async function PATCH(
   try {
     const session = await requireSession(request)
     const campaignId = await resolveCampaignId(request, context)
-    await requireCreationContentEditor(campaignId, session.user.id)
+    const access = await requireCreationDocumentAccess(campaignId, session.user.id)
+    const domains = resolveCreationDomainAccess(access)
 
     const body = await readJsonObject(request)
     const baseRevision = readRevision(body.baseRevision)
     const data = readCreationState(body.data)
+    const currentSnapshot = await buildCreationSnapshot(campaignId)
 
-    const systems = data.customSystems.map(readCreationCustomSystem)
-    ensureUniqueIds(
-      systems.map((system) => system.id),
-      "CREATION_SYSTEM_DUPLICATE",
-      "A Criação contém ids de sistema personalizado duplicados.",
-    )
+    const systems = domains.systems
+      ? data.customSystems.map(readCreationCustomSystem)
+      : currentSnapshot.data.customSystems.map(readCreationCustomSystem)
+    if (domains.systems) {
+      ensureUniqueIds(
+        systems.map((system) => system.id),
+        "CREATION_SYSTEM_DUPLICATE",
+        "A Criação contém ids de sistema personalizado duplicados.",
+      )
+    }
     const knownSystemIds = new Set(systems.map((system) => system.id))
 
-    const incomingCharacters = data.characters
-      .map(readCreationCharacterConfiguration)
-      .sort((left, right) => left.characterId.localeCompare(right.characterId))
-    ensureUniqueIds(
-      incomingCharacters.map((character) => character.characterId),
-      "CREATION_CHARACTER_DUPLICATE",
-      "A Criação contém personagens duplicados.",
-    )
+    const incomingCharacters = domains.settings
+      ? data.characters
+          .map(readCreationCharacterConfiguration)
+          .sort((left, right) => left.characterId.localeCompare(right.characterId))
+      : []
+    if (domains.settings) {
+      ensureUniqueIds(
+        incomingCharacters.map((character) => character.characterId),
+        "CREATION_CHARACTER_DUPLICATE",
+        "A Criação contém personagens duplicados.",
+      )
 
-    for (const configuration of incomingCharacters) {
-      for (const installedSystem of configuration.customSystems) {
-        if (!knownSystemIds.has(installedSystem.systemId)) {
-          throw new ApiError(
-            400,
-            "CREATION_CHARACTER_SYSTEM_UNKNOWN",
-            `O sistema ${installedSystem.systemId} instalado em ${configuration.characterId} não existe na Criação.`,
-          )
+      for (const configuration of incomingCharacters) {
+        for (const installedSystem of configuration.customSystems) {
+          if (!knownSystemIds.has(installedSystem.systemId)) {
+            throw new ApiError(
+              400,
+              "CREATION_CHARACTER_SYSTEM_UNKNOWN",
+              `O sistema ${installedSystem.systemId} instalado em ${configuration.characterId} não existe na Criação.`,
+            )
+          }
         }
       }
     }
 
-    const itemEntries = data.itemCompendium.map(readCreationItemEntry)
+    const itemEntries = domains.items
+      ? data.itemCompendium.map(readCreationItemEntry)
+      : []
     const templateIds = itemEntries.map((entry) => entry.templateId)
-    ensureUniqueIds(
-      templateIds,
-      "CREATION_ITEM_DUPLICATE",
-      "O compêndio contém ids de item duplicados.",
-    )
+    if (domains.items) {
+      ensureUniqueIds(
+        templateIds,
+        "CREATION_ITEM_DUPLICATE",
+        "O compêndio contém ids de item duplicados.",
+      )
+    }
 
-    const spells = data.spells.map(readCreationSpell)
-    ensureUniqueIds(
-      spells.map((spell) => spell.index),
-      "CREATION_SPELL_DUPLICATE",
-      "A Criação contém ids de magia duplicados.",
-    )
+    const spells = domains.magic ? data.spells.map(readCreationSpell) : []
+    if (domains.magic) {
+      ensureUniqueIds(
+        spells.map((spell) => spell.index),
+        "CREATION_SPELL_DUPLICATE",
+        "A Criação contém ids de magia duplicados.",
+      )
+    }
 
-    const creatures = data.creatureCompendium.map(readCreationCreature)
-    ensureUniqueIds(
-      creatures.map((creature) => creature.id),
-      "CREATION_CREATURE_DUPLICATE",
-      "O compêndio contém ids de criatura duplicados.",
-    )
+    const creatures = domains.creatures
+      ? data.creatureCompendium.map(readCreationCreature)
+      : []
+    if (domains.creatures) {
+      ensureUniqueIds(
+        creatures.map((creature) => creature.id),
+        "CREATION_CREATURE_DUPLICATE",
+        "O compêndio contém ids de criatura duplicados.",
+      )
+    }
+
+    const nextManagedDomains: CreationManagedDomains = {
+      spells: currentSnapshot.managedDomains?.spells === true || domains.magic,
+      creatureCompendium:
+        currentSnapshot.managedDomains?.creatureCompendium === true || domains.creatures,
+      customSystems:
+        currentSnapshot.managedDomains?.customSystems === true || domains.systems,
+    }
 
     await prisma.$transaction(async (tx) => {
       const campaign = await tx.campaign.findUnique({
@@ -162,137 +207,147 @@ export async function PATCH(
         )
       }
 
-      const currentCharacterIds = campaign.characters
-        .map((link) => link.characterId)
-        .sort((left, right) => left.localeCompare(right))
+      if (domains.settings) {
+        const currentCharacterIds = campaign.characters
+          .map((link) => link.characterId)
+          .sort((left, right) => left.localeCompare(right))
 
-      if (
-        incomingCharacters.length !== currentCharacterIds.length ||
-        incomingCharacters.some(
-          (character, index) => character.characterId !== currentCharacterIds[index],
-        )
-      ) {
-        throw new ApiError(
-          400,
-          "CREATION_CHARACTER_SET_CHANGED",
-          "A lista de personagens mudou. Recarregue a Criação antes de salvar.",
-        )
-      }
-
-      const allowedOwnerIds = new Set([
-        campaign.ownerId,
-        ...campaign.members.map((member) => member.userId),
-      ])
-      const characterDataById = new Map(
-        campaign.characters.map((link) => [link.characterId, link.character.data]),
-      )
-
-      for (const configuration of incomingCharacters) {
-        if (!allowedOwnerIds.has(configuration.ownerId)) {
+        if (
+          incomingCharacters.length !== currentCharacterIds.length ||
+          incomingCharacters.some(
+            (character, index) => character.characterId !== currentCharacterIds[index],
+          )
+        ) {
           throw new ApiError(
             400,
-            "CREATION_CHARACTER_OWNER_INVALID",
-            "O jogador atribuído precisa ser membro ativo da campanha.",
+            "CREATION_CHARACTER_SET_CHANGED",
+            "A lista de personagens mudou. Recarregue a Criação antes de salvar.",
           )
         }
 
-        const currentData = characterDataById.get(configuration.characterId)
-        if (currentData === undefined) {
-          throw new ApiError(
-            400,
-            "CREATION_CHARACTER_NOT_FOUND",
-            "Um personagem da Criação não pertence mais à campanha.",
-          )
-        }
+        const allowedOwnerIds = new Set([
+          campaign.ownerId,
+          ...campaign.members.map((member) => member.userId),
+        ])
+        const characterDataById = new Map(
+          campaign.characters.map((link) => [link.characterId, link.character.data]),
+        )
 
-        await tx.character.update({
-          where: { id: configuration.characterId },
-          data: {
-            ownerId: configuration.ownerId,
-            data: mergeCharacterCreationConfiguration(
-              currentData,
-              configuration,
-              systems,
-            ) as never,
-          },
-        })
+        for (const configuration of incomingCharacters) {
+          if (!allowedOwnerIds.has(configuration.ownerId)) {
+            throw new ApiError(
+              400,
+              "CREATION_CHARACTER_OWNER_INVALID",
+              "O jogador atribuído precisa ser membro ativo da campanha.",
+            )
+          }
 
-        await tx.campaignCharacter.update({
-          where: {
-            campaignId_characterId: {
-              campaignId,
-              characterId: configuration.characterId,
+          const currentData = characterDataById.get(configuration.characterId)
+          if (currentData === undefined) {
+            throw new ApiError(
+              400,
+              "CREATION_CHARACTER_NOT_FOUND",
+              "Um personagem da Criação não pertence mais à campanha.",
+            )
+          }
+
+          await tx.character.update({
+            where: { id: configuration.characterId },
+            data: {
+              ownerId: configuration.ownerId,
+              data: mergeCharacterCreationConfiguration(
+                currentData,
+                configuration,
+                systems,
+              ) as never,
             },
-          },
-          data: {
-            visibility: toDatabaseVisibility(configuration.visibility),
-          },
-        })
+          })
+
+          await tx.campaignCharacter.update({
+            where: {
+              campaignId_characterId: {
+                campaignId,
+                characterId: configuration.characterId,
+              },
+            },
+            data: {
+              visibility: toDatabaseVisibility(configuration.visibility),
+            },
+          })
+        }
       }
 
-      await tx.campaignItemCompendium.deleteMany({
-        where: {
-          campaignId,
-          ...(templateIds.length ? { templateId: { notIn: templateIds } } : {}),
-        },
-      })
-
-      for (const entry of itemEntries) {
-        await tx.campaignItemCompendium.upsert({
+      if (domains.items) {
+        await tx.campaignItemCompendium.deleteMany({
           where: {
-            campaignId_templateId: {
+            campaignId,
+            ...(templateIds.length ? { templateId: { notIn: templateIds } } : {}),
+          },
+        })
+
+        for (const entry of itemEntries) {
+          await tx.campaignItemCompendium.upsert({
+            where: {
+              campaignId_templateId: {
+                campaignId,
+                templateId: entry.templateId,
+              },
+            },
+            create: {
+              id: crypto.randomUUID(),
               campaignId,
               templateId: entry.templateId,
+              item: entry.item as never,
+              custom: entry.custom,
+              visibility: entry.visibility,
+              createdById: session.user.id,
             },
-          },
-          create: {
-            id: crypto.randomUUID(),
-            campaignId,
-            templateId: entry.templateId,
-            item: entry.item as never,
-            custom: entry.custom,
-            visibility: entry.visibility,
-            createdById: session.user.id,
-          },
-          update: {
-            item: entry.item as never,
-            custom: entry.custom,
-            visibility: entry.visibility,
-            createdById: session.user.id,
-          },
-        })
+            update: {
+              item: entry.item as never,
+              custom: entry.custom,
+              visibility: entry.visibility,
+              createdById: session.user.id,
+            },
+          })
+        }
       }
 
-      await replaceCreationAssets(tx, {
-        campaignId,
-        userId: session.user.id,
-        type: "SPELL",
-        entries: spells.map((spell) => ({
-          sourceId: spell.index,
-          name: spell.name,
-          data: spell,
-        })),
-      })
-      await replaceCreationAssets(tx, {
-        campaignId,
-        userId: session.user.id,
-        type: "CREATURE",
-        entries: creatures.map((creature) => ({
-          sourceId: creature.id,
-          name: creature.name,
-          data: creature,
-        })),
-      })
-      await replaceCreationAssets(tx, {
-        campaignId,
-        userId: session.user.id,
-        type: "SYSTEM",
-        entries: systems.map((system) => ({
-          sourceId: system.id,
-          name: system.name,
-          data: system,
-        })),
-      })
+      if (domains.magic) {
+        await replaceCreationAssets(tx, {
+          campaignId,
+          userId: session.user.id,
+          type: "SPELL",
+          entries: spells.map((spell) => ({
+            sourceId: spell.index,
+            name: spell.name,
+            data: spell,
+          })),
+        })
+      }
+      if (domains.creatures) {
+        await replaceCreationAssets(tx, {
+          campaignId,
+          userId: session.user.id,
+          type: "CREATURE",
+          entries: creatures.map((creature) => ({
+            sourceId: creature.id,
+            name: creature.name,
+            data: creature,
+          })),
+        })
+      }
+      if (domains.systems) {
+        await replaceCreationAssets(tx, {
+          campaignId,
+          userId: session.user.id,
+          type: "SYSTEM",
+          entries: systems.map((system) => ({
+            sourceId: system.id,
+            name: system.name,
+            data: system,
+          })),
+        })
+      }
 
       await tx.campaignHomebrewAsset.upsert({
         where: {
@@ -308,19 +363,11 @@ export async function PATCH(
           type: CREATION_META_TYPE,
           sourceId: CREATION_META_SOURCE,
           name: "Creation State v1",
-          data: {
-            spells: true,
-            creatureCompendium: true,
-            customSystems: true,
-          },
+          data: nextManagedDomains,
           addedById: session.user.id,
         },
         update: {
-          data: {
-            spells: true,
-            creatureCompendium: true,
-            customSystems: true,
-          },
+          data: nextManagedDomains,
           addedById: session.user.id,
         },
       })
@@ -344,52 +391,79 @@ export async function PATCH(
       }
     })
 
-    return jsonResponse(await buildCreationSnapshot(campaignId))
+    return jsonResponse(
+      projectCreationSnapshot(await buildCreationSnapshot(campaignId), domains),
+    )
   } catch (error) {
     return handleApiError(error)
   }
 }
 
-async function requireCreationContentEditor(
+async function requireCreationDocumentAccess(
   campaignId: string,
   userId: string,
-): Promise<void> {
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
-    select: {
-      ownerId: true,
-      members: {
-        where: {
-          userId,
-          status: CampaignMemberStatus.ACTIVE,
-        },
-        select: { role: true },
-      },
-    },
-  })
-
-  if (!campaign) {
-    throw new ApiError(404, "CAMPAIGN_NOT_FOUND", "Campanha não encontrada.")
-  }
-
-  const canEditCreationContent =
-    campaign.ownerId === userId ||
-    campaign.members.some(
-      (member) =>
-        member.role === CampaignRole.MASTER ||
-        member.role === CampaignRole.ASSISTANT,
-    )
-
-  if (!canEditCreationContent) {
+): Promise<CampaignAccess> {
+  const access = await getCampaignAccess(campaignId, userId)
+  if (!access) {
     throw new ApiError(
       403,
       "CREATION_ACCESS_FORBIDDEN",
-      "Somente mestres e assistentes podem acessar o estado de Criação da sessão.",
+      "Você não possui acesso ativo a esta sessão.",
     )
+  }
+
+  const domains = resolveCreationDomainAccess(access)
+  if (!Object.values(domains).some(Boolean)) {
+    throw new ApiError(
+      403,
+      "CREATION_ACCESS_FORBIDDEN",
+      "Suas permissões não concedem acesso a nenhum domínio editável da Criação.",
+    )
+  }
+  return access
+}
+
+function resolveCreationDomainAccess(
+  access: CampaignAccess,
+): CreationDomainAccess {
+  return {
+    settings: accessCanManageCreationSection(access, "settings"),
+    items: accessCanManageCreationSection(access, "items"),
+    creatures: accessCanManageCreationSection(access, "creatures"),
+    systems: accessCanManageCreationSection(access, "systems"),
+    magic: accessCanManageCreationSection(access, "magic"),
   }
 }
 
-async function buildCreationSnapshot(campaignId: string) {
+function projectCreationSnapshot(
+  snapshot: CreationSnapshot,
+  access: CreationDomainAccess,
+): CreationSnapshot {
+  return {
+    ...snapshot,
+    data: {
+      version: 1,
+      characters: access.settings ? snapshot.data.characters : [],
+      spells: access.magic ? snapshot.data.spells : [],
+      itemCompendium: access.items ? snapshot.data.itemCompendium : [],
+      creatureCompendium: access.creatures ? snapshot.data.creatureCompendium : [],
+      // Character configuration needs system definitions to install/configure
+      // systems without granting permission to modify the global definitions.
+      customSystems:
+        access.systems || access.settings ? snapshot.data.customSystems : [],
+    },
+    managedDomains: {
+      spells: access.magic && snapshot.managedDomains?.spells === true,
+      creatureCompendium:
+        access.creatures && snapshot.managedDomains?.creatureCompendium === true,
+      customSystems:
+        (access.systems || access.settings)
+        && snapshot.managedDomains?.customSystems === true,
+    },
+  }
+}
+
+async function buildCreationSnapshot(campaignId: string): Promise<CreationSnapshot> {
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
     select: {
@@ -466,7 +540,7 @@ async function buildCreationSnapshot(campaignId: string) {
     (asset) => asset.type === CREATION_META_TYPE && asset.sourceId === CREATION_META_SOURCE,
   )
   const markerData = asRecord(marker?.data)
-  const managedDomains = {
+  const managedDomains: CreationManagedDomains = {
     spells: markerData?.spells === true,
     creatureCompendium: markerData?.creatureCompendium === true,
     customSystems: markerData?.customSystems === true,

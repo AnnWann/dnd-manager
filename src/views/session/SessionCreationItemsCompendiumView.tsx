@@ -32,7 +32,7 @@ import type { Itemmable } from "../../models/items/item"
 import type { CreationItemCompendiumEntry } from "../../shared/creation/creation.types"
 
 export function SessionCreationItemsCompendiumView() {
-  const { userRole } = useSyncContext()
+  const { campaignCapabilities } = useSyncContext()
   const { addGroundItem } = useCharacterContext()
   const editor = useCreationEditor()
   const [query, setQuery] = useState("")
@@ -67,7 +67,7 @@ export function SessionCreationItemsCompendiumView() {
     )
   }, [compendiumItems, query])
 
-  if (userRole !== "master" && userRole !== "assistant") {
+  if (!campaignCapabilities.includes("creation.items.manage")) {
     return <Navigate to="/character" replace />
   }
 

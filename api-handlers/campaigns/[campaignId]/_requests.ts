@@ -11,6 +11,10 @@ import {
 } from "../../../server/api.js"
 import { prisma } from "../../../server/prisma.js"
 import { requireSession } from "../../../server/session.js"
+import {
+  canManageCreationSection,
+  normalizeCampaignCapabilityOverrides,
+} from "../../../src/shared/campaign/campaignRoles.js"
 
 type RouteContext = {
   params?:
@@ -84,7 +88,7 @@ export async function GET(
       throw new ApiError(
         403,
         "CAMPAIGN_CONTENT_MANAGER_REQUIRED",
-        "Somente mestres e assistentes podem visualizar as solicitações da sessão.",
+        "Sua função na sessão não permite visualizar as solicitações.",
       )
     }
 
@@ -426,6 +430,7 @@ export async function requireCampaignAccess(
         select: {
           role: true,
           status: true,
+          permissions: true,
         },
         take: 1,
       },
@@ -456,11 +461,10 @@ export async function requireCampaignAccess(
   }
 
   const active = membership.status === CampaignMemberStatus.ACTIVE
+  const permissions = normalizeCampaignCapabilityOverrides(membership.permissions)
   const isMaster = active && membership.role === CampaignRole.MASTER
   const canManageContent =
-    active &&
-    (membership.role === CampaignRole.MASTER ||
-      membership.role === CampaignRole.ASSISTANT)
+    active && canManageCreationSection(membership.role, "requests", permissions)
 
   return {
     isMaster,

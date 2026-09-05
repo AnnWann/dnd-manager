@@ -8,6 +8,10 @@ import {
   type CharacterTemplateProps,
 } from "../models/characters/CharacterTemplate"
 import { preloadSessionRouteModules } from "../sessionRoutePreload"
+import type {
+  CampaignCapability,
+  CampaignCapabilityOverrides,
+} from "../shared/campaign/campaignRoles"
 import { apiClient } from "./api-client"
 import {
   getMyCampaigns,
@@ -42,6 +46,9 @@ export type CampaignSessionCharacters = {
     name: string
     role: CampaignRole
     isMaster: boolean
+    canAccessAllCharacters?: boolean
+    permissions?: CampaignCapabilityOverrides
+    capabilities?: CampaignCapability[]
   }
   members: CampaignSessionMember[]
   characters: CampaignSessionCharacter[]
@@ -58,7 +65,7 @@ type CachedSessionRequest = {
 // The response is permission-dependent (role, membership and visible
 // characters), so entries MUST be partitioned by the authenticated viewer.
 // Explicit session entry forces a revalidation because the viewer's campaign
-// role can change without either the viewer id or campaign id changing.
+// role or permission overrides can change without either id changing.
 const SESSION_REQUEST_CACHE_MS = 10 * 60_000
 const sessionRequestCache = new Map<string, CachedSessionRequest>()
 
@@ -88,6 +95,8 @@ export async function getCampaignSessionCharacters(
         name: campaign.name,
         role: campaign.role,
         isMaster: campaign.isOwner || campaign.role === "MASTER",
+        permissions: {},
+        capabilities: [],
       },
       members: [
         {
