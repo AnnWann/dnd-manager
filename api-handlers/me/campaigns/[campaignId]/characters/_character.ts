@@ -183,8 +183,10 @@ export async function DELETE(request: Request): Promise<Response> {
     const session = await requireSession(request)
     const { campaignId, characterId } = getRouteParams(request)
 
-    await requireCampaignAccess(campaignId, session.user.id)
-    await requireOwnedCharacter(characterId, session.user.id)
+    const access = await requireCampaignAccess(campaignId, session.user.id)
+    if (!access.isMaster) {
+      await requireOwnedCharacter(characterId, session.user.id)
+    }
 
     await prisma.$transaction(async (tx) => {
       const removed = await tx.campaignCharacter.deleteMany({
