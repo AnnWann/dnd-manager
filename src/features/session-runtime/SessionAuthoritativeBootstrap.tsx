@@ -3,6 +3,10 @@ import { useEffect, useRef, useState } from "react"
 import { getSessionHomebrew } from "../../api/session-homebrew"
 import { useCharacterContext } from "../../contexts/characterContext"
 import {
+  SESSION_MEMBER_KICK_EVENT,
+  type SessionMemberKickDetail,
+} from "../../lib/sessionEvents"
+import {
   LEGACY_SESSION_BOOTSTRAP_ASSET_SOURCE,
   LEGACY_SESSION_BOOTSTRAP_ASSET_TYPE,
 } from "../../shared/legacy/legacyCampaignBackup"
@@ -62,6 +66,38 @@ export function SessionAuthoritativeBootstrap({ campaignId }: { campaignId: stri
       cancelled = true
     }
   }, [campaignId, runtime?.role])
+
+  useEffect(() => {
+    if (!runtime || runtime.role !== "MASTER") return
+
+    function handleMemberKick(event: Event) {
+      const detail = (event as CustomEvent<SessionMemberKickDetail>).detail
+      if (
+        !detail ||
+        detail.campaignId !== campaignId ||
+        runtime.status !== "connected"
+      ) return
+
+      const sent = runtime.dispatchCharacterLifecycleOperation({
+        type: "session.member.kick",
+        characterId: "session",
+        userId: detail.userId,
+      })
+      if (!sent) {
+        console.error("[session-runtime] failed to send live member kick", detail)
+      }
+    }
+
+    window.addEventListener(SESSION_MEMBER_KICK_EVENT, handleMemberKick)
+    return () => {
+      window.removeEventListener(SESSION_MEMBER_KICK_EVENT, handleMemberKick)
+    }
+  }, [
+    campaignId,
+    runtime?.dispatchCharacterLifecycleOperation,
+    runtime?.role,
+    runtime?.status,
+  ])
 
   useEffect(() => {
     if (
