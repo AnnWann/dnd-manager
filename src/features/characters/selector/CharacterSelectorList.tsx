@@ -152,17 +152,17 @@ export function CharacterSelectorList({
                   type="button"
                   className={
                     isSelected
-                      ? "flex w-full items-center justify-between gap-3 rounded-lg border border-accentBorder bg-accentBg px-3 py-2.5 text-left"
-                      : "flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-bg px-3 py-2.5 text-left hover:bg-[color:var(--social-bg)]"
+                      ? "flex w-full items-center justify-between gap-4 rounded-lg border border-accentBorder bg-accentBg px-4 py-3 text-left"
+                      : "flex w-full items-center justify-between gap-4 rounded-lg border border-border bg-bg px-4 py-3 text-left hover:bg-[color:var(--social-bg)]"
                   }
                   onClick={() => selectOrOpen(character.id)}
                 >
-                  <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex min-w-0 items-center gap-4">
                     {character.imageUrl ? (
                       <img
                         src={character.imageUrl}
                         alt=""
-                        className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                        className="h-16 w-16 shrink-0 rounded-xl object-cover"
                       />
                     ) : null}
 
