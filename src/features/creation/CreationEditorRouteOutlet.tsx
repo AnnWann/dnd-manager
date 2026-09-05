@@ -1,17 +1,34 @@
-import { Navigate, Outlet, useParams } from "react-router-dom"
+import { Navigate, Outlet, useLocation, useParams } from "react-router-dom"
 
 import { Button } from "../../components/ui/Button"
 import { useCreatureCompendium } from "../../contexts/creatureCompendiumContext"
 import { useCustomSystemsContext } from "../../contexts/customSystemsContext"
 import { useSyncContext } from "../../contexts/syncContext"
+import { sessionPath } from "../../lib/campaignRoutes"
+import type { CampaignCapability } from "../../shared/campaign/campaignRoles"
 import { CreationEditorProvider, useCreationEditor } from "./CreationEditorProvider"
 
 export function CreationEditorRouteOutlet() {
   const { campaignId } = useParams<{ campaignId?: string }>()
-  const { userRole } = useSyncContext()
+  const location = useLocation()
+  const { campaignCapabilities } = useSyncContext()
   if (!campaignId) return <Navigate to="/not-found" replace />
 
-  if (userRole === "moderator") {
+  const capabilities = new Set(campaignCapabilities)
+  const route = resolveCreationRoute(location.pathname, campaignId)
+  if (!route) return <Navigate to={sessionPath(campaignId, "characters")} replace />
+
+  if (!canAccessRoute(capabilities, route.capability, route.permissionsAlternative)) {
+    return <Navigate to={sessionPath(campaignId, "characters")} replace />
+  }
+
+  // Requests/homebrew use their own APIs. Permissions-only access to settings
+  // must likewise not instantiate the full Creation document editor.
+  if (!route.needsEditor) return <Outlet />
+  if (
+    route.capability === "creation.settings.manage" &&
+    !capabilities.has("creation.settings.manage")
+  ) {
     return <Outlet />
   }
 
@@ -103,4 +120,56 @@ function CreationEditorRouteContent() {
       ) : null}
     </div>
   )
+}
+
+type CreationRouteAccess = {
+  capability: CampaignCapability
+  permissionsAlternative?: boolean
+  needsEditor: boolean
+}
+
+function resolveCreationRoute(
+  pathname: string,
+  campaignId: string,
+): CreationRouteAccess | null {
+  const root = sessionPath(campaignId, "creation")
+  const tail = pathname.startsWith(root)
+    ? pathname.slice(root.length).replace(/^\/+/, "")
+    : ""
+
+  if (!tail || tail === "settings") {
+    return {
+      capability: "creation.settings.manage",
+      permissionsAlternative: true,
+      needsEditor: true,
+    }
+  }
+  if (tail === "requests") {
+    return { capability: "creation.requests.manage", needsEditor: false }
+  }
+  if (tail === "homebrew") {
+    return { capability: "creation.homebrew.manage", needsEditor: false }
+  }
+  if (tail === "items-compendium") {
+    return { capability: "creation.items.manage", needsEditor: true }
+  }
+  if (tail === "creatures-compendium") {
+    return { capability: "creation.creatures.manage", needsEditor: true }
+  }
+  if (tail === "magic") {
+    return { capability: "creation.magic.manage", needsEditor: true }
+  }
+  if (tail === "custom-systems" || tail.startsWith("custom-systems/")) {
+    return { capability: "creation.systems.manage", needsEditor: true }
+  }
+  return null
+}
+
+function canAccessRoute(
+  capabilities: ReadonlySet<CampaignCapability>,
+  capability: CampaignCapability,
+  permissionsAlternative = false,
+): boolean {
+  return capabilities.has(capability)
+    || (permissionsAlternative && capabilities.has("creation.permissions.read"))
 }
