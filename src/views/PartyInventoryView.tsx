@@ -20,6 +20,7 @@ import { consumeItemQuantity } from "../models/items/itemConsumption"
 import { getItemStackWeightKg } from "../models/items/itemWeight"
 import {
   calculatePartySupplies,
+  getRequiredSupplyForRace,
   STANDARD_PORTIONS_PER_BARREL,
   STANDARD_PORTIONS_PER_RATION,
 } from "../models/supplies/partySupply"
@@ -50,19 +51,55 @@ export function PartyInventoryView() {
   const additionalSupplyConsumption = runtime?.inventoryState?.additionalSupplyConsumption ?? localAdditionalSupplyConsumption
   const [transferringItem, setTransferringItem] = useState<Itemmable | null>(null)
 
+  // Inventory composition is shared, but character visibility is not. The
+  // server therefore publishes a privacy-safe authoritative consumer list and
+  // aggregate consumption for sessions. Local mode still derives the same
+  // values from all character sheets available to the workspace.
   const supplyCalculation = useMemo(
-    () => calculatePartySupplies(partyInventory, transferCharacters),
-    [partyInventory, transferCharacters],
+    () => calculatePartySupplies(partyInventory, []),
+    [partyInventory],
   )
+  const visibleSupplyConsumerDetails = useMemo(
+    () => new Map(
+      transferCharacters.map((character) => {
+        const race = character.get("sheet").race
+        return [
+          character.get("id"),
+          {
+            race: race.race,
+            supplyPerLongRest: getRequiredSupplyForRace(race),
+          },
+        ] as const
+      }),
+    ),
+    [transferCharacters],
+  )
+  const localSupplyConsumers = useMemo(
+    () => transferCharacters.map((character) => ({
+      characterId: character.get("id"),
+      name: character.get("name"),
+    })),
+    [transferCharacters],
+  )
+  const localSupplyPerLongRest = useMemo(
+    () => transferCharacters.reduce(
+      (total, character) =>
+        total + getRequiredSupplyForRace(character.get("sheet").race),
+      0,
+    ),
+    [transferCharacters],
+  )
+  const supplyConsumers = runtime?.inventoryState?.supplyConsumers ?? localSupplyConsumers
+  const groupSupplyPerLongRest = runtime?.inventoryState?.supplyPerLongRest ?? localSupplyPerLongRest
   const supplyItemCount = partyInventory.filter((item) => item.kind === "supply").length
-  const effectiveSupplyPerLongRest = supplyCalculation.supplyPerLongRest + additionalSupplyConsumption
+  const effectiveSupplyPerLongRest = groupSupplyPerLongRest + additionalSupplyConsumption
   const effectiveSupplyLongRests = effectiveSupplyPerLongRest > 0
     ? supplyCalculation.supplyPortions / effectiveSupplyPerLongRest
     : Number.POSITIVE_INFINITY
   const effectiveSupportedLongRests = Number.isFinite(effectiveSupplyLongRests)
     ? Math.max(0, Math.floor(effectiveSupplyLongRests))
     : Number.POSITIVE_INFINITY
-  const hasSupplyConsumers = supplyCalculation.consumers.length > 0 || additionalSupplyConsumption > 0
+  const hasSupplyConsumers = supplyConsumers.length > 0 || additionalSupplyConsumption > 0
 
   const totalWeight = partyInventory.reduce((total, item) => total + getItemStackWeightKg(item), 0)
   const hasCapacity = carryCapacity > 0
@@ -291,7 +328,7 @@ export function PartyInventoryView() {
               label="Consumo do grupo"
               value={formatNumber(effectiveSupplyPerLongRest)}
               detail={additionalSupplyConsumption > 0
-                ? `${formatNumber(supplyCalculation.supplyPerLongRest)} do grupo + ${formatNumber(additionalSupplyConsumption)} adicional`
+                ? `${formatNumber(groupSupplyPerLongRest)} do grupo + ${formatNumber(additionalSupplyConsumption)} adicional`
                 : "porções por rodada de descansos"}
             />
             <SupplyMetric label="Descansos equivalentes" value={formatLongRestEstimate(effectiveSupplyLongRests, hasSupplyConsumers)} detail="antes do arredondamento" />
@@ -310,19 +347,20 @@ export function PartyInventoryView() {
           <div className="grid gap-2">
             <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-textH">
               <UserRound className="h-4 w-4 shrink-0 text-accent" />
-              Consumidores considerados ({supplyCalculation.consumers.length}{additionalSupplyConsumption > 0 ? " + adicionais" : ""})
+              Consumidores considerados ({supplyConsumers.length}{additionalSupplyConsumption > 0 ? " + adicionais" : ""})
             </div>
 
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {supplyCalculation.consumers.map((consumer) => {
-                const canViewDetails = canViewCharacterDetails(consumer.characterId)
+              {supplyConsumers.map((consumer) => {
+                const details = visibleSupplyConsumerDetails.get(consumer.characterId)
+                const canViewDetails = canViewCharacterDetails(consumer.characterId) && Boolean(details)
                 return (
                   <div key={consumer.characterId} className="min-w-0 rounded-xl border border-border bg-bg-subtle p-3">
                     <div className="truncate text-sm font-semibold text-textH">{consumer.name}</div>
-                    {canViewDetails ? (
+                    {canViewDetails && details ? (
                       <>
-                        <div className="mt-1 text-[11px] text-textMuted">{formatRaceName(consumer.race)}</div>
-                        <div className="mt-2 text-xs text-text">Suprimento por descanso: {formatNumber(consumer.supplyPerLongRest)}</div>
+                        <div className="mt-1 text-[11px] text-textMuted">{formatRaceName(details.race)}</div>
+                        <div className="mt-2 text-xs text-text">Suprimento por descanso: {formatNumber(details.supplyPerLongRest)}</div>
                       </>
                     ) : (
                       <>
@@ -344,7 +382,7 @@ export function PartyInventoryView() {
             </div>
 
             {!hasSupplyConsumers ? (
-              <p className="text-xs leading-5 text-textMuted">Nenhum personagem jogador, humanoide ou consumo adicional está disponível para o cálculo.</p>
+              <p className="text-xs leading-5 text-textMuted">Nenhum personagem da sessão ou consumo adicional está disponível para o cálculo.</p>
             ) : null}
           </div>
 
