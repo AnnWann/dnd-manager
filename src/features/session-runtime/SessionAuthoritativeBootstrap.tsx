@@ -69,16 +69,17 @@ export function SessionAuthoritativeBootstrap({ campaignId }: { campaignId: stri
 
   useEffect(() => {
     if (!runtime || runtime.role !== "MASTER") return
+    const masterRuntime = runtime
 
     function handleMemberKick(event: Event) {
       const detail = (event as CustomEvent<SessionMemberKickDetail>).detail
       if (
         !detail ||
         detail.campaignId !== campaignId ||
-        runtime.status !== "connected"
+        masterRuntime.status !== "connected"
       ) return
 
-      const sent = runtime.dispatchCharacterLifecycleOperation({
+      const sent = masterRuntime.dispatchCharacterLifecycleOperation({
         type: "session.member.kick",
         characterId: "session",
         userId: detail.userId,
