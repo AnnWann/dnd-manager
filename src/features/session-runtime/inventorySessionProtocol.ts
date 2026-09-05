@@ -48,7 +48,13 @@ export type SessionInventoryOperation =
   | { type: "character.equipment.move.ground"; characterId: string; reference: EquippedItemReference }
 
 export type SessionInventoryClientMessage =
-  | { type: "session.inventory.initialize"; partyInventory: Itemmable[]; groundInventory: Itemmable[] }
+  | {
+      type: "session.inventory.initialize"
+      partyInventory: Itemmable[]
+      groundInventory: Itemmable[]
+      carryCapacity?: number
+      additionalSupplyConsumption?: number
+    }
   | { type: "session.inventory.operation"; operation: SessionInventoryOperation }
 
 export type SessionInventoryServerMessage =
