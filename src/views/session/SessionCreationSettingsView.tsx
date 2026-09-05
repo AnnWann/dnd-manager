@@ -32,6 +32,11 @@ import type {
   CustomSystemDefinition,
 } from "../../models/customSystems/CustomSystemDefinition"
 import type { Player } from "../../models/player/Player"
+import {
+  CAMPAIGN_DELEGATABLE_CAPABILITIES,
+  type CampaignCapability,
+  type CampaignCapabilityOverrides,
+} from "../../shared/campaign/campaignRoles"
 import type {
   CreationCharacterConfiguration,
   CreationCharacterCustomSystemConfiguration,
@@ -40,9 +45,10 @@ import type {
 export function SessionCreationSettingsView() {
   const { campaignId } = useParams<{ campaignId?: string }>()
   const navigate = useNavigate()
-  const { userRole } = useSyncContext()
+  const { campaignCapabilities } = useSyncContext()
   const editor = useOptionalCreationEditor()
-  const canViewPermissions = userRole === "master" || userRole === "moderator"
+  const canViewPermissions = campaignCapabilities.includes("creation.permissions.read")
+  const canManageRequests = campaignCapabilities.includes("creation.requests.manage")
   const {
     visibleCharacters: sessionCharacters,
     canAssignOwners,
@@ -65,8 +71,8 @@ export function SessionCreationSettingsView() {
       setLoading(true)
       setErrorMessage("")
       try {
-        // Ownership assignment is security-sensitive and must use the current
-        // campaign membership instead of a potentially stale preload cache.
+        // Ownership and permission editing are security-sensitive and must use
+        // current campaign membership instead of a potentially stale preload.
         const next = await getSessionCreationSettings(campaignId!, { force: true })
         if (!cancelled) setSettings(next)
       } catch (error) {
@@ -153,8 +159,6 @@ export function SessionCreationSettingsView() {
       return byId
     }
 
-    // Fallback only while the authoritative membership list is unavailable.
-    // Once settings load, stale/free-text owners must not remain assignable.
     for (const key of knownPlayerKeys) {
       const player = getOwner(key)
       if (player.id) byId.set(player.id, player)
@@ -189,6 +193,7 @@ export function SessionCreationSettingsView() {
     input: {
       status: "ACTIVE" | "REMOVED"
       role?: SessionSettingsMember["role"]
+      permissions?: CampaignCapabilityOverrides
     },
   ) {
     if (!campaignId || workingUserId || !settings?.canManageMembers) return
@@ -302,13 +307,13 @@ export function SessionCreationSettingsView() {
               </div>
               <p className="mt-1 text-xs text-textMuted">
                 {settings?.canManageMembers
-                  ? "Gerencie papéis e acesso dos membros já aprovados. Esta administração é aplicada imediatamente e não faz parte do rascunho de Criação."
-                  : "Visualização das permissões e papéis atuais da sessão."}
+                  ? "Use o papel como perfil base e personalize capacidades individuais quando necessário."
+                  : "Visualização dos papéis e capacidades efetivas atuais da sessão."}
               </p>
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {pendingMemberCount ? (
+              {canManageRequests && pendingMemberCount ? (
                 <Button
                   size="sm"
                   variant="secondary"
@@ -345,11 +350,33 @@ export function SessionCreationSettingsView() {
                     key={member.id}
                     member={member}
                     working={workingUserId === member.id}
+                    canEdit={settings.canManageMembers}
                     onRoleChange={settings.canManageMembers
                       ? (role) =>
                           void changeMember(member, {
                             status: "ACTIVE",
                             role,
+                            // Role change intentionally returns to that role's
+                            // documented baseline instead of carrying hidden
+                            // exceptions from the previous role.
+                            permissions: {},
+                          })
+                      : undefined}
+                    onCapabilityChange={settings.canManageMembers
+                      ? (capability, enabled) =>
+                          void changeMember(member, {
+                            status: "ACTIVE",
+                            permissions: {
+                              ...member.permissions,
+                              [capability]: enabled,
+                            },
+                          })
+                      : undefined}
+                    onResetCapabilities={settings.canManageMembers
+                      ? () =>
+                          void changeMember(member, {
+                            status: "ACTIVE",
+                            permissions: {},
                           })
                       : undefined}
                     onRemove={settings.canManageMembers
@@ -425,69 +452,145 @@ function MemberRow({
   member,
   owner = false,
   working = false,
+  canEdit = false,
   onRoleChange,
+  onCapabilityChange,
+  onResetCapabilities,
   onRemove,
 }: {
   member: SessionSettingsMember
   owner?: boolean
   working?: boolean
+  canEdit?: boolean
   onRoleChange?: (role: SessionSettingsMember["role"]) => void
+  onCapabilityChange?: (capability: CampaignCapability, enabled: boolean) => void
+  onResetCapabilities?: () => void
   onRemove?: () => void
 }) {
-  const editable = Boolean(onRoleChange || onRemove)
+  const customizedCount = Object.keys(member.permissions ?? {}).length
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-3">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate font-medium text-textH">{member.name}</span>
-          {owner ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
-              <ShieldCheck className="h-3 w-3" /> Mestre principal
-            </span>
+    <article className="rounded-xl border border-border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="truncate font-medium text-textH">{member.name}</span>
+            {owner ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
+                <ShieldCheck className="h-3 w-3" /> Mestre principal
+              </span>
+            ) : null}
+            {!owner && customizedCount > 0 ? (
+              <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] text-textH">
+                {customizedCount} acesso{customizedCount === 1 ? "" : "s"} personalizado{customizedCount === 1 ? "" : "s"}
+              </span>
+            ) : null}
+          </div>
+          {member.email ? (
+            <div className="mt-1 truncate text-xs text-textMuted">{member.email}</div>
           ) : null}
         </div>
-        {member.email ? (
-          <div className="mt-1 truncate text-xs text-textMuted">{member.email}</div>
-        ) : null}
+
+        {owner ? (
+          <div className="text-xs font-medium text-textMuted">Mestre</div>
+        ) : canEdit ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <SharedSelect
+              value={member.role}
+              disabled={working}
+              onChange={(event) =>
+                onRoleChange?.(event.target.value as SessionSettingsMember["role"])
+              }
+              className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH outline-none"
+            >
+              <option value="PLAYER">Jogador</option>
+              <option value="ASSISTANT">Assistente</option>
+              <option value="MODERATOR">Moderador</option>
+              <option value="MASTER">Mestre</option>
+            </SharedSelect>
+
+            {onRemove ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={working}
+                onClick={onRemove}
+              >
+                <Trash2 className="h-4 w-4" />
+                Remover
+              </Button>
+            ) : null}
+          </div>
+        ) : (
+          <div className="text-xs font-medium text-textMuted">
+            {roleLabel(member.role)}
+          </div>
+        )}
       </div>
 
-      {owner ? (
-        <div className="text-xs font-medium text-textMuted">Mestre</div>
-      ) : editable ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <SharedSelect
-            value={member.role}
-            disabled={working}
-            onChange={(event) =>
-              onRoleChange?.(event.target.value as SessionSettingsMember["role"])
-            }
-            className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH outline-none"
-          >
-            <option value="PLAYER">Jogador</option>
-            <option value="ASSISTANT">Assistente</option>
-            <option value="MODERATOR">Moderador</option>
-            <option value="MASTER">Mestre</option>
-          </SharedSelect>
+      {!owner ? (
+        <details className="mt-3 border-t border-border pt-3">
+          <summary className="cursor-pointer select-none text-xs font-semibold text-textH">
+            Acessos detalhados
+          </summary>
+          <p className="mt-2 text-xs leading-5 text-textMuted">
+            O papel define o padrão. Cada opção abaixo pode ser concedida ou retirada individualmente sem alterar o restante do papel.
+          </p>
 
-          {onRemove ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={working}
-              onClick={onRemove}
-            >
-              <Trash2 className="h-4 w-4" />
-              Remover
-            </Button>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {CAMPAIGN_DELEGATABLE_CAPABILITIES.map((entry) => {
+              const enabled = member.capabilities.includes(entry.capability)
+              const customized = Object.prototype.hasOwnProperty.call(
+                member.permissions,
+                entry.capability,
+              )
+              return (
+                <label
+                  key={entry.capability}
+                  className="flex gap-3 rounded-lg border border-border bg-bg-subtle p-3"
+                >
+                  <input
+                    type="checkbox"
+                    checked={enabled}
+                    disabled={!canEdit || working}
+                    onChange={(event) =>
+                      onCapabilityChange?.(entry.capability, event.target.checked)
+                    }
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-[color:var(--accent)]"
+                  />
+                  <span className="min-w-0">
+                    <span className="flex flex-wrap items-center gap-2 text-xs font-semibold text-textH">
+                      {entry.label}
+                      {customized ? (
+                        <span className="rounded-full border border-accentBorder px-1.5 py-0.5 text-[9px] font-medium text-accent">
+                          personalizado
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="mt-1 block text-[11px] leading-4 text-textMuted">
+                      {entry.description}
+                    </span>
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+
+          {canEdit && customizedCount > 0 ? (
+            <div className="mt-3 flex justify-end">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={working}
+                onClick={onResetCapabilities}
+              >
+                Restaurar padrão do papel
+              </Button>
+            </div>
           ) : null}
-        </div>
-      ) : (
-        <div className="text-xs font-medium text-textMuted">
-          {roleLabel(member.role)}
-        </div>
-      )}
-    </div>
+        </details>
+      ) : null}
+    </article>
   )
 }
 
