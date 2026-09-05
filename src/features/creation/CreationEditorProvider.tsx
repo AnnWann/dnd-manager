@@ -14,11 +14,13 @@ import {
   saveCreationSnapshot,
 } from "../../api/creation"
 import { getApiStatus } from "../../api/api-client"
+import { getSessionCreationSettings } from "../../api/session-settings"
 import { setCreationCustomSystemOverride } from "../../lib/customSystems/creationCustomSystemsBridge"
 import {
   toSessionRuntimeConfig,
 } from "../../shared/session-runtime/sessionRuntimeConfig"
 import type {
+  CreationCharacterConfiguration,
   CreationManagedDomains,
   CreationSnapshot,
   CreationState,
@@ -48,6 +50,11 @@ type CreationEditorContextValue = {
   save: () => Promise<void>
   cancel: () => void
   reload: () => Promise<void>
+}
+
+type OwnerChange = {
+  characterId: string
+  ownerId: string
 }
 
 const CreationEditorContext = createContext<CreationEditorContextValue | null>(null)
@@ -116,6 +123,8 @@ export function CreationEditorProvider({
   const runtimeRole = runtime?.role
   const runtimeStatus = runtime?.status
   const publishRuntimeConfig = runtime?.publishRuntimeConfig
+  const dispatchCharacterLifecycleOperation =
+    runtime?.dispatchCharacterLifecycleOperation
 
   useEffect(() => {
     if (
@@ -197,15 +206,82 @@ export function CreationEditorProvider({
   const save = useCallback(async () => {
     if (!dirty || !draft || baseRevision === null || saving) return
 
+    const ownerChanges = collectOwnerChanges(base, draft)
+    if (
+      ownerChanges.length > 0 &&
+      (
+        runtimeRole !== "MASTER" ||
+        runtimeStatus !== "connected" ||
+        !dispatchCharacterLifecycleOperation
+      )
+    ) {
+      const message =
+        "Não é possível alterar o jogador responsável enquanto o Session Server não estiver conectado como mestre."
+      setError(message)
+      throw new Error(message)
+    }
+
     setSaving(true)
     setError("")
     try {
+      let ownerDirectory = new Map<string, {
+        id: string
+        name: string
+        role: "master" | "player"
+      }>()
+
+      if (ownerChanges.length > 0) {
+        const settings = await getSessionCreationSettings(campaignId, {
+          force: true,
+        })
+        const activeUsers = [settings.owner, ...settings.members].filter(
+          (member) => member.status === "ACTIVE",
+        )
+        ownerDirectory = new Map(
+          activeUsers.map((member) => [
+            member.id,
+            {
+              id: member.id,
+              name: member.name,
+              role: member.role === "MASTER" ? "master" as const : "player" as const,
+            },
+          ]),
+        )
+
+        const missingOwner = ownerChanges.find(
+          (change) => !ownerDirectory.has(change.ownerId),
+        )
+        if (missingOwner) {
+          throw new Error(
+            "O jogador atribuído precisa ser um membro ativo da campanha.",
+          )
+        }
+      }
+
       const snapshot = await saveCreationSnapshot(
         campaignId,
         baseRevision,
         draft,
       )
       applySnapshot(snapshot)
+
+      let ownershipSyncFailed = false
+      for (const change of ownerChanges) {
+        const owner = ownerDirectory.get(change.ownerId)
+        if (!owner || !dispatchCharacterLifecycleOperation) continue
+        const sent = dispatchCharacterLifecycleOperation({
+          type: "character.session.owner.set",
+          characterId: change.characterId,
+          owner,
+        })
+        if (!sent) ownershipSyncFailed = true
+      }
+
+      if (ownershipSyncFailed) {
+        setError(
+          "A Criação foi salva, mas a troca de jogador não pôde ser enviada ao Session Server. Reconecte como mestre e refaça a atribuição.",
+        )
+      }
     } catch (cause) {
       if (getApiStatus(cause) === 409) {
         setError(
@@ -224,10 +300,14 @@ export function CreationEditorProvider({
     }
   }, [
     applySnapshot,
+    base,
     baseRevision,
     campaignId,
     dirty,
+    dispatchCharacterLifecycleOperation,
     draft,
+    runtimeRole,
+    runtimeStatus,
     saving,
   ])
 
@@ -285,6 +365,25 @@ export function useCreationEditor() {
 
 export function useOptionalCreationEditor() {
   return useContext(CreationEditorContext)
+}
+
+function collectOwnerChanges(
+  base: CreationState | null,
+  draft: CreationState,
+): OwnerChange[] {
+  if (!base) return []
+  const previousById = new Map(
+    base.characters.map((character) => [character.characterId, character]),
+  )
+
+  return draft.characters.flatMap((character) => {
+    const previous = previousById.get(character.characterId)
+    if (!previous || previous.ownerId === character.ownerId) return []
+    return [{
+      characterId: character.characterId,
+      ownerId: character.ownerId,
+    }]
+  })
 }
 
 function creationStatesEqual(left: CreationState, right: CreationState): boolean {
