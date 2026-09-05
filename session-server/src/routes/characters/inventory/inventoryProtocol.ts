@@ -28,7 +28,13 @@ type EquippedReference =
   | { type: "necklace"; itemId: string };
 
 export type SessionInventoryClientMessage =
-  | { type: "session.inventory.initialize"; partyInventory: Record<string, unknown>[]; groundInventory: Record<string, unknown>[] }
+  | {
+      type: "session.inventory.initialize";
+      partyInventory: Record<string, unknown>[];
+      groundInventory: Record<string, unknown>[];
+      carryCapacity?: number;
+      additionalSupplyConsumption?: number;
+    }
   | { type: "session.inventory.operation"; operation: SessionInventoryOperation };
 
 export function parseInventoryClientMessage(raw: string): SessionInventoryClientMessage | null {
@@ -38,6 +44,8 @@ export function parseInventoryClientMessage(raw: string): SessionInventoryClient
   const message = value as Record<string, unknown>;
   if (message.type === "session.inventory.initialize") {
     if (!Array.isArray(message.partyInventory) || !Array.isArray(message.groundInventory)) return null;
+    if (!isOptionalNonNegativeNumber(message.carryCapacity)) return null;
+    if (!isOptionalNonNegativeNumber(message.additionalSupplyConsumption)) return null;
     return message as SessionInventoryClientMessage;
   }
   if (message.type !== "session.inventory.operation" || !message.operation || typeof message.operation !== "object") return null;
@@ -48,4 +56,12 @@ export function parseInventoryClientMessage(raw: string): SessionInventoryClient
     && (operation.characterId !== "session" || typeof operation.value !== "number" || !Number.isFinite(operation.value) || operation.value < 0)
   ) return null;
   return message as SessionInventoryClientMessage;
+}
+
+function isOptionalNonNegativeNumber(value: unknown): boolean {
+  return value === undefined || (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= 0
+  );
 }
