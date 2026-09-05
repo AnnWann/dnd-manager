@@ -83,6 +83,12 @@ export class SessionActor extends EquipmentSessionActor {
           revision: 0,
           partyInventory: parsed.partyInventory as Itemmable[],
           groundInventory: parsed.groundInventory as Itemmable[],
+          ...(parsed.carryCapacity !== undefined
+            ? { carryCapacity: parsed.carryCapacity }
+            : {}),
+          ...(parsed.additionalSupplyConsumption !== undefined
+            ? { additionalSupplyConsumption: parsed.additionalSupplyConsumption }
+            : {}),
         };
         await this.ctx.storage.put(INVENTORY_STATE_KEY, state);
         const projection = await reconcileSessionSupplyProjection(this.ctx.storage);
@@ -91,11 +97,32 @@ export class SessionActor extends EquipmentSessionActor {
           state: projection.state ?? state,
         });
       } else {
+        const next: SharedInventoryState = {
+          ...current,
+          ...(current.carryCapacity === undefined && parsed.carryCapacity !== undefined
+            ? { carryCapacity: parsed.carryCapacity }
+            : {}),
+          ...(current.additionalSupplyConsumption === undefined && parsed.additionalSupplyConsumption !== undefined
+            ? { additionalSupplyConsumption: parsed.additionalSupplyConsumption }
+            : {}),
+        };
+        const migrated =
+          next.carryCapacity !== current.carryCapacity ||
+          next.additionalSupplyConsumption !== current.additionalSupplyConsumption;
+        if (migrated) await this.ctx.storage.put(INVENTORY_STATE_KEY, next);
         const projection = await reconcileSessionSupplyProjection(this.ctx.storage);
-        send(webSocket, {
-          type: "session.inventory.snapshot",
-          state: projection.state ?? current,
-        });
+        const authoritativeState = projection.state ?? next;
+        if (migrated || projection.changed) {
+          broadcast(this.ctx.getWebSockets(), {
+            type: "session.inventory.snapshot",
+            state: authoritativeState,
+          });
+        } else {
+          send(webSocket, {
+            type: "session.inventory.snapshot",
+            state: authoritativeState,
+          });
+        }
       }
       return;
     }
