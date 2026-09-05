@@ -51,7 +51,9 @@ export function AppHeader({ rightContent }: { rightContent?: ReactNode }) {
         </div>
 
         {rightContent ? (
-          <div className="flex shrink-0 items-center gap-2">{rightContent}</div>
+          <div className="mr-14 flex shrink-0 items-center gap-2 md:mr-0">
+            {rightContent}
+          </div>
         ) : null}
       </div>
     </header>
