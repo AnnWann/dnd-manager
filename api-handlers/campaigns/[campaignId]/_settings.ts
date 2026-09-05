@@ -95,8 +95,11 @@ export async function GET(
     const canEditCharacterSettings = Boolean(
       role && canManageCreationSection(role, "settings", viewerOverrides),
     )
+    const canManageRequests = Boolean(
+      role && canManageCreationSection(role, "requests", viewerOverrides),
+    )
 
-    if (!canViewPermissions && !canEditCharacterSettings) {
+    if (!canViewPermissions && !canEditCharacterSettings && !canManageRequests) {
       throw new ApiError(
         403,
         "SETTINGS_ACCESS_REQUIRED",
