@@ -65,7 +65,9 @@ export function SessionCreationSettingsView() {
       setLoading(true)
       setErrorMessage("")
       try {
-        const next = await getSessionCreationSettings(campaignId!)
+        // Ownership assignment is security-sensitive and must use the current
+        // campaign membership instead of a potentially stale preload cache.
+        const next = await getSessionCreationSettings(campaignId!, { force: true })
         if (!cancelled) setSettings(next)
       } catch (error) {
         if (!cancelled) {
@@ -102,15 +104,26 @@ export function SessionCreationSettingsView() {
   const visibleCharacters = useMemo(
     () => sessionCharacters.map((character) => {
       const configuration = creationConfigurationById.get(character.get("id"))
-      return configuration
-        ? applyCreationConfiguration(
-            character,
-            configuration,
-            customSystemDefinitions,
-          )
-        : character
+      if (!configuration) return character
+
+      const configuredOwner =
+        resolveActiveCampaignOwner(settings, configuration.ownerId)
+        ?? getOwner(configuration.ownerId)
+
+      return applyCreationConfiguration(
+        character,
+        configuration,
+        customSystemDefinitions,
+        configuredOwner,
+      )
     }),
-    [creationConfigurationById, customSystemDefinitions, sessionCharacters],
+    [
+      creationConfigurationById,
+      customSystemDefinitions,
+      getOwner,
+      sessionCharacters,
+      settings,
+    ],
   )
 
   const selectedCharacter = useMemo(
@@ -130,22 +143,21 @@ export function SessionCreationSettingsView() {
   const configuredPlayers = useMemo(() => {
     const byId = new Map<string, Player>()
 
-    for (const key of knownPlayerKeys) {
-      const player = getOwner(key)
-      if (player.id) byId.set(player.id, player)
-    }
-
     if (settings) {
       const users = [settings.owner, ...settings.members].filter(
         (member) => member.status === "ACTIVE",
       )
       for (const member of users) {
-        byId.set(member.id, {
-          id: member.id,
-          name: member.name,
-          role: member.role === "MASTER" ? "master" : "player",
-        })
+        byId.set(member.id, sessionMemberToPlayer(member))
       }
+      return byId
+    }
+
+    // Fallback only while the authoritative membership list is unavailable.
+    // Once settings load, stale/free-text owners must not remain assignable.
+    for (const key of knownPlayerKeys) {
+      const player = getOwner(key)
+      if (player.id) byId.set(player.id, player)
     }
 
     return byId
@@ -211,6 +223,7 @@ export function SessionCreationSettingsView() {
       source,
       currentConfiguration,
       customSystemDefinitions,
+      resolveConfiguredOwner(currentConfiguration.ownerId),
     )
     const updated = updater(current)
     const nextConfiguration = toCreationConfiguration(
@@ -485,12 +498,31 @@ function roleLabel(role: SessionSettingsMember["role"]): string {
   return "Jogador"
 }
 
+function resolveActiveCampaignOwner(
+  settings: SessionCreationSettings | null,
+  ownerId: string,
+): Player | undefined {
+  if (!settings) return undefined
+  const member = [settings.owner, ...settings.members].find(
+    (entry) => entry.id === ownerId && entry.status === "ACTIVE",
+  )
+  return member ? sessionMemberToPlayer(member) : undefined
+}
+
+function sessionMemberToPlayer(member: SessionSettingsMember): Player {
+  return {
+    id: member.id,
+    name: member.name,
+    role: member.role === "MASTER" ? "master" : "player",
+  }
+}
+
 function applyCreationConfiguration(
   character: CharacterTemplate,
   configuration: CreationCharacterConfiguration,
   definitions: CustomSystemDefinition[],
+  owner: Player,
 ): CharacterTemplate {
-  const currentOwner = character.get("owner")
   const currentSystems = (character.get("sheet").customSystems ?? []) as CharacterCustomSystemState[]
   const reconciledSystems = reconcileConfiguredCustomSystemStates(
     currentSystems,
@@ -502,7 +534,7 @@ function applyCreationConfiguration(
     .with("visibility", configuration.visibility)
     .with("unique", configuration.unique)
     .with("owner", {
-      ...currentOwner,
+      ...owner,
       id: configuration.ownerId,
     })
     .withSheet("type", configuration.type)
