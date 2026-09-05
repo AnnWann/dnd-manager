@@ -1,7 +1,15 @@
-import { Archive, Download, RotateCcw, Upload } from "lucide-react"
+import {
+  Archive,
+  Download,
+  RotateCcw,
+  Trash2,
+  Upload,
+  UserMinus,
+} from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 
+import { unlinkCharacterFromCampaign } from "../../api/user-campaigns"
 import { Button } from "../../components/ui/Button"
 import {
   Card,
@@ -14,6 +22,7 @@ import { CharacterSelectorList } from "../../features/characters/selector/Charac
 import { toSessionCharacterSelectorItem } from "../../features/characters/selector/sessionCharacterSelectorAdapter"
 import { useOptionalSessionRuntime } from "../../features/session-runtime/useSessionRuntime"
 import { sessionCharacterPath } from "../../lib/campaignRoutes"
+import { notifySessionContentChanged } from "../../lib/sessionEvents"
 import {
   CharacterTemplate,
   type CharacterTemplateProps,
@@ -197,6 +206,47 @@ export function CampaignCharactersView() {
     }
   }
 
+  async function kickSelectedCharacter() {
+    if (
+      !campaignId ||
+      !runtime ||
+      !canManageLifecycle ||
+      !selectedCharacter ||
+      working
+    ) return
+
+    const characterId = selectedCharacter.get("id")
+    const characterName = selectedCharacter.get("name") || "este personagem"
+    if (!window.confirm(
+      `Expulsar ${characterName} da sessão? O vínculo com a campanha será removido e a cópia atual ficará em Personagens inativos. A ficha original do usuário não será apagada.`,
+    )) return
+
+    setWorking(true)
+    setErrorMessage("")
+    try {
+      await unlinkCharacterFromCampaign(campaignId, characterId)
+      notifySessionContentChanged()
+
+      const sent = runtime.dispatchCharacterLifecycleOperation({
+        type: "character.session.remove",
+        characterId,
+      })
+      if (!sent) {
+        setErrorMessage(
+          "O personagem foi desvinculado da campanha, mas não foi possível expulsar a cópia ativa do estado da sessão.",
+        )
+      }
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível expulsar o personagem da sessão.",
+      )
+    } finally {
+      setWorking(false)
+    }
+  }
+
   function reactivateSelectedCharacter() {
     if (!runtime || !canManageLifecycle || !selectedInactiveCharacter || working) return
 
@@ -208,6 +258,49 @@ export function CampaignCharactersView() {
     })
     if (!sent) {
       setErrorMessage("Não foi possível reativar o personagem no estado da sessão.")
+    }
+  }
+
+  async function purgeSelectedInactiveCharacter() {
+    if (
+      !campaignId ||
+      !runtime ||
+      !canManageLifecycle ||
+      !selectedInactiveCharacter ||
+      working
+    ) return
+
+    const characterId = selectedInactiveCharacter.get("id")
+    const characterName = selectedInactiveCharacter.get("name") || "este personagem"
+    if (!window.confirm(
+      `Excluir definitivamente ${characterName} desta sessão? Isso apaga a cópia preservada no estado da sessão e não pode ser desfeito. A ficha original do usuário não será apagada.`,
+    )) return
+
+    setWorking(true)
+    setErrorMessage("")
+    try {
+      // An inactive character may still be linked to Creation. Remove that
+      // relationship first so the normal bootstrap cannot recreate it.
+      await unlinkCharacterFromCampaign(campaignId, characterId)
+      notifySessionContentChanged()
+
+      const sent = runtime.dispatchCharacterLifecycleOperation({
+        type: "character.session.purge",
+        characterId,
+      })
+      if (!sent) {
+        setErrorMessage(
+          "O personagem foi desvinculado da campanha, mas a cópia preservada não pôde ser excluída do estado da sessão.",
+        )
+      }
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir definitivamente o personagem da sessão.",
+      )
+    } finally {
+      setWorking(false)
     }
   }
 
@@ -311,16 +404,28 @@ export function CampaignCharactersView() {
         headerActions={
           <>
             {canManageLifecycle ? (
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={!selectedCharacter || working}
-                title="Move o personagem para a área de inativos sem apagar sua ficha."
-                onClick={inactivateSelectedCharacter}
-              >
-                <Archive className="h-4 w-4" />
-                Inativar
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={!selectedCharacter || working}
+                  title="Move o personagem para a área de inativos sem apagar sua ficha."
+                  onClick={inactivateSelectedCharacter}
+                >
+                  <Archive className="h-4 w-4" />
+                  Inativar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={!selectedCharacter || working}
+                  title="Desvincula o personagem da campanha e move a cópia atual para inativos."
+                  onClick={() => void kickSelectedCharacter()}
+                >
+                  <UserMinus className="h-4 w-4" />
+                  Expulsar
+                </Button>
+              </>
             ) : null}
             <Button
               size="sm"
@@ -351,6 +456,7 @@ export function CampaignCharactersView() {
           selectedCharacterId={selectedInactiveCharacterId}
           onSelectCharacter={setSelectedInactiveCharacterId}
           onReactivate={reactivateSelectedCharacter}
+          onPurge={() => void purgeSelectedInactiveCharacter()}
           disabled={!canManageLifecycle || !selectedInactiveCharacter || working}
         />
       ) : null}
@@ -373,12 +479,14 @@ function InactiveCharactersPanel({
   selectedCharacterId,
   onSelectCharacter,
   onReactivate,
+  onPurge,
   disabled,
 }: {
   characters: ReturnType<typeof toSessionCharacterSelectorItem>[]
   selectedCharacterId: string
   onSelectCharacter: (characterId: string) => void
   onReactivate: () => void
+  onPurge: () => void
   disabled: boolean
 }) {
   return (
@@ -388,18 +496,30 @@ function InactiveCharactersPanel({
           <div>
             <div className="text-sm font-semibold text-textH">Personagens inativos</div>
             <p className="mt-1 text-xs text-text">
-              Personagens mortos, aposentados ou removidos da sessão ficam preservados aqui.
+              Personagens mortos, aposentados ou removidos da sessão ficam preservados aqui até o mestre excluí-los definitivamente.
             </p>
           </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={disabled}
-            onClick={onReactivate}
-          >
-            <RotateCcw className="h-4 w-4" />
-            Reativar selecionado
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={disabled}
+              onClick={onReactivate}
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reativar selecionado
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={disabled}
+              title="Apaga definitivamente a cópia preservada desta sessão."
+              onClick={onPurge}
+            >
+              <Trash2 className="h-4 w-4 text-danger" />
+              Excluir definitivamente
+            </Button>
+          </div>
         </div>
       </CardHeader>
 
