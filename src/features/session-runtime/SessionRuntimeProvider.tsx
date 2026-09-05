@@ -67,6 +67,11 @@ type OptionalViteImportMeta = ImportMeta & {
   }
 }
 
+type SessionInventoryBootstrapSettings = {
+  carryCapacity?: number
+  additionalSupplyConsumption?: number
+}
+
 export type SessionRuntimeContextValue = {
   status: SessionRuntimeStatus
   sessionId: string
@@ -87,7 +92,11 @@ export type SessionRuntimeContextValue = {
   initializeAbilities: (characters: SessionAbilitySeed[]) => boolean
   initializeHp: (characters: SessionHpSeed[]) => boolean
   initializeConditions: (characters: SessionConditionSeed[]) => boolean
-  initializeInventory: (partyInventory: Itemmable[], groundInventory: Itemmable[]) => boolean
+  initializeInventory: (
+    partyInventory: Itemmable[],
+    groundInventory: Itemmable[],
+    settings?: SessionInventoryBootstrapSettings,
+  ) => boolean
   initializeMissions: (missions: Mission[]) => boolean
   initializeInitiative: (session: InitiativeSession) => boolean
   dispatchSheetOperation: (operation: SessionLoggedOperation) => boolean
@@ -308,8 +317,18 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
       },
     }) ?? false)
   }, [characterSnapshotReady, sessionCharactersById])
-  const initializeInventory = useCallback((partyInventory: Itemmable[], groundInventory: Itemmable[]) =>
-    socketRef.current?.send({ type: "session.inventory.initialize", partyInventory, groundInventory }) ?? false, [])
+  const initializeInventory = useCallback((
+    partyInventory: Itemmable[],
+    groundInventory: Itemmable[],
+    settings: SessionInventoryBootstrapSettings = {},
+  ) =>
+    socketRef.current?.send({
+      type: "session.inventory.initialize",
+      partyInventory,
+      groundInventory,
+      carryCapacity: settings.carryCapacity,
+      additionalSupplyConsumption: settings.additionalSupplyConsumption,
+    }) ?? false, [])
   const initializeMissions = useCallback((missions: Mission[]) =>
     socketRef.current?.send({ type: "session.missions.initialize", missions }) ?? false, [])
   const initializeInitiative = useCallback((session: InitiativeSession) =>
