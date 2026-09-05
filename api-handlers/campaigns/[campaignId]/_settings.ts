@@ -9,6 +9,12 @@ import {
 } from "../../../server/api.js"
 import { prisma } from "../../../server/prisma.js"
 import { requireSession } from "../../../server/session.js"
+import {
+  canManageCreationSection,
+  canReadCreationPermissions,
+  normalizeCampaignCapabilityOverrides,
+  resolveEffectiveCampaignCapabilities,
+} from "../../../src/shared/campaign/campaignRoles.js"
 
 type RouteContext = {
   params?:
@@ -52,6 +58,7 @@ export async function GET(
             userId: true,
             role: true,
             status: true,
+            permissions: true,
             user: {
               select: {
                 id: true,
@@ -78,16 +85,22 @@ export async function GET(
         member.status === CampaignMemberStatus.ACTIVE,
     )
     const role = isOwner ? CampaignRole.MASTER : membership?.role
-    const canViewPermissions =
-      role === CampaignRole.MASTER || role === CampaignRole.MODERATOR
-    const canEditCreationContent =
-      role === CampaignRole.MASTER || role === CampaignRole.ASSISTANT
+    const viewerOverrides = isOwner
+      ? {}
+      : normalizeCampaignCapabilityOverrides(membership?.permissions)
 
-    if (!canViewPermissions && !canEditCreationContent) {
+    const canViewPermissions = Boolean(
+      role && canReadCreationPermissions(role, viewerOverrides),
+    )
+    const canEditCharacterSettings = Boolean(
+      role && canManageCreationSection(role, "settings", viewerOverrides),
+    )
+
+    if (!canViewPermissions && !canEditCharacterSettings) {
       throw new ApiError(
         403,
         "SETTINGS_ACCESS_REQUIRED",
-        "Seu papel na sessão não permite acessar estas configurações.",
+        "Suas permissões na sessão não permitem acessar estas configurações.",
       )
     }
 
@@ -110,14 +123,26 @@ export async function GET(
           email: canViewPermissions ? campaign.owner.email : null,
           role: CampaignRole.MASTER,
           status: CampaignMemberStatus.ACTIVE,
+          permissions: {},
+          capabilities: resolveEffectiveCampaignCapabilities(CampaignRole.MASTER),
         },
-        members: visibleMembers.map((member) => ({
-          id: member.user.id,
-          name: member.user.name,
-          email: canViewPermissions ? member.user.email : null,
-          role: member.role,
-          status: member.status,
-        })),
+        members: visibleMembers.map((member) => {
+          const permissions = normalizeCampaignCapabilityOverrides(member.permissions)
+          return {
+            id: member.user.id,
+            name: member.user.name,
+            email: canViewPermissions ? member.user.email : null,
+            role: member.role,
+            status: member.status,
+            permissions: canViewPermissions ? permissions : {},
+            capabilities: canViewPermissions
+              ? resolveEffectiveCampaignCapabilities(member.role, permissions)
+              : [],
+          }
+        }),
+        viewerCapabilities: role
+          ? resolveEffectiveCampaignCapabilities(role, viewerOverrides)
+          : [],
         canManageMembers: isOwner,
       },
     })
