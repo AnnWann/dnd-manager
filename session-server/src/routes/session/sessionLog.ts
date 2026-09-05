@@ -1,3 +1,5 @@
+import { reconcileSessionSupplyProjection } from "./supplyProjection";
+
 export const SESSION_LOG_KEY = "hp-log";
 export const SHARED_INVENTORY_SCOPE = "inventory:shared";
 export const SESSION_LOG_PAGE_SIZE = 20;
@@ -170,6 +172,7 @@ export async function commitSessionMutation(
   const next = trimSessionLog(records, args.maxRecords);
   normalizeSessionLogRecordsInPlace(next);
   await storage.put({ ...args.writes, [SESSION_LOG_KEY]: next });
+  await refreshSupplyProjectionAfterWrites(storage, sockets, args.writes);
   broadcastSessionLogToMasters(sockets, next);
   return next;
 }
@@ -190,6 +193,7 @@ export async function commitSessionMutations(
   const next = trimSessionLog(current, args.maxRecords);
   normalizeSessionLogRecordsInPlace(next);
   await storage.put({ ...args.writes, [SESSION_LOG_KEY]: next });
+  await refreshSupplyProjectionAfterWrites(storage, sockets, args.writes);
   broadcastSessionLogToMasters(sockets, next);
   return next;
 }
@@ -210,6 +214,7 @@ export async function commitSessionUndo(
   const next = trimSessionLog(records, args.maxRecords);
   normalizeSessionLogRecordsInPlace(next);
   await storage.put({ ...args.writes, [SESSION_LOG_KEY]: next });
+  await refreshSupplyProjectionAfterWrites(storage, sockets, args.writes);
   broadcastSessionLogToMasters(sockets, next);
   return next;
 }
@@ -393,6 +398,31 @@ function toClientLogRecord(record: SessionLogRecord): SessionClientLogRecord {
     ...(record.undoneAt ? { undoneAt: record.undoneAt } : {}),
     ...(record.undoneBy ? { undoneBy: record.undoneBy } : {}),
   };
+}
+
+async function refreshSupplyProjectionAfterWrites(
+  storage: DurableObjectStorage,
+  sockets: WebSocket[],
+  writes: Record<string, unknown>,
+): Promise<void> {
+  if (
+    !("abilities-state" in writes) &&
+    !("characters-state" in writes) &&
+    !("inventory-state" in writes)
+  ) {
+    return;
+  }
+
+  const projection = await reconcileSessionSupplyProjection(storage);
+  if (!projection.changed || !projection.state) return;
+
+  const payload = JSON.stringify({
+    type: "session.inventory.updated",
+    state: projection.state,
+  });
+  for (const socket of sockets) {
+    try { socket.send(payload); } catch {}
+  }
 }
 
 function normalizeScopes(scopes: string[]): string[] {
