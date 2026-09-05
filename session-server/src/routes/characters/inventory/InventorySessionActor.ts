@@ -655,7 +655,13 @@ function canPerform(
   hp: Record<string, SessionHpState>,
 ): boolean {
   if (connection.role === "MASTER") return true;
-  if (operation.type.startsWith("party.") || operation.type.startsWith("ground.")) return false;
+  if (isPartySettingsOperation(operation)) return false;
+  if (
+    operation.type === "party.item.add" ||
+    operation.type === "party.item.update" ||
+    operation.type === "party.item.remove"
+  ) return true;
+  if (operation.type.startsWith("ground.")) return false;
   if (operation.type === "inventory.item.transfer") {
     return operation.request.from.type !== "character" ||
       hp[operation.request.from.characterId]?.ownerUserId === connection.userId;
