@@ -1,6 +1,7 @@
 import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/session-runtime/sessionRuntimeConfig";
 import type { SessionCharacterLifecycleState } from "./characterLifecycleProtocol";
 import type { SessionConnection } from "./protocol";
+import { reconcileSessionSupplyProjection } from "./supplyProjection";
 
 const CHARACTER_SNAPSHOT_TYPES = new Set([
   "session.hp.snapshot",
@@ -110,6 +111,14 @@ export async function sendAllVisibleCharacterSnapshots(
     storage.get<Record<string, unknown>>("abilities-state").then((value) => value ?? {}),
     storage.get<Record<string, unknown>>("characters-state").then((value) => value ?? {}),
   ]);
+
+  const supplyProjection = await reconcileSessionSupplyProjection(storage);
+  if (supplyProjection.state) {
+    sendVisibilityFiltered(socket, {
+      type: "session.inventory.snapshot",
+      state: supplyProjection.state,
+    });
+  }
 
   sendVisibilityFiltered(socket, {
     type: "session.hp.snapshot",
