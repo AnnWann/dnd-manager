@@ -77,7 +77,8 @@ export async function POST(request: Request): Promise<Response> {
     const permissions = isOwner
       ? {}
       : normalizeCampaignCapabilityOverrides(membership!.permissions)
-    const role: SessionConnectionRole = isOwner ? "MASTER" : "PLAYER"
+    const role: SessionConnectionRole =
+      campaignRole === CampaignRole.MASTER ? "MASTER" : "PLAYER"
     const readAnyCharacter = canReadAnyCharacter(campaignRole, permissions)
     const writeAnyCharacter = canWriteAnyCharacter(campaignRole, permissions)
 
