@@ -25,6 +25,7 @@ import {
   createSessionLogRecord,
   readSessionLog,
 } from "../../session/sessionLog";
+import { reconcileSessionSupplyProjection } from "../../session/supplyProjection";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
@@ -39,6 +40,8 @@ type SharedInventoryState = {
   groundInventory: Itemmable[];
   carryCapacity?: number;
   additionalSupplyConsumption?: number;
+  supplyConsumers?: Array<{ characterId: string; name: string }>;
+  supplyPerLongRest?: number;
 };
 
 type TransferRequest = Extract<SessionInventoryOperation, { type: "inventory.item.transfer" }>["request"];
@@ -82,9 +85,17 @@ export class SessionActor extends EquipmentSessionActor {
           groundInventory: parsed.groundInventory as Itemmable[],
         };
         await this.ctx.storage.put(INVENTORY_STATE_KEY, state);
-        broadcast(this.ctx.getWebSockets(), { type: "session.inventory.snapshot", state });
+        const projection = await reconcileSessionSupplyProjection(this.ctx.storage);
+        broadcast(this.ctx.getWebSockets(), {
+          type: "session.inventory.snapshot",
+          state: projection.state ?? state,
+        });
       } else {
-        send(webSocket, { type: "session.inventory.snapshot", state: current });
+        const projection = await reconcileSessionSupplyProjection(this.ctx.storage);
+        send(webSocket, {
+          type: "session.inventory.snapshot",
+          state: projection.state ?? current,
+        });
       }
       return;
     }
@@ -171,7 +182,15 @@ export class SessionActor extends EquipmentSessionActor {
       if (result.hpChanged.has(id)) broadcast(this.ctx.getWebSockets(), { type: "session.hp.updated", character: hp[id] });
       if (result.conditionsChanged.has(id)) broadcast(this.ctx.getWebSockets(), { type: "session.conditions.updated", character: conditions[id] });
     }
-    if (result.sharedChanged) broadcast(this.ctx.getWebSockets(), { type: "session.inventory.updated", state: inventory });
+    if (result.sharedChanged) {
+      // commitSessionMutation may have refreshed the authoritative supply
+      // projection. Re-read it instead of broadcasting the pre-projection
+      // local object and accidentally erasing supplyConsumers/supplyPerLongRest.
+      broadcast(this.ctx.getWebSockets(), {
+        type: "session.inventory.updated",
+        state: await this.readInventoryState(),
+      });
+    }
   }
 
   private async readInventoryState(): Promise<SharedInventoryState> {
@@ -184,7 +203,11 @@ export class SessionActor extends EquipmentSessionActor {
   }
 
   private async sendInventorySnapshot(socket: WebSocket): Promise<void> {
-    send(socket, { type: "session.inventory.snapshot", state: await this.readInventoryState() });
+    const projection = await reconcileSessionSupplyProjection(this.ctx.storage);
+    send(socket, {
+      type: "session.inventory.snapshot",
+      state: projection.state ?? await this.readInventoryState(),
+    });
   }
 }
 
