@@ -2,12 +2,12 @@ import {
   authenticateSessionConnection,
   type SessionServerEnv,
 } from "./session/auth";
-import { SessionActor } from "./session/BootstrapGuardSessionActor";
+import { SessionActor } from "./session/SessionAdministrationSessionActor";
 
 export { SessionActor };
 
 const SESSION_CONNECT_ROUTE = /^\/session\/([^/]+)\/connect\/?$/;
-const SESSION_PROTOCOL_VERSION = 4;
+const SESSION_PROTOCOL_VERSION = 5;
 const SESSION_PROTOCOL_CAPABILITIES = [
   "character.damageAffinities.set",
   "character.bootstrap.guard",
@@ -15,6 +15,8 @@ const SESSION_PROTOCOL_CAPABILITIES = [
   "character.readAny",
   "character.writeAny",
   "party.supply.authoritative",
+  "character.session.purge",
+  "session.member.kick",
 ] as const;
 
 export default {
