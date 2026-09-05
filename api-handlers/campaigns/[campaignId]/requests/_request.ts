@@ -1,14 +1,14 @@
-import {
-  CampaignMemberStatus,
-  CampaignRole,
-  CharacterVisibility,
-} from "../../../../generated/prisma/client.js"
+import { CharacterVisibility } from "../../../../generated/prisma/client.js"
 import {
   ApiError,
   handleApiError,
   jsonResponse,
   readJsonObject,
 } from "../../../../server/api.js"
+import {
+  accessCanManageCreationSection,
+  getCampaignAccess,
+} from "../../../../server/campaign-capabilities.js"
 import { prisma } from "../../../../server/prisma.js"
 import { requireSession } from "../../../../server/session.js"
 
@@ -191,30 +191,12 @@ async function requireContentManager(
   campaignId: string,
   userId: string,
 ): Promise<void> {
-  const campaign = await prisma.campaign.findFirst({
-    where: {
-      id: campaignId,
-      OR: [
-        { ownerId: userId },
-        {
-          members: {
-            some: {
-              userId,
-              status: CampaignMemberStatus.ACTIVE,
-              role: { in: [CampaignRole.MASTER, CampaignRole.ASSISTANT] },
-            },
-          },
-        },
-      ],
-    },
-    select: { id: true },
-  })
-
-  if (!campaign) {
+  const access = await getCampaignAccess(campaignId, userId)
+  if (!access || !accessCanManageCreationSection(access, "requests")) {
     throw new ApiError(
       403,
       "CAMPAIGN_CONTENT_MANAGER_REQUIRED",
-      "Somente mestres e assistentes podem revisar solicitações da sessão.",
+      "Sua função na sessão não permite revisar solicitações.",
     )
   }
 }
