@@ -150,6 +150,13 @@ export function hasCampaignCapability(
   capability: CampaignCapability,
   overrides: CampaignCapabilityOverrides = {},
 ): boolean {
+  // MASTER is the full-authority preset. Fine-grained delegation is intended
+  // for PLAYER/ASSISTANT/MODERATOR; demote a member before restricting it.
+  if (role === "MASTER") {
+    if (isCreationSectionCapability(capability)) return true
+    return CAPABILITIES.MASTER.has(capability)
+  }
+
   const explicit = overrides[capability]
   if (typeof explicit === "boolean") return explicit
 
