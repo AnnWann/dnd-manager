@@ -7,13 +7,14 @@ import { SessionActor } from "./session/BootstrapGuardSessionActor";
 export { SessionActor };
 
 const SESSION_CONNECT_ROUTE = /^\/session\/([^/]+)\/connect\/?$/;
-const SESSION_PROTOCOL_VERSION = 3;
+const SESSION_PROTOCOL_VERSION = 4;
 const SESSION_PROTOCOL_CAPABILITIES = [
   "character.damageAffinities.set",
   "character.bootstrap.guard",
   "character.legacy.reconcile",
   "character.readAny",
   "character.writeAny",
+  "party.supply.authoritative",
 ] as const;
 
 export default {
@@ -80,4 +81,4 @@ export default {
       }),
     );
   },
-} satisfies ExportedHandler<SessionServerEnv>;
+};
