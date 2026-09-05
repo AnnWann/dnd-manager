@@ -17,6 +17,14 @@ export type SessionCharacterLifecycleOperation =
       characterId: string
     }
   | {
+      /**
+       * Irreversibly removes an already inactive character snapshot from this
+       * session's Durable Object. The user's source character is not deleted.
+       */
+      type: "character.session.purge"
+      characterId: string
+    }
+  | {
       type: "character.session.owner.set"
       characterId: string
       owner: Player
@@ -25,6 +33,15 @@ export type SessionCharacterLifecycleOperation =
       type: "character.session.resync"
       characterId: string
       character: Record<string, unknown>
+    }
+  | {
+      /**
+       * Removes a campaign member's live session presence and inactivates every
+       * active character currently owned by that member.
+       */
+      type: "session.member.kick"
+      characterId: "session"
+      userId: string
     }
   | {
       /**
