@@ -4,7 +4,7 @@ import {
   Inbox,
   Settings2,
   ShieldCheck,
-  Trash2,
+  UserMinus,
   UsersRound,
 } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
@@ -383,7 +383,7 @@ export function SessionCreationSettingsView() {
                       ? () => {
                           if (
                             window.confirm(
-                              `Remover ${member.name} da sessão? Os personagens vinculados desse usuário também serão desvinculados da campanha.`,
+                              `Expulsar ${member.name} da sessão? A participação será removida, os personagens vinculados serão retirados da campanha e as conexões abertas desse usuário serão encerradas.`,
                             )
                           ) {
                             void changeMember(member, { status: "REMOVED" })
@@ -516,8 +516,8 @@ function MemberRow({
                 disabled={working}
                 onClick={onRemove}
               >
-                <Trash2 className="h-4 w-4" />
-                Remover
+                <UserMinus className="h-4 w-4" />
+                Expulsar
               </Button>
             ) : null}
           </div>
