@@ -152,8 +152,8 @@ export function CharacterSelectorList({
                   type="button"
                   className={
                     isSelected
-                      ? "flex w-full items-center justify-between gap-3 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-left"
-                      : "flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-bg px-3 py-2 text-left hover:bg-[color:var(--social-bg)]"
+                      ? "flex w-full items-center justify-between gap-3 rounded-lg border border-accentBorder bg-accentBg px-3 py-2.5 text-left"
+                      : "flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-bg px-3 py-2.5 text-left hover:bg-[color:var(--social-bg)]"
                   }
                   onClick={() => selectOrOpen(character.id)}
                 >
@@ -162,7 +162,7 @@ export function CharacterSelectorList({
                       <img
                         src={character.imageUrl}
                         alt=""
-                        className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                        className="h-12 w-12 shrink-0 rounded-lg object-cover"
                       />
                     ) : null}
 
