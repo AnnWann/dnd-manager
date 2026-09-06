@@ -2,12 +2,12 @@ import {
   authenticateSessionConnection,
   type SessionServerEnv,
 } from "./session/auth";
-import { SessionActor } from "./session/SessionAdministrationSessionActor";
+import { SessionActor } from "./session/CreatureDropSessionActor";
 
 export { SessionActor };
 
 const SESSION_CONNECT_ROUTE = /^\/session\/([^/]+)\/connect\/?$/;
-const SESSION_PROTOCOL_VERSION = 5;
+const SESSION_PROTOCOL_VERSION = 6;
 const SESSION_PROTOCOL_CAPABILITIES = [
   "character.damageAffinities.set",
   "character.bootstrap.guard",
@@ -17,6 +17,7 @@ const SESSION_PROTOCOL_CAPABILITIES = [
   "party.supply.authoritative",
   "character.session.purge",
   "session.member.kick",
+  "creature.loot.drop",
 ] as const;
 
 export default {
