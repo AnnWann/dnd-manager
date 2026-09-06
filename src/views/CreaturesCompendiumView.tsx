@@ -5,6 +5,7 @@ import {
   Copy,
   FileImage,
   FileJson,
+  PackageOpen,
   Pencil,
   Plus,
   Search,
@@ -19,6 +20,7 @@ import { Modal } from "../components/ui/Modal"
 import { useCreatureCompendium } from "../contexts/creatureCompendiumContext"
 import { useSyncContext } from "../contexts/syncContext"
 import { CreatureCompendiumTransferBar } from "../features/creatures/CreatureCompendiumTransferBar"
+import { CreatureDropsDialog } from "../features/creatures/CreatureDropsDialog"
 import { CreatureEditorDialog } from "../features/creatures/CreatureEditorDialog"
 import {
   CreatureQuickSheet,
@@ -47,10 +49,9 @@ export function CreaturesCompendiumView() {
   } = useCreatureCompendium()
   const [query, setQuery] = useState("")
   const [sideFilter, setSideFilter] = useState<CreatureSide | "all">("all")
-  const [editingCreature, setEditingCreature] =
-    useState<CompendiumCreature>()
-  const [viewingCreature, setViewingCreature] =
-    useState<CompendiumCreature>()
+  const [editingCreature, setEditingCreature] = useState<CompendiumCreature>()
+  const [viewingCreature, setViewingCreature] = useState<CompendiumCreature>()
+  const [dropCreature, setDropCreature] = useState<CompendiumCreature>()
 
   const filteredCreatures = useMemo(() => {
     const normalizedQuery = normalizeSearchText(query)
@@ -133,7 +134,7 @@ export function CreaturesCompendiumView() {
             </div>
             <p className="mt-2 max-w-3xl text-sm text-text">
               Fichas enxutas para a Criação: estatísticas de combate, habilidades,
-              ações, notas e uma imagem opcional da ficha original.
+              ações, drops, notas e uma imagem opcional da ficha original.
             </p>
           </div>
 
@@ -186,6 +187,7 @@ export function CreaturesCompendiumView() {
               key={creature.id}
               creature={creature}
               onView={() => setViewingCreature(creature)}
+              onDrops={() => setDropCreature(creature)}
               onEdit={() => setEditingCreature(creature)}
               onDuplicate={() => {
                 const duplicate = duplicateCreature(creature.id)
@@ -232,6 +234,17 @@ export function CreaturesCompendiumView() {
         />
       ) : null}
 
+      {dropCreature ? (
+        <CreatureDropsDialog
+          creature={dropCreature}
+          onClose={() => setDropCreature(undefined)}
+          onSave={(creature) => {
+            upsertCreature(creature)
+            setDropCreature(undefined)
+          }}
+        />
+      ) : null}
+
       {viewingCreature ? (
         <Modal
           title={`Ficha rápida — ${viewingCreature.name}`}
@@ -251,6 +264,7 @@ export function CreaturesCompendiumView() {
 function CreatureCard({
   creature,
   onView,
+  onDrops,
   onEdit,
   onDuplicate,
   onExportJson,
@@ -259,12 +273,16 @@ function CreatureCard({
 }: {
   creature: CompendiumCreature
   onView: () => void
+  onDrops: () => void
   onEdit: () => void
   onDuplicate: () => void
   onExportJson: () => void
   onExportZip: () => void
   onDelete: () => void
 }) {
+  const guaranteedCount = creature.drops.guaranteed.length
+  const rollGroupCount = creature.drops.rollGroups.length
+
   return (
     <article className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-bg shadow-theme-sm transition-colors hover:border-borderStrong">
       <button
@@ -293,6 +311,12 @@ function CreatureCard({
               {creature.unique ? (
                 <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-0.5 text-[10px] font-semibold text-accent">
                   Única
+                </span>
+              ) : null}
+              {guaranteedCount || rollGroupCount ? (
+                <span className="rounded-full border border-border bg-bg-subtle px-2 py-0.5 text-[10px] text-textMuted">
+                  Drops: {guaranteedCount} fixo{guaranteedCount === 1 ? "" : "s"}
+                  {rollGroupCount ? ` + 1d${rollGroupCount}` : ""}
                 </span>
               ) : null}
             </div>
@@ -339,6 +363,14 @@ function CreatureCard({
       </button>
 
       <div className="flex items-center justify-end gap-1 border-t border-border px-3 py-2">
+        <Button
+          size="icon"
+          variant="ghost"
+          title="Configurar drops"
+          onClick={onDrops}
+        >
+          <PackageOpen className="h-4 w-4" />
+        </Button>
         <Button
           size="icon"
           variant="ghost"
