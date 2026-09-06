@@ -1,4 +1,4 @@
-import { ArrowRight, Trash2 } from "lucide-react"
+import { ArrowRight, Trash2, X } from "lucide-react"
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 
@@ -110,9 +110,9 @@ export function UserCampaignsRouteView() {
                 return (
                   <div
                     key={campaign.id}
-                    className="flex flex-col gap-3 rounded-xl border border-border bg-bg-subtle p-3 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-bg-subtle p-3"
                   >
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold text-textH">
                         {campaign.name}
                       </div>
@@ -123,26 +123,35 @@ export function UserCampaignsRouteView() {
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="ml-auto flex shrink-0 items-center gap-2">
                       {campaign.isOwner ? (
                         <Button
                           size="sm"
                           variant="danger"
+                          className="w-8 px-0 sm:w-auto sm:px-3"
                           disabled={busy}
                           loading={deleting}
+                          aria-label={`Excluir ${campaign.name}`}
+                          title="Excluir campanha"
                           onClick={() => void deleteOwnedCampaign(campaign)}
                         >
-                          <Trash2 className="h-4 w-4" />
-                          Excluir
+                          <X className="h-4 w-4 sm:hidden" />
+                          <Trash2 className="hidden h-4 w-4 sm:block" />
+                          <span className="hidden sm:inline">Excluir</span>
                         </Button>
                       ) : null}
 
                       <Button
                         size="sm"
+                        className="w-8 px-0 sm:w-auto sm:px-3"
                         disabled={busy}
+                        aria-label={`Entrar em ${campaign.name}`}
+                        title="Entrar na sessão"
                         onClick={() => void enterCampaign(campaign)}
                       >
-                        {preparing ? "Preparando..." : "Entrar"}
+                        <span className="hidden sm:inline">
+                          {preparing ? "Preparando..." : "Entrar"}
+                        </span>
                         <ArrowRight className="h-4 w-4" />
                       </Button>
                     </div>
