@@ -1,5 +1,6 @@
 import type { Attribute } from "../sheet/Attribute"
 import { inferDamageAffinitiesFromLegacy, normalizeDamageAffinities, type DamageAffinity, type DamageType } from "../combat/Damage"
+import { normalizeCreatureDrops, type CreatureDrops } from "./CreatureDrops"
 
 export type CreatureSide = "ally" | "enemy" | "neutral"
 
@@ -77,6 +78,9 @@ export type CompendiumCreature = {
   reactions: CreatureFeature[]
   legendaryActions: CreatureFeature[]
   combatNotes: string
+
+  /** Loot enviado ao chão quando uma cópia da criatura morre na iniciativa. */
+  drops: CreatureDrops
 
   /**
    * Portrait or representative image of the creature.
@@ -158,6 +162,7 @@ export function createCompendiumCreature(
       "Ação lendária",
     ),
     combatNotes: patch.combatNotes ?? "",
+    drops: normalizeCreatureDrops(patch.drops),
     sheetImageUrl: patch.sheetImageUrl,
     createdAt: finiteNumber(patch.createdAt, now),
     updatedAt: finiteNumber(patch.updatedAt, now),
@@ -240,6 +245,7 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
       "Ação lendária",
     ),
     combatNotes: stringValue(value.combatNotes),
+    drops: normalizeCreatureDrops(value.drops ?? value.loot ?? value.dropTable),
     sheetImageUrl:
       optionalStringValue(value.imageUrl) ??
       optionalStringValue(value.creatureImageUrl) ??
@@ -291,6 +297,7 @@ export function duplicateCompendiumCreature(
     bonusActions: duplicateFeatures(creature.bonusActions),
     reactions: duplicateFeatures(creature.reactions),
     legendaryActions: duplicateFeatures(creature.legendaryActions),
+    drops: structuredClone(creature.drops),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
