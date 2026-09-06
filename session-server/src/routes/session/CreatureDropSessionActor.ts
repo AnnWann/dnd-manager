@@ -6,6 +6,7 @@ import {
 import {
   normalizeInitiativeSession,
   type InitiativeEntry,
+  type InitiativeSession,
 } from "../../../../src/models/initiative/Initiative";
 import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../characters/sheet/characterState";
 import {
@@ -75,7 +76,9 @@ export class SessionActor extends BaseSessionActor {
 
     const beforeState = await readInitiativeState(this.ctx.storage);
     const before = beforeState.initialized
-      ? normalizeInitiativeSession(beforeState.session)
+      ? normalizeInitiativeSession(
+          beforeState.session as Partial<InitiativeSession>,
+        )
       : null;
 
     await super.webSocketMessage(webSocket, message);
@@ -84,7 +87,9 @@ export class SessionActor extends BaseSessionActor {
     const afterState = await readInitiativeState(this.ctx.storage);
     if (!afterState.initialized || afterState.revision === beforeState.revision) return;
 
-    const after = normalizeInitiativeSession(afterState.session);
+    const after = normalizeInitiativeSession(
+      afterState.session as Partial<InitiativeSession>,
+    );
     const newlyDefeated = findNewlyDefeatedCreatureEntries(before.entries, after.entries);
     if (!newlyDefeated.length) return;
 
