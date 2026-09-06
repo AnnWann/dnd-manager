@@ -135,9 +135,15 @@ export function UserCampaignsRouteView() {
                           title="Excluir campanha"
                           onClick={() => void deleteOwnedCampaign(campaign)}
                         >
-                          <X className="h-4 w-4 sm:hidden" />
-                          <Trash2 className="hidden h-4 w-4 sm:block" />
-                          <span className="hidden sm:inline">Excluir</span>
+                          {!deleting ? (
+                            <>
+                              <X className="h-4 w-4 sm:hidden" />
+                              <Trash2 className="hidden h-4 w-4 sm:block" />
+                            </>
+                          ) : null}
+                          <span className="hidden sm:inline">
+                            {deleting ? "Excluindo..." : "Excluir"}
+                          </span>
                         </Button>
                       ) : null}
 
