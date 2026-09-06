@@ -147,6 +147,7 @@ export async function GET(
           ? resolveEffectiveCampaignCapabilities(role, viewerOverrides)
           : [],
         canManageMembers: isOwner,
+        canRenameCampaign: role === CampaignRole.MASTER,
       },
     })
   } catch (error) {
