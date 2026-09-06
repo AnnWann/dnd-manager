@@ -1,5 +1,5 @@
 import { Select as SharedSelect } from "../../components/ui/Select"
-import { Check, Copy, Link2, LogOut, Plus, Unlink } from "lucide-react"
+import { Check, ChevronDown, Copy, Link2, LogOut, Plus, Unlink } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import {
@@ -452,304 +452,314 @@ export function UserCampaignsTab() {
 
             return (
               <Card key={campaign.id}>
-                <CardHeader>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-lg font-semibold text-textH">{campaign.name}</h2>
-                        <Badge
-                          label={
-                            campaign.isOwner
-                              ? "Mestre"
-                              : campaign.status === "INVITED"
-                                ? "Aguardando aprovação"
-                                : campaign.role === "MASTER"
-                                  ? "Mestre auxiliar"
-                                  : "Jogador"
-                          }
-                        />
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-text">
-                        {campaign.description || "Sem descrição."}
-                      </p>
-                      <p className="mt-1 text-xs text-textMuted">Mestre: {campaign.owner.name}</p>
-                    </div>
-
-                    {!campaign.isOwner ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={working}
-                        onClick={() => void leave(campaign)}
-                      >
-                        <LogOut className="h-4 w-4" />
-                        Sair
-                      </Button>
-                    ) : null}
-                  </div>
-                </CardHeader>
-
-                <CardContent>
-                  <div className="grid gap-4">
-                    {campaign.isOwner && campaign.inviteCode ? (
-                      <section className="rounded-xl border border-accentBorder bg-accentBg p-3">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-textMuted">
-                          Código de convite
+                <details className="group">
+                  <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                    <CardHeader>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="truncate text-lg font-semibold text-textH">{campaign.name}</h2>
+                            <Badge
+                              label={
+                                campaign.isOwner
+                                  ? "Mestre"
+                                  : campaign.status === "INVITED"
+                                    ? "Aguardando aprovação"
+                                    : campaign.role === "MASTER"
+                                      ? "Mestre auxiliar"
+                                      : "Jogador"
+                              }
+                            />
+                          </div>
                         </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <code className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH">
-                            {campaign.inviteCode}
-                          </code>
+                        <ChevronDown className="h-4 w-4 shrink-0 text-textMuted transition-transform group-open:rotate-180" />
+                      </div>
+                    </CardHeader>
+                  </summary>
+
+                  <CardContent>
+                    <div className="grid gap-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="text-sm leading-6 text-text">
+                            {campaign.description || "Sem descrição."}
+                          </p>
+                          <p className="mt-1 text-xs text-textMuted">Mestre: {campaign.owner.name}</p>
+                        </div>
+
+                        {!campaign.isOwner ? (
                           <Button
                             size="sm"
                             variant="secondary"
-                            onClick={() => void copyInvite(campaign.inviteCode ?? "")}
+                            disabled={working}
+                            onClick={() => void leave(campaign)}
                           >
-                            {copiedCode === campaign.inviteCode ? (
-                              <Check className="h-4 w-4" />
-                            ) : (
-                              <Copy className="h-4 w-4" />
-                            )}
-                            {copiedCode === campaign.inviteCode ? "Copiado" : "Copiar"}
+                            <LogOut className="h-4 w-4" />
+                            Sair
                           </Button>
-                        </div>
-                      </section>
-                    ) : null}
-
-                    {campaign.status === "INVITED" ? (
-                      <div className="rounded-xl border border-accentBorder bg-accentBg p-3 text-xs leading-5 text-text">
-                        Sua entrada ainda está aguardando aprovação. Você já pode enviar personagem e homebrew agora; cada solicitação será revisada separadamente pelo mestre.
-                      </div>
-                    ) : null}
-
-                    <section>
-                      <h3 className="text-sm font-semibold text-textH">Homebrew da campanha</h3>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <Badge label={`${campaign.homebrew.approved} aprovadas`} />
-                        <Badge label={`${campaign.homebrew.pending} pendentes`} />
-                        <Badge label={`${campaign.homebrew.rejected} rejeitadas`} />
-                        <Badge label={`${campaign.homebrew.revoked} revogadas`} />
+                        ) : null}
                       </div>
 
-                      {campaign.homebrewSpells.length ? (
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          {campaign.homebrewSpells.map((spell) => (
-                            <article
-                              key={spell.linkId}
-                              className="rounded-xl border border-border bg-bg-subtle p-3"
+                      {campaign.isOwner && campaign.inviteCode ? (
+                        <section className="rounded-xl border border-accentBorder bg-accentBg p-3">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-textMuted">
+                            Código de convite
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <code className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH">
+                              {campaign.inviteCode}
+                            </code>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => void copyInvite(campaign.inviteCode ?? "")}
                             >
-                              <div className="flex flex-wrap items-start justify-between gap-2">
-                                <div>
-                                  <div className="font-medium text-textH">{spell.name}</div>
-                                  <div className="mt-1 text-xs text-textMuted">
-                                    Autor: {spell.author.name} · {spell.index}
-                                  </div>
-                                </div>
-                                <Badge label={spellStatusLabel(spell.status)} />
-                              </div>
-                              {spell.note ? (
-                                <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-text">
-                                  {spell.note}
-                                </p>
-                              ) : null}
-                              {spell.submittedByCurrentUser ? (
-                                <div className="mt-2 text-[11px] text-textMuted">Enviada por você.</div>
-                              ) : null}
+                              {copiedCode === campaign.inviteCode ? (
+                                <Check className="h-4 w-4" />
+                              ) : (
+                                <Copy className="h-4 w-4" />
+                              )}
+                              {copiedCode === campaign.inviteCode ? "Copiado" : "Copiar"}
+                            </Button>
+                          </div>
+                        </section>
+                      ) : null}
 
-                              {canReviewSpells ? (
-                                <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
-                                  {spell.status !== "APPROVED" ? (
-                                    <Button
-                                      size="sm"
-                                      disabled={working}
-                                      onClick={() => void reviewSpell(campaign.id, spell.id, "APPROVED")}
-                                    >
-                                      Aprovar
-                                    </Button>
-                                  ) : null}
-                                  {spell.status === "PENDING" ? (
-                                    <Button
-                                      size="sm"
-                                      variant="secondary"
-                                      disabled={working}
-                                      onClick={() => void reviewSpell(campaign.id, spell.id, "REJECTED")}
-                                    >
-                                      Rejeitar
-                                    </Button>
-                                  ) : null}
-                                  {spell.status === "APPROVED" ? (
-                                    <Button
-                                      size="sm"
-                                      variant="secondary"
-                                      disabled={working}
-                                      onClick={() => void reviewSpell(campaign.id, spell.id, "REVOKED")}
-                                    >
-                                      Revogar
-                                    </Button>
-                                  ) : null}
-                                </div>
-                              ) : null}
-                            </article>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="mt-2 text-xs text-textMuted">
-                          Nenhuma magia homebrew visível nesta campanha.
-                        </p>
-                      )}
-
-                      {canSubmitRequests && availableOwnedSpells.length ? (
-                        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                          <SharedSelect
-                            className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
-                            value={selectedSpell[campaign.id] ?? ""}
-                            onChange={(event) =>
-                              setSelectedSpell((current) => ({
-                                ...current,
-                                [campaign.id]: event.target.value,
-                              }))
-                            }
-                          >
-                            <option value="">Selecione uma magia própria</option>
-                            {availableOwnedSpells.map((record) => (
-                              <option key={record.id} value={record.id}>{record.name}</option>
-                            ))}
-                          </SharedSelect>
-                          <Button
-                            disabled={!selectedSpell[campaign.id] || working}
-                            onClick={() => void submitSpell(campaign)}
-                          >
-                            {canDirectlyAdd ? "Adicionar à sessão" : "Enviar para aprovação"}
-                          </Button>
+                      {campaign.status === "INVITED" ? (
+                        <div className="rounded-xl border border-accentBorder bg-accentBg p-3 text-xs leading-5 text-text">
+                          Sua entrada ainda está aguardando aprovação. Você já pode enviar personagem e homebrew agora; cada solicitação será revisada separadamente pelo mestre.
                         </div>
                       ) : null}
-                    </section>
 
-                    {campaign.isOwner && campaign.pendingMembers.length ? (
                       <section>
-                        <h3 className="text-sm font-semibold text-textH">Solicitações de entrada</h3>
-                        <div className="mt-2 grid gap-2">
-                          {campaign.pendingMembers.map((member) => (
-                            <div
-                              key={member.id}
-                              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
-                            >
-                              <div>
-                                <div className="text-sm font-medium text-textH">{member.name}</div>
-                                {member.email ? (
-                                  <div className="text-xs text-textMuted">{member.email}</div>
+                        <h3 className="text-sm font-semibold text-textH">Homebrew da campanha</h3>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Badge label={`${campaign.homebrew.approved} aprovadas`} />
+                          <Badge label={`${campaign.homebrew.pending} pendentes`} />
+                          <Badge label={`${campaign.homebrew.rejected} rejeitadas`} />
+                          <Badge label={`${campaign.homebrew.revoked} revogadas`} />
+                        </div>
+
+                        {campaign.homebrewSpells.length ? (
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            {campaign.homebrewSpells.map((spell) => (
+                              <article
+                                key={spell.linkId}
+                                className="rounded-xl border border-border bg-bg-subtle p-3"
+                              >
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                  <div>
+                                    <div className="font-medium text-textH">{spell.name}</div>
+                                    <div className="mt-1 text-xs text-textMuted">
+                                      Autor: {spell.author.name} · {spell.index}
+                                    </div>
+                                  </div>
+                                  <Badge label={spellStatusLabel(spell.status)} />
+                                </div>
+                                {spell.note ? (
+                                  <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-text">
+                                    {spell.note}
+                                  </p>
                                 ) : null}
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  disabled={working}
-                                  onClick={() => void reviewMember(campaign.id, member.id, "ACTIVE")}
-                                >
-                                  Aprovar
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  disabled={working}
-                                  onClick={() => void reviewMember(campaign.id, member.id, "REMOVED")}
-                                >
-                                  Rejeitar
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </section>
-                    ) : null}
+                                {spell.submittedByCurrentUser ? (
+                                  <div className="mt-2 text-[11px] text-textMuted">Enviada por você.</div>
+                                ) : null}
 
-                    <section>
-                      <h3 className="text-sm font-semibold text-textH">Meus personagens vinculados</h3>
-                      <p className="mt-1 text-xs leading-5 text-textMuted">
-                        Privado mantém o vínculo sem compartilhar a ficha; Mestres limita o acesso aos mestres; Campanha permite acesso aos membros ativos.
-                      </p>
-
-                      {campaign.characters.length ? (
-                        <div className="mt-2 grid gap-2">
-                          {campaign.characters.map((character) => (
-                            <div
-                              key={character.id}
-                              className="flex flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
-                            >
-                              <span className="text-sm font-medium text-textH">{character.name}</span>
-                              <div className="flex flex-col gap-2 sm:flex-row">
-                                <SharedSelect
-                                  className="h-9 rounded-lg border border-border bg-bg px-3 text-xs text-textH"
-                                  value={character.visibility}
-                                  disabled={working || !active}
-                                  onChange={(event) =>
-                                    void changeCharacterVisibility(
-                                      campaign.id,
-                                      character.id,
-                                      event.target.value as CampaignCharacterVisibility,
-                                    )
-                                  }
-                                >
-                                  <VisibilityOptions />
-                                </SharedSelect>
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  disabled={working || !active}
-                                  onClick={() => void unlinkCharacter(campaign.id, character.id)}
-                                >
-                                  <Unlink className="h-4 w-4" />
-                                  Desvincular
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="mt-2 text-xs text-textMuted">Nenhum personagem vinculado.</p>
-                      )}
-
-                      {canSubmitRequests && availableCharacters.length ? (
-                        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px_auto]">
-                          <SharedSelect
-                            className="h-10 min-w-0 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
-                            value={selectedCharacter[campaign.id] ?? ""}
-                            onChange={(event) =>
-                              setSelectedCharacter((current) => ({
-                                ...current,
-                                [campaign.id]: event.target.value,
-                              }))
-                            }
-                          >
-                            <option value="">Selecione um personagem</option>
-                            {availableCharacters.map((character) => (
-                              <option key={character.id} value={character.id}>{character.name}</option>
+                                {canReviewSpells ? (
+                                  <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
+                                    {spell.status !== "APPROVED" ? (
+                                      <Button
+                                        size="sm"
+                                        disabled={working}
+                                        onClick={() => void reviewSpell(campaign.id, spell.id, "APPROVED")}
+                                      >
+                                        Aprovar
+                                      </Button>
+                                    ) : null}
+                                    {spell.status === "PENDING" ? (
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        disabled={working}
+                                        onClick={() => void reviewSpell(campaign.id, spell.id, "REJECTED")}
+                                      >
+                                        Rejeitar
+                                      </Button>
+                                    ) : null}
+                                    {spell.status === "APPROVED" ? (
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        disabled={working}
+                                        onClick={() => void reviewSpell(campaign.id, spell.id, "REVOKED")}
+                                      >
+                                        Revogar
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </article>
                             ))}
-                          </SharedSelect>
-                          <SharedSelect
-                            className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
-                            value={selectedVisibility[campaign.id] ?? "PARTY"}
-                            onChange={(event) =>
-                              setSelectedVisibility((current) => ({
-                                ...current,
-                                [campaign.id]: event.target.value as CampaignCharacterVisibility,
-                              }))
-                            }
-                          >
-                            <VisibilityOptions />
-                          </SharedSelect>
-                          <Button
-                            disabled={!selectedCharacter[campaign.id] || working}
-                            onClick={() => void linkCharacter(campaign)}
-                          >
-                            <Link2 className="h-4 w-4" />
-                            {canDirectlyAdd ? "Vincular" : "Solicitar vínculo"}
-                          </Button>
-                        </div>
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-xs text-textMuted">
+                            Nenhuma magia homebrew visível nesta campanha.
+                          </p>
+                        )}
+
+                        {canSubmitRequests && availableOwnedSpells.length ? (
+                          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                            <SharedSelect
+                              className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
+                              value={selectedSpell[campaign.id] ?? ""}
+                              onChange={(event) =>
+                                setSelectedSpell((current) => ({
+                                  ...current,
+                                  [campaign.id]: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Selecione uma magia própria</option>
+                              {availableOwnedSpells.map((record) => (
+                                <option key={record.id} value={record.id}>{record.name}</option>
+                              ))}
+                            </SharedSelect>
+                            <Button
+                              disabled={!selectedSpell[campaign.id] || working}
+                              onClick={() => void submitSpell(campaign)}
+                            >
+                              {canDirectlyAdd ? "Adicionar à sessão" : "Enviar para aprovação"}
+                            </Button>
+                          </div>
+                        ) : null}
+                      </section>
+
+                      {campaign.isOwner && campaign.pendingMembers.length ? (
+                        <section>
+                          <h3 className="text-sm font-semibold text-textH">Solicitações de entrada</h3>
+                          <div className="mt-2 grid gap-2">
+                            {campaign.pendingMembers.map((member) => (
+                              <div
+                                key={member.id}
+                                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
+                              >
+                                <div>
+                                  <div className="text-sm font-medium text-textH">{member.name}</div>
+                                  {member.email ? (
+                                    <div className="text-xs text-textMuted">{member.email}</div>
+                                  ) : null}
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    disabled={working}
+                                    onClick={() => void reviewMember(campaign.id, member.id, "ACTIVE")}
+                                  >
+                                    Aprovar
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    disabled={working}
+                                    onClick={() => void reviewMember(campaign.id, member.id, "REMOVED")}
+                                  >
+                                    Rejeitar
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
                       ) : null}
-                    </section>
-                  </div>
-                </CardContent>
+
+                      <section>
+                        <h3 className="text-sm font-semibold text-textH">Meus personagens vinculados</h3>
+                        <p className="mt-1 text-xs leading-5 text-textMuted">
+                          Privado mantém o vínculo sem compartilhar a ficha; Mestres limita o acesso aos mestres; Campanha permite acesso aos membros ativos.
+                        </p>
+
+                        {campaign.characters.length ? (
+                          <div className="mt-2 grid gap-2">
+                            {campaign.characters.map((character) => (
+                              <div
+                                key={character.id}
+                                className="flex flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
+                              >
+                                <span className="text-sm font-medium text-textH">{character.name}</span>
+                                <div className="flex flex-col gap-2 sm:flex-row">
+                                  <SharedSelect
+                                    className="h-9 rounded-lg border border-border bg-bg px-3 text-xs text-textH"
+                                    value={character.visibility}
+                                    disabled={working || !active}
+                                    onChange={(event) =>
+                                      void changeCharacterVisibility(
+                                        campaign.id,
+                                        character.id,
+                                        event.target.value as CampaignCharacterVisibility,
+                                      )
+                                    }
+                                  >
+                                    <VisibilityOptions />
+                                  </SharedSelect>
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    disabled={working || !active}
+                                    onClick={() => void unlinkCharacter(campaign.id, character.id)}
+                                  >
+                                    <Unlink className="h-4 w-4" />
+                                    Desvincular
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-xs text-textMuted">Nenhum personagem vinculado.</p>
+                        )}
+
+                        {canSubmitRequests && availableCharacters.length ? (
+                          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px_auto]">
+                            <SharedSelect
+                              className="h-10 min-w-0 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
+                              value={selectedCharacter[campaign.id] ?? ""}
+                              onChange={(event) =>
+                                setSelectedCharacter((current) => ({
+                                  ...current,
+                                  [campaign.id]: event.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Selecione um personagem</option>
+                              {availableCharacters.map((character) => (
+                                <option key={character.id} value={character.id}>{character.name}</option>
+                              ))}
+                            </SharedSelect>
+                            <SharedSelect
+                              className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
+                              value={selectedVisibility[campaign.id] ?? "PARTY"}
+                              onChange={(event) =>
+                                setSelectedVisibility((current) => ({
+                                  ...current,
+                                  [campaign.id]: event.target.value as CampaignCharacterVisibility,
+                                }))
+                              }
+                            >
+                              <VisibilityOptions />
+                            </SharedSelect>
+                            <Button
+                              disabled={!selectedCharacter[campaign.id] || working}
+                              onClick={() => void linkCharacter(campaign)}
+                            >
+                              <Link2 className="h-4 w-4" />
+                              {canDirectlyAdd ? "Vincular" : "Solicitar vínculo"}
+                            </Button>
+                          </div>
+                        ) : null}
+                      </section>
+                    </div>
+                  </CardContent>
+                </details>
               </Card>
             )
           })}
