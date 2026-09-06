@@ -1,4 +1,8 @@
 import {
+  CampaignMemberStatus,
+  CampaignRole,
+} from "../../../../generated/prisma/client.js"
+import {
   ApiError,
   handleApiError,
   jsonResponse,
@@ -32,6 +36,16 @@ export async function PATCH(
       select: {
         id: true,
         ownerId: true,
+        members: {
+          where: {
+            userId: session.user.id,
+            status: CampaignMemberStatus.ACTIVE,
+          },
+          select: {
+            role: true,
+          },
+          take: 1,
+        },
       },
     })
 
@@ -43,11 +57,14 @@ export async function PATCH(
       )
     }
 
-    if (campaign.ownerId !== session.user.id) {
+    const canRename =
+      campaign.ownerId === session.user.id ||
+      campaign.members[0]?.role === CampaignRole.MASTER
+    if (!canRename) {
       throw new ApiError(
         403,
         "CAMPAIGN_RENAME_FORBIDDEN",
-        "Somente o mestre principal da campanha pode alterar o nome da sessão.",
+        "Somente um mestre ativo da campanha pode alterar o nome da sessão.",
       )
     }
 
