@@ -12,6 +12,7 @@ import {
   getMyCampaigns,
   reviewCampaignMember,
   type CampaignRole,
+  type UserCampaign,
 } from "./user-campaigns"
 
 export type SessionSettingsMember = {
@@ -40,6 +41,7 @@ type SettingsResponse = {
   settings: SessionCreationSettings
 }
 
+const LOCAL_CAMPAIGNS_KEY = "dnd-manager.local-campaigns.v2"
 const settingsCache = new Map<string, SessionCreationSettings>()
 const settingsRequests = new Map<string, Promise<SessionCreationSettings>>()
 
@@ -114,6 +116,48 @@ export async function getSessionCreationSettings(
 
   settingsRequests.set(campaignId, request)
   return request
+}
+
+export async function updateSessionName(
+  campaignId: string,
+  name: string,
+): Promise<string> {
+  const normalizedName = name.trim()
+  if (!normalizedName) throw new Error("Informe um nome para a sessão.")
+  if (normalizedName.length > 120) {
+    throw new Error("O nome da sessão deve ter no máximo 120 caracteres.")
+  }
+
+  if (LOCAL_AUTH_BYPASS) {
+    const campaigns = await getMyCampaigns()
+    const campaign = campaigns.find((entry) => entry.id === campaignId)
+    if (!campaign?.isOwner) {
+      throw new Error("Somente o mestre principal pode alterar o nome da sessão.")
+    }
+
+    const next = campaigns.map((entry) =>
+      entry.id === campaignId
+        ? { ...entry, name: normalizedName, updatedAt: new Date().toISOString() }
+        : entry,
+    )
+    window.localStorage.setItem(
+      LOCAL_CAMPAIGNS_KEY,
+      JSON.stringify(next satisfies UserCampaign[]),
+    )
+    invalidateSessionCreationSettings(campaignId)
+    notifySessionContentChanged()
+    return normalizedName
+  }
+
+  const response = await apiClient.patch<{
+    campaign: { id: string; name: string }
+  }>(
+    `/me/campaigns/${encodeURIComponent(campaignId)}`,
+    { name: normalizedName },
+  )
+  invalidateSessionCreationSettings(campaignId)
+  notifySessionContentChanged()
+  return response.data.campaign.name
 }
 
 export async function updateSessionMember(
