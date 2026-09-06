@@ -1,6 +1,8 @@
 import {
   ApiError,
   handleApiError,
+  jsonResponse,
+  readJsonObject,
 } from "../../../../server/api.js"
 import { prisma } from "../../../../server/prisma.js"
 import { requireSession } from "../../../../server/session.js"
@@ -13,6 +15,55 @@ type RouteContext = {
     | {
         campaignId?: string
       }
+}
+
+export async function PATCH(
+  request: Request,
+  context?: RouteContext,
+): Promise<Response> {
+  try {
+    const session = await requireSession(request)
+    const campaignId = await resolveCampaignId(request, context)
+    const body = await readJsonObject(request)
+    const name = parseCampaignName(body.name)
+
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: {
+        id: true,
+        ownerId: true,
+      },
+    })
+
+    if (!campaign) {
+      throw new ApiError(
+        404,
+        "CAMPAIGN_NOT_FOUND",
+        "Campanha não encontrada.",
+      )
+    }
+
+    if (campaign.ownerId !== session.user.id) {
+      throw new ApiError(
+        403,
+        "CAMPAIGN_RENAME_FORBIDDEN",
+        "Somente o mestre principal da campanha pode alterar o nome da sessão.",
+      )
+    }
+
+    const updated = await prisma.campaign.update({
+      where: { id: campaignId },
+      data: { name },
+      select: {
+        id: true,
+        name: true,
+      },
+    })
+
+    return jsonResponse({ campaign: updated })
+  } catch (error) {
+    return handleApiError(error)
+  }
 }
 
 export async function DELETE(
@@ -74,6 +125,33 @@ export async function DELETE(
   } catch (error) {
     return handleApiError(error)
   }
+}
+
+function parseCampaignName(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new ApiError(
+      400,
+      "CAMPAIGN_NAME_REQUIRED",
+      "O nome da sessão é obrigatório.",
+    )
+  }
+
+  const name = value.trim()
+  if (!name) {
+    throw new ApiError(
+      400,
+      "CAMPAIGN_NAME_REQUIRED",
+      "O nome da sessão é obrigatório.",
+    )
+  }
+  if (name.length > 120) {
+    throw new ApiError(
+      400,
+      "CAMPAIGN_NAME_TOO_LONG",
+      "O nome da sessão deve ter no máximo 120 caracteres.",
+    )
+  }
+  return name
 }
 
 async function resolveCampaignId(
