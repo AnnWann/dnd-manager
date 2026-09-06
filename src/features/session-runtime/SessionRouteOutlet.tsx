@@ -9,6 +9,7 @@ import { useSyncContext } from "../../contexts/syncContext"
 import { rememberActiveSession } from "../../lib/activeCampaign"
 import { toSessionRuntimeConfig } from "../../shared/session-runtime/sessionRuntimeConfig"
 import { SessionAuthoritativeBootstrap } from "./SessionAuthoritativeBootstrap"
+import { SessionRenameControl } from "./SessionRenameControl"
 import {
   SessionRuntimeProvider,
   useOptionalSessionRuntime,
@@ -28,9 +29,13 @@ export function SessionRouteOutlet() {
 
   if (!campaignId || !userId) return <Outlet />
 
+  const encodedCampaignId = encodeURIComponent(campaignId)
   const isCreationRoute = location.pathname.startsWith(
-    `/session/${encodeURIComponent(campaignId)}/creation`,
+    `/session/${encodedCampaignId}/creation`,
   )
+  const isSettingsRoute =
+    location.pathname.replace(/\/+$/, "") ===
+    `/session/${encodedCampaignId}/creation/settings`
 
   return (
     <SessionRuntimeProvider
@@ -43,6 +48,9 @@ export function SessionRouteOutlet() {
       ) : null}
       <SessionAuthoritativeBootstrap campaignId={campaignId} />
       <SessionMissionAuthorityProvider>
+        {userRole === "master" && isSettingsRoute ? (
+          <SessionRenameControl campaignId={campaignId} />
+        ) : null}
         <Outlet />
       </SessionMissionAuthorityProvider>
     </SessionRuntimeProvider>
