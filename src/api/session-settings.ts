@@ -35,6 +35,7 @@ export type SessionCreationSettings = {
   members: SessionSettingsMember[]
   viewerCapabilities: CampaignCapability[]
   canManageMembers: boolean
+  canRenameCampaign: boolean
 }
 
 type SettingsResponse = {
@@ -92,6 +93,7 @@ export async function getSessionCreationSettings(
       })),
       viewerCapabilities: [],
       canManageMembers: true,
+      canRenameCampaign: true,
     }
   }
 
