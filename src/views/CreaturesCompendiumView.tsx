@@ -280,8 +280,8 @@ function CreatureCard({
   onExportZip: () => void
   onDelete: () => void
 }) {
-  const guaranteedCount = creature.drops.guaranteed.length
-  const rollGroupCount = creature.drops.rollGroups.length
+  const guaranteedCount = creature.drops?.guaranteed?.length ?? 0
+  const rollGroupCount = creature.drops?.rollGroups?.length ?? 0
 
   return (
     <article className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-bg shadow-theme-sm transition-colors hover:border-borderStrong">
