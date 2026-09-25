@@ -282,7 +282,7 @@ export class SessionActor extends AbilitySessionActor {
       nextConditions = concentration.next;
     }
 
-    let actionResult;
+    let actionResult: ReturnType<typeof resolveSpellCastAction>;
     try {
       actionResult = resolveSpellCastAction({
         requestId: operation.requestId,
