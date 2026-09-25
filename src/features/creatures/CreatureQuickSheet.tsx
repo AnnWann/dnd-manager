@@ -12,6 +12,7 @@ import type {
   CreatureFeature,
 } from "../../models/creatures/CompendiumCreature"
 import type { Attribute } from "../../models/sheet/Attribute"
+import type { Skill } from "../../models/sheet/Skills"
 import type {
   InitiativeEntry,
   InitiativeSide,
@@ -415,7 +416,7 @@ function CreatureRollList({
     bonus: number
     source:
       | { type: "save"; attribute: Attribute }
-      | { type: "skill"; skill: string }
+      | { type: "skill"; skill: Skill }
   }>
   rollContext: CreatureQuickSheetRollContext
 }) {
