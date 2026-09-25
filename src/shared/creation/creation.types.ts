@@ -16,6 +16,8 @@ import type { Spell } from "../../models/magic/spells/Spell"
  */
 export type CreationState = {
   version: 1
+  /** When false, the session publishes action cards but never rolls digital dice. */
+  diceRollingEnabled: boolean
   characters: CreationCharacterConfiguration[]
   spells: Spell[]
   itemCompendium: CreationItemCompendiumEntry[]
