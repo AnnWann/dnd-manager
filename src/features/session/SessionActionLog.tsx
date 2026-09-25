@@ -310,6 +310,43 @@ function DiceRollPanel({
 
   return (
     <>
+      <form
+        className="grid gap-2 border-b border-border bg-bg px-3 py-3"
+        onSubmit={submitManualRoll}
+      >
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+          Rolagem manual
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={manualExpression}
+            onChange={(event) => {
+              setManualExpression(event.target.value)
+              if (manualError) setManualError("")
+            }}
+            placeholder="1d6 + 2d8 + 6"
+            aria-label="Expressão de dados"
+            className="min-w-0 flex-1 rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs text-textH outline-none transition-colors placeholder:text-textMuted focus:border-accentBorder"
+          />
+          <button
+            type="submit"
+            disabled={!manualExpression.trim() || !characterId}
+            className="shrink-0 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH transition-colors hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Rolar
+          </button>
+        </div>
+        <div className="text-[9px] leading-4 text-textMuted">
+          Ex.: 1d20 + 5 · a-1d20 + 5 para vantagem · d-1d20 + 5 para desvantagem
+        </div>
+        {manualError ? (
+          <div className="rounded-lg border border-danger bg-dangerBg px-2.5 py-2 text-[10px] leading-4 text-danger">
+            {manualError}
+          </div>
+        ) : null}
+      </form>
+
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <span className="text-[11px] text-textMuted">
           Resultados confirmados pelo servidor
