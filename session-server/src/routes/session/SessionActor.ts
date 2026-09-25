@@ -35,7 +35,12 @@ import {
   type Weapon,
 } from "../../../../src/models/items/equipment/Weapon";
 import type { Attribute } from "../../../../src/models/sheet/Attribute";
+import { abilityShortPtBr } from "../../../../src/i18n/ptBR";
 import type { Skill } from "../../../../src/models/sheet/Skills";
+import { normalizeInitiativeSession, type InitiativeEntry, type InitiativeSession } from "../../../../src/models/initiative/Initiative";
+import { CREATURE_ATTRIBUTE_LABELS, findCreatureSave, findCreatureSkill, inferCreatureAttackMechanics, parseCreatureDamageFormula } from "../../../../src/models/creatures/CreatureRolls";
+import { getCreatureEffectiveAbilityModifier, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../../../src/models/creatures/CreatureCombatRuntime";
+import type { CompendiumCreature, CreatureFeature } from "../../../../src/models/creatures/CompendiumCreature";
 import {
   getCharacterConditions,
   withCharacterConditions,
@@ -78,7 +83,7 @@ import {
   type SessionLogRecord,
 } from "./sessionLog";
 import { readRuntimeConfig } from "./runtimeConfigAccess";
-import type { SessionActionRollRequest, SessionActionRollResult, SessionDiceRollRequest, SessionDiceRollResult, SessionResolvedD20Roll, SessionResolvedDamageRoll } from "../../../../src/shared/session-runtime/diceRollProtocol";
+import type { SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult, SessionResolvedD20Roll, SessionResolvedDamageRoll } from "../../../../src/shared/session-runtime/diceRollProtocol";
 import {
   broadcastVisibilityFiltered,
   refreshConnectionVisibility,
@@ -192,6 +197,9 @@ export class SessionActor extends DurableObject<Env> {
       case "session.action.roll":
         await this.handleActionRoll(webSocket, connection, parsed.request);
         break;
+      case "session.creature.roll":
+        await this.handleCreatureRoll(webSocket, connection, parsed.request);
+        break;
       case "session.log.undo":
         this.sendError(webSocket, "UNDO_ROUTING_ERROR", "Session undo must be handled by the composed session actor.");
         break;
@@ -226,6 +234,62 @@ export class SessionActor extends DurableObject<Env> {
     }
     this.broadcastPresence(now);
     await this.scheduleNextAlarm(now);
+  }
+
+  private async handleCreatureRoll(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    request: SessionCreatureRollRequest,
+  ): Promise<void> {
+    if (connection.role !== "MASTER") {
+      this.sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can roll creature stat blocks.");
+      return;
+    }
+
+    const [runtimeConfig, initiativeState] = await Promise.all([
+      readRuntimeConfig(this.ctx.storage),
+      this.ctx.storage.get<{ initialized?: boolean; session?: Record<string, unknown> }>("initiative-state"),
+    ]);
+    const creature = runtimeConfig?.config.creatureCompendium.find(
+      (candidate) => candidate.id === request.creatureId,
+    );
+    if (!creature) {
+      this.sendError(webSocket, "CREATURE_NOT_FOUND", "The requested creature is not available in the authoritative compendium.");
+      return;
+    }
+
+    let entry: InitiativeEntry | undefined;
+    if (request.initiativeEntryId) {
+      const initiative = initiativeState?.session
+        ? normalizeInitiativeSession(
+            initiativeState.session as Partial<InitiativeSession>,
+          )
+        : undefined;
+      entry = initiative?.entries.find(
+        (candidate) => candidate.id === request.initiativeEntryId,
+      );
+      if (!entry || entry.sourceId !== `compendium:${creature.id}`) {
+        this.sendError(webSocket, "CREATURE_ENTRY_NOT_FOUND", "The requested initiative combatant does not match this creature.");
+        return;
+      }
+    }
+
+    const resolution = resolveServerCreatureRoll(
+      request,
+      connection.userId,
+      creature,
+      entry,
+    );
+    if (!resolution.ok) {
+      this.sendError(webSocket, resolution.code, resolution.message);
+      return;
+    }
+
+    this.broadcast(
+      resolution.resultType === "action"
+        ? { type: "session.action.result", result: resolution.result }
+        : { type: "session.dice.result", result: resolution.result },
+    );
   }
 
   private async handleActionRoll(
@@ -850,6 +914,197 @@ export class SessionActor extends DurableObject<Env> {
   }
 }
 
+type CreatureRollResolution =
+  | { ok: true; resultType: "dice"; result: SessionDiceRollResult }
+  | { ok: true; resultType: "action"; result: SessionActionRollResult }
+  | { ok: false; code: string; message: string };
+
+function resolveServerCreatureRoll(
+  request: SessionCreatureRollRequest,
+  actorId: string,
+  creature: CompendiumCreature,
+  entry?: InitiativeEntry,
+): CreatureRollResolution {
+  const conditions = entry?.conditions ?? [];
+  const resultCharacterId = `creature:${entry?.id ?? creature.id}`;
+  const source = request.source;
+
+  if (source.type === "feature") {
+    const feature = findCreatureFeature(creature, source.featureId);
+    const mechanics = feature?.mechanics
+      ?? inferCreatureAttackMechanics(feature?.description);
+    if (!feature || !mechanics || mechanics.kind !== "attack") {
+      return {
+        ok: false,
+        code: "CREATURE_FEATURE_NOT_ROLLABLE",
+        message: "The requested creature feature does not have resolvable attack mechanics.",
+      };
+    }
+    const resolvedFeature: CreatureFeature = { ...feature, mechanics };
+
+    const attackBonus = getCreatureFeatureEffectiveAttackBonus(
+      creature,
+      resolvedFeature,
+      conditions,
+      entry,
+    );
+    if (attackBonus === undefined) {
+      return {
+        ok: false,
+        code: "CREATURE_ATTACK_INVALID",
+        message: "The creature attack bonus could not be resolved.",
+      };
+    }
+
+    const attack = rollActionD20(request.mode, attackBonus);
+    const critical = attack.natural === 20;
+    const effectiveDamageBonus = getCreatureFeatureEffectiveDamageBonus(
+      creature,
+      resolvedFeature,
+      conditions,
+      entry,
+    );
+
+    const damages: SessionResolvedDamageRoll[] = [];
+    for (const part of mechanics.damage) {
+      const parsed = parseCreatureDamageFormula(part.formula);
+      if (!parsed) {
+        return {
+          ok: false,
+          code: "CREATURE_DAMAGE_FORMULA_INVALID",
+          message: `Could not resolve damage formula: ${part.formula}`,
+        };
+      }
+      const rolled = rollActionDamage(
+        parsed.dice,
+        parsed.modifier + effectiveDamageBonus,
+        critical,
+      );
+      damages.push({
+        ...rolled,
+        label: "Dano",
+        damageType: part.damageType,
+      });
+    }
+
+    return {
+      ok: true,
+      resultType: "action",
+      result: {
+        id: crypto.randomUUID(),
+        requestId: request.requestId,
+        actorId,
+        characterId: resultCharacterId,
+        sourceName: creature.name,
+        sourceType: "creature",
+        title: feature.name,
+        subtitle: `${creature.name} · ${mechanics.rangeType === "melee" ? "Ataque corpo a corpo" : "Ataque à distância"}`,
+        description: feature.description?.trim() || undefined,
+        details: [
+          ...(mechanics.reach?.trim() ? [mechanics.reach.trim()] : []),
+          ...(mechanics.magical ? ["Mágico"] : []),
+        ],
+        attack,
+        damages,
+        critical,
+        createdAt: new Date().toISOString(),
+      },
+    };
+  }
+
+  let label: string;
+  let kind: SessionDiceRollResult["kind"];
+  let modifier: number | undefined;
+
+  switch (source.type) {
+    case "ability":
+      label = `Teste de ${CREATURE_ATTRIBUTE_LABELS[source.attribute]}`;
+      kind = "ability";
+      modifier = getCreatureEffectiveAbilityModifier(
+        creature,
+        source.attribute,
+        conditions,
+        entry,
+      );
+      break;
+    case "save": {
+      const parsed = findCreatureSave(creature.savingThrows, source.attribute);
+      label = `Resistência de ${CREATURE_ATTRIBUTE_LABELS[source.attribute]}`;
+      kind = "save";
+      modifier = parsed
+        ? getCreatureEffectiveSaveBonus(creature, source.attribute, conditions, entry)
+        : getCreatureEffectiveAbilityModifier(creature, source.attribute, conditions, entry);
+      break;
+    }
+    case "skill": {
+      const parsed = findCreatureSkill(creature.skills, source.skill);
+      if (!parsed) {
+        return {
+          ok: false,
+          code: "CREATURE_SKILL_NOT_FOUND",
+          message: "The requested skill is not listed on this creature.",
+        };
+      }
+      label = parsed.label;
+      kind = "skill";
+      modifier = getCreatureEffectiveSkillBonus(
+        creature,
+        parsed.skill,
+        conditions,
+        entry,
+      );
+      break;
+    }
+    case "initiative":
+      label = "Iniciativa";
+      kind = "initiative";
+      modifier = getCreatureEffectiveInitiative(creature, conditions, entry);
+      break;
+  }
+
+  if (modifier === undefined) {
+    return {
+      ok: false,
+      code: "CREATURE_ROLL_INVALID",
+      message: "The creature roll modifier could not be resolved.",
+    };
+  }
+
+  const d20 = rollActionD20(request.mode, modifier);
+  return {
+    ok: true,
+    resultType: "dice",
+    result: {
+      id: crypto.randomUUID(),
+      requestId: request.requestId,
+      actorId,
+      characterId: resultCharacterId,
+      sourceName: creature.name,
+      label,
+      kind,
+      mode: request.mode,
+      groups: d20.groups,
+      modifier,
+      total: d20.total,
+      natural: d20.natural,
+      createdAt: new Date().toISOString(),
+    },
+  };
+}
+
+function findCreatureFeature(
+  creature: CompendiumCreature,
+  featureId: string,
+): CreatureFeature | undefined {
+  return [
+    ...creature.traits,
+    ...creature.actions,
+    ...creature.bonusActions,
+    ...creature.reactions,
+    ...creature.legendaryActions,
+  ].find((feature) => feature.id === featureId);
+}
+
 type ActionResolution =
   | { ok: true; result: SessionActionRollResult }
   | { ok: false; code: string; message: string };
@@ -908,7 +1163,7 @@ function resolveServerActionRoll(
           ),
         ),
         details: [
-          `Atributo: ${attribute.toUpperCase()}`,
+          `Atributo: ${abilityShortPtBr(attribute)}`,
           ...(weapon.properties ?? []).map((property) => property.name),
         ],
         attack,

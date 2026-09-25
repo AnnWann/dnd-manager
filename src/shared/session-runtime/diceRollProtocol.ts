@@ -47,6 +47,7 @@ export type SessionDiceRollResult = {
   requestId: string
   actorId: string
   characterId: string
+  sourceName?: string
   label: string
   kind: SessionDiceRollKind
   mode: SessionDiceRollMode
@@ -98,7 +99,8 @@ export type SessionActionRollResult = {
   requestId: string
   actorId: string
   characterId: string
-  sourceType: "weapon" | "unarmed" | "spell" | "ability"
+  sourceName?: string
+  sourceType: "weapon" | "unarmed" | "spell" | "ability" | "creature"
   title: string
   subtitle?: string
   description?: string
@@ -118,4 +120,20 @@ export type SessionActionRollResult = {
   castLevel?: number
   critical: boolean
   createdAt: string
+}
+
+
+export type SessionCreatureRollSource =
+  | { type: "ability"; attribute: Attribute }
+  | { type: "save"; attribute: Attribute }
+  | { type: "skill"; skill: Skill }
+  | { type: "initiative" }
+  | { type: "feature"; featureId: string }
+
+export type SessionCreatureRollRequest = {
+  requestId: string
+  creatureId: string
+  initiativeEntryId?: string
+  mode: SessionDiceRollMode
+  source: SessionCreatureRollSource
 }

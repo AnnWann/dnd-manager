@@ -1,4 +1,4 @@
-import type { SessionActionRollRequest, SessionActionRollResult, SessionDiceRollRequest, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
+import type { SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
 export type SessionRuntimeRole = "MASTER" | "PLAYER"
 export type SessionRuntimePresenceUser = { userId: string; userName?: string; clientId: string; role: SessionRuntimeRole }
 
@@ -228,6 +228,7 @@ export type ClientSessionMessage =
   | { type: "session.log.undo"; logId: string }
   | { type: "session.dice.roll"; request: SessionDiceRollRequest }
   | { type: "session.action.roll"; request: SessionActionRollRequest }
+  | { type: "session.creature.roll"; request: SessionCreatureRollRequest }
 
 export function parseServerSessionMessage(raw: string): ServerSessionMessage | null {
   let parsed: unknown

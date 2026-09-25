@@ -7,12 +7,15 @@ import type {
   SessionActionRollRequest,
   SessionActionRollResult,
   SessionActionRollSource,
+  SessionCreatureRollRequest,
+  SessionCreatureRollSource,
 } from "../shared/session-runtime/diceRollProtocol"
 
 export const DICE_ROLL_REQUEST_EVENT = "dndmm:dice-roll-request"
 export const DICE_ROLL_RESULT_EVENT = "dndmm:dice-roll-result"
 export const ACTION_ROLL_REQUEST_EVENT = "dndmm:action-roll-request"
 export const ACTION_ROLL_RESULT_EVENT = "dndmm:action-roll-result"
+export const CREATURE_ROLL_REQUEST_EVENT = "dndmm:creature-roll-request"
 
 let requestSequence = 0
 
@@ -57,6 +60,27 @@ export function requestActionRoll(input: {
     mode: input.mode ?? "normal",
     source: input.source,
   })
+}
+
+export function requestCreatureRoll(input: {
+  creatureId: string
+  initiativeEntryId?: string
+  source: SessionCreatureRollSource
+  mode?: SessionDiceRollMode
+}): void {
+  if (typeof window === "undefined") return
+  const request: SessionCreatureRollRequest = {
+    requestId: createRequestId(),
+    creatureId: input.creatureId,
+    initiativeEntryId: input.initiativeEntryId,
+    mode: input.mode ?? "normal",
+    source: input.source,
+  }
+  window.dispatchEvent(
+    new CustomEvent<SessionCreatureRollRequest>(CREATURE_ROLL_REQUEST_EVENT, {
+      detail: request,
+    }),
+  )
 }
 
 export function publishServerActionRoll(result: SessionActionRollResult): void {

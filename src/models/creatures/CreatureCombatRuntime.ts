@@ -4,6 +4,8 @@ import type { CharacterCondition } from "../characters/CharacterCondition"
 import { withCharacterConditions } from "../characters/characterConditionStorage"
 import type { InitiativeCondition, InitiativeEntry } from "../initiative/Initiative"
 import type { Attribute } from "../sheet/Attribute"
+import type { Skill } from "../sheet/Skills"
+import { findCreatureSave, findCreatureSkill, resolveCreatureBaseSaveBonus, resolveCreatureBaseSkillBonus } from "./CreatureRolls"
 import type { CompendiumCreature, CreatureFeature } from "./CompendiumCreature"
 
 export function createCreatureCombatCharacter(
@@ -69,6 +71,58 @@ export function createCreatureCombatCharacter(
     )
   }
   return character
+}
+
+export function getCreatureEffectiveInitiative(
+  creature: CompendiumCreature,
+  conditions: InitiativeCondition[] = [],
+  entry?: InitiativeEntry,
+): number {
+  const character = createCreatureCombatCharacter(creature, conditions, entry)
+  const baseDexterityModifier = Math.floor((creature.abilityScores.dex - 10) / 2)
+  const effectiveCalculated = character.getEffectiveInitiative()
+  return creature.initiativeBonus + (effectiveCalculated - baseDexterityModifier)
+}
+
+export function getCreatureEffectiveAbilityModifier(
+  creature: CompendiumCreature,
+  attribute: Attribute,
+  conditions: InitiativeCondition[] = [],
+  entry?: InitiativeEntry,
+): number {
+  return createCreatureCombatCharacter(creature, conditions, entry)
+    .getEffectiveAttributeModifier(attribute)
+}
+
+export function getCreatureEffectiveSaveBonus(
+  creature: CompendiumCreature,
+  attribute: Attribute,
+  conditions: InitiativeCondition[] = [],
+  entry?: InitiativeEntry,
+): number {
+  const character = createCreatureCombatCharacter(creature, conditions, entry)
+  const parsed = findCreatureSave(creature.savingThrows, attribute)
+  const explicitBonus = parsed
+    ? resolveCreatureBaseSaveBonus(creature.abilityScores, parsed)
+    : 0
+  return character.getSavingThrowBonus(attribute) + explicitBonus
+}
+
+export function getCreatureEffectiveSkillBonus(
+  creature: CompendiumCreature,
+  skill: Skill,
+  conditions: InitiativeCondition[] = [],
+  entry?: InitiativeEntry,
+): number | undefined {
+  const parsed = findCreatureSkill(creature.skills, skill)
+  if (!parsed) return undefined
+  const character = createCreatureCombatCharacter(creature, conditions, entry)
+  const proficiencyAndExpertise = resolveCreatureBaseSkillBonus(
+    creature.abilityScores,
+    parsed,
+  )
+  return character.getEffectiveAttributeModifier(parsed.attribute)
+    + proficiencyAndExpertise
 }
 
 export function getCreatureEffectiveArmorClass(

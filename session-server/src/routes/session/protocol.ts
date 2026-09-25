@@ -1,5 +1,5 @@
 import { routeForSheetOperation, type CharacterSheetRoute } from "../characters/sheet";
-import type { SessionActionRollRequest, SessionActionRollResult, SessionDiceRollRequest, SessionDiceRollResult } from "../../../../src/shared/session-runtime/diceRollProtocol";
+import type { SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult } from "../../../../src/shared/session-runtime/diceRollProtocol";
 
 export type SessionRole = "MASTER" | "PLAYER";
 
@@ -246,7 +246,8 @@ export type ClientSessionMessage =
   | { type: "session.sheet.operation"; route: CharacterSheetRoute; operation: SessionLoggedOperation }
   | { type: "session.log.undo"; logId: string }
   | { type: "session.dice.roll"; request: SessionDiceRollRequest }
-  | { type: "session.action.roll"; request: SessionActionRollRequest };
+  | { type: "session.action.roll"; request: SessionActionRollRequest }
+  | { type: "session.creature.roll"; request: SessionCreatureRollRequest };
 
 export type ServerSessionMessage =
   | { type: "session.ready"; sessionId: string; clientId: string; serverTime: number }
@@ -305,6 +306,10 @@ export function parseClientSessionMessage(raw: string): ClientSessionMessage | n
       return isActionRollRequest(value.request)
         ? { type: value.type, request: value.request }
         : null;
+    case "session.creature.roll":
+      return isCreatureRollRequest(value.request)
+        ? { type: value.type, request: value.request }
+        : null;
     default:
       return null;
   }
@@ -312,6 +317,31 @@ export function parseClientSessionMessage(raw: string): ClientSessionMessage | n
 
 export function encodeServerSessionMessage(message: ServerSessionMessage): string {
   return JSON.stringify(message);
+}
+
+function isCreatureRollRequest(value: unknown): value is SessionCreatureRollRequest {
+  if (!isRecord(value)) return false;
+  if (!nonEmpty(value.requestId) || value.requestId.length > 120) return false;
+  if (!nonEmpty(value.creatureId) || value.creatureId.length > 200) return false;
+  if (
+    value.initiativeEntryId !== undefined
+    && (!nonEmpty(value.initiativeEntryId) || value.initiativeEntryId.length > 200)
+  ) return false;
+  if (!diceRollMode(value.mode) || !isRecord(value.source) || !nonEmpty(value.source.type)) return false;
+
+  switch (value.source.type) {
+    case "ability":
+    case "save":
+      return attribute(value.source.attribute);
+    case "skill":
+      return skill(value.source.skill);
+    case "initiative":
+      return true;
+    case "feature":
+      return nonEmpty(value.source.featureId) && value.source.featureId.length <= 200;
+    default:
+      return false;
+  }
 }
 
 function isActionRollRequest(value: unknown): value is SessionActionRollRequest {

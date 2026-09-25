@@ -1,4 +1,5 @@
 import type { CharacterTemplate } from "../../../../../src/models/characters/CharacterTemplate";
+import { abilityShortPtBr } from "../../../../../src/i18n/ptBR";
 import type { Spell } from "../../../../../src/models/magic/spells/Spell";
 import type { SpellSource } from "../../../../../src/models/magic/spells/SpellSource";
 import {
@@ -51,7 +52,7 @@ export function resolveSpellCastAction(args: {
         : undefined,
     ),
     details: [
-      `Atributo de conjuração: ${attribute.toUpperCase()}`,
+      `Atributo de conjuração: ${abilityShortPtBr(attribute)}`,
       ...(castLevel > spell.slotLevel ? [`Conjurada no nível ${castLevel}`] : []),
       ...(spell.concentration ? ["Concentração"] : []),
       ...(spell.ritual ? ["Ritual"] : []),
