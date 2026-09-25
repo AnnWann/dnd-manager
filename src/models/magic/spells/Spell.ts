@@ -96,7 +96,7 @@ export type SpellScaledNumber = {
 
 export type SpellResolutionRoll =
   | { type: "none" }
-  | { type: "attack"; count?: SpellScaledNumber }
+  | { type: "attack" }
   | {
       type: "save"
       attribute: Attribute
@@ -126,5 +126,10 @@ export type SpellDamageComponent = {
 
 export type SpellResolution = {
   roll: SpellResolutionRoll
+  /**
+   * Independent attack/damage packets produced by one cast.
+   * Examples: Scorching Ray attacks, Eldritch Blast beams, Magic Missile darts.
+   */
+  instances?: SpellScaledNumber
   damage?: SpellDamageComponent[]
 }
