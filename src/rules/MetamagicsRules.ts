@@ -25,7 +25,7 @@ export const metamagicRules: Record<
     timing: 'on-damage-roll',
     canCombineWithOtherMetamagic: true,
     isAvailableForSpell: (spell) =>
-      !!spell.damageDice,
+      Boolean(spell.resolution?.damage?.length || spell.damageDice),
   },
 
   'extended-spell': {
