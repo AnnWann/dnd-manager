@@ -671,6 +671,7 @@ function describeSessionOperation(
     case "character.customSystem.action.execute":
     case "character.customSystem.automation.execute":
       return describeCustomSystemOperation(record, characterName, customSystemDefinitions)
+    case "character.spell.cast": return `${characterName} conjurou ${operation.spellIndex}${operation.castLevel > 0 ? ` no nível ${operation.castLevel}` : ""}.`
     case "character.spell.prepare": return `${operation.prepared ? "Preparou" : "Despreparou"} ${operation.spellIndex} para ${characterName}.`
     case "character.spell.add": return `Adicionou uma magia à lista de ${characterName}.`
     case "character.spell.remove": return `Removeu ${operation.spellIndex} da lista de ${characterName}.`
