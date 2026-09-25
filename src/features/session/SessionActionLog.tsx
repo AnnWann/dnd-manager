@@ -333,12 +333,6 @@ function ActionRollEntry({
 }) {
   const attack = roll.attack
   const damage = roll.damage
-  const attackClass = attack?.natural === 20
-    ? "text-success"
-    : attack?.natural === 1
-      ? "text-danger"
-      : "text-textH"
-
   return (
     <article className="overflow-hidden rounded-xl border border-accentBorder bg-bg">
       <header className="border-b border-border bg-accentBg px-3 py-2.5">
