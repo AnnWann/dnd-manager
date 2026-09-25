@@ -8387,10 +8387,6 @@
             "id": "damage-radiant-1",
             "label": "Dano",
             "damageType": "radiant",
-            "dice": {
-              "quantity": 0,
-              "sides": "d2"
-            },
             "flat": 20,
             "appliesOn": "failed-save",
             "critical": false
