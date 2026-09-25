@@ -974,6 +974,12 @@ function resolveServerActionRoll(
     };
   }
 
+  return {
+    ok: false,
+    code: "ACTION_NOT_SUPPORTED",
+    message: "The requested action type is not supported.",
+  };
+}
 
 function rollActionD20(
   mode: SessionDiceRollResult["mode"],
