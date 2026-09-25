@@ -37,7 +37,7 @@ import {
 import type { Attribute } from "../../../../src/models/sheet/Attribute";
 import { abilityShortPtBr } from "../../../../src/i18n/ptBR";
 import type { Skill } from "../../../../src/models/sheet/Skills";
-import { normalizeInitiativeSession, type InitiativeEntry, type InitiativeSession } from "../../../../src/models/initiative/Initiative";
+import { initiativeEntryDisplayName, normalizeInitiativeSession, type InitiativeEntry, type InitiativeSession } from "../../../../src/models/initiative/Initiative";
 import { CREATURE_ATTRIBUTE_LABELS, findCreatureSave, findCreatureSkill, inferCreatureAttackMechanics, parseCreatureDamageFormula } from "../../../../src/models/creatures/CreatureRolls";
 import { getCreatureEffectiveAbilityModifier, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../../../src/models/creatures/CreatureCombatRuntime";
 import type { CompendiumCreature, CreatureFeature } from "../../../../src/models/creatures/CompendiumCreature";
@@ -344,6 +344,34 @@ export class SessionActor extends DurableObject<Env> {
     connection: SessionConnection,
     request: SessionDiceRollRequest,
   ): Promise<void> {
+    if (request.source.type === "manual") {
+      const attribution = await this.resolveManualRollAttribution(
+        webSocket,
+        connection,
+        request,
+      );
+      if (!attribution) return;
+
+      let resolved: DiceResolution;
+      try {
+        resolved = resolveServerManualDiceRoll(
+          request,
+          connection.userId,
+          attribution,
+        );
+      } catch {
+        this.sendError(webSocket, "ROLL_RESOLUTION_FAILED", "The authoritative manual roll could not be resolved.");
+        return;
+      }
+      if (!resolved.ok) {
+        this.sendError(webSocket, resolved.code, resolved.message);
+        return;
+      }
+
+      this.broadcast({ type: "session.dice.result", result: resolved.result });
+      return;
+    }
+
     const [hpState, abilities, conditionsState] = await Promise.all([
       this.readHpState(),
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
@@ -383,6 +411,63 @@ export class SessionActor extends DurableObject<Env> {
     }
 
     this.broadcast({ type: "session.dice.result", result: resolved.result });
+  }
+
+  private async resolveManualRollAttribution(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    request: SessionDiceRollRequest,
+  ): Promise<{ characterId?: string; sourceName?: string } | null> {
+    if (request.source.type !== "manual") return null;
+
+    const initiativeEntryId = request.source.initiativeEntryId;
+    if (initiativeEntryId) {
+      if (connection.role !== "MASTER") {
+        this.sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can attribute a manual roll to an initiative combatant.");
+        return null;
+      }
+
+      const initiativeState = await this.ctx.storage.get<{
+        initialized?: boolean;
+        session?: Record<string, unknown>;
+      }>("initiative-state");
+      const initiative = initiativeState?.session
+        ? normalizeInitiativeSession(
+            initiativeState.session as Partial<InitiativeSession>,
+          )
+        : undefined;
+      const entry = initiative?.entries.find(
+        (candidate) => candidate.id === initiativeEntryId,
+      );
+      if (!entry) {
+        this.sendError(webSocket, "INITIATIVE_ENTRY_NOT_FOUND", "The selected initiative combatant no longer exists.");
+        return null;
+      }
+
+      return {
+        sourceName: initiativeEntryDisplayName(entry, "player"),
+      };
+    }
+
+    if (request.characterId) {
+      const hp = (await this.readHpState())[request.characterId];
+      if (!hp) {
+        this.sendError(webSocket, "CHARACTER_NOT_INITIALIZED", "Authoritative character state has not been initialized.");
+        return null;
+      }
+      if (connection.role !== "MASTER" && hp.ownerUserId !== connection.userId) {
+        this.sendError(webSocket, "CHARACTER_ACCESS_DENIED", "You cannot roll for this character.");
+        return null;
+      }
+      return { characterId: request.characterId };
+    }
+
+    if (connection.role !== "MASTER") {
+      this.sendError(webSocket, "CHARACTER_REQUIRED", "Players must associate manual rolls with a character.");
+      return null;
+    }
+
+    return {};
   }
 
   private async initializeHp(webSocket: WebSocket, connection: SessionConnection, seeds: SessionHpSeed[]): Promise<void> {
@@ -1372,6 +1457,7 @@ type DicePlan = {
 function resolveServerManualDiceRoll(
   request: SessionDiceRollRequest,
   actorId: string,
+  attribution: { characterId?: string; sourceName?: string } = {},
 ): DiceResolution {
   if (request.source.type !== "manual") {
     return {
@@ -1432,7 +1518,8 @@ function resolveServerManualDiceRoll(
       id: crypto.randomUUID(),
       requestId: request.requestId,
       actorId,
-      characterId: request.characterId,
+      characterId: attribution.characterId,
+      sourceName: attribution.sourceName,
       label: parsed.value.expression,
       kind: "manual",
       mode: parsed.value.mode,
@@ -1450,9 +1537,6 @@ function resolveServerDiceRoll(
   actorId: string,
   character: CharacterTemplate,
 ): DiceResolution {
-  if (request.source.type === "manual") {
-    return resolveServerManualDiceRoll(request, actorId);
-  }
 
   const plan = buildAuthoritativeDicePlan(request, character);
   if (!plan.ok) return plan;
