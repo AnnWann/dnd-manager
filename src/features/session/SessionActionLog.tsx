@@ -400,6 +400,11 @@ function ActionRollEntry({
           <ResolvedDamageBlock
             key={`${entry.label ?? "damage"}:${index}`}
             damage={entry}
+            halfOnSave={
+              roll.save?.onSuccess === "half"
+                ? Math.floor(entry.total / 2)
+                : undefined
+            }
           />
         ))}
 
@@ -445,8 +450,10 @@ function ResolvedAttackBlock({
 
 function ResolvedDamageBlock({
   damage,
+  halfOnSave,
 }: {
   damage: NonNullable<SessionActionRollResult["damage"]>
+  halfOnSave?: number
 }) {
   const label = damage.label?.trim() || (damage.critical ? "Dano crítico" : "Dano")
   const type = damage.damageType?.trim()
@@ -457,6 +464,11 @@ function ResolvedDamageBlock({
           {label}{type ? ` · ${type}` : ""}
         </div>
         <div className="mt-0.5 text-[10px] text-textMuted">{formatResolvedDamage(damage)}</div>
+        {halfOnSave !== undefined ? (
+          <div className="mt-0.5 text-[10px] font-medium text-textMuted">
+            Em sucesso: {halfOnSave}
+          </div>
+        ) : null}
       </div>
       <div className={damage.critical ? "text-2xl font-black text-success" : "text-2xl font-black text-textH"}>
         {damage.total}
