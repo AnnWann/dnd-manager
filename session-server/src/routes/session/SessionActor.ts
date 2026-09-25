@@ -930,16 +930,45 @@ function resolveServerCreatureRoll(
   const source = request.source;
 
   if (source.type === "feature") {
-    const feature = findCreatureFeature(creature, source.featureId);
-    const mechanics = feature?.mechanics
-      ?? inferCreatureAttackMechanics(feature?.description);
-    if (!feature || !mechanics || mechanics.kind !== "attack") {
+    const located = findCreatureFeature(creature, source.featureId);
+    if (!located) {
       return {
         ok: false,
-        code: "CREATURE_FEATURE_NOT_ROLLABLE",
-        message: "The requested creature feature does not have resolvable attack mechanics.",
+        code: "CREATURE_FEATURE_NOT_FOUND",
+        message: "The requested creature feature is not available.",
       };
     }
+
+    const { feature, sectionLabel } = located;
+    const mechanics = feature.mechanics
+      ?? inferCreatureAttackMechanics(feature.description);
+
+    if (source.intent === "announce" || !mechanics || mechanics.kind !== "attack") {
+      return {
+        ok: true,
+        resultType: "action",
+        result: {
+          id: crypto.randomUUID(),
+          requestId: request.requestId,
+          actorId,
+          characterId: resultCharacterId,
+          sourceName: creature.name,
+          sourceType: "creature",
+          title: feature.name,
+          subtitle: `${creature.name} · ${sectionLabel}`,
+          description: feature.description?.trim() || undefined,
+          details: mechanics
+            ? [
+                ...(mechanics.reach?.trim() ? [mechanics.reach.trim()] : []),
+                ...(mechanics.magical ? ["Mágico"] : []),
+              ]
+            : undefined,
+          critical: false,
+          createdAt: new Date().toISOString(),
+        },
+      };
+    }
+
     const resolvedFeature: CreatureFeature = { ...feature, mechanics };
 
     const attackBonus = getCreatureFeatureEffectiveAttackBonus(
@@ -998,7 +1027,7 @@ function resolveServerCreatureRoll(
         sourceName: creature.name,
         sourceType: "creature",
         title: feature.name,
-        subtitle: `${creature.name} · ${mechanics.rangeType === "melee" ? "Ataque corpo a corpo" : "Ataque à distância"}`,
+        subtitle: `${creature.name} · ${sectionLabel} · ${mechanics.rangeType === "melee" ? "Ataque corpo a corpo" : "Ataque à distância"}`,
         description: feature.description?.trim() || undefined,
         details: [
           ...(mechanics.reach?.trim() ? [mechanics.reach.trim()] : []),
@@ -1095,14 +1124,20 @@ function resolveServerCreatureRoll(
 function findCreatureFeature(
   creature: CompendiumCreature,
   featureId: string,
-): CreatureFeature | undefined {
-  return [
-    ...creature.traits,
-    ...creature.actions,
-    ...creature.bonusActions,
-    ...creature.reactions,
-    ...creature.legendaryActions,
-  ].find((feature) => feature.id === featureId);
+): { feature: CreatureFeature; sectionLabel: string } | undefined {
+  const sections: Array<{ label: string; entries: CreatureFeature[] }> = [
+    { label: "Característica", entries: creature.traits },
+    { label: "Ação", entries: creature.actions },
+    { label: "Ação bônus", entries: creature.bonusActions },
+    { label: "Reação", entries: creature.reactions },
+    { label: "Ação lendária", entries: creature.legendaryActions },
+  ];
+
+  for (const section of sections) {
+    const feature = section.entries.find((entry) => entry.id === featureId);
+    if (feature) return { feature, sectionLabel: section.label };
+  }
+  return undefined;
 }
 
 type ActionResolution =
