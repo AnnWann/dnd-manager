@@ -73,7 +73,7 @@ export const metamagicRules: Record<
     timing: 'on-cast',
     canCombineWithOtherMetamagic: false,
     isAvailableForSpell: (spell) =>
-      !!spell.damageDice,
+      Boolean(spell.resolution?.damage?.length || spell.damageDice),
   },
 
   'twinned-spell': {
