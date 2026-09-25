@@ -325,7 +325,27 @@ function FeatureSection({
             key={entry.id}
             className="rounded-lg border border-border bg-bg px-3 py-3"
           >
-            <h5 className="text-sm font-semibold text-textH">{entry.name}</h5>
+            <div className="flex items-start justify-between gap-3">
+              <h5 className="min-w-0 flex-1 text-sm font-semibold text-textH">{entry.name}</h5>
+              {rollContext ? (
+                <button
+                  type="button"
+                  className="shrink-0 rounded-lg border border-border bg-bg-subtle px-2.5 py-1 text-[11px] font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg"
+                  onClick={() =>
+                    requestCreatureRoll({
+                      ...rollContext,
+                      source: {
+                        type: "feature",
+                        featureId: entry.id,
+                        intent: "announce",
+                      },
+                    })
+                  }
+                >
+                  Mostrar
+                </button>
+              ) : null}
+            </div>
             {entry.mechanics ? (
               <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
                 {rollContext ? (
@@ -336,7 +356,11 @@ function FeatureSection({
                     onClick={(event) =>
                       requestCreatureRoll({
                         ...rollContext,
-                        source: { type: "feature", featureId: entry.id },
+                        source: {
+                          type: "feature",
+                          featureId: entry.id,
+                          intent: "resolve",
+                        },
                         mode: rollModeFromEvent(event.nativeEvent),
                       })
                     }
