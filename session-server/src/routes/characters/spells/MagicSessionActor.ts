@@ -420,15 +420,27 @@ function applySpellCastPayment(
 ): CastPaymentResult {
   if (payment.type === "none") {
     const options = getEffectiveSpellResourceOptions(character, spell);
+    const sourceRequiresPayment = Boolean(
+      grant
+      && grant.castingMode === "source"
+      && (
+        grant.resourceCost
+        || grant.usageSource
+        || grant.equipmentSpellUsageSource
+        || grant.usage
+      ),
+    );
     const isAtWillGrant = Boolean(
       grant
       && grant.castingMode === "source"
-      && !grant.resourceCost
-      && !grant.usageSource
-      && !grant.equipmentSpellUsageSource
-      && !grant.usage,
+      && !sourceRequiresPayment,
     );
-    if (spell.slotLevel === 0 || isAtWillGrant || (!options.useSlots && options.resources.length === 0)) {
+    const ordinaryCantrip = spell.slotLevel === 0 && !sourceRequiresPayment;
+    if (
+      ordinaryCantrip
+      || isAtWillGrant
+      || (!grant && !options.useSlots && options.resources.length === 0)
+    ) {
       return { ok: true, character };
     }
     return {
