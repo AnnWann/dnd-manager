@@ -1,4 +1,4 @@
-import type { CharacterGrantedSpellUsageSource } from "../../models/characters/characterGrantedSpells"
+import type { CharacterGrantedEquipmentSpellUsageSource, CharacterGrantedSpellUsageSource } from "../../models/characters/characterGrantedSpells"
 import type { SpellResourceType } from "../../models/magic/spells/Spell"
 import type { SessionDiceRollMode } from "../../shared/session-runtime/diceRollProtocol"
 
@@ -7,6 +7,7 @@ export type SessionSpellCastPayment =
   | { type: "slot"; pool: "normal" | "pact"; level: number }
   | { type: "resource"; resource: SpellResourceType }
   | { type: "ability-use"; source: CharacterGrantedSpellUsageSource }
+  | { type: "equipment-spell-use"; source: CharacterGrantedEquipmentSpellUsageSource }
 
 export type SessionMagicOperation =
   | { type: "character.spell.cast"; characterId: string; requestId: string; spellIndex: string; sourceId: string; castLevel: number; mode: SessionDiceRollMode; payment: SessionSpellCastPayment }
