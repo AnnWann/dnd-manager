@@ -5,7 +5,7 @@ import { Modal } from "../../../components/ui/Modal"
 import { CLASS_NAMES } from "../../../contexts/consts"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
-import { requestActionRoll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
+import { rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
 import { getAbilityUsageMax } from "../../../models/abilities/abilityActivation"
 import { getCharacterGrantedSpells, spendGrantedSpellAbilityUse, type CharacterGrantedSpellUsageSource } from "../../../models/characters/characterGrantedSpells"
 import { beginSpellConcentration, getConcentrationCondition } from "../../../models/characters/characterConcentration"
@@ -24,6 +24,8 @@ import type { SpellSource } from "../../../models/magic/spells/SpellSource"
 import type { MagicCircleLevel } from "../../../models/magic/spells/spellDefinitions"
 import type { CharacterClassInterface } from "../../../models/sheet/Class"
 import type { SessionDiceRollMode } from "../../../shared/session-runtime/diceRollProtocol"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
+import type { SessionSpellCastPayment } from "../../session-runtime/magicSessionProtocol"
 
 type ActionFilter = "action" | "bonusAction" | "reaction" | "other"
 type CastingResource = "slot" | "ability" | SpellResourceType
@@ -34,6 +36,7 @@ const ACTION_FILTERS: Array<{ value: ActionFilter; label: string }> = [{ value: 
 
 export function MinimalMagicActions({ character, updateCharacter }: Props) {
   const { getSpellByIndex } = useMagicContext()
+  const sessionRuntime = useOptionalSessionRuntime()
   const [actionFilter, setActionFilter] = useState<ActionFilter>("action")
   const [levelFilter, setLevelFilter] = useState<number | "all">("all")
   const [selected, setSelected] = useState<MinimalSpellEntry | null>(null)
@@ -85,26 +88,38 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
   }
   function finishCast() { setConfirmConcentrationReplacement(false); setSelected(null) }
 
-  function publishCastRoll(mode: SessionDiceRollMode) {
-    if (!selected) return
-    requestActionRoll({
-      characterId: character.get("id"),
-      source: {
-        type: "spell",
-        spellIndex: selected.spell.index,
-        sourceId: selected.source.sourceId,
-      },
-      mode,
-    })
-  }
-
   function executeSelectedCast(mode: SessionDiceRollMode = pendingRollMode) {
     if (!selected) return
     const spell = selected.spell
+
+    if (sessionRuntime) {
+      if (sessionRuntime.status !== "connected") {
+        setError("A sessão está desconectada. Não foi possível conjurar a magia.")
+        return
+      }
+
+      const resolved = resolveAuthoritativeCastPayment()
+      if (!resolved) return
+      const sent = sessionRuntime.dispatchMagicOperation({
+        type: "character.spell.cast",
+        characterId: character.get("id"),
+        requestId: crypto.randomUUID(),
+        spellIndex: spell.index,
+        sourceId: selected.source.sourceId,
+        castLevel: resolved.castLevel,
+        mode,
+        payment: resolved.payment,
+      })
+      if (!sent) {
+        setError("Não foi possível enviar a conjuração para a sessão.")
+        return
+      }
+      finishCast()
+      return
+    }
     if (castingResource === "ability") {
       if (!selected.sourceUsageSource || (selected.sourceUsageRemaining ?? 0) <= 0) { setError("Não há cargas disponíveis nesta habilidade."); return }
       updateCharacter(character.get("id"), (current) => { let next = spendGrantedSpellAbilityUse(current, selected.sourceUsageSource!); if (spell.concentration) next = beginSpellConcentration(next, spell); return next })
-      publishCastRoll(mode)
       finishCast()
       return
     }
@@ -113,14 +128,12 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
       const cost = baseCost ? getUpcastResourceCost(spell, baseCost, castLevel) : undefined
       if (!cost || !canPaySpellResourceCost(character, cost)) { setError(`Não há ${cost ? spellResourceLabel(cost.resource) : "recurso"} suficiente.`); return }
       updateCharacter(character.get("id"), (current) => { let next = spendSpellResourceCost(current, cost); if (spell.concentration) next = beginSpellConcentration(next, spell); return next })
-      publishCastRoll(mode)
       finishCast()
       return
     }
     if (selected.sourceCastingMode !== "slots" || !globalOptions.useSlots) { setError("Esta magia não usa espaços de magia."); return }
     if (spell.slotLevel === 0) {
       if (spell.concentration) updateCharacter(character.get("id"), (current) => beginSpellConcentration(current, spell))
-      publishCastRoll(mode)
       finishCast()
       return
     }
@@ -134,7 +147,64 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
     finishCast()
   }
 
-  const useDisabled = selected ? castingResource === "ability" ? !selected.sourceUsageSource || (selected.sourceUsageRemaining ?? 0) <= 0 : castingResource === "slot" ? selected.sourceCastingMode !== "slots" || !globalOptions.useSlots || (selected.spell.slotLevel > 0 && slotChoices.length === 0) : !selectedCost || !canPaySpellResourceCost(character, selectedCost) : true
+  function resolveAuthoritativeCastPayment(): {
+    castLevel: number
+    payment: SessionSpellCastPayment
+  } | null {
+    if (!selected) return null
+    const spell = selected.spell
+
+    if (castingResource === "ability") {
+      if (selected.sourceCastingMode === "source" && !selected.sourceUsageSource && !selected.sourceResourceCost) {
+        return { castLevel: spell.slotLevel, payment: { type: "none" } }
+      }
+      if (!selected.sourceUsageSource || (selected.sourceUsageRemaining ?? 0) <= 0) {
+        setError("Não há cargas disponíveis nesta habilidade.")
+        return null
+      }
+      return {
+        castLevel: spell.slotLevel,
+        payment: { type: "ability-use", source: selected.sourceUsageSource },
+      }
+    }
+
+    if (castingResource !== "slot") {
+      const baseCost = selected.sourceResourceCost?.resource === castingResource
+        ? selected.sourceResourceCost
+        : globalOptions.resources.find((candidate) => candidate.resource === castingResource)
+      if (!baseCost) {
+        setError("O recurso selecionado não pode pagar esta magia.")
+        return null
+      }
+      return {
+        castLevel: Math.max(spell.slotLevel, Math.trunc(castLevel ?? spell.slotLevel)),
+        payment: { type: "resource", resource: castingResource },
+      }
+    }
+
+    if (spell.slotLevel === 0) {
+      return { castLevel: 0, payment: { type: "none" } }
+    }
+    if (selected.sourceCastingMode !== "slots" || !globalOptions.useSlots) {
+      setError("Esta magia não usa espaços de magia.")
+      return null
+    }
+
+    const choices = getSlotChoices(character, spell)
+    const level = asksCastLevel ? castLevel : choices[0]?.level
+    const sameLevel = choices.filter((choice) => choice.level === level)
+    const choice = sameLevel.find((entry) => entry.pool === "normal") ?? sameLevel[0] ?? choices[0]
+    if (!choice) {
+      setError("Nenhum espaço compatível disponível.")
+      return null
+    }
+    return {
+      castLevel: choice.level,
+      payment: { type: "slot", pool: choice.pool, level: choice.level },
+    }
+  }
+
+  const useDisabled = selected ? castingResource === "ability" ? (selected.sourceCastingMode === "source" && !selected.sourceUsageSource && !selected.sourceResourceCost ? false : !selected.sourceUsageSource || (selected.sourceUsageRemaining ?? 0) <= 0) : castingResource === "slot" ? selected.sourceCastingMode !== "slots" || !globalOptions.useSlots || (selected.spell.slotLevel > 0 && slotChoices.length === 0) : !selectedCost || !canPaySpellResourceCost(character, selectedCost) : true
 
   return <section className="rounded-xl border border-border bg-bg p-3 shadow-theme-sm">
     {allSpells.length ? <>
@@ -166,7 +236,7 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
 }
 
 function getUpcastResourceCost(spell: Spell, baseCost: SpellResourceCost, castLevel: number | null): SpellResourceCost { const level = Math.max(spell.slotLevel, Math.min(9, Math.trunc(castLevel ?? spell.slotLevel))); return { ...baseCost, amount: baseCost.amount + Math.max(0, level - spell.slotLevel) } }
-function getResourceChoices(character: CharacterTemplate, entry: MinimalSpellEntry, slotChoices: SlotChoice[]) { if (entry.sourceResourceCost) return [{ value: entry.sourceResourceCost.resource as CastingResource, label: `${entry.sourceResourceCost.amount} ${spellResourceLabel(entry.sourceResourceCost.resource)}`, disabled: !canPaySpellResourceCost(character, entry.sourceResourceCost) }]; if (entry.sourceCastingMode === "source") return [{ value: "ability" as CastingResource, label: `${entry.sourceUsageLabel || sourceLabel(entry.source)} — ${entry.sourceUsageRemaining ?? 0}/${entry.sourceUsageMaximum ?? 0} usos`, disabled: (entry.sourceUsageRemaining ?? 0) <= 0 }]; const list: Array<{ value: CastingResource; label: string; disabled: boolean }> = []; const payment = getEffectiveSpellResourceOptions(character, entry.spell); if (payment.useSlots) list.push({ value: "slot", label: "Espaço de magia", disabled: entry.spell.slotLevel > 0 && !slotChoices.length }); for (const cost of payment.resources) list.push({ value: cost.resource, label: `${cost.amount} ${spellResourceLabel(cost.resource)}`, disabled: !canPaySpellResourceCost(character, cost) }); return list }
+function getResourceChoices(character: CharacterTemplate, entry: MinimalSpellEntry, slotChoices: SlotChoice[]) { if (entry.sourceResourceCost) return [{ value: entry.sourceResourceCost.resource as CastingResource, label: `${entry.sourceResourceCost.amount} ${spellResourceLabel(entry.sourceResourceCost.resource)}`, disabled: !canPaySpellResourceCost(character, entry.sourceResourceCost) }]; if (entry.sourceCastingMode === "source") return [{ value: "ability" as CastingResource, label: entry.sourceUsageSource ? `${entry.sourceUsageLabel || sourceLabel(entry.source)} — ${entry.sourceUsageRemaining ?? 0}/${entry.sourceUsageMaximum ?? 0} usos` : `${sourceLabel(entry.source)} — sem custo`, disabled: entry.sourceUsageSource ? (entry.sourceUsageRemaining ?? 0) <= 0 : false }]; const list: Array<{ value: CastingResource; label: string; disabled: boolean }> = []; const payment = getEffectiveSpellResourceOptions(character, entry.spell); if (payment.useSlots) list.push({ value: "slot", label: "Espaço de magia", disabled: entry.spell.slotLevel > 0 && !slotChoices.length }); for (const cost of payment.resources) list.push({ value: cost.resource, label: `${cost.amount} ${spellResourceLabel(cost.resource)}`, disabled: !canPaySpellResourceCost(character, cost) }); return list }
 function buildAvailableSpells(character: CharacterTemplate, getSpellByIndex: (index: string) => Spell | undefined): MinimalSpellEntry[] { const classes = character.get("sheet").classes ?? [], entries: MinimalSpellEntry[] = []; for (const known of character.get("magic")?.spells.knownSpells ?? []) { const spell = getSpellByIndex(known.spells.id); if (!spell) continue; const alwaysAvailable = isAlwaysAvailableSpell(spell, known.source, classes); if (!alwaysAvailable && !known.spells.prepared) continue; entries.push({ key: `known:${known.source.type}:${known.source.sourceId}:${spell.index}`, spell, source: known.source, sourceCastingMode: "slots" }) } for (const grant of getCharacterGrantedSpells(character)) { const spell = getSpellByIndex(grant.index); if (!spell) continue; const maximum = grant.usage ? getAbilityUsageMax(character, grant.usage) : undefined, remaining = grant.usage && maximum !== undefined ? Math.max(0, maximum - grant.usage.used) : undefined; entries.push({ key: grant.key, spell, source: grant.source, sourceCastingMode: grant.resourceCost ? "source" : grant.castingMode === "known" ? "slots" : "source", sourceUsageRemaining: remaining, sourceUsageMaximum: maximum, sourceUsageLabel: grant.usageSource ? grant.source.name || "Carga de habilidade" : undefined, sourceUsageSource: grant.usageSource, sourceResourceCost: grant.resourceCost }) } return entries }
 function getCastLevels(spell: Spell, resource: CastingResource, slots: SlotChoice[]): number[] { if (resource === "slot") return Array.from(new Set(slots.map((choice) => choice.level))); return Array.from({ length: Math.max(1, 10 - spell.slotLevel) }, (_, index) => spell.slotLevel + index).filter((level) => level >= 1 && level <= 9) }
 function isAlwaysAvailableSpell(spell: Spell, source: SpellSource, classes: CharacterClassInterface[]): boolean { if (spell.slotLevel === 0 || source.type !== "class") return true; const data = classes.find((entry) => entry.className === source.name); return !data?.knownSpells || data.knownSpells.mode === "limited" }
