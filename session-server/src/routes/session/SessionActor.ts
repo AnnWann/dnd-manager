@@ -79,6 +79,7 @@ import {
 } from "./sessionLog";
 import { readRuntimeConfig } from "./runtimeConfigAccess";
 import type { SessionActionRollRequest, SessionActionRollResult, SessionDiceRollRequest, SessionDiceRollResult, SessionResolvedD20Roll, SessionResolvedDamageRoll } from "../../../../src/shared/session-runtime/diceRollProtocol";
+import { parseManualDiceExpression } from "../../../../src/shared/session-runtime/manualDiceExpression";
 import {
   broadcastVisibilityFiltered,
   refreshConnectionVisibility,
@@ -279,6 +280,28 @@ export class SessionActor extends DurableObject<Env> {
     connection: SessionConnection,
     request: SessionDiceRollRequest,
   ): Promise<void> {
+    if (request.source.type === "manual") {
+      if (!canUseManualDiceScope(connection, request.characterId)) {
+        this.sendError(webSocket, "CHARACTER_ACCESS_DENIED", "You cannot roll under a character you cannot view.");
+        return;
+      }
+
+      let resolved: DiceResolution;
+      try {
+        resolved = resolveServerManualDiceRoll(request, connection.userId);
+      } catch {
+        this.sendError(webSocket, "ROLL_RESOLUTION_FAILED", "The authoritative manual roll could not be resolved.");
+        return;
+      }
+      if (!resolved.ok) {
+        this.sendError(webSocket, resolved.code, resolved.message);
+        return;
+      }
+
+      this.broadcast({ type: "session.dice.result", result: resolved.result });
+      return;
+    }
+
     const [hpState, abilities, conditionsState] = await Promise.all([
       this.readHpState(),
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
@@ -1036,6 +1059,82 @@ type DiceResolution =
   | { ok: true; result: SessionDiceRollResult }
   | { ok: false; code: string; message: string };
 
+function resolveServerManualDiceRoll(
+  request: Extract<SessionDiceRollRequest, { source: { type: "manual" } }> | SessionDiceRollRequest,
+  actorId: string,
+): DiceResolution {
+  if (request.source.type !== "manual") {
+    return {
+      ok: false,
+      code: "MANUAL_ROLL_INVALID",
+      message: "The requested roll is not a manual dice expression.",
+    };
+  }
+
+  const parsed = parseManualDiceExpression(request.source.expression);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      code: "MANUAL_ROLL_INVALID",
+      message: parsed.message,
+    };
+  }
+
+  const groups = parsed.value.terms.map((term) => {
+    if (term.mode === "normal") {
+      return {
+        quantity: term.quantity,
+        sides: term.sides,
+        rolls: Array.from({ length: term.quantity }, () => rollServerDie(term.sides)),
+        kept: undefined,
+      };
+    }
+
+    const rolls = [rollServerDie(term.sides), rollServerDie(term.sides)];
+    const kept = term.mode === "advantage"
+      ? Math.max(...rolls)
+      : Math.min(...rolls);
+    return {
+      quantity: rolls.length,
+      sides: term.sides,
+      rolls,
+      kept,
+    };
+  });
+
+  const diceTotal = groups.reduce((sum, group) => {
+    if (group.kept !== undefined) return sum + group.kept;
+    return sum + group.rolls.reduce((groupSum, value) => groupSum + value, 0);
+  }, 0);
+
+  const d20Candidates = parsed.value.terms.flatMap((term, index) =>
+    term.sides === 20 && term.quantity === 1
+      ? [{ term, group: groups[index] }]
+      : [],
+  );
+  const natural = d20Candidates.length === 1
+    ? d20Candidates[0].group.kept ?? d20Candidates[0].group.rolls[0]
+    : undefined;
+
+  return {
+    ok: true,
+    result: {
+      id: crypto.randomUUID(),
+      requestId: request.requestId,
+      actorId,
+      characterId: request.characterId,
+      label: parsed.value.expression,
+      kind: "manual",
+      mode: parsed.value.mode,
+      groups,
+      modifier: parsed.value.modifier,
+      total: diceTotal + parsed.value.modifier,
+      natural,
+      createdAt: new Date().toISOString(),
+    },
+  };
+}
+
 type DicePlan = {
   kind: SessionDiceRollResult["kind"];
   mode: SessionDiceRollResult["mode"];
@@ -1184,11 +1283,17 @@ function buildAuthoritativeDicePlan(
         },
       };
     }
+    case "manual":
+      return {
+        ok: false,
+        code: "MANUAL_ROLL_ROUTING_ERROR",
+        message: "Manual dice expressions must use the manual resolver.",
+      };
   }
 }
 
 function d20Plan(
-  kind: Exclude<SessionDiceRollResult["kind"], "damage">,
+  kind: Exclude<SessionDiceRollResult["kind"], "damage" | "manual">,
   mode: SessionDiceRollResult["mode"],
   modifier: number,
 ): { ok: true; plan: DicePlan } {
@@ -1220,6 +1325,17 @@ function getAuthoritativeSkillBonus(character: CharacterTemplate, skill: Skill):
   return character.getEffectiveAttributeModifier(attribute)
     + (effective === "proficient" ? proficiencyBonus : 0)
     + (effective === "expertise" ? proficiencyBonus * 2 : 0);
+}
+
+function canUseManualDiceScope(
+  connection: SessionConnection,
+  characterId: string,
+): boolean {
+  if (connection.role === "MASTER") return true;
+  if ((connection as SessionConnection & { canReadAnyCharacter?: boolean }).canReadAnyCharacter === true) {
+    return true;
+  }
+  return connection.visibleCharacterIds?.includes(characterId) ?? false;
 }
 
 function findEquippedWeapon(character: CharacterTemplate, weaponId: string): Weapon | undefined {
