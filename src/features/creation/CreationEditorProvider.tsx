@@ -15,10 +15,13 @@ import {
 } from "../../api/creation"
 import { getApiStatus } from "../../api/api-client"
 import { getSessionCreationSettings } from "../../api/session-settings"
+import { useCharacterContext } from "../../contexts/characterContext"
 import { setCreationCustomSystemOverride } from "../../lib/customSystems/creationCustomSystemsBridge"
 import {
-  toSessionRuntimeConfig,
-} from "../../shared/session-runtime/sessionRuntimeConfig"
+  buildSessionRuntimeConfigSnapshot,
+  collectSessionReferencedSpellIndexes,
+  sessionSpellReferenceKey,
+} from "../session-runtime/buildSessionRuntimeConfig"
 import type {
   CreationCharacterConfiguration,
   CreationManagedDomains,
@@ -67,6 +70,7 @@ export function CreationEditorProvider({
   children: ReactNode
 }) {
   const runtime = useOptionalSessionRuntime()
+  const { visibleCharacters } = useCharacterContext()
   const [status, setStatus] = useState<CreationEditorStatus>("loading")
   const [error, setError] = useState("")
   const [base, setBase] = useState<CreationState | null>(null)
@@ -125,6 +129,11 @@ export function CreationEditorProvider({
   const publishRuntimeConfig = runtime?.publishRuntimeConfig
   const dispatchCharacterLifecycleOperation =
     runtime?.dispatchCharacterLifecycleOperation
+  const referencedSpellIndexes = useMemo(
+    () => collectSessionReferencedSpellIndexes(visibleCharacters),
+    [visibleCharacters],
+  )
+  const spellReferenceKey = sessionSpellReferenceKey(referencedSpellIndexes)
 
   useEffect(() => {
     if (
@@ -137,16 +146,31 @@ export function CreationEditorProvider({
       return
     }
 
-    publishRuntimeConfig({
+    let cancelled = false
+    void buildSessionRuntimeConfigSnapshot({
       creationRevision: baseRevision,
-      config: toSessionRuntimeConfig(base),
+      creation: base,
+      referencedSpellIndexes,
     })
+      .then((snapshot) => {
+        if (!cancelled) publishRuntimeConfig(snapshot)
+      })
+      .catch((cause) => {
+        if (!cancelled) {
+          console.error("[session-runtime] failed to publish Creation config", cause)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [
     base,
     baseRevision,
     publishRuntimeConfig,
     runtimeRole,
     runtimeStatus,
+    spellReferenceKey,
   ])
 
   const updateDraft = useCallback(
