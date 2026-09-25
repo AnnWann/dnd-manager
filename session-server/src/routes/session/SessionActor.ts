@@ -1256,9 +1256,25 @@ function resolveServerActionRoll(
         ...base,
         sourceType: "ability",
         title: ability.name || "Habilidade",
-        subtitle: ability.actionKind ? `Habilidade · ${ability.actionKind}` : "Habilidade",
+        subtitle: ability.actionKind
+          ? `Habilidade · ${formatAbilityActionKind(ability.actionKind)}`
+          : formatAbilityKind(ability.kind),
         description: ability.description?.trim() || undefined,
         details: ability.trigger ? [`Gatilho: ${ability.trigger}`] : undefined,
+        critical: false,
+      },
+    };
+  }
+
+  if (request.source.type === "announcement") {
+    return {
+      ok: true,
+      result: {
+        ...base,
+        sourceType: "announcement",
+        title: request.source.title.trim(),
+        subtitle: request.source.subtitle?.trim() || undefined,
+        description: request.source.description?.trim() || undefined,
         critical: false,
       },
     };
@@ -1269,6 +1285,25 @@ function resolveServerActionRoll(
     code: "ACTION_NOT_SUPPORTED",
     message: "The requested action type is not supported.",
   };
+}
+
+function formatAbilityActionKind(kind: string): string {
+  const labels: Record<string, string> = {
+    action: "Ação",
+    bonusAction: "Ação bônus",
+    reaction: "Reação",
+    free: "Ação livre",
+    legendaryAction: "Ação lendária",
+    legendaryReaction: "Reação lendária",
+    legendaryResistance: "Resistência lendária",
+  };
+  return labels[kind] ?? kind;
+}
+
+function formatAbilityKind(kind: string | undefined): string {
+  if (kind === "passive") return "Passiva";
+  if (kind === "feature") return "Característica";
+  return "Habilidade";
 }
 
 function rollActionD20(
