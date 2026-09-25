@@ -282,6 +282,28 @@ export class SessionActor extends AbilitySessionActor {
       nextConditions = concentration.next;
     }
 
+    let actionResult;
+    try {
+      actionResult = resolveSpellCastAction({
+        requestId: operation.requestId,
+        actorId: connection.userId,
+        character: payment.character,
+        spell,
+        source: sourceResolution.source,
+        castLevel: operation.castLevel,
+        mode: operation.mode,
+      });
+    } catch (error) {
+      sendError(
+        webSocket,
+        "SPELL_RESOLUTION_INVALID",
+        error instanceof Error
+          ? error.message
+          : "The structured spell resolution is invalid.",
+      );
+      return;
+    }
+
     const characterChanged = JSON.stringify(character.toJSON()) !== JSON.stringify(payment.character.toJSON());
     const conditionsChanged = nextConditions.revision !== conditions.revision;
     const nextAbility: SessionAbilityState = characterChanged
@@ -337,18 +359,9 @@ export class SessionActor extends AbilitySessionActor {
       }
     }
 
-    const result = resolveSpellCastAction({
-      requestId: operation.requestId,
-      actorId: connection.userId,
-      character: payment.character,
-      spell,
-      source: sourceResolution.source,
-      castLevel: operation.castLevel,
-      mode: operation.mode,
-    });
     broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
       type: "session.action.result",
-      result,
+      result: actionResult,
     });
   }
 }
