@@ -179,9 +179,10 @@ function resolveDamageComponents(
       if (quantity > MAX_DICE_PER_DAMAGE_COMPONENT) {
         throw new Error("Spell damage component rolls too many dice.");
       }
-      const groups = quantity > 0 && component.dice
+      const damageDice = component.dice;
+      const groups = quantity > 0 && damageDice
         ? (() => {
-            const sides = parseDieSides(component.dice.sides);
+            const sides = parseDieSides(damageDice.sides);
             return [{
               quantity,
               sides,
