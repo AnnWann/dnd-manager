@@ -240,7 +240,7 @@ export function CustomSystemActionsPanel({
                               requestActionAnnouncement({
                                 characterId: character.get("id"),
                                 title: entry.name,
-                                subtitle: `${CATEGORY_LABELS[entry.actionKind].replace(/s$/, "")} · ${entry.source}`,
+                                subtitle: `${CATEGORY_LABELS[entry.actionKind]} · ${entry.source}`,
                                 description: entry.description,
                               })
                             }
