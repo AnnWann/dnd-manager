@@ -120,8 +120,7 @@ export function SavingThrows({
                   requestD20Roll({
                     characterId,
                     label: `Resistência de ${label}`,
-                    modifier: bonus,
-                    kind: "save",
+                    source: { type: "save", attribute },
                     mode: rollModeFromEvent(event.nativeEvent),
                   })
                 }
