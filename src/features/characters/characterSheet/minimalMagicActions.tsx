@@ -5,7 +5,7 @@ import { Modal } from "../../../components/ui/Modal"
 import { CLASS_NAMES } from "../../../contexts/consts"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
-import { rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
+import { getRollVisibility, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
 import { getAbilityUsageMax } from "../../../models/abilities/abilityActivation"
 import { getCharacterGrantedSpells, spendGrantedEquipmentSpellUse, spendGrantedSpellAbilityUse, type CharacterGrantedEquipmentSpellUsageSource, type CharacterGrantedSpellUsageSource } from "../../../models/characters/characterGrantedSpells"
 import { beginSpellConcentration, getConcentrationCondition } from "../../../models/characters/characterConcentration"
@@ -108,6 +108,7 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
         sourceId: selected.source.sourceId,
         castLevel: resolved.castLevel,
         mode,
+        visibility: getRollVisibility(),
         payment: resolved.payment,
       })
       if (!sent) {
