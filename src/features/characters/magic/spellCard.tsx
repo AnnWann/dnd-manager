@@ -62,7 +62,7 @@ export function SpellCard({
   )
   const [draftCastingDescriptions, setDraftCastingDescriptions] =
     useState(castingDescriptions)
-  const { activeCharacter, updateCharacter } = useCharacterWorkspace()
+  const { activeCharacter, updateCharacter, mode } = useCharacterWorkspace()
   const castingDescriptionsKey = castingDescriptions.join("\u0000")
   const canTogglePrepared = Boolean(onTogglePrepared) && !alwaysPrepared
   const canEditCastingDescriptions = Boolean(
@@ -518,7 +518,7 @@ export function SpellCard({
           </div>
 
           <div className="flex w-full flex-wrap gap-2 border-t border-border pt-3 sm:w-auto sm:shrink-0 sm:justify-end sm:border-0 sm:pt-0">
-            {activeCharacter && source ? (
+            {mode === "campaign" && activeCharacter && source ? (
               <Button
                 className="flex-1 sm:flex-none"
                 size="sm"
