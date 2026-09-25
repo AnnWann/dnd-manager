@@ -38,7 +38,7 @@ import type { Attribute } from "../../../../src/models/sheet/Attribute";
 import { abilityShortPtBr } from "../../../../src/i18n/ptBR";
 import type { Skill } from "../../../../src/models/sheet/Skills";
 import { normalizeInitiativeSession, type InitiativeEntry, type InitiativeSession } from "../../../../src/models/initiative/Initiative";
-import { CREATURE_ATTRIBUTE_LABELS, findCreatureSave, findCreatureSkill, parseCreatureDamageFormula } from "../../../../src/models/creatures/CreatureRolls";
+import { CREATURE_ATTRIBUTE_LABELS, findCreatureSave, findCreatureSkill, inferCreatureAttackMechanics, parseCreatureDamageFormula } from "../../../../src/models/creatures/CreatureRolls";
 import { getCreatureEffectiveAbilityModifier, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../../../src/models/creatures/CreatureCombatRuntime";
 import type { CompendiumCreature, CreatureFeature } from "../../../../src/models/creatures/CompendiumCreature";
 import {
@@ -931,17 +931,20 @@ function resolveServerCreatureRoll(
 
   if (source.type === "feature") {
     const feature = findCreatureFeature(creature, source.featureId);
-    if (!feature?.mechanics || feature.mechanics.kind !== "attack") {
+    const mechanics = feature?.mechanics
+      ?? inferCreatureAttackMechanics(feature?.description);
+    if (!feature || !mechanics || mechanics.kind !== "attack") {
       return {
         ok: false,
         code: "CREATURE_FEATURE_NOT_ROLLABLE",
-        message: "The requested creature feature does not have structured attack mechanics.",
+        message: "The requested creature feature does not have resolvable attack mechanics.",
       };
     }
+    const resolvedFeature: CreatureFeature = { ...feature, mechanics };
 
     const attackBonus = getCreatureFeatureEffectiveAttackBonus(
       creature,
-      feature,
+      resolvedFeature,
       conditions,
       entry,
     );
@@ -957,13 +960,13 @@ function resolveServerCreatureRoll(
     const critical = attack.natural === 20;
     const effectiveDamageBonus = getCreatureFeatureEffectiveDamageBonus(
       creature,
-      feature,
+      resolvedFeature,
       conditions,
       entry,
     );
 
     const damages: SessionResolvedDamageRoll[] = [];
-    for (const part of feature.mechanics.damage) {
+    for (const part of mechanics.damage) {
       const parsed = parseCreatureDamageFormula(part.formula);
       if (!parsed) {
         return {
@@ -995,11 +998,11 @@ function resolveServerCreatureRoll(
         sourceName: creature.name,
         sourceType: "creature",
         title: feature.name,
-        subtitle: `${creature.name} · ${feature.mechanics.rangeType === "melee" ? "Ataque corpo a corpo" : "Ataque à distância"}`,
+        subtitle: `${creature.name} · ${mechanics.rangeType === "melee" ? "Ataque corpo a corpo" : "Ataque à distância"}`,
         description: feature.description?.trim() || undefined,
         details: [
-          ...(feature.mechanics.reach?.trim() ? [feature.mechanics.reach.trim()] : []),
-          ...(feature.mechanics.magical ? ["Mágico"] : []),
+          ...(mechanics.reach?.trim() ? [mechanics.reach.trim()] : []),
+          ...(mechanics.magical ? ["Mágico"] : []),
         ],
         attack,
         damages,
