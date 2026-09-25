@@ -5,6 +5,7 @@ import { Button } from "../../../components/ui/Button"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatBonusName, formatBonusValue } from "../../../lib/formatBonus"
 import { formatSigned } from "../../../lib/formatSigned"
+import { requestD20Roll, requestDamageRoll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getUsedArmsIncludingShield } from "../../../models/characters/characterEquipmentInteractions"
 import { setWeaponGripWithRules } from "../../../models/characters/characterHands"
@@ -87,7 +88,7 @@ function weaponAttackBonus(character: CharacterTemplate, weapon: Weapon) {
 }
 
 function weaponDamageBonus(character: CharacterTemplate, weapon: Weapon) {
-  const modifierAttribute = weapon.modifierAttribute ?? "str"
+  const modifierAttribute = getWeaponAttackAttribute(weapon)
 
   const attributeMod = character.getEffectiveAttributeModifier(
     modifierAttribute,
@@ -252,11 +253,28 @@ export function EquipmentWeaponsSection({
                       icon={<Crosshair className="h-4 w-4" />}
                       label="Ataque"
                       value={formatSigned(attackBonus)}
+                      title={rollModifierHint()}
+                      onClick={(event) =>
+                        requestD20Roll({
+                          characterId: character.get("id"),
+                          label: `${weapon.name || "Arma"} — ataque`,
+                          source: { type: "weapon-attack", weaponId: weapon.id },
+                          mode: rollModeFromEvent(event.nativeEvent),
+                        })
+                      }
                     />
                     <WeaponStat
                       icon={<Swords className="h-4 w-4" />}
                       label="Dano"
                       value={`${damageText}${damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""}`}
+                      title="Clique para rolar o dano no servidor."
+                      onClick={() =>
+                        requestDamageRoll({
+                          characterId: character.get("id"),
+                          label: `${weapon.name || "Arma"} — dano`,
+                          source: { type: "weapon-damage", weaponId: weapon.id },
+                        })
+                      }
                     />
                     <WeaponStat
                       icon={<Sparkles className="h-4 w-4" />}
@@ -330,21 +348,39 @@ function WeaponStat({
   icon,
   label,
   value,
+  onClick,
+  title,
 }: {
   icon: React.ReactNode
   label: string
   value: string
+  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void
+  title?: string
 }) {
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className="bg-bg px-4 py-3 text-left transition-colors hover:bg-accentBg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+        title={title}
+        onClick={onClick}
+      >
+        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+          <span className="text-accent">{icon}</span>
+          {label}
+        </div>
+        <div className="mt-1 text-base font-bold text-textH">{value}</div>
+      </button>
+    )
+  }
+
   return (
     <div className="bg-bg px-4 py-3">
       <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-textMuted">
         <span className="text-accent">{icon}</span>
         {label}
       </div>
-
-      <div className="mt-1 text-base font-bold text-textH">
-        {value}
-      </div>
+      <div className="mt-1 text-base font-bold text-textH">{value}</div>
     </div>
   )
 }
