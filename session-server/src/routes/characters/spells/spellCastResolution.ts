@@ -174,7 +174,13 @@ function resolveDamageComponents(
           }]
         : [];
       const flat = Math.trunc(component.flat ?? 0);
-      const modifier = character.getEffectiveSpellDamageBonus(attribute, flat);
+      const castingModifier = component.addCastingModifier
+        ? character.getEffectiveAttributeModifier(attribute)
+        : 0;
+      const modifier = character.getEffectiveSpellDamageBonus(
+        attribute,
+        flat + castingModifier,
+      );
       const diceTotal = groups.reduce(
         (sum, group) => sum + group.rolls.reduce((groupSum, value) => groupSum + value, 0),
         0,
