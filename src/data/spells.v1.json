@@ -3577,9 +3577,8 @@
         "kind": "single-creature",
         "targetsSelf": false,
         "hasAttackRoll": true,
-        "hasSavingThrow": true,
-        "affectsArea": false,
-        "savingThrowAttribute": "con"
+        "hasSavingThrow": false,
+        "affectsArea": false
       },
       "effects": [],
       "resolution": {
@@ -12923,9 +12922,8 @@
         "kind": "single-creature",
         "targetsSelf": false,
         "hasAttackRoll": true,
-        "hasSavingThrow": true,
-        "affectsArea": false,
-        "savingThrowAttribute": "cha"
+        "hasSavingThrow": false,
+        "affectsArea": false
       },
       "effects": [],
       "material": "Uma haste metálica bifurcada, avaliada em pelo menos 250 po, sintonizada com um plano de existência específico.",
@@ -13980,9 +13978,8 @@
         "kind": "single-creature",
         "targetsSelf": false,
         "hasAttackRoll": true,
-        "hasSavingThrow": true,
-        "affectsArea": false,
-        "savingThrowAttribute": "con"
+        "hasSavingThrow": false,
+        "affectsArea": false
       },
       "effects": [],
       "resolution": {
@@ -14724,7 +14721,7 @@
       "targeting": {
         "kind": "special",
         "targetsSelf": false,
-        "hasAttackRoll": false,
+        "hasAttackRoll": true,
         "hasSavingThrow": false,
         "affectsArea": false
       },
