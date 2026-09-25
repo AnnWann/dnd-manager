@@ -12,6 +12,7 @@ import {
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import type { CharacterSpellResourceConfig } from "../../../models/magic/spells/CharacterSpells"
 import type { Spell, SpellResourceType } from "../../../models/magic/spells/Spell"
+import { getEffectiveSpellResolution } from "../../../models/magic/spells/spellResolution"
 import {
   getCharacterSpellResourceOverride,
   setCharacterSpellResourceOverride,
@@ -846,8 +847,22 @@ function formatRollModes(spell: Spell): string {
 }
 
 function formatDamageDice(spell: Spell): string {
-  if (!spell.damageDice) return "Não informado"
-  return `${spell.damageDice.quantity}${spell.damageDice.sides}`
+  const damage = getEffectiveSpellResolution(spell).damage ?? []
+  if (!damage.length) return "Não informado"
+  return damage.map((component) => {
+    const dice = component.dice
+      ? `${component.dice.quantity}${component.dice.sides}`
+      : ""
+    const flat = component.flat
+      ? `${dice ? " " : ""}${component.flat > 0 && dice ? "+" : component.flat < 0 ? "-" : ""}${dice ? " " : ""}${Math.abs(component.flat)}`
+      : ""
+    const castingModifier = component.addCastingModifier
+      ? `${dice || flat ? " + " : ""}mod. conjuração`
+      : ""
+    const type = component.damageType ? ` ${component.damageType}` : ""
+    const scaling = component.diceScaling ? " (escalável)" : ""
+    return `${dice}${flat}${castingModifier}${type}${scaling}`
+  }).join(" + ")
 }
 
 function formatClasses(spell: Spell): string {

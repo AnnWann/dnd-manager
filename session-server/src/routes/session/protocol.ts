@@ -324,11 +324,6 @@ function isActionRollRequest(value: unknown): value is SessionActionRollRequest 
       return nonEmpty(value.source.weaponId) && value.source.weaponId.length <= 160;
     case "unarmed":
       return true;
-    case "spell":
-      return nonEmpty(value.source.spellIndex)
-        && value.source.spellIndex.length <= 200
-        && nonEmpty(value.source.sourceId)
-        && value.source.sourceId.length <= 200;
     case "ability":
       return nonEmpty(value.source.abilityId) && value.source.abilityId.length <= 200;
     default:

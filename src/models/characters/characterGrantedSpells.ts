@@ -16,6 +16,11 @@ export type CharacterGrantedSpellUsageSource =
   | { type: "equipment"; itemId: string; abilityId: string }
   | { type: "condition"; conditionId: string; abilityId: string }
 
+export type CharacterGrantedEquipmentSpellUsageSource = {
+  itemId: string
+  spellIndex: string
+}
+
 export type CharacterGrantedSpell = {
   key: string
   index: string
@@ -23,6 +28,7 @@ export type CharacterGrantedSpell = {
   source: SpellSource
   usage?: Usage
   usageSource?: CharacterGrantedSpellUsageSource
+  equipmentSpellUsageSource?: CharacterGrantedEquipmentSpellUsageSource
   resourceCost?: SpellResourceCost
 }
 
@@ -78,6 +84,10 @@ export function getCharacterGrantedSpells(
           attribute: grant.attribute ?? "cha",
         },
         usage: castingMode === "source" ? grant.usage : undefined,
+        equipmentSpellUsageSource:
+          castingMode === "source" && grant.usage.reset !== "spellSlot"
+            ? { itemId: equipment.id, spellIndex: grant.index }
+            : undefined,
       })
     }
 
@@ -213,4 +223,35 @@ export function spendGrantedSpellAbilityUse(
 
   const ability = (character.get("abilities") ?? []).find((entry) => entry.id === source.abilityId)
   return ability ? character.updateAbility(spend(ability)) : character
+}
+
+
+export function spendGrantedEquipmentSpellUse(
+  character: CharacterTemplate,
+  source: CharacterGrantedEquipmentSpellUsageSource,
+): CharacterTemplate {
+  const equipment = [
+    ...character.getEquippedItems(),
+    ...(character.get("equipment").shield ? [character.get("equipment").shield!] : []),
+  ]
+    .map((item) => item as Equipment)
+    .find((item) => item.id === source.itemId)
+
+  const grant = equipment?.spells?.find(
+    (entry) => entry.index === source.spellIndex,
+  )
+  if (!equipment || !grant || grant.usage.reset === "spellSlot") {
+    return character
+  }
+
+  const maximum = getAbilityUsageMax(character, grant.usage)
+  if (grant.usage.used >= maximum) return character
+
+  return character.updateEquipmentSpell(source.itemId, {
+    ...grant,
+    usage: {
+      ...grant.usage,
+      used: Math.min(maximum, grant.usage.used + 1),
+    },
+  })
 }

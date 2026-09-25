@@ -6,8 +6,9 @@
     "Descriptions and higher-level text are preserved from the input source text.",
     "Spell display names are translated to Portuguese when a safe mapping was available; unmapped names remain in English.",
     "Ranges and areas are converted from feet to meters using 5 ft = 1.5 m.",
-    "damageDice is omitted because the local Die type shape was not provided.",
-    "description, higherLevelText and material translated with Google Cloud Translation API."
+    "Legacy damageDice remains omitted for official spells; authoritative mechanics use structured resolution data.",
+    "description, higherLevelText and material translated with Google Cloud Translation API.",
+    "Structured spell resolution is derived from the upstream SRD mechanical fields; translated descriptions are preserved."
   ],
   "spells": [
     {
@@ -59,7 +60,50 @@
         "affectsArea": false
       },
       "effects": [],
-      "material": "Folha de ruibarbo em pó e estômago de víbora."
+      "material": "Folha de ruibarbo em pó e estômago de víbora.",
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        },
+        "damage": [
+          {
+            "id": "damage-acid-initial",
+            "label": "Dano inicial",
+            "damageType": "acid",
+            "dice": {
+              "quantity": 4,
+              "sides": "d4"
+            },
+            "appliesOn": "hit",
+            "critical": true,
+            "diceScaling": {
+              "type": "step",
+              "source": "slot-level",
+              "startLevel": 2,
+              "interval": 1,
+              "amountPerStep": 1
+            }
+          },
+          {
+            "id": "damage-acid-later",
+            "label": "Dano no fim do próximo turno",
+            "damageType": "acid",
+            "dice": {
+              "quantity": 2,
+              "sides": "d4"
+            },
+            "appliesOn": "hit",
+            "critical": false,
+            "diceScaling": {
+              "type": "step",
+              "source": "slot-level",
+              "startLevel": 2,
+              "interval": 1,
+              "amountPerStep": 1
+            }
+          }
+        ]
+      }
     },
     {
       "index": "acid-splash",
@@ -110,7 +154,45 @@
         "affectsArea": false,
         "savingThrowAttribute": "dex"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "none"
+        },
+        "damage": [
+          {
+            "id": "damage-acid-1",
+            "label": "Dano",
+            "damageType": "acid",
+            "dice": {
+              "quantity": 1,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "character-level",
+              "thresholds": [
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 11,
+                  "amount": 1
+                },
+                {
+                  "level": 17,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "aid",
@@ -317,7 +399,14 @@
         "savingThrowAttribute": "wis"
       },
       "effects": [],
-      "material": "Um pedaço de comida."
+      "material": "Um pedaço de comida.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "animal-messenger",
@@ -876,7 +965,25 @@
         "affectsArea": false
       },
       "effects": [],
-      "material": "Uma espada em miniatura de platina com cabo e pomo de cobre e zinco, avaliada em 250 po."
+      "material": "Uma espada em miniatura de platina com cabo e pomo de cobre e zinco, avaliada em 250 po.",
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        },
+        "damage": [
+          {
+            "id": "damage-force-1",
+            "label": "Dano",
+            "damageType": "force",
+            "dice": {
+              "quantity": 3,
+              "sides": "d10"
+            },
+            "appliesOn": "hit",
+            "critical": true
+          }
+        ]
+      }
     },
     {
       "index": "arcanists-magic-aura",
@@ -1124,7 +1231,14 @@
         "targetCount": 3
       },
       "effects": [],
-      "material": "Uma gota de sangue."
+      "material": "Uma gota de sangue.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "cha",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "banishment",
@@ -1179,7 +1293,14 @@
         "savingThrowAttribute": "cha"
       },
       "effects": [],
-      "material": "Um item desagradável para o alvo."
+      "material": "Um item desagradável para o alvo.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "cha",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "barkskin",
@@ -1325,7 +1446,14 @@
         "affectsArea": false,
         "savingThrowAttribute": "wis"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "black-tentacles",
@@ -1383,7 +1511,27 @@
         "areaSize": 6
       },
       "effects": [],
-      "material": "Um pedaço de tentáculo de um polvo gigante ou de uma lula gigante."
+      "material": "Um pedaço de tentáculo de um polvo gigante ou de uma lula gigante.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "none"
+        },
+        "damage": [
+          {
+            "id": "damage-bludgeoning-1",
+            "label": "Dano",
+            "damageType": "bludgeoning",
+            "dice": {
+              "quantity": 3,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "blade-barrier",
@@ -1439,7 +1587,27 @@
         "areaShape": "line",
         "areaSize": 30
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-slashing-1",
+            "label": "Dano",
+            "damageType": "slashing",
+            "dice": {
+              "quantity": 6,
+              "sides": "d10"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "bless",
@@ -1542,7 +1710,53 @@
         "affectsArea": false,
         "savingThrowAttribute": "con"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-necrotic-1",
+            "label": "Dano",
+            "damageType": "necrotic",
+            "dice": {
+              "quantity": 8,
+              "sides": "d8"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "blindness-deafness",
@@ -1593,7 +1807,14 @@
         "affectsArea": false,
         "savingThrowAttribute": "con"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "blink",
@@ -1790,7 +2011,65 @@
         "areaShape": "cone",
         "areaSize": 4.5
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-fire-1",
+            "label": "Dano",
+            "damageType": "fire",
+            "dice": {
+              "quantity": 3,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 2,
+                  "amount": 1
+                },
+                {
+                  "level": 3,
+                  "amount": 1
+                },
+                {
+                  "level": 4,
+                  "amount": 1
+                },
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "call-lightning",
@@ -1900,7 +2179,14 @@
         "areaShape": "circle",
         "areaSize": 6
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "cha",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "chain-lightning",
@@ -1953,7 +2239,27 @@
         "savingThrowAttribute": "dex"
       },
       "effects": [],
-      "material": "Um pedaço de pele; um pedaço de âmbar, vidro ou uma haste de cristal; e três alfinetes de prata."
+      "material": "Um pedaço de pele; um pedaço de âmbar, vidro ou uma haste de cristal; e três alfinetes de prata.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-lightning-1",
+            "label": "Dano",
+            "damageType": "lightning",
+            "dice": {
+              "quantity": 10,
+              "sides": "d8"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "charm-person",
@@ -2006,7 +2312,14 @@
         "affectsArea": false,
         "savingThrowAttribute": "wis"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "chill-touch",
@@ -2057,7 +2370,43 @@
         "hasSavingThrow": false,
         "affectsArea": false
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        },
+        "damage": [
+          {
+            "id": "damage-necrotic-1",
+            "label": "Dano",
+            "damageType": "necrotic",
+            "dice": {
+              "quantity": 1,
+              "sides": "d8"
+            },
+            "appliesOn": "hit",
+            "critical": true,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "character-level",
+              "thresholds": [
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 11,
+                  "amount": 1
+                },
+                {
+                  "level": 17,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "circle-of-death",
@@ -2117,7 +2466,45 @@
         "areaSize": 18
       },
       "effects": [],
-      "material": "O pó de uma pérola negra triturada, avaliado em pelo menos 500 peças de ouro."
+      "material": "O pó de uma pérola negra triturada, avaliado em pelo menos 500 peças de ouro.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-necrotic-1",
+            "label": "Dano",
+            "damageType": "necrotic",
+            "dice": {
+              "quantity": 8,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 7,
+                  "amount": 2
+                },
+                {
+                  "level": 8,
+                  "amount": 2
+                },
+                {
+                  "level": 9,
+                  "amount": 2
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "clairvoyance",
@@ -2273,7 +2660,49 @@
         "areaShape": "circle",
         "areaSize": 6
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-poison-1",
+            "label": "Dano",
+            "damageType": "poison",
+            "dice": {
+              "quantity": 5,
+              "sides": "d8"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "color-spray",
@@ -2377,7 +2806,14 @@
         "affectsArea": false,
         "savingThrowAttribute": "wis"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "commune",
@@ -2572,7 +3008,14 @@
         "affectsArea": false,
         "savingThrowAttribute": "wis"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "cone-of-cold",
@@ -2631,7 +3074,49 @@
         "areaSize": 18
       },
       "effects": [],
-      "material": "Um pequeno cone de cristal ou vidro."
+      "material": "Um pequeno cone de cristal ou vidro.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-cold-1",
+            "label": "Dano",
+            "damageType": "cold",
+            "dice": {
+              "quantity": 8,
+              "sides": "d8"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "confusion",
@@ -2691,7 +3176,14 @@
         "areaSize": 3
       },
       "effects": [],
-      "material": "Três cascas de noz."
+      "material": "Três cascas de noz.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "conjure-animals",
@@ -3031,7 +3523,14 @@
         "affectsArea": false,
         "savingThrowAttribute": "int"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "int",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "contagion",
@@ -3078,11 +3577,15 @@
         "kind": "single-creature",
         "targetsSelf": false,
         "hasAttackRoll": true,
-        "hasSavingThrow": true,
-        "affectsArea": false,
-        "savingThrowAttribute": "con"
+        "hasSavingThrow": false,
+        "affectsArea": false
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        }
+      }
     },
     {
       "index": "contingency",
@@ -3239,7 +3742,27 @@
         "areaSize": 30
       },
       "effects": [],
-      "material": "Uma gota de água e uma pitada de poeira."
+      "material": "Uma gota de água e uma pitada de poeira.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "str",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-bludgeoning-1",
+            "label": "Dano",
+            "damageType": "bludgeoning",
+            "dice": {
+              "quantity": 2,
+              "sides": "d8"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "control-weather",
@@ -3915,7 +4438,41 @@
         "areaSize": 6
       },
       "effects": [],
-      "material": "Uma pequena bola de guano de morcego e enxofre."
+      "material": "Uma pequena bola de guano de morcego e enxofre.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-fire-1",
+            "label": "Dano",
+            "damageType": "fire",
+            "dice": {
+              "quantity": 12,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "demiplane",
@@ -4336,7 +4893,28 @@
         "areaSize": 3
       },
       "effects": [],
-      "material": "Uma pedra-ímã e uma pitada de pó."
+      "material": "Uma pedra-ímã e uma pitada de pó.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "none"
+        },
+        "damage": [
+          {
+            "id": "damage-force-1",
+            "label": "Dano",
+            "damageType": "force",
+            "dice": {
+              "quantity": 10,
+              "sides": "d6"
+            },
+            "flat": 40,
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "dispel-evil-and-good",
@@ -4388,7 +4966,14 @@
         "savingThrowAttribute": "cha"
       },
       "effects": [],
-      "material": "Água benta ou prata e ferro em pó."
+      "material": "Água benta ou prata e ferro em pó.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "cha",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "dispel-magic",
@@ -4584,7 +5169,14 @@
         "affectsArea": false,
         "savingThrowAttribute": "cha"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "cha",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "dominate-beast",
@@ -4634,7 +5226,14 @@
         "affectsArea": false,
         "savingThrowAttribute": "wis"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "dominate-monster",
@@ -4686,7 +5285,14 @@
         "affectsArea": false,
         "savingThrowAttribute": "wis"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "dominate-person",
@@ -4737,7 +5343,14 @@
         "affectsArea": false,
         "savingThrowAttribute": "wis"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "dream",
@@ -4791,7 +5404,27 @@
         "savingThrowAttribute": "wis"
       },
       "effects": [],
-      "material": "Um punhado de areia, um pingo de tinta e uma pena de escrever arrancada de um pássaro adormecido."
+      "material": "Um punhado de areia, um pingo de tinta e uma pena de escrever arrancada de um pássaro adormecido.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        },
+        "damage": [
+          {
+            "id": "damage-psychic-1",
+            "label": "Dano",
+            "damageType": "psychic",
+            "dice": {
+              "quantity": 3,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "druidcraft",
@@ -4942,7 +5575,46 @@
         "hasSavingThrow": false,
         "affectsArea": false
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        },
+        "instances": {
+          "base": 1,
+          "scaling": {
+            "type": "thresholds",
+            "source": "character-level",
+            "thresholds": [
+              {
+                "level": 5,
+                "amount": 1
+              },
+              {
+                "level": 11,
+                "amount": 1
+              },
+              {
+                "level": 17,
+                "amount": 1
+              }
+            ]
+          }
+        },
+        "damage": [
+          {
+            "id": "damage-force-1",
+            "label": "Dano por feixe",
+            "damageType": "force",
+            "dice": {
+              "quantity": 1,
+              "sides": "d10"
+            },
+            "appliesOn": "hit",
+            "critical": true
+          }
+        ]
+      }
     },
     {
       "index": "enhance-ability",
@@ -5045,7 +5717,14 @@
         "savingThrowAttribute": "con"
       },
       "effects": [],
-      "material": "Uma pitada de pó de ferro."
+      "material": "Uma pitada de pó de ferro.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "entangle",
@@ -5100,7 +5779,14 @@
         "areaShape": "square",
         "areaSize": 6
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "str",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "enthrall",
@@ -5150,7 +5836,14 @@
         "affectsArea": false,
         "savingThrowAttribute": "wis"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "etherealness",
@@ -5300,7 +5993,14 @@
         "affectsArea": false,
         "savingThrowAttribute": "wis"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "fabricate",
@@ -5400,7 +6100,14 @@
         "areaShape": "square",
         "areaSize": 6
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "faithful-hound",
@@ -5451,7 +6158,25 @@
         "affectsArea": false
       },
       "effects": [],
-      "material": "Um pequeno apito de prata, um pedaço de osso e um fio."
+      "material": "Um pequeno apito de prata, um pedaço de osso e um fio.",
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        },
+        "damage": [
+          {
+            "id": "damage-piercing-1",
+            "label": "Dano",
+            "damageType": "piercing",
+            "dice": {
+              "quantity": 4,
+              "sides": "d8"
+            },
+            "appliesOn": "hit",
+            "critical": true
+          }
+        ]
+      }
     },
     {
       "index": "false-life",
@@ -5562,7 +6287,14 @@
         "areaSize": 9
       },
       "effects": [],
-      "material": "Uma pena branca ou o coração de uma galinha."
+      "material": "Uma pena branca ou o coração de uma galinha.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "feather-fall",
@@ -5666,7 +6398,27 @@
         "savingThrowAttribute": "int"
       },
       "effects": [],
-      "material": "Um punhado de esferas de argila, cristal, vidro ou minerais."
+      "material": "Um punhado de esferas de argila, cristal, vidro ou minerais.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "int",
+          "onSuccess": "none"
+        },
+        "damage": [
+          {
+            "id": "damage-psychic-1",
+            "label": "Dano",
+            "damageType": "psychic",
+            "dice": {
+              "quantity": 4,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "find-familiar",
@@ -5910,7 +6662,28 @@
         "affectsArea": false,
         "savingThrowAttribute": "con"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-necrotic-1",
+            "label": "Dano",
+            "damageType": "necrotic",
+            "dice": {
+              "quantity": 7,
+              "sides": "d8"
+            },
+            "flat": 30,
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "fire-bolt",
@@ -5960,7 +6733,43 @@
         "hasSavingThrow": false,
         "affectsArea": false
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        },
+        "damage": [
+          {
+            "id": "damage-fire-1",
+            "label": "Dano",
+            "damageType": "fire",
+            "dice": {
+              "quantity": 1,
+              "sides": "d10"
+            },
+            "appliesOn": "hit",
+            "critical": true,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "character-level",
+              "thresholds": [
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 11,
+                  "amount": 1
+                },
+                {
+                  "level": 17,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "fire-shield",
@@ -6074,7 +6883,27 @@
         "areaShape": "square",
         "areaSize": 30
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-fire-1",
+            "label": "Dano",
+            "damageType": "fire",
+            "dice": {
+              "quantity": 7,
+              "sides": "d10"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "fireball",
@@ -6133,7 +6962,57 @@
         "areaSize": 6
       },
       "effects": [],
-      "material": "Uma pequena bola de guano de morcego e enxofre."
+      "material": "Uma pequena bola de guano de morcego e enxofre.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-fire-1",
+            "label": "Dano",
+            "damageType": "fire",
+            "dice": {
+              "quantity": 8,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 4,
+                  "amount": 1
+                },
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "flame-blade",
@@ -6241,7 +7120,38 @@
         "areaSize": 12
       },
       "effects": [],
-      "material": "Uma pitada de enxofre."
+      "material": "Uma pitada de enxofre.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-fire-1",
+            "label": "Dano de fogo",
+            "damageType": "fire",
+            "dice": {
+              "quantity": 4,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          },
+          {
+            "id": "damage-radiant-1",
+            "label": "Dano radiante",
+            "damageType": "radiant",
+            "dice": {
+              "quantity": 4,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "flaming-sphere",
@@ -6344,7 +7254,14 @@
         "savingThrowAttribute": "con"
       },
       "effects": [],
-      "material": "Uma pitada de cal, água e terra."
+      "material": "Uma pitada de cal, água e terra.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "floating-disk",
@@ -6767,7 +7684,27 @@
         "areaSize": 18
       },
       "effects": [],
-      "material": "Uma pequena esfera de cristal."
+      "material": "Uma pequena esfera de cristal.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-cold-1",
+            "label": "Dano",
+            "damageType": "cold",
+            "dice": {
+              "quantity": 10,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "gaseous-form",
@@ -6919,7 +7856,14 @@
         "affectsArea": false,
         "savingThrowAttribute": "wis"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "gentle-repose",
@@ -7271,7 +8215,14 @@
         "areaSize": 3
       },
       "effects": [],
-      "material": "Um pouco de torresmo ou manteiga."
+      "material": "Um pouco de torresmo ou manteiga.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "greater-invisibility",
@@ -7424,7 +8375,24 @@
         "areaShape": "circle",
         "areaSize": 3
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-radiant-1",
+            "label": "Dano",
+            "damageType": "radiant",
+            "flat": 20,
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "guards-and-wards",
@@ -7575,7 +8543,63 @@
         "hasSavingThrow": false,
         "affectsArea": false
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        },
+        "damage": [
+          {
+            "id": "damage-radiant-1",
+            "label": "Dano",
+            "damageType": "radiant",
+            "dice": {
+              "quantity": 4,
+              "sides": "d6"
+            },
+            "appliesOn": "hit",
+            "critical": true,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 2,
+                  "amount": 1
+                },
+                {
+                  "level": 3,
+                  "amount": 1
+                },
+                {
+                  "level": 4,
+                  "amount": 1
+                },
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "gust-of-wind",
@@ -7634,7 +8658,14 @@
         "areaSize": 18
       },
       "effects": [],
-      "material": "Semente de leguminosa."
+      "material": "Semente de leguminosa.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "str",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "hallow",
@@ -7691,7 +8722,14 @@
         "areaSize": 18
       },
       "effects": [],
-      "material": "Ervas, óleos e incensos no valor de pelo menos 1.000 po, que são consumidos pela magia."
+      "material": "Ervas, óleos e incensos no valor de pelo menos 1.000 po, que são consumidos pela magia.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "cha",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "hallucinatory-terrain",
@@ -7798,7 +8836,27 @@
         "affectsArea": false,
         "savingThrowAttribute": "con"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-necrotic-1",
+            "label": "Dano",
+            "damageType": "necrotic",
+            "dice": {
+              "quantity": 14,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "haste",
@@ -7998,7 +9056,61 @@
         "savingThrowAttribute": "con"
       },
       "effects": [],
-      "material": "Um pedaço de ferro e uma chama."
+      "material": "Um pedaço de ferro e uma chama.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "none"
+        },
+        "damage": [
+          {
+            "id": "damage-fire-1",
+            "label": "Dano",
+            "damageType": "fire",
+            "dice": {
+              "quantity": 2,
+              "sides": "d8"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 3,
+                  "amount": 1
+                },
+                {
+                  "level": 4,
+                  "amount": 1
+                },
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "hellish-rebuke",
@@ -8048,7 +9160,65 @@
         "affectsArea": false,
         "savingThrowAttribute": "dex"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-fire-1",
+            "label": "Dano",
+            "damageType": "fire",
+            "dice": {
+              "quantity": 2,
+              "sides": "d10"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 2,
+                  "amount": 1
+                },
+                {
+                  "level": 3,
+                  "amount": 1
+                },
+                {
+                  "level": 4,
+                  "amount": 1
+                },
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "heroes-feast",
@@ -8196,7 +9366,14 @@
         "savingThrowAttribute": "wis"
       },
       "effects": [],
-      "material": "Pequenas tortinhas e uma pena que é agitada no ar."
+      "material": "Pequenas tortinhas e uma pena que é agitada no ar.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "hold-monster",
@@ -8250,7 +9427,14 @@
         "savingThrowAttribute": "wis"
       },
       "effects": [],
-      "material": "Um pequeno pedaço de ferro."
+      "material": "Um pequeno pedaço de ferro.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "hold-person",
@@ -8306,7 +9490,14 @@
         "savingThrowAttribute": "wis"
       },
       "effects": [],
-      "material": "Um pequeno pedaço reto de ferro."
+      "material": "Um pequeno pedaço reto de ferro.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "holy-aura",
@@ -8458,7 +9649,14 @@
         "savingThrowAttribute": "wis"
       },
       "effects": [],
-      "material": "Um incenso em bastão aceso ou um frasco de cristal cheio de material fosforescente."
+      "material": "Um incenso em bastão aceso ou um frasco de cristal cheio de material fosforescente.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "ice-storm",
@@ -8518,7 +9716,64 @@
         "areaSize": 6
       },
       "effects": [],
-      "material": "Uma pitada de poeira e algumas gotas de água."
+      "material": "Uma pitada de poeira e algumas gotas de água.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-bludgeoning-1",
+            "label": "Dano",
+            "damageType": "bludgeoning",
+            "dice": {
+              "quantity": 2,
+              "sides": "d8"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          },
+          {
+            "id": "damage-cold-2",
+            "label": "Dano",
+            "damageType": "cold",
+            "dice": {
+              "quantity": 4,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "identify",
@@ -8668,7 +9923,14 @@
         "savingThrowAttribute": "wis"
       },
       "effects": [],
-      "material": "Uma representação em pergaminho ou uma estatueta esculpida à semelhança do alvo, e um componente especial que varia de acordo com a versão da magia escolhida, valendo pelo menos 500 po por Dado de Vida do alvo."
+      "material": "Uma representação em pergaminho ou uma estatueta esculpida à semelhança do alvo, e um componente especial que varia de acordo com a versão da magia escolhida, valendo pelo menos 500 po por Dado de Vida do alvo.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "incendiary-cloud",
@@ -8725,7 +9987,27 @@
         "areaShape": "circle",
         "areaSize": 6
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-fire-1",
+            "label": "Dano",
+            "damageType": "fire",
+            "dice": {
+              "quantity": 10,
+              "sides": "d8"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "inflict-wounds",
@@ -8774,7 +10056,63 @@
         "hasSavingThrow": false,
         "affectsArea": false
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        },
+        "damage": [
+          {
+            "id": "damage-necrotic-1",
+            "label": "Dano",
+            "damageType": "necrotic",
+            "dice": {
+              "quantity": 3,
+              "sides": "d10"
+            },
+            "appliesOn": "hit",
+            "critical": true,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 2,
+                  "amount": 1
+                },
+                {
+                  "level": 3,
+                  "amount": 1
+                },
+                {
+                  "level": 4,
+                  "amount": 1
+                },
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "insect-plague",
@@ -8834,7 +10172,49 @@
         "areaSize": 6
       },
       "effects": [],
-      "material": "Alguns grãos de açúcar, alguns grãos de cereais e uma camada de gordura."
+      "material": "Alguns grãos de açúcar, alguns grãos de cereais e uma camada de gordura.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-piercing-1",
+            "label": "Dano",
+            "damageType": "piercing",
+            "dice": {
+              "quantity": 4,
+              "sides": "d10"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "instant-summons",
@@ -9279,7 +10659,14 @@
         "savingThrowAttribute": "dex"
       },
       "effects": [],
-      "material": "Um vaga-lume ou musgo fosforescente."
+      "material": "Um vaga-lume ou musgo fosforescente.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "lightning-bolt",
@@ -9338,7 +10725,57 @@
         "areaSize": 30
       },
       "effects": [],
-      "material": "Um pedaço de pelo e uma haste de âmbar, cristal ou vidro."
+      "material": "Um pedaço de pelo e uma haste de âmbar, cristal ou vidro.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-lightning-1",
+            "label": "Dano",
+            "damageType": "lightning",
+            "dice": {
+              "quantity": 8,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 4,
+                  "amount": 1
+                },
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "locate-animals-or-plants",
@@ -9703,7 +11140,14 @@
         "areaSize": 3
       },
       "effects": [],
-      "material": "Água benta ou pó de prata e ferro no valor de pelo menos 100 peças de ouro, que o feitiço consome."
+      "material": "Água benta ou pó de prata e ferro no valor de pelo menos 100 peças de ouro, que o feitiço consome.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "cha",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "magic-jar",
@@ -9754,7 +11198,14 @@
         "savingThrowAttribute": "cha"
       },
       "effects": [],
-      "material": "Uma gema, cristal, relicário ou algum outro recipiente ornamental avaliado em pelo menos 500 po."
+      "material": "Uma gema, cristal, relicário ou algum outro recipiente ornamental avaliado em pelo menos 500 po.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "cha",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "magic-missile",
@@ -9803,7 +11254,36 @@
         "hasSavingThrow": false,
         "affectsArea": false
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "none"
+        },
+        "instances": {
+          "base": 3,
+          "scaling": {
+            "type": "step",
+            "source": "slot-level",
+            "startLevel": 1,
+            "interval": 1,
+            "amountPerStep": 1
+          }
+        },
+        "damage": [
+          {
+            "id": "damage-force-1",
+            "label": "Dano por dardo",
+            "damageType": "force",
+            "dice": {
+              "quantity": 1,
+              "sides": "d4"
+            },
+            "flat": 1,
+            "appliesOn": "always",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "magic-mouth",
@@ -10211,7 +11691,14 @@
         "savingThrowAttribute": "wis"
       },
       "effects": [],
-      "material": "Uma língua de cobra e um pouco de favo de mel ou uma gota de óleo doce."
+      "material": "Uma língua de cobra e um pouco de favo de mel ou uma gota de óleo doce.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "maze",
@@ -10462,7 +11949,38 @@
         "areaShape": "circle",
         "areaSize": 12
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-fire-1",
+            "label": "Dano",
+            "damageType": "fire",
+            "dice": {
+              "quantity": 20,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          },
+          {
+            "id": "damage-bludgeoning-2",
+            "label": "Dano",
+            "damageType": "bludgeoning",
+            "dice": {
+              "quantity": 20,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "mind-blank",
@@ -10804,7 +12322,14 @@
         "affectsArea": false,
         "savingThrowAttribute": "wis"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "moonbeam",
@@ -10862,7 +12387,61 @@
         "areaSize": 1.5
       },
       "effects": [],
-      "material": "Diversas sementes de qualquer planta do gênero <i>Schizachyrium scoparium</i> e um pedaço de feldspato opalescente."
+      "material": "Diversas sementes de qualquer planta do gênero <i>Schizachyrium scoparium</i> e um pedaço de feldspato opalescente.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-radiant-1",
+            "label": "Dano",
+            "damageType": "radiant",
+            "dice": {
+              "quantity": 2,
+              "sides": "d10"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 3,
+                  "amount": 1
+                },
+                {
+                  "level": 4,
+                  "amount": 1
+                },
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "move-earth",
@@ -11115,7 +12694,27 @@
         "affectsArea": false,
         "savingThrowAttribute": "wis"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        },
+        "damage": [
+          {
+            "id": "damage-psychic-1",
+            "label": "Dano",
+            "damageType": "psychic",
+            "dice": {
+              "quantity": 4,
+              "sides": "d10"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "phantom-steed",
@@ -11261,7 +12860,14 @@
         "savingThrowAttribute": "cha"
       },
       "effects": [],
-      "material": "Uma joia avaliada em pelo menos 1.000 peças de ouro, que é consumida pela magia."
+      "material": "Uma joia avaliada em pelo menos 1.000 peças de ouro, que é consumida pela magia.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "cha",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "plane-shift",
@@ -11312,12 +12918,16 @@
         "kind": "single-creature",
         "targetsSelf": false,
         "hasAttackRoll": true,
-        "hasSavingThrow": true,
-        "affectsArea": false,
-        "savingThrowAttribute": "cha"
+        "hasSavingThrow": false,
+        "affectsArea": false
       },
       "effects": [],
-      "material": "Uma haste metálica bifurcada, avaliada em pelo menos 250 po, sintonizada com um plano de existência específico."
+      "material": "Uma haste metálica bifurcada, avaliada em pelo menos 250 po, sintonizada com um plano de existência específico.",
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        }
+      }
     },
     {
       "index": "plant-growth",
@@ -11418,7 +13028,45 @@
         "affectsArea": false,
         "savingThrowAttribute": "con"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "none"
+        },
+        "damage": [
+          {
+            "id": "damage-poison-1",
+            "label": "Dano",
+            "damageType": "poison",
+            "dice": {
+              "quantity": 1,
+              "sides": "d12"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "character-level",
+              "thresholds": [
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 11,
+                  "amount": 1
+                },
+                {
+                  "level": 17,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "polymorph",
@@ -11472,7 +13120,14 @@
         "savingThrowAttribute": "wis"
       },
       "effects": [],
-      "material": "Um casulo de lagarta."
+      "material": "Um casulo de lagarta.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "power-word-kill",
@@ -11722,7 +13377,14 @@
         "areaShape": "cone",
         "areaSize": 18
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "prismatic-wall",
@@ -11877,7 +13539,43 @@
         "hasSavingThrow": false,
         "affectsArea": false
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        },
+        "damage": [
+          {
+            "id": "damage-fire-1",
+            "label": "Dano",
+            "damageType": "fire",
+            "dice": {
+              "quantity": 1,
+              "sides": "d8"
+            },
+            "appliesOn": "hit",
+            "critical": true,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "character-level",
+              "thresholds": [
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 11,
+                  "amount": 1
+                },
+                {
+                  "level": 17,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "programmed-illusion",
@@ -12276,11 +13974,15 @@
         "kind": "single-creature",
         "targetsSelf": false,
         "hasAttackRoll": true,
-        "hasSavingThrow": true,
-        "affectsArea": false,
-        "savingThrowAttribute": "con"
+        "hasSavingThrow": false,
+        "affectsArea": false
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        }
+      }
     },
     {
       "index": "ray-of-frost",
@@ -12330,7 +14032,43 @@
         "hasSavingThrow": false,
         "affectsArea": false
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        },
+        "damage": [
+          {
+            "id": "damage-cold-1",
+            "label": "Dano",
+            "damageType": "cold",
+            "dice": {
+              "quantity": 1,
+              "sides": "d8"
+            },
+            "appliesOn": "hit",
+            "critical": true,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "character-level",
+              "thresholds": [
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 11,
+                  "amount": 1
+                },
+                {
+                  "level": 17,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "regenerate",
@@ -12530,7 +14268,14 @@
         "savingThrowAttribute": "dex"
       },
       "effects": [],
-      "material": "Uma peça hemisférica de cristal transparente e uma peça hemisférica correspondente de goma arábica."
+      "material": "Uma peça hemisférica de cristal transparente e uma peça hemisférica correspondente de goma arábica.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "resistance",
@@ -12687,7 +14432,14 @@
         "areaSize": 15
       },
       "effects": [],
-      "material": "Uma pedra-ímã e limalha de ferro."
+      "material": "Uma pedra-ímã e limalha de ferro.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "revivify",
@@ -12834,7 +14586,45 @@
         "affectsArea": false,
         "savingThrowAttribute": "dex"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "none"
+        },
+        "damage": [
+          {
+            "id": "damage-radiant-1",
+            "label": "Dano",
+            "damageType": "radiant",
+            "dice": {
+              "quantity": 1,
+              "sides": "d8"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "character-level",
+              "thresholds": [
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 11,
+                  "amount": 1
+                },
+                {
+                  "level": 17,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "sanctuary",
@@ -12927,11 +14717,39 @@
       "targeting": {
         "kind": "special",
         "targetsSelf": false,
-        "hasAttackRoll": false,
+        "hasAttackRoll": true,
         "hasSavingThrow": false,
         "affectsArea": false
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        },
+        "instances": {
+          "base": 3,
+          "scaling": {
+            "type": "step",
+            "source": "slot-level",
+            "startLevel": 2,
+            "interval": 1,
+            "amountPerStep": 1
+          }
+        },
+        "damage": [
+          {
+            "id": "damage-fire-1",
+            "label": "Dano por raio",
+            "damageType": "fire",
+            "dice": {
+              "quantity": 2,
+              "sides": "d6"
+            },
+            "appliesOn": "hit",
+            "critical": true
+          }
+        ]
+      }
     },
     {
       "index": "scrying",
@@ -12986,7 +14804,14 @@
         "savingThrowAttribute": "wis"
       },
       "effects": [],
-      "material": "Um objeto de foco que valha pelo menos 1.000 po, como uma bola de cristal, um espelho de prata ou uma pia batismal com água benta."
+      "material": "Um objeto de foco que valha pelo menos 1.000 po, como uma bola de cristal, um espelho de prata ou uma pia batismal com água benta.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "secret-chest",
@@ -13340,7 +15165,61 @@
         "areaSize": 3
       },
       "effects": [],
-      "material": "Uma explosão de mica."
+      "material": "Uma explosão de mica.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-thunder-1",
+            "label": "Dano",
+            "damageType": "thunder",
+            "dice": {
+              "quantity": 3,
+              "sides": "d8"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 3,
+                  "amount": 1
+                },
+                {
+                  "level": 4,
+                  "amount": 1
+                },
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "shield",
@@ -13534,7 +15413,43 @@
         "hasSavingThrow": false,
         "affectsArea": false
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        },
+        "damage": [
+          {
+            "id": "damage-lightning-1",
+            "label": "Dano",
+            "damageType": "lightning",
+            "dice": {
+              "quantity": 1,
+              "sides": "d8"
+            },
+            "appliesOn": "hit",
+            "critical": true,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "character-level",
+              "thresholds": [
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 11,
+                  "amount": 1
+                },
+                {
+                  "level": 17,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "silence",
@@ -13865,7 +15780,14 @@
         "targetCount": 6
       },
       "effects": [],
-      "material": "Uma gota de melaço."
+      "material": "Uma gota de melaço.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "spare-the-dying",
@@ -14264,7 +16186,33 @@
         "hasSavingThrow": false,
         "affectsArea": false
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        },
+        "damage": [
+          {
+            "id": "damage-force-1",
+            "label": "Dano",
+            "damageType": "force",
+            "dice": {
+              "quantity": 1,
+              "sides": "d8"
+            },
+            "addCastingModifier": true,
+            "appliesOn": "hit",
+            "critical": true,
+            "diceScaling": {
+              "type": "step",
+              "source": "slot-level",
+              "startLevel": 2,
+              "interval": 2,
+              "amountPerStep": 1
+            }
+          }
+        ]
+      }
     },
     {
       "index": "stinking-cloud",
@@ -14323,7 +16271,14 @@
         "areaSize": 6
       },
       "effects": [],
-      "material": "Um ovo podre ou várias folhas de repolho-gambá."
+      "material": "Um ovo podre ou várias folhas de repolho-gambá.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "stone-shape",
@@ -14480,7 +16435,27 @@
         "areaShape": "circle",
         "areaSize": 108
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "none"
+        },
+        "damage": [
+          {
+            "id": "damage-thunder-1",
+            "label": "Dano",
+            "damageType": "thunder",
+            "dice": {
+              "quantity": 2,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "suggestion",
@@ -14533,7 +16508,14 @@
         "savingThrowAttribute": "wis"
       },
       "effects": [],
-      "material": "Uma língua de cobra e um pouco de favo de mel ou uma gota de óleo doce."
+      "material": "Uma língua de cobra e um pouco de favo de mel ou uma gota de óleo doce.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "sunbeam",
@@ -14593,7 +16575,27 @@
         "areaSize": 18
       },
       "effects": [],
-      "material": "Uma lupa."
+      "material": "Uma lupa.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-radiant-1",
+            "label": "Dano",
+            "damageType": "radiant",
+            "dice": {
+              "quantity": 6,
+              "sides": "d8"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "sunburst",
@@ -14653,7 +16655,27 @@
         "areaSize": 18
       },
       "effects": [],
-      "material": "Fogo e um pedaço de pedra solar."
+      "material": "Fogo e um pedaço de pedra solar.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-radiant-1",
+            "label": "Dano",
+            "damageType": "radiant",
+            "dice": {
+              "quantity": 12,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "symbol",
@@ -15022,7 +17044,65 @@
         "areaShape": "square",
         "areaSize": 4.5
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "con",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-thunder-1",
+            "label": "Dano",
+            "damageType": "thunder",
+            "dice": {
+              "quantity": 2,
+              "sides": "d8"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 2,
+                  "amount": 1
+                },
+                {
+                  "level": 3,
+                  "amount": 1
+                },
+                {
+                  "level": 4,
+                  "amount": 1
+                },
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "time-stop",
@@ -15566,7 +17646,55 @@
         "hasSavingThrow": false,
         "affectsArea": false
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "attack"
+        },
+        "damage": [
+          {
+            "id": "damage-necrotic-1",
+            "label": "Dano",
+            "damageType": "necrotic",
+            "dice": {
+              "quantity": 3,
+              "sides": "d6"
+            },
+            "appliesOn": "hit",
+            "critical": true,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 4,
+                  "amount": 1
+                },
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 6,
+                  "amount": 1
+                },
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "vicious-mockery",
@@ -15615,7 +17743,45 @@
         "affectsArea": false,
         "savingThrowAttribute": "wis"
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        },
+        "damage": [
+          {
+            "id": "damage-psychic-1",
+            "label": "Dano",
+            "damageType": "psychic",
+            "dice": {
+              "quantity": 1,
+              "sides": "d4"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "character-level",
+              "thresholds": [
+                {
+                  "level": 5,
+                  "amount": 1
+                },
+                {
+                  "level": 11,
+                  "amount": 1
+                },
+                {
+                  "level": 17,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "wall-of-fire",
@@ -15675,7 +17841,27 @@
         "areaSize": 18
       },
       "effects": [],
-      "material": "Um pequeno pedaço de fósforo."
+      "material": "Um pequeno pedaço de fósforo.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-fire-1",
+            "label": "Dano",
+            "damageType": "fire",
+            "dice": {
+              "quantity": 5,
+              "sides": "d8"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "wall-of-force",
@@ -15781,7 +17967,45 @@
         "areaSize": 3
       },
       "effects": [],
-      "material": "Um pequeno pedaço de quartzo."
+      "material": "Um pequeno pedaço de quartzo.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-cold-1",
+            "label": "Dano",
+            "damageType": "cold",
+            "dice": {
+              "quantity": 10,
+              "sides": "d6"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 7,
+                  "amount": 2
+                },
+                {
+                  "level": 8,
+                  "amount": 2
+                },
+                {
+                  "level": 9,
+                  "amount": 2
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "wall-of-stone",
@@ -15889,7 +18113,45 @@
         "areaSize": 18
       },
       "effects": [],
-      "material": "Um punhado de espinhos."
+      "material": "Um punhado de espinhos.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "dex",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-piercing-1",
+            "label": "Dano",
+            "damageType": "piercing",
+            "dice": {
+              "quantity": 7,
+              "sides": "d8"
+            },
+            "appliesOn": "failed-save",
+            "critical": false,
+            "diceScaling": {
+              "type": "thresholds",
+              "source": "slot-level",
+              "thresholds": [
+                {
+                  "level": 7,
+                  "amount": 1
+                },
+                {
+                  "level": 8,
+                  "amount": 1
+                },
+                {
+                  "level": 9,
+                  "amount": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "index": "warding-bond",
@@ -16149,7 +18411,14 @@
         "areaShape": "circle",
         "areaSize": 9
       },
-      "effects": []
+      "effects": [],
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "wis",
+          "onSuccess": "none"
+        }
+      }
     },
     {
       "index": "wind-walk",
@@ -16256,7 +18525,27 @@
         "areaSize": 15
       },
       "effects": [],
-      "material": "Um pequeno leque e uma pena de origem exótica."
+      "material": "Um pequeno leque e uma pena de origem exótica.",
+      "resolution": {
+        "roll": {
+          "type": "save",
+          "attribute": "str",
+          "onSuccess": "half"
+        },
+        "damage": [
+          {
+            "id": "damage-bludgeoning-1",
+            "label": "Dano",
+            "damageType": "bludgeoning",
+            "dice": {
+              "quantity": 3,
+              "sides": "d8"
+            },
+            "appliesOn": "failed-save",
+            "critical": false
+          }
+        ]
+      }
     },
     {
       "index": "wish",

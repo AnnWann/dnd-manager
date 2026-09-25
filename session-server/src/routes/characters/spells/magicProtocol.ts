@@ -1,4 +1,16 @@
+import type { CharacterGrantedEquipmentSpellUsageSource, CharacterGrantedSpellUsageSource } from "../../../../../src/models/characters/characterGrantedSpells";
+import type { SpellResourceType } from "../../../../../src/models/magic/spells/Spell";
+import type { SessionDiceRollMode } from "../../../../../src/shared/session-runtime/diceRollProtocol";
+
+export type SessionSpellCastPayment =
+  | { type: "none" }
+  | { type: "slot"; pool: "normal" | "pact"; level: number }
+  | { type: "resource"; resource: SpellResourceType }
+  | { type: "ability-use"; source: CharacterGrantedSpellUsageSource }
+  | { type: "equipment-spell-use"; source: CharacterGrantedEquipmentSpellUsageSource };
+
 export type SessionMagicOperation =
+  | { type: "character.spell.cast"; characterId: string; requestId: string; spellIndex: string; sourceId: string; castLevel: number; mode: SessionDiceRollMode; payment: SessionSpellCastPayment }
   | { type: "character.spell.prepare"; characterId: string; spellIndex: string; prepared: boolean }
   | { type: "character.spell.add"; characterId: string; spellEntry: Record<string, unknown> }
   | { type: "character.spell.remove"; characterId: string; spellIndex: string }
@@ -88,6 +100,18 @@ export function parseMagicClientMessage(raw: string): SessionMagicClientMessage 
 function isMagicOperation(value: unknown): value is SessionMagicOperation {
   if (!isRecord(value) || typeof value.type !== "string" || typeof value.characterId !== "string" || !value.characterId.trim()) return false;
   switch (value.type) {
+    case "character.spell.cast":
+      return nonEmpty(value.requestId)
+        && value.requestId.length <= 120
+        && nonEmpty(value.spellIndex)
+        && value.spellIndex.length <= 200
+        && nonEmpty(value.sourceId)
+        && value.sourceId.length <= 200
+        && integer(value.castLevel)
+        && value.castLevel >= 0
+        && value.castLevel <= 9
+        && (value.mode === "normal" || value.mode === "advantage" || value.mode === "disadvantage")
+        && isSpellCastPayment(value.payment);
     case "character.spell.prepare": return nonEmpty(value.spellIndex) && typeof value.prepared === "boolean";
     case "character.spell.add": return isKnownSpellEntry(value.spellEntry);
     case "character.spell.remove": return nonEmpty(value.spellIndex);
@@ -110,6 +134,40 @@ function isMagicOperation(value: unknown): value is SessionMagicOperation {
     case "character.metamagic.remove": return nonEmpty(value.metamagicId);
     default: return false;
   }
+}
+
+function isSpellCastPayment(value: unknown): value is SessionSpellCastPayment {
+  if (!isRecord(value) || !nonEmpty(value.type)) return false;
+  if (value.type === "none") return true;
+  if (value.type === "slot") {
+    return (value.pool === "normal" || value.pool === "pact") && slotLevel(value.level);
+  }
+  if (value.type === "resource") {
+    return value.resource === "ki"
+      || value.resource === "sorceryPoints"
+      || value.resource === "channelDivinity";
+  }
+  if (value.type === "ability-use") return isGrantedSpellUsageSource(value.source);
+  if (value.type === "equipment-spell-use") return isEquipmentSpellUsageSource(value.source);
+  return false;
+}
+
+function isEquipmentSpellUsageSource(
+  value: unknown,
+): value is CharacterGrantedEquipmentSpellUsageSource {
+  return isRecord(value)
+    && nonEmpty(value.itemId)
+    && value.itemId.length <= 200
+    && nonEmpty(value.spellIndex)
+    && value.spellIndex.length <= 200;
+}
+
+function isGrantedSpellUsageSource(value: unknown): value is CharacterGrantedSpellUsageSource {
+  if (!isRecord(value) || !nonEmpty(value.type) || !nonEmpty(value.abilityId)) return false;
+  if (value.type === "character" || value.type === "race") return true;
+  if (value.type === "equipment") return nonEmpty(value.itemId);
+  if (value.type === "condition") return nonEmpty(value.conditionId);
+  return false;
 }
 
 function isKnownSpellEntry(value: unknown): value is Record<string, unknown> {

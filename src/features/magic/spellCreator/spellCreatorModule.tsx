@@ -7,7 +7,9 @@ import type {
   MagicCircleLevel,
   MagicSchool,
 } from "../../../models/magic/spells/spellDefinitions"
-import type { Spell } from "../../../models/magic/spells/Spell"
+import type { Spell, SpellDamageComponent, SpellNumericScaling, SpellResolution } from "../../../models/magic/spells/Spell"
+import type { DieSides } from "../../../models/dice/Die"
+import type { Attribute } from "../../../models/sheet/Attribute"
 import { MAGIC_SCHOOLS, SPELL_CLASS_OPTIONS } from "../../../contexts/consts"
 import type { ClassName } from "../../../models/sheet/Class"
 
@@ -26,6 +28,10 @@ function newSpell(): Spell {
     classes: [],
 
     rollMode: [],
+    resolution: {
+      roll: { type: "none" },
+      damage: [],
+    },
 
     castingTime: {
       value: 1,
@@ -95,6 +101,143 @@ export function SpellCreatorModule({
       ...prev,
       [key]: value,
     }))
+  }
+
+  function currentResolution(value: Spell = spell): SpellResolution {
+    if (value.resolution) return value.resolution
+    return {
+      roll: value.targeting.hasAttackRoll
+        ? { type: "attack" }
+        : value.targeting.hasSavingThrow && value.targeting.savingThrowAttribute
+          ? {
+              type: "save",
+              attribute: value.targeting.savingThrowAttribute,
+              onSuccess: "none",
+            }
+          : { type: "none" },
+      damage: value.damageDice
+        ? [{
+            id: "legacy-damage",
+            label: "Dano",
+            dice: { ...value.damageDice },
+            appliesOn: value.targeting.hasAttackRoll
+              ? "hit"
+              : value.targeting.hasSavingThrow
+                ? "failed-save"
+                : "always",
+            critical: value.targeting.hasAttackRoll,
+          }]
+        : [],
+    }
+  }
+
+  function updateResolution(next: SpellResolution) {
+    setSpell((prev) => {
+      const firstDamage = next.damage?.[0]
+      return {
+        ...prev,
+        resolution: next,
+        damageDice: firstDamage?.dice
+          ? {
+              quantity: Math.max(0, Math.trunc(firstDamage.dice.quantity)),
+              sides: firstDamage.dice.sides,
+            }
+          : undefined,
+        targeting: {
+          ...prev.targeting,
+          hasAttackRoll: next.roll.type === "attack",
+          hasSavingThrow: next.roll.type === "save",
+          savingThrowAttribute:
+            next.roll.type === "save"
+              ? next.roll.attribute
+              : undefined,
+        },
+        rollMode: next.roll.type === "attack"
+          ? ["attack"]
+          : next.roll.type === "save"
+            ? ["save"]
+            : [],
+      }
+    })
+  }
+
+  function setResolutionRollType(type: SpellResolution["roll"]["type"]) {
+    const current = currentResolution()
+    updateResolution({
+      ...current,
+      roll: type === "attack"
+        ? { type: "attack" }
+        : type === "save"
+          ? { type: "save", attribute: "dex", onSuccess: "none" }
+          : { type: "none" },
+    })
+  }
+
+  function updateInstanceCount(base: number) {
+    const current = currentResolution()
+    updateResolution({
+      ...current,
+      instances: {
+        ...current.instances,
+        base: Math.max(1, Math.trunc(base) || 1),
+      },
+    })
+  }
+
+  function updateInstanceScaling(scaling: SpellNumericScaling | undefined) {
+    const current = currentResolution()
+    updateResolution({
+      ...current,
+      instances: {
+        base: current.instances?.base ?? 1,
+        scaling,
+      },
+    })
+  }
+
+  function updateSave(patch: Partial<Omit<Extract<SpellResolution["roll"], { type: "save" }>, "type">>) {
+    const current = currentResolution()
+    if (current.roll.type !== "save") return
+    updateResolution({
+      ...current,
+      roll: { ...current.roll, ...patch },
+    })
+  }
+
+  function setDamageComponents(damage: SpellDamageComponent[]) {
+    updateResolution({ ...currentResolution(), damage })
+  }
+
+  function addDamageComponent() {
+    const current = currentResolution()
+    setDamageComponents([
+      ...(current.damage ?? []),
+      {
+        id: crypto.randomUUID(),
+        label: "Dano",
+        dice: { quantity: 1, sides: "d6" },
+        appliesOn: current.roll.type === "attack"
+          ? "hit"
+          : current.roll.type === "save"
+            ? "failed-save"
+            : "always",
+        critical: current.roll.type === "attack",
+      },
+    ])
+  }
+
+  function updateDamageComponent(index: number, patch: Partial<SpellDamageComponent>) {
+    const damage = [...(currentResolution().damage ?? [])]
+    const current = damage[index]
+    if (!current) return
+    damage[index] = { ...current, ...patch }
+    setDamageComponents(damage)
+  }
+
+  function removeDamageComponent(index: number) {
+    setDamageComponents(
+      (currentResolution().damage ?? []).filter((_, candidate) => candidate !== index),
+    )
   }
 
   function updateCastingTime(patch: Partial<Spell["castingTime"]>) {
@@ -238,6 +381,8 @@ export function SpellCreatorModule({
       ? spell.classes.filter((entry) => entry !== className)
       : [...spell.classes, className]
   }
+
+  const resolution = currentResolution()
 
   return (
     <Card>
@@ -628,6 +773,236 @@ export function SpellCreatorModule({
             />
           )}
 
+          <section className="grid gap-3 rounded-xl border border-accentBorder bg-bg p-3">
+            <div>
+              <div className="text-xs font-semibold text-textH">Resolução mecânica</div>
+              <p className="mt-1 text-[11px] text-textMuted">
+                Estrutura usada pelo servidor para ataque, CD, dano, crítico e escalonamento.
+              </p>
+            </div>
+
+            <label className="grid gap-1 text-xs text-text">
+              Tipo de resolução
+              <SharedSelect
+                className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-text"
+                value={resolution.roll.type}
+                onChange={(event) =>
+                  setResolutionRollType(
+                    event.target.value as SpellResolution["roll"]["type"],
+                  )
+                }
+              >
+                <option value="none">Sem ataque/resistência</option>
+                <option value="attack">Jogada de ataque</option>
+                <option value="save">Teste de resistência</option>
+              </SharedSelect>
+            </label>
+
+            {resolution.roll.type !== "save" ? (
+              <div className="grid gap-3 rounded-lg border border-border bg-bg-subtle p-3">
+                <label className="grid gap-1 text-xs text-text">
+                  Quantidade base de instâncias
+                  <Input
+                    type="number"
+                    min={1}
+                    value={resolution.instances?.base ?? 1}
+                    onChange={(event) => updateInstanceCount(Number(event.target.value))}
+                  />
+                </label>
+                <p className="text-[10px] leading-4 text-textMuted">
+                  Use para ataques/projéteis independentes ou efeitos repetidos, como raios, feixes ou dardos.
+                </p>
+                <ScalingEditor
+                  label="Escalonamento da quantidade de instâncias"
+                  scaling={resolution.instances?.scaling}
+                  defaultStartLevel={spell.slotLevel}
+                  onChange={updateInstanceScaling}
+                />
+              </div>
+            ) : null}
+
+            {resolution.roll.type === "save" ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs text-text">
+                  Atributo da resistência
+                  <SharedSelect
+                    className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-text"
+                    value={resolution.roll.type === "save"
+                      ? resolution.roll.attribute
+                      : "dex"}
+                    onChange={(event) =>
+                      updateSave({ attribute: event.target.value as Attribute })
+                    }
+                  >
+                    <option value="str">FOR</option>
+                    <option value="dex">DES</option>
+                    <option value="con">CON</option>
+                    <option value="int">INT</option>
+                    <option value="wis">SAB</option>
+                    <option value="cha">CAR</option>
+                  </SharedSelect>
+                </label>
+                <label className="grid gap-1 text-xs text-text">
+                  Em um sucesso
+                  <SharedSelect
+                    className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-text"
+                    value={resolution.roll.type === "save"
+                      ? resolution.roll.onSuccess
+                      : "none"}
+                    onChange={(event) =>
+                      updateSave({
+                        onSuccess: event.target.value as "none" | "half" | "full",
+                      })
+                    }
+                  >
+                    <option value="none">Sem dano/efeito</option>
+                    <option value="half">Metade do dano</option>
+                    <option value="full">Dano completo</option>
+                  </SharedSelect>
+                </label>
+              </div>
+            ) : null}
+
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs font-semibold text-textH">Componentes de dano</div>
+              <Button size="sm" variant="secondary" onClick={addDamageComponent}>
+                Adicionar dano
+              </Button>
+            </div>
+
+            {(resolution.damage ?? []).map((damage, index) => (
+              <div key={damage.id} className="grid gap-3 rounded-lg border border-border bg-bg-subtle p-3">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input
+                    value={damage.label ?? ""}
+                    placeholder="Rótulo, ex.: Dano de fogo"
+                    onChange={(event) =>
+                      updateDamageComponent(index, { label: event.target.value })
+                    }
+                  />
+                  <Input
+                    value={damage.damageType ?? ""}
+                    placeholder="Tipo de dano, ex.: fire"
+                    onChange={(event) =>
+                      updateDamageComponent(index, { damageType: event.target.value })
+                    }
+                  />
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-4">
+                  <label className="grid gap-1 text-xs text-text">
+                    Dados
+                    <Input
+                      type="number"
+                      min={0}
+                      value={damage.dice?.quantity ?? 0}
+                      onChange={(event) => {
+                        const quantity = Math.max(0, Number(event.target.value))
+                        updateDamageComponent(index, {
+                          dice: quantity > 0
+                            ? {
+                                quantity,
+                                sides: damage.dice?.sides ?? "d6",
+                              }
+                            : undefined,
+                        })
+                      }}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs text-text">
+                    Dado
+                    <SharedSelect
+                      className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-text"
+                      value={damage.dice?.sides ?? "d6"}
+                      disabled={!damage.dice}
+                      onChange={(event) =>
+                        updateDamageComponent(index, {
+                          dice: damage.dice
+                            ? {
+                                ...damage.dice,
+                                sides: event.target.value as DieSides,
+                              }
+                            : undefined,
+                        })
+                      }
+                    >
+                      {(["d2", "d3", "d4", "d6", "d8", "d10", "d12", "d20", "d100"] as DieSides[]).map((side) => (
+                        <option key={side} value={side}>{side}</option>
+                      ))}
+                    </SharedSelect>
+                  </label>
+                  <label className="grid gap-1 text-xs text-text">
+                    Bônus fixo
+                    <Input
+                      type="number"
+                      value={damage.flat ?? 0}
+                      onChange={(event) =>
+                        updateDamageComponent(index, { flat: Number(event.target.value) })
+                      }
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs text-text">
+                    Aplicação
+                    <SharedSelect
+                      className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-text"
+                      value={damage.appliesOn}
+                      onChange={(event) =>
+                        updateDamageComponent(index, {
+                          appliesOn: event.target.value as SpellDamageComponent["appliesOn"],
+                        })
+                      }
+                    >
+                      <option value="hit">Ao acertar</option>
+                      <option value="failed-save">Falha na resistência</option>
+                      <option value="successful-save">Sucesso na resistência</option>
+                      <option value="always">Sempre</option>
+                    </SharedSelect>
+                  </label>
+                </div>
+
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-xs text-text">
+                    <input
+                      type="checkbox"
+                      checked={damage.critical ?? damage.appliesOn === "hit"}
+                      onChange={(event) =>
+                        updateDamageComponent(index, { critical: event.target.checked })
+                      }
+                    />
+                    Dobra os dados em crítico
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-text">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(damage.addCastingModifier)}
+                      onChange={(event) =>
+                        updateDamageComponent(index, {
+                          addCastingModifier: event.target.checked,
+                        })
+                      }
+                    />
+                    Soma o modificador de conjuração
+                  </label>
+                </div>
+
+                <ScalingEditor
+                  label="Escalonamento dos dados"
+                  scaling={damage.diceScaling}
+                  defaultStartLevel={spell.slotLevel}
+                  onChange={(scaling) =>
+                    updateDamageComponent(index, { diceScaling: scaling })
+                  }
+                />
+
+                <div className="flex justify-end">
+                  <Button size="sm" variant="danger" onClick={() => removeDamageComponent(index)}>
+                    Remover dano
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </section>
+
           <textarea
             className="min-h-32 rounded-xl border border-accentBorder bg-bg px-3 py-2 text-sm text-text outline-none transition-colors focus:border-accent"
             value={spell.description}
@@ -658,4 +1033,165 @@ export function SpellCreatorModule({
       </CardContent>
     </Card>
   )
+}
+
+function ScalingEditor({
+  label,
+  scaling,
+  defaultStartLevel,
+  onChange,
+}: {
+  label: string
+  scaling?: SpellNumericScaling
+  defaultStartLevel: number
+  onChange: (scaling: SpellNumericScaling | undefined) => void
+}) {
+  const mode = scaling?.type ?? "none"
+
+  return (
+    <div className="grid gap-2 rounded-lg border border-border bg-bg p-2">
+      <label className="grid gap-1 text-[11px] text-textMuted">
+        {label}
+        <SharedSelect
+          className="h-8 rounded-lg border border-border bg-bg px-2 text-xs text-text"
+          value={mode}
+          onChange={(event) => {
+            const nextMode = event.target.value
+            if (nextMode === "none") {
+              onChange(undefined)
+            } else if (nextMode === "step") {
+              onChange({
+                type: "step",
+                source: defaultStartLevel === 0 ? "character-level" : "slot-level",
+                startLevel: defaultStartLevel,
+                interval: 1,
+                amountPerStep: 1,
+              })
+            } else {
+              onChange({
+                type: "thresholds",
+                source: defaultStartLevel === 0 ? "character-level" : "slot-level",
+                thresholds: defaultStartLevel === 0
+                  ? [{ level: 5, amount: 1 }, { level: 11, amount: 1 }, { level: 17, amount: 1 }]
+                  : [],
+              })
+            }
+          }}
+        >
+          <option value="none">Sem escalonamento</option>
+          <option value="step">A cada N níveis</option>
+          <option value="thresholds">Níveis específicos</option>
+        </SharedSelect>
+      </label>
+
+      {scaling?.type === "step" ? (
+        <div className="grid gap-2 sm:grid-cols-4">
+          <ScalingSourceSelect
+            value={scaling.source}
+            onChange={(source) => onChange({ ...scaling, source })}
+          />
+          <label className="grid gap-1 text-[11px] text-textMuted">
+            Nível inicial
+            <Input
+              type="number"
+              min={0}
+              value={scaling.startLevel}
+              onChange={(event) =>
+                onChange({ ...scaling, startLevel: Math.max(0, Number(event.target.value)) })
+              }
+            />
+          </label>
+          <label className="grid gap-1 text-[11px] text-textMuted">
+            A cada N níveis
+            <Input
+              type="number"
+              min={1}
+              value={scaling.interval}
+              onChange={(event) =>
+                onChange({ ...scaling, interval: Math.max(1, Number(event.target.value)) })
+              }
+            />
+          </label>
+          <label className="grid gap-1 text-[11px] text-textMuted">
+            Aumento por etapa
+            <Input
+              type="number"
+              value={scaling.amountPerStep}
+              onChange={(event) =>
+                onChange({ ...scaling, amountPerStep: Number(event.target.value) })
+              }
+            />
+          </label>
+        </div>
+      ) : null}
+
+      {scaling?.type === "thresholds" ? (
+        <div className="grid gap-2 sm:grid-cols-[180px_1fr]">
+          <ScalingSourceSelect
+            value={scaling.source}
+            onChange={(source) => onChange({ ...scaling, source })}
+          />
+          <label className="grid gap-1 text-[11px] text-textMuted">
+            Limiares (nível:+aumento)
+            <Input
+              value={formatThresholds(scaling.thresholds)}
+              placeholder="5:+1, 11:+1, 17:+1"
+              onChange={(event) =>
+                onChange({
+                  ...scaling,
+                  thresholds: parseThresholds(event.target.value),
+                })
+              }
+            />
+          </label>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function ScalingSourceSelect({
+  value,
+  onChange,
+}: {
+  value: SpellNumericScaling["source"]
+  onChange: (source: SpellNumericScaling["source"]) => void
+}) {
+  return (
+    <label className="grid gap-1 text-[11px] text-textMuted">
+      Escala por
+      <SharedSelect
+        className="h-9 rounded-xl border border-border bg-bg px-2 text-xs text-text"
+        value={value}
+        onChange={(event) =>
+          onChange(event.target.value as SpellNumericScaling["source"])
+        }
+      >
+        <option value="slot-level">Nível da conjuração</option>
+        <option value="character-level">Nível do personagem</option>
+      </SharedSelect>
+    </label>
+  )
+}
+
+function parseThresholds(value: string): Array<{ level: number; amount: number }> {
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [levelText, amountText] = entry.split(":")
+      return {
+        level: Math.max(0, Math.trunc(Number(levelText))),
+        amount: Math.trunc(Number(amountText)),
+      }
+    })
+    .filter((entry) => Number.isFinite(entry.level) && Number.isFinite(entry.amount))
+    .sort((left, right) => left.level - right.level)
+}
+
+function formatThresholds(thresholds: Array<{ level: number; amount: number }>): string {
+  return thresholds
+    .map((entry) => `${entry.level}:${entry.amount >= 0 ? "+" : ""}${entry.amount}`)
+    .join(", ")
 }

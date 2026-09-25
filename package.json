@@ -21,10 +21,11 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "db:migrate": "node scripts/migrate-relational.mjs",
-    "spells:fetch": "node scripts/build-spells-json.mjs --force",
+    "spells:fetch": "node scripts/build-spells-json.mjs --force && npm run spells:enrich-resolution",
     "prisma:generate": "prisma generate",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "spells:enrich-resolution": "node scripts/enrich-spell-resolution.mjs"
   },
   "dependencies": {
     "@better-auth/prisma-adapter": "^1.6.25",

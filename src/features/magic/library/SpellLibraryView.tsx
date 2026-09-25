@@ -18,6 +18,7 @@ import {
 } from "../../../contexts/consts"
 import { useMagicContext } from "../../../contexts/magicContext"
 import type { Spell } from "../../../models/magic/spells/Spell"
+import { getEffectiveSpellResolution } from "../../../models/magic/spells/spellResolution"
 import type { ClassName } from "../../../models/sheet/Class"
 import { SpellCreatorModule } from "../spellCreator/spellCreatorModule"
 
@@ -576,7 +577,7 @@ function SpellDetails({ spell }: { spell: Spell }) {
     <div className="grid gap-5 text-sm text-text">
       <div className="flex flex-wrap gap-2 text-xs"><LibraryBadge label={formatLevel(spell.slotLevel)} /><LibraryBadge label={schoolLabel(String(spell.school))} />{spell.concentration ? <LibraryBadge label="Concentração" /> : null}{spell.ritual ? <LibraryBadge label="Ritual" /> : null}</div>
       <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        <Info label="Tempo de conjuração" value={formatCastingTime(spell)} /><Info label="Alcance" value={formatRange(spell)} /><Info label="Duração" value={formatDuration(spell)} /><Info label="Componentes" value={formatComponents(spell)} /><Info label="Classes" value={spell.classes.map((entry) => CLASS_NAMES[entry]).join(", ") || "Nenhuma"} /><Info label="Alvo" value={formatTargeting(spell)} /><Info label="Área" value={formatArea(spell)} /><Info label="Rolagens" value={spell.rollMode.join(", ") || "Nenhuma"} /><Info label="Dano" value={spell.damageDice ? `${spell.damageDice.quantity}${spell.damageDice.sides}` : "Nenhum"} />
+        <Info label="Tempo de conjuração" value={formatCastingTime(spell)} /><Info label="Alcance" value={formatRange(spell)} /><Info label="Duração" value={formatDuration(spell)} /><Info label="Componentes" value={formatComponents(spell)} /><Info label="Classes" value={spell.classes.map((entry) => CLASS_NAMES[entry]).join(", ") || "Nenhuma"} /><Info label="Alvo" value={formatTargeting(spell)} /><Info label="Área" value={formatArea(spell)} /><Info label="Rolagens" value={spell.rollMode.join(", ") || "Nenhuma"} /><Info label="Dano" value={formatStructuredDamage(spell)} />
       </section>
       {spell.material?.trim() ? <Info label="Material" value={spell.material} /> : null}
       <section><h3 className="font-semibold text-textH">Descrição</h3><div className="mt-2 whitespace-pre-wrap leading-6">{spell.description?.trim() || "Sem descrição."}</div></section>
@@ -598,6 +599,24 @@ function matchesBoolean(filter: BooleanFilter, value: boolean): boolean { return
 function normalizeSearch(value: string): string { return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim() }
 function spellName(spell: LibrarySpell): string { return spell.displayName?.trim() || spell.name }
 function schoolLabel(school: string): string { return MAGIC_SCHOOLS_MAP[school] ?? school }
+function formatStructuredDamage(spell: Spell): string {
+  const damage = getEffectiveSpellResolution(spell).damage ?? []
+  if (!damage.length) return "Nenhum"
+  return damage.map((component) => {
+    const dice = component.dice
+      ? `${component.dice.quantity}${component.dice.sides}`
+      : ""
+    const flat = component.flat
+      ? `${dice ? " " : ""}${component.flat > 0 && dice ? "+" : component.flat < 0 ? "-" : ""}${dice ? " " : ""}${Math.abs(component.flat)}`
+      : ""
+    const modifier = component.addCastingModifier
+      ? `${dice || flat ? " + " : ""}mod. conjuração`
+      : ""
+    const type = component.damageType ? ` ${component.damageType}` : ""
+    return `${dice}${flat}${modifier}${type}${component.diceScaling ? " (escalável)" : ""}`
+  }).join(" + ")
+}
+
 function formatLevel(level: number): string { return level === 0 ? "Truque" : `${level}º nível` }
 function formatCastingTime(spell: LibrarySpell): string { const label = CASTING_TIME_NAMES[spell.castingTime.type] ?? spell.castingTime.type; const amount = spell.castingTime.value || 1; if (spell.castingTime.type === "reaction" && spell.castingTime.reactionWhen) return `${label}: ${spell.castingTime.reactionWhen}`; if (spell.castingTime.type === "special" && spell.castingTime.special) return spell.castingTime.special; return amount === 1 ? label : `${amount} ${label.toLocaleLowerCase("pt-BR")}` }
 function formatRange(spell: LibrarySpell): string { const labels: Record<string, string> = { self: "Pessoal", touch: "Toque", point: "Ponto", target: "Alvo", ally: "Aliado", enemy: "Inimigo" }; const origin = labels[spell.range.origin] ?? spell.range.origin; return spell.range.distance > 0 ? `${origin}, ${spell.range.distance} m` : origin }
