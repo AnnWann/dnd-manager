@@ -84,6 +84,14 @@ export type SessionResolvedDamageRoll = {
   modifier: number
   total: number
   critical: boolean
+  label?: string
+  damageType?: string
+}
+
+export type SessionActionInstanceResult = {
+  label: string
+  attack?: SessionResolvedD20Roll
+  damages?: SessionResolvedDamageRoll[]
 }
 
 export type SessionActionRollResult = {
@@ -100,8 +108,15 @@ export type SessionActionRollResult = {
   save?: {
     attribute: Attribute
     dc: number
+    onSuccess?: "none" | "half" | "full"
   }
+  /** Legacy/single damage block used by weapons and simple actions. */
   damage?: SessionResolvedDamageRoll
+  /** Structured spell damage when one action can contain multiple components. */
+  damages?: SessionResolvedDamageRoll[]
+  /** Multi-attack/projectile spells expose one resolved instance per attack. */
+  instances?: SessionActionInstanceResult[]
+  castLevel?: number
   critical: boolean
   createdAt: string
 }
