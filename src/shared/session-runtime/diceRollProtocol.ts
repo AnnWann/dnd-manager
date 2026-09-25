@@ -11,6 +11,7 @@ export type SessionDiceRollKind =
   | "attack"
   | "damage"
   | "spell-attack"
+  | "manual"
 
 export type SessionDiceD20Source =
   | { type: "ability"; attribute: Attribute }
@@ -25,7 +26,13 @@ export type SessionDiceDamageSource =
   | { type: "weapon-damage"; weaponId: string }
   | { type: "unarmed-damage" }
 
-export type SessionDiceRollSource = SessionDiceD20Source | SessionDiceDamageSource
+export type SessionDiceManualSource =
+  | { type: "manual"; expression: string }
+
+export type SessionDiceRollSource =
+  | SessionDiceD20Source
+  | SessionDiceDamageSource
+  | SessionDiceManualSource
 
 export type SessionDiceRollRequest = {
   requestId: string
