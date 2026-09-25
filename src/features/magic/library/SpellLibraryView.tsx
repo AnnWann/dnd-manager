@@ -603,11 +603,15 @@ function formatStructuredDamage(spell: Spell): string {
   const damage = getEffectiveSpellResolution(spell).damage ?? []
   if (!damage.length) return "Nenhum"
   return damage.map((component) => {
-    const dice = `${component.dice.quantity}${component.dice.sides}`
-    const flat = component.flat
-      ? ` ${component.flat > 0 ? "+" : "-"} ${Math.abs(component.flat)}`
+    const dice = component.dice
+      ? `${component.dice.quantity}${component.dice.sides}`
       : ""
-    const modifier = component.addCastingModifier ? " + mod. conjuração" : ""
+    const flat = component.flat
+      ? `${dice ? " " : ""}${component.flat > 0 && dice ? "+" : component.flat < 0 ? "-" : ""}${dice ? " " : ""}${Math.abs(component.flat)}`
+      : ""
+    const modifier = component.addCastingModifier
+      ? `${dice || flat ? " + " : ""}mod. conjuração`
+      : ""
     const type = component.damageType ? ` ${component.damageType}` : ""
     return `${dice}${flat}${modifier}${type}${component.diceScaling ? " (escalável)" : ""}`
   }).join(" + ")
