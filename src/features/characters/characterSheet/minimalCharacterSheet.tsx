@@ -496,11 +496,9 @@ function CompactUnarmedTile({ character }: { character: CharacterTemplate }) {
             })
             return
           }
-          rollDamage({
+          rollFlatDamage({
             label: "Ataque desarmado — dano",
-            quantity: 1,
-            sides: 2,
-            modifier: profile.damageBonus,
+            total: 1 + profile.damageBonus,
           })
         }}
       >
