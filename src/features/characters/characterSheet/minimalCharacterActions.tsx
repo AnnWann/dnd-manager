@@ -41,7 +41,7 @@ import {
   setSorceryPointCurrent,
 } from "../../../models/characters/characterSorceryPoints"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
-import { hasManualBonusRolls, resolveBonusCollectionRolls } from "../../../models/bonuses/BonusRoll"
+import { hasManualBonusRolls, listBonusRollRequirements, resolveBonusCollectionRolls } from "../../../models/bonuses/BonusRoll"
 import type { CustomAbilityRollDefinition } from "../../../models/customSystems/CustomAbilityDefinition"
 import type {
   CharacterCustomSystemState,
@@ -139,6 +139,9 @@ export function MinimalCharacterActions({
   const navigate = useNavigate()
   const definitions = useCustomSystemDefinitions()
   const sessionRuntime = useOptionalSessionRuntime()
+  const digitalDiceEnabled =
+    sessionRuntime?.runtimeConfigSnapshot?.config.diceRollingEnabled !== false
+  const physicalDiceMode = Boolean(sessionRuntime) && !digitalDiceEnabled
   const { getMetamagicsByIds } = useMagicContext()
   const [filter, setFilter] = useState<ActionFilter>("action")
   const [selected, setSelected] = useState<ActionEntry | null>(null)
@@ -201,7 +204,9 @@ export function MinimalCharacterActions({
   const selectedCustomAbilityCosts = useMemo(() => {
     if (!selected?.customAbilitySource) return []
     const previewRollValue =
-      selected.customAbilityRoll?.mode === "manual" && isFiniteInput(manualRollValue)
+      selected.customAbilityRoll
+      && (selected.customAbilityRoll.mode === "manual" || physicalDiceMode)
+      && isFiniteInput(manualRollValue)
         ? Number(manualRollValue)
         : undefined
     return resolveCustomAbilityCosts(
@@ -210,7 +215,7 @@ export function MinimalCharacterActions({
       selected.customAbilitySource,
       previewRollValue,
     )
-  }, [character, definitions, manualRollValue, selected])
+  }, [character, definitions, manualRollValue, physicalDiceMode, selected])
   const selectedCustomAbilityCostError = customAbilityCostError(
     selectedCustomAbilityCosts,
   )
@@ -274,6 +279,17 @@ export function MinimalCharacterActions({
     let resolvedBonusRollValues = bonusRollValues
     let hasResolvedRolls = false
     if (action === "use" && entry.ability) {
+      const requirements = listBonusRollRequirements(entry.ability.bonuses)
+      if (
+        physicalDiceMode
+        && requirements.some((requirement) => {
+          const value = bonusRollValues?.[requirement.key]
+          return typeof value !== "number" || !Number.isFinite(value)
+        })
+      ) {
+        setAbilityResourceEntry(entry)
+        return
+      }
       try {
         const resolved = resolveBonusCollectionRolls(
           character,
@@ -328,6 +344,7 @@ export function MinimalCharacterActions({
         return
       }
 
+      if (action === "use") announce(entry)
       setAbilityResourceEntry(null)
       if (!hasResolvedRolls) setSelected(null)
       return
@@ -369,7 +386,10 @@ export function MinimalCharacterActions({
     try {
       setError("")
       let rollValue: number | undefined
-      if (entry.customAbilityRoll?.mode === "manual") {
+      if (
+        entry.customAbilityRoll
+        && (entry.customAbilityRoll.mode === "manual" || physicalDiceMode)
+      ) {
         const raw = manualRollValue.trim()
         if (!raw || !Number.isFinite(Number(raw))) {
           setError("Informe um resultado numérico válido para a rolagem.")
@@ -413,6 +433,8 @@ export function MinimalCharacterActions({
           return
         }
 
+        announce(entry)
+        announce(entry)
         if (!resolved.roll) setSelected(null)
         return
       }
@@ -434,7 +456,10 @@ export function MinimalCharacterActions({
     try {
       setError("")
       let rollValue: number | undefined
-      if (entry.customAbilityRoll?.mode === "manual") {
+      if (
+        entry.customAbilityRoll
+        && (entry.customAbilityRoll.mode === "manual" || physicalDiceMode)
+      ) {
         const raw = manualRollValue.trim()
         if (!raw) {
           setError("Informe o resultado da rolagem antes de usar esta habilidade.")
@@ -536,6 +561,7 @@ export function MinimalCharacterActions({
         return
       }
 
+      announce(entry)
       setSelected(null)
       return
     }
@@ -658,14 +684,15 @@ export function MinimalCharacterActions({
                 ))}
               </div>
             ) : null}
-            {selected.customAbilityRoll?.mode === "manual" ? (
+            {selected.customAbilityRoll
+              && (selected.customAbilityRoll.mode === "manual" || physicalDiceMode) ? (
               <label className="grid gap-1 rounded-xl border border-accentBorder bg-accentBg/30 p-3">
                 <span className="text-xs font-semibold text-textH">
                   {selected.customAbilityRoll.label?.trim() || "Resultado da rolagem"}
                 </span>
                 <span className="text-[11px] leading-4 text-textMuted">
                   {selected.customAbilityRoll.dice?.trim()
-                    ? `Role ${selected.customAbilityRoll.dice} antes de usar e informe o resultado.`
+                    ? `Role ${selected.customAbilityRoll.dice} ${physicalDiceMode ? "com seus dados físicos " : ""}antes de usar e informe o resultado.`
                     : "Faça a rolagem necessária antes de usar e informe o resultado."}
                 </span>
                 <Input
@@ -676,7 +703,7 @@ export function MinimalCharacterActions({
                   onChange={(event) => setManualRollValue(event.target.value)}
                 />
               </label>
-            ) : selected.customAbilityRoll?.mode === "automatic" ? (
+            ) : selected.customAbilityRoll?.mode === "automatic" && digitalDiceEnabled ? (
               <div className="rounded-xl border border-accentBorder bg-accentBg/30 p-3 text-xs leading-5 text-textMuted">
                 <span className="font-semibold text-textH">
                   {selected.customAbilityRoll.label?.trim() || "Rolagem automática"}
@@ -732,7 +759,11 @@ export function MinimalCharacterActions({
               <div className="flex justify-end border-t border-border pt-3">
                 <Button
                   variant="primary"
-                  disabled={selected.customAbilityRoll?.mode === "manual" && !isFiniteInput(manualRollValue)}
+                  disabled={
+                    Boolean(selected.customAbilityRoll)
+                    && (selected.customAbilityRoll.mode === "manual" || physicalDiceMode)
+                    && !isFiniteInput(manualRollValue)
+                  }
                   onClick={() => useCustomSystemAction(selected)}
                 >Usar</Button>
               </div>
@@ -742,7 +773,9 @@ export function MinimalCharacterActions({
                   variant="primary"
                   disabled={
                     Boolean(selectedCustomAbilityCostError) ||
-                    (selected.customAbilityRoll?.mode === "manual" && !isFiniteInput(manualRollValue))
+                    (Boolean(selected.customAbilityRoll)
+                      && (selected.customAbilityRoll!.mode === "manual" || physicalDiceMode)
+                      && !isFiniteInput(manualRollValue))
                   }
                   onClick={() => useCustomAbility(selected)}
                 >
@@ -755,7 +788,13 @@ export function MinimalCharacterActions({
                   <div className="flex justify-end">
                     <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>Encerrar efeito</Button>
                   </div>
-                ) : hasAbilityResourceCosts(selected.ability) || selected.ability.resourceUpcast?.enabled || hasManualBonusRolls(selected.ability.bonuses) ? (
+                ) : hasAbilityResourceCosts(selected.ability)
+                    || selected.ability.resourceUpcast?.enabled
+                    || hasManualBonusRolls(selected.ability.bonuses)
+                    || (
+                      physicalDiceMode
+                      && listBonusRollRequirements(selected.ability.bonuses).length > 0
+                    ) ? (
                   <div className="flex justify-end">
                     <Button variant="primary" onClick={() => setAbilityResourceEntry(selected)}>
                       Configurar e usar
@@ -799,6 +838,7 @@ export function MinimalCharacterActions({
           key={abilityResourceEntry.id}
           ability={abilityResourceEntry.ability}
           character={character}
+          forceManualRolls={physicalDiceMode}
           onClose={() => setAbilityResourceEntry(null)}
           onConfirm={(optionId, resourceSelection, bonusRollValues) =>
             changeAbilityState(abilityResourceEntry, "use", optionId, resourceSelection, bonusRollValues)
