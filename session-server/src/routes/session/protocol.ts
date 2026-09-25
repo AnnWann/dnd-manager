@@ -334,7 +334,7 @@ function isCreatureRollRequest(value: unknown): value is SessionCreatureRollRequ
     case "save":
       return attribute(value.source.attribute);
     case "skill":
-      return nonEmpty(value.source.skill) && value.source.skill.length <= 80;
+      return skill(value.source.skill);
     case "initiative":
       return true;
     case "feature":
