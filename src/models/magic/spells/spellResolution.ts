@@ -56,6 +56,7 @@ export function evaluateSpellDamageDiceQuantity(
   component: SpellDamageComponent,
   context: SpellResolutionContext,
 ): number {
+  if (!component.dice) return 0
   return Math.max(
     0,
     Math.trunc(component.dice.quantity)
