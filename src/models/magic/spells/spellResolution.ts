@@ -87,3 +87,4 @@ export function evaluateSpellScaling(
 
   return steps * Math.trunc(scaling.amountPerStep)
 }
+
