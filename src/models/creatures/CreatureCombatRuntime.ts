@@ -78,7 +78,10 @@ export function getCreatureEffectiveInitiative(
   conditions: InitiativeCondition[] = [],
   entry?: InitiativeEntry,
 ): number {
-  return createCreatureCombatCharacter(creature, conditions, entry).getEffectiveInitiative()
+  const character = createCreatureCombatCharacter(creature, conditions, entry)
+  const baseDexterityModifier = Math.floor((creature.abilityScores.dex - 10) / 2)
+  const effectiveCalculated = character.getEffectiveInitiative()
+  return creature.initiativeBonus + (effectiveCalculated - baseDexterityModifier)
 }
 
 export function getCreatureEffectiveAbilityModifier(
