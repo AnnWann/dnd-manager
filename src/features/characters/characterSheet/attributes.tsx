@@ -5,6 +5,7 @@ import { Input } from "../../../components/ui/Input"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatSigned } from "../../../lib/formatSigned"
 import { clampInt } from "../../../lib/numberFormat"
+import { rollD20, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
 import {
   getAsiAttributeIncrease,
   getCharacterAsis,
