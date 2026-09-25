@@ -102,7 +102,7 @@ export class SessionActor extends BaseSessionActor {
   ): Promise<void> {
     const [runtimeConfig, inventory, log] = await Promise.all([
       readRuntimeConfig(this.ctx.storage),
-      this.readInventoryState(),
+      this.readCreatureDropInventoryState(),
       readSessionLog(this.ctx.storage),
     ]);
     if (!runtimeConfig || !inventory.initialized) return;
@@ -180,11 +180,11 @@ export class SessionActor extends BaseSessionActor {
 
     broadcast(this.ctx.getWebSockets(), {
       type: "session.inventory.updated",
-      state: await this.readInventoryState(),
+      state: await this.readCreatureDropInventoryState(),
     });
   }
 
-  private async readInventoryState(): Promise<SharedInventoryState> {
+  private async readCreatureDropInventoryState(): Promise<SharedInventoryState> {
     return this.ctx.storage
       .get<SharedInventoryState>(INVENTORY_STATE_KEY)
       .then((value) => value ?? {
