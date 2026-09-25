@@ -128,7 +128,7 @@ export type SessionCreatureRollSource =
   | { type: "save"; attribute: Attribute }
   | { type: "skill"; skill: Skill }
   | { type: "initiative" }
-  | { type: "feature"; featureId: string }
+  | { type: "feature"; featureId: string; intent?: "resolve" | "announce" }
 
 export type SessionCreatureRollRequest = {
   requestId: string
