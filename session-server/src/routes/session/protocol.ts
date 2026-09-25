@@ -1,4 +1,5 @@
 import { routeForSheetOperation, type CharacterSheetRoute } from "../characters/sheet";
+import type { SessionDiceRollRequest, SessionDiceRollResult } from "../../../../src/shared/session-runtime/diceRollProtocol";
 
 export type SessionRole = "MASTER" | "PLAYER";
 
@@ -240,7 +241,8 @@ export type ClientSessionMessage =
   | { type: "session.conditions.initialize"; characters: SessionConditionSeed[] }
   | { type: "session.conditions.operation"; operation: SessionConditionOperation | SessionConcentrationOperation }
   | { type: "session.sheet.operation"; route: CharacterSheetRoute; operation: SessionLoggedOperation }
-  | { type: "session.log.undo"; logId: string };
+  | { type: "session.log.undo"; logId: string }
+  | { type: "session.dice.roll"; request: SessionDiceRollRequest };
 
 export type ServerSessionMessage =
   | { type: "session.ready"; sessionId: string; clientId: string; serverTime: number }
@@ -252,6 +254,7 @@ export type ServerSessionMessage =
   | { type: "session.conditions.snapshot"; characters: SessionConditionsState[] }
   | { type: "session.conditions.updated"; character: SessionConditionsState }
   | { type: "session.hp.log"; records: SessionHpLogRecord[] }
+  | { type: "session.dice.result"; result: SessionDiceRollResult }
   | { type: "session.error"; code: string; message: string };
 
 export function parseClientSessionMessage(raw: string): ClientSessionMessage | null {
@@ -289,6 +292,10 @@ export function parseClientSessionMessage(raw: string): ClientSessionMessage | n
     }
     case "session.log.undo":
       return nonEmpty(value.logId) ? { type: value.type, logId: value.logId } : null;
+    case "session.dice.roll":
+      return isDiceRollRequest(value.request)
+        ? { type: value.type, request: value.request }
+        : null;
     default:
       return null;
   }
@@ -296,6 +303,47 @@ export function parseClientSessionMessage(raw: string): ClientSessionMessage | n
 
 export function encodeServerSessionMessage(message: ServerSessionMessage): string {
   return JSON.stringify(message);
+}
+
+function isDiceRollRequest(value: unknown): value is SessionDiceRollRequest {
+  if (!isRecord(value)) return false;
+  if (!nonEmpty(value.requestId) || value.requestId.length > 120) return false;
+  if (!nonEmpty(value.characterId) || value.characterId.length > 120) return false;
+  if (typeof value.label !== "string" || value.label.trim().length === 0 || value.label.length > 160) return false;
+  if (!diceRollKind(value.kind) || !diceRollMode(value.mode)) return false;
+  if (typeof value.modifier !== "number" || !Number.isFinite(value.modifier) || Math.abs(value.modifier) > 10000) return false;
+  if (!Array.isArray(value.groups) || value.groups.length > 8) return false;
+  if (!value.groups.every((group) =>
+    isRecord(group)
+    && positiveInteger(group.quantity)
+    && group.quantity <= 100
+    && positiveInteger(group.sides)
+    && group.sides >= 2
+    && group.sides <= 1000
+  )) return false;
+
+  if (value.kind === "damage") {
+    return value.mode === "normal";
+  }
+
+  return value.groups.length === 1
+    && value.groups[0].quantity === 1
+    && value.groups[0].sides === 20;
+}
+
+function diceRollKind(value: unknown): boolean {
+  return value === "ability"
+    || value === "skill"
+    || value === "save"
+    || value === "initiative"
+    || value === "attack"
+    || value === "damage"
+    || value === "spell-attack"
+    || value === "custom";
+}
+
+function diceRollMode(value: unknown): boolean {
+  return value === "normal" || value === "advantage" || value === "disadvantage";
 }
 
 function isHpSeed(value: unknown): value is SessionHpSeed {
