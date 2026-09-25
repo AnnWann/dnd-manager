@@ -266,6 +266,7 @@ export function SessionActionLog() {
         <DiceRollPanel
           entries={rollFeed}
           characterNames={characterNames}
+          characterId={activeCharacter?.get("id") ?? visibleCharacters[0]?.get("id")}
           onClear={() => setRollFeed([])}
         />
       )}
@@ -276,12 +277,37 @@ export function SessionActionLog() {
 function DiceRollPanel({
   entries,
   characterNames,
+  characterId,
   onClear,
 }: {
   entries: RollFeedEntry[]
   characterNames: ReadonlyMap<string, string>
+  characterId?: string
   onClear: () => void
 }) {
+  const [manualExpression, setManualExpression] = useState("")
+  const [manualError, setManualError] = useState("")
+
+  function submitManualRoll(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!characterId) {
+      setManualError("Nenhum personagem visível está disponível para associar à rolagem.")
+      return
+    }
+
+    const result = requestManualDiceRoll({
+      characterId,
+      expression: manualExpression,
+    })
+    if (!result.ok) {
+      setManualError(result.message)
+      return
+    }
+
+    setManualExpression(result.value.expression)
+    setManualError("")
+  }
+
   return (
     <>
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
