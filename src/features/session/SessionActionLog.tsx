@@ -634,9 +634,7 @@ function ActionRollEntry({
         ) : null}
 
         <div className="flex items-center justify-between gap-2 text-[10px] text-textMuted">
-          <span className="truncate">
-          {characterName || (roll.kind === "manual" && !roll.characterId ? "Sem identificador" : "Personagem")}
-        </span>
+          <span className="truncate">{characterName || "Personagem"}</span>
           <time dateTime={roll.createdAt}>{formatTime(roll.createdAt)}</time>
         </div>
       </div>
