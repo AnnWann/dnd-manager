@@ -1,3 +1,4 @@
+import { parseManualDiceExpression, type ManualDiceExpressionParseResult } from "../shared/session-runtime/manualDiceExpression"
 import type {
   SessionDiceD20Source,
   SessionDiceDamageSource,
@@ -46,6 +47,27 @@ export function requestDamageRoll(input: {
     mode: "normal",
     source: input.source,
   })
+}
+
+
+export function requestManualDiceRoll(input: {
+  characterId: string
+  expression: string
+}): ManualDiceExpressionParseResult {
+  const parsed = parseManualDiceExpression(input.expression)
+  if (!parsed.ok) return parsed
+
+  publishRequest({
+    requestId: createRequestId(),
+    characterId: input.characterId,
+    label: "Rolagem manual",
+    mode: "normal",
+    source: {
+      type: "manual",
+      expression: parsed.value.expression,
+    },
+  })
+  return parsed
 }
 
 
