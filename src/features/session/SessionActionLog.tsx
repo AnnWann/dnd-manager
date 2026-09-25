@@ -1,8 +1,8 @@
 import { Dices, History, PanelRightClose, PanelRightOpen, Undo2 } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type FormEvent } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
-import { ACTION_ROLL_RESULT_EVENT, DICE_ROLL_RESULT_EVENT } from "../../lib/diceRoller"
+import { ACTION_ROLL_RESULT_EVENT, DICE_ROLL_RESULT_EVENT, requestManualDiceRoll } from "../../lib/diceRoller"
 import type { SessionActionRollResult, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
 import { DAMAGE_TYPES, damageTypeLabel, type DamageType } from "../../models/combat/Damage"
 import { CREATURE_ATTRIBUTE_LABELS } from "../../models/creatures/CreatureRolls"
@@ -41,7 +41,7 @@ type RollFeedEntry =
   | { type: "action"; result: SessionActionRollResult }
 
 export function SessionActionLog() {
-  const { operationLog, visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
+  const { activeCharacter, operationLog, visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
   const runtime = useOptionalSessionRuntime()
   const logRuntime = useOptionalSessionRuntimeLog()
   const sessionLog = (logRuntime?.hpLog ?? []) as SessionLogRecord[]
