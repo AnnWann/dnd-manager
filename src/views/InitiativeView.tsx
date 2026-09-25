@@ -1025,7 +1025,11 @@ function resolveQuickSheet(
   if (entry.sourceId?.startsWith(COMPENDIUM_SOURCE_PREFIX)) {
     const creatureId = entry.sourceId.slice(COMPENDIUM_SOURCE_PREFIX.length)
     const creature = creatures.find((candidate) => candidate.id === creatureId)
-    if (creature) return quickSheetFromCompendiumCreature(creature, entry)
+    if (creature) {
+      return quickSheetFromCompendiumCreature(creature, entry, {
+        enableRolls: true,
+      })
+    }
   }
 
   if (entry.sourceId) {
