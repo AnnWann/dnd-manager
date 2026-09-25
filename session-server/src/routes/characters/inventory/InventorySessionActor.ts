@@ -309,6 +309,9 @@ function applyInventoryOperation(
       ));
     case "character.inventory.attunement.toggle":
       return result(updateCharacter(operation.characterId, (c) => toggleInventoryItemAttunement(c, operation.itemId)));
+    case "character.ammunition.spend":
+      // Handled by AmmunitionSessionActor before this base actor is reached.
+      return result(false);
     case "character.equipment.move.ground": {
       const did = updateCharacter(operation.characterId, (c) => {
         const removed = removeEquippedItem(c, operation.reference as EquippedItemReference);
