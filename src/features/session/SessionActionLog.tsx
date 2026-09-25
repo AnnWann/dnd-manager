@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
 import { useInitiativeRollSelection } from "../initiative/initiativeRollSelection"
-import { ACTION_ROLL_RESULT_EVENT, DICE_ROLL_RESULT_EVENT, requestManualDiceRoll } from "../../lib/diceRoller"
+import { ACTION_ROLL_RESULT_EVENT, DICE_ROLL_RESULT_EVENT, getRollVisibility, requestManualDiceRoll, setRollVisibility } from "../../lib/diceRoller"
 import type { SessionActionRollResult, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
 import { DAMAGE_TYPES, damageTypeLabel, type DamageType } from "../../models/combat/Damage"
 import { CREATURE_ATTRIBUTE_LABELS } from "../../models/creatures/CreatureRolls"
@@ -366,6 +366,14 @@ function DiceRollPanel({
   const [manualExpression, setManualExpression] = useState("")
   const [manualError, setManualError] = useState("")
   const [attributionMode, setAttributionMode] = useState<"selected" | "none">("selected")
+  const [privateRolls, setPrivateRolls] = useState(
+    () => getRollVisibility() === "roller-master",
+  )
+
+  function changePrivateRolls(enabled: boolean) {
+    setPrivateRolls(enabled)
+    setRollVisibility(enabled ? "roller-master" : "public")
+  }
 
   function submitManualRoll(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -392,6 +400,25 @@ function DiceRollPanel({
 
   return (
     <>
+      <div className="border-b border-border bg-bg px-3 py-2.5">
+        <label className="flex cursor-pointer items-center justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-[11px] font-semibold text-textH">
+              Ocultar dos outros jogadores
+            </span>
+            <span className="mt-0.5 block text-[9px] leading-4 text-textMuted">
+              Quando ativo, só quem rolou e o mestre recebem a rolagem.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={privateRolls}
+            onChange={(event) => changePrivateRolls(event.target.checked)}
+            className="h-4 w-4 shrink-0 accent-current"
+          />
+        </label>
+      </div>
+
       <form
         className="grid gap-2 border-b border-border bg-bg px-3 py-3"
         onSubmit={submitManualRoll}
@@ -525,11 +552,18 @@ function ActionRollEntry({
             <div className="truncate text-sm font-bold text-textH">{roll.title}</div>
             {roll.subtitle ? <div className="mt-0.5 text-[10px] text-textMuted">{roll.subtitle}</div> : null}
           </div>
-          {roll.critical ? (
-            <span className="shrink-0 rounded-full border border-success px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-success">
-              Crítico
-            </span>
-          ) : null}
+          <div className="flex shrink-0 items-center gap-1">
+            {roll.visibility === "roller-master" ? (
+              <span className="rounded-full border border-border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-textMuted">
+                Privada
+              </span>
+            ) : null}
+            {roll.critical ? (
+              <span className="rounded-full border border-success px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-success">
+                Crítico
+              </span>
+            ) : null}
+          </div>
         </div>
         {roll.details?.length ? (
           <div className="mt-2 flex flex-wrap gap-1">
