@@ -29,8 +29,19 @@ export function resolveSpellCastAction(args: {
   castLevel: number;
   mode: SessionDiceRollMode;
   visibility?: SessionRollVisibility;
+  rollDice?: boolean;
 }): SessionActionRollResult {
-  const { requestId, actorId, character, spell, source, castLevel, mode, visibility } = args;
+  const {
+    requestId,
+    actorId,
+    character,
+    spell,
+    source,
+    castLevel,
+    mode,
+    visibility,
+    rollDice = true,
+  } = args;
   const attribute = source.attribute;
   const modifier = character.getEffectiveAttributeModifier(attribute);
   const proficiency = character.getProficiencyBonus();
@@ -63,6 +74,13 @@ export function resolveSpellCastAction(args: {
     castLevel,
     createdAt: new Date().toISOString(),
   };
+
+  if (!rollDice) {
+    return {
+      ...base,
+      critical: false,
+    };
+  }
 
   if ((resolution.damage?.length ?? 0) > MAX_SPELL_DAMAGE_COMPONENTS) {
     throw new Error("Spell resolution has too many damage components.");
