@@ -338,7 +338,13 @@ function isCreatureRollRequest(value: unknown): value is SessionCreatureRollRequ
     case "initiative":
       return true;
     case "feature":
-      return nonEmpty(value.source.featureId) && value.source.featureId.length <= 200;
+      return nonEmpty(value.source.featureId)
+        && value.source.featureId.length <= 200
+        && (
+          value.source.intent === undefined
+          || value.source.intent === "resolve"
+          || value.source.intent === "announce"
+        );
     default:
       return false;
   }
