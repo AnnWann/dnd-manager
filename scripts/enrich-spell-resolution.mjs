@@ -243,21 +243,27 @@ function baseDamage(entry, spell, rollType, index) {
 
   if (!base?.parsed) return undefined
 
-  const scaling = scalingFromTable(
-    table,
-    source,
-    base.level,
-    base.parsed,
-  )
+  const scaling = base.parsed.quantity > 0
+    ? scalingFromTable(
+        table,
+        source,
+        base.level,
+        base.parsed,
+      )
+    : undefined
 
   return {
     id: `damage-${damageType}-${index + 1}`,
     label: "Dano",
     damageType,
-    dice: {
-      quantity: base.parsed.quantity,
-      sides: base.parsed.sides,
-    },
+    ...(base.parsed.quantity > 0
+      ? {
+          dice: {
+            quantity: base.parsed.quantity,
+            sides: base.parsed.sides,
+          },
+        }
+      : {}),
     ...(base.parsed.flat ? { flat: base.parsed.flat } : {}),
     appliesOn:
       rollType === "attack"
