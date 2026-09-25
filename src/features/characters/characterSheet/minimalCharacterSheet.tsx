@@ -299,6 +299,7 @@ export function MinimalCharacterSheet({
                   title={rollModifierHint()}
                   onClick={(event) =>
                     requestD20Roll({
+                      characterId,
                       label: `Resistência de ${label}`,
                       modifier: character.getSavingThrowBonus(attribute),
                       kind: "save",
@@ -496,6 +497,7 @@ function CompactUnarmedTile({ character }: { character: CharacterTemplate }) {
         onClick={() => {
           if (damageDie) {
             requestDamageRoll({
+              characterId: character.get("id"),
               label: "Ataque desarmado — dano",
               quantity: damageDie.quantity,
               sides: damageDie.sides,
