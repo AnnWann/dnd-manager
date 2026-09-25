@@ -234,11 +234,24 @@ function transformLifecycleVisibilityMessage(
 
 function filterMessageForSocket(socket: WebSocket, message: unknown): unknown | null {
   const connection = readConnection(socket) as OwnershipAwareSessionConnection | null;
-  if (!connection || canReadEveryCharacter(connection)) return message;
+  if (!connection) return message;
   if (!message || typeof message !== "object" || Array.isArray(message)) return message;
 
   const record = message as Record<string, unknown>;
   const type = typeof record.type === "string" ? record.type : "";
+
+  if (type === "session.dice.result" || type === "session.action.result") {
+    const result = readRecord(record.result);
+    const visibility = result?.visibility;
+    if (visibility === "roller-master") {
+      const actorId = typeof result.actorId === "string" ? result.actorId : "";
+      if (connection.role !== "MASTER" && actorId !== connection.userId) {
+        return null;
+      }
+    }
+  }
+
+  if (canReadEveryCharacter(connection)) return message;
 
   if (CHARACTER_SNAPSHOT_TYPES.has(type) && Array.isArray(record.characters)) {
     return {
@@ -364,6 +377,12 @@ function canReadEveryCharacter(
   connection: OwnershipAwareSessionConnection,
 ): boolean {
   return connection.role === "MASTER" || connection.canReadAnyCharacter === true;
+}
+
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
 function readCharacterId(value: unknown): string | null {
