@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 
 import { DICE_ROLL_RESULT_EVENT } from "../../lib/diceRoller"
-import type { SessionSessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
+import type { SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
 import { formatSigned } from "../../lib/formatSigned"
 
 const MAX_HISTORY = 8
