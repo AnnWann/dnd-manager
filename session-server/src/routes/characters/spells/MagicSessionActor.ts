@@ -37,6 +37,7 @@ import type { SessionAbilityState } from "../abilities/abilityProtocol";
 import {
   authorizeCharacterMutation,
   findRuntimeSpell,
+  isDigitalDiceRollingEnabled,
   readRuntimeConfig,
 } from "../../session/runtimeConfigAccess";
 import {
@@ -293,6 +294,7 @@ export class SessionActor extends AbilitySessionActor {
         castLevel: operation.castLevel,
         mode: operation.mode,
         visibility: operation.visibility,
+        rollDice: isDigitalDiceRollingEnabled(runtimeConfig),
       });
     } catch (error) {
       sendError(
