@@ -485,7 +485,7 @@ function formatDiceBreakdown(roll: SessionDiceRollResult): string {
   }
 
   const group = roll.groups[0]
-  const d20 = group.entries.length > 1
+  const d20 = group.rolls.length > 1
     ? `[${group.rolls.join(", ")}] → ${group.kept}`
     : String(group.kept ?? group.rolls[0])
 
