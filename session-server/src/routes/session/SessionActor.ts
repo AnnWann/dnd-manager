@@ -26,6 +26,16 @@ import {
   type CharacterTemplateProps,
 } from "../../../../src/models/characters/CharacterTemplate";
 import { getCurrentMaxHp } from "../../../../src/models/characters/characterHp";
+import { hasProficiency } from "../../../../src/models/characters/characterProficiencies";
+import { getUnarmedAttackProfile } from "../../../../src/models/characters/unarmedAttack";
+import {
+  getWeaponAttackAttribute,
+  getWeaponDamageDie,
+  isWeaponImprovisedGrip,
+  type Weapon,
+} from "../../../../src/models/items/equipment/Weapon";
+import type { Attribute } from "../../../../src/models/sheet/Attribute";
+import type { Skill } from "../../../../src/models/sheet/Skills";
 import {
   getCharacterConditions,
   withCharacterConditions,
@@ -205,19 +215,37 @@ export class SessionActor extends DurableObject<Env> {
     connection: SessionConnection,
     request: SessionDiceRollRequest,
   ): Promise<void> {
-    const hpState = await this.readHpState();
-    const character = hpState[request.characterId];
-    if (!character) {
+    const [hpState, abilities, conditionsState] = await Promise.all([
+      this.readHpState(),
+      this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
+      this.readConditionsState(),
+    ]);
+    const hp = hpState[request.characterId];
+    const ability = abilities[request.characterId];
+    const conditions = conditionsState[request.characterId];
+    if (!hp || !ability?.initialized || !conditions?.initialized) {
       this.sendError(webSocket, "CHARACTER_NOT_INITIALIZED", "Authoritative character state has not been initialized.");
       return;
     }
-    if (connection.role !== "MASTER" && character.ownerUserId !== connection.userId) {
+    if (connection.role !== "MASTER" && hp.ownerUserId !== connection.userId) {
       this.sendError(webSocket, "CHARACTER_ACCESS_DENIED", "You cannot roll for this character.");
       return;
     }
 
-    const result = resolveServerDiceRoll(request, connection.userId);
-    this.broadcast({ type: "session.dice.result", result });
+    let character: CharacterTemplate;
+    try {
+      character = hydrateCharacterForRest(ability, hp, conditions);
+    } catch {
+      this.sendError(webSocket, "CHARACTER_STATE_INVALID", "The authoritative character snapshot is invalid.");
+      return;
+    }
+
+    const resolved = resolveServerDiceRoll(request, connection.userId, character);
+    if (!resolved.ok) {
+      this.sendError(webSocket, resolved.code, resolved.message);
+      return;
+    }
+    this.broadcast({ type: "session.dice.result", result: resolved.result });
   }
 
   private async initializeHp(webSocket: WebSocket, connection: SessionConnection, seeds: SessionHpSeed[]): Promise<void> {
@@ -746,37 +774,55 @@ export class SessionActor extends DurableObject<Env> {
   }
 }
 
+type DiceResolution =
+  | { ok: true; result: SessionDiceRollResult }
+  | { ok: false; code: string; message: string };
+
+type DicePlan = {
+  kind: SessionDiceRollResult["kind"];
+  mode: SessionDiceRollResult["mode"];
+  groups: Array<{ quantity: number; sides: number }>;
+  modifier: number;
+};
+
 function resolveServerDiceRoll(
   request: SessionDiceRollRequest,
   actorId: string,
-): SessionDiceRollResult {
-  if (request.kind !== "damage") {
-    const rolls = request.mode === "normal"
+  character: CharacterTemplate,
+): DiceResolution {
+  const plan = buildAuthoritativeDicePlan(request, character);
+  if (!plan.ok) return plan;
+
+  if (plan.plan.kind !== "damage") {
+    const rolls = plan.plan.mode === "normal"
       ? [rollServerDie(20)]
       : [rollServerDie(20), rollServerDie(20)];
-    const kept = request.mode === "advantage"
+    const kept = plan.plan.mode === "advantage"
       ? Math.max(...rolls)
-      : request.mode === "disadvantage"
+      : plan.plan.mode === "disadvantage"
         ? Math.min(...rolls)
         : rolls[0];
 
     return {
-      id: crypto.randomUUID(),
-      requestId: request.requestId,
-      actorId,
-      characterId: request.characterId,
-      label: request.label,
-      kind: request.kind,
-      mode: request.mode,
-      groups: [{ quantity: rolls.length, sides: 20, rolls, kept }],
-      modifier: request.modifier,
-      total: kept + request.modifier,
-      natural: kept,
-      createdAt: new Date().toISOString(),
+      ok: true,
+      result: {
+        id: crypto.randomUUID(),
+        requestId: request.requestId,
+        actorId,
+        characterId: request.characterId,
+        label: request.label,
+        kind: plan.plan.kind,
+        mode: plan.plan.mode,
+        groups: [{ quantity: rolls.length, sides: 20, rolls, kept }],
+        modifier: plan.plan.modifier,
+        total: kept + plan.plan.modifier,
+        natural: kept,
+        createdAt: new Date().toISOString(),
+      },
     };
   }
 
-  const groups = request.groups.map((group) => ({
+  const groups = plan.plan.groups.map((group) => ({
     ...group,
     rolls: Array.from({ length: group.quantity }, () => rollServerDie(group.sides)),
   }));
@@ -786,18 +832,157 @@ function resolveServerDiceRoll(
   );
 
   return {
-    id: crypto.randomUUID(),
-    requestId: request.requestId,
-    actorId,
-    characterId: request.characterId,
-    label: request.label,
-    kind: request.kind,
-    mode: "normal",
-    groups,
-    modifier: request.modifier,
-    total: diceTotal + request.modifier,
-    createdAt: new Date().toISOString(),
+    ok: true,
+    result: {
+      id: crypto.randomUUID(),
+      requestId: request.requestId,
+      actorId,
+      characterId: request.characterId,
+      label: request.label,
+      kind: "damage",
+      mode: "normal",
+      groups,
+      modifier: plan.plan.modifier,
+      total: diceTotal + plan.plan.modifier,
+      createdAt: new Date().toISOString(),
+    },
   };
+}
+
+function buildAuthoritativeDicePlan(
+  request: SessionDiceRollRequest,
+  character: CharacterTemplate,
+): { ok: true; plan: DicePlan } | { ok: false; code: string; message: string } {
+  const source = request.source;
+  switch (source.type) {
+    case "ability":
+      return d20Plan("ability", request.mode, character.getEffectiveAttributeModifier(source.attribute));
+    case "skill":
+      return d20Plan("skill", request.mode, getAuthoritativeSkillBonus(character, source.skill));
+    case "save":
+      return d20Plan("save", request.mode, character.getSavingThrowBonus(source.attribute));
+    case "initiative":
+      return d20Plan("initiative", request.mode, character.getEffectiveInitiative());
+    case "spell-attack": {
+      const modifier = character.getEffectiveAttributeModifier(source.attribute);
+      return d20Plan(
+        "spell-attack",
+        request.mode,
+        character.getEffectiveSpellAttackBonus(
+          source.attribute,
+          modifier + character.getProficiencyBonus(),
+        ),
+      );
+    }
+    case "weapon-attack": {
+      const weapon = findEquippedWeapon(character, source.weaponId);
+      if (!weapon) return missingWeapon();
+      const attribute = getWeaponAttackAttribute(weapon);
+      const proficiency = weapon.proficient && !isWeaponImprovisedGrip(weapon)
+        ? character.getProficiencyBonus()
+        : 0;
+      return d20Plan(
+        "attack",
+        request.mode,
+        character.getEffectiveWeaponAttackBonus(
+          weapon,
+          character.getEffectiveAttributeModifier(attribute) + proficiency,
+        ),
+      );
+    }
+    case "unarmed-attack":
+      return d20Plan("attack", request.mode, getUnarmedAttackProfile(character).attack);
+    case "weapon-damage": {
+      const weapon = findEquippedWeapon(character, source.weaponId);
+      if (!weapon) return missingWeapon();
+      const die = getWeaponDamageDie(weapon) ?? weapon.damage;
+      const attribute = getWeaponAttackAttribute(weapon);
+      const modifier = character.getEffectiveWeaponDamageBonus(
+        weapon,
+        character.getEffectiveAttributeModifier(attribute),
+      );
+      return {
+        ok: true,
+        plan: {
+          kind: "damage",
+          mode: "normal",
+          groups: [{ quantity: Math.max(1, Math.trunc(die.quantity) || 1), sides: parseDieSides(die.sides) }],
+          modifier,
+        },
+      };
+    }
+    case "unarmed-damage": {
+      const profile = getUnarmedAttackProfile(character);
+      const die = profile.damageDie;
+      return {
+        ok: true,
+        plan: {
+          kind: "damage",
+          mode: "normal",
+          groups: die
+            ? [{ quantity: Math.max(1, Math.trunc(die.quantity) || 1), sides: parseDieSides(die.sides) }]
+            : [],
+          modifier: die ? profile.damageBonus : 1 + profile.damageBonus,
+        },
+      };
+    }
+  }
+}
+
+function d20Plan(
+  kind: Exclude<SessionDiceRollResult["kind"], "damage">,
+  mode: SessionDiceRollResult["mode"],
+  modifier: number,
+): { ok: true; plan: DicePlan } {
+  return {
+    ok: true,
+    plan: {
+      kind,
+      mode,
+      groups: [{ quantity: 1, sides: 20 }],
+      modifier,
+    },
+  };
+}
+
+function getAuthoritativeSkillBonus(character: CharacterTemplate, skill: Skill): number {
+  const attribute = SKILL_ATTRIBUTES[skill];
+  const label = SKILL_LABELS[skill];
+  const proficiency = character.get("sheet").skills[skill] ?? "none";
+  const granted =
+    hasProficiency(character, "skill", label)
+    || hasProficiency(character, "skill", skill);
+  const effective = proficiency === "expertise"
+    ? "expertise"
+    : proficiency === "proficient" || granted
+      ? "proficient"
+      : "none";
+  const proficiencyBonus = character.getProficiencyBonus();
+  return character.getEffectiveAttributeModifier(attribute)
+    + (effective === "proficient" ? proficiencyBonus : 0)
+    + (effective === "expertise" ? proficiencyBonus * 2 : 0);
+}
+
+function findEquippedWeapon(character: CharacterTemplate, weaponId: string): Weapon | undefined {
+  return character.get("equipment").weapons.find((weapon) => weapon.id === weaponId);
+}
+
+function missingWeapon(): { ok: false; code: string; message: string } {
+  return {
+    ok: false,
+    code: "WEAPON_NOT_EQUIPPED",
+    message: "The requested weapon is not equipped by this character.",
+  };
+}
+
+function parseDieSides(value: number | string): number {
+  const parsed = typeof value === "number"
+    ? value
+    : Number(String(value).trim().toLowerCase().replace(/^d/, ""));
+  if (!Number.isInteger(parsed) || parsed < 2 || parsed > 1000) {
+    throw new Error(`Invalid authoritative die sides: ${String(value)}`);
+  }
+  return parsed;
 }
 
 function rollServerDie(sides: number): number {
@@ -809,6 +994,48 @@ function rollServerDie(sides: number): number {
   } while (buffer[0] >= limit);
   return (buffer[0] % sides) + 1;
 }
+
+const SKILL_ATTRIBUTES: Record<Skill, Attribute> = {
+  acrobatics: "dex",
+  arcana: "int",
+  athletics: "str",
+  animalHandling: "wis",
+  performance: "cha",
+  deception: "cha",
+  stealth: "dex",
+  history: "int",
+  intimidation: "cha",
+  insight: "wis",
+  investigation: "int",
+  medicine: "wis",
+  nature: "int",
+  perception: "wis",
+  persuasion: "cha",
+  sleightOfHand: "dex",
+  religion: "int",
+  survival: "wis",
+};
+
+const SKILL_LABELS: Record<Skill, string> = {
+  acrobatics: "Acrobacia",
+  arcana: "Arcanismo",
+  athletics: "Atletismo",
+  animalHandling: "Lidar com Animais",
+  performance: "Atuação",
+  deception: "Blefe",
+  stealth: "Furtividade",
+  history: "História",
+  intimidation: "Intimidação",
+  insight: "Intuição",
+  investigation: "Investigação",
+  medicine: "Medicina",
+  nature: "Natureza",
+  perception: "Percepção",
+  persuasion: "Persuasão",
+  sleightOfHand: "Prestidigitação",
+  religion: "Religião",
+  survival: "Sobrevivência",
+};
 
 function hydrateCharacterForRest(
   state: SessionAbilityState,
