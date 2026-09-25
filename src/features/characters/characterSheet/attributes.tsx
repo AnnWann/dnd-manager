@@ -88,7 +88,21 @@ export function Attributes({ character, updateCharacter }: Props) {
                 <div className="text-sm font-bold uppercase tracking-wide text-textH">{attributeShort(attribute)}</div>
                 <div className="flex shrink-0 items-baseline gap-1 text-right">
                   <span className="text-[10px] uppercase tracking-wide text-textMuted">Mod.</span>
-                  <span className="text-xl font-bold text-textH">{formatSigned(displayedModifier)}</span>
+                  <button
+                    type="button"
+                    className="rounded px-1 text-xl font-bold text-textH hover:bg-accentBg hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    title={rollModifierHint()}
+                    onClick={(event) =>
+                      rollD20({
+                        label: `Teste de ${attributeLabel(attribute)}`,
+                        modifier: displayedModifier,
+                        kind: "ability",
+                        mode: rollModeFromEvent(event.nativeEvent),
+                      })
+                    }
+                  >
+                    {formatSigned(displayedModifier)}
+                  </button>
                 </div>
               </div>
 
