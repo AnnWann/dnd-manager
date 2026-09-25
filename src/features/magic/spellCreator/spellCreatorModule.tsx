@@ -166,39 +166,31 @@ export function SpellCreatorModule({
     updateResolution({
       ...current,
       roll: type === "attack"
-        ? { type: "attack", count: { base: 1 } }
+        ? { type: "attack" }
         : type === "save"
           ? { type: "save", attribute: "dex", onSuccess: "none" }
           : { type: "none" },
     })
   }
 
-  function updateAttackCount(base: number) {
+  function updateInstanceCount(base: number) {
     const current = currentResolution()
-    if (current.roll.type !== "attack") return
     updateResolution({
       ...current,
-      roll: {
-        ...current.roll,
-        count: {
-          ...current.roll.count,
-          base: Math.max(1, Math.trunc(base) || 1),
-        },
+      instances: {
+        ...current.instances,
+        base: Math.max(1, Math.trunc(base) || 1),
       },
     })
   }
 
-  function updateAttackScaling(scaling: SpellNumericScaling | undefined) {
+  function updateInstanceScaling(scaling: SpellNumericScaling | undefined) {
     const current = currentResolution()
-    if (current.roll.type !== "attack") return
     updateResolution({
       ...current,
-      roll: {
-        ...current.roll,
-        count: {
-          base: current.roll.count?.base ?? 1,
-          scaling,
-        },
+      instances: {
+        base: current.instances?.base ?? 1,
+        scaling,
       },
     })
   }
@@ -806,26 +798,25 @@ export function SpellCreatorModule({
               </SharedSelect>
             </label>
 
-            {resolution.roll.type === "attack" ? (
+            {resolution.roll.type !== "save" ? (
               <div className="grid gap-3 rounded-lg border border-border bg-bg-subtle p-3">
                 <label className="grid gap-1 text-xs text-text">
-                  Quantidade base de ataques/projéteis
+                  Quantidade base de instâncias
                   <Input
                     type="number"
                     min={1}
-                    value={resolution.roll.type === "attack"
-                      ? resolution.roll.count?.base ?? 1
-                      : 1}
-                    onChange={(event) => updateAttackCount(Number(event.target.value))}
+                    value={resolution.instances?.base ?? 1}
+                    onChange={(event) => updateInstanceCount(Number(event.target.value))}
                   />
                 </label>
+                <p className="text-[10px] leading-4 text-textMuted">
+                  Use para ataques/projéteis independentes ou efeitos repetidos, como raios, feixes ou dardos.
+                </p>
                 <ScalingEditor
-                  label="Escalonamento da quantidade de ataques"
-                  scaling={resolution.roll.type === "attack"
-                    ? resolution.roll.count?.scaling
-                    : undefined}
+                  label="Escalonamento da quantidade de instâncias"
+                  scaling={resolution.instances?.scaling}
                   defaultStartLevel={spell.slotLevel}
-                  onChange={updateAttackScaling}
+                  onChange={updateInstanceScaling}
                 />
               </div>
             ) : null}
