@@ -81,6 +81,20 @@ export function rollDamage(input: {
   })
 }
 
+export function rollFlatDamage(input: {
+  label: string
+  total: number
+}): DiceRollResult {
+  return publishRoll({
+    label: input.label,
+    kind: "damage",
+    mode: "normal",
+    groups: [],
+    modifier: input.total,
+    total: input.total,
+  })
+}
+
 export function rollModeFromEvent(
   event: Pick<MouseEvent, "shiftKey" | "altKey">,
 ): DiceRollMode {
