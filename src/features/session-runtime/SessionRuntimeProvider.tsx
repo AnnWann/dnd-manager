@@ -9,8 +9,8 @@ import {
   type ReactNode,
 } from "react"
 import { SessionSocket, type SessionRuntimeStatus } from "./sessionSocket"
-import { DICE_ROLL_REQUEST_EVENT, publishServerDiceRoll } from "../../lib/diceRoller"
-import type { SessionDiceRollRequest } from "../../shared/session-runtime/diceRollProtocol"
+import { ACTION_ROLL_REQUEST_EVENT, DICE_ROLL_REQUEST_EVENT, publishServerActionRoll, publishServerDiceRoll } from "../../lib/diceRoller"
+import type { SessionActionRollRequest, SessionDiceRollRequest } from "../../shared/session-runtime/diceRollProtocol"
 import { toSheetOperationMessage } from "./sheetRoutes"
 import type {
   SessionAbilityOperation,
@@ -292,6 +292,10 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
           publishServerDiceRoll(message.result)
           return
         }
+        if (message.type === "session.action.result") {
+          publishServerActionRoll(message.result)
+          return
+        }
         if (message.type === "session.error") console.error(`[session-runtime] ${message.code}: ${message.message}`)
       },
     })
@@ -301,12 +305,19 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
       if (!request) return
       socket.send({ type: "session.dice.roll", request })
     }
+    const onActionRollRequest = (event: Event) => {
+      const request = (event as CustomEvent<SessionActionRollRequest>).detail
+      if (!request) return
+      socket.send({ type: "session.action.roll", request })
+    }
 
     window.addEventListener(DICE_ROLL_REQUEST_EVENT, onDiceRollRequest)
+    window.addEventListener(ACTION_ROLL_REQUEST_EVENT, onActionRollRequest)
     socketRef.current = socket
     socket.connect()
     return () => {
       window.removeEventListener(DICE_ROLL_REQUEST_EVENT, onDiceRollRequest)
+      window.removeEventListener(ACTION_ROLL_REQUEST_EVENT, onActionRollRequest)
       if (socketRef.current === socket) socketRef.current = null
       socket.disconnect()
     }
