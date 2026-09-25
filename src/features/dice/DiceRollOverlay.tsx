@@ -1,26 +1,24 @@
 import { useEffect, useState } from "react"
 
-import {
-  DICE_ROLL_EVENT,
-  type DiceRollResult,
-} from "../../lib/diceRoller"
+import { DICE_ROLL_RESULT_EVENT } from "../../lib/diceRoller"
+import type { SessionSessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
 import { formatSigned } from "../../lib/formatSigned"
 
 const MAX_HISTORY = 8
 
 export function DiceRollOverlay() {
-  const [history, setHistory] = useState<DiceRollResult[]>([])
+  const [history, setHistory] = useState<SessionDiceRollResult[]>([])
   const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     function onRoll(event: Event) {
-      const result = (event as CustomEvent<DiceRollResult>).detail
+      const result = (event as CustomEvent<SessionDiceRollResult>).detail
       if (!result) return
       setHistory((current) => [result, ...current].slice(0, MAX_HISTORY))
     }
 
-    window.addEventListener(DICE_ROLL_EVENT, onRoll)
-    return () => window.removeEventListener(DICE_ROLL_EVENT, onRoll)
+    window.addEventListener(DICE_ROLL_RESULT_EVENT, onRoll)
+    return () => window.removeEventListener(DICE_ROLL_RESULT_EVENT, onRoll)
   }, [])
 
   const latest = history[0]
@@ -97,14 +95,14 @@ export function DiceRollOverlay() {
   )
 }
 
-function modeLabel(result: DiceRollResult): string {
+function modeLabel(result: SessionDiceRollResult): string {
   if (result.kind === "damage") return "Dano"
   if (result.mode === "advantage") return "Vantagem"
   if (result.mode === "disadvantage") return "Desvantagem"
   return "Rolagem"
 }
 
-function formatBreakdown(result: DiceRollResult): string {
+function formatBreakdown(result: SessionDiceRollResult): string {
   const group = result.groups[0]
   if (!group) return String(result.total)
 
