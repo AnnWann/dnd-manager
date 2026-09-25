@@ -112,6 +112,8 @@ export type SpellDamageComponent = {
     sides: DieSides
   }
   flat?: number
+  /** Adds the spellcasting ability modifier to this damage component. */
+  addCastingModifier?: boolean
   /**
    * Determines when this component is relevant. For attack spells, "hit"
    * applies once per successful attack instance. Save spells normally use
