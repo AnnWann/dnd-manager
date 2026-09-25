@@ -51,7 +51,8 @@ export function requestDamageRoll(input: {
 
 
 export function requestManualDiceRoll(input: {
-  characterId: string
+  characterId?: string
+  initiativeEntryId?: string
   expression: string
 }): ManualDiceExpressionParseResult {
   const parsed = parseManualDiceExpression(input.expression)
@@ -65,6 +66,7 @@ export function requestManualDiceRoll(input: {
     source: {
       type: "manual",
       expression: parsed.value.expression,
+      initiativeEntryId: input.initiativeEntryId,
     },
   })
   return parsed
