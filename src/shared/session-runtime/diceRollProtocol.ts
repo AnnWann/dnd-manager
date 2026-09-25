@@ -126,7 +126,7 @@ export type SessionActionRollResult = {
 export type SessionCreatureRollSource =
   | { type: "ability"; attribute: Attribute }
   | { type: "save"; attribute: Attribute }
-  | { type: "skill"; skill: string }
+  | { type: "skill"; skill: Skill }
   | { type: "initiative" }
   | { type: "feature"; featureId: string }
 
