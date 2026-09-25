@@ -258,8 +258,7 @@ export function EquipmentWeaponsSection({
                         requestD20Roll({
                           characterId: character.get("id"),
                           label: `${weapon.name || "Arma"} — ataque`,
-                          modifier: attackBonus,
-                          kind: "attack",
+                          source: { type: "weapon-attack", weaponId: weapon.id },
                           mode: rollModeFromEvent(event.nativeEvent),
                         })
                       }
@@ -274,9 +273,7 @@ export function EquipmentWeaponsSection({
                         requestDamageRoll({
                           characterId: character.get("id"),
                           label: `${weapon.name || "Arma"} — dano`,
-                          quantity: damageDie.quantity,
-                          sides: damageDie.sides,
-                          modifier: damageBonus,
+                          source: { type: "weapon-damage", weaponId: weapon.id },
                         })
                       }}
                     />
