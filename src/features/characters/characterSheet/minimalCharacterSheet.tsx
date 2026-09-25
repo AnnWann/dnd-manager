@@ -6,7 +6,7 @@ import { attributeShort } from "../../../lib/attributeShorts"
 import { cn } from "../../../lib/cn"
 import { formatSigned } from "../../../lib/formatSigned"
 import { clampInt } from "../../../lib/numberFormat"
-import { rollD20, rollDamage, rollFlatDamage, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
+import { requestD20Roll, requestDamageRoll, requestFlatDamageRoll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
   formatUnarmedDamage,
@@ -206,7 +206,8 @@ export function MinimalCharacterSheet({
             className="min-h-16 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center transition-colors hover:border-accentBorder hover:bg-accentBg"
             title={rollModifierHint()}
             onClick={(event) =>
-              rollD20({
+              requestD20Roll({
+                characterId,
                 label: "Iniciativa",
                 modifier: character.getEffectiveInitiative(),
                 kind: "initiative",
@@ -251,7 +252,8 @@ export function MinimalCharacterSheet({
                 className="rounded text-xs font-bold text-textH hover:bg-accentBg hover:text-accent"
                 title={rollModifierHint()}
                 onClick={(event) =>
-                  rollD20({
+                  requestD20Roll({
+                    characterId,
                     label: `Teste de ${attributeShort(attribute)}`,
                     modifier: character.getEffectiveAttributeModifier(attribute),
                     kind: "ability",
@@ -296,7 +298,7 @@ export function MinimalCharacterSheet({
                   className="shrink-0 rounded px-1 text-sm font-bold text-textH hover:bg-bg hover:text-accent"
                   title={rollModifierHint()}
                   onClick={(event) =>
-                    rollD20({
+                    requestD20Roll({
                       label: `Resistência de ${label}`,
                       modifier: character.getSavingThrowBonus(attribute),
                       kind: "save",
@@ -349,7 +351,8 @@ export function MinimalCharacterSheet({
                         className="rounded px-1 text-sm font-bold text-textH hover:bg-bg hover:text-accent"
                         title={rollModifierHint()}
                         onClick={(event) =>
-                          rollD20({
+                          requestD20Roll({
+                            characterId,
                             label: `Ataque mágico (${attributeShort(attribute)})`,
                             modifier: character.getEffectiveSpellAttackBonus(attribute, modifier + proficiency),
                             kind: "spell-attack",
@@ -431,7 +434,8 @@ function CompactWeaponTile({ weapon, attack, damageBonus, onClick }: { weapon: W
         className="mt-1 rounded px-1 text-lg font-bold text-textH hover:bg-accentBg hover:text-accent"
         title={rollModifierHint()}
         onClick={(event) =>
-          rollD20({
+          requestD20Roll({
+            characterId: character.get("id"),
             label: `${weapon.name || "Arma"} — ataque`,
             modifier: attack,
             kind: "attack",
@@ -446,7 +450,8 @@ function CompactWeaponTile({ weapon, attack, damageBonus, onClick }: { weapon: W
         className="block w-full rounded text-[10px] font-medium text-textMuted hover:bg-accentBg hover:text-accent"
         title="Clique para rolar o dano."
         onClick={() =>
-          rollDamage({
+          requestDamageRoll({
+            characterId: character.get("id"),
             label: `${weapon.name || "Arma"} — dano`,
             quantity: die.quantity,
             sides: die.sides,
@@ -473,7 +478,8 @@ function CompactUnarmedTile({ character }: { character: CharacterTemplate }) {
         className="mt-1 rounded px-1 text-lg font-bold text-textH hover:bg-accentBg hover:text-accent"
         title={rollModifierHint()}
         onClick={(event) =>
-          rollD20({
+          requestD20Roll({
+            characterId: character.get("id"),
             label: "Ataque desarmado — ataque",
             modifier: profile.attack,
             kind: "attack",
@@ -489,7 +495,7 @@ function CompactUnarmedTile({ character }: { character: CharacterTemplate }) {
         title="Clique para rolar o dano."
         onClick={() => {
           if (damageDie) {
-            rollDamage({
+            requestDamageRoll({
               label: "Ataque desarmado — dano",
               quantity: damageDie.quantity,
               sides: damageDie.sides,
@@ -497,7 +503,8 @@ function CompactUnarmedTile({ character }: { character: CharacterTemplate }) {
             })
             return
           }
-          rollFlatDamage({
+          requestFlatDamageRoll({
+            characterId: character.get("id"),
             label: "Ataque desarmado — dano",
             total: 1 + profile.damageBonus,
           })
