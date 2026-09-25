@@ -14,6 +14,7 @@ import { Modal } from "../../components/ui/Modal"
 import { Textarea } from "../../components/ui/Textarea"
 import { uploadImage } from "../../lib/uploadImage"
 import { DamageAffinityEditor } from "../combat/DamageAffinityEditor"
+import { getCreatureJsonTemplate } from "./creatureCompendiumIO"
 import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../../models/combat/Damage"
 import {
   createCreatureFeature,
@@ -177,8 +178,12 @@ export function CreatureEditorDialog({
                 Preencher criatura com JSON
               </h3>
               <p className="mt-1 text-xs text-textMuted">
-                Habilidades e ações usam listas de objetos com nome e descrição.
-                Textos antigos continuam sendo migrados automaticamente.
+                O JSON aceita todos os campos da ficha, incluindo nome básico,
+                afinidades de dano, mecânicas estruturadas de ataques e drops.
+                Itens em drops aceitam o mesmo schema completo do compêndio de
+                itens; o modelo mostra um item comum mínimo. IDs e timestamps
+                são gerados automaticamente. Formatos antigos continuam sendo
+                migrados.
               </p>
             </div>
 
@@ -844,24 +849,4 @@ function optionalNumber(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
-const JSON_PLACEHOLDER = `{
-  "name": "Goblin",
-  "armorClass": 15,
-  "maxHp": 7,
-  "traits": [
-    {
-      "name": "Escapada Ágil",
-      "description": "O goblin pode usar Desengajar ou Esconder como ação bônus."
-    }
-  ],
-  "actions": [
-    {
-      "name": "Cimitarra",
-      "description": "Ataque corpo a corpo com arma: +4 para atingir."
-    }
-  ],
-  "bonusActions": [],
-  "reactions": [],
-  "legendaryActions": [],
-  "imageUrl": "https://..."
-}`
+const JSON_PLACEHOLDER = getCreatureJsonTemplate()
