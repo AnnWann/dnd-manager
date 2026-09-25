@@ -56,22 +56,23 @@ export function resolveSpellCastAction(args: {
     createdAt: new Date().toISOString(),
   };
 
+  const instanceCount = Math.max(
+    1,
+    evaluateSpellScaledNumber(resolution.instances, context, 1),
+  );
+
   if (resolution.roll.type === "attack") {
-    const attackCount = Math.max(
-      1,
-      evaluateSpellScaledNumber(resolution.roll.count, context, 1),
-    );
     const attackModifier = character.getEffectiveSpellAttackBonus(
       attribute,
       modifier + proficiency,
     );
     const instances: SessionActionInstanceResult[] = Array.from(
-      { length: attackCount },
+      { length: instanceCount },
       (_, index) => {
         const attack = rollD20(mode, attackModifier);
         const critical = attack.natural === 20;
         return {
-          label: attackCount > 1 ? `Ataque ${index + 1}` : "Ataque",
+          label: instanceCount > 1 ? `Ataque ${index + 1}` : "Ataque",
           attack,
           damages: resolveDamageComponents(
             character,
@@ -111,6 +112,24 @@ export function resolveSpellCastAction(args: {
         false,
         new Set(["failed-save", "successful-save", "always"]),
       ),
+      critical: false,
+    };
+  }
+
+  if (instanceCount > 1) {
+    return {
+      ...base,
+      instances: Array.from({ length: instanceCount }, (_, index) => ({
+        label: `Instância ${index + 1}`,
+        damages: resolveDamageComponents(
+          character,
+          resolution.damage ?? [],
+          context,
+          attribute,
+          false,
+          new Set(["always"]),
+        ),
+      })),
       critical: false,
     };
   }
