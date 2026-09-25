@@ -27,7 +27,7 @@ export type SessionDiceDamageSource =
   | { type: "unarmed-damage" }
 
 export type SessionDiceManualSource =
-  | { type: "manual"; expression: string }
+  | { type: "manual"; expression: string; initiativeEntryId?: string }
 
 export type SessionDiceRollSource =
   | SessionDiceD20Source
@@ -36,7 +36,7 @@ export type SessionDiceRollSource =
 
 export type SessionDiceRollRequest = {
   requestId: string
-  characterId: string
+  characterId?: string
   label: string
   mode: SessionDiceRollMode
   source: SessionDiceRollSource
@@ -53,7 +53,7 @@ export type SessionDiceRollResult = {
   id: string
   requestId: string
   actorId: string
-  characterId: string
+  characterId?: string
   sourceName?: string
   label: string
   kind: SessionDiceRollKind

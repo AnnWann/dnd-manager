@@ -382,10 +382,28 @@ function isActionRollRequest(value: unknown): value is SessionActionRollRequest 
 function isDiceRollRequest(value: unknown): value is SessionDiceRollRequest {
   if (!isRecord(value)) return false;
   if (!nonEmpty(value.requestId) || value.requestId.length > 120) return false;
-  if (!nonEmpty(value.characterId) || value.characterId.length > 120) return false;
   if (typeof value.label !== "string" || value.label.trim().length === 0 || value.label.length > 160) return false;
   if (!diceRollMode(value.mode) || !isDiceRollSource(value.source)) return false;
-  if (value.source.type === "manual") return value.mode === "normal";
+
+  if (value.source.type === "manual") {
+    if (
+      value.characterId !== undefined
+      && (!nonEmpty(value.characterId) || value.characterId.length > 120)
+    ) return false;
+    if (
+      value.source.initiativeEntryId !== undefined
+      && (
+        !nonEmpty(value.source.initiativeEntryId)
+        || value.source.initiativeEntryId.length > 200
+      )
+    ) return false;
+    if (value.characterId !== undefined && value.source.initiativeEntryId !== undefined) {
+      return false;
+    }
+    return value.mode === "normal";
+  }
+
+  if (!nonEmpty(value.characterId) || value.characterId.length > 120) return false;
   return value.source.type !== "weapon-damage"
     && value.source.type !== "unarmed-damage"
     ? true
@@ -410,7 +428,11 @@ function isDiceRollSource(value: unknown): boolean {
       return nonEmpty(value.weaponId) && value.weaponId.length <= 160;
     case "manual":
       return typeof value.expression === "string"
-        && parseManualDiceExpression(value.expression).ok;
+        && parseManualDiceExpression(value.expression).ok
+        && (
+          value.initiativeEntryId === undefined
+          || (nonEmpty(value.initiativeEntryId) && value.initiativeEntryId.length <= 200)
+        );
     default:
       return false;
   }

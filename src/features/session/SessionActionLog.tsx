@@ -2,6 +2,7 @@ import { ChevronDown, ChevronUp, Dices, History, PanelRightClose, PanelRightOpen
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
+import { useInitiativeRollSelection } from "../initiative/initiativeRollSelection"
 import { ACTION_ROLL_RESULT_EVENT, DICE_ROLL_RESULT_EVENT, requestManualDiceRoll } from "../../lib/diceRoller"
 import type { SessionActionRollResult, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
 import { DAMAGE_TYPES, damageTypeLabel, type DamageType } from "../../models/combat/Damage"
@@ -44,6 +45,7 @@ export function SessionActionLog() {
   const { activeCharacter, operationLog, visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
   const runtime = useOptionalSessionRuntime()
   const logRuntime = useOptionalSessionRuntimeLog()
+  const initiativeRollSelection = useInitiativeRollSelection()
   const sessionLog = (logRuntime?.hpLog ?? []) as SessionLogRecord[]
   const customSystemDefinitions = runtime?.runtimeConfigSnapshot?.config.customSystems ?? []
   const isMaster = runtime?.role === "MASTER"
@@ -136,6 +138,18 @@ export function SessionActionLog() {
     )
   }, [collapsed])
 
+  const manualRollTarget = initiativeRollSelection
+    ? {
+        initiativeEntryId: initiativeRollSelection.entryId,
+        label: initiativeRollSelection.name,
+      }
+    : activeCharacter
+      ? {
+          characterId: activeCharacter.get("id"),
+          label: activeCharacter.get("name"),
+        }
+      : undefined
+
   const title = activeView === "logs" ? "Logs da sessão" : "Rolagens"
   const subtitle = activeView === "logs"
     ? `${records.length} ações recentes`
@@ -199,7 +213,8 @@ export function SessionActionLog() {
       <DiceRollPanel
         entries={rollFeed}
         characterNames={characterNames}
-        characterId={activeCharacter?.get("id") ?? visibleCharacters[0]?.get("id")}
+        manualTarget={manualRollTarget}
+        allowAnonymous={isMaster}
         onClear={() => setRollFeed([])}
       />
     )
@@ -334,26 +349,36 @@ export function SessionActionLog() {
 function DiceRollPanel({
   entries,
   characterNames,
-  characterId,
+  manualTarget,
+  allowAnonymous,
   onClear,
 }: {
   entries: RollFeedEntry[]
   characterNames: ReadonlyMap<string, string>
-  characterId?: string
+  manualTarget?: {
+    characterId?: string
+    initiativeEntryId?: string
+    label: string
+  }
+  allowAnonymous: boolean
   onClear: () => void
 }) {
   const [manualExpression, setManualExpression] = useState("")
   const [manualError, setManualError] = useState("")
+  const [attributionMode, setAttributionMode] = useState<"selected" | "none">("selected")
 
   function submitManualRoll(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!characterId) {
-      setManualError("Nenhum personagem visível está disponível para associar à rolagem.")
+
+    const anonymous = allowAnonymous && attributionMode === "none"
+    if (!anonymous && !manualTarget) {
+      setManualError("Nenhum personagem ou participante da iniciativa está selecionado.")
       return
     }
 
     const result = requestManualDiceRoll({
-      characterId,
+      characterId: anonymous ? undefined : manualTarget?.characterId,
+      initiativeEntryId: anonymous ? undefined : manualTarget?.initiativeEntryId,
       expression: manualExpression,
     })
     if (!result.ok) {
@@ -374,6 +399,30 @@ function DiceRollPanel({
         <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
           Rolagem manual
         </div>
+        <div className="grid gap-1">
+          <label className="text-[9px] font-medium uppercase tracking-wide text-textMuted">
+            Identificação
+          </label>
+          {allowAnonymous ? (
+            <select
+              value={attributionMode}
+              onChange={(event) => {
+                setAttributionMode(event.target.value as "selected" | "none")
+                if (manualError) setManualError("")
+              }}
+              className="h-8 w-full rounded-lg border border-border bg-bg-subtle px-2 text-[11px] text-textH outline-none focus:border-accentBorder"
+            >
+              <option value="selected" disabled={!manualTarget}>
+                {manualTarget?.label ?? "Nenhum participante selecionado"}
+              </option>
+              <option value="none">Sem identificador</option>
+            </select>
+          ) : (
+            <div className="rounded-lg border border-border bg-bg-subtle px-2 py-1.5 text-[11px] text-textH">
+              {manualTarget?.label ?? "Personagem"}
+            </div>
+          )}
+        </div>
         <div className="flex gap-2">
           <input
             type="text"
@@ -388,7 +437,10 @@ function DiceRollPanel({
           />
           <button
             type="submit"
-            disabled={!manualExpression.trim() || !characterId}
+            disabled={
+              !manualExpression.trim()
+              || (attributionMode === "selected" && !manualTarget)
+            }
             className="shrink-0 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH transition-colors hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-40"
           >
             Rolar
@@ -426,13 +478,23 @@ function DiceRollPanel({
               <ActionRollEntry
                 key={entry.result.id}
                 roll={entry.result}
-                characterName={characterNames.get(entry.result.characterId) ?? entry.result.sourceName}
+                characterName={
+                  (entry.result.characterId
+                    ? characterNames.get(entry.result.characterId)
+                    : undefined)
+                  ?? entry.result.sourceName
+                }
               />
             ) : (
               <DiceRollEntry
                 key={entry.result.id}
                 roll={entry.result}
-                characterName={characterNames.get(entry.result.characterId) ?? entry.result.sourceName}
+                characterName={
+                  (entry.result.characterId
+                    ? characterNames.get(entry.result.characterId)
+                    : undefined)
+                  ?? entry.result.sourceName
+                }
               />
             ))}
           </div>
@@ -538,7 +600,9 @@ function ActionRollEntry({
         ) : null}
 
         <div className="flex items-center justify-between gap-2 text-[10px] text-textMuted">
-          <span className="truncate">{characterName || "Personagem"}</span>
+          <span className="truncate">
+          {characterName || (roll.kind === "manual" && !roll.characterId ? "Sem identificador" : "Personagem")}
+        </span>
           <time dateTime={roll.createdAt}>{formatTime(roll.createdAt)}</time>
         </div>
       </div>
@@ -650,7 +714,9 @@ function DiceRollEntry({
       </div>
 
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2 text-[10px] text-textMuted">
-        <span className="truncate">{characterName || "Personagem"}</span>
+        <span className="truncate">
+          {characterName || (roll.kind === "manual" && !roll.characterId ? "Sem identificador" : "Personagem")}
+        </span>
         <time dateTime={roll.createdAt}>{formatTime(roll.createdAt)}</time>
       </div>
     </article>
