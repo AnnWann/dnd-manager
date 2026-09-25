@@ -97,8 +97,7 @@ export function Attributes({ character, updateCharacter }: Props) {
                       requestD20Roll({
                         characterId: character.get("id"),
                         label: `Teste de ${attributeLabel(attribute)}`,
-                        modifier: displayedModifier,
-                        kind: "ability",
+                        source: { type: "ability", attribute },
                         mode: rollModeFromEvent(event.nativeEvent),
                       })
                     }
