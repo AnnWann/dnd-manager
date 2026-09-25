@@ -240,7 +240,13 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
 
-    const resolved = resolveServerDiceRoll(request, connection.userId, character);
+    let resolved: DiceResolution;
+    try {
+      resolved = resolveServerDiceRoll(request, connection.userId, character);
+    } catch {
+      this.sendError(webSocket, "ROLL_RESOLUTION_FAILED", "The authoritative roll could not be resolved.");
+      return;
+    }
     if (!resolved.ok) {
       this.sendError(webSocket, resolved.code, resolved.message);
       return;
