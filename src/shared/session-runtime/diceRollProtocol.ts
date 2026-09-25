@@ -61,7 +61,6 @@ export type SessionDiceRollResult = {
 export type SessionActionRollSource =
   | { type: "weapon"; weaponId: string }
   | { type: "unarmed" }
-  | { type: "spell"; spellIndex: string; sourceId: string }
   | { type: "ability"; abilityId: string }
 
 export type SessionActionRollRequest = {
