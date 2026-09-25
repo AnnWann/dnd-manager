@@ -1,14 +1,17 @@
 import { FileImage, Shield, Swords } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react"
 
 import { Button } from "../../components/ui/Button"
 import { damageAffinityLabel, damageTypeLabel, type DamageAffinity } from "../../models/combat/Damage"
-import { getCreatureEffectiveArmorClass, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../models/creatures/CreatureCombatRuntime"
+import { requestCreatureRoll, rollModeFromEvent, rollModifierHint } from "../../lib/diceRoller"
+import { CREATURE_ATTRIBUTE_LABELS, parseCreatureSavingThrows, parseCreatureSkills, type ParsedCreatureSave, type ParsedCreatureSkill } from "../../models/creatures/CreatureRolls"
+import { getCreatureEffectiveAbilityModifier, getCreatureEffectiveArmorClass, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../models/creatures/CreatureCombatRuntime"
 import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
 import type {
   CompendiumCreature,
   CreatureFeature,
 } from "../../models/creatures/CompendiumCreature"
+import type { Attribute } from "../../models/sheet/Attribute"
 import type {
   InitiativeEntry,
   InitiativeSide,
@@ -25,6 +28,11 @@ export type QuickSheetSection = {
   entries?: QuickSheetFeature[]
 }
 
+export type CreatureQuickSheetRollContext = {
+  creatureId: string
+  initiativeEntryId?: string
+}
+
 export type CombatQuickSheetData = {
   id: string
   name: string
@@ -39,9 +47,13 @@ export type CombatQuickSheetData = {
   speed?: string
   passivePerception?: number
   challengeRating?: string
-  abilityScores?: Record<"str" | "dex" | "con" | "int" | "wis" | "cha", number>
+  abilityScores?: Record<Attribute, number>
+  abilityModifiers?: Record<Attribute, number>
   savingThrows?: string
+  savingThrowRolls?: ParsedCreatureSave[]
   skills?: string
+  skillRolls?: ParsedCreatureSkill[]
+  rollContext?: CreatureQuickSheetRollContext
   vulnerabilities?: string
   resistances?: string
   immunities?: string
@@ -134,7 +146,18 @@ function QuickSheetSummary({ data, compact = false }: { data: CombatQuickSheetDa
   return (
     <div className="grid gap-4">
       <div className={`grid gap-2 ${compact ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"}`}>
-        <StatCard label="Iniciativa" value={signed(data.initiativeBonus)} />
+        <StatCard
+          label="Iniciativa"
+          value={signed(data.initiativeBonus)}
+          rollable={Boolean(data.rollContext)}
+          onRoll={(event) =>
+            data.rollContext && requestCreatureRoll({
+              ...data.rollContext,
+              source: { type: "initiative" },
+              mode: rollModeFromEvent(event.nativeEvent),
+            })
+          }
+        />
         <StatCard label="CA" value={displayNumber(data.armorClass)} />
         <StatCard
           label="PV"
@@ -157,22 +180,46 @@ function QuickSheetSummary({ data, compact = false }: { data: CombatQuickSheetDa
 
       {data.abilityScores ? (
         <div className={`grid gap-2 ${compact ? "grid-cols-3" : "grid-cols-3 sm:grid-cols-6"}`}>
-          {Object.entries(data.abilityScores).map(([attribute, score]) => (
-            <div
-              key={attribute}
-              className="rounded-lg border border-border bg-bg-subtle p-3 text-center"
-            >
-              <div className="text-[10px] font-bold uppercase text-textMuted">
-                {attribute}
+          {(Object.entries(data.abilityScores) as Array<[Attribute, number]>).map(([attribute, score]) => {
+            const modifier = data.abilityModifiers?.[attribute] ?? Math.floor((score - 10) / 2)
+            const content = (
+              <>
+                <div className="text-[10px] font-bold uppercase text-textMuted">
+                  {CREATURE_ATTRIBUTE_LABELS[attribute]}
+                </div>
+                <div className="mt-1 text-lg font-semibold text-textH">
+                  {score}
+                </div>
+                <div className="text-xs text-textMuted">
+                  {signed(modifier)}
+                </div>
+              </>
+            )
+            return data.rollContext ? (
+              <button
+                key={attribute}
+                type="button"
+                className="rounded-lg border border-border bg-bg-subtle p-3 text-center transition-colors hover:border-accentBorder hover:bg-accentBg"
+                title={rollModifierHint()}
+                onClick={(event) =>
+                  requestCreatureRoll({
+                    ...data.rollContext!,
+                    source: { type: "ability", attribute },
+                    mode: rollModeFromEvent(event.nativeEvent),
+                  })
+                }
+              >
+                {content}
+              </button>
+            ) : (
+              <div
+                key={attribute}
+                className="rounded-lg border border-border bg-bg-subtle p-3 text-center"
+              >
+                {content}
               </div>
-              <div className="mt-1 text-lg font-semibold text-textH">
-                {score}
-              </div>
-              <div className="text-xs text-textMuted">
-                {signed(Math.floor((score - 10) / 2))}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       ) : null}
 
@@ -198,8 +245,34 @@ function QuickSheetSummary({ data, compact = false }: { data: CombatQuickSheetDa
       ) : null}
 
       <div className={`grid gap-3 ${compact ? "grid-cols-1" : "md:grid-cols-2"}`}>
-        <OptionalInfo title="Testes de resistência" content={data.savingThrows} />
-        <OptionalInfo title="Perícias" content={data.skills} />
+        {data.rollContext && data.savingThrowRolls?.length ? (
+          <CreatureRollList
+            title="Testes de resistência"
+            entries={data.savingThrowRolls.map((entry) => ({
+              key: entry.attribute,
+              label: entry.label,
+              bonus: entry.bonus,
+              source: { type: "save" as const, attribute: entry.attribute },
+            }))}
+            rollContext={data.rollContext}
+          />
+        ) : (
+          <OptionalInfo title="Testes de resistência" content={data.savingThrows} />
+        )}
+        {data.rollContext && data.skillRolls?.length ? (
+          <CreatureRollList
+            title="Perícias"
+            entries={data.skillRolls.map((entry) => ({
+              key: entry.skill,
+              label: entry.label,
+              bonus: entry.bonus,
+              source: { type: "skill" as const, skill: entry.skill },
+            }))}
+            rollContext={data.rollContext}
+          />
+        ) : (
+          <OptionalInfo title="Perícias" content={data.skills} />
+        )}
         <OptionalInfo title="Vulnerabilidades" content={data.vulnerabilities} />
         <OptionalInfo title="Resistências" content={data.resistances} />
         <OptionalInfo title="Imunidades" content={data.immunities} />
@@ -219,6 +292,7 @@ function QuickSheetSummary({ data, compact = false }: { data: CombatQuickSheetDa
               key={section.title}
               title={section.title}
               entries={section.entries}
+              rollContext={data.rollContext}
             />
           ) : (
             <InfoBlock
@@ -235,9 +309,11 @@ function QuickSheetSummary({ data, compact = false }: { data: CombatQuickSheetDa
 function FeatureSection({
   title,
   entries,
+  rollContext,
 }: {
   title: string
   entries: QuickSheetFeature[]
+  rollContext?: CreatureQuickSheetRollContext
 }) {
   return (
     <section className="rounded-xl border border-border bg-bg-subtle p-4">
@@ -251,9 +327,26 @@ function FeatureSection({
             <h5 className="text-sm font-semibold text-textH">{entry.name}</h5>
             {entry.mechanics ? (
               <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-                <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-1 font-semibold text-accent">
-                  Ataque {signed(entry.effectiveAttackBonus ?? entry.mechanics.attackBonus)}
-                </span>
+                {rollContext ? (
+                  <button
+                    type="button"
+                    className="rounded-full border border-accentBorder bg-accentBg px-2 py-1 font-semibold text-accent transition-colors hover:bg-bg-subtle"
+                    title={rollModifierHint()}
+                    onClick={(event) =>
+                      requestCreatureRoll({
+                        ...rollContext,
+                        source: { type: "feature", featureId: entry.id },
+                        mode: rollModeFromEvent(event.nativeEvent),
+                      })
+                    }
+                  >
+                    Ataque {signed(entry.effectiveAttackBonus ?? entry.mechanics.attackBonus)}
+                  </button>
+                ) : (
+                  <span className="rounded-full border border-accentBorder bg-accentBg px-2 py-1 font-semibold text-accent">
+                    Ataque {signed(entry.effectiveAttackBonus ?? entry.mechanics.attackBonus)}
+                  </span>
+                )}
                 {entry.mechanics.reach ? <span className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-textMuted">{entry.mechanics.reach}</span> : null}
                 {entry.mechanics.damage.map((part, index) => (
                   <span key={`${part.damageType}:${index}`} className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-textH">
@@ -278,19 +371,77 @@ function StatCard({
   label,
   value,
   detail,
+  rollable = false,
+  onRoll,
 }: {
   label: string
   value: string
   detail?: string
+  rollable?: boolean
+  onRoll?: (event: ReactMouseEvent<HTMLButtonElement>) => void
 }) {
-  return (
-    <div className="rounded-lg border border-border bg-bg-subtle p-3">
+  const content = (
+    <>
       <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
         {label}
       </div>
       <div className="mt-1 text-lg font-semibold text-textH">{value}</div>
       {detail ? <div className="text-xs text-accent">{detail}</div> : null}
-    </div>
+    </>
+  )
+  return rollable && onRoll ? (
+    <button
+      type="button"
+      className="rounded-lg border border-border bg-bg-subtle p-3 text-left transition-colors hover:border-accentBorder hover:bg-accentBg"
+      title={rollModifierHint()}
+      onClick={onRoll}
+    >
+      {content}
+    </button>
+  ) : (
+    <div className="rounded-lg border border-border bg-bg-subtle p-3">{content}</div>
+  )
+}
+
+function CreatureRollList({
+  title,
+  entries,
+  rollContext,
+}: {
+  title: string
+  entries: Array<{
+    key: string
+    label: string
+    bonus: number
+    source:
+      | { type: "save"; attribute: Attribute }
+      | { type: "skill"; skill: string }
+  }>
+  rollContext: CreatureQuickSheetRollContext
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-bg-subtle p-4">
+      <div className="mb-2 text-sm font-semibold text-textH">{title}</div>
+      <div className="flex flex-wrap gap-2">
+        {entries.map((entry) => (
+          <button
+            key={entry.key}
+            type="button"
+            className="rounded-full border border-border bg-bg px-2.5 py-1 text-xs font-medium text-textH transition-colors hover:border-accentBorder hover:bg-accentBg"
+            title={rollModifierHint()}
+            onClick={(event) =>
+              requestCreatureRoll({
+                ...rollContext,
+                source: entry.source,
+                mode: rollModeFromEvent(event.nativeEvent),
+              })
+            }
+          >
+            {entry.label} {signed(entry.bonus)}
+          </button>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -330,6 +481,7 @@ function InfoBlock({
 export function quickSheetFromCompendiumCreature(
   creature: CompendiumCreature,
   entry?: InitiativeEntry,
+  options: { enableRolls?: boolean } = {},
 ): CombatQuickSheetData {
   const conditions = entry?.conditions ?? []
   const enrich = (features: CreatureFeature[]): QuickSheetFeature[] =>
@@ -338,6 +490,21 @@ export function quickSheetFromCompendiumCreature(
       effectiveAttackBonus: getCreatureFeatureEffectiveAttackBonus(creature, feature, conditions, entry),
       effectiveDamageBonus: getCreatureFeatureEffectiveDamageBonus(creature, feature, conditions, entry),
     }))
+  const abilityModifiers = Object.fromEntries(
+    (Object.keys(creature.abilityScores) as Attribute[]).map((attribute) => [
+      attribute,
+      getCreatureEffectiveAbilityModifier(creature, attribute, conditions, entry),
+    ]),
+  ) as Record<Attribute, number>
+  const savingThrowRolls = parseCreatureSavingThrows(creature.savingThrows).map((save) => ({
+    ...save,
+    bonus: getCreatureEffectiveSaveBonus(creature, save.attribute, conditions, entry),
+  }))
+  const skillRolls = parseCreatureSkills(creature.skills).map((skill) => ({
+    ...skill,
+    bonus: getCreatureEffectiveSkillBonus(creature, skill.skill, conditions, entry) ?? skill.bonus,
+  }))
+
   return {
     id: creature.id,
     name: creature.name,
@@ -346,7 +513,7 @@ export function quickSheetFromCompendiumCreature(
       .join(" • "),
     side: entry?.side ?? creature.defaultSide,
     sheetImageUrl: creature.sheetImageUrl,
-    initiativeBonus: creature.initiativeBonus,
+    initiativeBonus: getCreatureEffectiveInitiative(creature, conditions, entry),
     armorClass: getCreatureEffectiveArmorClass(creature, conditions, entry),
     currentHp: entry?.currentHp ?? creature.maxHp,
     maxHp: entry?.maxHp ?? creature.maxHp,
@@ -355,8 +522,14 @@ export function quickSheetFromCompendiumCreature(
     passivePerception: creature.passivePerception,
     challengeRating: creature.challengeRating,
     abilityScores: creature.abilityScores,
+    abilityModifiers,
     savingThrows: creature.savingThrows,
+    savingThrowRolls,
     skills: creature.skills,
+    skillRolls,
+    rollContext: options.enableRolls
+      ? { creatureId: creature.id, initiativeEntryId: entry?.id }
+      : undefined,
     vulnerabilities: creature.vulnerabilities,
     resistances: creature.resistances,
     immunities: creature.immunities,
