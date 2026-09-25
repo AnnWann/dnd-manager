@@ -117,7 +117,7 @@ export function SpellCreatorModule({
           : { type: "none" },
       damage: value.damageDice
         ? [{
-            id: crypto.randomUUID(),
+            id: "legacy-damage",
             label: "Dano",
             dice: { ...value.damageDice },
             appliesOn: value.targeting.hasAttackRoll
@@ -389,6 +389,8 @@ export function SpellCreatorModule({
       ? spell.classes.filter((entry) => entry !== className)
       : [...spell.classes, className]
   }
+
+  const resolution = currentResolution()
 
   return (
     <Card>
@@ -791,7 +793,7 @@ export function SpellCreatorModule({
               Tipo de resolução
               <SharedSelect
                 className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-text"
-                value={currentResolution().roll.type}
+                value={resolution.roll.type}
                 onChange={(event) =>
                   setResolutionRollType(
                     event.target.value as SpellResolution["roll"]["type"],
@@ -804,23 +806,23 @@ export function SpellCreatorModule({
               </SharedSelect>
             </label>
 
-            {currentResolution().roll.type === "attack" ? (
+            {resolution.roll.type === "attack" ? (
               <div className="grid gap-3 rounded-lg border border-border bg-bg-subtle p-3">
                 <label className="grid gap-1 text-xs text-text">
                   Quantidade base de ataques/projéteis
                   <Input
                     type="number"
                     min={1}
-                    value={currentResolution().roll.type === "attack"
-                      ? currentResolution().roll.count?.base ?? 1
+                    value={resolution.roll.type === "attack"
+                      ? resolution.roll.count?.base ?? 1
                       : 1}
                     onChange={(event) => updateAttackCount(Number(event.target.value))}
                   />
                 </label>
                 <ScalingEditor
                   label="Escalonamento da quantidade de ataques"
-                  scaling={currentResolution().roll.type === "attack"
-                    ? currentResolution().roll.count?.scaling
+                  scaling={resolution.roll.type === "attack"
+                    ? resolution.roll.count?.scaling
                     : undefined}
                   defaultStartLevel={spell.slotLevel}
                   onChange={updateAttackScaling}
@@ -828,14 +830,14 @@ export function SpellCreatorModule({
               </div>
             ) : null}
 
-            {currentResolution().roll.type === "save" ? (
+            {resolution.roll.type === "save" ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1 text-xs text-text">
                   Atributo da resistência
                   <SharedSelect
                     className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-text"
-                    value={currentResolution().roll.type === "save"
-                      ? currentResolution().roll.attribute
+                    value={resolution.roll.type === "save"
+                      ? resolution.roll.attribute
                       : "dex"}
                     onChange={(event) =>
                       updateSave({ attribute: event.target.value as Attribute })
@@ -853,8 +855,8 @@ export function SpellCreatorModule({
                   Em um sucesso
                   <SharedSelect
                     className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-text"
-                    value={currentResolution().roll.type === "save"
-                      ? currentResolution().roll.onSuccess
+                    value={resolution.roll.type === "save"
+                      ? resolution.roll.onSuccess
                       : "none"}
                     onChange={(event) =>
                       updateSave({
@@ -877,7 +879,7 @@ export function SpellCreatorModule({
               </Button>
             </div>
 
-            {(currentResolution().damage ?? []).map((damage, index) => (
+            {(resolution.damage ?? []).map((damage, index) => (
               <div key={damage.id} className="grid gap-3 rounded-lg border border-border bg-bg-subtle p-3">
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Input
