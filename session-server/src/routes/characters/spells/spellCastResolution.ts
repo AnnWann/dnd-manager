@@ -14,6 +14,10 @@ import type {
   SessionResolvedDamageRoll,
 } from "../../../../../src/shared/session-runtime/diceRollProtocol";
 
+const MAX_SPELL_INSTANCES = 100;
+const MAX_SPELL_DAMAGE_COMPONENTS = 20;
+const MAX_DICE_PER_DAMAGE_COMPONENT = 200;
+
 export function resolveSpellCastAction(args: {
   requestId: string;
   actorId: string;
@@ -56,10 +60,17 @@ export function resolveSpellCastAction(args: {
     createdAt: new Date().toISOString(),
   };
 
+  if ((resolution.damage?.length ?? 0) > MAX_SPELL_DAMAGE_COMPONENTS) {
+    throw new Error("Spell resolution has too many damage components.");
+  }
+
   const instanceCount = Math.max(
     1,
     evaluateSpellScaledNumber(resolution.instances, context, 1),
   );
+  if (instanceCount > MAX_SPELL_INSTANCES) {
+    throw new Error("Spell resolution has too many independent instances.");
+  }
 
   if (resolution.roll.type === "attack") {
     const attackModifier = character.getEffectiveSpellAttackBonus(
@@ -165,6 +176,9 @@ function resolveDamageComponents(
       const quantity = critical && doublesOnCritical
         ? baseQuantity * 2
         : baseQuantity;
+      if (quantity > MAX_DICE_PER_DAMAGE_COMPONENT) {
+        throw new Error("Spell damage component rolls too many dice.");
+      }
       const sides = parseDieSides(component.dice.sides);
       const groups = quantity > 0
         ? [{
