@@ -26,6 +26,7 @@ type Props = {
   onUse?: () => void
   onDeactivate?: () => void
   onRestore?: () => void
+  onAnnounce?: () => void
 }
 
 function summaryLabel(ability: Ability) {
@@ -64,6 +65,7 @@ export function AbilityCard({
   onUse,
   onDeactivate,
   onRestore,
+  onAnnounce,
 }: Props) {
   const { getSpellByIndex } = useMagicContext()
   const [expanded, setExpanded] = useState(false)
@@ -211,6 +213,12 @@ export function AbilityCard({
       </div>
 
       <div className="flex flex-wrap gap-2 md:justify-end">
+        {onAnnounce ? (
+          <Button size="sm" variant="primary" onClick={onAnnounce}>
+            Mostrar
+          </Button>
+        ) : null}
+
         {onEdit ? (
           <Button size="sm" variant="secondary" onClick={onEdit}>Editar</Button>
         ) : null}
