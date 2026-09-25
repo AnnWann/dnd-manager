@@ -1,148 +1,92 @@
-export type DiceRollMode = "normal" | "advantage" | "disadvantage"
-export type DiceRollKind =
-  | "ability"
-  | "skill"
-  | "save"
-  | "initiative"
-  | "attack"
-  | "damage"
-  | "spell-attack"
-  | "custom"
+import type {
+  SessionDiceRollKind,
+  SessionDiceRollMode,
+  SessionDiceRollRequest,
+  SessionDiceRollResult,
+} from "../shared/session-runtime/diceRollProtocol"
 
-export type DiceRollGroup = {
-  quantity: number
-  sides: number
-  rolls: number[]
-  kept?: number
-}
+export const DICE_ROLL_REQUEST_EVENT = "dndmm:dice-roll-request"
+export const DICE_ROLL_RESULT_EVENT = "dndmm:dice-roll-result"
 
-export type DiceRollResult = {
-  id: string
-  label: string
-  kind: DiceRollKind
-  mode: DiceRollMode
-  groups: DiceRollGroup[]
-  modifier: number
-  total: number
-  natural?: number
-  createdAt: number
-}
-
-export const DICE_ROLL_EVENT = "dndmm:dice-roll"
-
-export function rollD20(input: {
+export function requestD20Roll(input: {
+  characterId: string
   label: string
   modifier?: number
-  kind: Exclude<DiceRollKind, "damage">
-  mode?: DiceRollMode
-}): DiceRollResult {
-  const mode = input.mode ?? "normal"
-  const rolls =
-    mode === "normal"
-      ? [rollDie(20)]
-      : [rollDie(20), rollDie(20)]
-
-  const kept =
-    mode === "advantage"
-      ? Math.max(...rolls)
-      : mode === "disadvantage"
-        ? Math.min(...rolls)
-        : rolls[0]
-
-  return publishRoll({
+  kind: Exclude<SessionDiceRollKind, "damage">
+  mode?: SessionDiceRollMode
+}): void {
+  publishRequest({
+    requestId: createRequestId(),
+    characterId: input.characterId,
     label: input.label,
     kind: input.kind,
-    mode,
-    groups: [{ quantity: rolls.length, sides: 20, rolls, kept }],
+    mode: input.mode ?? "normal",
+    groups: [{ quantity: 1, sides: 20 }],
     modifier: input.modifier ?? 0,
-    total: kept + (input.modifier ?? 0),
-    natural: kept,
   })
 }
 
-export function rollDamage(input: {
+export function requestDamageRoll(input: {
+  characterId: string
   label: string
   quantity: number
   sides: number | string
   modifier?: number
-}): DiceRollResult {
-  const sides = normalizeSides(input.sides)
-  const quantity = Math.max(1, Math.trunc(input.quantity) || 1)
-  const rolls = Array.from({ length: quantity }, () => rollDie(sides))
-  const modifier = input.modifier ?? 0
-
-  return publishRoll({
+}): void {
+  publishRequest({
+    requestId: createRequestId(),
+    characterId: input.characterId,
     label: input.label,
     kind: "damage",
     mode: "normal",
-    groups: [{ quantity, sides, rolls }],
-    modifier,
-    total: rolls.reduce((sum, value) => sum + value, 0) + modifier,
+    groups: [{
+      quantity: Math.max(1, Math.trunc(input.quantity) || 1),
+      sides: normalizeSides(input.sides),
+    }],
+    modifier: input.modifier ?? 0,
   })
 }
 
-export function rollFlatDamage(input: {
+export function requestFlatDamageRoll(input: {
+  characterId: string
   label: string
   total: number
-}): DiceRollResult {
-  return publishRoll({
+}): void {
+  publishRequest({
+    requestId: createRequestId(),
+    characterId: input.characterId,
     label: input.label,
     kind: "damage",
     mode: "normal",
     groups: [],
     modifier: input.total,
-    total: input.total,
   })
+}
+
+export function publishServerDiceRoll(result: SessionDiceRollResult): void {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(
+    new CustomEvent<SessionDiceRollResult>(DICE_ROLL_RESULT_EVENT, { detail: result }),
+  )
 }
 
 export function rollModeFromEvent(
   event: Pick<MouseEvent, "shiftKey" | "altKey">,
-): DiceRollMode {
+): SessionDiceRollMode {
   if (event.shiftKey) return "advantage"
   if (event.altKey) return "disadvantage"
   return "normal"
 }
 
 export function rollModifierHint(): string {
-  return "Clique para rolar. Shift: vantagem. Alt: desvantagem."
+  return "Clique para rolar no servidor. Shift: vantagem. Alt: desvantagem."
 }
 
-function publishRoll(
-  value: Omit<DiceRollResult, "id" | "createdAt">,
-): DiceRollResult {
-  const result: DiceRollResult = {
-    ...value,
-    id: createRollId(),
-    createdAt: Date.now(),
-  }
-
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(
-      new CustomEvent<DiceRollResult>(DICE_ROLL_EVENT, { detail: result }),
-    )
-  }
-
-  return result
-}
-
-function rollDie(sides: number): number {
-  if (!Number.isInteger(sides) || sides < 2) {
-    throw new Error(`Invalid die sides: ${sides}`)
-  }
-
-  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
-    const range = 0x1_0000_0000
-    const limit = range - (range % sides)
-    const buffer = new Uint32Array(1)
-
-    do {
-      crypto.getRandomValues(buffer)
-    } while (buffer[0] >= limit)
-
-    return (buffer[0] % sides) + 1
-  }
-
-  return Math.floor(Math.random() * sides) + 1
+function publishRequest(request: SessionDiceRollRequest): void {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(
+    new CustomEvent<SessionDiceRollRequest>(DICE_ROLL_REQUEST_EVENT, { detail: request }),
+  )
 }
 
 function normalizeSides(value: number | string): number {
@@ -158,7 +102,7 @@ function normalizeSides(value: number | string): number {
   return parsed
 }
 
-function createRollId(): string {
+function createRequestId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID()
   }
