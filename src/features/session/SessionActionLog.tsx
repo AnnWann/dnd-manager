@@ -1,4 +1,4 @@
-import { Dices, History, PanelRightClose, PanelRightOpen, Undo2 } from "lucide-react"
+import { ChevronDown, ChevronUp, Dices, History, PanelRightClose, PanelRightOpen, Undo2 } from "lucide-react"
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
@@ -54,6 +54,7 @@ export function SessionActionLog() {
     if (typeof window === "undefined") return false
     return window.localStorage.getItem(SESSION_PANEL_COLLAPSED_STORAGE_KEY) === "1"
   })
+  const [mobileOpen, setMobileOpen] = useState(false)
   const activeView: PanelView = isMaster ? panelView : "dice"
 
   const characterNames = useMemo(
@@ -141,136 +142,192 @@ export function SessionActionLog() {
     : `${rollFeed.length} rolagens recentes`
   const PanelIcon = activeView === "logs" ? History : Dices
 
-  if (collapsed) {
-    return (
-      <aside className="hidden w-14 shrink-0 flex-col items-center border-l border-border bg-bg-elevated xl:flex">
-        <div className="flex h-16 w-full shrink-0 items-center justify-center border-b border-border">
-          <button
-            type="button"
-            onClick={() => setCollapsed(false)}
-            className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-bg-subtle text-textMuted transition-colors hover:border-accentBorder hover:bg-accentBg hover:text-textH"
-            title={`Mostrar ${activeView === "logs" ? "logs" : "rolagens"} da sessão`}
-            aria-label={`Mostrar ${activeView === "logs" ? "logs" : "rolagens"} da sessão`}
-          >
-            <PanelRightOpen className="h-4 w-4" />
-          </button>
+  function renderPanelContent() {
+    return activeView === "logs" ? (
+      <>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          {records.length ? (
+            <div className="flex flex-col gap-2">
+              {visibleRecords.map((entry) => entry.source === "session" ? (
+                <SessionLogEntry
+                  key={`session:${entry.record.id}`}
+                  record={entry.record}
+                  characterNames={characterNames}
+                  customSystemDefinitions={customSystemDefinitions}
+                  canUndo={isMaster && isLatestUndoableSessionLog(sessionLog, entry.record)}
+                  onUndo={() => logRuntime?.undoLog(entry.record.id)}
+                />
+              ) : (
+                <LegacyLogEntry
+                  key={`legacy:${entry.record.id}`}
+                  record={entry.record}
+                  characterNames={characterNames}
+                  itemNames={itemNames}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-xs leading-5 text-textMuted">
+              As ações realizadas durante a sessão aparecerão aqui.
+            </div>
+          )}
         </div>
-        <PanelIcon className="mt-3 h-4 w-4 text-textMuted" />
-      </aside>
+
+        {records.length > LOG_PAGE_SIZE ? (
+          <footer className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-border p-3 text-[11px] text-textMuted">
+            <button
+              type="button"
+              disabled={page === 0}
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+              className="rounded-lg border border-border px-2 py-1.5 text-left disabled:cursor-not-allowed disabled:opacity-40 hover:bg-bg-subtle"
+            >
+              Mais recentes
+            </button>
+            <span>{page + 1}/{pageCount}</span>
+            <button
+              type="button"
+              disabled={page >= pageCount - 1}
+              onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}
+              className="rounded-lg border border-border px-2 py-1.5 text-right disabled:cursor-not-allowed disabled:opacity-40 hover:bg-bg-subtle"
+            >
+              Mais antigos
+            </button>
+          </footer>
+        ) : null}
+      </>
+    ) : (
+      <DiceRollPanel
+        entries={rollFeed}
+        characterNames={characterNames}
+        characterId={activeCharacter?.get("id") ?? visibleCharacters[0]?.get("id")}
+        onClear={() => setRollFeed([])}
+      />
+    )
+  }
+
+  function renderViewTabs() {
+    if (!isMaster) return null
+    return (
+      <nav className="grid grid-cols-2 gap-1 border-b border-border bg-bg px-3 py-2" aria-label="Conteúdo do painel da sessão">
+        <button
+          type="button"
+          aria-pressed={activeView === "logs"}
+          onClick={() => setPanelView("logs")}
+          className={
+            activeView === "logs"
+              ? "rounded-lg bg-accentBg px-3 py-2 text-xs font-semibold text-textH"
+              : "rounded-lg px-3 py-2 text-xs font-medium text-textMuted transition-colors hover:bg-bg-subtle hover:text-textH"
+          }
+        >
+          <span className="inline-flex items-center gap-1.5"><History className="h-3.5 w-3.5" /> Logs</span>
+        </button>
+        <button
+          type="button"
+          aria-pressed={activeView === "dice"}
+          onClick={() => setPanelView("dice")}
+          className={
+            activeView === "dice"
+              ? "rounded-lg bg-accentBg px-3 py-2 text-xs font-semibold text-textH"
+              : "rounded-lg px-3 py-2 text-xs font-medium text-textMuted transition-colors hover:bg-bg-subtle hover:text-textH"
+          }
+        >
+          <span className="inline-flex items-center gap-1.5"><Dices className="h-3.5 w-3.5" /> Dados</span>
+        </button>
+      </nav>
     )
   }
 
   return (
-    <aside className="hidden w-80 shrink-0 flex-col border-l border-border bg-bg-elevated xl:flex">
-      <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4">
-        <div className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-bg-subtle text-textMuted">
-          <PanelIcon className="h-4 w-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-textH">{title}</div>
-          <div className="text-xs text-textMuted">{subtitle}</div>
-        </div>
-        <button
-          type="button"
-          onClick={() => setCollapsed(true)}
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-textMuted transition-colors hover:bg-bg-subtle hover:text-textH"
-          title="Ocultar painel da sessão"
-          aria-label="Ocultar painel da sessão"
-        >
-          <PanelRightClose className="h-4 w-4" />
-        </button>
-      </header>
-
-      {isMaster ? (
-        <nav className="grid grid-cols-2 gap-1 border-b border-border bg-bg px-3 py-2" aria-label="Conteúdo do painel da sessão">
-          <button
-            type="button"
-            aria-pressed={activeView === "logs"}
-            onClick={() => setPanelView("logs")}
-            className={
-              activeView === "logs"
-                ? "rounded-lg bg-accentBg px-3 py-2 text-xs font-semibold text-textH"
-                : "rounded-lg px-3 py-2 text-xs font-medium text-textMuted transition-colors hover:bg-bg-subtle hover:text-textH"
-            }
-          >
-            <span className="inline-flex items-center gap-1.5"><History className="h-3.5 w-3.5" /> Logs</span>
-          </button>
-          <button
-            type="button"
-            aria-pressed={activeView === "dice"}
-            onClick={() => setPanelView("dice")}
-            className={
-              activeView === "dice"
-                ? "rounded-lg bg-accentBg px-3 py-2 text-xs font-semibold text-textH"
-                : "rounded-lg px-3 py-2 text-xs font-medium text-textMuted transition-colors hover:bg-bg-subtle hover:text-textH"
-            }
-          >
-            <span className="inline-flex items-center gap-1.5"><Dices className="h-3.5 w-3.5" /> Dados</span>
-          </button>
-        </nav>
-      ) : null}
-
-      {activeView === "logs" ? (
-        <>
-          <div className="min-h-0 flex-1 overflow-y-auto p-3">
-            {records.length ? (
-              <div className="flex flex-col gap-2">
-                {visibleRecords.map((entry) => entry.source === "session" ? (
-                  <SessionLogEntry
-                    key={`session:${entry.record.id}`}
-                    record={entry.record}
-                    characterNames={characterNames}
-                    customSystemDefinitions={customSystemDefinitions}
-                    canUndo={isMaster && isLatestUndoableSessionLog(sessionLog, entry.record)}
-                    onUndo={() => logRuntime?.undoLog(entry.record.id)}
-                  />
-                ) : (
-                  <LegacyLogEntry
-                    key={`legacy:${entry.record.id}`}
-                    record={entry.record}
-                    characterNames={characterNames}
-                    itemNames={itemNames}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-xs leading-5 text-textMuted">
-                As ações realizadas durante a sessão aparecerão aqui.
-              </div>
-            )}
+    <>
+      {collapsed ? (
+        <aside className="hidden w-14 shrink-0 flex-col items-center border-l border-border bg-bg-elevated xl:flex">
+          <div className="flex h-16 w-full shrink-0 items-center justify-center border-b border-border">
+            <button
+              type="button"
+              onClick={() => setCollapsed(false)}
+              className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-bg-subtle text-textMuted transition-colors hover:border-accentBorder hover:bg-accentBg hover:text-textH"
+              title={`Mostrar ${activeView === "logs" ? "logs" : "rolagens"} da sessão`}
+              aria-label={`Mostrar ${activeView === "logs" ? "logs" : "rolagens"} da sessão`}
+            >
+              <PanelRightOpen className="h-4 w-4" />
+            </button>
           </div>
-
-          {records.length > LOG_PAGE_SIZE ? (
-            <footer className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-t border-border p-3 text-[11px] text-textMuted">
-              <button
-                type="button"
-                disabled={page === 0}
-                onClick={() => setPage((current) => Math.max(0, current - 1))}
-                className="rounded-lg border border-border px-2 py-1.5 text-left disabled:cursor-not-allowed disabled:opacity-40 hover:bg-bg-subtle"
-              >
-                Mais recentes
-              </button>
-              <span>{page + 1}/{pageCount}</span>
-              <button
-                type="button"
-                disabled={page >= pageCount - 1}
-                onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))}
-                className="rounded-lg border border-border px-2 py-1.5 text-right disabled:cursor-not-allowed disabled:opacity-40 hover:bg-bg-subtle"
-              >
-                Mais antigos
-              </button>
-            </footer>
-          ) : null}
-        </>
+          <PanelIcon className="mt-3 h-4 w-4 text-textMuted" />
+        </aside>
       ) : (
-        <DiceRollPanel
-          entries={rollFeed}
-          characterNames={characterNames}
-          characterId={activeCharacter?.get("id") ?? visibleCharacters[0]?.get("id")}
-          onClear={() => setRollFeed([])}
-        />
+        <aside className="hidden w-80 shrink-0 flex-col border-l border-border bg-bg-elevated xl:flex">
+          <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border px-4">
+            <div className="grid h-9 w-9 place-items-center rounded-lg border border-border bg-bg-subtle text-textMuted">
+              <PanelIcon className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-textH">{title}</div>
+              <div className="text-xs text-textMuted">{subtitle}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCollapsed(true)}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-textMuted transition-colors hover:bg-bg-subtle hover:text-textH"
+              title="Ocultar painel da sessão"
+              aria-label="Ocultar painel da sessão"
+            >
+              <PanelRightClose className="h-4 w-4" />
+            </button>
+          </header>
+
+          {renderViewTabs()}
+          {renderPanelContent()}
+        </aside>
       )}
-    </aside>
+
+      <div className="xl:hidden">
+        {mobileOpen ? (
+          <button
+            type="button"
+            className="fixed inset-0 z-40 bg-black/35"
+            aria-label="Fechar painel da sessão"
+            onClick={() => setMobileOpen(false)}
+          />
+        ) : null}
+
+        <section
+          className={
+            mobileOpen
+              ? "fixed inset-x-0 bottom-0 z-50 flex max-h-[72dvh] flex-col overflow-hidden rounded-t-2xl border border-b-0 border-border bg-bg-elevated shadow-2xl"
+              : "fixed inset-x-0 bottom-0 z-50 border-t border-border bg-bg-elevated shadow-2xl"
+          }
+          style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+          aria-label={title}
+        >
+          <button
+            type="button"
+            onClick={() => setMobileOpen((current) => !current)}
+            aria-expanded={mobileOpen}
+            className="flex min-h-14 w-full items-center gap-3 px-4 py-2 text-left"
+          >
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-bg-subtle text-textMuted">
+              <PanelIcon className="h-4 w-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-textH">{title}</div>
+              <div className="truncate text-[11px] text-textMuted">{subtitle}</div>
+            </div>
+            {mobileOpen ? (
+              <ChevronDown className="h-5 w-5 shrink-0 text-textMuted" />
+            ) : (
+              <ChevronUp className="h-5 w-5 shrink-0 text-textMuted" />
+            )}
+          </button>
+
+          {mobileOpen ? (
+            <div className="flex min-h-0 flex-1 flex-col border-t border-border">
+              {renderViewTabs()}
+              {renderPanelContent()}
+            </div>
+          ) : null}
+        </section>
+      </div>
+    </>
   )
 }
 
