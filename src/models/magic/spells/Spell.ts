@@ -107,7 +107,7 @@ export type SpellDamageComponent = {
   id: string
   label?: string
   damageType?: string
-  dice: {
+  dice?: {
     quantity: number
     sides: DieSides
   }
