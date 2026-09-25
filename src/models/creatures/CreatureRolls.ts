@@ -1,6 +1,7 @@
 import type { Attribute } from "../sheet/Attribute"
 import type { Skill } from "../sheet/Skills"
-import type { CreatureAbilityScores } from "./CompendiumCreature"
+import type { DamageType } from "../combat/Damage"
+import type { CreatureAbilityScores, CreatureFeatureMechanics } from "./CompendiumCreature"
 
 export const CREATURE_ATTRIBUTE_LABELS: Record<Attribute, string> = {
   str: "FOR",
@@ -58,6 +59,116 @@ const ATTRIBUTE_ALIASES: Array<{ attribute: Attribute; aliases: string[] }> = [
   { attribute: "wis", aliases: ["wis", "sab", "wisdom", "sabedoria"] },
   { attribute: "cha", aliases: ["cha", "car", "charisma", "carisma"] },
 ]
+
+export function inferCreatureAttackMechanics(
+  description: string | undefined,
+): CreatureFeatureMechanics | undefined {
+  const text = description?.trim()
+  if (!text) return undefined
+
+  const attackMatch = text.match(/([+-]\s*\d+)\s*(?:para\s+atingir|to\s+hit)\b/i)
+  if (!attackMatch) return undefined
+  const attackBonus = Number(attackMatch[1].replace(/\s+/g, ""))
+  if (!Number.isFinite(attackBonus)) return undefined
+
+  const damage = inferDamageParts(text)
+  if (!damage.length) return undefined
+
+  const normalized = normalizeName(text)
+  const rangeType: "melee" | "ranged" =
+    /\b(?:a distancia|ranged)\b/.test(normalized)
+      ? "ranged"
+      : "melee"
+  const attackType: "weapon" | "spell" | "other" =
+    /\b(?:magia|magico|spell)\b/.test(normalized)
+      ? "spell"
+      : /\b(?:arma|weapon)\b/.test(normalized)
+        ? "weapon"
+        : "other"
+  const reachMatch = text.match(
+    /(?:alcance|reach|range)\s+([^,.;]+)/i,
+  )
+
+  return {
+    kind: "attack",
+    attackType,
+    rangeType,
+    attackBonus,
+    magical: /\b(?:magico|magica|magical)\b/.test(normalized),
+    reach: reachMatch?.[1]?.trim(),
+    damage,
+  }
+}
+
+function inferDamageParts(
+  text: string,
+): CreatureFeatureMechanics["damage"] {
+  const parts: CreatureFeatureMechanics["damage"] = []
+  const seen = new Set<string>()
+
+  const portuguese =
+    /\(([^()]*(?:\d+)?d\d+[^()]*)\)\s*(?:de\s+)?dano\s+([\p{L}-]+)/giu
+  const english =
+    /\(([^()]*(?:\d+)?d\d+[^()]*)\)\s*([a-z-]+)\s+damage/giu
+
+  for (const expression of [portuguese, english]) {
+    for (const match of text.matchAll(expression)) {
+      const formula = normalizeDamageFormula(match[1])
+      const damageType = parseDamageTypeLabel(match[2])
+      if (!formula || !damageType || !parseCreatureDamageFormula(formula)) continue
+      const key = `${formula}:${damageType}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      parts.push({ formula, damageType })
+    }
+  }
+
+  return parts
+}
+
+function normalizeDamageFormula(value: string): string {
+  return value
+    .trim()
+    .replace(/\s+/g, "")
+    .toLowerCase()
+}
+
+function parseDamageTypeLabel(value: string): DamageType | undefined {
+  const normalized = normalizeName(value)
+  const aliases: Record<string, DamageType> = {
+    acid: "acid",
+    acido: "acid",
+    bludgeoning: "bludgeoning",
+    concussao: "bludgeoning",
+    contundente: "bludgeoning",
+    cold: "cold",
+    frio: "cold",
+    fire: "fire",
+    fogo: "fire",
+    force: "force",
+    forca: "force",
+    lightning: "lightning",
+    eletrico: "lightning",
+    eletricidade: "lightning",
+    relampago: "lightning",
+    necrotic: "necrotic",
+    necrotico: "necrotic",
+    piercing: "piercing",
+    perfurante: "piercing",
+    poison: "poison",
+    veneno: "poison",
+    psychic: "psychic",
+    psiquico: "psychic",
+    radiant: "radiant",
+    radiante: "radiant",
+    slashing: "slashing",
+    cortante: "slashing",
+    thunder: "thunder",
+    trovao: "thunder",
+    sonoro: "thunder",
+  }
+  return aliases[normalized]
+}
 
 export function creatureAbilityModifier(score: number): number {
   return Math.floor((score - 10) / 2)
