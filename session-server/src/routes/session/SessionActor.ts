@@ -35,6 +35,7 @@ import {
   type Weapon,
 } from "../../../../src/models/items/equipment/Weapon";
 import type { Attribute } from "../../../../src/models/sheet/Attribute";
+import { abilityShortPtBr } from "../../../../src/i18n/ptBR";
 import type { Skill } from "../../../../src/models/sheet/Skills";
 import { normalizeInitiativeSession, type InitiativeEntry, type InitiativeSession } from "../../../../src/models/initiative/Initiative";
 import { CREATURE_ATTRIBUTE_LABELS, findCreatureSave, findCreatureSkill, parseCreatureDamageFormula } from "../../../../src/models/creatures/CreatureRolls";
@@ -1159,7 +1160,7 @@ function resolveServerActionRoll(
           ),
         ),
         details: [
-          `Atributo: ${attribute.toUpperCase()}`,
+          `Atributo: ${abilityShortPtBr(attribute)}`,
           ...(weapon.properties ?? []).map((property) => property.name),
         ],
         attack,
