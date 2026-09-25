@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react"
 import { useCharacterContext } from "../../contexts/characterContext"
 import { ACTION_ROLL_RESULT_EVENT, DICE_ROLL_RESULT_EVENT } from "../../lib/diceRoller"
 import type { SessionActionRollResult, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
+import { damageTypeLabel, type DamageType } from "../../models/combat/Damage"
+import { CREATURE_ATTRIBUTE_LABELS } from "../../models/creatures/CreatureRolls"
 import type {
   CharacterCustomSystemState,
   CustomAbilityInstance,
@@ -304,13 +306,13 @@ function DiceRollPanel({
               <ActionRollEntry
                 key={entry.result.id}
                 roll={entry.result}
-                characterName={characterNames.get(entry.result.characterId)}
+                characterName={characterNames.get(entry.result.characterId) ?? entry.result.sourceName}
               />
             ) : (
               <DiceRollEntry
                 key={entry.result.id}
                 roll={entry.result}
-                characterName={characterNames.get(entry.result.characterId)}
+                characterName={characterNames.get(entry.result.characterId) ?? entry.result.sourceName}
               />
             ))}
           </div>
@@ -390,7 +392,7 @@ function ActionRollEntry({
                 </div>
               ) : null}
             </div>
-            <div className="text-sm font-black text-textH">CD {roll.save.dc} · {roll.save.attribute.toUpperCase()}</div>
+            <div className="text-sm font-black text-textH">CD {roll.save.dc} · {CREATURE_ATTRIBUTE_LABELS[roll.save.attribute]}</div>
           </div>
         ) : null}
 
@@ -456,7 +458,10 @@ function ResolvedDamageBlock({
   halfOnSave?: number
 }) {
   const label = damage.label?.trim() || (damage.critical ? "Dano crítico" : "Dano")
-  const type = damage.damageType?.trim()
+  const rawType = damage.damageType?.trim()
+  const type = rawType
+    ? damageTypeLabel(rawType as DamageType)
+    : undefined
   return (
     <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-border bg-bg px-3 py-2">
       <div>
