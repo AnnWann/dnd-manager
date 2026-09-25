@@ -447,11 +447,11 @@ function applySpellCastPayment(
       }
       return { ok: true, character: character.spendPactSlot() };
     }
-    const slot = character.getSpellSlots()[payment.level as keyof ReturnType<CharacterTemplate["getSpellSlots"]>];
+    const slot = character.getSpellSlots()[payment.level as MagicCircleLevel];
     if (!slot || slot.current <= 0) {
       return { ok: false, code: "SPELL_SLOT_UNAVAILABLE", message: "The selected spell slot is unavailable." };
     }
-    return { ok: true, character: character.spendSpellSlot(payment.level as any) };
+    return { ok: true, character: character.spendSpellSlot(payment.level as MagicCircleLevel) };
   }
 
   if (payment.type === "resource") {
@@ -658,6 +658,9 @@ function validateManualSource(
 
 function applyMagicOperation(character: CharacterTemplate, operation: SessionMagicOperation): CharacterTemplate | null {
   switch (operation.type) {
+    case "character.spell.cast":
+      // Intercepted atomically by handleSpellCast before generic magic mutation handling.
+      return null;
     case "character.spell.prepare":
       return character.setSpellPrepared(operation.spellIndex, operation.prepared);
     case "character.spell.add":
