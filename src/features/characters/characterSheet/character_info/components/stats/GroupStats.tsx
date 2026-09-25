@@ -84,8 +84,7 @@ export function GroupStats({
             requestD20Roll({
               characterId,
               label: "Iniciativa",
-              modifier: character.getEffectiveInitiative(),
-              kind: "initiative",
+              source: { type: "initiative" },
               mode: rollModeFromEvent(event.nativeEvent),
             })
           }
