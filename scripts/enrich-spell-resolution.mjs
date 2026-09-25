@@ -28,6 +28,14 @@ for (const spell of local.spells ?? []) {
   const resolution = makeResolution(spell, upstreamByIndex.get(spell.index))
   if (resolution) {
     spell.resolution = resolution
+    spell.targeting ??= {}
+    spell.targeting.hasAttackRoll = resolution.roll.type === "attack"
+    spell.targeting.hasSavingThrow = resolution.roll.type === "save"
+    if (resolution.roll.type === "save") {
+      spell.targeting.savingThrowAttribute = resolution.roll.attribute
+    } else {
+      delete spell.targeting.savingThrowAttribute
+    }
     enriched += 1
   } else {
     delete spell.resolution
