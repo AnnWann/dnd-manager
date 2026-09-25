@@ -62,6 +62,23 @@ export function requestActionRoll(input: {
   })
 }
 
+export function requestActionAnnouncement(input: {
+  characterId: string
+  title: string
+  subtitle?: string
+  description?: string
+}): void {
+  requestActionRoll({
+    characterId: input.characterId,
+    source: {
+      type: "announcement",
+      title: input.title,
+      subtitle: input.subtitle,
+      description: input.description,
+    },
+  })
+}
+
 export function requestCreatureRoll(input: {
   creatureId: string
   initiativeEntryId?: string

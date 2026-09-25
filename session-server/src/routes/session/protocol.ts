@@ -338,7 +338,13 @@ function isCreatureRollRequest(value: unknown): value is SessionCreatureRollRequ
     case "initiative":
       return true;
     case "feature":
-      return nonEmpty(value.source.featureId) && value.source.featureId.length <= 200;
+      return nonEmpty(value.source.featureId)
+        && value.source.featureId.length <= 200
+        && (
+          value.source.intent === undefined
+          || value.source.intent === "resolve"
+          || value.source.intent === "announce"
+        );
     default:
       return false;
   }
@@ -356,6 +362,17 @@ function isActionRollRequest(value: unknown): value is SessionActionRollRequest 
       return true;
     case "ability":
       return nonEmpty(value.source.abilityId) && value.source.abilityId.length <= 200;
+    case "announcement":
+      return nonEmpty(value.source.title)
+        && value.source.title.length <= 160
+        && (
+          value.source.subtitle === undefined
+          || (typeof value.source.subtitle === "string" && value.source.subtitle.length <= 240)
+        )
+        && (
+          value.source.description === undefined
+          || (typeof value.source.description === "string" && value.source.description.length <= 6000)
+        );
     default:
       return false;
   }

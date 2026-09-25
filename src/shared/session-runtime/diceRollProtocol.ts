@@ -63,6 +63,12 @@ export type SessionActionRollSource =
   | { type: "weapon"; weaponId: string }
   | { type: "unarmed" }
   | { type: "ability"; abilityId: string }
+  | {
+      type: "announcement"
+      title: string
+      subtitle?: string
+      description?: string
+    }
 
 export type SessionActionRollRequest = {
   requestId: string
@@ -100,7 +106,7 @@ export type SessionActionRollResult = {
   actorId: string
   characterId: string
   sourceName?: string
-  sourceType: "weapon" | "unarmed" | "spell" | "ability" | "creature"
+  sourceType: "weapon" | "unarmed" | "spell" | "ability" | "creature" | "announcement"
   title: string
   subtitle?: string
   description?: string
@@ -128,7 +134,7 @@ export type SessionCreatureRollSource =
   | { type: "save"; attribute: Attribute }
   | { type: "skill"; skill: Skill }
   | { type: "initiative" }
-  | { type: "feature"; featureId: string }
+  | { type: "feature"; featureId: string; intent?: "resolve" | "announce" }
 
 export type SessionCreatureRollRequest = {
   requestId: string

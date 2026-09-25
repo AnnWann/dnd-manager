@@ -6,6 +6,7 @@ import { Input } from "../../../components/ui/Input"
 import { Modal } from "../../../components/ui/Modal"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
+import { requestActionAnnouncement, requestActionRoll } from "../../../lib/diceRoller"
 import {
   evaluateCustomFormula,
   getCustomAbilityAvailability,
@@ -213,6 +214,28 @@ export function MinimalCharacterActions({
   const selectedCustomAbilityCostError = customAbilityCostError(
     selectedCustomAbilityCosts,
   )
+
+  function announce(entry: ActionEntry) {
+    if (entry.ability) {
+      requestActionRoll({
+        characterId: character.get("id"),
+        source: {
+          type: "ability",
+          abilityId: entry.abilitySource?.abilityId ?? entry.ability.id,
+        },
+      })
+      return
+    }
+
+    requestActionAnnouncement({
+      characterId: character.get("id"),
+      title: entry.name,
+      subtitle: entry.source
+        ? `${filterLabel(entry.filter)} · ${entry.source}`
+        : filterLabel(entry.filter),
+      description: entry.description,
+    })
+  }
 
   function open(entry: ActionEntry) {
     if (entry.magic) {
@@ -684,6 +707,12 @@ export function MinimalCharacterActions({
                 {error || selectedCustomAbilityCostError}
               </div>
             ) : null}
+
+            <div className="flex justify-end border-t border-border pt-3">
+              <Button variant="secondary" onClick={() => announce(selected)}>
+                Mostrar
+              </Button>
+            </div>
             {selected.metamagicCost !== undefined ? (
               <div className="flex justify-end border-t border-border pt-3">
                 <Button

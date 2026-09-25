@@ -6,6 +6,7 @@ import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
 import { attributeShort } from "../../../lib/attributeShorts"
+import { requestActionRoll } from "../../../lib/diceRoller"
 import type { Ability } from "../../../models/abilities/Ability"
 import {
   activateAbilityBenefits,
@@ -372,6 +373,12 @@ export function CharacterRaceTab({
                   onUse={() => updateAbilityState(ability.id, "use")}
                   onRestore={() => updateAbilityState(ability.id, "restore")}
                   onDeactivate={() => updateAbilityState(ability.id, "deactivate")}
+                  onAnnounce={() =>
+                    requestActionRoll({
+                      characterId: character.get("id"),
+                      source: { type: "ability", abilityId: ability.id },
+                    })
+                  }
                 />
               ))}
           </div>
