@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useCharacterContext } from "../../contexts/characterContext"
 import { ACTION_ROLL_RESULT_EVENT, DICE_ROLL_RESULT_EVENT } from "../../lib/diceRoller"
 import type { SessionActionRollResult, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
-import { damageTypeLabel, type DamageType } from "../../models/combat/Damage"
+import { DAMAGE_TYPES, damageTypeLabel, type DamageType } from "../../models/combat/Damage"
 import { CREATURE_ATTRIBUTE_LABELS } from "../../models/creatures/CreatureRolls"
 import type {
   CharacterCustomSystemState,
@@ -460,7 +460,9 @@ function ResolvedDamageBlock({
   const label = damage.label?.trim() || (damage.critical ? "Dano crítico" : "Dano")
   const rawType = damage.damageType?.trim()
   const type = rawType
-    ? damageTypeLabel(rawType as DamageType)
+    ? DAMAGE_TYPES.includes(rawType as DamageType)
+      ? damageTypeLabel(rawType as DamageType)
+      : rawType
     : undefined
   return (
     <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-border bg-bg px-3 py-2">
