@@ -602,6 +602,11 @@ function DiceRollEntry({
 
 function diceModeLabel(roll: SessionDiceRollResult): string {
   if (roll.kind === "damage") return "Dano"
+  if (roll.kind === "manual") {
+    if (roll.mode === "advantage") return "Manual · Vantagem"
+    if (roll.mode === "disadvantage") return "Manual · Desvantagem"
+    return "Rolagem manual"
+  }
   if (roll.mode === "advantage") return "Vantagem"
   if (roll.mode === "disadvantage") return "Desvantagem"
   return "Rolagem"
@@ -609,6 +614,27 @@ function diceModeLabel(roll: SessionDiceRollResult): string {
 
 function formatDiceBreakdown(roll: SessionDiceRollResult): string {
   if (!roll.groups.length) return String(roll.total)
+
+  if (roll.kind === "manual") {
+    const dice = roll.groups.map((group) => {
+      const advantagePrefix = group.kept !== undefined && group.sides === 20
+        ? roll.mode === "advantage"
+          ? "a-"
+          : roll.mode === "disadvantage"
+            ? "d-"
+            : ""
+        : ""
+      const expressionQuantity = group.kept !== undefined ? 1 : group.quantity
+      const label = `${advantagePrefix}${expressionQuantity}d${group.sides}`
+      const values = group.kept !== undefined
+        ? `[${group.rolls.join(", ")}] → ${group.kept}`
+        : group.rolls.length === 1
+          ? String(group.rolls[0])
+          : `[${group.rolls.join(", ")}]`
+      return `${label}: ${values}`
+    }).join(" + ")
+    return `${dice}${roll.modifier ? ` ${formatDiceModifier(roll.modifier)}` : ""}`
+  }
 
   if (roll.kind === "damage") {
     const dice = roll.groups
