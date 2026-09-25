@@ -165,6 +165,12 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const [presence, setPresence] = useState<SessionRuntimePresenceUser[]>([])
   const [lastHeartbeatAckAt, setLastHeartbeatAckAt] = useState<number | null>(null)
   const [runtimeConfigSnapshot, setRuntimeConfigSnapshot] = useState<SessionRuntimeConfigSnapshot | null>(null)
+  const digitalDiceEnabledRef = useRef(true)
+
+  useEffect(() => {
+    digitalDiceEnabledRef.current =
+      runtimeConfigSnapshot?.config.diceRollingEnabled !== false
+  }, [runtimeConfigSnapshot?.config.diceRollingEnabled])
   const [hpByCharacterId, setHpByCharacterId] = useState<Record<string, SessionHpState>>({})
   const [conditionsByCharacterId, setConditionsByCharacterId] = useState<Record<string, SessionConditionsState>>({})
   const [abilitiesByCharacterId, setAbilitiesByCharacterId] = useState<Record<string, SessionAbilityState>>({})
@@ -302,7 +308,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
 
     const onDiceRollRequest = (event: Event) => {
       const request = (event as CustomEvent<SessionDiceRollRequest>).detail
-      if (!request) return
+      if (!request || !digitalDiceEnabledRef.current) return
       socket.send({ type: "session.dice.roll", request })
     }
     const onActionRollRequest = (event: Event) => {
@@ -313,6 +319,10 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     const onCreatureRollRequest = (event: Event) => {
       const request = (event as CustomEvent<SessionCreatureRollRequest>).detail
       if (!request) return
+      if (
+        !digitalDiceEnabledRef.current
+        && request.source.type !== "feature"
+      ) return
       socket.send({ type: "session.creature.roll", request })
     }
 
