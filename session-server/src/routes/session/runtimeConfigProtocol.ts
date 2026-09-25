@@ -48,7 +48,11 @@ function isRuntimeConfigSnapshot(
 
   const config = snapshot.config as Record<string, unknown>;
   if (
-    !Array.isArray(config.characters)
+    (
+      config.diceRollingEnabled !== undefined
+      && typeof config.diceRollingEnabled !== "boolean"
+    )
+    || !Array.isArray(config.characters)
     || !Array.isArray(config.spells)
     || !Array.isArray(config.customSystems)
   ) {

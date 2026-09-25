@@ -270,6 +270,46 @@ export function SessionCreationSettingsView() {
         </div>
       ) : null}
 
+      {editor?.draft ? (
+        <section className="rounded-xl border border-border bg-bg shadow-theme-sm">
+          <header className="border-b border-border p-4">
+            <h2 className="font-semibold text-textH">Rolagem de dados</h2>
+            <p className="mt-1 text-xs leading-5 text-textMuted">
+              Escolha se esta campanha usa as rolagens digitais da sessão ou dados físicos na mesa.
+            </p>
+          </header>
+
+          <label className="flex cursor-pointer items-start justify-between gap-4 p-4">
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-textH">
+                Rolagens digitais
+              </span>
+              <span className="mt-1 block text-xs leading-5 text-textMuted">
+                Quando desativado, usar ações, habilidades e magias continua consumindo recursos e publicando o card com a descrição no painel Dados, mas o sistema não rola nenhum dado.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={editor.draft.diceRollingEnabled !== false}
+              onChange={(event) =>
+                editor.updateDraft((draft) => ({
+                  ...draft,
+                  diceRollingEnabled: event.target.checked,
+                }))
+              }
+              className="mt-0.5 h-4 w-4 shrink-0 accent-current"
+              aria-label="Ativar rolagens digitais"
+            />
+          </label>
+
+          {editor.draft.diceRollingEnabled === false ? (
+            <div className="border-t border-border bg-bg-subtle px-4 py-3 text-xs leading-5 text-textMuted">
+              Modo de dados físicos ativo. Testes, perícias, resistências, iniciativa e o roller manual não serão rolados pelo servidor.
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
       {editor ? (
         <section className="rounded-xl border border-border bg-bg shadow-theme-sm">
           <header className="border-b border-border p-4">

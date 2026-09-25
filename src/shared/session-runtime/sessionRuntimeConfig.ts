@@ -14,6 +14,8 @@ import type { Spell } from "../../models/magic/spells/Spell"
  * configuration cache used to validate/adjudicate live operations.
  */
 export type SessionRuntimeConfig = {
+  /** Defaults to true for snapshots created before this setting existed. */
+  diceRollingEnabled?: boolean
   characters: SessionRuntimeCharacterConfig[]
   spells: Spell[]
   customSystems: CustomSystemDefinition[]
@@ -39,6 +41,7 @@ export function toSessionRuntimeConfig(
   creation: CreationState,
 ): SessionRuntimeConfig {
   return {
+    diceRollingEnabled: creation.diceRollingEnabled !== false,
     characters: creation.characters.map((character) => ({
       characterId: character.characterId,
       type: character.type,

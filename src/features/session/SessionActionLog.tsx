@@ -50,6 +50,8 @@ export function SessionActionLog() {
   const initiativeRollSelection = useInitiativeRollSelection()
   const sessionLog = (logRuntime?.hpLog ?? []) as SessionLogRecord[]
   const customSystemDefinitions = runtime?.runtimeConfigSnapshot?.config.customSystems ?? []
+  const digitalDiceEnabled =
+    runtime?.runtimeConfigSnapshot?.config.diceRollingEnabled !== false
   const isMaster = runtime?.role === "MASTER"
   const [page, setPage] = useState(0)
   const [panelView, setPanelView] = useState<PanelView>("logs")
@@ -226,6 +228,7 @@ export function SessionActionLog() {
         manualTarget={manualRollTarget}
         allowAnonymous={isMaster}
         privateRolls={privateRolls}
+        digitalDiceEnabled={digitalDiceEnabled}
         onPrivateRollsChange={changePrivateRolls}
         onClear={() => setRollFeed([])}
       />
@@ -364,6 +367,7 @@ function DiceRollPanel({
   manualTarget,
   allowAnonymous,
   privateRolls,
+  digitalDiceEnabled,
   onPrivateRollsChange,
   onClear,
 }: {
@@ -376,6 +380,7 @@ function DiceRollPanel({
   }
   allowAnonymous: boolean
   privateRolls: boolean
+  digitalDiceEnabled: boolean
   onPrivateRollsChange: (enabled: boolean) => void
   onClear: () => void
 }) {
@@ -427,6 +432,7 @@ function DiceRollPanel({
         </label>
       </div>
 
+      {digitalDiceEnabled ? (
       <form
         className="grid gap-2 border-b border-border bg-bg px-3 py-3"
         onSubmit={submitManualRoll}
@@ -490,6 +496,14 @@ function DiceRollPanel({
           </div>
         ) : null}
       </form>
+      ) : (
+        <div className="border-b border-border bg-bg px-3 py-3">
+          <div className="rounded-xl border border-accentBorder bg-accentBg/20 px-3 py-3 text-[11px] leading-5 text-textMuted">
+            <span className="font-semibold text-textH">Dados físicos ativos.</span>{" "}
+            Ações, habilidades e magias aparecem aqui sem rolagens digitais.
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <span className="text-[11px] text-textMuted">

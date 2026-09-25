@@ -34,6 +34,7 @@ export async function getCreationSnapshot(
       updatedAt: new Date(0).toISOString(),
       data: {
         version: 1,
+        diceRollingEnabled: true,
         characters: [],
         spells: [],
         itemCompendium: [],

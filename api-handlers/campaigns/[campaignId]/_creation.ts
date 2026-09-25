@@ -173,6 +173,9 @@ export async function PATCH(
       customSystems:
         currentSnapshot.managedDomains?.customSystems === true || domains.systems,
     }
+    const nextDiceRollingEnabled = domains.settings
+      ? data.diceRollingEnabled
+      : currentSnapshot.data.diceRollingEnabled
 
     await prisma.$transaction(async (tx) => {
       const campaign = await tx.campaign.findUnique({
@@ -363,11 +366,17 @@ export async function PATCH(
           type: CREATION_META_TYPE,
           sourceId: CREATION_META_SOURCE,
           name: "Creation State v1",
-          data: nextManagedDomains,
+          data: {
+            ...nextManagedDomains,
+            diceRollingEnabled: nextDiceRollingEnabled,
+          },
           addedById: session.user.id,
         },
         update: {
-          data: nextManagedDomains,
+          data: {
+            ...nextManagedDomains,
+            diceRollingEnabled: nextDiceRollingEnabled,
+          },
           addedById: session.user.id,
         },
       })
@@ -443,6 +452,7 @@ function projectCreationSnapshot(
     ...snapshot,
     data: {
       version: 1,
+      diceRollingEnabled: snapshot.data.diceRollingEnabled,
       characters: access.settings ? snapshot.data.characters : [],
       spells: access.magic ? snapshot.data.spells : [],
       itemCompendium: access.items ? snapshot.data.itemCompendium : [],
@@ -545,6 +555,7 @@ async function buildCreationSnapshot(campaignId: string): Promise<CreationSnapsh
     creatureCompendium: markerData?.creatureCompendium === true,
     customSystems: markerData?.customSystems === true,
   }
+  const diceRollingEnabled = markerData?.diceRollingEnabled !== false
 
   const characters = characterLinks.map((link) => {
     updatedAt = laterDate(updatedAt, link.character.updatedAt)
@@ -590,6 +601,7 @@ async function buildCreationSnapshot(campaignId: string): Promise<CreationSnapsh
 
   const data: CreationState = {
     version: 1,
+    diceRollingEnabled,
     characters,
     spells,
     itemCompendium,
@@ -680,7 +692,11 @@ function readCreationState(value: unknown): CreationState {
     !Array.isArray(state.spells) ||
     !Array.isArray(state.itemCompendium) ||
     !Array.isArray(state.creatureCompendium) ||
-    !Array.isArray(state.customSystems)
+    !Array.isArray(state.customSystems) ||
+    (
+      state.diceRollingEnabled !== undefined
+      && typeof state.diceRollingEnabled !== "boolean"
+    )
   ) {
     throw new ApiError(
       400,
@@ -688,7 +704,10 @@ function readCreationState(value: unknown): CreationState {
       "O estado de Criação é inválido.",
     )
   }
-  return state as unknown as CreationState
+  return {
+    ...(state as unknown as CreationState),
+    diceRollingEnabled: state.diceRollingEnabled !== false,
+  }
 }
 
 function readCreationCharacterConfiguration(
