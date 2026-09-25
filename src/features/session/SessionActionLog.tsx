@@ -2,8 +2,8 @@ import { Dices, History, PanelRightClose, PanelRightOpen, Undo2 } from "lucide-r
 import { useEffect, useMemo, useState } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
-import { DICE_ROLL_RESULT_EVENT } from "../../lib/diceRoller"
-import type { SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
+import { ACTION_ROLL_RESULT_EVENT, DICE_ROLL_RESULT_EVENT } from "../../lib/diceRoller"
+import type { SessionActionRollResult, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
 import type {
   CharacterCustomSystemState,
   CustomAbilityInstance,
@@ -34,6 +34,9 @@ const MAX_DICE_ROLLS = 100
 const SESSION_PANEL_COLLAPSED_STORAGE_KEY = "dnd-manager:session-right-panel:collapsed"
 
 type PanelView = "logs" | "dice"
+type RollFeedEntry =
+  | { type: "dice"; result: SessionDiceRollResult }
+  | { type: "action"; result: SessionActionRollResult }
 
 export function SessionActionLog() {
   const { operationLog, visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
@@ -44,7 +47,7 @@ export function SessionActionLog() {
   const isMaster = runtime?.role === "MASTER"
   const [page, setPage] = useState(0)
   const [panelView, setPanelView] = useState<PanelView>("logs")
-  const [diceRolls, setDiceRolls] = useState<SessionDiceRollResult[]>([])
+  const [rollFeed, setRollFeed] = useState<RollFeedEntry[]>([])
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false
     return window.localStorage.getItem(SESSION_PANEL_COLLAPSED_STORAGE_KEY) === "1"
@@ -99,17 +102,27 @@ export function SessionActionLog() {
   }, [page, pageCount])
 
   useEffect(() => {
+    function prepend(entry: RollFeedEntry) {
+      setRollFeed((current) => [
+        entry,
+        ...current.filter((candidate) => candidate.result.id !== entry.result.id),
+      ].slice(0, MAX_DICE_ROLLS))
+    }
     function onDiceRoll(event: Event) {
       const result = (event as CustomEvent<SessionDiceRollResult>).detail
-      if (!result) return
-      setDiceRolls((current) => [
-        result,
-        ...current.filter((entry) => entry.id !== result.id),
-      ].slice(0, MAX_DICE_ROLLS))
+      if (result) prepend({ type: "dice", result })
+    }
+    function onActionRoll(event: Event) {
+      const result = (event as CustomEvent<SessionActionRollResult>).detail
+      if (result) prepend({ type: "action", result })
     }
 
     window.addEventListener(DICE_ROLL_RESULT_EVENT, onDiceRoll)
-    return () => window.removeEventListener(DICE_ROLL_RESULT_EVENT, onDiceRoll)
+    window.addEventListener(ACTION_ROLL_RESULT_EVENT, onActionRoll)
+    return () => {
+      window.removeEventListener(DICE_ROLL_RESULT_EVENT, onDiceRoll)
+      window.removeEventListener(ACTION_ROLL_RESULT_EVENT, onActionRoll)
+    }
   }, [])
 
   useEffect(() => {
@@ -123,7 +136,7 @@ export function SessionActionLog() {
   const title = activeView === "logs" ? "Logs da sessão" : "Rolagens"
   const subtitle = activeView === "logs"
     ? `${records.length} ações recentes`
-    : `${diceRolls.length} rolagens recentes`
+    : `${rollFeed.length} rolagens recentes`
   const PanelIcon = activeView === "logs" ? History : Dices
 
   if (collapsed) {
@@ -249,9 +262,9 @@ export function SessionActionLog() {
         </>
       ) : (
         <DiceRollPanel
-          rolls={diceRolls}
+          entries={rollFeed}
           characterNames={characterNames}
-          onClear={() => setDiceRolls([])}
+          onClear={() => setRollFeed([])}
         />
       )}
     </aside>
@@ -259,11 +272,11 @@ export function SessionActionLog() {
 }
 
 function DiceRollPanel({
-  rolls,
+  entries,
   characterNames,
   onClear,
 }: {
-  rolls: SessionDiceRollResult[]
+  entries: RollFeedEntry[]
   characterNames: ReadonlyMap<string, string>
   onClear: () => void
 }) {
@@ -273,7 +286,7 @@ function DiceRollPanel({
         <span className="text-[11px] text-textMuted">
           Resultados confirmados pelo servidor
         </span>
-        {rolls.length ? (
+        {entries.length ? (
           <button
             type="button"
             onClick={onClear}
@@ -285,13 +298,19 @@ function DiceRollPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {rolls.length ? (
+        {entries.length ? (
           <div className="flex flex-col gap-2">
-            {rolls.map((roll) => (
+            {entries.map((entry) => entry.type === "action" ? (
+              <ActionRollEntry
+                key={entry.result.id}
+                roll={entry.result}
+                characterName={characterNames.get(entry.result.characterId)}
+              />
+            ) : (
               <DiceRollEntry
-                key={roll.id}
-                roll={roll}
-                characterName={characterNames.get(roll.characterId)}
+                key={entry.result.id}
+                roll={entry.result}
+                characterName={characterNames.get(entry.result.characterId)}
               />
             ))}
           </div>
@@ -303,6 +322,110 @@ function DiceRollPanel({
       </div>
     </>
   )
+}
+
+function ActionRollEntry({
+  roll,
+  characterName,
+}: {
+  roll: SessionActionRollResult
+  characterName?: string
+}) {
+  const attack = roll.attack
+  const damage = roll.damage
+  const attackClass = attack?.natural === 20
+    ? "text-success"
+    : attack?.natural === 1
+      ? "text-danger"
+      : "text-textH"
+
+  return (
+    <article className="overflow-hidden rounded-xl border border-accentBorder bg-bg">
+      <header className="border-b border-border bg-accentBg px-3 py-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-bold text-textH">{roll.title}</div>
+            {roll.subtitle ? <div className="mt-0.5 text-[10px] text-textMuted">{roll.subtitle}</div> : null}
+          </div>
+          {roll.critical ? (
+            <span className="shrink-0 rounded-full border border-success px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-success">
+              Crítico
+            </span>
+          ) : null}
+        </div>
+        {roll.details?.length ? (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {roll.details.map((detail) => (
+              <span key={detail} className="rounded-full border border-border bg-bg px-2 py-0.5 text-[9px] text-textMuted">
+                {detail}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </header>
+
+      <div className="grid gap-2 p-3">
+        {attack ? (
+          <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-border bg-bg-subtle px-3 py-2">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+                Ataque{attack.mode === "advantage" ? " · Vantagem" : attack.mode === "disadvantage" ? " · Desvantagem" : ""}
+              </div>
+              <div className="mt-0.5 text-[10px] text-textMuted">{formatResolvedD20(attack)}</div>
+            </div>
+            <div className={`text-2xl font-black ${attackClass}`}>{attack.total}</div>
+          </div>
+        ) : null}
+
+        {roll.save ? (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-subtle px-3 py-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Teste de resistência</div>
+            <div className="text-sm font-black text-textH">CD {roll.save.dc} · {roll.save.attribute.toUpperCase()}</div>
+          </div>
+        ) : null}
+
+        {damage ? (
+          <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-border bg-bg-subtle px-3 py-2">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+                {damage.critical ? "Dano crítico" : "Dano"}
+              </div>
+              <div className="mt-0.5 text-[10px] text-textMuted">{formatResolvedDamage(damage)}</div>
+            </div>
+            <div className={damage.critical ? "text-2xl font-black text-success" : "text-2xl font-black text-textH"}>
+              {damage.total}
+            </div>
+          </div>
+        ) : null}
+
+        {roll.description ? (
+          <details className="rounded-lg border border-border bg-bg-subtle px-3 py-2">
+            <summary className="cursor-pointer text-[11px] font-semibold text-textH">Ver descrição</summary>
+            <div className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-5 text-text">{roll.description}</div>
+          </details>
+        ) : null}
+
+        <div className="flex items-center justify-between gap-2 text-[10px] text-textMuted">
+          <span className="truncate">{characterName || "Personagem"}</span>
+          <time dateTime={roll.createdAt}>{formatTime(roll.createdAt)}</time>
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function formatResolvedD20(roll: SessionActionRollResult["attack"] & {}) {
+  if (!roll) return ""
+  const group = roll.groups[0]
+  const d20 = group.rolls.length > 1
+    ? `[${group.rolls.join(", ")}] → ${group.kept}`
+    : String(group.kept ?? group.rolls[0])
+  return `${d20}${roll.modifier ? ` ${formatDiceModifier(roll.modifier)}` : ""}`
+}
+
+function formatResolvedDamage(damage: NonNullable<SessionActionRollResult["damage"]>) {
+  const dice = damage.groups.flatMap((group) => group.rolls).join(" + ")
+  return `${dice ? `(${dice})` : ""}${damage.modifier ? ` ${formatDiceModifier(damage.modifier)}` : ""}` || String(damage.total)
 }
 
 function DiceRollEntry({
@@ -362,7 +485,7 @@ function formatDiceBreakdown(roll: SessionDiceRollResult): string {
   }
 
   const group = roll.groups[0]
-  const d20 = group.rolls.length > 1
+  const d20 = group.entries.length > 1
     ? `[${group.rolls.join(", ")}] → ${group.kept}`
     : String(group.kept ?? group.rolls[0])
 
