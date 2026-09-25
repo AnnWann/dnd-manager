@@ -1,7 +1,7 @@
 import { Sparkles } from "lucide-react"
 
 import { Input } from "../../../../../../components/ui/Input"
-import { rollD20, rollModeFromEvent, rollModifierHint } from "../../../../../../lib/diceRoller"
+import { requestD20Roll, rollModeFromEvent, rollModifierHint } from "../../../../../../lib/diceRoller"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
 import {
   getCalculatedArmorClassWithShield,
@@ -81,7 +81,8 @@ export function GroupStats({
           className="mt-2 w-full rounded-md border border-border bg-bg-subtle px-2 py-1 text-[10px] font-semibold text-text hover:border-accentBorder hover:text-accent"
           title={rollModifierHint()}
           onClick={(event) =>
-            rollD20({
+            requestD20Roll({
+              characterId,
               label: "Iniciativa",
               modifier: character.getEffectiveInitiative(),
               kind: "initiative",
