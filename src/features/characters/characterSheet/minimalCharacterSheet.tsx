@@ -461,7 +461,6 @@ function CompactWeaponTile({ weapon, attack, damageBonus, onClick }: { weapon: W
 
 function CompactUnarmedTile({ character }: { character: CharacterTemplate }) {
   const profile = getUnarmedAttackProfile(character)
-  const damageDie = profile.damageDie
   return (
     <div className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center">
       <div className="truncate text-[10px] uppercase tracking-wide text-textMuted">
@@ -486,21 +485,13 @@ function CompactUnarmedTile({ character }: { character: CharacterTemplate }) {
         type="button"
         className="block w-full rounded text-[10px] font-medium text-textMuted hover:bg-accentBg hover:text-accent"
         title="Clique para rolar o dano."
-        onClick={() => {
-          if (damageDie) {
-            requestDamageRoll({
-              characterId: character.get("id"),
-              label: "Ataque desarmado — dano",
-              source: { type: "unarmed-damage" },
-            })
-            return
-          }
+        onClick={() =>
           requestDamageRoll({
             characterId: character.get("id"),
             label: "Ataque desarmado — dano",
             source: { type: "unarmed-damage" },
           })
-        }}
+        }
       >
         {formatUnarmedDamage(profile)}
       </button>
