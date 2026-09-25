@@ -100,7 +100,7 @@ export type SessionActionRollResult = {
   actorId: string
   characterId: string
   sourceName?: string
-  sourceType: "weapon" | "unarmed" | "spell" | "ability"
+  sourceType: "weapon" | "unarmed" | "spell" | "ability" | "creature"
   title: string
   subtitle?: string
   description?: string
