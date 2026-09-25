@@ -954,16 +954,30 @@ export function SpellCreatorModule({
                   </label>
                 </div>
 
-                <label className="flex items-center gap-2 text-xs text-text">
-                  <input
-                    type="checkbox"
-                    checked={damage.critical ?? damage.appliesOn === "hit"}
-                    onChange={(event) =>
-                      updateDamageComponent(index, { critical: event.target.checked })
-                    }
-                  />
-                  Dobra os dados em crítico
-                </label>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-xs text-text">
+                    <input
+                      type="checkbox"
+                      checked={damage.critical ?? damage.appliesOn === "hit"}
+                      onChange={(event) =>
+                        updateDamageComponent(index, { critical: event.target.checked })
+                      }
+                    />
+                    Dobra os dados em crítico
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-text">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(damage.addCastingModifier)}
+                      onChange={(event) =>
+                        updateDamageComponent(index, {
+                          addCastingModifier: event.target.checked,
+                        })
+                      }
+                    />
+                    Soma o modificador de conjuração
+                  </label>
+                </div>
 
                 <ScalingEditor
                   label="Escalonamento dos dados"
