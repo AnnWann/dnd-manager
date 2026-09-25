@@ -82,8 +82,7 @@ export function SelectSkillModule({
           requestD20Roll({
             characterId: character.get("id"),
             label,
-            modifier: bonus,
-            kind: "skill",
+            source: { type: "skill", skill: skillKey },
             mode: rollModeFromEvent(event.nativeEvent),
           })
         }
