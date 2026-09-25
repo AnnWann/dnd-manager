@@ -116,6 +116,11 @@ export class SessionSocket {
     if (this.socket?.readyState !== WebSocket.OPEN) return false
 
     if (message.type === "session.magic.operation") {
+      if (message.operation.type === "character.spell.cast") {
+        this.flushMagicOperations()
+        this.socket.send(JSON.stringify(message))
+        return true
+      }
       this.pendingMagicOperations.push(message.operation)
       this.scheduleMagicFlush()
       return true
@@ -252,25 +257,29 @@ export class SessionSocket {
     this.magicFlushQueued = true
 
     queueMicrotask(() => {
-      this.magicFlushQueued = false
-      const socket = this.socket
-      const pending = this.pendingMagicOperations.splice(0)
-      if (!pending.length || socket?.readyState !== WebSocket.OPEN) return
-
-      const byCharacter = new Map<string, SessionMagicOperation[]>()
-      for (const operation of pending) {
-        const group = byCharacter.get(operation.characterId)
-        if (group) group.push(operation)
-        else byCharacter.set(operation.characterId, [operation])
-      }
-
-      for (const operations of byCharacter.values()) {
-        const payload = operations.length === 1
-          ? { type: "session.magic.operation", operation: operations[0] }
-          : { type: "session.magic.operations", operations }
-        socket.send(JSON.stringify(payload))
-      }
+      this.flushMagicOperations()
     })
+  }
+
+  private flushMagicOperations(): void {
+    this.magicFlushQueued = false
+    const socket = this.socket
+    const pending = this.pendingMagicOperations.splice(0)
+    if (!pending.length || socket?.readyState !== WebSocket.OPEN) return
+
+    const byCharacter = new Map<string, SessionMagicOperation[]>()
+    for (const operation of pending) {
+      const group = byCharacter.get(operation.characterId)
+      if (group) group.push(operation)
+      else byCharacter.set(operation.characterId, [operation])
+    }
+
+    for (const operations of byCharacter.values()) {
+      const payload = operations.length === 1
+        ? { type: "session.magic.operation", operation: operations[0] }
+        : { type: "session.magic.operations", operations }
+      socket.send(JSON.stringify(payload))
+    }
   }
 
   private async buildUrl(): Promise<string> {
