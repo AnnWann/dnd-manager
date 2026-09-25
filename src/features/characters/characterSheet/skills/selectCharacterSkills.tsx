@@ -1,6 +1,7 @@
 import { useCharacterWorkspace } from "../../workspace/CharacterWorkspaceContext"
 import { attributeShort } from "../../../../lib/attributeShorts"
 import { formatSigned } from "../../../../lib/formatSigned"
+import { requestD20Roll, rollModeFromEvent, rollModifierHint } from "../../../../lib/diceRoller"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
 import { hasProficiency } from "../../../../models/characters/characterProficiencies"
 import type { Attribute } from "../../../../models/sheet/Attribute"
@@ -73,9 +74,21 @@ export function SelectSkillModule({
         </div>
       </div>
 
-      <div className="text-center text-xs font-semibold text-textH">
+      <button
+        type="button"
+        className="rounded py-1 text-center text-xs font-semibold text-textH hover:bg-accentBg hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        title={rollModifierHint()}
+        onClick={(event) =>
+          requestD20Roll({
+            characterId: character.get("id"),
+            label,
+            source: { type: "skill", skill: skillKey },
+            mode: rollModeFromEvent(event.nativeEvent),
+          })
+        }
+      >
         {formatSigned(bonus)}
-      </div>
+      </button>
 
       <div className="flex items-center justify-end gap-1">
         <button

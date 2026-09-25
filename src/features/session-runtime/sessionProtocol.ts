@@ -1,3 +1,4 @@
+import type { SessionDiceRollRequest, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
 export type SessionRuntimeRole = "MASTER" | "PLAYER"
 export type SessionRuntimePresenceUser = { userId: string; clientId: string; role: SessionRuntimeRole }
 
@@ -188,13 +189,14 @@ export type SessionConditionsSnapshotMessage = { type: "session.conditions.snaps
 export type SessionConditionsUpdatedMessage = { type: "session.conditions.updated"; character: SessionConditionsState }
 export type SessionHpLogMessage = { type: "session.hp.log"; records: SessionHpLogRecord[] }
 export type SessionPongMessage = { type: "session.pong"; serverTime: number }
+export type SessionDiceResultMessage = { type: "session.dice.result"; result: SessionDiceRollResult }
 export type SessionErrorMessage = { type: "session.error"; code: string; message: string }
 
 export type ServerSessionMessage =
   | SessionReadyMessage | SessionHeartbeatAckMessage | SessionPresenceMessage
   | SessionHpSnapshotMessage | SessionHpUpdatedMessage
   | SessionConditionsSnapshotMessage | SessionConditionsUpdatedMessage
-  | SessionHpLogMessage | SessionPongMessage | SessionErrorMessage
+  | SessionHpLogMessage | SessionPongMessage | SessionDiceResultMessage | SessionErrorMessage
 
 export type CharacterSheetRoute =
   | "characters/sheet/hp"
@@ -222,6 +224,7 @@ export type ClientSessionMessage =
   | { type: "session.conditions.operation"; operation: SessionConditionOperation | SessionConcentrationOperation }
   | { type: "session.sheet.operation"; route: CharacterSheetRoute; operation: SessionLoggedOperation }
   | { type: "session.log.undo"; logId: string }
+  | { type: "session.dice.roll"; request: SessionDiceRollRequest }
 
 export function parseServerSessionMessage(raw: string): ServerSessionMessage | null {
   let parsed: unknown
@@ -242,6 +245,7 @@ export function parseServerSessionMessage(raw: string): ServerSessionMessage | n
     case "session.conditions.snapshot": if (Array.isArray(message.characters)) return message as SessionConditionsSnapshotMessage; break
     case "session.conditions.updated": if (message.character && typeof message.character === "object") return message as SessionConditionsUpdatedMessage; break
     case "session.hp.log": if (Array.isArray(message.records)) return message as SessionHpLogMessage; break
+    case "session.dice.result": if (message.result && typeof message.result === "object") return message as SessionDiceResultMessage; break
     case "session.error": if (typeof message.code === "string" && typeof message.message === "string") return message as SessionErrorMessage; break
   }
   return null

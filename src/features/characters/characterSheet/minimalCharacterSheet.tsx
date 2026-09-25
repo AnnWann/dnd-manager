@@ -6,6 +6,7 @@ import { attributeShort } from "../../../lib/attributeShorts"
 import { cn } from "../../../lib/cn"
 import { formatSigned } from "../../../lib/formatSigned"
 import { clampInt } from "../../../lib/numberFormat"
+import { requestD20Roll, requestDamageRoll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
   formatUnarmedDamage,
@@ -202,6 +203,22 @@ export function MinimalCharacterSheet({
           <ReadOnlyStat label="Proficiência" value={formatSigned(proficiency)} />
           <button
             type="button"
+            className="min-h-16 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center transition-colors hover:border-accentBorder hover:bg-accentBg"
+            title={rollModifierHint()}
+            onClick={(event) =>
+              requestD20Roll({
+                characterId,
+                label: "Iniciativa",
+                source: { type: "initiative" },
+                mode: rollModeFromEvent(event.nativeEvent),
+              })
+            }
+          >
+            <div className="text-[10px] uppercase tracking-wide text-textMuted">Iniciativa</div>
+            <div className="mt-1 text-sm font-bold text-textH">Rolar</div>
+          </button>
+          <button
+            type="button"
             aria-pressed={sheet.stats.inspiration ?? false}
             onClick={() => setInspiration(!(sheet.stats.inspiration ?? false))}
             className={cn(
@@ -229,7 +246,21 @@ export function MinimalCharacterSheet({
                 value={character.getEffectiveAttribute(attribute)}
                 onChange={(event) => updateAttribute(attribute, Number(event.target.value))}
               />
-              <span className="text-xs font-bold text-textH">{formatSigned(character.getEffectiveAttributeModifier(attribute))}</span>
+              <button
+                type="button"
+                className="rounded text-xs font-bold text-textH hover:bg-accentBg hover:text-accent"
+                title={rollModifierHint()}
+                onClick={(event) =>
+                  requestD20Roll({
+                    characterId,
+                    label: `Teste de ${attributeShort(attribute)}`,
+                    source: { type: "ability", attribute },
+                    mode: rollModeFromEvent(event.nativeEvent),
+                  })
+                }
+              >
+                {formatSigned(character.getEffectiveAttributeModifier(attribute))}
+              </button>
             </label>
           ))}
         </div>
@@ -240,26 +271,42 @@ export function MinimalCharacterSheet({
           {SAVING_THROWS.map(({ attribute, label }) => {
             const proficient = character.isSavingThrowProficient(attribute)
             return (
-              <button
+              <div
                 key={attribute}
-                type="button"
-                aria-pressed={proficient}
-                title={`${label}: ${proficient ? "proficiente" : "não proficiente"}`}
-                onClick={() => toggleSavingThrow(attribute)}
                 className={cn(
                   "flex min-w-0 items-center gap-2 rounded-lg border px-2 py-2 text-left transition-colors",
-                  proficient ? "border-accentBorder bg-accentBg" : "border-border bg-bg-subtle hover:border-borderStrong",
+                  proficient ? "border-accentBorder bg-accentBg" : "border-border bg-bg-subtle",
                 )}
               >
-                <span className={cn(
-                  "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-                  proficient ? "border-accent bg-accent text-white" : "border-textMuted",
-                )}>
+                <button
+                  type="button"
+                  aria-pressed={proficient}
+                  title={`${label}: ${proficient ? "proficiente" : "não proficiente"}`}
+                  onClick={() => toggleSavingThrow(attribute)}
+                  className={cn(
+                    "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+                    proficient ? "border-accent bg-accent text-white" : "border-textMuted",
+                  )}
+                >
                   {proficient ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
-                </span>
+                </button>
                 <span className="min-w-0 flex-1 truncate text-xs font-semibold text-textH">{attributeShort(attribute)}</span>
-                <span className="shrink-0 text-sm font-bold text-textH">{formatSigned(character.getSavingThrowBonus(attribute))}</span>
-              </button>
+                <button
+                  type="button"
+                  className="shrink-0 rounded px-1 text-sm font-bold text-textH hover:bg-bg hover:text-accent"
+                  title={rollModifierHint()}
+                  onClick={(event) =>
+                    requestD20Roll({
+                      characterId,
+                      label: `Resistência de ${label}`,
+                      source: { type: "save", attribute },
+                      mode: rollModeFromEvent(event.nativeEvent),
+                    })
+                  }
+                >
+                  {formatSigned(character.getSavingThrowBonus(attribute))}
+                </button>
+              </div>
             )
           })}
         </div>
@@ -297,7 +344,21 @@ export function MinimalCharacterSheet({
                   <div key={attribute} className="rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center">
                     <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">{attributeShort(attribute)}</div>
                     <div className="mt-1 flex items-baseline justify-center gap-2">
-                      <span className="text-sm font-bold text-textH">{formatSigned(character.getEffectiveSpellAttackBonus(attribute, modifier + proficiency))}</span>
+                      <button
+                        type="button"
+                        className="rounded px-1 text-sm font-bold text-textH hover:bg-bg hover:text-accent"
+                        title={rollModifierHint()}
+                        onClick={(event) =>
+                          requestD20Roll({
+                            characterId,
+                            label: `Ataque mágico (${attributeShort(attribute)})`,
+                            source: { type: "spell-attack", attribute },
+                            mode: rollModeFromEvent(event.nativeEvent),
+                          })
+                        }
+                      >
+                        {formatSigned(character.getEffectiveSpellAttackBonus(attribute, modifier + proficiency))}
+                      </button>
                       <span className="text-[10px] text-textMuted">CD</span>
                       <span className="text-sm font-bold text-textH">{character.getEffectiveSpellSaveDc(attribute, 8 + modifier + proficiency)}</span>
                     </div>
@@ -360,17 +421,82 @@ function CompactWeaponTile({ weapon, attack, damageBonus, onClick }: { weapon: W
   const damage = `${die.quantity}${die.sides}${damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""}`
   const hands = weapon.wieldedTwoHanded ? 2 : 1
   return (
-    <button type="button" title="Abrir opções de empunhadura, guardar ou largar" onClick={onClick} className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center transition-colors hover:border-accentBorder hover:bg-accentBg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-      <div className="flex min-w-0 items-center justify-center gap-1 text-[10px] uppercase tracking-wide text-textMuted"><span className="truncate">{weapon.name || "Arma"}{isWeaponImprovisedGrip(weapon) ? " · imp." : ""}</span><span className="shrink-0 rounded-full border border-accentBorder bg-accentBg px-1 py-0.5 text-[9px] font-semibold text-accent">{hands}M</span></div>
-      <div className="mt-1 text-lg font-bold text-textH">{formatSigned(attack)}</div>
-      <div className="text-[10px] font-medium text-textMuted">{damage}</div>
-    </button>
+    <div className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center">
+      <button type="button" title="Abrir opções de empunhadura, guardar ou largar" onClick={onClick} className="flex w-full min-w-0 items-center justify-center gap-1 rounded text-[10px] uppercase tracking-wide text-textMuted hover:text-accent">
+        <span className="truncate">{weapon.name || "Arma"}{isWeaponImprovisedGrip(weapon) ? " · imp." : ""}</span>
+        <span className="shrink-0 rounded-full border border-accentBorder bg-accentBg px-1 py-0.5 text-[9px] font-semibold text-accent">{hands}M</span>
+      </button>
+      <button
+        type="button"
+        className="mt-1 rounded px-1 text-lg font-bold text-textH hover:bg-accentBg hover:text-accent"
+        title={rollModifierHint()}
+        onClick={(event) =>
+          requestD20Roll({
+            characterId: character.get("id"),
+            label: `${weapon.name || "Arma"} — ataque`,
+            source: { type: "weapon-attack", weaponId: weapon.id },
+            mode: rollModeFromEvent(event.nativeEvent),
+          })
+        }
+      >
+        {formatSigned(attack)}
+      </button>
+      <button
+        type="button"
+        className="block w-full rounded text-[10px] font-medium text-textMuted hover:bg-accentBg hover:text-accent"
+        title="Clique para rolar o dano."
+        onClick={() =>
+          requestDamageRoll({
+            characterId: character.get("id"),
+            label: `${weapon.name || "Arma"} — dano`,
+            source: { type: "weapon-damage", weaponId: weapon.id },
+          })
+        }
+      >
+        {damage}
+      </button>
+    </div>
   )
 }
 
 function CompactUnarmedTile({ character }: { character: CharacterTemplate }) {
   const profile = getUnarmedAttackProfile(character)
-  return <div className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center"><div className="truncate text-[10px] uppercase tracking-wide text-textMuted">Ataque desarmado{profile.monkLevel > 0 ? ` · M${profile.monkLevel}` : ""}</div><div className="mt-1 text-lg font-bold text-textH">{formatSigned(profile.attack)}</div><div className="text-[10px] font-medium text-textMuted">{formatUnarmedDamage(profile)}</div></div>
+  return (
+    <div className="min-w-0 rounded-lg border border-border bg-bg-subtle px-2 py-2 text-center">
+      <div className="truncate text-[10px] uppercase tracking-wide text-textMuted">
+        Ataque desarmado{profile.monkLevel > 0 ? ` · M${profile.monkLevel}` : ""}
+      </div>
+      <button
+        type="button"
+        className="mt-1 rounded px-1 text-lg font-bold text-textH hover:bg-accentBg hover:text-accent"
+        title={rollModifierHint()}
+        onClick={(event) =>
+          requestD20Roll({
+            characterId: character.get("id"),
+            label: "Ataque desarmado — ataque",
+            source: { type: "unarmed-attack" },
+            mode: rollModeFromEvent(event.nativeEvent),
+          })
+        }
+      >
+        {formatSigned(profile.attack)}
+      </button>
+      <button
+        type="button"
+        className="block w-full rounded text-[10px] font-medium text-textMuted hover:bg-accentBg hover:text-accent"
+        title="Clique para rolar o dano."
+        onClick={() =>
+          requestDamageRoll({
+            characterId: character.get("id"),
+            label: "Ataque desarmado — dano",
+            source: { type: "unarmed-damage" },
+          })
+        }
+      >
+        {formatUnarmedDamage(profile)}
+      </button>
+    </div>
+  )
 }
 
 function DerivedTile({ label, value }: { label: string; value: string }) {

@@ -24,6 +24,7 @@ import type { GameOperation } from "../../../models/game/GameOperation"
 import type { Itemmable } from "../../../models/items/item"
 import type { Player } from "../../../models/player/Player"
 import type { LongRestSupplySelection } from "../../../models/supplies/partySupply"
+import { DiceRollOverlay } from "../../dice/DiceRollOverlay"
 
 export type CharacterWorkspaceMode = "campaign" | "user"
 
@@ -139,6 +140,7 @@ export function CharacterWorkspaceProvider({
   return (
     <CharacterWorkspaceContext.Provider value={value}>
       {children}
+      <DiceRollOverlay />
     </CharacterWorkspaceContext.Provider>
   )
 }
