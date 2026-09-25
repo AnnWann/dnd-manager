@@ -1,6 +1,6 @@
 import type { CharacterTemplateProps } from "../../../../../src/models/characters/CharacterTemplate";
 import { getAbilityUsageMax } from "../../../../../src/models/abilities/abilityActivation";
-import { getCharacterGrantedSpells, spendGrantedSpellAbilityUse, type CharacterGrantedSpell } from "../../../../../src/models/characters/characterGrantedSpells";
+import { getCharacterGrantedSpells, spendGrantedEquipmentSpellUse, spendGrantedSpellAbilityUse, type CharacterGrantedSpell } from "../../../../../src/models/characters/characterGrantedSpells";
 import { CharacterTemplate } from "../../../../../src/models/characters/CharacterTemplate";
 import {
   addSpellCastingDescription,
@@ -425,6 +425,7 @@ function applySpellCastPayment(
       && grant.castingMode === "source"
       && !grant.resourceCost
       && !grant.usageSource
+      && !grant.equipmentSpellUsageSource
       && !grant.usage,
     );
     if (spell.slotLevel === 0 || isAtWillGrant || (!options.useSlots && options.resources.length === 0)) {
@@ -490,6 +491,35 @@ function applySpellCastPayment(
     return { ok: true, character: spendSpellResourceCost(character, cost) };
   }
 
+  if (payment.type === "equipment-spell-use") {
+    if (
+      !grant?.equipmentSpellUsageSource
+      || !sameEquipmentSpellUsageSource(
+        grant.equipmentSpellUsageSource,
+        payment.source,
+      )
+      || !grant.usage
+    ) {
+      return {
+        ok: false,
+        code: "SPELL_EQUIPMENT_PAYMENT_INVALID",
+        message: "The selected equipment spell charge cannot pay for this spell.",
+      };
+    }
+    const maximum = getAbilityUsageMax(character, grant.usage);
+    if (grant.usage.used >= maximum) {
+      return {
+        ok: false,
+        code: "SPELL_EQUIPMENT_USE_UNAVAILABLE",
+        message: "No equipment spell charges remain.",
+      };
+    }
+    return {
+      ok: true,
+      character: spendGrantedEquipmentSpellUse(character, payment.source),
+    };
+  }
+
   if (!grant?.usageSource || !sameUsageSource(grant.usageSource, payment.source) || !grant.usage) {
     return {
       ok: false,
@@ -505,6 +535,14 @@ function applySpellCastPayment(
     ok: true,
     character: spendGrantedSpellAbilityUse(character, payment.source),
   };
+}
+
+function sameEquipmentSpellUsageSource(
+  left: NonNullable<CharacterGrantedSpell["equipmentSpellUsageSource"]>,
+  right: NonNullable<CharacterGrantedSpell["equipmentSpellUsageSource"]>,
+): boolean {
+  return left.itemId === right.itemId
+    && left.spellIndex === right.spellIndex;
 }
 
 function sameUsageSource(
