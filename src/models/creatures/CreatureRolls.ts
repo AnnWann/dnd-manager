@@ -210,7 +210,7 @@ export function parseCreatureSkills(text: string | undefined): ParsedCreatureSki
 
 export function findCreatureSkill(
   text: string | undefined,
-  skill: string,
+  skill: Skill,
 ): ParsedCreatureSkill | undefined {
   return parseCreatureSkills(text).find((entry) => entry.skill === skill)
 }
