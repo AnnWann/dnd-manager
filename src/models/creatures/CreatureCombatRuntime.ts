@@ -130,7 +130,17 @@ export function getCreatureEffectiveArmorClass(
   conditions: InitiativeCondition[] = [],
   entry?: InitiativeEntry,
 ): number {
-  return createCreatureCombatCharacter(creature, conditions, entry).getEffectiveArmorClass()
+  const baseArmorClass = entry?.armorClassOverride ?? creature.armorClass ?? 10
+  const character = createCreatureCombatCharacter(creature, conditions, entry)
+
+  // Creature compendium armorClass is already the final stat-block AC.
+  // Do not run CharacterTemplate.getEffectiveArmorClass(), because character
+  // AC calculation adds the DEX armor contribution on top of this value.
+  // Only explicit armor-class bonuses/penalties from active conditions apply.
+  return applyBonuses(
+    baseArmorClass,
+    getCharacterBonuses(character, "armorClass"),
+  )
 }
 
 export function getCreatureFeatureEffectiveAttackBonus(
