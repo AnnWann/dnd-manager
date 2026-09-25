@@ -36,7 +36,7 @@ import {
 } from "../../../../src/models/items/equipment/Weapon";
 import type { Attribute } from "../../../../src/models/sheet/Attribute";
 import type { Skill } from "../../../../src/models/sheet/Skills";
-import { normalizeInitiativeSession, type InitiativeEntry } from "../../../../src/models/initiative/Initiative";
+import { normalizeInitiativeSession, type InitiativeEntry, type InitiativeSession } from "../../../../src/models/initiative/Initiative";
 import { CREATURE_ATTRIBUTE_LABELS, findCreatureSave, findCreatureSkill, parseCreatureDamageFormula } from "../../../../src/models/creatures/CreatureRolls";
 import { getCreatureEffectiveAbilityModifier, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../../../src/models/creatures/CreatureCombatRuntime";
 import type { CompendiumCreature, CreatureFeature } from "../../../../src/models/creatures/CompendiumCreature";
@@ -260,7 +260,9 @@ export class SessionActor extends DurableObject<Env> {
     let entry: InitiativeEntry | undefined;
     if (request.initiativeEntryId) {
       const initiative = initiativeState?.session
-        ? normalizeInitiativeSession(initiativeState.session)
+        ? normalizeInitiativeSession(
+            initiativeState.session as Partial<InitiativeSession>,
+          )
         : undefined;
       entry = initiative?.entries.find(
         (candidate) => candidate.id === request.initiativeEntryId,
