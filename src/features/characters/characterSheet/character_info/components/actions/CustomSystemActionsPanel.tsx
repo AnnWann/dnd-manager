@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import { Play } from "lucide-react"
+import { requestActionAnnouncement } from "../../../../../../lib/diceRoller"
 
 import type { AbilityActionKind } from "../../../../../../models/abilities/Ability"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
@@ -232,15 +233,31 @@ export function CustomSystemActionsPanel({
                           ) : null}
                         </div>
 
-                        <button
-                          type="button"
-                          disabled={entry.disabled || manualInvalid}
-                          onClick={() => activate(entry)}
-                          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH hover:bg-bg disabled:cursor-not-allowed disabled:opacity-45"
-                        >
-                          <Play className="h-3.5 w-3.5" />
-                          Usar
-                        </button>
+                        <div className="flex shrink-0 flex-col gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              requestActionAnnouncement({
+                                characterId: character.get("id"),
+                                title: entry.name,
+                                subtitle: `${CATEGORY_LABELS[entry.actionKind].replace(/s$/, "")} · ${entry.source}`,
+                                description: entry.description,
+                              })
+                            }
+                            className="rounded-lg border border-border bg-bg px-3 py-2 text-xs font-semibold text-textH hover:border-accentBorder hover:bg-accentBg"
+                          >
+                            Mostrar
+                          </button>
+                          <button
+                            type="button"
+                            disabled={entry.disabled || manualInvalid}
+                            onClick={() => activate(entry)}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH hover:bg-bg disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            <Play className="h-3.5 w-3.5" />
+                            Usar
+                          </button>
+                        </div>
                       </div>
                     </article>
                   )
