@@ -1,4 +1,4 @@
-import type { CharacterGrantedSpellUsageSource } from "../../../../../src/models/characters/characterGrantedSpells";
+import type { CharacterGrantedEquipmentSpellUsageSource, CharacterGrantedSpellUsageSource } from "../../../../../src/models/characters/characterGrantedSpells";
 import type { SpellResourceType } from "../../../../../src/models/magic/spells/Spell";
 import type { SessionDiceRollMode } from "../../../../../src/shared/session-runtime/diceRollProtocol";
 
@@ -6,7 +6,8 @@ export type SessionSpellCastPayment =
   | { type: "none" }
   | { type: "slot"; pool: "normal" | "pact"; level: number }
   | { type: "resource"; resource: SpellResourceType }
-  | { type: "ability-use"; source: CharacterGrantedSpellUsageSource };
+  | { type: "ability-use"; source: CharacterGrantedSpellUsageSource }
+  | { type: "equipment-spell-use"; source: CharacterGrantedEquipmentSpellUsageSource };
 
 export type SessionMagicOperation =
   | { type: "character.spell.cast"; characterId: string; requestId: string; spellIndex: string; sourceId: string; castLevel: number; mode: SessionDiceRollMode; payment: SessionSpellCastPayment }
@@ -147,7 +148,18 @@ function isSpellCastPayment(value: unknown): value is SessionSpellCastPayment {
       || value.resource === "channelDivinity";
   }
   if (value.type === "ability-use") return isGrantedSpellUsageSource(value.source);
+  if (value.type === "equipment-spell-use") return isEquipmentSpellUsageSource(value.source);
   return false;
+}
+
+function isEquipmentSpellUsageSource(
+  value: unknown,
+): value is CharacterGrantedEquipmentSpellUsageSource {
+  return isRecord(value)
+    && nonEmpty(value.itemId)
+    && value.itemId.length <= 200
+    && nonEmpty(value.spellIndex)
+    && value.spellIndex.length <= 200;
 }
 
 function isGrantedSpellUsageSource(value: unknown): value is CharacterGrantedSpellUsageSource {
