@@ -277,7 +277,8 @@ function filterMessageForSocket(socket: WebSocket, message: unknown): unknown | 
 
   if (type === "session.dice.result" || type === "session.action.result") {
     const characterId = readCharacterId(record.result);
-    return characterId && canReceiveCharacter(connection, characterId)
+    if (!characterId) return message;
+    return canReceiveCharacter(connection, characterId)
       ? message
       : null;
   }
