@@ -19,6 +19,12 @@ export async function readRuntimeConfig(
   ) ?? null;
 }
 
+export function isDigitalDiceRollingEnabled(
+  snapshot: SessionRuntimeConfigSnapshot | null,
+): boolean {
+  return snapshot?.config.diceRollingEnabled !== false;
+}
+
 export function getRuntimeCharacterConfig(
   snapshot: SessionRuntimeConfigSnapshot | null,
   characterId: string,
