@@ -8,6 +8,8 @@ import type {
 export const DICE_ROLL_REQUEST_EVENT = "dndmm:dice-roll-request"
 export const DICE_ROLL_RESULT_EVENT = "dndmm:dice-roll-result"
 
+let requestSequence = 0
+
 export function requestD20Roll(input: {
   characterId: string
   label: string
@@ -106,5 +108,5 @@ function createRequestId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID()
   }
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return `${Date.now()}-${requestSequence++}`
 }
