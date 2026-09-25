@@ -75,6 +75,21 @@ export function GroupStats({
           updateCharacter={updateCharacter}
           fallback={0}
         />
+        <button
+          type="button"
+          className="mt-2 w-full rounded-md border border-border bg-bg-subtle px-2 py-1 text-[10px] font-semibold text-text hover:border-accentBorder hover:text-accent"
+          title={rollModifierHint()}
+          onClick={(event) =>
+            rollD20({
+              label: "Iniciativa",
+              modifier: character.getEffectiveInitiative(),
+              kind: "initiative",
+              mode: rollModeFromEvent(event.nativeEvent),
+            })
+          }
+        >
+          Rolar iniciativa
+        </button>
       </StatShell>
 
       <StatShell label="Deslocamento">
