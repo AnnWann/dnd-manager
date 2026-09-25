@@ -19,6 +19,7 @@ import {
 import {
   activateCustomAbilityWithRoll,
   activateCustomSystemActionWithRoll,
+  getCustomAbilityRollDefinition,
 } from "../../../../../src/lib/customSystems/CustomAbilityRoll";
 import {
   runCustomSystemAutomation,
@@ -46,7 +47,7 @@ import {
   createSessionLogRecord,
   readSessionLog,
 } from "../../session/sessionLog";
-import { readRuntimeConfig } from "../../session/runtimeConfigAccess";
+import { isDigitalDiceRollingEnabled, readRuntimeConfig } from "../../session/runtimeConfigAccess";
 import { broadcastVisibilityFiltered } from "../../session/visibilityDelivery";
 import { MAX_CHARACTER_STATE_LOG_RECORDS } from "../sheet/characterState";
 import {
@@ -148,6 +149,38 @@ export class SessionActor extends BaseSessionActor {
     if (currentState.systemVersion !== installation.systemVersion) {
       sendError(webSocket, "CUSTOM_SYSTEM_RUNTIME_VERSION_MISMATCH", "The live custom-system state does not match the installed Creation version.");
       return;
+    }
+
+    const digitalDiceEnabled = isDigitalDiceRollingEnabled(activeRuntimeConfig);
+    if (!digitalDiceEnabled) {
+      if (operation.type === "character.customSystem.ability.activate") {
+        const roll = getCustomAbilityRollDefinition(
+          definition,
+          currentState,
+          operation.abilityId,
+        );
+        if (roll && (typeof operation.rollValue !== "number" || !Number.isFinite(operation.rollValue))) {
+          sendError(
+            webSocket,
+            "PHYSICAL_ROLL_REQUIRED",
+            "Informe o resultado dos dados físicos antes de usar esta habilidade.",
+          );
+          return;
+        }
+      }
+      if (operation.type === "character.customSystem.action.execute") {
+        const roll = definition.actions?.find(
+          (entry) => entry.id === operation.actionId,
+        )?.roll;
+        if (roll && (typeof operation.rollValue !== "number" || !Number.isFinite(operation.rollValue))) {
+          sendError(
+            webSocket,
+            "PHYSICAL_ROLL_REQUIRED",
+            "Informe o resultado dos dados físicos antes de executar esta ação.",
+          );
+          return;
+        }
+      }
     }
 
     let nextCharacter: CharacterTemplate;
