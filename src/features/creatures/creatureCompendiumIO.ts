@@ -48,17 +48,20 @@ type CreatureZipManifest = {
 export function getCreatureJsonTemplate(): string {
   return JSON.stringify(
     {
-      name: "Nome da criatura",
+      name: "Nome verdadeiro da criatura",
+      basicName: "Nome genérico mostrado aos jogadores",
       category: "Monstro",
       size: "Médio",
       challengeRating: "5",
       unique: false,
       defaultSide: "enemy",
+
       initiativeBonus: 0,
       armorClass: 15,
       maxHp: 75,
       speed: "9 m",
       passivePerception: 12,
+
       abilityScores: {
         str: 10,
         dex: 10,
@@ -67,31 +70,129 @@ export function getCreatureJsonTemplate(): string {
         wis: 10,
         cha: 10,
       },
-      savingThrows: "",
-      skills: "",
+
+      savingThrows: "DES +5, SAB +3",
+      skills: "Percepção +5, Furtividade +7",
+
       vulnerabilities: "",
       resistances: "",
       immunities: "",
-      conditionImmunities: "",
-      senses: "",
-      languages: "",
+      damageAffinities: [
+        {
+          damageType: "slashing",
+          kind: "resistance",
+          qualifier: "nonmagical",
+          label: "Resistência a dano cortante não mágico",
+        },
+        {
+          damageType: "fire",
+          kind: "immunity",
+          qualifier: "any",
+        },
+        {
+          damageType: "cold",
+          kind: "vulnerability",
+          qualifier: "any",
+        },
+      ],
+
+      conditionImmunities: "enfeitiçado, amedrontado",
+      senses: "visão no escuro 18 m, Percepção passiva 12",
+      languages: "Comum, Infernal",
+
       traits: [
         {
           name: "Nome do traço",
-          description: "Descrição completa do traço ou habilidade.",
+          description: "Descrição completa do traço ou característica.",
         },
       ],
+
       actions: [
         {
-          name: "Nome da ação",
+          name: "Nome do ataque",
           description: "Descrição completa da ação.",
+          mechanics: {
+            kind: "attack",
+            attackType: "weapon",
+            rangeType: "melee",
+            attackBonus: 5,
+            attribute: "str",
+            magical: false,
+            reach: "1,5 m",
+            damage: [
+              {
+                formula: "1d8+3",
+                damageType: "slashing",
+              },
+              {
+                formula: "1d6",
+                damageType: "fire",
+              },
+            ],
+          },
+        },
+        {
+          name: "Nome de uma ação sem ataque",
+          description: "Ações sem rolagem precisam apenas de nome e descrição.",
         },
       ],
-      bonusActions: [],
-      reactions: [],
-      legendaryActions: [],
-      combatNotes: "",
-      imageUrl: "",
+
+      bonusActions: [
+        {
+          name: "Nome da ação bônus",
+          description: "Descrição completa da ação bônus.",
+        },
+      ],
+
+      reactions: [
+        {
+          name: "Nome da reação",
+          description: "Descrição completa da reação.",
+        },
+      ],
+
+      legendaryActions: [
+        {
+          name: "Nome da ação lendária",
+          description: "Descrição completa da ação lendária.",
+        },
+      ],
+
+      combatNotes: "Observações gerais de combate.",
+
+      drops: {
+        guaranteed: [
+          {
+            name: "Item garantido",
+            desc: "Descrição do item.",
+            notes: "",
+            quantity: 1,
+            weight: 0,
+            pocketable: true,
+            kind: "common",
+          },
+        ],
+        rollGroups: [
+          {
+            items: [
+              {
+                name: "Item do resultado 1",
+                desc: "",
+                notes: "",
+                quantity: 1,
+                weight: 0,
+                pocketable: true,
+                kind: "common",
+              },
+            ],
+          },
+          {
+            items: [],
+          },
+        ],
+      },
+
+      imageUrl: "https://...",
     },
     null,
     2,
@@ -181,7 +282,10 @@ export async function downloadCreaturePackZip(
       "",
       "Importe este arquivo ZIP pela página Compêndio de Criaturas.",
       "As criaturas ficam em /creatures e suas imagens em /images.",
-      "Traços, ações, ações bônus, reações e ações lendárias são listas de objetos com name e description.",
+      "Traços, ações, ações bônus, reações e ações lendárias são listas de objetos com name, description e mechanics opcional.",
+      "Ataques estruturados usam mechanics.kind=attack, attackType, rangeType, attackBonus, attribute, magical, reach e damage[].",
+      "Afinidades estruturadas usam damageAffinities[] e drops usam guaranteed[] + rollGroups[].",
+      "IDs e timestamps podem ser omitidos em JSONs manuais; o aplicativo os gera automaticamente.",
       "Cada JSON usa imagePath para referenciar a imagem correspondente dentro do pack.",
       "Ao importar, o aplicativo descompacta a imagem, envia-a novamente e grava a nova URL na criatura.",
       "Também é possível editar os arquivos JSON manualmente antes da importação.",
