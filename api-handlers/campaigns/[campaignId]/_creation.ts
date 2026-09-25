@@ -174,8 +174,8 @@ export async function PATCH(
         currentSnapshot.managedDomains?.customSystems === true || domains.systems,
     }
     const nextDiceRollingEnabled = domains.settings
-      ? data.diceRollingEnabled
-      : currentSnapshot.data.diceRollingEnabled
+      ? data.diceRollingEnabled !== false
+      : currentSnapshot.data.diceRollingEnabled !== false
 
     await prisma.$transaction(async (tx) => {
       const campaign = await tx.campaign.findUnique({
