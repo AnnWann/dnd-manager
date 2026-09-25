@@ -414,7 +414,7 @@ function ActionRollEntry({
   )
 }
 
-function formatResolvedD20(roll: SessionActionRollResult["attack"] & {}) {
+function formatResolvedD20(roll: NonNullable<SessionActionRollResult["attack"]>) {
   if (!roll) return ""
   const group = roll.groups[0]
   const d20 = group.rolls.length > 1
