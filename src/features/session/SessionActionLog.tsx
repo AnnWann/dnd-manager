@@ -365,38 +365,49 @@ function ActionRollEntry({
       </header>
 
       <div className="grid gap-2 p-3">
-        {attack ? (
-          <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-border bg-bg-subtle px-3 py-2">
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-                Ataque{attack.mode === "advantage" ? " · Vantagem" : attack.mode === "disadvantage" ? " · Desvantagem" : ""}
+        {roll.instances?.length ? (
+          <div className="grid gap-2">
+            {roll.instances.map((instance, index) => (
+              <div key={`${instance.label}:${index}`} className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-2">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+                  {instance.label}
+                </div>
+                {instance.attack ? <ResolvedAttackBlock attack={instance.attack} /> : null}
+                {instance.damages?.map((entry, damageIndex) => (
+                  <ResolvedDamageBlock
+                    key={`${entry.label ?? "damage"}:${damageIndex}`}
+                    damage={entry}
+                  />
+                ))}
               </div>
-              <div className="mt-0.5 text-[10px] text-textMuted">{formatResolvedD20(attack)}</div>
-            </div>
-            <div className={`text-2xl font-black ${attackClass}`}>{attack.total}</div>
+            ))}
           </div>
+        ) : attack ? (
+          <ResolvedAttackBlock attack={attack} />
         ) : null}
 
         {roll.save ? (
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-subtle px-3 py-2">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Teste de resistência</div>
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Teste de resistência</div>
+              {roll.save.onSuccess ? (
+                <div className="mt-0.5 text-[10px] text-textMuted">
+                  Sucesso: {roll.save.onSuccess === "half" ? "metade do dano" : roll.save.onSuccess === "full" ? "dano completo" : "sem dano"}
+                </div>
+              ) : null}
+            </div>
             <div className="text-sm font-black text-textH">CD {roll.save.dc} · {roll.save.attribute.toUpperCase()}</div>
           </div>
         ) : null}
 
-        {damage ? (
-          <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-border bg-bg-subtle px-3 py-2">
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-                {damage.critical ? "Dano crítico" : "Dano"}
-              </div>
-              <div className="mt-0.5 text-[10px] text-textMuted">{formatResolvedDamage(damage)}</div>
-            </div>
-            <div className={damage.critical ? "text-2xl font-black text-success" : "text-2xl font-black text-textH"}>
-              {damage.total}
-            </div>
-          </div>
-        ) : null}
+        {damage ? <ResolvedDamageBlock damage={damage} /> : null}
+
+        {roll.damages?.map((entry, index) => (
+          <ResolvedDamageBlock
+            key={`${entry.label ?? "damage"}:${index}`}
+            damage={entry}
+          />
+        ))}
 
         {roll.description ? (
           <details className="rounded-lg border border-border bg-bg-subtle px-3 py-2">
@@ -411,6 +422,52 @@ function ActionRollEntry({
         </div>
       </div>
     </article>
+  )
+}
+
+function ResolvedAttackBlock({
+  attack,
+}: {
+  attack: NonNullable<SessionActionRollResult["attack"]>
+}) {
+  const attackClass = attack.natural === 20
+    ? "text-success"
+    : attack.natural === 1
+      ? "text-danger"
+      : "text-textH"
+
+  return (
+    <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-border bg-bg px-3 py-2">
+      <div>
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+          Ataque{attack.mode === "advantage" ? " · Vantagem" : attack.mode === "disadvantage" ? " · Desvantagem" : ""}
+        </div>
+        <div className="mt-0.5 text-[10px] text-textMuted">{formatResolvedD20(attack)}</div>
+      </div>
+      <div className={`text-2xl font-black ${attackClass}`}>{attack.total}</div>
+    </div>
+  )
+}
+
+function ResolvedDamageBlock({
+  damage,
+}: {
+  damage: NonNullable<SessionActionRollResult["damage"]>
+}) {
+  const label = damage.label?.trim() || (damage.critical ? "Dano crítico" : "Dano")
+  const type = damage.damageType?.trim()
+  return (
+    <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-border bg-bg px-3 py-2">
+      <div>
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+          {label}{type ? ` · ${type}` : ""}
+        </div>
+        <div className="mt-0.5 text-[10px] text-textMuted">{formatResolvedDamage(damage)}</div>
+      </div>
+      <div className={damage.critical ? "text-2xl font-black text-success" : "text-2xl font-black text-textH"}>
+        {damage.total}
+      </div>
+    </div>
   )
 }
 
