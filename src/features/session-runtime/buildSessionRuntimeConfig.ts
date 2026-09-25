@@ -64,7 +64,8 @@ export async function buildSessionRuntimeConfigSnapshot(args: {
     creationRevision: args.creationRevision,
     config: {
       ...toSessionRuntimeConfig(args.creation),
-      spells: Array.from(spellByIndex.values()),
+      spells: Array.from(spellByIndex.values())
+        .sort((left, right) => left.index.localeCompare(right.index)),
     },
   }
 }
