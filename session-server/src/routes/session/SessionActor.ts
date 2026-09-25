@@ -69,6 +69,7 @@ import {
 } from "./sessionLog";
 import { readRuntimeConfig } from "./runtimeConfigAccess";
 import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/session-runtime/sessionRuntimeConfig";
+import type { SessionDiceRollRequest, SessionDiceRollResult } from "../../../../src/shared/session-runtime/diceRollProtocol";
 import {
   broadcastVisibilityFiltered,
   refreshConnectionVisibility,
@@ -160,6 +161,9 @@ export class SessionActor extends DurableObject<Env> {
         break;
       case "session.sheet.operation":
         break;
+      case "session.dice.roll":
+        await this.handleDiceRoll(webSocket, connection, parsed.request);
+        break;
       case "session.log.undo":
         this.sendError(webSocket, "UNDO_ROUTING_ERROR", "Session undo must be handled by the composed session actor.");
         break;
@@ -194,6 +198,26 @@ export class SessionActor extends DurableObject<Env> {
     }
     this.broadcastPresence(now);
     await this.scheduleNextAlarm(now);
+  }
+
+  private async handleDiceRoll(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    request: SessionDiceRollRequest,
+  ): Promise<void> {
+    const hpState = await this.readHpState();
+    const character = hpState[request.characterId];
+    if (!character) {
+      this.sendError(webSocket, "CHARACTER_NOT_INITIALIZED", "Authoritative character state has not been initialized.");
+      return;
+    }
+    if (connection.role !== "MASTER" && character.ownerUserId !== connection.userId) {
+      this.sendError(webSocket, "CHARACTER_ACCESS_DENIED", "You cannot roll for this character.");
+      return;
+    }
+
+    const result = resolveServerDiceRoll(request, connection.userId);
+    this.broadcast({ type: "session.dice.result", result });
   }
 
   private async initializeHp(webSocket: WebSocket, connection: SessionConnection, seeds: SessionHpSeed[]): Promise<void> {
@@ -720,6 +744,70 @@ export class SessionActor extends DurableObject<Env> {
     }
     await this.ctx.storage.setAlarm(nextDeadline);
   }
+}
+
+function resolveServerDiceRoll(
+  request: SessionDiceRollRequest,
+  actorId: string,
+): SessionDiceRollResult {
+  if (request.kind !== "damage") {
+    const rolls = request.mode === "normal"
+      ? [rollServerDie(20)]
+      : [rollServerDie(20), rollServerDie(20)];
+    const kept = request.mode === "advantage"
+      ? Math.max(...rolls)
+      : request.mode === "disadvantage"
+        ? Math.min(...rolls)
+        : rolls[0];
+
+    return {
+      id: crypto.randomUUID(),
+      requestId: request.requestId,
+      actorId,
+      characterId: request.characterId,
+      label: request.label,
+      kind: request.kind,
+      mode: request.mode,
+      groups: [{ quantity: rolls.length, sides: 20, rolls, kept }],
+      modifier: request.modifier,
+      total: kept + request.modifier,
+      natural: kept,
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  const groups = request.groups.map((group) => ({
+    ...group,
+    rolls: Array.from({ length: group.quantity }, () => rollServerDie(group.sides)),
+  }));
+  const diceTotal = groups.reduce(
+    (sum, group) => sum + group.rolls.reduce((groupSum, value) => groupSum + value, 0),
+    0,
+  );
+
+  return {
+    id: crypto.randomUUID(),
+    requestId: request.requestId,
+    actorId,
+    characterId: request.characterId,
+    label: request.label,
+    kind: request.kind,
+    mode: "normal",
+    groups,
+    modifier: request.modifier,
+    total: diceTotal + request.modifier,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function rollServerDie(sides: number): number {
+  const range = 0x1_0000_0000;
+  const limit = range - (range % sides);
+  const buffer = new Uint32Array(1);
+  do {
+    crypto.getRandomValues(buffer);
+  } while (buffer[0] >= limit);
+  return (buffer[0] % sides) + 1;
 }
 
 function hydrateCharacterForRest(
