@@ -30,7 +30,7 @@ export function CompactSpellCard({
   castingDescriptions = [],
 }: Props) {
   const hiddenCardRef = useRef<HTMLDivElement | null>(null)
-  const { activeCharacter, updateCharacter } = useCharacterWorkspace()
+  const { activeCharacter, updateCharacter, mode } = useCharacterWorkspace()
   const { getSpellByIndex } = useMagicContext()
   const spellName = spell.displayName || spell.name
   const canTogglePrepared = !alwaysPrepared && Boolean(activeCharacter)
@@ -104,7 +104,7 @@ export function CompactSpellCard({
           —
         </span>
 
-        {activeCharacter ? (
+        {mode === "campaign" && activeCharacter ? (
           <Button
             className="shrink-0"
             size="sm"
