@@ -1,5 +1,6 @@
 import { routeForSheetOperation, type CharacterSheetRoute } from "../characters/sheet";
 import type { SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult } from "../../../../src/shared/session-runtime/diceRollProtocol";
+import { parseManualDiceExpression } from "../../../../src/shared/session-runtime/manualDiceExpression";
 
 export type SessionRole = "MASTER" | "PLAYER";
 
@@ -384,6 +385,7 @@ function isDiceRollRequest(value: unknown): value is SessionDiceRollRequest {
   if (!nonEmpty(value.characterId) || value.characterId.length > 120) return false;
   if (typeof value.label !== "string" || value.label.trim().length === 0 || value.label.length > 160) return false;
   if (!diceRollMode(value.mode) || !isDiceRollSource(value.source)) return false;
+  if (value.source.type === "manual") return value.mode === "normal";
   return value.source.type !== "weapon-damage"
     && value.source.type !== "unarmed-damage"
     ? true
@@ -406,6 +408,9 @@ function isDiceRollSource(value: unknown): boolean {
     case "weapon-attack":
     case "weapon-damage":
       return nonEmpty(value.weaponId) && value.weaponId.length <= 160;
+    case "manual":
+      return typeof value.expression === "string"
+        && parseManualDiceExpression(value.expression).ok;
     default:
       return false;
   }
