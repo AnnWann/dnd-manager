@@ -203,7 +203,7 @@ export function SpellCreatorModule({
     })
   }
 
-  function updateSave(patch: Partial<Extract<SpellResolution["roll"], { type: "save" }>>) {
+  function updateSave(patch: Partial<Omit<Extract<SpellResolution["roll"], { type: "save" }>, "type">>) {
     const current = currentResolution()
     if (current.roll.type !== "save") return
     updateResolution({
