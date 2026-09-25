@@ -3,7 +3,6 @@ import { useEffect, useState } from "react"
 import { useCustomSystemDefinitions } from "../../../lib/customSystems/CustomSystemRegistry"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
-import { DiceRollOverlay } from "../../dice/DiceRollOverlay"
 
 import { AttributeCalculators } from "./attributeCalculators"
 import { Attributes } from "./attributes"
@@ -53,7 +52,6 @@ export function CharacterSheetTab({
 
   return (
     <div className="grid gap-4">
-      <DiceRollOverlay />
       <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-bg p-2 shadow-theme-sm">
         <div className="min-w-0 px-1">
           <div className="text-xs font-semibold text-textH">Visualização da ficha</div>
