@@ -1,6 +1,8 @@
 import { ChevronDown, ChevronUp, Dices, History, PanelRightClose, PanelRightOpen, Undo2 } from "lucide-react"
 import { useEffect, useMemo, useState, type FormEvent } from "react"
 
+import { Select } from "../../components/ui/Select"
+
 import { useCharacterContext } from "../../contexts/characterContext"
 import { useInitiativeRollSelection } from "../initiative/initiativeRollSelection"
 import { ACTION_ROLL_RESULT_EVENT, DICE_ROLL_RESULT_EVENT, getRollVisibility, requestManualDiceRoll, setRollVisibility } from "../../lib/diceRoller"
@@ -437,19 +439,19 @@ function DiceRollPanel({
             Identificação
           </label>
           {allowAnonymous ? (
-            <select
+            <Select
               value={attributionMode}
               onChange={(event) => {
                 setAttributionMode(event.target.value as "selected" | "none")
                 if (manualError) setManualError("")
               }}
-              className="h-8 w-full rounded-lg border border-border bg-bg-subtle px-2 text-[11px] text-textH outline-none focus:border-accentBorder"
+              className="h-8 w-full text-[11px]"
             >
               <option value="selected" disabled={!manualTarget}>
                 {manualTarget?.label ?? "Nenhum participante selecionado"}
               </option>
               <option value="none">Sem identificador</option>
-            </select>
+            </Select>
           ) : (
             <div className="rounded-lg border border-border bg-bg-subtle px-2 py-1.5 text-[11px] text-textH">
               {manualTarget?.label ?? "Personagem"}
