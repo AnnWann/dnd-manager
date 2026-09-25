@@ -107,7 +107,7 @@ function inferDamageParts(
   const seen = new Set<string>()
 
   const portuguese =
-    /\(([^()]*(?:\d+)?d\d+[^()]*)\)\s*(?:de\s+)?dano\s+([\p{L}-]+)/giu
+    /\(([^()]*(?:\d+)?d\d+[^()]*)\)\s*(?:(?:pontos?\s+)?de\s+)?dano\s+(?:de\s+)?([\p{L}-]+)/giu
   const english =
     /\(([^()]*(?:\d+)?d\d+[^()]*)\)\s*([a-z-]+)\s+damage/giu
 
@@ -165,6 +165,7 @@ function parseDamageTypeLabel(value: string): DamageType | undefined {
     cortante: "slashing",
     thunder: "thunder",
     trovao: "thunder",
+    trovejante: "thunder",
     sonoro: "thunder",
   }
   return aliases[normalized]
