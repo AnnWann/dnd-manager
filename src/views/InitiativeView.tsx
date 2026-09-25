@@ -38,6 +38,7 @@ import {
 } from "../features/initiative/InitiativeDialogs"
 import { InitiativeTable } from "../features/initiative/InitiativeTable"
 import { InitiativeCombatantInspector } from "../features/initiative/InitiativeCombatantInspector"
+import { setInitiativeRollSelection } from "../features/initiative/initiativeRollSelection"
 import {
   InitiativeHpActionDialog,
   type InitiativeHpActionMode,
@@ -162,6 +163,22 @@ export function InitiativeView() {
     setInspectedEntryId(session.activeEntryId ?? session.entries[0]?.id)
     setInspectorPinned(false)
   }, [inspectedEntryId, session.activeEntryId, session.entries])
+
+  useEffect(() => {
+    if (!inspectedEntry) {
+      setInitiativeRollSelection(undefined)
+      return
+    }
+
+    setInitiativeRollSelection({
+      entryId: inspectedEntry.id,
+      name: initiativeEntryDisplayName(inspectedEntry, "master"),
+    })
+
+    return () => {
+      setInitiativeRollSelection(undefined)
+    }
+  }, [inspectedEntry])
 
   useEffect(() => {
     if (!session.activeEntryId || session.viewMode !== "cards") return
