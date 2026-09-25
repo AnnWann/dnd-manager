@@ -4,7 +4,7 @@ import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react"
 import { Button } from "../../components/ui/Button"
 import { damageAffinityLabel, damageTypeLabel, type DamageAffinity } from "../../models/combat/Damage"
 import { requestCreatureRoll, rollModeFromEvent, rollModifierHint } from "../../lib/diceRoller"
-import { CREATURE_ATTRIBUTE_LABELS, parseCreatureSavingThrows, parseCreatureSkills, type ParsedCreatureSave, type ParsedCreatureSkill } from "../../models/creatures/CreatureRolls"
+import { CREATURE_ATTRIBUTE_LABELS, inferCreatureAttackMechanics, parseCreatureSavingThrows, parseCreatureSkills, type ParsedCreatureSave, type ParsedCreatureSkill } from "../../models/creatures/CreatureRolls"
 import { getCreatureEffectiveAbilityModifier, getCreatureEffectiveArmorClass, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../models/creatures/CreatureCombatRuntime"
 import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
 import type {
@@ -486,11 +486,29 @@ export function quickSheetFromCompendiumCreature(
 ): CombatQuickSheetData {
   const conditions = entry?.conditions ?? []
   const enrich = (features: CreatureFeature[]): QuickSheetFeature[] =>
-    features.map((feature) => ({
-      ...feature,
-      effectiveAttackBonus: getCreatureFeatureEffectiveAttackBonus(creature, feature, conditions, entry),
-      effectiveDamageBonus: getCreatureFeatureEffectiveDamageBonus(creature, feature, conditions, entry),
-    }))
+    features.map((feature) => {
+      const resolvedFeature: CreatureFeature = {
+        ...feature,
+        mechanics:
+          feature.mechanics
+          ?? inferCreatureAttackMechanics(feature.description),
+      }
+      return {
+        ...resolvedFeature,
+        effectiveAttackBonus: getCreatureFeatureEffectiveAttackBonus(
+          creature,
+          resolvedFeature,
+          conditions,
+          entry,
+        ),
+        effectiveDamageBonus: getCreatureFeatureEffectiveDamageBonus(
+          creature,
+          resolvedFeature,
+          conditions,
+          entry,
+        ),
+      }
+    })
   const abilityModifiers = Object.fromEntries(
     (Object.keys(creature.abilityScores) as Attribute[]).map((attribute) => [
       attribute,
