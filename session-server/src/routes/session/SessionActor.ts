@@ -26,6 +26,7 @@ import {
   type CharacterTemplateProps,
 } from "../../../../src/models/characters/CharacterTemplate";
 import { getCurrentMaxHp } from "../../../../src/models/characters/characterHp";
+import { getCharacterGrantedSpells } from "../../../../src/models/characters/characterGrantedSpells";
 import { hasProficiency } from "../../../../src/models/characters/characterProficiencies";
 import { getUnarmedAttackProfile } from "../../../../src/models/characters/unarmedAttack";
 import {
@@ -79,7 +80,7 @@ import {
 } from "./sessionLog";
 import { readRuntimeConfig } from "./runtimeConfigAccess";
 import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/session-runtime/sessionRuntimeConfig";
-import type { SessionDiceRollRequest, SessionDiceRollResult } from "../../../../src/shared/session-runtime/diceRollProtocol";
+import type { SessionActionRollRequest, SessionActionRollResult, SessionDiceRollRequest, SessionDiceRollResult, SessionResolvedD20Roll, SessionResolvedDamageRoll } from "../../../../src/shared/session-runtime/diceRollProtocol";
 import {
   broadcastVisibilityFiltered,
   refreshConnectionVisibility,
@@ -190,6 +191,9 @@ export class SessionActor extends DurableObject<Env> {
       case "session.dice.roll":
         await this.handleDiceRoll(webSocket, connection, parsed.request);
         break;
+      case "session.action.roll":
+        await this.handleActionRoll(webSocket, connection, parsed.request);
+        break;
       case "session.log.undo":
         this.sendError(webSocket, "UNDO_ROUTING_ERROR", "Session undo must be handled by the composed session actor.");
         break;
@@ -224,6 +228,53 @@ export class SessionActor extends DurableObject<Env> {
     }
     this.broadcastPresence(now);
     await this.scheduleNextAlarm(now);
+  }
+
+  private async handleActionRoll(
+    webSocket: WebSocket,
+    connection: SessionConnection,
+    request: SessionActionRollRequest,
+  ): Promise<void> {
+    const [hpState, abilities, conditionsState, runtimeConfig] = await Promise.all([
+      this.readHpState(),
+      this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
+      this.readConditionsState(),
+      readRuntimeConfig(this.ctx.storage),
+    ]);
+    const hp = hpState[request.characterId];
+    const ability = abilities[request.characterId];
+    const conditions = conditionsState[request.characterId];
+
+    if (!hp || !ability?.initialized || !conditions?.initialized) {
+      this.sendError(webSocket, "CHARACTER_NOT_INITIALIZED", "Authoritative character state has not been initialized.");
+      return;
+    }
+    if (connection.role !== "MASTER" && hp.ownerUserId !== connection.userId) {
+      this.sendError(webSocket, "CHARACTER_ACCESS_DENIED", "You cannot roll for this character.");
+      return;
+    }
+
+    let character: CharacterTemplate;
+    try {
+      character = hydrateCharacterForRest(ability, hp, conditions);
+    } catch {
+      this.sendError(webSocket, "CHARACTER_STATE_INVALID", "The authoritative character snapshot is invalid.");
+      return;
+    }
+
+    let resolved: ActionResolution;
+    try {
+      resolved = resolveServerActionRoll(request, connection.userId, character, runtimeConfig);
+    } catch {
+      this.sendError(webSocket, "ACTION_ROLL_RESOLUTION_FAILED", "The authoritative action roll could not be resolved.");
+      return;
+    }
+    if (!resolved.ok) {
+      this.sendError(webSocket, resolved.code, resolved.message);
+      return;
+    }
+
+    this.broadcast({ type: "session.action.result", result: resolved.result });
   }
 
   private async handleDiceRoll(
@@ -800,6 +851,250 @@ export class SessionActor extends DurableObject<Env> {
     }
     await this.ctx.storage.setAlarm(nextDeadline);
   }
+}
+
+type ActionResolution =
+  | { ok: true; result: SessionActionRollResult }
+  | { ok: false; code: string; message: string };
+
+function resolveServerActionRoll(
+  request: SessionActionRollRequest,
+  actorId: string,
+  character: CharacterTemplate,
+  runtimeConfig: SessionRuntimeConfigSnapshot | null,
+): ActionResolution {
+  const base = {
+    id: crypto.randomUUID(),
+    requestId: request.requestId,
+    actorId,
+    characterId: request.characterId,
+    createdAt: new Date().toISOString(),
+  };
+
+  if (request.source.type === "weapon") {
+    const weapon = findEquippedWeapon(character, request.source.weaponId);
+    if (!weapon) return missingWeapon();
+
+    const attribute = getWeaponAttackAttribute(weapon);
+    const proficiency = weapon.proficient && !isWeaponImprovisedGrip(weapon)
+      ? character.getProficiencyBonus()
+      : 0;
+    const attack = rollActionD20(
+      request.mode,
+      character.getEffectiveWeaponAttackBonus(
+        weapon,
+        character.getEffectiveAttributeModifier(attribute) + proficiency,
+      ),
+    );
+    const critical = attack.natural === 20;
+    const die = getWeaponDamageDie(weapon) ?? weapon.damage;
+    const damage = rollActionDamage(
+      [{ quantity: Math.max(1, Math.trunc(die.quantity) || 1), sides: parseDieSides(die.sides) }],
+      character.getEffectiveWeaponDamageBonus(
+        weapon,
+        character.getEffectiveAttributeModifier(attribute),
+      ),
+      critical,
+    );
+
+    return {
+      ok: true,
+      result: {
+        ...base,
+        sourceType: "weapon",
+        title: weapon.name || "Arma",
+        subtitle: isWeaponImprovisedGrip(weapon) ? "Ataque com arma improvisada" : "Ataque com arma",
+        description: joinDescription(weapon.desc, weapon.notes),
+        details: [
+          `Atributo: ${attribute.toUpperCase()}`,
+          ...(weapon.properties ?? []).map((property) => property.name),
+        ],
+        attack,
+        damage,
+        critical,
+      },
+    };
+  }
+
+  if (request.source.type === "unarmed") {
+    const profile = getUnarmedAttackProfile(character);
+    const attack = rollActionD20(request.mode, profile.attack);
+    const critical = attack.natural === 20;
+    const groups = profile.damageDie
+      ? [{
+          quantity: Math.max(1, Math.trunc(profile.damageDie.quantity) || 1),
+          sides: parseDieSides(profile.damageDie.sides),
+        }]
+      : [];
+    const damage = rollActionDamage(
+      groups,
+      profile.damageDie ? profile.damageBonus : 1 + profile.damageBonus,
+      critical,
+    );
+
+    return {
+      ok: true,
+      result: {
+        ...base,
+        sourceType: "unarmed",
+        title: "Ataque desarmado",
+        subtitle: profile.monkLevel > 0 ? `Ataque desarmado · Monge ${profile.monkLevel}` : "Ataque desarmado",
+        description: "Ataque corpo a corpo realizado sem uma arma equipada.",
+        attack,
+        damage,
+        critical,
+      },
+    };
+  }
+
+  if (request.source.type === "ability") {
+    const ability = character.getCharacterAbilities().find((candidate) =>
+      candidate.id === request.source.abilityId
+      || candidate.originalAbilityId === request.source.abilityId
+    );
+    if (!ability) {
+      return { ok: false, code: "ABILITY_NOT_FOUND", message: "The requested ability is not available to this character." };
+    }
+    return {
+      ok: true,
+      result: {
+        ...base,
+        sourceType: "ability",
+        title: ability.name || "Habilidade",
+        subtitle: ability.actionKind ? `Habilidade · ${ability.actionKind}` : "Habilidade",
+        description: ability.description?.trim() || undefined,
+        details: ability.trigger ? [`Gatilho: ${ability.trigger}`] : undefined,
+        critical: false,
+      },
+    };
+  }
+
+  if (!runtimeConfig) {
+    return { ok: false, code: "RUNTIME_CONFIG_NOT_INITIALIZED", message: "Session spell configuration is not available." };
+  }
+
+  const spell = runtimeConfig.config.spells.find((candidate) => candidate.index === request.source.spellIndex);
+  if (!spell) {
+    return { ok: false, code: "SPELL_NOT_FOUND", message: "The requested spell is not available in this session." };
+  }
+  const knownSource = character.get("magic")?.spells.knownSpells.find((entry) =>
+    entry.spells.id === spell.index && entry.source.sourceId === request.source.sourceId
+  )?.source;
+  const grantedSource = getCharacterGrantedSpells(character).find((entry) =>
+    entry.index === spell.index && entry.source.sourceId === request.source.sourceId
+  )?.source;
+  const source = knownSource ?? grantedSource;
+  if (!source) {
+    return { ok: false, code: "SPELL_SOURCE_NOT_FOUND", message: "The requested spell source is not available to this character." };
+  }
+
+  const attribute = source.attribute;
+  const modifier = character.getEffectiveAttributeModifier(attribute);
+  const attack = spell.targeting.hasAttackRoll
+    ? rollActionD20(
+        request.mode,
+        character.getEffectiveSpellAttackBonus(
+          attribute,
+          modifier + character.getProficiencyBonus(),
+        ),
+      )
+    : undefined;
+  const critical = attack?.natural === 20;
+  const save = spell.targeting.hasSavingThrow && spell.targeting.savingThrowAttribute
+    ? {
+        attribute: spell.targeting.savingThrowAttribute,
+        dc: character.getEffectiveSpellSaveDc(
+          attribute,
+          8 + modifier + character.getProficiencyBonus(),
+        ),
+      }
+    : undefined;
+  const damage = spell.damageDice
+    ? rollActionDamage(
+        [{
+          quantity: Math.max(1, Math.trunc(spell.damageDice.quantity) || 1),
+          sides: parseDieSides(spell.damageDice.sides),
+        }],
+        character.getEffectiveSpellDamageBonus(attribute, 0),
+        Boolean(critical),
+      )
+    : undefined;
+
+  return {
+    ok: true,
+    result: {
+      ...base,
+      sourceType: "spell",
+      title: spell.displayName || spell.name,
+      subtitle: `${spell.slotLevel === 0 ? "Truque" : `Magia de nível ${spell.slotLevel}`} · ${source.name}`,
+      description: joinDescription(
+        spell.description,
+        spell.higherLevelText?.trim()
+          ? `Em níveis superiores: ${spell.higherLevelText}`
+          : undefined,
+      ),
+      details: [
+        `Atributo de conjuração: ${attribute.toUpperCase()}`,
+        ...(spell.concentration ? ["Concentração"] : []),
+        ...(spell.ritual ? ["Ritual"] : []),
+      ],
+      attack,
+      save,
+      damage,
+      critical: Boolean(critical),
+    },
+  };
+}
+
+function rollActionD20(
+  mode: SessionDiceRollResult["mode"],
+  modifier: number,
+): SessionResolvedD20Roll {
+  const rolls = mode === "normal"
+    ? [rollServerDie(20)]
+    : [rollServerDie(20), rollServerDie(20)];
+  const kept = mode === "advantage"
+    ? Math.max(...rolls)
+    : mode === "disadvantage"
+      ? Math.min(...rolls)
+      : rolls[0];
+  return {
+    mode,
+    groups: [{ quantity: rolls.length, sides: 20, rolls, kept }],
+    modifier,
+    total: kept + modifier,
+    natural: kept,
+  };
+}
+
+function rollActionDamage(
+  groups: Array<{ quantity: number; sides: number }>,
+  modifier: number,
+  critical: boolean,
+): SessionResolvedDamageRoll {
+  const resolvedGroups = groups.map((group) => {
+    const quantity = critical ? group.quantity * 2 : group.quantity;
+    return {
+      quantity,
+      sides: group.sides,
+      rolls: Array.from({ length: quantity }, () => rollServerDie(group.sides)),
+    };
+  });
+  const diceTotal = resolvedGroups.reduce(
+    (sum, group) => sum + group.rolls.reduce((groupSum, value) => groupSum + value, 0),
+    0,
+  );
+  return {
+    groups: resolvedGroups,
+    modifier,
+    total: diceTotal + modifier,
+    critical,
+  };
+}
+
+function joinDescription(...parts: Array<string | undefined>): string | undefined {
+  const content = parts.map((part) => part?.trim()).filter((part): part is string => Boolean(part));
+  return content.length ? content.join("\n\n") : undefined;
 }
 
 type DiceResolution =
