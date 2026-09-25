@@ -5,7 +5,7 @@ import { Button } from "../../../components/ui/Button"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatBonusName, formatBonusValue } from "../../../lib/formatBonus"
 import { formatSigned } from "../../../lib/formatSigned"
-import { requestD20Roll, requestDamageRoll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
+import { requestActionRoll, requestDamageRoll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { getUsedArmsIncludingShield } from "../../../models/characters/characterEquipmentInteractions"
 import { setWeaponGripWithRules } from "../../../models/characters/characterHands"
@@ -255,10 +255,9 @@ export function EquipmentWeaponsSection({
                       value={formatSigned(attackBonus)}
                       title={rollModifierHint()}
                       onClick={(event) =>
-                        requestD20Roll({
+                        requestActionRoll({
                           characterId: character.get("id"),
-                          label: `${weapon.name || "Arma"} — ataque`,
-                          source: { type: "weapon-attack", weaponId: weapon.id },
+                          source: { type: "weapon", weaponId: weapon.id },
                           mode: rollModeFromEvent(event.nativeEvent),
                         })
                       }
