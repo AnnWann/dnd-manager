@@ -1,4 +1,4 @@
-import type { SessionDiceRollRequest, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
+import type { SessionActionRollRequest, SessionActionRollResult, SessionDiceRollRequest, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
 export type SessionRuntimeRole = "MASTER" | "PLAYER"
 export type SessionRuntimePresenceUser = { userId: string; userName?: string; clientId: string; role: SessionRuntimeRole }
 
@@ -191,13 +191,14 @@ export type SessionConditionsUpdatedMessage = { type: "session.conditions.update
 export type SessionHpLogMessage = { type: "session.hp.log"; records: SessionHpLogRecord[] }
 export type SessionPongMessage = { type: "session.pong"; serverTime: number }
 export type SessionDiceResultMessage = { type: "session.dice.result"; result: SessionDiceRollResult }
+export type SessionActionResultMessage = { type: "session.action.result"; result: SessionActionRollResult }
 export type SessionErrorMessage = { type: "session.error"; code: string; message: string }
 
 export type ServerSessionMessage =
   | SessionReadyMessage | SessionHeartbeatAckMessage | SessionPresenceMessage
   | SessionHpSnapshotMessage | SessionHpUpdatedMessage
   | SessionConditionsSnapshotMessage | SessionConditionsUpdatedMessage
-  | SessionHpLogMessage | SessionPongMessage | SessionDiceResultMessage | SessionErrorMessage
+  | SessionHpLogMessage | SessionPongMessage | SessionDiceResultMessage | SessionActionResultMessage | SessionErrorMessage
 
 export type CharacterSheetRoute =
   | "characters/sheet/hp"
@@ -226,6 +227,7 @@ export type ClientSessionMessage =
   | { type: "session.sheet.operation"; route: CharacterSheetRoute; operation: SessionLoggedOperation }
   | { type: "session.log.undo"; logId: string }
   | { type: "session.dice.roll"; request: SessionDiceRollRequest }
+  | { type: "session.action.roll"; request: SessionActionRollRequest }
 
 export function parseServerSessionMessage(raw: string): ServerSessionMessage | null {
   let parsed: unknown
@@ -247,6 +249,7 @@ export function parseServerSessionMessage(raw: string): ServerSessionMessage | n
     case "session.conditions.updated": if (message.character && typeof message.character === "object") return message as SessionConditionsUpdatedMessage; break
     case "session.hp.log": if (Array.isArray(message.records)) return message as SessionHpLogMessage; break
     case "session.dice.result": if (message.result && typeof message.result === "object") return message as SessionDiceResultMessage; break
+    case "session.action.result": if (message.result && typeof message.result === "object") return message as SessionActionResultMessage; break
     case "session.error": if (typeof message.code === "string" && typeof message.message === "string") return message as SessionErrorMessage; break
   }
   return null

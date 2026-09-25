@@ -56,3 +56,52 @@ export type SessionDiceRollResult = {
   natural?: number
   createdAt: string
 }
+
+
+export type SessionActionRollSource =
+  | { type: "weapon"; weaponId: string }
+  | { type: "unarmed" }
+  | { type: "spell"; spellIndex: string; sourceId: string }
+  | { type: "ability"; abilityId: string }
+
+export type SessionActionRollRequest = {
+  requestId: string
+  characterId: string
+  mode: SessionDiceRollMode
+  source: SessionActionRollSource
+}
+
+export type SessionResolvedD20Roll = {
+  mode: SessionDiceRollMode
+  groups: SessionDiceRollGroupResult[]
+  modifier: number
+  total: number
+  natural: number
+}
+
+export type SessionResolvedDamageRoll = {
+  groups: SessionDiceRollGroupResult[]
+  modifier: number
+  total: number
+  critical: boolean
+}
+
+export type SessionActionRollResult = {
+  id: string
+  requestId: string
+  actorId: string
+  characterId: string
+  sourceType: "weapon" | "unarmed" | "spell" | "ability"
+  title: string
+  subtitle?: string
+  description?: string
+  details?: string[]
+  attack?: SessionResolvedD20Roll
+  save?: {
+    attribute: Attribute
+    dc: number
+  }
+  damage?: SessionResolvedDamageRoll
+  critical: boolean
+  createdAt: string
+}

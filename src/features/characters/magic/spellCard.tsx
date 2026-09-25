@@ -22,6 +22,7 @@ import type { SpellSource } from "../../../models/magic/spells/SpellSource"
 import type { ClassName } from "../../../models/sheet/Class"
 import type { Attribute } from "../../../models/sheet/Attribute"
 import { attributeShort } from "../../../lib/attributeShorts"
+import { requestActionRoll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
 
 const MAX_CASTING_DESCRIPTIONS = 5
 const MAX_CASTING_DESCRIPTION_LENGTH = 800
@@ -61,7 +62,7 @@ export function SpellCard({
   )
   const [draftCastingDescriptions, setDraftCastingDescriptions] =
     useState(castingDescriptions)
-  const { activeCharacter, updateCharacter } = useCharacterWorkspace()
+  const { activeCharacter, updateCharacter, mode } = useCharacterWorkspace()
   const castingDescriptionsKey = castingDescriptions.join("\u0000")
   const canTogglePrepared = Boolean(onTogglePrepared) && !alwaysPrepared
   const canEditCastingDescriptions = Boolean(
@@ -517,6 +518,28 @@ export function SpellCard({
           </div>
 
           <div className="flex w-full flex-wrap gap-2 border-t border-border pt-3 sm:w-auto sm:shrink-0 sm:justify-end sm:border-0 sm:pt-0">
+            {mode === "campaign" && activeCharacter && source ? (
+              <Button
+                className="flex-1 sm:flex-none"
+                size="sm"
+                variant="primary"
+                title={rollModifierHint()}
+                onClick={(event) =>
+                  requestActionRoll({
+                    characterId: activeCharacter.get("id"),
+                    source: {
+                      type: "spell",
+                      spellIndex: spell.index,
+                      sourceId: source.sourceId,
+                    },
+                    mode: rollModeFromEvent(event.nativeEvent),
+                  })
+                }
+              >
+                Rolar
+              </Button>
+            ) : null}
+
             <Button
               className="flex-1 sm:flex-none"
               size="sm"

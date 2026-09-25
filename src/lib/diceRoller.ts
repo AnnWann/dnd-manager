@@ -4,10 +4,15 @@ import type {
   SessionDiceRollMode,
   SessionDiceRollRequest,
   SessionDiceRollResult,
+  SessionActionRollRequest,
+  SessionActionRollResult,
+  SessionActionRollSource,
 } from "../shared/session-runtime/diceRollProtocol"
 
 export const DICE_ROLL_REQUEST_EVENT = "dndmm:dice-roll-request"
 export const DICE_ROLL_RESULT_EVENT = "dndmm:dice-roll-result"
+export const ACTION_ROLL_REQUEST_EVENT = "dndmm:action-roll-request"
+export const ACTION_ROLL_RESULT_EVENT = "dndmm:action-roll-result"
 
 let requestSequence = 0
 
@@ -40,6 +45,27 @@ export function requestDamageRoll(input: {
   })
 }
 
+
+export function requestActionRoll(input: {
+  characterId: string
+  source: SessionActionRollSource
+  mode?: SessionDiceRollMode
+}): void {
+  publishActionRequest({
+    requestId: createRequestId(),
+    characterId: input.characterId,
+    mode: input.mode ?? "normal",
+    source: input.source,
+  })
+}
+
+export function publishServerActionRoll(result: SessionActionRollResult): void {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(
+    new CustomEvent<SessionActionRollResult>(ACTION_ROLL_RESULT_EVENT, { detail: result }),
+  )
+}
+
 export function publishServerDiceRoll(result: SessionDiceRollResult): void {
   if (typeof window === "undefined") return
   window.dispatchEvent(
@@ -57,6 +83,14 @@ export function rollModeFromEvent(
 
 export function rollModifierHint(): string {
   return "Clique para rolar no servidor. Shift: vantagem. Alt: desvantagem."
+}
+
+
+function publishActionRequest(request: SessionActionRollRequest): void {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(
+    new CustomEvent<SessionActionRollRequest>(ACTION_ROLL_REQUEST_EVENT, { detail: request }),
+  )
 }
 
 function publishRequest(request: SessionDiceRollRequest): void {

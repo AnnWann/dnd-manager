@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
+import { requestActionRoll } from "../../../lib/diceRoller"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
@@ -352,6 +353,15 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
                       onUse={onUse}
                       onDeactivate={() => deactivateAbility(ability.id)}
                       onRestore={() => restoreAbility(ability.id)}
+                      onAnnounce={() =>
+                        requestActionRoll({
+                          characterId: displayCharacter.get("id"),
+                          source: {
+                            type: "ability",
+                            abilityId: ability.originalAbilityId ?? ability.id,
+                          },
+                        })
+                      }
                     />
                   )
                 }
@@ -367,6 +377,15 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
                     onUse={onUse}
                     onDeactivate={() => deactivateAbility(ability.id)}
                     onRestore={() => restoreAbility(ability.id)}
+                    onAnnounce={() =>
+                      requestActionRoll({
+                        characterId: displayCharacter.get("id"),
+                        source: {
+                          type: "ability",
+                          abilityId: ability.originalAbilityId ?? ability.id,
+                        },
+                      })
+                    }
                   />
                 )
               })}

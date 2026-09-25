@@ -571,7 +571,7 @@ export function CampaignLayout() {
                           <AppRouter />
                         </div>
                       </main>
-                      {effectiveUserRole === "master" && !isCreationMode ? (
+                      {sessionId && !isCreationMode ? (
                         <SessionActionLog />
                       ) : null}
                     </div>

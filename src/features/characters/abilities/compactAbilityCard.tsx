@@ -19,6 +19,7 @@ type Props = {
   onUse?: () => void
   onDeactivate?: () => void
   onRestore?: () => void
+  onAnnounce?: () => void
 }
 
 export function CompactAbilityCard({
@@ -30,6 +31,7 @@ export function CompactAbilityCard({
   onUse,
   onDeactivate,
   onRestore,
+  onAnnounce,
 }: Props) {
   const [open, setOpen] = useState(false)
   const abilityName = ability.name || "Habilidade sem nome"
@@ -122,6 +124,12 @@ export function CompactAbilityCard({
           </div>
         ) : null}
 
+        {onAnnounce ? (
+          <Button className="shrink-0" size="sm" variant="primary" onClick={onAnnounce}>
+            Mostrar
+          </Button>
+        ) : null}
+
         <Button className="shrink-0" size="sm" variant="secondary" onClick={() => setOpen(true)}>
           Visualizar
         </Button>
@@ -156,6 +164,7 @@ export function CompactAbilityCard({
                     onUse={onUse}
                     onDeactivate={onDeactivate}
                     onRestore={onRestore}
+                    onAnnounce={onAnnounce}
                   />
                 </div>
               </div>

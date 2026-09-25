@@ -6,7 +6,7 @@ import { attributeShort } from "../../../lib/attributeShorts"
 import { cn } from "../../../lib/cn"
 import { formatSigned } from "../../../lib/formatSigned"
 import { clampInt } from "../../../lib/numberFormat"
-import { requestD20Roll, requestDamageRoll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
+import { requestActionRoll, requestD20Roll, requestDamageRoll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
   formatUnarmedDamage,
@@ -459,10 +459,9 @@ function CompactWeaponTile({
         className="mt-1 rounded px-1 text-lg font-bold text-textH hover:bg-accentBg hover:text-accent"
         title={rollModifierHint()}
         onClick={(event) =>
-          requestD20Roll({
+          requestActionRoll({
             characterId: character.get("id"),
-            label: `${weapon.name || "Arma"} — ataque`,
-            source: { type: "weapon-attack", weaponId: weapon.id },
+            source: { type: "weapon", weaponId: weapon.id },
             mode: rollModeFromEvent(event.nativeEvent),
           })
         }
@@ -504,10 +503,9 @@ function CompactUnarmedTile({ character }: { character: CharacterTemplate }) {
         className="mt-1 rounded px-1 text-lg font-bold text-textH hover:bg-accentBg hover:text-accent"
         title={rollModifierHint()}
         onClick={(event) =>
-          requestD20Roll({
+          requestActionRoll({
             characterId: character.get("id"),
-            label: "Ataque desarmado — ataque",
-            source: { type: "unarmed-attack" },
+            source: { type: "unarmed" },
             mode: rollModeFromEvent(event.nativeEvent),
           })
         }
