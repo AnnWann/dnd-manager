@@ -1,6 +1,7 @@
 import { useRef } from "react"
 
 import { Button } from "../../../components/ui/Button"
+import { requestActionRoll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
 import { useMagicContext } from "../../../contexts/magicContext"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Spell } from "../../../models/magic/spells/Spell"
@@ -102,6 +103,28 @@ export function CompactSpellCard({
         <span className="shrink-0 text-xs text-textMuted" aria-hidden="true">
           —
         </span>
+
+        {activeCharacter ? (
+          <Button
+            className="shrink-0"
+            size="sm"
+            variant="primary"
+            title={rollModifierHint()}
+            onClick={(event) =>
+              requestActionRoll({
+                characterId: activeCharacter.get("id"),
+                source: {
+                  type: "spell",
+                  spellIndex: spell.index,
+                  sourceId: source.sourceId,
+                },
+                mode: rollModeFromEvent(event.nativeEvent),
+              })
+            }
+          >
+            Rolar
+          </Button>
+        ) : null}
 
         <Button
           className="shrink-0"
