@@ -88,7 +88,7 @@ function weaponAttackBonus(character: CharacterTemplate, weapon: Weapon) {
 }
 
 function weaponDamageBonus(character: CharacterTemplate, weapon: Weapon) {
-  const modifierAttribute = weapon.modifierAttribute ?? "str"
+  const modifierAttribute = getWeaponAttackAttribute(weapon)
 
   const attributeMod = character.getEffectiveAttributeModifier(
     modifierAttribute,
