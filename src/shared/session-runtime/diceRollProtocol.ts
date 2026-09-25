@@ -1,3 +1,6 @@
+import type { Attribute } from "../../models/sheet/Attribute"
+import type { Skill } from "../../models/sheet/Skills"
+
 export type SessionDiceRollMode = "normal" | "advantage" | "disadvantage"
 
 export type SessionDiceRollKind =
@@ -8,24 +11,33 @@ export type SessionDiceRollKind =
   | "attack"
   | "damage"
   | "spell-attack"
-  | "custom"
 
-export type SessionDiceGroupRequest = {
-  quantity: number
-  sides: number
-}
+export type SessionDiceD20Source =
+  | { type: "ability"; attribute: Attribute }
+  | { type: "skill"; skill: Skill }
+  | { type: "save"; attribute: Attribute }
+  | { type: "initiative" }
+  | { type: "weapon-attack"; weaponId: string }
+  | { type: "unarmed-attack" }
+  | { type: "spell-attack"; attribute: Attribute }
+
+export type SessionDiceDamageSource =
+  | { type: "weapon-damage"; weaponId: string }
+  | { type: "unarmed-damage" }
+
+export type SessionDiceRollSource = SessionDiceD20Source | SessionDiceDamageSource
 
 export type SessionDiceRollRequest = {
   requestId: string
   characterId: string
   label: string
-  kind: SessionDiceRollKind
   mode: SessionDiceRollMode
-  groups: SessionDiceGroupRequest[]
-  modifier: number
+  source: SessionDiceRollSource
 }
 
-export type SessionDiceRollGroupResult = SessionDiceGroupRequest & {
+export type SessionDiceRollGroupResult = {
+  quantity: number
+  sides: number
   rolls: number[]
   kept?: number
 }
