@@ -66,6 +66,15 @@ export type CombatQuickSheetData = {
   sections: QuickSheetSection[]
 }
 
+const ATTRIBUTE_ORDER: Attribute[] = [
+  "str",
+  "dex",
+  "con",
+  "int",
+  "wis",
+  "cha",
+]
+
 type CreatureQuickSheetProps = {
   data: CombatQuickSheetData
   preferImage?: boolean
@@ -181,7 +190,8 @@ function QuickSheetSummary({ data, compact = false }: { data: CombatQuickSheetDa
 
       {data.abilityScores ? (
         <div className={`grid gap-2 ${compact ? "grid-cols-3" : "grid-cols-3 sm:grid-cols-6"}`}>
-          {(Object.entries(data.abilityScores) as Array<[Attribute, number]>).map(([attribute, score]) => {
+          {ATTRIBUTE_ORDER.map((attribute) => {
+            const score = data.abilityScores![attribute]
             const modifier = data.abilityModifiers?.[attribute] ?? Math.floor((score - 10) / 2)
             const content = (
               <>
