@@ -298,14 +298,20 @@ export class SessionActor extends DurableObject<Env> {
     connection: SessionConnection,
     request: SessionActionRollRequest,
   ): Promise<void> {
+    const characterId = request.characterId;
+    if (!characterId) {
+      this.sendError(webSocket, "CHARACTER_REQUIRED", "This roll requires an authoritative character.");
+      return;
+    }
+
     const [hpState, abilities, conditionsState] = await Promise.all([
       this.readHpState(),
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
       this.readConditionsState(),
     ]);
-    const hp = hpState[request.characterId];
-    const ability = abilities[request.characterId];
-    const conditions = conditionsState[request.characterId];
+    const hp = hpState[characterId];
+    const ability = abilities[characterId];
+    const conditions = conditionsState[characterId];
 
     if (!hp || !ability?.initialized || !conditions?.initialized) {
       this.sendError(webSocket, "CHARACTER_NOT_INITIALIZED", "Authoritative character state has not been initialized.");
