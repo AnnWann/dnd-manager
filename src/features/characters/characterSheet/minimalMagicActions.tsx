@@ -61,7 +61,7 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
     ? selected.sourceResourceCost
     : globalOptions.resources.find((cost) => cost.resource === castingResource)
   const selectedCost = selected && selectedBaseCost ? getUpcastResourceCost(selected.spell, selectedBaseCost, castLevel) : undefined
-  const asksCastLevel = Boolean(selected && selected.spell.slotLevel > 0 && selected.spell.higherLevelText?.trim() && (castingResource === "slot" || selectedBaseCost))
+  const asksCastLevel = Boolean(selected && selected.spell.slotLevel > 0 && (castingResource === "slot" || selectedBaseCost))
 
   function openSpell(entry: MinimalSpellEntry) {
     setSelected(entry); setError(""); setConfirmConcentrationReplacement(false); setCastLevel(entry.spell.slotLevel)
