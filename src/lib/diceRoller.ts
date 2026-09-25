@@ -10,6 +10,7 @@ import type {
   SessionActionRollSource,
   SessionCreatureRollRequest,
   SessionCreatureRollSource,
+  SessionRollVisibility,
 } from "../shared/session-runtime/diceRollProtocol"
 
 export const DICE_ROLL_REQUEST_EVENT = "dndmm:dice-roll-request"
@@ -18,7 +19,26 @@ export const ACTION_ROLL_REQUEST_EVENT = "dndmm:action-roll-request"
 export const ACTION_ROLL_RESULT_EVENT = "dndmm:action-roll-result"
 export const CREATURE_ROLL_REQUEST_EVENT = "dndmm:creature-roll-request"
 
+const ROLL_VISIBILITY_STORAGE_KEY = "dnd-manager:session-roll-visibility"
 let requestSequence = 0
+let cachedRollVisibility: SessionRollVisibility | null = null
+
+export function getRollVisibility(): SessionRollVisibility {
+  if (cachedRollVisibility) return cachedRollVisibility
+  if (typeof window === "undefined") return "public"
+  cachedRollVisibility = window.localStorage.getItem(ROLL_VISIBILITY_STORAGE_KEY) === "roller-master"
+    ? "roller-master"
+    : "public"
+  return cachedRollVisibility
+}
+
+export function setRollVisibility(visibility: SessionRollVisibility): void {
+  cachedRollVisibility = visibility
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(ROLL_VISIBILITY_STORAGE_KEY, visibility)
+  }
+}
+
 
 export function requestD20Roll(input: {
   characterId: string
@@ -31,6 +51,7 @@ export function requestD20Roll(input: {
     characterId: input.characterId,
     label: input.label,
     mode: input.mode ?? "normal",
+    visibility: getRollVisibility(),
     source: input.source,
   })
 }
@@ -45,6 +66,7 @@ export function requestDamageRoll(input: {
     characterId: input.characterId,
     label: input.label,
     mode: "normal",
+    visibility: getRollVisibility(),
     source: input.source,
   })
 }
@@ -63,6 +85,7 @@ export function requestManualDiceRoll(input: {
     characterId: input.characterId,
     label: "Rolagem manual",
     mode: "normal",
+    visibility: getRollVisibility(),
     source: {
       type: "manual",
       expression: parsed.value.expression,
@@ -82,6 +105,7 @@ export function requestActionRoll(input: {
     requestId: createRequestId(),
     characterId: input.characterId,
     mode: input.mode ?? "normal",
+    visibility: getRollVisibility(),
     source: input.source,
   })
 }
@@ -115,6 +139,7 @@ export function requestCreatureRoll(input: {
     creatureId: input.creatureId,
     initiativeEntryId: input.initiativeEntryId,
     mode: input.mode ?? "normal",
+    visibility: getRollVisibility(),
     source: input.source,
   }
   window.dispatchEvent(

@@ -1,6 +1,6 @@
 import type { CharacterGrantedEquipmentSpellUsageSource, CharacterGrantedSpellUsageSource } from "../../../../../src/models/characters/characterGrantedSpells";
 import type { SpellResourceType } from "../../../../../src/models/magic/spells/Spell";
-import type { SessionDiceRollMode } from "../../../../../src/shared/session-runtime/diceRollProtocol";
+import type { SessionDiceRollMode, SessionRollVisibility } from "../../../../../src/shared/session-runtime/diceRollProtocol";
 
 export type SessionSpellCastPayment =
   | { type: "none" }
@@ -10,7 +10,7 @@ export type SessionSpellCastPayment =
   | { type: "equipment-spell-use"; source: CharacterGrantedEquipmentSpellUsageSource };
 
 export type SessionMagicOperation =
-  | { type: "character.spell.cast"; characterId: string; requestId: string; spellIndex: string; sourceId: string; castLevel: number; mode: SessionDiceRollMode; payment: SessionSpellCastPayment }
+  | { type: "character.spell.cast"; characterId: string; requestId: string; spellIndex: string; sourceId: string; castLevel: number; mode: SessionDiceRollMode; visibility?: SessionRollVisibility; payment: SessionSpellCastPayment }
   | { type: "character.spell.prepare"; characterId: string; spellIndex: string; prepared: boolean }
   | { type: "character.spell.add"; characterId: string; spellEntry: Record<string, unknown> }
   | { type: "character.spell.remove"; characterId: string; spellIndex: string }
@@ -111,6 +111,11 @@ function isMagicOperation(value: unknown): value is SessionMagicOperation {
         && value.castLevel >= 0
         && value.castLevel <= 9
         && (value.mode === "normal" || value.mode === "advantage" || value.mode === "disadvantage")
+        && (
+          value.visibility === undefined
+          || value.visibility === "public"
+          || value.visibility === "roller-master"
+        )
         && isSpellCastPayment(value.payment);
     case "character.spell.prepare": return nonEmpty(value.spellIndex) && typeof value.prepared === "boolean";
     case "character.spell.add": return isKnownSpellEntry(value.spellEntry);

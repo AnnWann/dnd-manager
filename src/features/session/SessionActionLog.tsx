@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
 import { useInitiativeRollSelection } from "../initiative/initiativeRollSelection"
-import { ACTION_ROLL_RESULT_EVENT, DICE_ROLL_RESULT_EVENT, requestManualDiceRoll } from "../../lib/diceRoller"
+import { ACTION_ROLL_RESULT_EVENT, DICE_ROLL_RESULT_EVENT, getRollVisibility, requestManualDiceRoll, setRollVisibility } from "../../lib/diceRoller"
 import type { SessionActionRollResult, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
 import { DAMAGE_TYPES, damageTypeLabel, type DamageType } from "../../models/combat/Damage"
 import { CREATURE_ATTRIBUTE_LABELS } from "../../models/creatures/CreatureRolls"
@@ -57,7 +57,15 @@ export function SessionActionLog() {
     return window.localStorage.getItem(SESSION_PANEL_COLLAPSED_STORAGE_KEY) === "1"
   })
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [privateRolls, setPrivateRolls] = useState(
+    () => getRollVisibility() === "roller-master",
+  )
   const activeView: PanelView = isMaster ? panelView : "dice"
+
+  function changePrivateRolls(enabled: boolean) {
+    setPrivateRolls(enabled)
+    setRollVisibility(enabled ? "roller-master" : "public")
+  }
 
   const characterNames = useMemo(
     () => new Map(visibleCharacters.map((character) => [character.get("id"), character.get("name")])),
@@ -215,6 +223,8 @@ export function SessionActionLog() {
         characterNames={characterNames}
         manualTarget={manualRollTarget}
         allowAnonymous={isMaster}
+        privateRolls={privateRolls}
+        onPrivateRollsChange={changePrivateRolls}
         onClear={() => setRollFeed([])}
       />
     )
@@ -351,6 +361,8 @@ function DiceRollPanel({
   characterNames,
   manualTarget,
   allowAnonymous,
+  privateRolls,
+  onPrivateRollsChange,
   onClear,
 }: {
   entries: RollFeedEntry[]
@@ -361,6 +373,8 @@ function DiceRollPanel({
     label: string
   }
   allowAnonymous: boolean
+  privateRolls: boolean
+  onPrivateRollsChange: (enabled: boolean) => void
   onClear: () => void
 }) {
   const [manualExpression, setManualExpression] = useState("")
@@ -392,6 +406,25 @@ function DiceRollPanel({
 
   return (
     <>
+      <div className="border-b border-border bg-bg px-3 py-2.5">
+        <label className="flex cursor-pointer items-center justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-[11px] font-semibold text-textH">
+              Ocultar dos outros jogadores
+            </span>
+            <span className="mt-0.5 block text-[9px] leading-4 text-textMuted">
+              Quando ativo, só quem rolou e o mestre recebem a rolagem.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            checked={privateRolls}
+            onChange={(event) => onPrivateRollsChange(event.target.checked)}
+            className="h-4 w-4 shrink-0 accent-current"
+          />
+        </label>
+      </div>
+
       <form
         className="grid gap-2 border-b border-border bg-bg px-3 py-3"
         onSubmit={submitManualRoll}
@@ -525,11 +558,18 @@ function ActionRollEntry({
             <div className="truncate text-sm font-bold text-textH">{roll.title}</div>
             {roll.subtitle ? <div className="mt-0.5 text-[10px] text-textMuted">{roll.subtitle}</div> : null}
           </div>
-          {roll.critical ? (
-            <span className="shrink-0 rounded-full border border-success px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-success">
-              Crítico
-            </span>
-          ) : null}
+          <div className="flex shrink-0 items-center gap-1">
+            {roll.visibility === "roller-master" ? (
+              <span className="rounded-full border border-border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-textMuted">
+                Privada
+              </span>
+            ) : null}
+            {roll.critical ? (
+              <span className="rounded-full border border-success px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-success">
+                Crítico
+              </span>
+            ) : null}
+          </div>
         </div>
         {roll.details?.length ? (
           <div className="mt-2 flex flex-wrap gap-1">
@@ -600,9 +640,7 @@ function ActionRollEntry({
         ) : null}
 
         <div className="flex items-center justify-between gap-2 text-[10px] text-textMuted">
-          <span className="truncate">
-          {characterName || (roll.kind === "manual" && !roll.characterId ? "Sem identificador" : "Personagem")}
-        </span>
+          <span className="truncate">{characterName || "Personagem"}</span>
           <time dateTime={roll.createdAt}>{formatTime(roll.createdAt)}</time>
         </div>
       </div>
@@ -699,7 +737,14 @@ function DiceRollEntry({
     <article className="rounded-lg border border-border bg-bg px-3 py-2.5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate text-xs font-semibold text-textH">{roll.label}</div>
+          <div className="flex items-center gap-1.5">
+            <div className="truncate text-xs font-semibold text-textH">{roll.label}</div>
+            {roll.visibility === "roller-master" ? (
+              <span className="shrink-0 rounded-full border border-border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-textMuted">
+                Privada
+              </span>
+            ) : null}
+          </div>
           <div className="mt-0.5 text-[10px] uppercase tracking-wide text-textMuted">
             {diceModeLabel(roll)}
           </div>

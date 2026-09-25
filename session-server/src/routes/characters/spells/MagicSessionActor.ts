@@ -292,6 +292,7 @@ export class SessionActor extends AbilitySessionActor {
         source: sourceResolution.source,
         castLevel: operation.castLevel,
         mode: operation.mode,
+        visibility: operation.visibility,
       });
     } catch (error) {
       sendError(

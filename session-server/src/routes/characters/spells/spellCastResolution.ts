@@ -11,6 +11,7 @@ import type {
   SessionActionInstanceResult,
   SessionActionRollResult,
   SessionDiceRollMode,
+  SessionRollVisibility,
   SessionResolvedD20Roll,
   SessionResolvedDamageRoll,
 } from "../../../../../src/shared/session-runtime/diceRollProtocol";
@@ -27,8 +28,9 @@ export function resolveSpellCastAction(args: {
   source: SpellSource;
   castLevel: number;
   mode: SessionDiceRollMode;
+  visibility?: SessionRollVisibility;
 }): SessionActionRollResult {
-  const { requestId, actorId, character, spell, source, castLevel, mode } = args;
+  const { requestId, actorId, character, spell, source, castLevel, mode, visibility } = args;
   const attribute = source.attribute;
   const modifier = character.getEffectiveAttributeModifier(attribute);
   const proficiency = character.getProficiencyBonus();
@@ -42,6 +44,7 @@ export function resolveSpellCastAction(args: {
     requestId,
     actorId,
     characterId: character.get("id"),
+    visibility: visibility ?? "public",
     sourceType: "spell" as const,
     title: spell.displayName || spell.name,
     subtitle: `${spell.slotLevel === 0 ? "Truque" : `Magia de nível ${spell.slotLevel}`} · ${source.name}`,
