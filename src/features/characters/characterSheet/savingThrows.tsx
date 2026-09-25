@@ -59,7 +59,7 @@ export function SavingThrows({
         </h2>
 
         <p className="mt-0.5 text-[11px] text-textMuted">
-          Clique para alternar proficiência.
+          Clique no círculo para proficiência e no bônus para rolar.
         </p>
       </div>
 
@@ -69,25 +69,24 @@ export function SavingThrows({
           const bonus = character.getSavingThrowBonus(attribute)
 
           return (
-            <button
+            <div
               key={attribute}
-              type="button"
-              aria-pressed={proficient}
-              title={`${label}: ${proficient ? "proficiente" : "não proficiente"}`}
-              onClick={() => toggleProficiency(attribute)}
               className={cn(
                 "grid grid-cols-[22px_1fr_auto] items-center gap-2",
                 "rounded-lg border px-2.5 py-2 text-left",
                 "transition-colors",
                 proficient
                   ? "border-accentBorder bg-accentBg"
-                  : "border-border bg-bg-subtle hover:border-borderStrong",
+                  : "border-border bg-bg-subtle",
               )}
             >
-              <span
+              <button
+                type="button"
+                aria-pressed={proficient}
+                title={`${label}: ${proficient ? "proficiente" : "não proficiente"}`}
+                onClick={() => toggleProficiency(attribute)}
                 className={cn(
-                  "flex h-4 w-4 items-center justify-center",
-                  "rounded-full border",
+                  "flex h-4 w-4 items-center justify-center rounded-full border",
                   proficient
                     ? "border-accent bg-accent text-white"
                     : "border-textMuted bg-transparent",
@@ -100,7 +99,7 @@ export function SavingThrows({
                     strokeWidth={3}
                   />
                 ) : null}
-              </span>
+              </button>
 
               <span className="min-w-0">
                 <span className="block text-xs font-semibold text-textH">
@@ -112,10 +111,22 @@ export function SavingThrows({
                 </span>
               </span>
 
-              <span className="text-sm font-bold text-textH">
+              <button
+                type="button"
+                className="rounded px-1 text-sm font-bold text-textH hover:bg-bg hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                title={rollModifierHint()}
+                onClick={(event) =>
+                  rollD20({
+                    label: `Resistência de ${label}`,
+                    modifier: bonus,
+                    kind: "save",
+                    mode: rollModeFromEvent(event.nativeEvent),
+                  })
+                }
+              >
                 {formatSigned(bonus)}
-              </span>
-            </button>
+              </button>
+            </div>
           )
         })}
       </div>
