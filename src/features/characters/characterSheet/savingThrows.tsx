@@ -3,6 +3,7 @@ import { Check } from "lucide-react"
 import { cn } from "../../../lib/cn"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatSigned } from "../../../lib/formatSigned"
+import { requestD20Roll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Attribute } from "../../../models/sheet/Attribute"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
@@ -59,7 +60,7 @@ export function SavingThrows({
         </h2>
 
         <p className="mt-0.5 text-[11px] text-textMuted">
-          Clique para alternar proficiência.
+          Clique no círculo para proficiência e no bônus para rolar.
         </p>
       </div>
 
@@ -69,53 +70,59 @@ export function SavingThrows({
           const bonus = character.getSavingThrowBonus(attribute)
 
           return (
-            <button
+            <div
               key={attribute}
-              type="button"
-              aria-pressed={proficient}
-              title={`${label}: ${proficient ? "proficiente" : "não proficiente"}`}
-              onClick={() => toggleProficiency(attribute)}
               className={cn(
                 "grid grid-cols-[22px_1fr_auto] items-center gap-2",
                 "rounded-lg border px-2.5 py-2 text-left",
                 "transition-colors",
                 proficient
                   ? "border-accentBorder bg-accentBg"
-                  : "border-border bg-bg-subtle hover:border-borderStrong",
+                  : "border-border bg-bg-subtle",
               )}
             >
-              <span
+              <button
+                type="button"
+                aria-pressed={proficient}
+                title={`${label}: ${proficient ? "proficiente" : "não proficiente"}`}
+                onClick={() => toggleProficiency(attribute)}
                 className={cn(
-                  "flex h-4 w-4 items-center justify-center",
-                  "rounded-full border",
+                  "flex h-4 w-4 items-center justify-center rounded-full border",
                   proficient
                     ? "border-accent bg-accent text-white"
                     : "border-textMuted bg-transparent",
                 )}
               >
                 {proficient ? (
-                  <Check
-                    aria-hidden="true"
-                    className="h-3 w-3"
-                    strokeWidth={3}
-                  />
+                  <Check aria-hidden="true" className="h-3 w-3" strokeWidth={3} />
                 ) : null}
-              </span>
+              </button>
 
               <span className="min-w-0">
                 <span className="block text-xs font-semibold text-textH">
                   {attributeShort(attribute)}
                 </span>
-
                 <span className="block truncate text-[10px] text-textMuted">
                   {label}
                 </span>
               </span>
 
-              <span className="text-sm font-bold text-textH">
+              <button
+                type="button"
+                className="rounded px-1 text-sm font-bold text-textH hover:bg-bg hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                title={rollModifierHint()}
+                onClick={(event) =>
+                  requestD20Roll({
+                    characterId,
+                    label: `Resistência de ${label}`,
+                    source: { type: "save", attribute },
+                    mode: rollModeFromEvent(event.nativeEvent),
+                  })
+                }
+              >
                 {formatSigned(bonus)}
-              </span>
-            </button>
+              </button>
+            </div>
           )
         })}
       </div>

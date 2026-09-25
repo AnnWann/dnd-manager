@@ -9,6 +9,9 @@ import {
   type ReactNode,
 } from "react"
 import { SessionSocket, type SessionRuntimeStatus } from "./sessionSocket"
+import { DiceRollOverlay } from "../dice/DiceRollOverlay"
+import { DICE_ROLL_REQUEST_EVENT, publishServerDiceRoll } from "../../lib/diceRoller"
+import type { SessionDiceRollRequest } from "../../shared/session-runtime/diceRollProtocol"
 import { toSheetOperationMessage } from "./sheetRoutes"
 import type {
   SessionAbilityOperation,
@@ -286,13 +289,25 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
           setHpLog((current) => mergeSessionLogs(current, message.records as SessionLogRecord[]))
           return
         }
+        if (message.type === "session.dice.result") {
+          publishServerDiceRoll(message.result)
+          return
+        }
         if (message.type === "session.error") console.error(`[session-runtime] ${message.code}: ${message.message}`)
       },
     })
 
+    const onDiceRollRequest = (event: Event) => {
+      const request = (event as CustomEvent<SessionDiceRollRequest>).detail
+      if (!request) return
+      socket.send({ type: "session.dice.roll", request })
+    }
+
+    window.addEventListener(DICE_ROLL_REQUEST_EVENT, onDiceRollRequest)
     socketRef.current = socket
     socket.connect()
     return () => {
+      window.removeEventListener(DICE_ROLL_REQUEST_EVENT, onDiceRollRequest)
       if (socketRef.current === socket) socketRef.current = null
       socket.disconnect()
     }
@@ -418,6 +433,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     <SessionRuntimeContext.Provider value={value}>
       <SessionRuntimeLogContext.Provider value={logValue}>
         {children}
+        <DiceRollOverlay />
       </SessionRuntimeLogContext.Provider>
     </SessionRuntimeContext.Provider>
   )
