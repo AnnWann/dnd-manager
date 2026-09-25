@@ -1,5 +1,6 @@
 import type {
-  SessionDiceRollKind,
+  SessionDiceD20Source,
+  SessionDiceDamageSource,
   SessionDiceRollMode,
   SessionDiceRollRequest,
   SessionDiceRollResult,
@@ -13,55 +14,29 @@ let requestSequence = 0
 export function requestD20Roll(input: {
   characterId: string
   label: string
-  modifier?: number
-  kind: Exclude<SessionDiceRollKind, "damage">
+  source: SessionDiceD20Source
   mode?: SessionDiceRollMode
 }): void {
   publishRequest({
     requestId: createRequestId(),
     characterId: input.characterId,
     label: input.label,
-    kind: input.kind,
     mode: input.mode ?? "normal",
-    groups: [{ quantity: 1, sides: 20 }],
-    modifier: input.modifier ?? 0,
+    source: input.source,
   })
 }
 
 export function requestDamageRoll(input: {
   characterId: string
   label: string
-  quantity: number
-  sides: number | string
-  modifier?: number
+  source: SessionDiceDamageSource
 }): void {
   publishRequest({
     requestId: createRequestId(),
     characterId: input.characterId,
     label: input.label,
-    kind: "damage",
     mode: "normal",
-    groups: [{
-      quantity: Math.max(1, Math.trunc(input.quantity) || 1),
-      sides: normalizeSides(input.sides),
-    }],
-    modifier: input.modifier ?? 0,
-  })
-}
-
-export function requestFlatDamageRoll(input: {
-  characterId: string
-  label: string
-  total: number
-}): void {
-  publishRequest({
-    requestId: createRequestId(),
-    characterId: input.characterId,
-    label: input.label,
-    kind: "damage",
-    mode: "normal",
-    groups: [],
-    modifier: input.total,
+    source: input.source,
   })
 }
 
@@ -89,19 +64,6 @@ function publishRequest(request: SessionDiceRollRequest): void {
   window.dispatchEvent(
     new CustomEvent<SessionDiceRollRequest>(DICE_ROLL_REQUEST_EVENT, { detail: request }),
   )
-}
-
-function normalizeSides(value: number | string): number {
-  const parsed =
-    typeof value === "number"
-      ? value
-      : Number(value.trim().toLowerCase().replace(/^d/, ""))
-
-  if (!Number.isInteger(parsed) || parsed < 2) {
-    throw new Error(`Invalid die sides: ${String(value)}`)
-  }
-
-  return parsed
 }
 
 function createRequestId(): string {
