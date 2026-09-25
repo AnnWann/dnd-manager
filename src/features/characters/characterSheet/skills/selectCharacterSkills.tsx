@@ -1,6 +1,7 @@
 import { useCharacterWorkspace } from "../../workspace/CharacterWorkspaceContext"
 import { attributeShort } from "../../../../lib/attributeShorts"
 import { formatSigned } from "../../../../lib/formatSigned"
+import { rollD20, rollModeFromEvent, rollModifierHint } from "../../../../lib/diceRoller"
 import type { CharacterTemplate } from "../../../../models/characters/CharacterTemplate"
 import { hasProficiency } from "../../../../models/characters/characterProficiencies"
 import type { Attribute } from "../../../../models/sheet/Attribute"
