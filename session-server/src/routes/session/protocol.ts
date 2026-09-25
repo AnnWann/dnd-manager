@@ -1,5 +1,5 @@
 import { routeForSheetOperation, type CharacterSheetRoute } from "../characters/sheet";
-import type { SessionDiceRollRequest, SessionDiceRollResult } from "../../../../src/shared/session-runtime/diceRollProtocol";
+import type { SessionActionRollRequest, SessionActionRollResult, SessionDiceRollRequest, SessionDiceRollResult } from "../../../../src/shared/session-runtime/diceRollProtocol";
 
 export type SessionRole = "MASTER" | "PLAYER";
 
@@ -245,7 +245,8 @@ export type ClientSessionMessage =
   | { type: "session.conditions.operation"; operation: SessionConditionOperation | SessionConcentrationOperation }
   | { type: "session.sheet.operation"; route: CharacterSheetRoute; operation: SessionLoggedOperation }
   | { type: "session.log.undo"; logId: string }
-  | { type: "session.dice.roll"; request: SessionDiceRollRequest };
+  | { type: "session.dice.roll"; request: SessionDiceRollRequest }
+  | { type: "session.action.roll"; request: SessionActionRollRequest };
 
 export type ServerSessionMessage =
   | { type: "session.ready"; sessionId: string; clientId: string; serverTime: number }
@@ -258,6 +259,7 @@ export type ServerSessionMessage =
   | { type: "session.conditions.updated"; character: SessionConditionsState }
   | { type: "session.hp.log"; records: SessionHpLogRecord[] }
   | { type: "session.dice.result"; result: SessionDiceRollResult }
+  | { type: "session.action.result"; result: SessionActionRollResult }
   | { type: "session.error"; code: string; message: string };
 
 export function parseClientSessionMessage(raw: string): ClientSessionMessage | null {
@@ -299,6 +301,10 @@ export function parseClientSessionMessage(raw: string): ClientSessionMessage | n
       return isDiceRollRequest(value.request)
         ? { type: value.type, request: value.request }
         : null;
+    case "session.action.roll":
+      return isActionRollRequest(value.request)
+        ? { type: value.type, request: value.request }
+        : null;
     default:
       return null;
   }
@@ -306,6 +312,28 @@ export function parseClientSessionMessage(raw: string): ClientSessionMessage | n
 
 export function encodeServerSessionMessage(message: ServerSessionMessage): string {
   return JSON.stringify(message);
+}
+
+function isActionRollRequest(value: unknown): value is SessionActionRollRequest {
+  if (!isRecord(value)) return false;
+  if (!nonEmpty(value.requestId) || value.requestId.length > 120) return false;
+  if (!nonEmpty(value.characterId) || value.characterId.length > 120) return false;
+  if (!diceRollMode(value.mode) || !isRecord(value.source) || !nonEmpty(value.source.type)) return false;
+  switch (value.source.type) {
+    case "weapon":
+      return nonEmpty(value.source.weaponId) && value.source.weaponId.length <= 160;
+    case "unarmed":
+      return true;
+    case "spell":
+      return nonEmpty(value.source.spellIndex)
+        && value.source.spellIndex.length <= 200
+        && nonEmpty(value.source.sourceId)
+        && value.source.sourceId.length <= 200;
+    case "ability":
+      return nonEmpty(value.source.abilityId) && value.source.abilityId.length <= 200;
+    default:
+      return false;
+  }
 }
 
 function isDiceRollRequest(value: unknown): value is SessionDiceRollRequest {
