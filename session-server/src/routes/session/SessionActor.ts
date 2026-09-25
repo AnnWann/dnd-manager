@@ -82,7 +82,7 @@ import {
   readSessionLog,
   type SessionLogRecord,
 } from "./sessionLog";
-import { readRuntimeConfig } from "./runtimeConfigAccess";
+import { isDigitalDiceRollingEnabled, readRuntimeConfig } from "./runtimeConfigAccess";
 import type { SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult, SessionResolvedD20Roll, SessionResolvedDamageRoll } from "../../../../src/shared/session-runtime/diceRollProtocol";
 import { parseManualDiceExpression } from "../../../../src/shared/session-runtime/manualDiceExpression";
 import {
@@ -280,6 +280,7 @@ export class SessionActor extends DurableObject<Env> {
       connection.userId,
       creature,
       entry,
+      isDigitalDiceRollingEnabled(runtimeConfig),
     );
     if (!resolution.ok) {
       this.sendError(webSocket, resolution.code, resolution.message);
@@ -304,10 +305,11 @@ export class SessionActor extends DurableObject<Env> {
       return;
     }
 
-    const [hpState, abilities, conditionsState] = await Promise.all([
+    const [hpState, abilities, conditionsState, runtimeConfig] = await Promise.all([
       this.readHpState(),
       this.ctx.storage.get<Record<string, SessionAbilityState>>(ABILITIES_STATE_KEY).then((value) => value ?? {}),
       this.readConditionsState(),
+      readRuntimeConfig(this.ctx.storage),
     ]);
     const hp = hpState[characterId];
     const ability = abilities[characterId];
@@ -332,7 +334,7 @@ export class SessionActor extends DurableObject<Env> {
 
     let resolved: ActionResolution;
     try {
-      resolved = resolveServerActionRoll(request, connection.userId, character);
+      resolved = resolveServerActionRoll(request, connection.userId, character, isDigitalDiceRollingEnabled(runtimeConfig));
     } catch {
       this.sendError(webSocket, "ACTION_ROLL_RESOLUTION_FAILED", "The authoritative action roll could not be resolved.");
       return;
@@ -350,6 +352,16 @@ export class SessionActor extends DurableObject<Env> {
     connection: SessionConnection,
     request: SessionDiceRollRequest,
   ): Promise<void> {
+    const runtimeConfig = await readRuntimeConfig(this.ctx.storage);
+    if (!isDigitalDiceRollingEnabled(runtimeConfig)) {
+      this.sendError(
+        webSocket,
+        "DIGITAL_DICE_DISABLED",
+        "Digital dice rolling is disabled for this session.",
+      );
+      return;
+    }
+
     if (request.source.type === "manual") {
       const attribution = await this.resolveManualRollAttribution(
         webSocket,
@@ -1021,7 +1033,8 @@ function resolveServerCreatureRoll(
   request: SessionCreatureRollRequest,
   actorId: string,
   creature: CompendiumCreature,
-  entry?: InitiativeEntry,
+  entry: InitiativeEntry | undefined,
+  diceRollingEnabled: boolean,
 ): CreatureRollResolution {
   const conditions = entry?.conditions ?? [];
   const resultCharacterId = `creature:${entry?.id ?? creature.id}`;
@@ -1041,7 +1054,7 @@ function resolveServerCreatureRoll(
     const mechanics = feature.mechanics
       ?? inferCreatureAttackMechanics(feature.description);
 
-    if (source.intent === "announce" || !mechanics || mechanics.kind !== "attack") {
+    if (!diceRollingEnabled || source.intent === "announce" || !mechanics || mechanics.kind !== "attack") {
       return {
         ok: true,
         resultType: "action",
@@ -1137,6 +1150,14 @@ function resolveServerCreatureRoll(
         critical,
         createdAt: new Date().toISOString(),
       },
+    };
+  }
+
+  if (!diceRollingEnabled) {
+    return {
+      ok: false,
+      code: "DIGITAL_DICE_DISABLED",
+      message: "Digital dice rolling is disabled for this session.",
     };
   }
 
@@ -1248,6 +1269,7 @@ function resolveServerActionRoll(
   request: SessionActionRollRequest,
   actorId: string,
   character: CharacterTemplate,
+  diceRollingEnabled: boolean,
 ): ActionResolution {
   const base = {
     id: crypto.randomUUID(),
@@ -1266,6 +1288,33 @@ function resolveServerActionRoll(
     const proficiency = weapon.proficient && !isWeaponImprovisedGrip(weapon)
       ? character.getProficiencyBonus()
       : 0;
+    const description = joinDescription(
+      weapon.desc,
+      weapon.notes,
+      ...(weapon.properties ?? []).map((property) =>
+        property.desc?.trim() ? `${property.name}: ${property.desc}` : undefined
+      ),
+    );
+    const details = [
+      `Atributo: ${abilityShortPtBr(attribute)}`,
+      ...(weapon.properties ?? []).map((property) => property.name),
+    ];
+    if (!diceRollingEnabled) {
+      return {
+        ok: true,
+        result: {
+          ...base,
+          sourceType: "weapon",
+          title: weapon.name || "Arma",
+          subtitle: isWeaponImprovisedGrip(weapon)
+            ? "Ataque com arma improvisada"
+            : "Ataque com arma",
+          description,
+          details,
+          critical: false,
+        },
+      };
+    }
     const attack = rollActionD20(
       request.mode,
       character.getEffectiveWeaponAttackBonus(
@@ -1291,17 +1340,8 @@ function resolveServerActionRoll(
         sourceType: "weapon",
         title: weapon.name || "Arma",
         subtitle: isWeaponImprovisedGrip(weapon) ? "Ataque com arma improvisada" : "Ataque com arma",
-        description: joinDescription(
-          weapon.desc,
-          weapon.notes,
-          ...(weapon.properties ?? []).map((property) =>
-            property.desc?.trim() ? `${property.name}: ${property.desc}` : undefined
-          ),
-        ),
-        details: [
-          `Atributo: ${abilityShortPtBr(attribute)}`,
-          ...(weapon.properties ?? []).map((property) => property.name),
-        ],
+        description,
+        details,
         attack,
         damage,
         critical,
@@ -1311,6 +1351,21 @@ function resolveServerActionRoll(
 
   if (request.source.type === "unarmed") {
     const profile = getUnarmedAttackProfile(character);
+    if (!diceRollingEnabled) {
+      return {
+        ok: true,
+        result: {
+          ...base,
+          sourceType: "unarmed",
+          title: "Ataque desarmado",
+          subtitle: profile.monkLevel > 0
+            ? `Ataque desarmado · Monge ${profile.monkLevel}`
+            : "Ataque desarmado",
+          description: "Ataque corpo a corpo realizado sem uma arma equipada.",
+          critical: false,
+        },
+      };
+    }
     const attack = rollActionD20(request.mode, profile.attack);
     const critical = attack.natural === 20;
     const groups = profile.damageDie
