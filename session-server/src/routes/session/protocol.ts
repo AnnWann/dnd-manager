@@ -310,36 +310,33 @@ function isDiceRollRequest(value: unknown): value is SessionDiceRollRequest {
   if (!nonEmpty(value.requestId) || value.requestId.length > 120) return false;
   if (!nonEmpty(value.characterId) || value.characterId.length > 120) return false;
   if (typeof value.label !== "string" || value.label.trim().length === 0 || value.label.length > 160) return false;
-  if (!diceRollKind(value.kind) || !diceRollMode(value.mode)) return false;
-  if (typeof value.modifier !== "number" || !Number.isFinite(value.modifier) || Math.abs(value.modifier) > 10000) return false;
-  if (!Array.isArray(value.groups) || value.groups.length > 8) return false;
-  if (!value.groups.every((group) =>
-    isRecord(group)
-    && positiveInteger(group.quantity)
-    && group.quantity <= 100
-    && positiveInteger(group.sides)
-    && group.sides >= 2
-    && group.sides <= 1000
-  )) return false;
+  if (!diceRollMode(value.mode) || !isDiceRollSource(value.source)) return false;
 
-  if (value.kind === "damage") {
-    return value.mode === "normal";
-  }
-
-  return value.groups.length === 1
-    && value.groups[0].quantity === 1
-    && value.groups[0].sides === 20;
+  return value.source.type !== "weapon-damage"
+    && value.source.type !== "unarmed-damage"
+    ? true
+    : value.mode === "normal";
 }
 
-function diceRollKind(value: unknown): boolean {
-  return value === "ability"
-    || value === "skill"
-    || value === "save"
-    || value === "initiative"
-    || value === "attack"
-    || value === "damage"
-    || value === "spell-attack"
-    || value === "custom";
+function isDiceRollSource(value: unknown): boolean {
+  if (!isRecord(value) || !nonEmpty(value.type)) return false;
+  switch (value.type) {
+    case "ability":
+    case "save":
+    case "spell-attack":
+      return attribute(value.attribute);
+    case "skill":
+      return skill(value.skill);
+    case "initiative":
+    case "unarmed-attack":
+    case "unarmed-damage":
+      return true;
+    case "weapon-attack":
+    case "weapon-damage":
+      return nonEmpty(value.weaponId) && value.weaponId.length <= 160;
+    default:
+      return false;
+  }
 }
 
 function diceRollMode(value: unknown): boolean {
