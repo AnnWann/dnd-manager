@@ -1,6 +1,7 @@
 import { Sparkles } from "lucide-react"
 
 import { Input } from "../../../../../../components/ui/Input"
+import { rollD20, rollModeFromEvent, rollModifierHint } from "../../../../../../lib/diceRoller"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
 import {
   getCalculatedArmorClassWithShield,
