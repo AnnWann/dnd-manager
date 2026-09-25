@@ -1,8 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises"
 
 const LOCAL_PATH = new URL("../src/data/spells.v1.json", import.meta.url)
+const UPSTREAM_REVISION = "bce51b3958573819e3b842fbc0cd9524fe4bc2e1"
 const UPSTREAM_URL =
-  "https://raw.githubusercontent.com/5e-bits/5e-database/main/src/2014/en/5e-SRD-Spells.json"
+  `https://raw.githubusercontent.com/5e-bits/5e-database/${UPSTREAM_REVISION}/src/2014/en/5e-SRD-Spells.json`
 
 const ATTRIBUTES = new Set(["str", "dex", "con", "int", "wis", "cha"])
 const SKIP_NO_ROLL_DAMAGE = new Set([
