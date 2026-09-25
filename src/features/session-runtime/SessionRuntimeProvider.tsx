@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from "react"
 import { SessionSocket, type SessionRuntimeStatus } from "./sessionSocket"
-import { DiceRollOverlay } from "../dice/DiceRollOverlay"
 import { DICE_ROLL_REQUEST_EVENT, publishServerDiceRoll } from "../../lib/diceRoller"
 import type { SessionDiceRollRequest } from "../../shared/session-runtime/diceRollProtocol"
 import { toSheetOperationMessage } from "./sheetRoutes"
@@ -433,7 +432,6 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
     <SessionRuntimeContext.Provider value={value}>
       <SessionRuntimeLogContext.Provider value={logValue}>
         {children}
-        <DiceRollOverlay />
       </SessionRuntimeLogContext.Provider>
     </SessionRuntimeContext.Provider>
   )
