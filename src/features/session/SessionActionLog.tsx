@@ -714,7 +714,9 @@ function DiceRollEntry({
       </div>
 
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2 text-[10px] text-textMuted">
-        <span className="truncate">{characterName || "Personagem"}</span>
+        <span className="truncate">
+          {characterName || (roll.kind === "manual" && !roll.characterId ? "Sem identificador" : "Personagem")}
+        </span>
         <time dateTime={roll.createdAt}>{formatTime(roll.createdAt)}</time>
       </div>
     </article>
