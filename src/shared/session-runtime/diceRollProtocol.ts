@@ -2,6 +2,7 @@ import type { Attribute } from "../../models/sheet/Attribute"
 import type { Skill } from "../../models/sheet/Skills"
 
 export type SessionDiceRollMode = "normal" | "advantage" | "disadvantage"
+export type SessionRollVisibility = "public" | "roller-master"
 
 export type SessionDiceRollKind =
   | "ability"
@@ -39,6 +40,7 @@ export type SessionDiceRollRequest = {
   characterId?: string
   label: string
   mode: SessionDiceRollMode
+  visibility?: SessionRollVisibility
   source: SessionDiceRollSource
 }
 
@@ -62,6 +64,7 @@ export type SessionDiceRollResult = {
   modifier: number
   total: number
   natural?: number
+  visibility?: SessionRollVisibility
   createdAt: string
 }
 
@@ -81,6 +84,7 @@ export type SessionActionRollRequest = {
   requestId: string
   characterId: string
   mode: SessionDiceRollMode
+  visibility?: SessionRollVisibility
   source: SessionActionRollSource
 }
 
@@ -132,6 +136,7 @@ export type SessionActionRollResult = {
   instances?: SessionActionInstanceResult[]
   castLevel?: number
   critical: boolean
+  visibility?: SessionRollVisibility
   createdAt: string
 }
 
@@ -148,5 +153,6 @@ export type SessionCreatureRollRequest = {
   creatureId: string
   initiativeEntryId?: string
   mode: SessionDiceRollMode
+  visibility?: SessionRollVisibility
   source: SessionCreatureRollSource
 }
