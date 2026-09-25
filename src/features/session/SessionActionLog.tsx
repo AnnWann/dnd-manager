@@ -57,7 +57,15 @@ export function SessionActionLog() {
     return window.localStorage.getItem(SESSION_PANEL_COLLAPSED_STORAGE_KEY) === "1"
   })
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [privateRolls, setPrivateRolls] = useState(
+    () => getRollVisibility() === "roller-master",
+  )
   const activeView: PanelView = isMaster ? panelView : "dice"
+
+  function changePrivateRolls(enabled: boolean) {
+    setPrivateRolls(enabled)
+    setRollVisibility(enabled ? "roller-master" : "public")
+  }
 
   const characterNames = useMemo(
     () => new Map(visibleCharacters.map((character) => [character.get("id"), character.get("name")])),
@@ -215,6 +223,8 @@ export function SessionActionLog() {
         characterNames={characterNames}
         manualTarget={manualRollTarget}
         allowAnonymous={isMaster}
+        privateRolls={privateRolls}
+        onPrivateRollsChange={changePrivateRolls}
         onClear={() => setRollFeed([])}
       />
     )
@@ -351,6 +361,8 @@ function DiceRollPanel({
   characterNames,
   manualTarget,
   allowAnonymous,
+  privateRolls,
+  onPrivateRollsChange,
   onClear,
 }: {
   entries: RollFeedEntry[]
@@ -361,19 +373,13 @@ function DiceRollPanel({
     label: string
   }
   allowAnonymous: boolean
+  privateRolls: boolean
+  onPrivateRollsChange: (enabled: boolean) => void
   onClear: () => void
 }) {
   const [manualExpression, setManualExpression] = useState("")
   const [manualError, setManualError] = useState("")
   const [attributionMode, setAttributionMode] = useState<"selected" | "none">("selected")
-  const [privateRolls, setPrivateRolls] = useState(
-    () => getRollVisibility() === "roller-master",
-  )
-
-  function changePrivateRolls(enabled: boolean) {
-    setPrivateRolls(enabled)
-    setRollVisibility(enabled ? "roller-master" : "public")
-  }
 
   function submitManualRoll(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -413,7 +419,7 @@ function DiceRollPanel({
           <input
             type="checkbox"
             checked={privateRolls}
-            onChange={(event) => changePrivateRolls(event.target.checked)}
+            onChange={(event) => onPrivateRollsChange(event.target.checked)}
             className="h-4 w-4 shrink-0 accent-current"
           />
         </label>
