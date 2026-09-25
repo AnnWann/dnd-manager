@@ -1600,7 +1600,7 @@ function buildAuthoritativeDicePlan(
 }
 
 function d20Plan(
-  kind: Exclude<SessionDiceRollResult["kind"], "damage">,
+  kind: Exclude<SessionDiceRollResult["kind"], "damage" | "manual">,
   mode: SessionDiceRollResult["mode"],
   modifier: number,
 ): { ok: true; plan: DicePlan } {
