@@ -13,6 +13,7 @@ import {
 } from "../../../data/characterCreation/phbPresets"
 import { RACIAL_SPELLCASTING_PRESETS } from "../../../data/characterCreation/racialSpellcastingPresets"
 import { attributeShort } from "../../../lib/attributeShorts"
+import { requestActionRoll } from "../../../lib/diceRoller"
 import type { Ability } from "../../../models/abilities/Ability"
 import {
   endAbilityEffect,
@@ -697,6 +698,12 @@ export function CharacterRaceTab({
                   onUse={() => updateAbilityState(ability.id, "use")}
                   onRestore={() => updateAbilityState(ability.id, "restore")}
                   onDeactivate={() => updateAbilityState(ability.id, "deactivate")}
+                  onAnnounce={() =>
+                    requestActionRoll({
+                      characterId: character.get("id"),
+                      source: { type: "ability", abilityId: ability.id },
+                    })
+                  }
                 />
               ))}
           </div>
