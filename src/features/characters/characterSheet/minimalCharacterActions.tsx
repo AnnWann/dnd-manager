@@ -221,7 +221,7 @@ export function MinimalCharacterActions({
         characterId: character.get("id"),
         source: {
           type: "ability",
-          abilityId: entry.ability.originalAbilityId ?? entry.ability.id,
+          abilityId: entry.abilitySource?.abilityId ?? entry.ability.id,
         },
       })
       return
