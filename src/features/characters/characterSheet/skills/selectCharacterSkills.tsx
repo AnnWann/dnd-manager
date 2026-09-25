@@ -73,9 +73,21 @@ export function SelectSkillModule({
         </div>
       </div>
 
-      <div className="text-center text-xs font-semibold text-textH">
+      <button
+        type="button"
+        className="rounded py-1 text-center text-xs font-semibold text-textH hover:bg-accentBg hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        title={rollModifierHint()}
+        onClick={(event) =>
+          rollD20({
+            label,
+            modifier: bonus,
+            kind: "skill",
+            mode: rollModeFromEvent(event.nativeEvent),
+          })
+        }
+      >
         {formatSigned(bonus)}
-      </div>
+      </button>
 
       <div className="flex items-center justify-end gap-1">
         <button
