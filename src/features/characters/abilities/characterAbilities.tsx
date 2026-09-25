@@ -20,7 +20,7 @@ import { AbilityCard } from "./abilityCard"
 import { AbilityDialog } from "./abilityDialog"
 import { AbilityResourceActivationModal } from "./abilityResourceActivationModal"
 import { hasAbilityResourceCosts, spendAbilityResourceCosts } from "../../../models/abilities/abilityResourceCosts"
-import { hasManualBonusRolls } from "../../../models/bonuses/BonusRoll"
+import { hasManualBonusRolls, listBonusRollRequirements } from "../../../models/bonuses/BonusRoll"
 import { CompactAbilityCard } from "./compactAbilityCard"
 
 type Props = {
@@ -71,6 +71,8 @@ const ABILITY_LIST_VIEW_STORAGE_KEY = "dnd-manager:ability-list-view"
 export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   const sessionRuntime = useOptionalSessionRuntime()
   const authoritative = sessionRuntime?.abilitiesByCharacterId[character.get("id")]
+  const digitalDiceEnabled =
+    sessionRuntime?.runtimeConfigSnapshot?.config.diceRollingEnabled !== false
   const displayCharacter = useMemo(() => {
     if (!authoritative?.initialized) return character
     try {
@@ -182,7 +184,11 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
   }
 
   function requestUseAbility(ability: Ability) {
-    if ((ability.activationOptions?.length ?? 0) > 0 || hasAbilityResourceCosts(ability) || ability.resourceUpcast?.enabled || hasManualBonusRolls(ability.bonuses)) {
+    const requiresPhysicalRollInput =
+      Boolean(sessionRuntime)
+      && !digitalDiceEnabled
+      && listBonusRollRequirements(ability.bonuses).length > 0
+    if ((ability.activationOptions?.length ?? 0) > 0 || hasAbilityResourceCosts(ability) || ability.resourceUpcast?.enabled || hasManualBonusRolls(ability.bonuses) || requiresPhysicalRollInput) {
       setActivationChoice(ability)
       return
     }
@@ -202,6 +208,13 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
         resourceSelection,
         bonusRollValues,
       })) {
+        requestActionRoll({
+          characterId: displayCharacter.get("id"),
+          source: {
+            type: "ability",
+            abilityId: ability.originalAbilityId ?? ability.id,
+          },
+        })
         setActivationChoice(null)
         return
       }
@@ -409,6 +422,7 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
         <AbilityResourceActivationModal
           ability={activationChoice}
           character={displayCharacter}
+          forceManualRolls={Boolean(sessionRuntime) && !digitalDiceEnabled}
           onClose={() => setActivationChoice(null)}
           onConfirm={(optionId, resourceSelection, bonusRollValues) => useAbility(activationChoice.id, optionId, resourceSelection, bonusRollValues)}
         />

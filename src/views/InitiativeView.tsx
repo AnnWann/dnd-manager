@@ -77,6 +77,8 @@ export function InitiativeView() {
   const { creatures: localCreatures } = useCreatureCompendium()
   const { userRole } = useSyncContext()
   const runtime = useOptionalSessionRuntime()
+  const digitalDiceEnabled =
+    runtime?.runtimeConfigSnapshot?.config.diceRollingEnabled !== false
   const creatures = runtime?.runtimeConfigSnapshot
     ? runtime.runtimeConfigSnapshot.config.creatureCompendium
     : localCreatures
@@ -253,7 +255,7 @@ export function InitiativeView() {
           basicName: name,
           revealRealName: true,
           imageUrl: selectedCharacter.get("profile").imageUrl,
-          initiative: rollInitiative(initiativeBonus),
+          initiative: digitalDiceEnabled ? rollInitiative(initiativeBonus) : 0,
           initiativeBonus,
           dexterity: selectedCharacter.getEffectiveAttribute("dex"),
           side: selectedCharacterSide,
@@ -279,7 +281,7 @@ export function InitiativeView() {
     const quantity = selectedCreature.unique
       ? 1
       : clamp(Math.trunc(creatureQuantity), 1, 50)
-    const sharedRoll = sharedCreatureInitiative
+    const sharedRoll = digitalDiceEnabled && sharedCreatureInitiative
       ? rollInitiative(selectedCreature.initiativeBonus)
       : undefined
 
@@ -298,7 +300,10 @@ export function InitiativeView() {
       revealRealName: false,
       imageUrl: selectedCreature.sheetImageUrl,
       initiative:
-        sharedRoll ?? rollInitiative(selectedCreature.initiativeBonus),
+        sharedRoll
+        ?? (digitalDiceEnabled
+          ? rollInitiative(selectedCreature.initiativeBonus)
+          : 0),
       initiativeBonus: selectedCreature.initiativeBonus,
       dexterity: selectedCreature.abilityScores.dex,
       side: selectedCreature.defaultSide,
@@ -316,7 +321,7 @@ export function InitiativeView() {
       (entry) =>
         entry.name === draft.name || entry.name.startsWith(`${draft.name} `),
     ).length
-    const sharedRoll = draft.sharedInitiative
+    const sharedRoll = digitalDiceEnabled && draft.sharedInitiative
       ? rollInitiative(draft.initiativeBonus)
       : undefined
 
@@ -326,7 +331,11 @@ export function InitiativeView() {
         draft.quantity === 1 && existingCopies === 0
           ? draft.name
           : `${draft.name} ${existingCopies + index + 1}`,
-      initiative: sharedRoll ?? rollInitiative(draft.initiativeBonus),
+      initiative:
+        sharedRoll
+        ?? (digitalDiceEnabled
+          ? rollInitiative(draft.initiativeBonus)
+          : 0),
       initiativeBonus: draft.initiativeBonus,
       side: draft.side,
       armorClass: draft.armorClass,

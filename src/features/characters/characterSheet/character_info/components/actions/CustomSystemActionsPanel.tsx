@@ -83,6 +83,9 @@ export function CustomSystemActionsPanel({
 }: Props) {
   const definitions = useCustomSystemDefinitions()
   const sessionRuntime = useOptionalSessionRuntime()
+  const digitalDiceEnabled =
+    sessionRuntime?.runtimeConfigSnapshot?.config.diceRollingEnabled !== false
+  const physicalDiceMode = Boolean(sessionRuntime) && !digitalDiceEnabled
   const [error, setError] = useState("")
   const [manualRollValues, setManualRollValues] = useState<Record<string, string>>({})
   const [activationLevels, setActivationLevels] = useState<Record<string, string>>({})
@@ -97,7 +100,10 @@ export function CustomSystemActionsPanel({
     try {
       setError("")
       let rollValue: number | undefined
-      if (entry.roll?.mode === "manual") {
+      if (
+        entry.roll
+        && (entry.roll.mode === "manual" || physicalDiceMode)
+      ) {
         const raw = manualRollValues[entry.key]?.trim() ?? ""
         if (!raw || !Number.isFinite(Number(raw))) {
           setError(`Informe um resultado numérico válido para ${entry.roll.label?.trim() || entry.name}.`)
@@ -125,7 +131,17 @@ export function CustomSystemActionsPanel({
         if ((operation.type === "character.customSystem.ability.activate" || operation.type === "character.customSystem.action.execute") && rollValue !== undefined) {
           operation = { ...operation, rollValue }
         }
-        sessionRuntime.dispatchAbilityOperation(operation)
+        const sent = sessionRuntime.dispatchAbilityOperation(operation)
+        if (!sent) {
+          setError("Não foi possível enviar esta ação para a sessão.")
+          return
+        }
+        requestActionAnnouncement({
+          characterId: character.get("id"),
+          title: entry.name,
+          subtitle: `${CATEGORY_LABELS[entry.actionKind]} · ${entry.source}`,
+          description: entry.description,
+        })
         return
       }
       updateCharacter(character.get("id"), (current) => entry.activate(current, rollValue, activationLevel))
@@ -168,7 +184,8 @@ export function CustomSystemActionsPanel({
               <div className="grid gap-2">
                 {categoryEntries.map((entry) => {
                   const manualValue = manualRollValues[entry.key] ?? ""
-                  const manualInvalid = entry.roll?.mode === "manual"
+                  const manualInvalid = Boolean(entry.roll)
+                    && (entry.roll!.mode === "manual" || physicalDiceMode)
                     && (!manualValue.trim() || !Number.isFinite(Number(manualValue)))
                   return (
                     <article
@@ -206,13 +223,16 @@ export function CustomSystemActionsPanel({
                               />
                             </label>
                           ) : null}
-                          {entry.roll?.mode === "manual" ? (
+                          {entry.roll
+                            && (entry.roll.mode === "manual" || physicalDiceMode) ? (
                             <label className="mt-3 grid gap-1 rounded-lg border border-accentBorder bg-accentBg/30 p-2">
                               <span className="text-[11px] font-semibold text-textH">
                                 {entry.roll.label?.trim() || "Resultado da rolagem"}
                               </span>
                               <span className="text-[10px] text-textMuted">
-                                {entry.roll.dice?.trim() ? `Role ${entry.roll.dice} e informe o resultado.` : "Informe o resultado obtido antes de usar."}
+                                {entry.roll.dice?.trim()
+                                  ? `Role ${entry.roll.dice}${physicalDiceMode ? " com seus dados físicos" : ""} e informe o resultado.`
+                                  : "Informe o resultado obtido antes de usar."}
                               </span>
                               <input
                                 type="number"
@@ -226,7 +246,7 @@ export function CustomSystemActionsPanel({
                                 className="input-base h-8"
                               />
                             </label>
-                          ) : entry.roll?.mode === "automatic" ? (
+                          ) : entry.roll?.mode === "automatic" && digitalDiceEnabled ? (
                             <div className="mt-2 text-[10px] font-medium text-accent">
                               Rolagem automática{entry.roll.dice?.trim() ? ` · ${entry.roll.dice}` : ""}
                             </div>

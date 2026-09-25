@@ -19,7 +19,7 @@ import {
   type CharacterTemplateProps,
 } from "../../../../../src/models/characters/CharacterTemplate";
 import { normalizeDamageAffinities } from "../../../../../src/models/combat/Damage";
-import { listResolvedBonusRolls } from "../../../../../src/models/bonuses/BonusRoll";
+import { listBonusRollRequirements, listResolvedBonusRolls } from "../../../../../src/models/bonuses/BonusRoll";
 import { SessionActor as BaseSessionActor } from "../../session/SessionActor";
 import {
   parseAbilityClientMessage,
@@ -39,6 +39,10 @@ import {
   createSessionLogRecord,
   readSessionLog,
 } from "../../session/sessionLog";
+import {
+  isDigitalDiceRollingEnabled,
+  readRuntimeConfig,
+} from "../../session/runtimeConfigAccess";
 
 const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
@@ -144,11 +148,12 @@ export class SessionActor extends BaseSessionActor {
     connection: SessionConnection,
     operation: SessionAbilityOperation,
   ): Promise<void> {
-    const [abilityState, hpState, conditionsState, log] = await Promise.all([
+    const [abilityState, hpState, conditionsState, log, runtimeConfig] = await Promise.all([
       this.readAbilityState(),
       this.readAbilityHpState(),
       this.readAbilityConditionsState(),
       readSessionLog(this.ctx.storage),
+      readRuntimeConfig(this.ctx.storage),
     ]);
 
     const storedAbility = abilityState[operation.characterId];
@@ -171,6 +176,26 @@ export class SessionActor extends BaseSessionActor {
     } catch {
       this.sendAbilityError(webSocket, "ABILITY_STATE_INVALID", "The authoritative ability snapshot is invalid.");
       return;
+    }
+
+    if (
+      operation.type === "character.ability.use"
+      && !isDigitalDiceRollingEnabled(runtimeConfig)
+    ) {
+      const ability = findAbilityForSource(current, operation.source);
+      const requirements = listBonusRollRequirements(ability?.bonuses);
+      const missing = requirements.filter((requirement) => {
+        const value = operation.bonusRollValues?.[requirement.key];
+        return typeof value !== "number" || !Number.isFinite(value);
+      });
+      if (missing.length > 0) {
+        this.sendAbilityError(
+          webSocket,
+          "PHYSICAL_ROLL_REQUIRED",
+          `Informe o resultado físico para: ${missing.map((entry) => entry.label).join(", ")}.`,
+        );
+        return;
+      }
     }
 
     const next = applyAbilityOperation(current, operation);

@@ -21,11 +21,13 @@ export function AbilityResourceActivationModal({
   character,
   onClose,
   onConfirm,
+  forceManualRolls = false,
 }: {
   ability: Ability
   character: CharacterTemplate
   onClose: () => void
   onConfirm: (optionId: string | undefined, selection: AbilityResourceSelection | undefined, bonusRollValues?: Record<string, number>) => void
+  forceManualRolls?: boolean
 }) {
   const baseLevel = ability.resourceUpcast?.enabled ? Math.max(1, ability.resourceUpcast.baseLevel || 1) : undefined
   const maximumLevel = ability.resourceUpcast?.enabled
@@ -52,8 +54,10 @@ export function AbilityResourceActivationModal({
     ),
   )
   const manualRollRequirements = useMemo(
-    () => listBonusRollRequirements(ability.bonuses).filter((entry) => entry.mode === "manual"),
-    [ability.bonuses],
+    () => listBonusRollRequirements(ability.bonuses).filter(
+      (entry) => forceManualRolls || entry.mode === "manual",
+    ),
+    [ability.bonuses, forceManualRolls],
   )
   const [manualRollValues, setManualRollValues] = useState<Record<string, string>>({})
 
@@ -174,9 +178,13 @@ export function AbilityResourceActivationModal({
         {manualRollRequirements.length > 0 ? (
           <div className="grid gap-2 rounded-xl border border-accentBorder bg-accentBg/20 p-3">
             <div>
-              <div className="text-xs font-semibold text-textH">Rolagens manuais dos bônus</div>
+              <div className="text-xs font-semibold text-textH">
+                {forceManualRolls ? "Resultados dos dados físicos" : "Rolagens manuais dos bônus"}
+              </div>
               <p className="mt-1 text-[11px] leading-5 text-textMuted">
-                Informe apenas o resultado dos dados. O bônus por fórmula é calculado e somado automaticamente.
+                {forceManualRolls
+                  ? "Role estes dados na mesa e informe apenas o resultado. O sistema não fará RNG digital."
+                  : "Informe apenas o resultado dos dados. O bônus por fórmula é calculado e somado automaticamente."}
               </p>
             </div>
             {manualRollRequirements.map((entry) => (
