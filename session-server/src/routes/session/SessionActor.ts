@@ -84,6 +84,7 @@ import {
 } from "./sessionLog";
 import { readRuntimeConfig } from "./runtimeConfigAccess";
 import type { SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult, SessionResolvedD20Roll, SessionResolvedDamageRoll } from "../../../../src/shared/session-runtime/diceRollProtocol";
+import { parseManualDiceExpression } from "../../../../src/shared/session-runtime/manualDiceExpression";
 import {
   broadcastVisibilityFiltered,
   refreshConnectionVisibility,
@@ -1362,17 +1363,97 @@ type DiceResolution =
   | { ok: false; code: string; message: string };
 
 type DicePlan = {
-  kind: SessionDiceRollResult["kind"];
+  kind: Exclude<SessionDiceRollResult["kind"], "manual">;
   mode: SessionDiceRollResult["mode"];
   groups: Array<{ quantity: number; sides: number }>;
   modifier: number;
 };
+
+function resolveServerManualDiceRoll(
+  request: SessionDiceRollRequest,
+  actorId: string,
+): DiceResolution {
+  if (request.source.type !== "manual") {
+    return {
+      ok: false,
+      code: "MANUAL_ROLL_INVALID",
+      message: "The requested roll is not a manual dice expression.",
+    };
+  }
+
+  const parsed = parseManualDiceExpression(request.source.expression);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      code: "MANUAL_ROLL_INVALID",
+      message: parsed.message,
+    };
+  }
+
+  const groups: SessionDiceRollResult["groups"] = parsed.value.terms.map((term) => {
+    if (term.mode === "normal") {
+      return {
+        quantity: term.quantity,
+        sides: term.sides,
+        rolls: Array.from({ length: term.quantity }, () => rollServerDie(term.sides)),
+      };
+    }
+
+    const rolls = [rollServerDie(term.sides), rollServerDie(term.sides)];
+    const kept = term.mode === "advantage"
+      ? Math.max(...rolls)
+      : Math.min(...rolls);
+
+    return {
+      quantity: rolls.length,
+      sides: term.sides,
+      rolls,
+      kept,
+    };
+  });
+
+  const diceTotal = groups.reduce((sum, group) => {
+    if (group.kept !== undefined) return sum + group.kept;
+    return sum + group.rolls.reduce((groupSum, value) => groupSum + value, 0);
+  }, 0);
+
+  const d20Groups = parsed.value.terms.flatMap((term, index) =>
+    term.sides === 20 && term.quantity === 1
+      ? [groups[index]]
+      : [],
+  );
+  const natural = d20Groups.length === 1
+    ? d20Groups[0].kept ?? d20Groups[0].rolls[0]
+    : undefined;
+
+  return {
+    ok: true,
+    result: {
+      id: crypto.randomUUID(),
+      requestId: request.requestId,
+      actorId,
+      characterId: request.characterId,
+      label: parsed.value.expression,
+      kind: "manual",
+      mode: parsed.value.mode,
+      groups,
+      modifier: parsed.value.modifier,
+      total: diceTotal + parsed.value.modifier,
+      natural,
+      createdAt: new Date().toISOString(),
+    },
+  };
+}
 
 function resolveServerDiceRoll(
   request: SessionDiceRollRequest,
   actorId: string,
   character: CharacterTemplate,
 ): DiceResolution {
+  if (request.source.type === "manual") {
+    return resolveServerManualDiceRoll(request, actorId);
+  }
+
   const plan = buildAuthoritativeDicePlan(request, character);
   if (!plan.ok) return plan;
 
@@ -1509,11 +1590,17 @@ function buildAuthoritativeDicePlan(
         },
       };
     }
+    case "manual":
+      return {
+        ok: false,
+        code: "MANUAL_ROLL_ROUTING_ERROR",
+        message: "Manual dice expressions must use the manual resolver.",
+      };
   }
 }
 
 function d20Plan(
-  kind: Exclude<SessionDiceRollResult["kind"], "damage">,
+  kind: Exclude<SessionDiceRollResult["kind"], "damage" | "manual">,
   mode: SessionDiceRollResult["mode"],
   modifier: number,
 ): { ok: true; plan: DicePlan } {

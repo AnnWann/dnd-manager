@@ -1,8 +1,8 @@
 import { Dices, History, PanelRightClose, PanelRightOpen, Undo2 } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type FormEvent } from "react"
 
 import { useCharacterContext } from "../../contexts/characterContext"
-import { ACTION_ROLL_RESULT_EVENT, DICE_ROLL_RESULT_EVENT } from "../../lib/diceRoller"
+import { ACTION_ROLL_RESULT_EVENT, DICE_ROLL_RESULT_EVENT, requestManualDiceRoll } from "../../lib/diceRoller"
 import type { SessionActionRollResult, SessionDiceRollResult } from "../../shared/session-runtime/diceRollProtocol"
 import { DAMAGE_TYPES, damageTypeLabel, type DamageType } from "../../models/combat/Damage"
 import { CREATURE_ATTRIBUTE_LABELS } from "../../models/creatures/CreatureRolls"
@@ -41,7 +41,7 @@ type RollFeedEntry =
   | { type: "action"; result: SessionActionRollResult }
 
 export function SessionActionLog() {
-  const { operationLog, visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
+  const { activeCharacter, operationLog, visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
   const runtime = useOptionalSessionRuntime()
   const logRuntime = useOptionalSessionRuntimeLog()
   const sessionLog = (logRuntime?.hpLog ?? []) as SessionLogRecord[]
@@ -266,6 +266,7 @@ export function SessionActionLog() {
         <DiceRollPanel
           entries={rollFeed}
           characterNames={characterNames}
+          characterId={activeCharacter?.get("id") ?? visibleCharacters[0]?.get("id")}
           onClear={() => setRollFeed([])}
         />
       )}
@@ -276,14 +277,76 @@ export function SessionActionLog() {
 function DiceRollPanel({
   entries,
   characterNames,
+  characterId,
   onClear,
 }: {
   entries: RollFeedEntry[]
   characterNames: ReadonlyMap<string, string>
+  characterId?: string
   onClear: () => void
 }) {
+  const [manualExpression, setManualExpression] = useState("")
+  const [manualError, setManualError] = useState("")
+
+  function submitManualRoll(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!characterId) {
+      setManualError("Nenhum personagem visível está disponível para associar à rolagem.")
+      return
+    }
+
+    const result = requestManualDiceRoll({
+      characterId,
+      expression: manualExpression,
+    })
+    if (!result.ok) {
+      setManualError(result.message)
+      return
+    }
+
+    setManualExpression(result.value.expression)
+    setManualError("")
+  }
+
   return (
     <>
+      <form
+        className="grid gap-2 border-b border-border bg-bg px-3 py-3"
+        onSubmit={submitManualRoll}
+      >
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+          Rolagem manual
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={manualExpression}
+            onChange={(event) => {
+              setManualExpression(event.target.value)
+              if (manualError) setManualError("")
+            }}
+            placeholder="1d6 + 2d8 + 6"
+            aria-label="Expressão de dados"
+            className="min-w-0 flex-1 rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs text-textH outline-none transition-colors placeholder:text-textMuted focus:border-accentBorder"
+          />
+          <button
+            type="submit"
+            disabled={!manualExpression.trim() || !characterId}
+            className="shrink-0 rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs font-semibold text-textH transition-colors hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Rolar
+          </button>
+        </div>
+        <div className="text-[9px] leading-4 text-textMuted">
+          Ex.: 1d20 + 5 · a-1d20 + 5 para vantagem · d-1d20 + 5 para desvantagem
+        </div>
+        {manualError ? (
+          <div className="rounded-lg border border-danger bg-dangerBg px-2.5 py-2 text-[10px] leading-4 text-danger">
+            {manualError}
+          </div>
+        ) : null}
+      </form>
+
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <span className="text-[11px] text-textMuted">
           Resultados confirmados pelo servidor
@@ -539,6 +602,11 @@ function DiceRollEntry({
 
 function diceModeLabel(roll: SessionDiceRollResult): string {
   if (roll.kind === "damage") return "Dano"
+  if (roll.kind === "manual") {
+    if (roll.mode === "advantage") return "Manual · Vantagem"
+    if (roll.mode === "disadvantage") return "Manual · Desvantagem"
+    return "Rolagem manual"
+  }
   if (roll.mode === "advantage") return "Vantagem"
   if (roll.mode === "disadvantage") return "Desvantagem"
   return "Rolagem"
@@ -546,6 +614,27 @@ function diceModeLabel(roll: SessionDiceRollResult): string {
 
 function formatDiceBreakdown(roll: SessionDiceRollResult): string {
   if (!roll.groups.length) return String(roll.total)
+
+  if (roll.kind === "manual") {
+    const dice = roll.groups.map((group) => {
+      const advantagePrefix = group.kept !== undefined && group.sides === 20
+        ? roll.mode === "advantage"
+          ? "a-"
+          : roll.mode === "disadvantage"
+            ? "d-"
+            : ""
+        : ""
+      const expressionQuantity = group.kept !== undefined ? 1 : group.quantity
+      const label = `${advantagePrefix}${expressionQuantity}d${group.sides}`
+      const values = group.kept !== undefined
+        ? `[${group.rolls.join(", ")}] → ${group.kept}`
+        : group.rolls.length === 1
+          ? String(group.rolls[0])
+          : `[${group.rolls.join(", ")}]`
+      return `${label}: ${values}`
+    }).join(" + ")
+    return `${dice}${roll.modifier ? ` ${formatDiceModifier(roll.modifier)}` : ""}`
+  }
 
   if (roll.kind === "damage") {
     const dice = roll.groups
