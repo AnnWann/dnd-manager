@@ -275,6 +275,13 @@ function filterMessageForSocket(socket: WebSocket, message: unknown): unknown | 
       : null;
   }
 
+  if (type === "session.dice.result") {
+    const characterId = readCharacterId(record.result);
+    return characterId && canReceiveCharacter(connection, characterId)
+      ? message
+      : null;
+  }
+
   return message;
 }
 
