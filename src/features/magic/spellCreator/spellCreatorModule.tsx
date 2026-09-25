@@ -137,7 +137,7 @@ export function SpellCreatorModule({
       return {
         ...prev,
         resolution: next,
-        damageDice: firstDamage
+        damageDice: firstDamage?.dice
           ? {
               quantity: Math.max(0, Math.trunc(firstDamage.dice.quantity)),
               sides: firstDamage.dice.sides,
@@ -895,28 +895,34 @@ export function SpellCreatorModule({
                     <Input
                       type="number"
                       min={0}
-                      value={damage.dice.quantity}
-                      onChange={(event) =>
+                      value={damage.dice?.quantity ?? 0}
+                      onChange={(event) => {
+                        const quantity = Math.max(0, Number(event.target.value))
                         updateDamageComponent(index, {
-                          dice: {
-                            ...damage.dice,
-                            quantity: Math.max(0, Number(event.target.value)),
-                          },
+                          dice: quantity > 0
+                            ? {
+                                quantity,
+                                sides: damage.dice?.sides ?? "d6",
+                              }
+                            : undefined,
                         })
-                      }
+                      }}
                     />
                   </label>
                   <label className="grid gap-1 text-xs text-text">
                     Dado
                     <SharedSelect
                       className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-text"
-                      value={damage.dice.sides}
+                      value={damage.dice?.sides ?? "d6"}
+                      disabled={!damage.dice}
                       onChange={(event) =>
                         updateDamageComponent(index, {
-                          dice: {
-                            ...damage.dice,
-                            sides: event.target.value as DieSides,
-                          },
+                          dice: damage.dice
+                            ? {
+                                ...damage.dice,
+                                sides: event.target.value as DieSides,
+                              }
+                            : undefined,
                         })
                       }
                     >
