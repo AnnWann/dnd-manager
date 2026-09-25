@@ -5,7 +5,7 @@ import { Input } from "../../../components/ui/Input"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatSigned } from "../../../lib/formatSigned"
 import { clampInt } from "../../../lib/numberFormat"
-import { rollD20, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
+import { requestD20Roll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
 import {
   getAsiAttributeIncrease,
   getCharacterAsis,
@@ -94,7 +94,8 @@ export function Attributes({ character, updateCharacter }: Props) {
                     className="rounded px-1 text-xl font-bold text-textH hover:bg-accentBg hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     title={rollModifierHint()}
                     onClick={(event) =>
-                      rollD20({
+                      requestD20Roll({
+                        characterId: character.get("id"),
                         label: `Teste de ${attributeLabel(attribute)}`,
                         modifier: displayedModifier,
                         kind: "ability",
