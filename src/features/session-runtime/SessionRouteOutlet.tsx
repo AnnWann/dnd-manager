@@ -35,9 +35,6 @@ export function SessionRouteOutlet() {
   if (!campaignId || !userId) return <Outlet />
 
   const encodedCampaignId = encodeURIComponent(campaignId)
-  const isCreationRoute = location.pathname.startsWith(
-    `/session/${encodedCampaignId}/creation`,
-  )
   const isSettingsRoute =
     location.pathname.replace(/\/+$/, "") ===
     `/session/${encodedCampaignId}/creation/settings`
