@@ -904,7 +904,13 @@ function resolveServerActionRoll(
         sourceType: "weapon",
         title: weapon.name || "Arma",
         subtitle: isWeaponImprovisedGrip(weapon) ? "Ataque com arma improvisada" : "Ataque com arma",
-        description: joinDescription(weapon.desc, weapon.notes),
+        description: joinDescription(
+          weapon.desc,
+          weapon.notes,
+          ...(weapon.properties ?? []).map((property) =>
+            property.desc?.trim() ? `${property.name}: ${property.desc}` : undefined
+          ),
+        ),
         details: [
           `Atributo: ${attribute.toUpperCase()}`,
           ...(weapon.properties ?? []).map((property) => property.name),
@@ -948,7 +954,10 @@ function resolveServerActionRoll(
   }
 
   if (request.source.type === "ability") {
-    const ability = character.getCharacterAbilities().find((candidate) =>
+    const ability = [
+      ...(character.getCharacterAbilities() ?? []),
+      ...(character.get("sheet").race.naturalAbilities ?? []),
+    ].find((candidate) =>
       candidate.id === request.source.abilityId
       || candidate.originalAbilityId === request.source.abilityId
     );
