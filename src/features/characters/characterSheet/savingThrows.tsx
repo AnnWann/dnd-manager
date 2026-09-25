@@ -3,7 +3,7 @@ import { Check } from "lucide-react"
 import { cn } from "../../../lib/cn"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatSigned } from "../../../lib/formatSigned"
-import { rollD20, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
+import { requestD20Roll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Attribute } from "../../../models/sheet/Attribute"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
@@ -117,7 +117,8 @@ export function SavingThrows({
                 className="rounded px-1 text-sm font-bold text-textH hover:bg-bg hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 title={rollModifierHint()}
                 onClick={(event) =>
-                  rollD20({
+                  requestD20Roll({
+                    characterId,
                     label: `Resistência de ${label}`,
                     modifier: bonus,
                     kind: "save",
