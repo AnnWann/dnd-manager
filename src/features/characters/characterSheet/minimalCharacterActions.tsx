@@ -761,7 +761,7 @@ export function MinimalCharacterActions({
                   variant="primary"
                   disabled={
                     Boolean(selected.customAbilityRoll)
-                    && (selected.customAbilityRoll.mode === "manual" || physicalDiceMode)
+                    && (selected.customAbilityRoll!.mode === "manual" || physicalDiceMode)
                     && !isFiniteInput(manualRollValue)
                   }
                   onClick={() => useCustomSystemAction(selected)}
