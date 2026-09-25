@@ -587,7 +587,7 @@ export function quickSheetFromCharacter(
     .filter((attribute) => character.isSavingThrowProficient(attribute))
     .map(
       (attribute) =>
-        `${attribute.toUpperCase()} ${signed(character.getSavingThrowBonus(attribute))}`,
+        `${CREATURE_ATTRIBUTE_LABELS[attribute]} ${signed(character.getSavingThrowBonus(attribute))}`,
     )
     .join(", ")
   const abilities = character.getCharacterAbilities()
