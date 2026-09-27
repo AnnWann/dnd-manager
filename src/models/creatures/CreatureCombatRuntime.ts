@@ -6,7 +6,12 @@ import type { InitiativeCondition, InitiativeEntry } from "../initiative/Initiat
 import type { Attribute } from "../sheet/Attribute"
 import type { Skill } from "../sheet/Skills"
 import { findCreatureSave, findCreatureSkill, resolveCreatureBaseSaveBonus, resolveCreatureBaseSkillBonus } from "./CreatureRolls"
-import type { CompendiumCreature, CreatureFeature } from "./CompendiumCreature"
+import {
+  getCreatureSpellAttackBonus,
+  getCreatureSpellSaveDc,
+  type CompendiumCreature,
+  type CreatureFeature,
+} from "./CompendiumCreature"
 
 export function createCreatureCombatCharacter(
   creature: CompendiumCreature,
@@ -155,6 +160,42 @@ export function getCreatureEffectiveArmorClass(
     baseArmorClass,
     getCharacterBonuses(character, "armorClass"),
   )
+}
+
+export function getCreatureEffectiveSpellAttackBonus(
+  creature: CompendiumCreature,
+  conditions: InitiativeCondition[] = [],
+  entry?: InitiativeEntry,
+): number | undefined {
+  const spellcasting = creature.spellcasting
+  const base = getCreatureSpellAttackBonus(creature)
+  if (!spellcasting || base === undefined) return undefined
+  return createCreatureCombatCharacter(creature, conditions, entry)
+    .getEffectiveSpellAttackBonus(spellcasting.ability, base)
+}
+
+export function getCreatureEffectiveSpellSaveDc(
+  creature: CompendiumCreature,
+  conditions: InitiativeCondition[] = [],
+  entry?: InitiativeEntry,
+): number | undefined {
+  const spellcasting = creature.spellcasting
+  const base = getCreatureSpellSaveDc(creature)
+  if (!spellcasting || base === undefined) return undefined
+  return createCreatureCombatCharacter(creature, conditions, entry)
+    .getEffectiveSpellSaveDc(spellcasting.ability, base)
+}
+
+export function getCreatureEffectiveSpellDamageBonus(
+  creature: CompendiumCreature,
+  baseValue: number,
+  conditions: InitiativeCondition[] = [],
+  entry?: InitiativeEntry,
+): number {
+  const spellcasting = creature.spellcasting
+  if (!spellcasting) return baseValue
+  return createCreatureCombatCharacter(creature, conditions, entry)
+    .getEffectiveSpellDamageBonus(spellcasting.ability, baseValue)
 }
 
 export function getCreatureFeatureEffectiveAttackBonus(
