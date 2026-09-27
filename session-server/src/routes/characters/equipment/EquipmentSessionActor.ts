@@ -5,7 +5,7 @@ import {
   moveEquippedItemToCharacterStorage,
   type EquippedItemReference,
 } from "../../../../../src/models/characters/characterEquippedItemMovement";
-import { wieldPocketWeaponWithRules } from "../../../../../src/models/characters/characterEquipmentInteractions";
+import { swapPocketWeaponWithRules, wieldPocketWeaponWithRules } from "../../../../../src/models/characters/characterEquipmentInteractions";
 import { unequipPocketStack } from "../../../../../src/models/characters/characterInventoryStacks";
 import { toggleInventoryItemAttunement } from "../../../../../src/models/characters/characterInventory";
 import { applyConsumableEffect } from "../../../../../src/models/characters/characterConsumables";
@@ -144,7 +144,12 @@ function applyEquipmentOperation(character: CharacterTemplate, operation: Sessio
     case "character.equipment.pocket.unequip":
       return unequipPocketStack(character, operation.index);
     case "character.equipment.pocket.wield":
-      return wieldPocketWeaponWithRules(character, operation.index);
+      return operation.replaceWeaponId !== undefined || operation.hands !== undefined
+        ? swapPocketWeaponWithRules(character, operation.index, {
+            replaceWeaponId: operation.replaceWeaponId,
+            hands: operation.hands,
+          })
+        : wieldPocketWeaponWithRules(character, operation.index);
     case "character.equipment.pocket.use":
       return usePocketItem(character, operation.index);
   }
