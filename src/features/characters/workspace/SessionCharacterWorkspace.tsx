@@ -46,8 +46,19 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
 
   useEffect(() => {
     if (!sessionRuntime || sessionRuntime.status !== "connected" || sessionRuntime.role !== "MASTER") return
+    // Inventory initialization is a one-time bootstrap. Re-sending initialize
+    // after each authoritative snapshot creates a snapshot -> render ->
+    // initialize feedback loop.
+    if (sessionRuntime.inventoryState?.initialized) return
     sessionRuntime.initializeInventory(characterContext.partyInventory, characterContext.groundInventory)
-  }, [characterContext.groundInventory, characterContext.partyInventory, sessionRuntime?.initializeInventory, sessionRuntime?.role, sessionRuntime?.status])
+  }, [
+    characterContext.groundInventory,
+    characterContext.partyInventory,
+    sessionRuntime?.initializeInventory,
+    sessionRuntime?.inventoryState?.initialized,
+    sessionRuntime?.role,
+    sessionRuntime?.status,
+  ])
 
   const projectedCharacters = useMemo(() => {
     if (!sessionRuntime) return characterContext.visibleCharacters
