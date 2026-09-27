@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import { useCharacterContext } from "../../../contexts/characterContext"
 import { useSyncContext } from "../../../contexts/syncContext"
@@ -43,14 +43,29 @@ export function SessionCharacterWorkspace({ children }: { children: ReactNode })
   const sessionRuntime = useOptionalSessionRuntime()
   const { userKey } = useSyncContext()
   const [selectedCharacterId, setSelectedCharacterId] = useState("")
+  const inventoryBootstrapSentRef = useRef(false)
 
   useEffect(() => {
-    if (!sessionRuntime || sessionRuntime.status !== "connected" || sessionRuntime.role !== "MASTER") return
-    // Inventory initialization is a one-time bootstrap. Re-sending initialize
-    // after each authoritative snapshot creates a snapshot -> render ->
-    // initialize feedback loop.
-    if (sessionRuntime.inventoryState?.initialized) return
-    sessionRuntime.initializeInventory(characterContext.partyInventory, characterContext.groundInventory)
+    if (!sessionRuntime || sessionRuntime.status !== "connected" || sessionRuntime.role !== "MASTER") {
+      inventoryBootstrapSentRef.current = false
+      return
+    }
+
+    // Inventory initialization is a one-time bootstrap. The runtime answers an
+    // initialize request with a snapshot; sending another initialize while
+    // processing that snapshot creates a websocket feedback loop.
+    if (sessionRuntime.inventoryState?.initialized) {
+      inventoryBootstrapSentRef.current = true
+      return
+    }
+    if (inventoryBootstrapSentRef.current) return
+
+    inventoryBootstrapSentRef.current = true
+    const sent = sessionRuntime.initializeInventory(
+      characterContext.partyInventory,
+      characterContext.groundInventory,
+    )
+    if (!sent) inventoryBootstrapSentRef.current = false
   }, [
     characterContext.groundInventory,
     characterContext.partyInventory,
