@@ -41,6 +41,7 @@ export function SelectStatModule({
   const effectiveValue = finiteOr(getValue(character), fallback)
   const adjustmentKey = getStatAdjustmentKey(statKey)
   const adjustment = getStatAdjustment(character, adjustmentKey)
+  const hasManualAdjustment = adjustment !== 0
   const calculate = getCalculatedValue ?? ((current: CharacterTemplate) =>
     getDefaultCalculatedValue(current, statKey))
   const calculatedValue = finiteOr(calculate(character), fallback)
@@ -121,9 +122,12 @@ export function SelectStatModule({
       <Input
         type="number"
         step="any"
-        className="mt-1 text-center"
+        className={`mt-1 text-center ${hasManualAdjustment ? "border-accentBorder" : ""}`}
         value={draft}
         readOnly={readOnly}
+        title={hasManualAdjustment
+          ? `Valor manual. Automático: ${formatNumber(calculatedValue)}; ajuste: ${formatSigned(adjustment)}`
+          : `Valor automático: ${formatNumber(calculatedValue)}`}
         onFocus={() => setEditing(true)}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={commitDraft}
@@ -137,12 +141,13 @@ export function SelectStatModule({
       />
 
       <div className="mt-1.5 flex min-w-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[10px] text-textMuted">
-        <span>Automático: {formatNumber(calculatedValue)}</span>
-
-        {adjustment !== 0 ? (
+        {hasManualAdjustment ? (
           <>
-            <span className="font-semibold text-accent">
-              Ajuste {formatSigned(adjustment)}
+            <span className="rounded border border-accentBorder bg-accentBg px-1.5 py-0.5 font-semibold text-accent">
+              Manual
+            </span>
+            <span>
+              Base {formatNumber(calculatedValue)} · ajuste {formatSigned(adjustment)}
             </span>
             {!readOnly ? (
               <button
@@ -156,7 +161,9 @@ export function SelectStatModule({
             ) : null}
           </>
         ) : (
-          <span>Sem ajuste manual</span>
+          <span className="rounded border border-border bg-bg-subtle px-1.5 py-0.5 font-medium text-textMuted">
+            Automático
+          </span>
         )}
       </div>
     </div>
