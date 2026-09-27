@@ -16,6 +16,16 @@ export type InitiativeDeathSaveVisibility = "masterOnly" | "owner" | "everyone"
 export type InitiativeDeathSaves = { successes: number; failures: number }
 export type InitiativeDefeatReason = "manual" | "zeroHp"
 
+export type InitiativeCreatureSpellResources = {
+  slots: Partial<
+    Record<
+      1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9,
+      { current: number; max: number }
+    >
+  >
+  perDay: Record<string, { used: number; max: number }>
+}
+
 export type InitiativeConditionDuration =
   | { type: "manual" }
   | { type: "turns"; remaining: number }
@@ -71,6 +81,8 @@ export type InitiativeEntry = {
   downed?: boolean
   defeatReason?: InitiativeDefeatReason
   deathSaves?: InitiativeDeathSaves
+  /** Mutable monster-spell resources for compendium combatants. */
+  creatureSpellResources?: InitiativeCreatureSpellResources
   order: number
   createdAt: number
 }
@@ -170,6 +182,9 @@ export function normalizeInitiativeSession(
       deathSaves: entry.sourceType === "character"
         ? normalizeDeathSaves(entry.deathSaves)
         : undefined,
+      creatureSpellResources: normalizeCreatureSpellResources(
+        entry.creatureSpellResources,
+      ),
       revealRealName: Boolean(entry.revealRealName),
       realName: entry.realName?.trim() || undefined,
       basicName: entry.basicName?.trim() || undefined,
@@ -272,6 +287,7 @@ export function synchronizeSharedCombatantState(
     defeatReason: source.defeatReason,
     armorClass: source.armorClass,
     armorClassOverride: source.armorClassOverride,
+    creatureSpellResources: source.creatureSpellResources,
   }
 
   return touchSession({
@@ -579,6 +595,47 @@ function normalizeZeroHpState(
       ? { successes: 0, failures: 0 }
       : next.deathSaves,
   }
+}
+
+function normalizeCreatureSpellResources(
+  value: InitiativeCreatureSpellResources | undefined,
+): InitiativeCreatureSpellResources | undefined {
+  if (!value) return undefined
+
+  const slots: InitiativeCreatureSpellResources["slots"] = {}
+  for (let level = 1; level <= 9; level += 1) {
+    const pool = value.slots?.[
+      level as keyof InitiativeCreatureSpellResources["slots"]
+    ]
+    if (!pool) continue
+    const max = Math.max(0, Math.trunc(Number(pool.max) || 0))
+    if (max <= 0) continue
+    slots[level as keyof InitiativeCreatureSpellResources["slots"]] = {
+      max,
+      current: Math.max(
+        0,
+        Math.min(max, Math.trunc(Number(pool.current) || 0)),
+      ),
+    }
+  }
+
+  const perDay = Object.fromEntries(
+    Object.entries(value.perDay ?? {}).flatMap(([spellIndex, pool]) => {
+      const normalizedIndex = spellIndex.trim()
+      const max = Math.max(1, Math.trunc(Number(pool?.max) || 1))
+      return normalizedIndex
+        ? [[normalizedIndex, {
+            max,
+            used: Math.max(
+              0,
+              Math.min(max, Math.trunc(Number(pool?.used) || 0)),
+            ),
+          }]]
+        : []
+    }),
+  )
+
+  return { slots, perDay }
 }
 
 function normalizeDeathSaves(value: InitiativeDeathSaves | undefined): InitiativeDeathSaves {
