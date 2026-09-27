@@ -425,8 +425,15 @@ export function getCalculatedPassivePerception(
     wisdomModifier += getProficiencyBonus(character) * 2
   }
 
+  const perceptionCheckBonus = getEffectiveSkillCheckBonus(
+    character,
+    "perception",
+    "wis",
+    wisdomModifier,
+  )
+
   return applyBonuses(
-    10 + wisdomModifier,
+    10 + perceptionCheckBonus,
     getCharacterBonuses(character, "passivePerception"),
   )
 }
