@@ -21,6 +21,8 @@ const DIRECT_KEYS: Array<{ key: NormalBonusKey; label: string }> = [
   { key: "temporaryHp", label: "HP temporário" },
   { key: "passivePerception", label: "Percepção passiva" },
   { key: "attackBonus", label: "Ataques — global" },
+  { key: "generalTestBonus", label: "Testes gerais" },
+  { key: "abilityCheckBonus", label: "Testes de habilidade — todos" },
   { key: "savingThrowBonus", label: "Testes de resistência — global" },
   { key: "saveDcBonus", label: "CD — global" },
   { key: "damageBonus", label: "Dano — global" },
@@ -30,6 +32,7 @@ const DIRECT_KEYS: Array<{ key: NormalBonusKey; label: string }> = [
 const SCOPED_KEYS: Array<{ key: ScopedBonusKey; label: string }> = [
   { key: "weaponAttackBonus", label: "Ataques com arma" },
   { key: "spellAttackBonus", label: "Ataques mágicos" },
+  { key: "abilityCheckAttributeBonus", label: "Testes de habilidade — atributo" },
   { key: "savingThrowAttributeBonus", label: "Testes de resistência" },
   { key: "weaponDamageBonus", label: "Dano com arma" },
   { key: "spellDamageBonus", label: "Dano mágico" },
@@ -192,6 +195,20 @@ function collectEntries(bonuses: BonusCollection): Entry[] {
       })
     })
   }
+
+  ;(bonuses.skillCheckBonus ?? []).forEach((entry, index) => {
+    result.push({
+      id: `skillCheckBonus:${index}`,
+      label: `Testes de habilidade — ${entry.skill ?? "todas as perícias"}`,
+      bonus: entry.bonus,
+      update: (current, next) => ({
+        ...current,
+        skillCheckBonus: (current.skillCheckBonus ?? []).map((currentEntry, currentIndex) =>
+          currentIndex === index ? { ...currentEntry, bonus: next } : currentEntry,
+        ),
+      }),
+    })
+  })
 
   ;(bonuses.attribute ?? []).forEach((entry, index) => {
     result.push({
