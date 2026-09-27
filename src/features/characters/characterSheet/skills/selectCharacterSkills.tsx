@@ -41,10 +41,15 @@ export function SelectSkillModule({
         : "none"
   const abilityMod = character.getEffectiveAttributeModifier(ability)
 
-  const bonus =
+  const baseBonus =
     abilityMod +
     (effectiveProficiency === "proficient" ? profBonus : 0) +
     (effectiveProficiency === "expertise" ? profBonus * 2 : 0)
+  const bonus = character.getEffectiveSkillCheckBonus(
+    skillKey,
+    ability,
+    baseBonus,
+  )
 
   function setProficiency(next: SkillProficiency) {
     if (dispatchSkillOperation({
