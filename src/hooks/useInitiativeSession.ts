@@ -278,6 +278,7 @@ function diffEntry(current: InitiativeEntry, next: InitiativeEntry): Record<stri
     "basicName",
     "customName",
     "revealRealName",
+    "combatantId",
     "initiative",
     "initiativeBonus",
     "dexterity",
