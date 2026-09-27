@@ -42,6 +42,7 @@ export function CreatureSpellcastingEditor({
   const [pickerOpen, setPickerOpen] = useState(false)
   const enabled = Boolean(creature.spellcasting)
   const value: CreatureSpellcasting = creature.spellcasting ?? {
+    casterLevel: 1,
     ability: "cha",
     slots: {},
     spells: [],
@@ -131,7 +132,31 @@ export function CreatureSpellcastingEditor({
 
       {enabled ? (
         <div className="mt-4 grid gap-4">
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-4">
+            <label className="grid gap-1.5 text-xs font-medium text-textH">
+              Nível de conjurador
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                value={value.casterLevel}
+                onChange={(event) =>
+                  patch({
+                    casterLevel: Math.max(
+                      1,
+                      Math.min(
+                        20,
+                        Math.trunc(Number(event.target.value) || 1),
+                      ),
+                    ),
+                  })
+                }
+              />
+              <span className="text-[10px] font-normal text-textMuted">
+                Usado para progressão de truques e outros escalamentos por nível.
+              </span>
+            </label>
+
             <label className="grid gap-1.5 text-xs font-medium text-textH">
               Atributo de conjuração
               <Select
