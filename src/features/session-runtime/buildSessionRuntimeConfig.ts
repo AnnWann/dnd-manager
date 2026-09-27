@@ -37,9 +37,13 @@ export async function buildSessionRuntimeConfigSnapshot(args: {
       .map((spell) => [spell.index.trim(), spell] as const)
       .filter(([index]) => Boolean(index)),
   )
+  const creatureSpellIndexes = args.creation.creatureCompendium.flatMap(
+    (creature) =>
+      creature.spellcasting?.spells.map((entry) => entry.spellIndex) ?? [],
+  )
   const missingOfficialIndexes = Array.from(
     new Set(
-      args.referencedSpellIndexes
+      [...args.referencedSpellIndexes, ...creatureSpellIndexes]
         .map((index) => index.trim())
         .filter((index) => index && !savedByIndex.has(index)),
     ),
