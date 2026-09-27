@@ -1,4 +1,5 @@
 import type { Bonus } from "../models/items/equipment/EquipmentSlot"
+import type { Skill } from "../models/sheet/Skills"
 
 export function formatBonusName(key: string): string {
   switch (key) {
@@ -63,4 +64,28 @@ export function formatBonusValue(bonus: Bonus): string {
     default:
       return String(bonus.value)
   }
+}
+
+export function formatSkillName(skill: Skill): string {
+  const labels: Record<Skill, string> = {
+    acrobatics: "Acrobacia",
+    arcana: "Arcanismo",
+    athletics: "Atletismo",
+    animalHandling: "Lidar com Animais",
+    performance: "Atuação",
+    deception: "Blefe",
+    stealth: "Furtividade",
+    history: "História",
+    intimidation: "Intimidação",
+    insight: "Intuição",
+    investigation: "Investigação",
+    medicine: "Medicina",
+    nature: "Natureza",
+    perception: "Percepção",
+    persuasion: "Persuasão",
+    sleightOfHand: "Prestidigitação",
+    religion: "Religião",
+    survival: "Sobrevivência",
+  }
+  return labels[skill]
 }
