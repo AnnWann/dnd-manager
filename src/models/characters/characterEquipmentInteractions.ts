@@ -190,6 +190,94 @@ export function wieldPocketWeaponWithRules(
   })
 }
 
+export function swapPocketWeaponWithRules(
+  character: CharacterTemplate,
+  index: number,
+  options: {
+    replaceWeaponId?: string
+    hands?: 1 | 2
+  } = {},
+): CharacterTemplate {
+  const equipment = character.get("equipment")
+  const item = equipment.pockets[index]
+
+  if (!item || item.kind !== "equipment" || item.equipSlot !== "weapon") {
+    return character
+  }
+
+  const weapon = toWeapon(item)
+  const requestedHands = options.hands ?? getWeaponRequiredHands(weapon)
+  const hands: 1 | 2 = requestedHands === 2 ? 2 : 1
+  const nextWeapon: Weapon = {
+    ...weapon,
+    quantity: 1,
+    wieldedTwoHanded: hands === 2,
+  }
+
+  let pockets = equipment.pockets.filter(
+    (_, currentIndex) => currentIndex !== index,
+  )
+  let weapons = [...equipment.weapons]
+  let inventory = [...character.get("inventory")]
+
+  const stowWeapon = (weaponToStow: Weapon) => {
+    const stowed = {
+      ...weaponToStow,
+      quantity: 1,
+      heldHands: undefined,
+      insideBagOfHolding: false,
+      pocketable: true,
+    }
+    if (pockets.length < 8) {
+      pockets = [...pockets, stowed]
+    } else {
+      inventory = [...inventory, stowed]
+    }
+  }
+
+  const preferredIndex = options.replaceWeaponId
+    ? weapons.findIndex((current) => current.id === options.replaceWeaponId)
+    : weapons.length > 0
+      ? 0
+      : -1
+
+  if (preferredIndex >= 0) {
+    const [removed] = weapons.splice(preferredIndex, 1)
+    if (removed) stowWeapon(removed)
+  }
+
+  let intermediate = character
+    .with("inventory", inventory)
+    .with("equipment", {
+      ...equipment,
+      pockets,
+      weapons,
+    })
+
+  // A troca deve liberar mãos automaticamente quando outra arma ainda estiver
+  // ocupando o espaço necessário. Escudos e itens segurados não são guardados
+  // implicitamente: eles continuam sendo uma escolha separada do jogador.
+  while (getFreeHands(intermediate) < hands && weapons.length > 0) {
+    const removed = weapons.shift()
+    if (!removed) break
+    stowWeapon(removed)
+    intermediate = character
+      .with("inventory", inventory)
+      .with("equipment", {
+        ...equipment,
+        pockets,
+        weapons,
+      })
+  }
+
+  if (getFreeHands(intermediate) < hands) return character
+
+  return intermediate.with("equipment", {
+    ...intermediate.get("equipment"),
+    weapons: [...weapons, nextWeapon],
+  })
+}
+
 function equipItemInHand(
   character: CharacterTemplate,
   item: Itemmable,
