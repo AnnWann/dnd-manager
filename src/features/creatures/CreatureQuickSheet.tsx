@@ -370,6 +370,9 @@ function CreatureSpellcastingSection({
           <h4 className="text-sm font-semibold text-textH">Conjuração</h4>
           <div className="mt-1 flex flex-wrap gap-1.5 text-[11px]">
             <span className="rounded-full border border-border bg-bg px-2 py-1 text-textH">
+              Conjurador {spellcasting.casterLevel}
+            </span>
+            <span className="rounded-full border border-border bg-bg px-2 py-1 text-textH">
               {CREATURE_ATTRIBUTE_LABELS[spellcasting.ability]}
             </span>
             <span className="rounded-full border border-border bg-bg px-2 py-1 text-textH">
