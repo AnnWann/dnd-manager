@@ -36,6 +36,8 @@ import {
   startInitiativeCombat,
   tradeConsecutiveAllies,
   updateInitiativeEntry,
+  sharedCombatantEntryIds,
+  synchronizeSharedCombatantState,
   type InitiativeEntry,
   type InitiativeSession,
   type NewInitiativeEntry,
@@ -553,7 +555,13 @@ function applyInitiativeOperation(
           patch.armorClassOverride = patch.armorClass - (effective - base);
         }
       }
-      const session = updateInitiativeEntry(current, operation.entryId, (entry) => ({ ...entry, ...patch, id: entry.id, order: entry.order, createdAt: entry.createdAt }));
+      let session = updateInitiativeEntry(current, operation.entryId, (entry) => ({ ...entry, ...patch, id: entry.id, order: entry.order, createdAt: entry.createdAt }));
+      if (existing.combatantId && [
+        "armorClass", "currentHp", "maxHp", "temporaryHp", "conditions",
+        "hidden", "defeated", "downed", "defeatReason",
+      ].some((key) => key in patch)) {
+        session = synchronizeSharedCombatantState(session, operation.entryId);
+      }
       return { ok: true, session, operation: { ...operation, patch } };
     }
     case "initiative.entry.remove": {
@@ -561,7 +569,7 @@ function applyInitiativeOperation(
       return { ok: true, session: removeInitiativeEntry(current, operation.entryId), operation };
     }
     case "initiative.hp.apply": {
-      const entryIds = Array.from(new Set(operation.entryIds));
+      const entryIds = Array.from(new Set(operation.entryIds.flatMap((entryId) => sharedCombatantEntryIds(current, entryId))));
       if (!entryIds.length || entryIds.length > 50) {
         return invalid("INITIATIVE_HP_TARGETS_INVALID", "Select between 1 and 50 initiative targets.");
       }
@@ -598,6 +606,7 @@ function applyInitiativeOperation(
               ? target.currentHp
               : Math.max(0, target.currentHp - hpDamage),
           }));
+          session = synchronizeSharedCombatantState(session, entryId);
           results.push({
             entryId,
             requested,
@@ -620,6 +629,7 @@ function applyInitiativeOperation(
           const maximum = entry.maxHp === undefined ? currentHp + operation.amount : Math.max(0, entry.maxHp);
           const nextHp = Math.min(maximum, currentHp + operation.amount);
           session = updateInitiativeEntry(session, entryId, (target) => ({ ...target, currentHp: nextHp }));
+          session = synchronizeSharedCombatantState(session, entryId);
           results.push({
             entryId,
             requested: operation.amount,
@@ -635,6 +645,7 @@ function applyInitiativeOperation(
           ...target,
           temporaryHp: Math.max(0, (target.temporaryHp ?? 0) + operation.amount),
         }));
+        session = synchronizeSharedCombatantState(session, entryId);
         results.push({
           entryId,
           requested: operation.amount,
@@ -661,6 +672,7 @@ function applyInitiativeOperation(
             ...condition,
             id: crypto.randomUUID(),
           });
+          session = synchronizeSharedCombatantState(session, entryId);
         }
       } else {
         const conditionName = operation.conditionName?.trim();
@@ -672,6 +684,7 @@ function applyInitiativeOperation(
           for (const condition of entry.conditions.filter((candidate) => normalizeName(candidate.name) === normalizedName)) {
             session = removeInitiativeCondition(session, entryId, condition.id);
           }
+          session = synchronizeSharedCombatantState(session, entryId);
         }
       }
       if (JSON.stringify(session.entries) === JSON.stringify(current.entries)) {
@@ -922,6 +935,7 @@ function normalizeEntryInput(value: Record<string, unknown>): NewInitiativeEntry
   if (side !== "ally" && side !== "enemy" && side !== "neutral") return [];
   return [{
     sourceId: optionalString(value.sourceId),
+    combatantId: optionalString(value.combatantId),
     sourceType,
     name,
     realName: optionalString(value.realName),
@@ -954,7 +968,7 @@ function normalizeEntryInput(value: Record<string, unknown>): NewInitiativeEntry
 function normalizeEntryPatch(value: Record<string, unknown>): Partial<InitiativeEntry> {
   const patch: Partial<InitiativeEntry> = {};
   if (typeof value.name === "string" && value.name.trim()) patch.name = value.name.trim();
-  for (const key of ["realName", "basicName", "customName"] as const) {
+  for (const key of ["realName", "basicName", "customName", "combatantId"] as const) {
     if (!(key in value)) continue;
     patch[key] = optionalString(value[key]);
   }
