@@ -374,6 +374,7 @@ export class SessionActor extends DurableObject<Env> {
         let nextInitiative = consumeCreatureSpellResource(
           currentInitiative,
           entry.id,
+          creature,
           configuredSpell,
           castLevel,
           spell.displayName || spell.name,
@@ -1431,6 +1432,7 @@ function validateCreatureSpellResource(
 function consumeCreatureSpellResource(
   session: InitiativeSession,
   entryId: string,
+  creature: CompendiumCreature,
   configuredSpell: NonNullable<CompendiumCreature["spellcasting"]>["spells"][number],
   castLevel: number,
   spellName: string,
@@ -1455,15 +1457,23 @@ function consumeCreatureSpellResource(
     }
 
     if (configuredSpell.usage.type === "slots" && castLevel > 0) {
-      const current = resources.slots[
-        castLevel as keyof typeof resources.slots
-      ];
-      if (current) {
-        resources.slots[castLevel as keyof typeof resources.slots] = {
-          ...current,
-          current: Math.max(0, current.current - 1),
-        };
-      }
+      const slotKey = castLevel as keyof typeof resources.slots;
+      const maximum = Math.max(
+        0,
+        Math.trunc(
+          creature.spellcasting?.slots[
+            castLevel as keyof NonNullable<CompendiumCreature["spellcasting"]>["slots"]
+          ] ?? 0,
+        ),
+      );
+      const current = resources.slots[slotKey] ?? {
+        current: maximum,
+        max: maximum,
+      };
+      resources.slots[slotKey] = {
+        max: Math.max(current.max, maximum),
+        current: Math.max(0, current.current - 1),
+      };
     }
 
     const conditions = concentration
