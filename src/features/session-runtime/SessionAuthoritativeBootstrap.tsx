@@ -31,9 +31,34 @@ type LegacyImportState = "checking" | "legacy" | "regular"
  */
 export function SessionAuthoritativeBootstrap({ campaignId }: { campaignId: string }) {
   const runtime = useOptionalSessionRuntime()
-  const { visibleCharacters } = useCharacterContext()
+  const { visibleCharacters, partyInventory, groundInventory } = useCharacterContext()
   const [legacyImportState, setLegacyImportState] = useState<LegacyImportState>("checking")
   const attemptedReconciliations = useRef(new Set<string>())
+  const inventoryBootstrapSent = useRef(false)
+
+  useEffect(() => {
+    if (!runtime || runtime.role !== "MASTER" || runtime.status !== "connected") {
+      inventoryBootstrapSent.current = false
+      return
+    }
+
+    if (runtime.inventoryState?.initialized) {
+      inventoryBootstrapSent.current = true
+      return
+    }
+    if (inventoryBootstrapSent.current) return
+
+    inventoryBootstrapSent.current = true
+    const sent = runtime.initializeInventory(partyInventory, groundInventory)
+    if (!sent) inventoryBootstrapSent.current = false
+  }, [
+    groundInventory,
+    partyInventory,
+    runtime?.initializeInventory,
+    runtime?.inventoryState?.initialized,
+    runtime?.role,
+    runtime?.status,
+  ])
 
   useEffect(() => {
     attemptedReconciliations.current.clear()
