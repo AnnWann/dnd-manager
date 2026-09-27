@@ -52,6 +52,8 @@ export type CreatureSpellReference = {
 }
 
 export type CreatureSpellcasting = {
+  /** Effective spellcaster level, used for cantrip and level-based scaling. */
+  casterLevel: number
   /** Ability used for automatic spell attack/DC calculation. */
   ability: Attribute
   /** Optional monster-stat-block override. Omit to derive from CR + ability. */
@@ -520,6 +522,10 @@ function normalizeCreatureSpellcasting(
     : []
 
   return {
+    casterLevel: Math.max(
+      1,
+      Math.min(20, Math.trunc(finiteNumber(record.casterLevel, 1))),
+    ),
     ability,
     saveDc: optionalFiniteNumber(record.saveDc ?? record.dc),
     attackBonus: optionalFiniteNumber(
