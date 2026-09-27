@@ -1177,7 +1177,6 @@ function resolveServerCreatureRoll(
       );
       break;
     case "save": {
-      const parsed = findCreatureSave(creature.savingThrows, source.attribute);
       label = `Resistência de ${CREATURE_ATTRIBUTE_LABELS[source.attribute]}`;
       kind = "save";
       modifier = getCreatureEffectiveSaveBonus(
