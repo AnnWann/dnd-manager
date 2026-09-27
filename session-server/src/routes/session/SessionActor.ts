@@ -38,7 +38,7 @@ import type { Attribute } from "../../../../src/models/sheet/Attribute";
 import { abilityShortPtBr } from "../../../../src/i18n/ptBR";
 import type { Skill } from "../../../../src/models/sheet/Skills";
 import { initiativeEntryDisplayName, normalizeInitiativeSession, type InitiativeEntry, type InitiativeSession } from "../../../../src/models/initiative/Initiative";
-import { CREATURE_ATTRIBUTE_LABELS, findCreatureSave, findCreatureSkill, inferCreatureAttackMechanics, parseCreatureDamageFormula } from "../../../../src/models/creatures/CreatureRolls";
+import { CREATURE_ATTRIBUTE_LABELS, findCreatureSave, findCreatureSkill, parseCreatureDamageFormula } from "../../../../src/models/creatures/CreatureRolls";
 import { getCreatureEffectiveAbilityCheckBonus, getCreatureEffectiveAbilityModifier, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../../../src/models/creatures/CreatureCombatRuntime";
 import type { CompendiumCreature, CreatureFeature } from "../../../../src/models/creatures/CompendiumCreature";
 import {
@@ -1051,8 +1051,7 @@ function resolveServerCreatureRoll(
     }
 
     const { feature, sectionLabel } = located;
-    const mechanics = feature.mechanics
-      ?? inferCreatureAttackMechanics(feature.description);
+    const mechanics = feature.mechanics;
 
     if (!diceRollingEnabled || source.intent === "announce" || !mechanics || mechanics.kind !== "attack") {
       return {
