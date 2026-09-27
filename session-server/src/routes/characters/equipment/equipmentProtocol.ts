@@ -33,6 +33,8 @@ export type SessionEquipmentOperation =
       type: "character.equipment.pocket.wield";
       characterId: string;
       index: number;
+      replaceWeaponId?: string;
+      hands?: 1 | 2;
     }
   | {
       type: "character.equipment.pocket.use";
@@ -68,5 +70,12 @@ export function parseEquipmentClientMessage(raw: string): SessionEquipmentClient
     typeof operation.characterId !== "string" ||
     !operation.characterId.trim()
   ) return null;
+
+  if (operation.type === "character.equipment.pocket.wield") {
+    if (typeof operation.index !== "number" || !Number.isInteger(operation.index) || operation.index < 0) return null;
+    if (operation.replaceWeaponId !== undefined && typeof operation.replaceWeaponId !== "string") return null;
+    if (operation.hands !== undefined && operation.hands !== 1 && operation.hands !== 2) return null;
+  }
+
   return message as SessionEquipmentClientMessage;
 }
