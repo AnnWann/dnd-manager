@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { attributeShort } from "../../../lib/attributeShorts"
-import { formatBonusName, formatBonusValue } from "../../../lib/formatBonus"
+import { formatBonusName, formatBonusValue, formatSkillName } from "../../../lib/formatBonus"
 import type {
   EquippedItemDestination,
   EquippedItemReference,
@@ -19,6 +19,9 @@ type DisplayBonusKey =
   | "temporaryHp"
   | "passivePerception"
   | "attackBonus"
+  | "generalTestBonus"
+  | "abilityCheckBonus"
+  | "savingThrowBonus"
   | "saveDcBonus"
   | "damageBonus"
   | "speed"
@@ -30,6 +33,9 @@ const NORMAL_BONUS_KEYS: DisplayBonusKey[] = [
   "temporaryHp",
   "passivePerception",
   "attackBonus",
+  "generalTestBonus",
+  "abilityCheckBonus",
+  "savingThrowBonus",
   "saveDcBonus",
   "damageBonus",
   "speed",
@@ -38,6 +44,8 @@ const NORMAL_BONUS_KEYS: DisplayBonusKey[] = [
 const SCOPED_BONUS_KEYS = [
   "weaponAttackBonus",
   "spellAttackBonus",
+  "abilityCheckAttributeBonus",
+  "savingThrowAttributeBonus",
   "weaponDamageBonus",
   "spellDamageBonus",
   "spellSaveDcBonus",
@@ -224,6 +232,15 @@ export function EquipmentBonusList({
         : " — todos"
       rows.push(`${formatBonusName(key)}${scope}: ${formatBonusValue(entry.bonus)}`)
     }
+  }
+
+  for (const entry of bonuses.skillCheckBonus ?? []) {
+    const scope = entry.skill
+      ? ` ${formatSkillName(entry.skill)}`
+      : " — todas"
+    rows.push(
+      `${formatBonusName("skillCheckBonus")}${scope}: ${formatBonusValue(entry.bonus)}`,
+    )
   }
 
   for (const entry of bonuses.attribute ?? []) {
