@@ -39,7 +39,7 @@ import { abilityShortPtBr } from "../../../../src/i18n/ptBR";
 import type { Skill } from "../../../../src/models/sheet/Skills";
 import { initiativeEntryDisplayName, normalizeInitiativeSession, type InitiativeEntry, type InitiativeSession } from "../../../../src/models/initiative/Initiative";
 import { CREATURE_ATTRIBUTE_LABELS, findCreatureSave, findCreatureSkill, inferCreatureAttackMechanics, parseCreatureDamageFormula } from "../../../../src/models/creatures/CreatureRolls";
-import { getCreatureEffectiveAbilityModifier, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../../../src/models/creatures/CreatureCombatRuntime";
+import { getCreatureEffectiveAbilityCheckBonus, getCreatureEffectiveAbilityModifier, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../../../src/models/creatures/CreatureCombatRuntime";
 import type { CompendiumCreature, CreatureFeature } from "../../../../src/models/creatures/CompendiumCreature";
 import {
   getCharacterConditions,
@@ -1169,7 +1169,7 @@ function resolveServerCreatureRoll(
     case "ability":
       label = `Teste de ${CREATURE_ATTRIBUTE_LABELS[source.attribute]}`;
       kind = "ability";
-      modifier = getCreatureEffectiveAbilityModifier(
+      modifier = getCreatureEffectiveAbilityCheckBonus(
         creature,
         source.attribute,
         conditions,
@@ -1180,9 +1180,12 @@ function resolveServerCreatureRoll(
       const parsed = findCreatureSave(creature.savingThrows, source.attribute);
       label = `Resistência de ${CREATURE_ATTRIBUTE_LABELS[source.attribute]}`;
       kind = "save";
-      modifier = parsed
-        ? getCreatureEffectiveSaveBonus(creature, source.attribute, conditions, entry)
-        : getCreatureEffectiveAbilityModifier(creature, source.attribute, conditions, entry);
+      modifier = getCreatureEffectiveSaveBonus(
+        creature,
+        source.attribute,
+        conditions,
+        entry,
+      );
       break;
     }
     case "skill": {
