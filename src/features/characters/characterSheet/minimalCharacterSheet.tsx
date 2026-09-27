@@ -261,35 +261,63 @@ export function MinimalCharacterSheet({
 
       <CompactSection title="Atributos">
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {ATTRIBUTE_KEYS.map((attribute) => (
-            <div key={attribute} className="grid min-w-0 gap-1 rounded-lg border border-border bg-bg-subtle p-2 text-center">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">{attributeShort(attribute)}</span>
-              <Input
-                type="number"
-                min={1}
-                max={30}
-                inputMode="numeric"
-                className="h-8 min-w-0 px-1 text-center text-sm font-bold"
-                value={character.getEffectiveAttribute(attribute)}
-                onChange={(event) => updateAttribute(attribute, Number(event.target.value))}
-              />
-              <button
-                type="button"
-                className="rounded text-xs font-bold text-textH hover:bg-accentBg hover:text-accent"
-                title={rollModifierHint()}
-                onClick={(event) =>
-                  requestD20Roll({
-                    characterId,
-                    label: `Teste de ${attributeShort(attribute)}`,
-                    source: { type: "ability", attribute },
-                    mode: rollModeFromEvent(event.nativeEvent),
-                  })
+          {ATTRIBUTE_KEYS.map((attribute) => {
+            const baseScore = sheet.attributes[attribute]
+            const effectiveScore = character.getEffectiveAttribute(attribute)
+            const adjustment = effectiveScore - baseScore
+            const hasAdjustment = Math.abs(adjustment) >= 0.000001
+
+            return (
+              <div
+                key={attribute}
+                className={cn(
+                  "grid min-w-0 gap-1 rounded-lg border bg-bg-subtle p-2 text-center",
+                  hasAdjustment ? "border-accentBorder" : "border-border",
+                )}
+                title={
+                  hasAdjustment
+                    ? `Valor efetivo: ${effectiveScore}. Base: ${baseScore}; ajuste total: ${formatSigned(adjustment)}`
+                    : `Valor base: ${baseScore}. Sem ajustes ativos.`
                 }
               >
-                {formatSigned(character.getEffectiveAttributeModifier(attribute))}
-              </button>
-            </div>
-          ))}
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">{attributeShort(attribute)}</span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={30}
+                  inputMode="numeric"
+                  className="h-8 min-w-0 px-1 text-center text-sm font-bold"
+                  value={effectiveScore}
+                  onChange={(event) => updateAttribute(attribute, Number(event.target.value))}
+                />
+                <span
+                  className={cn(
+                    "truncate text-[9px] font-semibold",
+                    hasAdjustment ? "text-accent" : "text-textMuted",
+                  )}
+                >
+                  {hasAdjustment
+                    ? `Modificado · Base ${baseScore} · ${formatSigned(adjustment)}`
+                    : "Base"}
+                </span>
+                <button
+                  type="button"
+                  className="rounded text-xs font-bold text-textH hover:bg-accentBg hover:text-accent"
+                  title={rollModifierHint()}
+                  onClick={(event) =>
+                    requestD20Roll({
+                      characterId,
+                      label: `Teste de ${attributeShort(attribute)}`,
+                      source: { type: "ability", attribute },
+                      mode: rollModeFromEvent(event.nativeEvent),
+                    })
+                  }
+                >
+                  {formatSigned(character.getEffectiveAttributeModifier(attribute))}
+                </button>
+              </div>
+            )
+          })}
         </div>
       </CompactSection>
 
