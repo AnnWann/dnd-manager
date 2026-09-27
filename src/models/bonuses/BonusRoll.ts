@@ -21,6 +21,8 @@ const DIRECT_KEYS = [
   "temporaryHp",
   "passivePerception",
   "attackBonus",
+  "generalTestBonus",
+  "abilityCheckBonus",
   "savingThrowBonus",
   "saveDcBonus",
   "damageBonus",
@@ -30,6 +32,7 @@ const DIRECT_KEYS = [
 const SCOPED_KEYS = [
   "weaponAttackBonus",
   "spellAttackBonus",
+  "abilityCheckAttributeBonus",
   "savingThrowAttributeBonus",
   "weaponDamageBonus",
   "spellDamageBonus",
@@ -54,6 +57,14 @@ export function listBonusRollRequirements(
       pushRequirement(result, `${key}:${index}`, key, entry.bonus)
     })
   }
+  ;(bonuses.skillCheckBonus ?? []).forEach((entry, index) => {
+    pushRequirement(
+      result,
+      `skillCheckBonus:${index}`,
+      `skillCheckBonus ${entry.skill ?? "all"}`,
+      entry.bonus,
+    )
+  })
 
   ;(bonuses.attribute ?? []).forEach((entry, index) => {
     pushRequirement(result, `attribute:${index}`, `attribute ${entry.attribute}`, entry.bonus)
@@ -149,6 +160,16 @@ export function resolveBonusCollectionRolls(
       }))
     }
   }
+  if (bonuses.skillCheckBonus) {
+    next.skillCheckBonus = bonuses.skillCheckBonus.map((entry, index) => ({
+      ...entry,
+      bonus: resolve(
+        `skillCheckBonus:${index}`,
+        `skillCheckBonus ${entry.skill ?? "all"}`,
+        entry.bonus,
+      ),
+    }))
+  }
 
   if (bonuses.attribute) {
     next.attribute = bonuses.attribute.map((entry, index) => ({
@@ -194,6 +215,7 @@ export function listResolvedBonusRolls(
 
   for (const key of DIRECT_KEYS) (bonuses[key] ?? []).forEach(collect)
   for (const key of SCOPED_KEYS) (bonuses[key] ?? []).forEach((entry) => collect(entry.bonus))
+  ;(bonuses.skillCheckBonus ?? []).forEach((entry) => collect(entry.bonus))
   ;(bonuses.attribute ?? []).forEach((entry) => collect(entry.bonus))
   ;(bonuses.attributeModifier ?? []).forEach((entry) => collect(entry.bonus))
   if (bonuses.attack?.bonus) collect(bonuses.attack.bonus)
