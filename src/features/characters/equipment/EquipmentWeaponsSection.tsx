@@ -3,7 +3,7 @@ import { Crosshair, Hand, Scale, Sparkles, Swords } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
 import { attributeShort } from "../../../lib/attributeShorts"
-import { formatBonusName, formatBonusValue } from "../../../lib/formatBonus"
+import { formatBonusName, formatBonusValue, formatSkillName } from "../../../lib/formatBonus"
 import { formatSigned } from "../../../lib/formatSigned"
 import { requestActionRoll, requestDamageRoll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
@@ -39,6 +39,9 @@ type DisplayBonusKey =
   | "temporaryHp"
   | "passivePerception"
   | "attackBonus"
+  | "generalTestBonus"
+  | "abilityCheckBonus"
+  | "savingThrowBonus"
   | "saveDcBonus"
   | "damageBonus"
   | "speed"
@@ -50,6 +53,9 @@ const NORMAL_BONUS_KEYS: DisplayBonusKey[] = [
   "temporaryHp",
   "passivePerception",
   "attackBonus",
+  "generalTestBonus",
+  "abilityCheckBonus",
+  "savingThrowBonus",
   "saveDcBonus",
   "damageBonus",
   "speed",
@@ -58,6 +64,8 @@ const NORMAL_BONUS_KEYS: DisplayBonusKey[] = [
 const SCOPED_BONUS_KEYS = [
   "weaponAttackBonus",
   "spellAttackBonus",
+  "abilityCheckAttributeBonus",
+  "savingThrowAttributeBonus",
   "weaponDamageBonus",
   "spellDamageBonus",
   "spellSaveDcBonus",
@@ -411,6 +419,15 @@ function WeaponBonusList({ weapon }: WeaponBonusListProps) {
         : " — todos"
       rows.push(`${formatBonusName(key)}${scope}: ${formatBonusValue(entry.bonus)}`)
     }
+  }
+
+  for (const entry of bonuses.skillCheckBonus ?? []) {
+    const scope = entry.skill
+      ? ` ${formatSkillName(entry.skill)}`
+      : " — todas"
+    rows.push(
+      `${formatBonusName("skillCheckBonus")}${scope}: ${formatBonusValue(entry.bonus)}`,
+    )
   }
 
   for (const entry of bonuses.attribute ?? []) {
