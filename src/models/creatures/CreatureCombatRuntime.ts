@@ -91,6 +91,16 @@ export function getCreatureEffectiveAbilityModifier(
   entry?: InitiativeEntry,
 ): number {
   return createCreatureCombatCharacter(creature, conditions, entry)
+    .getEffectiveAttributeModifier(attribute)
+}
+
+export function getCreatureEffectiveAbilityCheckBonus(
+  creature: CompendiumCreature,
+  attribute: Attribute,
+  conditions: InitiativeCondition[] = [],
+  entry?: InitiativeEntry,
+): number {
+  return createCreatureCombatCharacter(creature, conditions, entry)
     .getEffectiveAbilityCheckBonus(attribute)
 }
 
