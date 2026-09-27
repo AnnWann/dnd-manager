@@ -59,7 +59,7 @@ export function Attributes({ character, updateCharacter }: Props) {
           const displayedScore = showRawValues ? baseScore : effectiveScore
           const displayedModifier = showRawValues
             ? Math.floor((baseScore - 10) / 2)
-            : character.getEffectiveAttributeModifier(attribute)
+            : character.getEffectiveAbilityCheckBonus(attribute)
           const otherBonus = effectiveScore - baseScore - racialBonus - asiBonus
 
           function updateDisplayedScore(value: number) {
