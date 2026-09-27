@@ -1,5 +1,5 @@
 import { Check, X } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
@@ -16,6 +16,8 @@ import {
 import {
   getWeaponAttackAttribute,
   getWeaponDamageDie,
+  isTwoHandedWeapon,
+  isVersatileWeapon,
   isWeaponImprovisedGrip,
   type Weapon,
 } from "../../../models/items/equipment/Weapon"
@@ -47,7 +49,7 @@ import { SelectSkillModule } from "./skills/selectCharacterSkills"
 import { MinimalCharacterActions } from "./minimalCharacterActions"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
-import { wieldPocketWeaponWithRules } from "../../../models/characters/characterEquipmentInteractions"
+import { swapPocketWeaponWithRules } from "../../../models/characters/characterEquipmentInteractions"
 
 type Props = {
   character: CharacterTemplate
@@ -137,7 +139,7 @@ export function MinimalCharacterSheet({
   const pocketWeapons = character.get("equipment").pockets.flatMap(
     (item, index) =>
       item.kind === "equipment" && item.equipSlot === "weapon"
-        ? [{ item, index }]
+        ? [{ item: item as Weapon, index }]
         : [],
   )
   const equippedWeapons = character.get("equipment").weapons
@@ -148,7 +150,7 @@ export function MinimalCharacterSheet({
     equippedWeapons.find((weapon) => weapon.id === selectedEquippedWeaponId)
     ?? equippedWeapons[0]
 
-  function wieldSelectedPocketWeapon() {
+  function wieldSelectedPocketWeapon(hands: 1 | 2) {
     if (!selectedPocketWeapon) return
 
     const currentIndex = character.get("equipment").pockets.findIndex(
@@ -161,13 +163,20 @@ export function MinimalCharacterSheet({
         type: "character.equipment.pocket.wield",
         characterId,
         index: currentIndex,
+        replaceWeaponId: selectedEquippedWeapon?.id,
+        hands,
       })
+      setWeaponSwapOpen(false)
       return
     }
 
     updateCharacter(characterId, (current) =>
-      wieldPocketWeaponWithRules(current, currentIndex),
+      swapPocketWeaponWithRules(current, currentIndex, {
+        replaceWeaponId: selectedEquippedWeapon?.id,
+        hands,
+      }),
     )
+    setWeaponSwapOpen(false)
   }
 
   function stowSelectedWeapon() {
@@ -573,17 +582,45 @@ function WeaponSwapDialog({
   onClose,
 }: {
   open: boolean
-  pocketWeapons: Array<{ item: { id: string; name?: string }; index: number }>
+  pocketWeapons: Array<{ item: Weapon; index: number }>
   equippedWeapons: Weapon[]
   selectedPocketWeaponId: string
   selectedEquippedWeaponId: string
   pocketsFull: boolean
   onSelectedPocketWeaponChange: (id: string) => void
   onSelectedEquippedWeaponChange: (id: string) => void
-  onWield: () => void
+  onWield: (hands: 1 | 2) => void
   onStow: () => void
   onClose: () => void
 }) {
+  const selectedPocketWeapon = pocketWeapons.find(
+    ({ item }) => item.id === selectedPocketWeaponId,
+  )?.item
+  const versatile = selectedPocketWeapon
+    ? isVersatileWeapon(selectedPocketWeapon)
+    : false
+  const twoHanded = selectedPocketWeapon
+    ? isTwoHandedWeapon(selectedPocketWeapon)
+    : false
+  const hasGripChoice = versatile || twoHanded
+  const [wieldHands, setWieldHands] = useState<1 | 2>(1)
+
+  useEffect(() => {
+    if (!open || !selectedPocketWeapon) return
+    setWieldHands(
+      twoHanded
+        ? 2
+        : selectedPocketWeapon.wieldedTwoHanded
+          ? 2
+          : 1,
+    )
+  }, [
+    open,
+    selectedPocketWeapon?.id,
+    selectedPocketWeapon?.wieldedTwoHanded,
+    twoHanded,
+  ])
+
   if (!open) return null
 
   return (
@@ -621,9 +658,11 @@ function WeaponSwapDialog({
           <section className="grid gap-2">
             <div>
               <div className="text-xs font-semibold text-textH">Empunhar</div>
-              <div className="text-[11px] text-textMuted">Armas disponíveis nos bolsos.</div>
+              <div className="text-[11px] text-textMuted">
+                A arma equipada atual será guardada automaticamente ao trocar.
+              </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="grid gap-2">
               <Select
                 value={selectedPocketWeaponId}
                 disabled={pocketWeapons.length === 0}
@@ -640,13 +679,39 @@ function WeaponSwapDialog({
                   ))
                 )}
               </Select>
+
+              {hasGripChoice ? (
+                <label className="grid gap-1">
+                  <span className="text-[11px] font-medium text-textH">Empunhadura</span>
+                  <Select
+                    value={String(wieldHands)}
+                    aria-label="Empunhadura da arma"
+                    onChange={(event) =>
+                      setWieldHands(event.target.value === "2" ? 2 : 1)
+                    }
+                  >
+                    {twoHanded ? (
+                      <>
+                        <option value="2">2 mãos — uso normal</option>
+                        <option value="1">1 mão — improvisada</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="1">1 mão</option>
+                        <option value="2">2 mãos — versátil</option>
+                      </>
+                    )}
+                  </Select>
+                </label>
+              ) : null}
+
               <button
                 type="button"
                 className="h-10 rounded-md border border-accentBorder bg-accentBg px-3 text-xs font-semibold text-textH transition-colors hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={pocketWeapons.length === 0}
-                onClick={onWield}
+                onClick={() => onWield(hasGripChoice ? wieldHands : 1)}
               >
-                Empunhar
+                Trocar e empunhar
               </button>
             </div>
           </section>
