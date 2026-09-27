@@ -53,6 +53,8 @@ export type CompendiumCreature = {
   size: string
   challengeRating: string
   unique: boolean
+  /** Number of initiative turns created for this unique creature. */
+  initiativeTurns: number
   defaultSide: CreatureSide
 
   initiativeBonus: number
@@ -133,6 +135,7 @@ export function createCompendiumCreature(
     size: patch.size ?? "Médio",
     challengeRating: patch.challengeRating ?? "",
     unique: patch.unique ?? false,
+    initiativeTurns: Math.max(1, Math.trunc(finiteNumber(patch.initiativeTurns, 1))),
     defaultSide: patch.defaultSide ?? "enemy",
     initiativeBonus: finiteNumber(patch.initiativeBonus),
     armorClass: optionalFiniteNumber(patch.armorClass),
@@ -192,6 +195,7 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
     size: stringValue(value.size, "Médio"),
     challengeRating: stringValue(value.challengeRating),
     unique: booleanValue(value.unique),
+    initiativeTurns: Math.max(1, Math.trunc(finiteNumber(value.initiativeTurns, 1))),
     defaultSide: creatureSideValue(value.defaultSide),
     initiativeBonus: finiteNumber(value.initiativeBonus),
     armorClass: optionalFiniteNumber(value.armorClass),
