@@ -1,5 +1,6 @@
 import type { DamageAffinity } from "../combat/Damage"
 import type { Attribute } from "../sheet/Attribute"
+import type { Skill } from "../sheet/Skills"
 
 export type BonusRollDefinition = {
   mode: "automatic" | "manual"
@@ -42,6 +43,12 @@ export type AttributeScopedBonus = {
   bonus: Bonus
 }
 
+export type SkillScopedBonus = {
+  /** Ausente significa todas as perícias. */
+  skill?: Skill
+  bonus: Bonus
+}
+
 export type BonusCollection = {
   armorClass?: Bonus[]
   initiative?: Bonus[]
@@ -56,6 +63,14 @@ export type BonusCollection = {
   weaponAttackBonus?: AttributeScopedBonus[]
   /** Bônus aplicado apenas a ataques mágicos. */
   spellAttackBonus?: AttributeScopedBonus[]
+  /** Bônus global aplicado a qualquer teste geral: atributo, perícia ou resistência. */
+  generalTestBonus?: Bonus[]
+  /** Bônus global aplicado a testes de habilidade (atributo puro e perícias). */
+  abilityCheckBonus?: Bonus[]
+  /** Bônus aplicado a testes de habilidade ligados a um atributo específico. */
+  abilityCheckAttributeBonus?: AttributeScopedBonus[]
+  /** Bônus aplicado apenas a uma perícia específica (ou todas, quando sem perícia). */
+  skillCheckBonus?: SkillScopedBonus[]
   /** Bônus global aplicado a qualquer teste de resistência. */
   savingThrowBonus?: Bonus[]
   /** Bônus aplicado a testes de resistência de um atributo específico (ou todos, quando sem atributo). */
@@ -100,6 +115,8 @@ export type NormalBonusKey =
   | "temporaryHp"
   | "passivePerception"
   | "attackBonus"
+  | "generalTestBonus"
+  | "abilityCheckBonus"
   | "savingThrowBonus"
   | "saveDcBonus"
   | "damageBonus"
@@ -108,6 +125,7 @@ export type NormalBonusKey =
 export type ScopedBonusKey =
   | "weaponAttackBonus"
   | "spellAttackBonus"
+  | "abilityCheckAttributeBonus"
   | "savingThrowAttributeBonus"
   | "weaponDamageBonus"
   | "spellDamageBonus"
@@ -117,6 +135,7 @@ export type ScopedBonusKey =
 export type BonusTarget =
   | NormalBonusKey
   | ScopedBonusKey
+  | "skillCheckBonus"
   | "attribute"
   | "attributeModifier"
   | "damageAffinity"
