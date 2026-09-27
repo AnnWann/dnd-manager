@@ -150,14 +150,24 @@ export function MinimalCharacterSheet({
 
   function wieldSelectedPocketWeapon() {
     if (!selectedPocketWeapon) return
-    updateCharacter(characterId, (current) => {
-      const index = current.get("equipment").pockets.findIndex(
-        (item) => item.id === selectedPocketWeapon.item.id,
-      )
-      return index >= 0
-        ? wieldPocketWeaponWithRules(current, index)
-        : current
-    })
+
+    const currentIndex = character.get("equipment").pockets.findIndex(
+      (item) => item.id === selectedPocketWeapon.item.id,
+    )
+    if (currentIndex < 0) return
+
+    if (sessionRuntime) {
+      sessionRuntime.dispatchEquipmentOperation({
+        type: "character.equipment.pocket.wield",
+        characterId,
+        index: currentIndex,
+      })
+      return
+    }
+
+    updateCharacter(characterId, (current) =>
+      wieldPocketWeaponWithRules(current, currentIndex),
+    )
   }
 
   function stowSelectedWeapon() {
