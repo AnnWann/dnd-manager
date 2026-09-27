@@ -22,6 +22,7 @@ import {
   getCalculatedInitiative,
   getCalculatedMobility,
   getCalculatedPassivePerception,
+  getStatAdjustment,
   getStatAdjustmentKey,
   type CalculatedStatKey,
 } from "../../../models/characters/characterStats"
@@ -196,10 +197,35 @@ export function MinimalCharacterSheet({
 
       <CompactSection title="Stats">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
-          <CompactNumberField label="CA" value={getEffectiveArmorClassWithShield(character)} onChange={(value) => updateDerivedStat("armorClass", value, getCalculatedArmorClassWithShield)} />
-          <CompactNumberField label="Iniciativa" value={character.getEffectiveInitiative()} signed onChange={(value) => updateDerivedStat("initiative", value, getCalculatedInitiative)} />
-          <CompactNumberField label="Desloc." value={character.getEffectiveMobility()} onChange={(value) => updateDerivedStat("mobility", value, getCalculatedMobility)} />
-          <CompactNumberField label="Passiva" value={character.getEffectivePassivePerception()} onChange={(value) => updateDerivedStat("passive_perception", value, getCalculatedPassivePerception)} />
+          <CompactNumberField
+            label="CA"
+            value={getEffectiveArmorClassWithShield(character)}
+            automaticValue={getCalculatedArmorClassWithShield(character)}
+            adjustment={getStatAdjustment(character, "armorClassAdjustment")}
+            onChange={(value) => updateDerivedStat("armorClass", value, getCalculatedArmorClassWithShield)}
+          />
+          <CompactNumberField
+            label="Iniciativa"
+            value={character.getEffectiveInitiative()}
+            automaticValue={getCalculatedInitiative(character)}
+            adjustment={getStatAdjustment(character, "initiativeAdjustment")}
+            signed
+            onChange={(value) => updateDerivedStat("initiative", value, getCalculatedInitiative)}
+          />
+          <CompactNumberField
+            label="Desloc."
+            value={character.getEffectiveMobility()}
+            automaticValue={getCalculatedMobility(character)}
+            adjustment={getStatAdjustment(character, "mobilityAdjustment")}
+            onChange={(value) => updateDerivedStat("mobility", value, getCalculatedMobility)}
+          />
+          <CompactNumberField
+            label="Passiva"
+            value={character.getEffectivePassivePerception()}
+            automaticValue={getCalculatedPassivePerception(character)}
+            adjustment={getStatAdjustment(character, "passivePerceptionAdjustment")}
+            onChange={(value) => updateDerivedStat("passive_perception", value, getCalculatedPassivePerception)}
+          />
           <CompactNumberField label="Exaustão" value={sheet.stats.exhaustion ?? 0} min={0} max={6} onChange={setExhaustion} />
           <ReadOnlyStat label="Proficiência" value={formatSigned(proficiency)} />
           <button
@@ -411,11 +437,58 @@ function CompactSection({ title, children }: { title: string; children: React.Re
   return <section className="rounded-xl border border-border bg-bg p-3 shadow-theme-sm"><h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-textH">{title}</h2>{children}</section>
 }
 
-function CompactNumberField({ label, value, onChange, min, max, signed = false }: { label: string; value: number; onChange: (value: number) => void; min?: number; max?: number; signed?: boolean }) {
+function CompactNumberField({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  signed = false,
+  automaticValue,
+  adjustment,
+}: {
+  label: string
+  value: number
+  onChange: (value: number) => void
+  min?: number
+  max?: number
+  signed?: boolean
+  automaticValue?: number
+  adjustment?: number
+}) {
+  const hasDerivedState =
+    automaticValue !== undefined && adjustment !== undefined
+  const hasManualAdjustment =
+    hasDerivedState && Math.abs(adjustment) >= 0.000001
+
   return (
-    <label className="grid min-w-0 gap-1 rounded-lg border border-border bg-bg-subtle p-2 text-center">
+    <label
+      className={cn(
+        "grid min-w-0 gap-1 rounded-lg border bg-bg-subtle p-2 text-center",
+        hasManualAdjustment ? "border-accentBorder" : "border-border",
+      )}
+      title={
+        hasDerivedState
+          ? hasManualAdjustment
+            ? `Valor manual. Automático: ${automaticValue}; ajuste: ${formatSigned(adjustment)}`
+            : `Valor automático: ${automaticValue}`
+          : undefined
+      }
+    >
       <span className="truncate text-[10px] uppercase tracking-wide text-textMuted">{label}</span>
       <Input type="number" inputMode="decimal" min={min} max={max} className="h-8 min-w-0 px-1 text-center text-sm font-bold" value={value} aria-label={label} onChange={(event) => onChange(Number(event.target.value))} />
+      {hasDerivedState ? (
+        <span
+          className={cn(
+            "truncate text-[9px] font-semibold",
+            hasManualAdjustment ? "text-accent" : "text-textMuted",
+          )}
+        >
+          {hasManualAdjustment
+            ? `Manual · Auto ${automaticValue} · ${formatSigned(adjustment)}`
+            : "Automático"}
+        </span>
+      ) : null}
       {signed ? <span className="sr-only">Valor atual {formatSigned(value)}</span> : null}
     </label>
   )
