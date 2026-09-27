@@ -7,11 +7,9 @@ import { useMagicContext } from "../../contexts/magicContext"
 import { damageAffinityLabel, damageTypeLabel, type DamageAffinity } from "../../models/combat/Damage"
 import { requestCreatureRoll, rollModeFromEvent, rollModifierHint } from "../../lib/diceRoller"
 import { CREATURE_ATTRIBUTE_LABELS, parseCreatureSavingThrows, parseCreatureSkills, type ParsedCreatureSave, type ParsedCreatureSkill } from "../../models/creatures/CreatureRolls"
-import { getCreatureEffectiveAbilityModifier, getCreatureEffectiveArmorClass, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../models/creatures/CreatureCombatRuntime"
+import { getCreatureEffectiveAbilityModifier, getCreatureEffectiveArmorClass, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureEffectiveSpellAttackBonus, getCreatureEffectiveSpellSaveDc, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../models/creatures/CreatureCombatRuntime"
 import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
 import {
-  getCreatureSpellAttackBonus,
-  getCreatureSpellSaveDc,
   type CompendiumCreature,
   type CreatureFeature,
   type CreatureSpellcasting,
@@ -909,8 +907,8 @@ export function quickSheetFromCompendiumCreature(
     languages: creature.languages,
     conditions: entry?.conditions.map((condition) => condition.name),
     spellcasting: creature.spellcasting,
-    spellSaveDc: getCreatureSpellSaveDc(creature),
-    spellAttackBonus: getCreatureSpellAttackBonus(creature),
+    spellSaveDc: getCreatureEffectiveSpellSaveDc(creature, conditions, entry),
+    spellAttackBonus: getCreatureEffectiveSpellAttackBonus(creature, conditions, entry),
     spellResources: entry?.creatureSpellResources,
     sections: [
       { title: "Traços e habilidades", entries: enrich(creature.traits) },
