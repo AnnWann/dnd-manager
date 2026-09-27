@@ -1677,7 +1677,11 @@ function buildAuthoritativeDicePlan(
   const source = request.source;
   switch (source.type) {
     case "ability":
-      return d20Plan("ability", request.mode, character.getEffectiveAttributeModifier(source.attribute));
+      return d20Plan(
+        "ability",
+        request.mode,
+        character.getEffectiveAbilityCheckBonus(source.attribute),
+      );
     case "skill":
       return d20Plan("skill", request.mode, getAuthoritativeSkillBonus(character, source.skill));
     case "save":
@@ -1786,9 +1790,15 @@ function getAuthoritativeSkillBonus(character: CharacterTemplate, skill: Skill):
       : "none";
   const proficiencyBonus = character.getProficiencyBonus();
 
-  return character.getEffectiveAttributeModifier(attribute)
+  const baseValue = character.getEffectiveAttributeModifier(attribute)
     + (effective === "proficient" ? proficiencyBonus : 0)
     + (effective === "expertise" ? proficiencyBonus * 2 : 0);
+
+  return character.getEffectiveSkillCheckBonus(
+    skill,
+    attribute,
+    baseValue,
+  );
 }
 
 function findEquippedWeapon(character: CharacterTemplate, weaponId: string): Weapon | undefined {
