@@ -2,14 +2,18 @@ import { FileImage, Shield, Swords } from "lucide-react"
 import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react"
 
 import { Button } from "../../components/ui/Button"
+import { useMagicContext } from "../../contexts/magicContext"
 import { damageAffinityLabel, damageTypeLabel, type DamageAffinity } from "../../models/combat/Damage"
 import { requestCreatureRoll, rollModeFromEvent, rollModifierHint } from "../../lib/diceRoller"
 import { CREATURE_ATTRIBUTE_LABELS, parseCreatureSavingThrows, parseCreatureSkills, type ParsedCreatureSave, type ParsedCreatureSkill } from "../../models/creatures/CreatureRolls"
 import { getCreatureEffectiveAbilityModifier, getCreatureEffectiveArmorClass, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../models/creatures/CreatureCombatRuntime"
 import type { CharacterTemplate } from "../../models/characters/CharacterTemplate"
-import type {
-  CompendiumCreature,
-  CreatureFeature,
+import {
+  getCreatureSpellAttackBonus,
+  getCreatureSpellSaveDc,
+  type CompendiumCreature,
+  type CreatureFeature,
+  type CreatureSpellcasting,
 } from "../../models/creatures/CompendiumCreature"
 import type { Attribute } from "../../models/sheet/Attribute"
 import type { Skill } from "../../models/sheet/Skills"
@@ -63,6 +67,9 @@ export type CombatQuickSheetData = {
   senses?: string
   languages?: string
   conditions?: string[]
+  spellcasting?: CreatureSpellcasting
+  spellSaveDc?: number
+  spellAttackBonus?: number
   sections: QuickSheetSection[]
 }
 
@@ -295,6 +302,14 @@ function QuickSheetSummary({ data, compact = false }: { data: CombatQuickSheetDa
         <OptionalInfo title="Idiomas" content={data.languages} />
       </div>
 
+      {data.spellcasting ? (
+        <CreatureSpellcastingSection
+          spellcasting={data.spellcasting}
+          saveDc={data.spellSaveDc}
+          attackBonus={data.spellAttackBonus}
+        />
+      ) : null}
+
       {data.sections
         .filter(sectionHasContent)
         .map((section) =>
@@ -315,6 +330,201 @@ function QuickSheetSummary({ data, compact = false }: { data: CombatQuickSheetDa
         )}
     </div>
   )
+}
+
+function CreatureSpellcastingSection({
+  spellcasting,
+  saveDc,
+  attackBonus,
+}: {
+  spellcasting: CreatureSpellcasting
+  saveDc?: number
+  attackBonus?: number
+}) {
+  const { getSpellByIndex, ensureOfficialSpells } = useMagicContext()
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+
+  useEffect(() => {
+    if (!spellcasting.spells.length) return
+    void ensureOfficialSpells(
+      spellcasting.spells.map((entry) => entry.spellIndex),
+    )
+  }, [ensureOfficialSpells, spellcasting.spells])
+
+  const slots = Object.entries(spellcasting.slots)
+    .filter(([, amount]) => Boolean(amount))
+    .sort(([left], [right]) => Number(left) - Number(right))
+
+  return (
+    <section className="rounded-xl border border-border bg-bg-subtle p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-semibold text-textH">Conjuração</h4>
+          <div className="mt-1 flex flex-wrap gap-1.5 text-[11px]">
+            <span className="rounded-full border border-border bg-bg px-2 py-1 text-textH">
+              {CREATURE_ATTRIBUTE_LABELS[spellcasting.ability]}
+            </span>
+            <span className="rounded-full border border-border bg-bg px-2 py-1 text-textH">
+              CD {saveDc ?? "—"}
+            </span>
+            <span className="rounded-full border border-border bg-bg px-2 py-1 text-textH">
+              Ataque {signed(attackBonus)}
+            </span>
+          </div>
+        </div>
+
+        {slots.length ? (
+          <div className="flex max-w-full flex-wrap justify-end gap-1.5 text-[10px] text-textMuted">
+            {slots.map(([level, amount]) => (
+              <span
+                key={level}
+                className="rounded-full border border-border bg-bg px-2 py-1"
+              >
+                {level}º: {amount} espaço{Number(amount) === 1 ? "" : "s"}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      {spellcasting.spells.length ? (
+        <div className="mt-3 grid gap-2">
+          {spellcasting.spells.map((entry) => {
+            const spell = getSpellByIndex(entry.spellIndex)
+            const isExpanded = expanded.has(entry.spellIndex)
+            const usage =
+              entry.usage.type === "atWill"
+                ? "À vontade"
+                : entry.usage.type === "perDay"
+                  ? `${entry.usage.uses}/dia`
+                  : "Usa espaços"
+            const castLevel =
+              entry.usage.type !== "slots" &&
+              entry.castLevel !== undefined &&
+              spell &&
+              entry.castLevel > spell.slotLevel
+                ? ` · conjura no ${entry.castLevel}º`
+                : ""
+
+            return (
+              <article
+                key={entry.spellIndex}
+                className="rounded-lg border border-border bg-bg px-3 py-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-textH">
+                      {spell?.displayName || spell?.name || entry.spellIndex}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-textMuted">
+                      {spell
+                        ? spell.slotLevel === 0
+                          ? "Truque"
+                          : `${spell.slotLevel}º círculo`
+                        : "Magia do compêndio"}
+                      {" · "}
+                      {usage}
+                      {castLevel}
+                      {spell?.concentration ? " · concentração" : ""}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-lg border border-border bg-bg-subtle px-2.5 py-1 text-[11px] font-semibold text-textH hover:border-accentBorder hover:bg-accentBg"
+                    onClick={() =>
+                      setExpanded((current) => {
+                        const next = new Set(current)
+                        if (next.has(entry.spellIndex)) {
+                          next.delete(entry.spellIndex)
+                        } else {
+                          next.add(entry.spellIndex)
+                        }
+                        return next
+                      })
+                    }
+                  >
+                    {isExpanded ? "Ocultar" : "Mostrar"}
+                  </button>
+                </div>
+
+                {isExpanded ? (
+                  spell ? (
+                    <div className="mt-3 grid gap-2 border-t border-border pt-3 text-xs leading-5 text-text">
+                      <div className="flex flex-wrap gap-2 text-[11px] text-textMuted">
+                        <span>{formatSpellCastingTime(spell.castingTime)}</span>
+                        <span>•</span>
+                        <span>{formatSpellRange(spell)}</span>
+                        {spell.components.length ? (
+                          <>
+                            <span>•</span>
+                            <span>{spell.components.join(", ")}</span>
+                          </>
+                        ) : null}
+                      </div>
+                      <p className="whitespace-pre-wrap">{spell.description}</p>
+                      {spell.higherLevelText?.trim() ? (
+                        <p className="whitespace-pre-wrap text-textMuted">
+                          <span className="font-semibold text-textH">Em círculos superiores: </span>
+                          {spell.higherLevelText}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="mt-3 border-t border-border pt-3 text-xs text-textMuted">
+                      Carregando detalhes da magia…
+                    </div>
+                  )
+                ) : null}
+              </article>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="mt-3 text-xs text-textMuted">
+          Nenhuma magia configurada.
+        </div>
+      )}
+    </section>
+  )
+}
+
+function formatSpellCastingTime(
+  castingTime: { value: number; type: string; reactionWhen?: string; special?: string },
+): string {
+  if (castingTime.type === "reaction") {
+    return castingTime.reactionWhen?.trim()
+      ? `Reação — ${castingTime.reactionWhen}`
+      : "Reação"
+  }
+  if (castingTime.type === "special") {
+    return castingTime.special?.trim() || "Especial"
+  }
+
+  const label =
+    castingTime.type === "action"
+      ? "ação"
+      : castingTime.type === "bonusAction"
+        ? "ação bônus"
+        : castingTime.type === "minute"
+          ? "minuto"
+          : castingTime.type === "hour"
+            ? "hora"
+            : castingTime.type
+  return `${castingTime.value} ${label}${castingTime.value === 1 ? "" : "s"}`
+}
+
+function formatSpellRange(spell: {
+  range: { origin: string; distance: number; area?: { shape: string; size: number } }
+}): string {
+  if (spell.range.origin === "self") {
+    return spell.range.area
+      ? `Pessoal · ${spell.range.area.size} m`
+      : "Pessoal"
+  }
+  if (spell.range.origin === "touch") return "Toque"
+  return spell.range.distance > 0
+    ? `${spell.range.distance} m`
+    : spell.range.origin
 }
 
 function FeatureSection({
@@ -586,6 +796,9 @@ export function quickSheetFromCompendiumCreature(
     senses: creature.senses,
     languages: creature.languages,
     conditions: entry?.conditions.map((condition) => condition.name),
+    spellcasting: creature.spellcasting,
+    spellSaveDc: getCreatureSpellSaveDc(creature),
+    spellAttackBonus: getCreatureSpellAttackBonus(creature),
     sections: [
       { title: "Traços e habilidades", entries: enrich(creature.traits) },
       { title: "Ações", entries: enrich(creature.actions) },
