@@ -8,6 +8,11 @@ import { Coffee, Moon, X } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
+import {
+  DICE_ROLL_RESULT_EVENT,
+  requestManualDiceRoll,
+} from "../../../lib/diceRoller"
+import type { SessionDiceRollResult } from "../../../shared/session-runtime/diceRollProtocol"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import type {
   SessionDieSides,
@@ -162,6 +167,7 @@ export function CharacterRestControls({
         open={shortRestOpen}
         character={character}
         authoritativeHitDice={authoritativeHitDice}
+        diceRollingAvailable={runtime?.status === "connected"}
         onClose={() => setShortRestOpen(false)}
         onConfirm={completeShortRest}
       />
@@ -181,12 +187,14 @@ function ShortRestDialog({
   open,
   character,
   authoritativeHitDice,
+  diceRollingAvailable,
   onClose,
   onConfirm,
 }: {
   open: boolean
   character: CharacterTemplate
   authoritativeHitDice?: SessionHitDiceState
+  diceRollingAvailable: boolean
   onClose: () => void
   onConfirm: (
     healing: number,
@@ -195,6 +203,8 @@ function ShortRestDialog({
 }) {
   const [healing, setHealing] = useState(0)
   const [hitDiceConsumption, setHitDiceConsumption] = useState<HitDiceConsumption>({})
+  const [pendingRolls, setPendingRolls] = useState<Record<string, DieSides>>({})
+  const constitutionModifier = character.getEffectiveAttributeModifier("con")
 
   const availableHitDice = useMemo(() => {
     if (authoritativeHitDice) {
@@ -215,6 +225,30 @@ function ShortRestDialog({
     })
   }, [authoritativeHitDice, character])
 
+  useEffect(() => {
+    if (!open || typeof window === "undefined") return
+
+    const handleResult = (event: Event) => {
+      const result = (event as CustomEvent<SessionDiceRollResult>).detail
+      const side = pendingRolls[result.requestId]
+      if (!side) return
+
+      setHealing((current) => current + Math.max(0, Math.trunc(result.total)))
+      setHitDiceConsumption((current) => ({
+        ...current,
+        [side]: (current[side] ?? 0) + 1,
+      }))
+      setPendingRolls((current) => {
+        const next = { ...current }
+        delete next[result.requestId]
+        return next
+      })
+    }
+
+    window.addEventListener(DICE_ROLL_RESULT_EVENT, handleResult)
+    return () => window.removeEventListener(DICE_ROLL_RESULT_EVENT, handleResult)
+  }, [open, pendingRolls])
+
   if (!open) return null
 
   const totalDice = Object.values(hitDiceConsumption).reduce(
@@ -225,6 +259,7 @@ function ShortRestDialog({
   function resetAndClose() {
     setHealing(0)
     setHitDiceConsumption({})
+    setPendingRolls({})
     onClose()
   }
 
@@ -232,10 +267,48 @@ function ShortRestDialog({
     onConfirm(Math.max(0, Math.trunc(healing)), hitDiceConsumption)
     setHealing(0)
     setHitDiceConsumption({})
+    setPendingRolls({})
+  }
+
+  function rollHitDie(side: DieSides) {
+    if (!diceRollingAvailable) return
+
+    const pool = availableHitDice.find((entry) => entry.side === side)
+    if (!pool) return
+
+    const consumed = hitDiceConsumption[side] ?? 0
+    const alreadyPending = Object.values(pendingRolls).some((pendingSide) => pendingSide === side)
+    if (alreadyPending || consumed >= pool.current) return
+
+    const modifier =
+      constitutionModifier === 0
+        ? ""
+        : constitutionModifier > 0
+          ? `+${constitutionModifier}`
+          : String(constitutionModifier)
+
+    const requested = requestManualDiceRoll({
+      characterId: character.get("id"),
+      expression: `1${side}${modifier}`,
+      label: `Dado de Vida (${side})`,
+    })
+    if (!requested.ok || !requested.requestId) return
+
+    const requestId = requested.requestId
+    setPendingRolls((current) => ({ ...current, [requestId]: side }))
+
+    window.setTimeout(() => {
+      setPendingRolls((current) => {
+        if (!current[requestId]) return current
+        const next = { ...current }
+        delete next[requestId]
+        return next
+      })
+    }, 8000)
   }
 
   return (
-    <ModalShell onClose={resetAndClose} maxWidth="max-w-lg">
+    <ModalShell onClose={resetAndClose} maxWidth="max-w-lg" fitContent>
       <DialogHeader
         id="short-rest-title"
         title="Descanso curto"
@@ -243,7 +316,7 @@ function ShortRestDialog({
         onClose={resetAndClose}
       />
 
-      <div className="grid gap-4 py-4">
+      <div className="grid content-start gap-4 py-4">
         <label className="grid gap-1.5">
           <span className="text-xs font-medium text-textH">Pontos de vida recuperados</span>
           <Input
@@ -259,29 +332,59 @@ function ShortRestDialog({
             <span className="text-xs font-medium text-textH">Dados de vida consumidos</span>
             <span className="text-[11px] font-semibold text-textMuted">Total: {totalDice}</span>
           </div>
+          <p className="text-[11px] leading-4 text-textMuted">
+            Ao rolar um dado de vida, o modificador de Constituição é aplicado automaticamente e a cura resultante é somada acima.
+            {!diceRollingAvailable ? " Entre em uma sessão conectada para usar a rolagem integrada." : ""}
+          </p>
 
           {availableHitDice.length > 0 ? (
             <div className="grid gap-2 sm:grid-cols-2">
               {availableHitDice.map(({ side, current, max }) => {
                 const currentAmount = hitDiceConsumption[side] ?? 0
+                const isRolling = Object.values(pendingRolls).some(
+                  (pendingSide) => pendingSide === side,
+                )
+                const canRoll =
+                  diceRollingAvailable &&
+                  !isRolling &&
+                  currentAmount < current
+
                 return (
-                  <label key={side} className="grid grid-cols-[1fr_80px] items-center gap-3 rounded-lg border border-border bg-bg-subtle p-3">
-                    <span>
-                      <span className="block text-sm font-semibold text-textH">{side}</span>
-                      <span className="block text-[11px] text-textMuted">{current}/{max} disponíveis</span>
-                    </span>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={current}
-                      className="text-center"
-                      value={currentAmount}
-                      onChange={(event) => {
-                        const nextAmount = Math.max(0, Math.min(current, Math.trunc(Number(event.target.value) || 0)))
-                        setHitDiceConsumption((value) => ({ ...value, [side]: nextAmount }))
-                      }}
-                    />
-                  </label>
+                  <div key={side} className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <span>
+                        <span className="block text-sm font-semibold text-textH">{side}</span>
+                        <span className="block text-[11px] text-textMuted">{current}/{max} disponíveis</span>
+                      </span>
+                      <span className="text-[10px] font-medium text-textMuted">
+                        CON {constitutionModifier >= 0 ? "+" : ""}{constitutionModifier}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-[80px_minmax(0,1fr)] gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={current}
+                        className="text-center"
+                        value={currentAmount}
+                        disabled={isRolling}
+                        aria-label={`Dados ${side} consumidos`}
+                        onChange={(event) => {
+                          const nextAmount = Math.max(0, Math.min(current, Math.trunc(Number(event.target.value) || 0)))
+                          setHitDiceConsumption((value) => ({ ...value, [side]: nextAmount }))
+                        }}
+                      />
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={!canRoll}
+                        onClick={() => rollHitDie(side)}
+                      >
+                        {isRolling ? "Rolando..." : `Rolar ${side}`}
+                      </Button>
+                    </div>
+                  </div>
                 )
               })}
             </div>
@@ -543,10 +646,25 @@ function SupplyBalanceBar({ required, selected }: { required: number; selected: 
   )
 }
 
-function ModalShell({ children, onClose, maxWidth }: { children: ReactNode; onClose: () => void; maxWidth: string }) {
+function ModalShell({
+  children,
+  onClose,
+  maxWidth,
+  fitContent = false,
+}: {
+  children: ReactNode
+  onClose: () => void
+  maxWidth: string
+  fitContent?: boolean
+}) {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-x-hidden bg-black/65 p-2 backdrop-blur-sm sm:p-4" onMouseDown={onClose}>
-      <div role="dialog" aria-modal="true" className={`grid max-h-[94vh] w-full min-w-0 ${maxWidth} overflow-hidden rounded-xl border border-border bg-bg-elevated p-3 text-text shadow-theme-lg sm:p-4`} onMouseDown={(event) => event.stopPropagation()}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className={`grid max-h-[94vh] w-full min-w-0 ${maxWidth} overflow-hidden rounded-xl border border-border bg-bg-elevated p-3 text-text shadow-theme-lg sm:p-4 ${fitContent ? "h-fit auto-rows-max content-start" : ""}`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         {children}
       </div>
     </div>
