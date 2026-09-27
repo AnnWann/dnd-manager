@@ -23,6 +23,7 @@ import {
 import type { Equipment } from "../../../models/items/equipment/EquipmentSlot"
 import type { Itemmable } from "../../../models/items/item"
 import type { Attribute } from "../../../models/sheet/Attribute"
+import type { Skill } from "../../../models/sheet/Skills"
 import { FormulaVariablePicker } from "../../customSystems/FormulaVariablePicker"
 import { listCharacterFormulaVariables } from "../../../lib/customSystems/CharacterFormulaVariables"
 import { validateCharacterSheetFormula } from "../../../lib/customSystems/CharacterSheetFormula"
@@ -37,6 +38,27 @@ const ATTRIBUTES: Array<{ value: Attribute; label: string }> = [
   { value: "cha", label: "CAR" },
 ]
 
+const SKILLS: Array<{ value: Skill; label: string }> = [
+  { value: "acrobatics", label: "Acrobacia" },
+  { value: "arcana", label: "Arcanismo" },
+  { value: "athletics", label: "Atletismo" },
+  { value: "animalHandling", label: "Lidar com Animais" },
+  { value: "performance", label: "Atuação" },
+  { value: "deception", label: "Blefe" },
+  { value: "stealth", label: "Furtividade" },
+  { value: "history", label: "História" },
+  { value: "intimidation", label: "Intimidação" },
+  { value: "insight", label: "Intuição" },
+  { value: "investigation", label: "Investigação" },
+  { value: "medicine", label: "Medicina" },
+  { value: "nature", label: "Natureza" },
+  { value: "perception", label: "Percepção" },
+  { value: "persuasion", label: "Persuasão" },
+  { value: "sleightOfHand", label: "Prestidigitação" },
+  { value: "religion", label: "Religião" },
+  { value: "survival", label: "Sobrevivência" },
+]
+
 const TARGET_OPTIONS: Array<{ value: BonusTarget; label: string }> = [
   { value: "armorClass", label: "Classe de Armadura" },
   { value: "initiative", label: "Iniciativa" },
@@ -47,6 +69,10 @@ const TARGET_OPTIONS: Array<{ value: BonusTarget; label: string }> = [
   { value: "attackBonus", label: "Ataques — global" },
   { value: "weaponAttackBonus", label: "Ataques com arma" },
   { value: "spellAttackBonus", label: "Ataques mágicos" },
+  { value: "generalTestBonus", label: "Testes gerais" },
+  { value: "abilityCheckBonus", label: "Testes de habilidade — todos" },
+  { value: "abilityCheckAttributeBonus", label: "Testes de habilidade — atributo" },
+  { value: "skillCheckBonus", label: "Testes de habilidade — perícia" },
   { value: "savingThrowBonus", label: "Testes de resistência — global" },
   { value: "savingThrowAttributeBonus", label: "Testes de resistência — atributo" },
   { value: "saveDcBonus", label: "CD — global" },
@@ -63,6 +89,7 @@ const TARGET_OPTIONS: Array<{ value: BonusTarget; label: string }> = [
 const SCOPED_TARGETS = new Set<BonusTarget>([
   "weaponAttackBonus",
   "spellAttackBonus",
+  "abilityCheckAttributeBonus",
   "savingThrowAttributeBonus",
   "weaponDamageBonus",
   "spellDamageBonus",
@@ -173,6 +200,14 @@ export function BonusesFields({
                 { attribute: entry.attribute, bonus: entry.bonus },
               ],
             })
+          } else if (entry.target === "skillCheckBonus") {
+            onChange({
+              ...bonuses,
+              skillCheckBonus: [
+                ...(bonuses.skillCheckBonus ?? []),
+                { skill: entry.scopeSkill, bonus: entry.bonus },
+              ],
+            })
           } else if (isScopedTarget(entry.target)) {
             onChange({
               ...bonuses,
@@ -247,6 +282,26 @@ export function flattenBonuses(
       continue
     }
 
+    if (target === "skillCheckBonus") {
+      const values = bonuses.skillCheckBonus ?? []
+      values.forEach((entry, index) => {
+        const scope = entry.skill
+          ? ` ${SKILLS.find((skill) => skill.value === entry.skill)?.label ?? entry.skill}`
+          : " — todas as perícias"
+        entries.push({
+          id: `${target}-${index}`,
+          label: `${option.label}${scope}: ${formatBonus(entry.bonus)}`,
+          remove: (current) => ({
+            ...current,
+            skillCheckBonus: (current.skillCheckBonus ?? []).filter(
+              (_, currentIndex) => currentIndex !== index,
+            ),
+          }),
+        })
+      })
+      continue
+    }
+
     if (isScopedTarget(target)) {
       const values = bonuses[target] ?? []
       values.forEach((entry, index) => {
@@ -301,6 +356,7 @@ type AddBonusEntry =
       target: Exclude<BonusTarget, "damageAffinity">
       attribute: Attribute
       scopeAttribute?: Attribute
+      scopeSkill?: Skill
       bonus: Bonus
     }
 
@@ -318,6 +374,7 @@ function AddBonusDialog({
   const [target, setTarget] = useState<BonusTarget>("armorClass")
   const [attribute, setAttribute] = useState<Attribute>("str")
   const [scopeAttribute, setScopeAttribute] = useState<"all" | Attribute>("all")
+  const [scopeSkill, setScopeSkill] = useState<"all" | Skill>("all")
   const [type, setType] = useState<Bonus["type"]>("add")
   const [value, setValue] = useState(1)
   const [useFormula, setUseFormula] = useState(false)
@@ -332,6 +389,7 @@ function AddBonusDialog({
   const needsAttribute =
     target === "attribute" || target === "attributeModifier"
   const supportsAttributeScope = isScopedTarget(target)
+  const supportsSkillScope = target === "skillCheckBonus"
   const formulaError = !isDamageAffinity && useFormula
     ? validateCharacterSheetFormula(formula, character)
     : undefined
@@ -340,6 +398,7 @@ function AddBonusDialog({
     setTarget("armorClass")
     setAttribute("str")
     setScopeAttribute("all")
+    setScopeSkill("all")
     setType("add")
     setValue(1)
     setUseFormula(false)
@@ -460,6 +519,23 @@ function AddBonusDialog({
                 </label>
               ) : null}
 
+              {supportsSkillScope ? (
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-textH">Limitar à perícia</span>
+                  <Select
+                    value={scopeSkill}
+                    onChange={(event) =>
+                      setScopeSkill(event.target.value as "all" | Skill)
+                    }
+                  >
+                    <option value="all">Todas as perícias</option>
+                    {SKILLS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </Select>
+                </label>
+              ) : null}
+
               <label className="flex items-center gap-2 text-xs font-medium text-textH">
                 <input
                   type="checkbox"
@@ -535,6 +611,7 @@ function AddBonusDialog({
                 target: target as Exclude<BonusTarget, "damageAffinity">,
                 attribute,
                 scopeAttribute: scopeAttribute === "all" ? undefined : scopeAttribute,
+                scopeSkill: scopeSkill === "all" ? undefined : scopeSkill,
                 bonus: {
                   type,
                   value: Math.abs(value),
