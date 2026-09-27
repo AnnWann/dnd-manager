@@ -13,6 +13,7 @@ import type {
 import { validateBonusRollDiceExpression } from "../../../models/bonuses/BonusRoll"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { attributeShort } from "../../../lib/attributeShorts"
+import { formatSkillName } from "../../../lib/formatBonus"
 
 const DIRECT_KEYS: Array<{ key: NormalBonusKey; label: string }> = [
   { key: "armorClass", label: "Classe de Armadura" },
@@ -199,7 +200,7 @@ function collectEntries(bonuses: BonusCollection): Entry[] {
   ;(bonuses.skillCheckBonus ?? []).forEach((entry, index) => {
     result.push({
       id: `skillCheckBonus:${index}`,
-      label: `Testes de habilidade — ${entry.skill ?? "todas as perícias"}`,
+      label: `Testes de habilidade — ${entry.skill ? formatSkillName(entry.skill) : "todas as perícias"}`,
       bonus: entry.bonus,
       update: (current, next) => ({
         ...current,
