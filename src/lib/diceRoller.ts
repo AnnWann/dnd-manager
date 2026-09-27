@@ -72,18 +72,23 @@ export function requestDamageRoll(input: {
 }
 
 
+export type ManualDiceRollRequestResult =
+  ManualDiceExpressionParseResult & { requestId?: string }
+
 export function requestManualDiceRoll(input: {
   characterId?: string
   initiativeEntryId?: string
   expression: string
-}): ManualDiceExpressionParseResult {
+  label?: string
+}): ManualDiceRollRequestResult {
   const parsed = parseManualDiceExpression(input.expression)
   if (!parsed.ok) return parsed
 
+  const requestId = createRequestId()
   publishRequest({
-    requestId: createRequestId(),
+    requestId,
     characterId: input.characterId,
-    label: "Rolagem manual",
+    label: input.label?.trim() || "Rolagem manual",
     mode: "normal",
     visibility: getRollVisibility(),
     source: {
@@ -92,7 +97,7 @@ export function requestManualDiceRoll(input: {
       initiativeEntryId: input.initiativeEntryId,
     },
   })
-  return parsed
+  return { ...parsed, requestId }
 }
 
 
