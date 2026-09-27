@@ -282,7 +282,7 @@ export function MinimalCharacterSheet({
             onChange={(value) => updateDerivedStat("mobility", value, getCalculatedMobility)}
           />
           <CompactNumberField
-            label="Passiva"
+            label="Percepção Passiva"
             value={character.getEffectivePassivePerception()}
             automaticValue={getCalculatedPassivePerception(character)}
             adjustment={getStatAdjustment(character, "passivePerceptionAdjustment")}
@@ -376,7 +376,7 @@ export function MinimalCharacterSheet({
                     })
                   }
                 >
-                  {formatSigned(character.getEffectiveAttributeModifier(attribute))}
+                  {formatSigned(character.getEffectiveAbilityCheckBonus(attribute))}
                 </button>
               </div>
             )
