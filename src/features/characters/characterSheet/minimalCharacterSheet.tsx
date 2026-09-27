@@ -1,4 +1,4 @@
-import { Check } from "lucide-react"
+import { Check, X } from "lucide-react"
 import { useState } from "react"
 
 import { Input } from "../../../components/ui/Input"
@@ -103,6 +103,7 @@ export function MinimalCharacterSheet({
     useState<HandItemActionsDialogState | null>(null)
   const [selectedPocketWeaponId, setSelectedPocketWeaponId] = useState("")
   const [selectedEquippedWeaponId, setSelectedEquippedWeaponId] = useState("")
+  const [weaponSwapOpen, setWeaponSwapOpen] = useState(false)
   const sheet = character.get("sheet")
   const characterId = character.get("id")
   const proficiency = character.getProficiencyBonus()
@@ -439,65 +440,13 @@ export function MinimalCharacterSheet({
               <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
                 Armas equipadas
               </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Select
-                  className="h-8 max-w-44 text-[11px]"
-                  value={selectedPocketWeapon?.item.id ?? ""}
-                  disabled={pocketWeapons.length === 0}
-                  aria-label="Arma do bolso para empunhar"
-                  onChange={(event) => setSelectedPocketWeaponId(event.target.value)}
-                >
-                  {pocketWeapons.length === 0 ? (
-                    <option value="">Nenhuma arma no bolso</option>
-                  ) : (
-                    pocketWeapons.map(({ item }) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name || "Arma"}
-                      </option>
-                    ))
-                  )}
-                </Select>
-                <button
-                  type="button"
-                  className="h-8 rounded-md border border-border bg-bg-subtle px-2 text-[11px] font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!selectedPocketWeapon}
-                  title="Empunhar a arma selecionada dos bolsos"
-                  onClick={wieldSelectedPocketWeapon}
-                >
-                  Empunhar
-                </button>
-
-                <Select
-                  className="h-8 max-w-44 text-[11px]"
-                  value={selectedEquippedWeapon?.id ?? ""}
-                  disabled={equippedWeapons.length === 0}
-                  aria-label="Arma equipada para guardar"
-                  onChange={(event) => setSelectedEquippedWeaponId(event.target.value)}
-                >
-                  {equippedWeapons.length === 0 ? (
-                    <option value="">Nenhuma arma equipada</option>
-                  ) : (
-                    equippedWeapons.map((weapon) => (
-                      <option key={weapon.id} value={weapon.id}>
-                        {weapon.name || "Arma"}
-                      </option>
-                    ))
-                  )}
-                </Select>
-                <button
-                  type="button"
-                  className="h-8 rounded-md border border-border bg-bg-subtle px-2 text-[11px] font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!selectedEquippedWeapon || character.get("equipment").pockets.length >= 8}
-                  title={
-                    character.get("equipment").pockets.length >= 8
-                      ? "Os oito espaços de bolso estão ocupados"
-                      : "Guardar a arma selecionada no bolso"
-                  }
-                  onClick={stowSelectedWeapon}
-                >
-                  Guardar
-                </button>
-              </div>
+              <button
+                type="button"
+                className="h-8 rounded-md border border-border bg-bg-subtle px-3 text-[11px] font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg"
+                onClick={() => setWeaponSwapOpen(true)}
+              >
+                Trocar Arma
+              </button>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {character.get("equipment").weapons.length ? (
@@ -583,6 +532,155 @@ export function MinimalCharacterSheet({
 
       <MinimalCharacterActions character={character} updateCharacter={updateCharacter} />
       <HandItemActionsDialog character={character} state={handDialog} onClose={() => setHandDialog(null)} />
+      <WeaponSwapDialog
+        open={weaponSwapOpen}
+        pocketWeapons={pocketWeapons}
+        equippedWeapons={equippedWeapons}
+        selectedPocketWeaponId={selectedPocketWeapon?.item.id ?? ""}
+        selectedEquippedWeaponId={selectedEquippedWeapon?.id ?? ""}
+        pocketsFull={character.get("equipment").pockets.length >= 8}
+        onSelectedPocketWeaponChange={setSelectedPocketWeaponId}
+        onSelectedEquippedWeaponChange={setSelectedEquippedWeaponId}
+        onWield={wieldSelectedPocketWeapon}
+        onStow={stowSelectedWeapon}
+        onClose={() => setWeaponSwapOpen(false)}
+      />
+    </div>
+  )
+}
+
+function WeaponSwapDialog({
+  open,
+  pocketWeapons,
+  equippedWeapons,
+  selectedPocketWeaponId,
+  selectedEquippedWeaponId,
+  pocketsFull,
+  onSelectedPocketWeaponChange,
+  onSelectedEquippedWeaponChange,
+  onWield,
+  onStow,
+  onClose,
+}: {
+  open: boolean
+  pocketWeapons: Array<{ item: { id: string; name?: string }; index: number }>
+  equippedWeapons: Weapon[]
+  selectedPocketWeaponId: string
+  selectedEquippedWeaponId: string
+  pocketsFull: boolean
+  onSelectedPocketWeaponChange: (id: string) => void
+  onSelectedEquippedWeaponChange: (id: string) => void
+  onWield: () => void
+  onStow: () => void
+  onClose: () => void
+}) {
+  if (!open) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      onMouseDown={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="weapon-swap-title"
+        className="w-full max-w-md rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
+          <div>
+            <h2 id="weapon-swap-title" className="text-base font-semibold text-textH">
+              Trocar Arma
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-textMuted">
+              Empunhe uma arma dos bolsos ou guarde uma arma equipada.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Fechar"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-textMuted hover:bg-bg-subtle hover:text-textH"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="grid gap-4 py-4">
+          <section className="grid gap-2">
+            <div>
+              <div className="text-xs font-semibold text-textH">Empunhar</div>
+              <div className="text-[11px] text-textMuted">Armas disponíveis nos bolsos.</div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <Select
+                value={selectedPocketWeaponId}
+                disabled={pocketWeapons.length === 0}
+                aria-label="Arma do bolso para empunhar"
+                onChange={(event) => onSelectedPocketWeaponChange(event.target.value)}
+              >
+                {pocketWeapons.length === 0 ? (
+                  <option value="">Nenhuma arma no bolso</option>
+                ) : (
+                  pocketWeapons.map(({ item }) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name || "Arma"}
+                    </option>
+                  ))
+                )}
+              </Select>
+              <button
+                type="button"
+                className="h-10 rounded-md border border-accentBorder bg-accentBg px-3 text-xs font-semibold text-textH transition-colors hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={pocketWeapons.length === 0}
+                onClick={onWield}
+              >
+                Empunhar
+              </button>
+            </div>
+          </section>
+
+          <section className="grid gap-2 border-t border-border pt-4">
+            <div>
+              <div className="text-xs font-semibold text-textH">Guardar</div>
+              <div className="text-[11px] text-textMuted">Mova uma arma equipada para um bolso.</div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <Select
+                value={selectedEquippedWeaponId}
+                disabled={equippedWeapons.length === 0}
+                aria-label="Arma equipada para guardar"
+                onChange={(event) => onSelectedEquippedWeaponChange(event.target.value)}
+              >
+                {equippedWeapons.length === 0 ? (
+                  <option value="">Nenhuma arma equipada</option>
+                ) : (
+                  equippedWeapons.map((weapon) => (
+                    <option key={weapon.id} value={weapon.id}>
+                      {weapon.name || "Arma"}
+                    </option>
+                  ))
+                )}
+              </Select>
+              <button
+                type="button"
+                className="h-10 rounded-md border border-border bg-bg-subtle px-3 text-xs font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={equippedWeapons.length === 0 || pocketsFull}
+                title={pocketsFull ? "Os oito espaços de bolso estão ocupados" : undefined}
+                onClick={onStow}
+              >
+                Guardar
+              </button>
+            </div>
+            {pocketsFull ? (
+              <div className="text-[11px] text-danger">
+                Os oito espaços de bolso estão ocupados.
+              </div>
+            ) : null}
+          </section>
+        </div>
+      </div>
     </div>
   )
 }
