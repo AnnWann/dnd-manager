@@ -37,7 +37,14 @@ import {
 import type { Attribute } from "../../../../src/models/sheet/Attribute";
 import { abilityShortPtBr } from "../../../../src/i18n/ptBR";
 import type { Skill } from "../../../../src/models/sheet/Skills";
-import { initiativeEntryDisplayName, normalizeInitiativeSession, type InitiativeEntry, type InitiativeSession } from "../../../../src/models/initiative/Initiative";
+import {
+  initiativeEntryDisplayName,
+  normalizeInitiativeSession,
+  synchronizeSharedCombatantState,
+  updateInitiativeEntry,
+  type InitiativeEntry,
+  type InitiativeSession,
+} from "../../../../src/models/initiative/Initiative";
 import { CREATURE_ATTRIBUTE_LABELS, findCreatureSave, findCreatureSkill, parseCreatureDamageFormula } from "../../../../src/models/creatures/CreatureRolls";
 import { getCreatureEffectiveAbilityCheckBonus, getCreatureEffectiveAbilityModifier, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../../../src/models/creatures/CreatureCombatRuntime";
 import type { CompendiumCreature, CreatureFeature } from "../../../../src/models/creatures/CompendiumCreature";
@@ -82,7 +89,11 @@ import {
   readSessionLog,
   type SessionLogRecord,
 } from "./sessionLog";
-import { isDigitalDiceRollingEnabled, readRuntimeConfig } from "./runtimeConfigAccess";
+import {
+  findRuntimeSpell,
+  isDigitalDiceRollingEnabled,
+  readRuntimeConfig,
+} from "./runtimeConfigAccess";
 import type { SessionActionRollRequest, SessionActionRollResult, SessionCreatureRollRequest, SessionDiceRollRequest, SessionDiceRollResult, SessionResolvedD20Roll, SessionResolvedDamageRoll } from "../../../../src/shared/session-runtime/diceRollProtocol";
 import { parseManualDiceExpression } from "../../../../src/shared/session-runtime/manualDiceExpression";
 import {
@@ -90,6 +101,8 @@ import {
   refreshConnectionVisibility,
   sendVisibilityFiltered,
 } from "./visibilityDelivery";
+import { resolveCreatureSpellCastAction } from "./creatureSpellCastResolution";
+import type { SessionInitiativeState } from "../../../../src/features/session-runtime/initiativeSessionProtocol";
 
 const CONNECTION_TIMEOUT_MS = 90_000;
 const CLOSE_CODE_TIMEOUT = 4000;
@@ -249,7 +262,7 @@ export class SessionActor extends DurableObject<Env> {
 
     const [runtimeConfig, initiativeState] = await Promise.all([
       readRuntimeConfig(this.ctx.storage),
-      this.ctx.storage.get<{ initialized?: boolean; session?: Record<string, unknown> }>("initiative-state"),
+      this.ctx.storage.get<SessionInitiativeState>("initiative-state"),
     ]);
     const creature = runtimeConfig?.config.creatureCompendium.find(
       (candidate) => candidate.id === request.creatureId,
@@ -273,6 +286,120 @@ export class SessionActor extends DurableObject<Env> {
         this.sendError(webSocket, "CREATURE_ENTRY_NOT_FOUND", "The requested initiative combatant does not match this creature.");
         return;
       }
+    }
+
+    if (request.source.type === "spell") {
+      const spellcasting = creature.spellcasting;
+      if (!spellcasting) {
+        this.sendError(webSocket, "CREATURE_SPELLCASTING_UNAVAILABLE", "This creature does not have spellcasting configured.");
+        return;
+      }
+
+      const configuredSpell = spellcasting.spells.find(
+        (candidate) => candidate.spellIndex === request.source.spellIndex,
+      );
+      const spell = findRuntimeSpell(runtimeConfig, request.source.spellIndex);
+      if (!configuredSpell || !spell) {
+        this.sendError(webSocket, "CREATURE_SPELL_NOT_FOUND", "The requested spell is not available to this creature.");
+        return;
+      }
+
+      const castLevel = request.source.castLevel;
+      if (
+        castLevel < spell.slotLevel ||
+        castLevel > 9 ||
+        (spell.slotLevel === 0 && castLevel !== 0)
+      ) {
+        this.sendError(webSocket, "CREATURE_SPELL_LEVEL_INVALID", "The selected cast level is invalid for this creature spell.");
+        return;
+      }
+
+      if (
+        configuredSpell.usage.type !== "slots" &&
+        castLevel !== (configuredSpell.castLevel ?? spell.slotLevel)
+      ) {
+        this.sendError(webSocket, "CREATURE_SPELL_LEVEL_FIXED", "This creature casts the spell at a fixed level.");
+        return;
+      }
+
+      const announcing = request.source.intent === "announce";
+      if (!announcing && !entry) {
+        this.sendError(webSocket, "CREATURE_ENTRY_REQUIRED", "Creature spell resources can only be spent from an initiative combatant.");
+        return;
+      }
+
+      if (!announcing && entry) {
+        const availability = validateCreatureSpellResource(
+          creature,
+          configuredSpell,
+          spell.slotLevel,
+          castLevel,
+          entry,
+        );
+        if (!availability.ok) {
+          this.sendError(webSocket, availability.code, availability.message);
+          return;
+        }
+      }
+
+      let actionResult: SessionActionRollResult;
+      try {
+        actionResult = resolveCreatureSpellCastAction({
+          requestId: request.requestId,
+          actorId: connection.userId,
+          creature,
+          entry,
+          spell,
+          castLevel,
+          mode: request.mode,
+          visibility: request.visibility,
+          rollDice:
+            !announcing && isDigitalDiceRollingEnabled(runtimeConfig),
+        });
+      } catch (error) {
+        this.sendError(
+          webSocket,
+          "CREATURE_SPELL_RESOLUTION_INVALID",
+          error instanceof Error
+            ? error.message
+            : "The creature spell could not be resolved.",
+        );
+        return;
+      }
+
+      if (!announcing && entry && initiativeState?.initialized) {
+        const currentInitiative = normalizeInitiativeSession(
+          initiativeState.session as Partial<InitiativeSession>,
+        );
+        let nextInitiative = consumeCreatureSpellResource(
+          currentInitiative,
+          entry.id,
+          configuredSpell,
+          castLevel,
+          spell.displayName || spell.name,
+          spell.concentration,
+          spell.index,
+        );
+
+        if (nextInitiative !== currentInitiative) {
+          const nextState: SessionInitiativeState = {
+            initialized: true,
+            revision: (initiativeState.revision ?? 0) + 1,
+            session: nextInitiative,
+          };
+          await this.ctx.storage.put("initiative-state", nextState);
+          broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
+            type: "session.initiative.updated",
+            state: nextState,
+          });
+        }
+      }
+
+      this.broadcast({
+        type: "session.action.result",
+        result: actionResult,
+      });
+      return;
     }
 
     const resolution = resolveServerCreatureRoll(
@@ -1040,6 +1167,14 @@ function resolveServerCreatureRoll(
   const resultCharacterId = `creature:${entry?.id ?? creature.id}`;
   const source = request.source;
 
+  if (source.type === "spell") {
+    return {
+      ok: false,
+      code: "CREATURE_SPELL_ROUTING_ERROR",
+      message: "Creature spells must be resolved by the spellcasting route.",
+    };
+  }
+
   if (source.type === "feature") {
     const located = findCreatureFeature(creature, source.featureId);
     if (!located) {
@@ -1241,6 +1376,123 @@ function resolveServerCreatureRoll(
       createdAt: new Date().toISOString(),
     },
   };
+}
+
+type CreatureSpellAvailability =
+  | { ok: true }
+  | { ok: false; code: string; message: string };
+
+function validateCreatureSpellResource(
+  creature: CompendiumCreature,
+  configuredSpell: NonNullable<CompendiumCreature["spellcasting"]>["spells"][number],
+  baseSpellLevel: number,
+  castLevel: number,
+  entry: InitiativeEntry,
+): CreatureSpellAvailability {
+  if (configuredSpell.usage.type === "atWill") return { ok: true };
+
+  if (configuredSpell.usage.type === "perDay") {
+    const maximum = Math.max(1, Math.trunc(configuredSpell.usage.uses));
+    const used = entry.creatureSpellResources?.perDay?.[
+      configuredSpell.spellIndex
+    ]?.used ?? 0;
+    return used < maximum
+      ? { ok: true }
+      : {
+          ok: false,
+          code: "CREATURE_SPELL_DAILY_USES_EXHAUSTED",
+          message: "This creature has no daily uses of the spell remaining.",
+        };
+  }
+
+  if (baseSpellLevel === 0) return { ok: true };
+  const maximum = Math.max(
+    0,
+    Math.trunc(
+      creature.spellcasting?.slots[
+        castLevel as keyof NonNullable<CompendiumCreature["spellcasting"]>["slots"]
+      ] ?? 0,
+    ),
+  );
+  const current =
+    entry.creatureSpellResources?.slots?.[
+      castLevel as keyof NonNullable<InitiativeEntry["creatureSpellResources"]>["slots"]
+    ]?.current ?? maximum;
+
+  return maximum > 0 && current > 0
+    ? { ok: true }
+    : {
+        ok: false,
+        code: "CREATURE_SPELL_SLOT_UNAVAILABLE",
+        message: "This creature has no spell slot of the selected level remaining.",
+      };
+}
+
+function consumeCreatureSpellResource(
+  session: InitiativeSession,
+  entryId: string,
+  configuredSpell: NonNullable<CompendiumCreature["spellcasting"]>["spells"][number],
+  castLevel: number,
+  spellName: string,
+  concentration: boolean,
+  spellIndex: string,
+): InitiativeSession {
+  let next = updateInitiativeEntry(session, entryId, (entry) => {
+    const resources = structuredClone(
+      entry.creatureSpellResources ?? { slots: {}, perDay: {} },
+    );
+
+    if (configuredSpell.usage.type === "perDay") {
+      const maximum = Math.max(1, Math.trunc(configuredSpell.usage.uses));
+      const current = resources.perDay[configuredSpell.spellIndex] ?? {
+        used: 0,
+        max: maximum,
+      };
+      resources.perDay[configuredSpell.spellIndex] = {
+        max: maximum,
+        used: Math.min(maximum, current.used + 1),
+      };
+    }
+
+    if (configuredSpell.usage.type === "slots" && castLevel > 0) {
+      const current = resources.slots[
+        castLevel as keyof typeof resources.slots
+      ];
+      if (current) {
+        resources.slots[castLevel as keyof typeof resources.slots] = {
+          ...current,
+          current: Math.max(0, current.current - 1),
+        };
+      }
+    }
+
+    const conditions = concentration
+      ? [
+          ...entry.conditions.filter(
+            (condition) =>
+              !(condition.tags ?? []).includes("dnd-manager:concentrating"),
+          ),
+          {
+            id: crypto.randomUUID(),
+            name: "Concentrando",
+            description: `Concentrando em ${spellName}.`,
+            source: spellName,
+            notes: `spell:${spellIndex}`,
+            tags: ["dnd-manager:concentrating"],
+            duration: { type: "manual" as const },
+          },
+        ]
+      : entry.conditions;
+
+    return {
+      ...entry,
+      creatureSpellResources: resources,
+      conditions,
+    };
+  });
+
+  next = synchronizeSharedCombatantState(next, entryId);
+  return next;
 }
 
 function findCreatureFeature(
