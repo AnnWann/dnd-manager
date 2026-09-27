@@ -54,6 +54,7 @@ export function getCreatureJsonTemplate(): string {
       size: "Médio",
       challengeRating: "5",
       unique: false,
+      initiativeTurns: 1,
       defaultSide: "enemy",
 
       initiativeBonus: 0,

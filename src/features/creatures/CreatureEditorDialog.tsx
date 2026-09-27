@@ -370,6 +370,17 @@ export function CreatureEditorDialog({
                 />
                 Criatura única — não numerar cópias automaticamente
               </label>
+
+              {draft.unique ? (
+                <NumberField
+                  label="Iniciativas por rodada"
+                  value={draft.initiativeTurns}
+                  min={1}
+                  onChange={(value) =>
+                    patch({ initiativeTurns: Math.max(1, Math.trunc(value ?? 1)) })
+                  }
+                />
+              ) : null}
             </div>
           </div>
         </section>

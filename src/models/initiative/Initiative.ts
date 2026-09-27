@@ -41,6 +41,8 @@ export type InitiativeCondition = {
 export type InitiativeEntry = {
   id: string
   sourceId?: string
+  /** Shared combat-state key for multiple initiative turns of the same creature. */
+  combatantId?: string
   sourceType: InitiativeSourceType
   /** Nome canônico usado pelo mestre e por entradas antigas. */
   name: string
@@ -154,6 +156,7 @@ export function normalizeInitiativeSession(
     .map((entry, index) => ({
       ...entry,
       initiative: finiteNumber(entry.initiative),
+      combatantId: entry.combatantId?.trim() || undefined,
       initiativeBonus: finiteNumber(entry.initiativeBonus),
       side: isInitiativeSide(entry.side) ? entry.side : "neutral",
       sourceType: isSourceType(entry.sourceType) ? entry.sourceType : "custom",
@@ -234,6 +237,48 @@ export function updateInitiativeEntry(
     entries: session.entries.map((entry) =>
       entry.id === entryId
         ? normalizeZeroHpState(updater(entry), entry)
+        : entry,
+    ),
+  })
+}
+
+
+export function sharedCombatantEntryIds(
+  session: InitiativeSession,
+  entryId: string,
+): string[] {
+  const entry = session.entries.find((candidate) => candidate.id === entryId)
+  if (!entry?.combatantId) return entry ? [entry.id] : []
+  return session.entries
+    .filter((candidate) => candidate.combatantId === entry.combatantId)
+    .map((candidate) => candidate.id)
+}
+
+export function synchronizeSharedCombatantState(
+  session: InitiativeSession,
+  sourceEntryId: string,
+): InitiativeSession {
+  const source = session.entries.find((entry) => entry.id === sourceEntryId)
+  if (!source?.combatantId) return session
+
+  const shared = {
+    currentHp: source.currentHp,
+    maxHp: source.maxHp,
+    temporaryHp: source.temporaryHp,
+    conditions: source.conditions,
+    hidden: source.hidden,
+    defeated: source.defeated,
+    downed: source.downed,
+    defeatReason: source.defeatReason,
+    armorClass: source.armorClass,
+    armorClassOverride: source.armorClassOverride,
+  }
+
+  return touchSession({
+    ...session,
+    entries: session.entries.map((entry) =>
+      entry.combatantId === source.combatantId
+        ? { ...entry, ...shared }
         : entry,
     ),
   })

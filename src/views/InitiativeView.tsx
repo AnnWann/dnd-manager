@@ -279,15 +279,19 @@ export function InitiativeView() {
     if (selectedCreature.unique && existingCopies > 0) return
 
     const quantity = selectedCreature.unique
-      ? 1
+      ? clamp(Math.trunc(selectedCreature.initiativeTurns), 1, 50)
       : clamp(Math.trunc(creatureQuantity), 1, 50)
     const sharedRoll = digitalDiceEnabled && sharedCreatureInitiative
       ? rollInitiative(selectedCreature.initiativeBonus)
+      : undefined
+    const combatantId = selectedCreature.unique
+      ? crypto.randomUUID()
       : undefined
 
     const entries = Array.from({ length: quantity }, (_, index) => ({
       sourceId,
       sourceType: creatureSourceType(selectedCreature),
+      combatantId,
       name: selectedCreature.unique
         ? selectedCreature.name
         : `${selectedCreature.name} ${existingCopies + index + 1}`,
@@ -618,6 +622,9 @@ export function InitiativeView() {
                   >
                     {creature.name}
                     {creature.basicName !== creature.name ? ` — ${creature.basicName}` : ""}
+                    {creature.unique && creature.initiativeTurns > 1
+                      ? ` — ${creature.initiativeTurns} iniciativas`
+                      : ""}
                     {disabled ? " — já adicionada" : ""}
                   </option>
                 )
@@ -627,7 +634,7 @@ export function InitiativeView() {
               type="number"
               min={1}
               max={50}
-              value={selectedCreature?.unique ? 1 : creatureQuantity}
+              value={selectedCreature?.unique ? selectedCreature.initiativeTurns : creatureQuantity}
               disabled={selectedCreature?.unique}
               onChange={(event) => setCreatureQuantity(Number(event.target.value))}
               title="Quantidade"
