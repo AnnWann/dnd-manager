@@ -36,6 +36,33 @@ export type CreatureFeature = {
   mechanics?: CreatureFeatureMechanics
 }
 
+export type CreatureSpellUsage =
+  | { type: "atWill" }
+  | { type: "perDay"; uses: number }
+  | { type: "slots" }
+
+export type CreatureSpellReference = {
+  spellIndex: string
+  usage: CreatureSpellUsage
+  /**
+   * Fixed cast level for innate/limited-use casting. Slot-based spells choose
+   * the slot level at cast time, so this field is ignored for slot casting.
+   */
+  castLevel?: number
+}
+
+export type CreatureSpellcasting = {
+  /** Ability used for automatic spell attack/DC calculation. */
+  ability: Attribute
+  /** Optional monster-stat-block override. Omit to derive from CR + ability. */
+  saveDc?: number
+  /** Optional monster-stat-block override. Omit to derive from CR + ability. */
+  attackBonus?: number
+  /** Shared spell slots by circle. Cantrips never consume slots. */
+  slots: Partial<Record<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9, number>>
+  spells: CreatureSpellReference[]
+}
+
 export type CreatureFeatureField =
   | "traits"
   | "actions"
@@ -73,6 +100,9 @@ export type CompendiumCreature = {
   conditionImmunities: string
   senses: string
   languages: string
+
+  /** Optional monster-style spellcasting block backed by compendium spells. */
+  spellcasting?: CreatureSpellcasting
 
   traits: CreatureFeature[]
   actions: CreatureFeature[]
@@ -156,6 +186,7 @@ export function createCompendiumCreature(
     conditionImmunities: patch.conditionImmunities ?? "",
     senses: patch.senses ?? "",
     languages: patch.languages ?? "",
+    spellcasting: normalizeCreatureSpellcasting(patch.spellcasting),
     traits: normalizeCreatureFeatures(patch.traits, "Traço"),
     actions: normalizeCreatureFeatures(patch.actions, "Ação"),
     bonusActions: normalizeCreatureFeatures(patch.bonusActions, "Ação bônus"),
@@ -228,6 +259,7 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
     conditionImmunities: stringValue(value.conditionImmunities),
     senses: stringValue(value.senses),
     languages: stringValue(value.languages),
+    spellcasting: normalizeCreatureSpellcasting(value.spellcasting),
     traits: normalizeCreatureFeatures(
       value.traits ?? featureGroups?.traits,
       "Traço",
@@ -416,6 +448,135 @@ function normalizeCreatureFeatureMechanics(value: unknown): CreatureFeatureMecha
     reach: optionalStringValue(record.reach),
     damage,
   }
+}
+
+function normalizeCreatureSpellcasting(
+  value: unknown,
+): CreatureSpellcasting | undefined {
+  const record = asRecord(value)
+  if (!record) return undefined
+
+  const ability = ["str", "dex", "con", "int", "wis", "cha"].includes(
+    String(record.ability),
+  )
+    ? (record.ability as Attribute)
+    : "cha"
+
+  const slotRecord = asRecord(record.slots)
+  const slots: CreatureSpellcasting["slots"] = {}
+  for (let level = 1; level <= 9; level += 1) {
+    const amount = Math.max(
+      0,
+      Math.trunc(finiteNumber(slotRecord?.[String(level)], 0)),
+    )
+    if (amount > 0) {
+      slots[level as keyof CreatureSpellcasting["slots"]] = amount
+    }
+  }
+
+  const spells = Array.isArray(record.spells)
+    ? record.spells.flatMap((entry) => {
+        const spell = asRecord(entry)
+        const spellIndex = stringValue(
+          spell?.spellIndex ?? spell?.index,
+        ).trim()
+        if (!spellIndex) return []
+
+        const usageRecord = asRecord(spell?.usage)
+        const rawUsageType = stringValue(
+          usageRecord?.type ?? spell?.usageType,
+        )
+        const usage: CreatureSpellUsage =
+          rawUsageType === "slots"
+            ? { type: "slots" }
+            : rawUsageType === "perDay"
+              ? {
+                  type: "perDay",
+                  uses: Math.max(
+                    1,
+                    Math.trunc(
+                      finiteNumber(
+                        usageRecord?.uses ?? spell?.usesPerDay,
+                        1,
+                      ),
+                    ),
+                  ),
+                }
+              : { type: "atWill" }
+
+        const castLevel = optionalFiniteNumber(
+          spell?.castLevel ?? spell?.level,
+        )
+
+        return [{
+          spellIndex,
+          usage,
+          castLevel:
+            usage.type !== "slots" && castLevel !== undefined
+              ? Math.max(0, Math.min(9, Math.trunc(castLevel)))
+              : undefined,
+        }]
+      })
+    : []
+
+  return {
+    ability,
+    saveDc: optionalFiniteNumber(record.saveDc ?? record.dc),
+    attackBonus: optionalFiniteNumber(
+      record.attackBonus ?? record.spellAttackBonus,
+    ),
+    slots,
+    spells,
+  }
+}
+
+export function getCreatureProficiencyBonusFromChallengeRating(
+  challengeRating: string,
+): number {
+  const normalized = challengeRating.trim()
+  let cr = Number(normalized)
+  if (!Number.isFinite(cr) && normalized.includes("/")) {
+    const [numerator, denominator] = normalized.split("/").map(Number)
+    if (
+      Number.isFinite(numerator) &&
+      Number.isFinite(denominator) &&
+      denominator !== 0
+    ) {
+      cr = numerator / denominator
+    }
+  }
+
+  if (!Number.isFinite(cr) || cr < 1) return 2
+  return Math.max(2, Math.min(9, 2 + Math.floor((cr - 1) / 4)))
+}
+
+export function getCreatureSpellAttackBonus(
+  creature: CompendiumCreature,
+): number | undefined {
+  const spellcasting = creature.spellcasting
+  if (!spellcasting) return undefined
+  if (spellcasting.attackBonus !== undefined) return spellcasting.attackBonus
+
+  const score = creature.abilityScores[spellcasting.ability]
+  return (
+    Math.floor((score - 10) / 2) +
+    getCreatureProficiencyBonusFromChallengeRating(creature.challengeRating)
+  )
+}
+
+export function getCreatureSpellSaveDc(
+  creature: CompendiumCreature,
+): number | undefined {
+  const spellcasting = creature.spellcasting
+  if (!spellcasting) return undefined
+  if (spellcasting.saveDc !== undefined) return spellcasting.saveDc
+
+  const score = creature.abilityScores[spellcasting.ability]
+  return (
+    8 +
+    Math.floor((score - 10) / 2) +
+    getCreatureProficiencyBonusFromChallengeRating(creature.challengeRating)
+  )
 }
 
 function normalizeAbilityScores(
