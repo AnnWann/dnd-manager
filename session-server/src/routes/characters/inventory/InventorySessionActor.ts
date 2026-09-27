@@ -117,12 +117,11 @@ export class SessionActor extends EquipmentSessionActor {
             type: "session.inventory.snapshot",
             state: authoritativeState,
           });
-        } else {
-          send(webSocket, {
-            type: "session.inventory.snapshot",
-            state: authoritativeState,
-          });
         }
+        // A repeated initialize against an already initialized, unchanged
+        // inventory is a no-op. Do not answer with another snapshot: a client
+        // feedback bug would otherwise turn initialize -> snapshot into an
+        // unbounded websocket loop.
       }
       return;
     }
