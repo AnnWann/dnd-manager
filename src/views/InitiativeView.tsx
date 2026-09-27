@@ -64,6 +64,7 @@ import {
   startInitiativeCombat,
   tradeConsecutiveAllies,
   updateInitiativeEntry,
+  type InitiativeCreatureSpellResources,
   type InitiativeEntry,
   type InitiativeSide,
 } from "../models/initiative/Initiative"
@@ -315,6 +316,7 @@ export function InitiativeView() {
       currentHp: selectedCreature.maxHp,
       maxHp: selectedCreature.maxHp,
       temporaryHp: 0,
+      creatureSpellResources: createCreatureSpellResources(selectedCreature),
     }))
 
     updateSession((current) => addInitiativeEntries(current, entries))
@@ -1073,6 +1075,44 @@ function resolveQuickSheet(
   }
 
   return quickSheetFromInitiativeEntry(entry)
+}
+
+function createCreatureSpellResources(
+  creature: CompendiumCreature,
+): InitiativeCreatureSpellResources | undefined {
+  const spellcasting = creature.spellcasting
+  if (!spellcasting) return undefined
+
+  const slots: InitiativeCreatureSpellResources["slots"] = {}
+  for (let level = 1; level <= 9; level += 1) {
+    const max = Math.max(
+      0,
+      Math.trunc(
+        spellcasting.slots[
+          level as keyof typeof spellcasting.slots
+        ] ?? 0,
+      ),
+    )
+    if (max > 0) {
+      slots[level as keyof InitiativeCreatureSpellResources["slots"]] = {
+        current: max,
+        max,
+      }
+    }
+  }
+
+  const perDay = Object.fromEntries(
+    spellcasting.spells.flatMap((spell) =>
+      spell.usage.type === "perDay"
+        ? [[spell.spellIndex, {
+            used: 0,
+            max: Math.max(1, Math.trunc(spell.usage.uses)),
+          }]]
+        : [],
+    ),
+  )
+
+  return { slots, perDay }
 }
 
 function creatureSourceType(
