@@ -338,6 +338,18 @@ function isCreatureRollRequest(value: unknown): value is SessionCreatureRollRequ
       return skill(value.source.skill);
     case "initiative":
       return true;
+    case "spell":
+      return nonEmpty(value.source.spellIndex)
+        && value.source.spellIndex.length <= 200
+        && typeof value.source.castLevel === "number"
+        && Number.isInteger(value.source.castLevel)
+        && value.source.castLevel >= 0
+        && value.source.castLevel <= 9
+        && (
+          value.source.intent === undefined
+          || value.source.intent === "resolve"
+          || value.source.intent === "announce"
+        );
     case "feature":
       return nonEmpty(value.source.featureId)
         && value.source.featureId.length <= 200
