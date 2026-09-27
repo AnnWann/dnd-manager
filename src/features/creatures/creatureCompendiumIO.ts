@@ -102,6 +102,7 @@ export function getCreatureJsonTemplate(): string {
       languages: "Comum, Infernal",
 
       spellcasting: {
+        casterLevel: 9,
         ability: "cha",
         saveDc: 15,
         attackBonus: 7,
