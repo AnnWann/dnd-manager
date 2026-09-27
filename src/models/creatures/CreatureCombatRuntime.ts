@@ -91,7 +91,7 @@ export function getCreatureEffectiveAbilityModifier(
   entry?: InitiativeEntry,
 ): number {
   return createCreatureCombatCharacter(creature, conditions, entry)
-    .getEffectiveAttributeModifier(attribute)
+    .getEffectiveAbilityCheckBonus(attribute)
 }
 
 export function getCreatureEffectiveSaveBonus(
@@ -121,8 +121,12 @@ export function getCreatureEffectiveSkillBonus(
     creature.abilityScores,
     parsed,
   )
-  return character.getEffectiveAttributeModifier(parsed.attribute)
-    + proficiencyAndExpertise
+  return character.getEffectiveSkillCheckBonus(
+    skill,
+    parsed.attribute,
+    character.getEffectiveAttributeModifier(parsed.attribute)
+      + proficiencyAndExpertise,
+  )
 }
 
 export function getCreatureEffectiveArmorClass(
