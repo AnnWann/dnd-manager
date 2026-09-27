@@ -11,9 +11,21 @@ export function formatBonusName(key: string): string {
     case "temporaryHp":
       return "HP Temp."
     case "passivePerception":
-      return "Percepção"
+      return "Percepção Passiva"
     case "attackBonus":
       return "Ataque geral"
+    case "generalTestBonus":
+      return "Testes gerais"
+    case "abilityCheckBonus":
+      return "Testes de habilidade"
+    case "abilityCheckAttributeBonus":
+      return "Testes de habilidade por atributo"
+    case "skillCheckBonus":
+      return "Teste de perícia"
+    case "savingThrowBonus":
+      return "Resistência geral"
+    case "savingThrowAttributeBonus":
+      return "Resistência por atributo"
     case "weaponAttackBonus":
       return "Ataque com arma"
     case "spellAttackBonus":
