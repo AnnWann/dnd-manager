@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   type Dispatch,
   type ReactNode,
   type SetStateAction,
