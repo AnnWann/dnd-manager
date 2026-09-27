@@ -11,6 +11,7 @@ import {
 } from "../items/equipment/Weapon"
 import type { Attribute } from "../sheet/Attribute"
 import type { Sheet } from "../sheet/Sheet"
+import type { Skill } from "../sheet/Skills"
 import type { CharacterTemplate } from "./CharacterTemplate"
 import {
   getAsiAttributeIncrease,
@@ -157,6 +158,60 @@ export function getScopedCharacterBonuses(
       .filter(isConditionActive)
       .flatMap(collect),
   ]
+}
+
+export function getSkillScopedCharacterBonuses(
+  character: CharacterTemplate,
+  skill: Skill,
+): Bonus[] {
+  const collect = (
+    collection: { bonuses?: { skillCheckBonus?: Array<{ skill?: Skill; bonus: Bonus }> } },
+  ) =>
+    (collection.bonuses?.skillCheckBonus ?? [])
+      .filter((entry) => !entry.skill || entry.skill === skill)
+      .map((entry) => resolveBonus(character, entry.bonus))
+
+  return [
+    ...getEquippedItems(character).flatMap(collect),
+    ...getActiveAbilities(character).flatMap(collect),
+    ...getCharacterConditions(character)
+      .filter(isConditionActive)
+      .flatMap(collect),
+  ]
+}
+
+export function getEffectiveAbilityCheckBonus(
+  character: CharacterTemplate,
+  attribute: Attribute,
+  baseValue: number = getEffectiveAttributeModifier(character, attribute),
+): number {
+  return applyBonuses(baseValue, [
+    ...getCharacterBonuses(character, "generalTestBonus"),
+    ...getCharacterBonuses(character, "abilityCheckBonus"),
+    ...getScopedCharacterBonuses(
+      character,
+      "abilityCheckAttributeBonus",
+      attribute,
+    ),
+  ])
+}
+
+export function getEffectiveSkillCheckBonus(
+  character: CharacterTemplate,
+  skill: Skill,
+  attribute: Attribute,
+  baseValue: number,
+): number {
+  return applyBonuses(baseValue, [
+    ...getCharacterBonuses(character, "generalTestBonus"),
+    ...getCharacterBonuses(character, "abilityCheckBonus"),
+    ...getScopedCharacterBonuses(
+      character,
+      "abilityCheckAttributeBonus",
+      attribute,
+    ),
+    ...getSkillScopedCharacterBonuses(character, skill),
+  ])
 }
 
 export function getEffectiveAttackBonus(
@@ -600,6 +655,7 @@ export function getSavingThrowBonus(
     : attributeModifier
 
   return applyBonuses(baseValue, [
+    ...getCharacterBonuses(character, "generalTestBonus"),
     ...getCharacterBonuses(character, "savingThrowBonus"),
     ...getScopedCharacterBonuses(
       character,
