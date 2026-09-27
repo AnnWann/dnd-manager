@@ -2,6 +2,7 @@ import { FileImage, Shield, Swords } from "lucide-react"
 import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react"
 
 import { Button } from "../../components/ui/Button"
+import { Select } from "../../components/ui/Select"
 import { useMagicContext } from "../../contexts/magicContext"
 import { damageAffinityLabel, damageTypeLabel, type DamageAffinity } from "../../models/combat/Damage"
 import { requestCreatureRoll, rollModeFromEvent, rollModifierHint } from "../../lib/diceRoller"
@@ -18,6 +19,7 @@ import {
 import type { Attribute } from "../../models/sheet/Attribute"
 import type { Skill } from "../../models/sheet/Skills"
 import type {
+  InitiativeCreatureSpellResources,
   InitiativeEntry,
   InitiativeSide,
 } from "../../models/initiative/Initiative"
@@ -70,6 +72,7 @@ export type CombatQuickSheetData = {
   spellcasting?: CreatureSpellcasting
   spellSaveDc?: number
   spellAttackBonus?: number
+  spellResources?: InitiativeCreatureSpellResources
   sections: QuickSheetSection[]
 }
 
@@ -307,6 +310,8 @@ function QuickSheetSummary({ data, compact = false }: { data: CombatQuickSheetDa
           spellcasting={data.spellcasting}
           saveDc={data.spellSaveDc}
           attackBonus={data.spellAttackBonus}
+          resources={data.spellResources}
+          rollContext={data.rollContext}
         />
       ) : null}
 
@@ -336,13 +341,18 @@ function CreatureSpellcastingSection({
   spellcasting,
   saveDc,
   attackBonus,
+  resources,
+  rollContext,
 }: {
   spellcasting: CreatureSpellcasting
   saveDc?: number
   attackBonus?: number
+  resources?: InitiativeCreatureSpellResources
+  rollContext?: CreatureQuickSheetRollContext
 }) {
   const { getSpellByIndex, ensureOfficialSpells } = useMagicContext()
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  const [castLevels, setCastLevels] = useState<Record<string, number>>({})
 
   useEffect(() => {
     if (!spellcasting.spells.length) return
@@ -380,7 +390,11 @@ function CreatureSpellcastingSection({
                 key={level}
                 className="rounded-full border border-border bg-bg px-2 py-1"
               >
-                {level}º: {amount} espaço{Number(amount) === 1 ? "" : "s"}
+                {level}º: {resources?.slots?.[
+                  Number(level) as keyof InitiativeCreatureSpellResources["slots"]
+                ]?.current ?? amount}/{resources?.slots?.[
+                  Number(level) as keyof InitiativeCreatureSpellResources["slots"]
+                ]?.max ?? amount}
               </span>
             ))}
           </div>
@@ -405,6 +419,51 @@ function CreatureSpellcastingSection({
               entry.castLevel > spell.slotLevel
                 ? ` · conjura no ${entry.castLevel}º`
                 : ""
+            const dailyPool =
+              entry.usage.type === "perDay"
+                ? resources?.perDay?.[entry.spellIndex]
+                : undefined
+            const remainingDaily =
+              entry.usage.type === "perDay"
+                ? Math.max(
+                    0,
+                    (dailyPool?.max ?? entry.usage.uses) -
+                      (dailyPool?.used ?? 0),
+                  )
+                : undefined
+            const availableSlotLevels =
+              entry.usage.type === "slots" && spell
+                ? Object.entries(spellcasting.slots)
+                    .flatMap(([levelText, maximum]) => {
+                      const level = Number(levelText)
+                      const current =
+                        resources?.slots?.[
+                          level as keyof InitiativeCreatureSpellResources["slots"]
+                        ]?.current ?? maximum ?? 0
+                      return level >= spell.slotLevel && current > 0
+                        ? [level]
+                        : []
+                    })
+                    .sort((left, right) => left - right)
+                : []
+            const selectedCastLevel =
+              entry.usage.type === "slots"
+                ? (
+                    availableSlotLevels.includes(castLevels[entry.spellIndex])
+                      ? castLevels[entry.spellIndex]
+                      : availableSlotLevels[0] ?? spell?.slotLevel ?? 0
+                  )
+                : entry.castLevel ?? spell?.slotLevel ?? 0
+            const canCast =
+              Boolean(rollContext && spell) &&
+              (
+                entry.usage.type === "atWill" ||
+                (entry.usage.type === "perDay" && (remainingDaily ?? 0) > 0) ||
+                (entry.usage.type === "slots" && (
+                  (spell?.slotLevel ?? 0) === 0 ||
+                  availableSlotLevels.length > 0
+                ))
+              )
 
             return (
               <article
@@ -424,6 +483,9 @@ function CreatureSpellcastingSection({
                         : "Magia do compêndio"}
                       {" · "}
                       {usage}
+                      {entry.usage.type === "perDay" && remainingDaily !== undefined
+                        ? ` · ${remainingDaily} restante${remainingDaily === 1 ? "" : "s"}`
+                        : ""}
                       {castLevel}
                       {spell?.concentration ? " · concentração" : ""}
                     </div>
@@ -446,6 +508,56 @@ function CreatureSpellcastingSection({
                     {isExpanded ? "Ocultar" : "Mostrar"}
                   </button>
                 </div>
+
+                {rollContext && spell ? (
+                  <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3">
+                    {entry.usage.type === "slots" && spell.slotLevel > 0 ? (
+                      <label className="grid min-w-32 gap-1 text-[10px] font-medium text-textMuted">
+                        Espaço
+                        <Select
+                          value={String(selectedCastLevel)}
+                          disabled={availableSlotLevels.length === 0}
+                          onChange={(event) =>
+                            setCastLevels((current) => ({
+                              ...current,
+                              [entry.spellIndex]: Number(event.target.value),
+                            }))
+                          }
+                        >
+                          {availableSlotLevels.length ? (
+                            availableSlotLevels.map((level) => (
+                              <option key={level} value={level}>
+                                {level}º círculo
+                              </option>
+                            ))
+                          ) : (
+                            <option value={spell.slotLevel}>Sem espaços</option>
+                          )}
+                        </Select>
+                      </label>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={!canCast}
+                      className="h-10 rounded-lg border border-accentBorder bg-accentBg px-3 text-xs font-semibold text-accent transition-colors hover:bg-bg-subtle disabled:cursor-not-allowed disabled:opacity-50"
+                      title={canCast ? rollModifierHint() : "Sem usos disponíveis."}
+                      onClick={(event) =>
+                        requestCreatureRoll({
+                          ...rollContext,
+                          source: {
+                            type: "spell",
+                            spellIndex: entry.spellIndex,
+                            castLevel: selectedCastLevel,
+                            intent: "resolve",
+                          },
+                          mode: rollModeFromEvent(event.nativeEvent),
+                        })
+                      }
+                    >
+                      Conjurar
+                    </button>
+                  </div>
+                ) : null}
 
                 {isExpanded ? (
                   spell ? (
@@ -799,6 +911,7 @@ export function quickSheetFromCompendiumCreature(
     spellcasting: creature.spellcasting,
     spellSaveDc: getCreatureSpellSaveDc(creature),
     spellAttackBonus: getCreatureSpellAttackBonus(creature),
+    spellResources: entry?.creatureSpellResources,
     sections: [
       { title: "Traços e habilidades", entries: enrich(creature.traits) },
       { title: "Ações", entries: enrich(creature.actions) },
