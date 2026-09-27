@@ -559,6 +559,7 @@ function applyInitiativeOperation(
       if (existing.combatantId && [
         "armorClass", "currentHp", "maxHp", "temporaryHp", "conditions",
         "hidden", "defeated", "downed", "defeatReason",
+        "creatureSpellResources",
       ].some((key) => key in patch)) {
         session = synchronizeSharedCombatantState(session, operation.entryId);
       }
@@ -961,6 +962,11 @@ function normalizeEntryInput(value: Record<string, unknown>): NewInitiativeEntry
     deathSaves: sourceType === "character"
       ? normalizeDeathSaves(value.deathSaves)
       : undefined,
+    creatureSpellResources: value.creatureSpellResources &&
+      typeof value.creatureSpellResources === "object" &&
+      !Array.isArray(value.creatureSpellResources)
+        ? structuredClone(value.creatureSpellResources) as InitiativeEntry["creatureSpellResources"]
+        : undefined,
     conditions: Array.isArray(value.conditions) ? structuredClone(value.conditions) as InitiativeEntry["conditions"] : [],
   }];
 }
@@ -988,6 +994,16 @@ function normalizeEntryPatch(value: Record<string, unknown>): Partial<Initiative
       : undefined;
   }
   if ("deathSaves" in value) patch.deathSaves = normalizeDeathSaves(value.deathSaves);
+  if (
+    "creatureSpellResources" in value &&
+    value.creatureSpellResources &&
+    typeof value.creatureSpellResources === "object" &&
+    !Array.isArray(value.creatureSpellResources)
+  ) {
+    patch.creatureSpellResources = structuredClone(
+      value.creatureSpellResources,
+    ) as InitiativeEntry["creatureSpellResources"];
+  }
   if (Array.isArray(value.conditions)) patch.conditions = structuredClone(value.conditions) as InitiativeEntry["conditions"];
   return patch;
 }
