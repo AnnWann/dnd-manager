@@ -2,6 +2,7 @@ import { Check } from "lucide-react"
 import { useState } from "react"
 
 import { Input } from "../../../components/ui/Input"
+import { Select } from "../../../components/ui/Select"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { cn } from "../../../lib/cn"
 import { formatSigned } from "../../../lib/formatSigned"
@@ -439,8 +440,8 @@ export function MinimalCharacterSheet({
                 Armas equipadas
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
-                <select
-                  className="h-8 max-w-44 rounded-md border border-border bg-bg px-2 text-[11px] text-textH"
+                <Select
+                  className="h-8 max-w-44 text-[11px]"
                   value={selectedPocketWeapon?.item.id ?? ""}
                   disabled={pocketWeapons.length === 0}
                   aria-label="Arma do bolso para empunhar"
@@ -455,7 +456,7 @@ export function MinimalCharacterSheet({
                       </option>
                     ))
                   )}
-                </select>
+                </Select>
                 <button
                   type="button"
                   className="h-8 rounded-md border border-border bg-bg-subtle px-2 text-[11px] font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg disabled:cursor-not-allowed disabled:opacity-50"
@@ -466,8 +467,8 @@ export function MinimalCharacterSheet({
                   Empunhar
                 </button>
 
-                <select
-                  className="h-8 max-w-44 rounded-md border border-border bg-bg px-2 text-[11px] text-textH"
+                <Select
+                  className="h-8 max-w-44 text-[11px]"
                   value={selectedEquippedWeapon?.id ?? ""}
                   disabled={equippedWeapons.length === 0}
                   aria-label="Arma equipada para guardar"
@@ -482,7 +483,7 @@ export function MinimalCharacterSheet({
                       </option>
                     ))
                   )}
-                </select>
+                </Select>
                 <button
                   type="button"
                   className="h-8 rounded-md border border-border bg-bg-subtle px-2 text-[11px] font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg disabled:cursor-not-allowed disabled:opacity-50"
