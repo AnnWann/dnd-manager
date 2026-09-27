@@ -110,6 +110,15 @@ export function InitiativeView() {
   const selectedCharacter = visibleCharacters.find(
     (character) => character.get("id") === selectedCharacterId,
   )
+  const playerCharacters = visibleCharacters.filter(
+    (character) => character.get("sheet").type === "pc",
+  )
+  const playersMissingFromInitiative = playerCharacters.filter(
+    (character) =>
+      !session.entries.some(
+        (entry) => entry.sourceId === character.get("id"),
+      ),
+  )
   const selectedCreature = creatures.find(
     (creature) => creature.id === selectedCreatureId,
   )
@@ -222,6 +231,49 @@ export function InitiativeView() {
     if (!entry) return
     setRenameTargetId(entryId)
     setRenameValue(entry.customName ?? "")
+  }
+
+  function addAllPlayers() {
+    updateSession((current) => {
+      const existingSourceIds = new Set(
+        current.entries
+          .map((entry) => entry.sourceId)
+          .filter((sourceId): sourceId is string => Boolean(sourceId)),
+      )
+
+      const entries = playerCharacters
+        .filter((character) => !existingSourceIds.has(character.get("id")))
+        .map((character) => {
+          const sourceId = character.get("id")
+          const initiativeBonus = character.getEffectiveInitiative()
+          const name = character.get("name")
+          const sheet = character.get("sheet")
+
+          return {
+            sourceId,
+            sourceType: "character" as const,
+            name,
+            realName: name,
+            basicName: name,
+            revealRealName: true,
+            imageUrl: character.get("profile").imageUrl,
+            initiative: digitalDiceEnabled
+              ? rollInitiative(initiativeBonus)
+              : 0,
+            initiativeBonus,
+            dexterity: character.getEffectiveAttribute("dex"),
+            side: "ally" as const,
+            armorClass: getEffectiveArmorClassWithShield(character),
+            currentHp: sheet.HP.current,
+            maxHp: character.getEffectiveMaxHp(),
+            temporaryHp: character.getEffectiveTemporaryHp(),
+          }
+        })
+
+      return entries.length
+        ? addInitiativeEntries(current, entries)
+        : current
+    })
   }
 
   function addSelectedCharacter() {
@@ -546,9 +598,25 @@ export function InitiativeView() {
 
       <section className="grid gap-4 xl:grid-cols-2">
         <div className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
-          <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-textH">
-            <UserPlus className="h-4 w-4 text-accent" />
-            Adicionar ficha existente
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-textH">
+              <UserPlus className="h-4 w-4 text-accent" />
+              Adicionar ficha existente
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={addAllPlayers}
+              disabled={playersMissingFromInitiative.length === 0}
+              title={
+                playersMissingFromInitiative.length === 0
+                  ? "Todos os jogadores já estão na iniciativa."
+                  : `Adicionar ${playersMissingFromInitiative.length} jogador${playersMissingFromInitiative.length === 1 ? "" : "es"} como aliado${playersMissingFromInitiative.length === 1 ? "" : "s"}.`
+              }
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              Adicionar todos os jogadores
+            </Button>
           </div>
           <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_9rem_auto]">
             <SharedSelect
