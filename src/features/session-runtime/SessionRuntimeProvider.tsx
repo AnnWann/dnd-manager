@@ -322,6 +322,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
       if (
         !digitalDiceEnabledRef.current
         && request.source.type !== "feature"
+        && request.source.type !== "spell"
       ) return
       socket.send({ type: "session.creature.roll", request })
     }
