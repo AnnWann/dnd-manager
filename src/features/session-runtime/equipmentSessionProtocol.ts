@@ -27,6 +27,8 @@ export type SessionEquipmentOperation =
       type: "character.equipment.pocket.wield"
       characterId: string
       index: number
+      replaceWeaponId?: string
+      hands?: 1 | 2
     }
   | {
       type: "character.equipment.pocket.use"
