@@ -12,6 +12,7 @@ import type { Player } from "../player/Player"
 import type { Attribute } from "../sheet/Attribute"
 import type { HP } from "../sheet/HP"
 import type { Sheet } from "../sheet/Sheet"
+import type { Skill } from "../sheet/Skills"
 import type { MagicCircleLevel } from "../magic/spells/spellDefinitions"
 import { 
   addAbility, 
@@ -103,6 +104,8 @@ import {
   getEffectiveAbilitySaveDc,
   getEffectiveArmorClass,
   getEffectiveAttackBonus,
+  getEffectiveAbilityCheckBonus,
+  getEffectiveSkillCheckBonus,
   getEffectiveAttribute,
   getEffectiveAttributeModifier,
   getEffectiveInitiative,
@@ -469,6 +472,8 @@ export class CharacterTemplate {
   getEffectiveAttributeModifier(attribute: Attribute): number {return getEffectiveAttributeModifier(this, attribute)}
   getEffectiveStat<K extends keyof Sheet["stats"]>(stat: K,): Sheet["stats"][K] {return getEffectiveStat(this, stat)}
   getEffectiveAttackBonus(baseValue: number): number {return getEffectiveAttackBonus(this, baseValue)}
+  getEffectiveAbilityCheckBonus(attribute: Attribute, baseValue?: number): number {return getEffectiveAbilityCheckBonus(this, attribute, baseValue)}
+  getEffectiveSkillCheckBonus(skill: Skill, attribute: Attribute, baseValue: number): number {return getEffectiveSkillCheckBonus(this, skill, attribute, baseValue)}
   getEffectiveSpellAttackBonus(attribute: Attribute, baseValue: number): number {return getEffectiveSpellAttackBonus(this, attribute, baseValue)}
   getEffectiveSpellDamageBonus(attribute: Attribute, baseValue: number): number {return getEffectiveSpellDamageBonus(this, attribute, baseValue)}
   getEffectiveSaveDc(baseValue: number): number {return getEffectiveSaveDc(this, baseValue)}
