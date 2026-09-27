@@ -7,7 +7,7 @@ import { cn } from "../../../lib/cn"
 import { formatSigned } from "../../../lib/formatSigned"
 import { clampInt } from "../../../lib/numberFormat"
 import { requestActionRoll, requestD20Roll, requestDamageRoll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
-import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
   formatUnarmedDamage,
   getUnarmedAttackProfile,
@@ -45,6 +45,8 @@ import type { Skill } from "../../../models/sheet/Skills"
 import { SelectSkillModule } from "./skills/selectCharacterSkills"
 import { MinimalCharacterActions } from "./minimalCharacterActions"
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
+import { wieldPocketWeaponWithRules } from "../../../models/characters/characterEquipmentInteractions"
 
 type Props = {
   character: CharacterTemplate
@@ -92,10 +94,14 @@ export function MinimalCharacterSheet({
     dispatchStatOperation,
     dispatchAttributeOperation,
     dispatchSavingThrowOperation,
+    moveEquippedItem,
   } = useCharacterWorkspace()
+  const sessionRuntime = useOptionalSessionRuntime()
   const [skillQuery, setSkillQuery] = useState("")
   const [handDialog, setHandDialog] =
     useState<HandItemActionsDialogState | null>(null)
+  const [selectedPocketWeaponId, setSelectedPocketWeaponId] = useState("")
+  const [selectedEquippedWeaponId, setSelectedEquippedWeaponId] = useState("")
   const sheet = character.get("sheet")
   const characterId = character.get("id")
   const proficiency = character.getProficiencyBonus()
@@ -105,6 +111,61 @@ export function MinimalCharacterSheet({
         normalizeSearchText(skill.label).includes(normalizedSkillQuery),
       )
     : []
+
+  let automaticAttributeCharacter = character
+  const automaticSnapshot = sessionRuntime?.abilitiesByCharacterId[characterId]
+  if (automaticSnapshot?.initialized) {
+    try {
+      const snapshotCharacter = CharacterTemplate.fromJSON(
+        automaticSnapshot.character,
+      )
+      automaticAttributeCharacter = character.withPatch({
+        sheet: {
+          ...sheet,
+          attributes: {
+            ...snapshotCharacter.get("sheet").attributes,
+          },
+        },
+      })
+    } catch {
+      automaticAttributeCharacter = character
+    }
+  }
+
+  const pocketWeapons = character.get("equipment").pockets.flatMap(
+    (item, index) =>
+      item.kind === "equipment" && item.equipSlot === "weapon"
+        ? [{ item, index }]
+        : [],
+  )
+  const equippedWeapons = character.get("equipment").weapons
+  const selectedPocketWeapon =
+    pocketWeapons.find(({ item }) => item.id === selectedPocketWeaponId)
+    ?? pocketWeapons[0]
+  const selectedEquippedWeapon =
+    equippedWeapons.find((weapon) => weapon.id === selectedEquippedWeaponId)
+    ?? equippedWeapons[0]
+
+  function wieldSelectedPocketWeapon() {
+    if (!selectedPocketWeapon) return
+    updateCharacter(characterId, (current) => {
+      const index = current.get("equipment").pockets.findIndex(
+        (item) => item.id === selectedPocketWeapon.item.id,
+      )
+      return index >= 0
+        ? wieldPocketWeaponWithRules(current, index)
+        : current
+    })
+  }
+
+  function stowSelectedWeapon() {
+    if (!selectedEquippedWeapon) return
+    moveEquippedItem(
+      characterId,
+      { type: "weapon", itemId: selectedEquippedWeapon.id },
+      "pocket",
+    )
+  }
 
   function updateDerivedStat(
     statKey: CalculatedStatKey,
@@ -262,9 +323,10 @@ export function MinimalCharacterSheet({
       <CompactSection title="Atributos">
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
           {ATTRIBUTE_KEYS.map((attribute) => {
-            const baseScore = sheet.attributes[attribute]
             const effectiveScore = character.getEffectiveAttribute(attribute)
-            const adjustment = effectiveScore - baseScore
+            const automaticScore =
+              automaticAttributeCharacter.getEffectiveAttribute(attribute)
+            const adjustment = effectiveScore - automaticScore
             const hasAdjustment = Math.abs(adjustment) >= 0.000001
 
             return (
@@ -276,8 +338,8 @@ export function MinimalCharacterSheet({
                 )}
                 title={
                   hasAdjustment
-                    ? `Valor efetivo: ${effectiveScore}. Base: ${baseScore}; ajuste total: ${formatSigned(adjustment)}`
-                    : `Valor base: ${baseScore}. Sem ajustes ativos.`
+                    ? `Valor manual: ${effectiveScore}. Automático: ${automaticScore}; ajuste: ${formatSigned(adjustment)}`
+                    : `Valor automático: ${automaticScore}`
                 }
               >
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">{attributeShort(attribute)}</span>
@@ -297,8 +359,8 @@ export function MinimalCharacterSheet({
                   )}
                 >
                   {hasAdjustment
-                    ? `Modificado · Base ${baseScore} · ${formatSigned(adjustment)}`
-                    : "Base"}
+                    ? `Manual · Auto ${automaticScore} · ${formatSigned(adjustment)}`
+                    : "Automático"}
                 </span>
                 <button
                   type="button"
@@ -372,7 +434,70 @@ export function MinimalCharacterSheet({
           <SpellcastingHandsWarning character={character} />
 
           <div>
-            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-textMuted">Armas equipadas</div>
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+                Armas equipadas
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <select
+                  className="h-8 max-w-44 rounded-md border border-border bg-bg px-2 text-[11px] text-textH"
+                  value={selectedPocketWeapon?.item.id ?? ""}
+                  disabled={pocketWeapons.length === 0}
+                  aria-label="Arma do bolso para empunhar"
+                  onChange={(event) => setSelectedPocketWeaponId(event.target.value)}
+                >
+                  {pocketWeapons.length === 0 ? (
+                    <option value="">Nenhuma arma no bolso</option>
+                  ) : (
+                    pocketWeapons.map(({ item }) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name || "Arma"}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <button
+                  type="button"
+                  className="h-8 rounded-md border border-border bg-bg-subtle px-2 text-[11px] font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!selectedPocketWeapon}
+                  title="Empunhar a arma selecionada dos bolsos"
+                  onClick={wieldSelectedPocketWeapon}
+                >
+                  Empunhar
+                </button>
+
+                <select
+                  className="h-8 max-w-44 rounded-md border border-border bg-bg px-2 text-[11px] text-textH"
+                  value={selectedEquippedWeapon?.id ?? ""}
+                  disabled={equippedWeapons.length === 0}
+                  aria-label="Arma equipada para guardar"
+                  onChange={(event) => setSelectedEquippedWeaponId(event.target.value)}
+                >
+                  {equippedWeapons.length === 0 ? (
+                    <option value="">Nenhuma arma equipada</option>
+                  ) : (
+                    equippedWeapons.map((weapon) => (
+                      <option key={weapon.id} value={weapon.id}>
+                        {weapon.name || "Arma"}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <button
+                  type="button"
+                  className="h-8 rounded-md border border-border bg-bg-subtle px-2 text-[11px] font-semibold text-textH transition-colors hover:border-accentBorder hover:bg-accentBg disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!selectedEquippedWeapon || character.get("equipment").pockets.length >= 8}
+                  title={
+                    character.get("equipment").pockets.length >= 8
+                      ? "Os oito espaços de bolso estão ocupados"
+                      : "Guardar a arma selecionada no bolso"
+                  }
+                  onClick={stowSelectedWeapon}
+                >
+                  Guardar
+                </button>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {character.get("equipment").weapons.length ? (
                 character.get("equipment").weapons.map((weapon, index) => {
