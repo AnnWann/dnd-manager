@@ -101,6 +101,32 @@ export function getCreatureJsonTemplate(): string {
       senses: "visão no escuro 18 m, Percepção passiva 12",
       languages: "Comum, Infernal",
 
+      spellcasting: {
+        ability: "cha",
+        saveDc: 15,
+        attackBonus: 7,
+        slots: {
+          "1": 4,
+          "2": 3,
+          "3": 3,
+        },
+        spells: [
+          {
+            spellIndex: "fire-bolt",
+            usage: { type: "atWill" },
+          },
+          {
+            spellIndex: "misty-step",
+            usage: { type: "perDay", uses: 3 },
+            castLevel: 2,
+          },
+          {
+            spellIndex: "fireball",
+            usage: { type: "slots" },
+          },
+        ],
+      },
+
       traits: [
         {
           name: "Nome do traço",
@@ -286,6 +312,7 @@ export async function downloadCreaturePackZip(
       "Traços, ações, ações bônus, reações e ações lendárias são listas de objetos com name, description e mechanics opcional.",
       "Ataques estruturados usam mechanics.kind=attack, attackType, rangeType, attackBonus, attribute, magical, reach e damage[].",
       "Afinidades estruturadas usam damageAffinities[] e drops usam guaranteed[] + rollGroups[].",
+      "Conjuração de criatura usa spellcasting: ability, saveDc/attackBonus opcionais, slots e spells[] com uso atWill, perDay ou slots.",
       "IDs e timestamps podem ser omitidos em JSONs manuais; o aplicativo os gera automaticamente.",
       "Cada JSON usa imagePath para referenciar a imagem correspondente dentro do pack.",
       "Ao importar, o aplicativo descompacta a imagem, envia-a novamente e grava a nova URL na criatura.",
