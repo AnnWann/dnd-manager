@@ -42,6 +42,7 @@ export function PartyInventorySettingsProvider({
   setAppState,
 }: Props) {
   const runtime = useOptionalSessionRuntime()
+  const inventorySettingsMigrationSent = useRef(false)
   const normalizedCarryCapacity = Math.max(0, carryCapacity)
   const normalizedAdditionalSupplyConsumption = Math.max(
     0,
@@ -56,18 +57,22 @@ export function PartyInventorySettingsProvider({
       runtime.status !== "connected" ||
       !runtime.inventoryState?.initialized
     ) {
+      inventorySettingsMigrationSent.current = false
       return
     }
 
     const missingCarryCapacity = runtime.inventoryState.carryCapacity === undefined
     const missingAdditionalSupplyConsumption =
       runtime.inventoryState.additionalSupplyConsumption === undefined
-    if (!missingCarryCapacity && !missingAdditionalSupplyConsumption) return
 
-    // Older session inventory snapshots did not persist these settings. Reuse
-    // the idempotent MASTER bootstrap to fill only missing fields, without
-    // fabricating normal user-change log entries during migration.
-    runtime.initializeInventory(
+    if (!missingCarryCapacity && !missingAdditionalSupplyConsumption) {
+      inventorySettingsMigrationSent.current = true
+      return
+    }
+    if (inventorySettingsMigrationSent.current) return
+
+    inventorySettingsMigrationSent.current = true
+    const sent = runtime.initializeInventory(
       runtime.inventoryState.partyInventory,
       runtime.inventoryState.groundInventory,
       {
@@ -75,11 +80,19 @@ export function PartyInventorySettingsProvider({
         additionalSupplyConsumption: normalizedAdditionalSupplyConsumption,
       },
     )
+    if (!sent) inventorySettingsMigrationSent.current = false
   }, [
     canEditCarryCapacity,
     normalizedAdditionalSupplyConsumption,
     normalizedCarryCapacity,
-    runtime,
+    runtime?.initializeInventory,
+    runtime?.inventoryState?.additionalSupplyConsumption,
+    runtime?.inventoryState?.carryCapacity,
+    runtime?.inventoryState?.initialized,
+    runtime?.inventoryState?.groundInventory,
+    runtime?.inventoryState?.partyInventory,
+    runtime?.role,
+    runtime?.status,
   ])
 
   function setCarryCapacity(value: number) {
