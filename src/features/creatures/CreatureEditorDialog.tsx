@@ -14,6 +14,7 @@ import { Modal } from "../../components/ui/Modal"
 import { Textarea } from "../../components/ui/Textarea"
 import { uploadImage } from "../../lib/uploadImage"
 import { DamageAffinityEditor } from "../combat/DamageAffinityEditor"
+import { CreatureSpellcastingEditor } from "./CreatureSpellcastingEditor"
 import { getCreatureJsonTemplate } from "./creatureCompendiumIO"
 import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../../models/combat/Damage"
 import {
@@ -479,6 +480,11 @@ export function CreatureEditorDialog({
             />
           </div>
         </section>
+
+        <CreatureSpellcastingEditor
+          creature={draft}
+          onChange={(spellcasting) => patch({ spellcasting })}
+        />
 
         <section className="rounded-xl border border-border bg-bg-subtle p-4">
           <SectionTitle
