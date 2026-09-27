@@ -313,7 +313,7 @@ export async function downloadCreaturePackZip(
       "Traços, ações, ações bônus, reações e ações lendárias são listas de objetos com name, description e mechanics opcional.",
       "Ataques estruturados usam mechanics.kind=attack, attackType, rangeType, attackBonus, attribute, magical, reach e damage[].",
       "Afinidades estruturadas usam damageAffinities[] e drops usam guaranteed[] + rollGroups[].",
-      "Conjuração de criatura usa spellcasting: ability, saveDc/attackBonus opcionais, slots e spells[] com uso atWill, perDay ou slots.",
+      "Conjuração de criatura usa spellcasting: casterLevel, ability, saveDc/attackBonus opcionais, slots e spells[] com uso atWill, perDay ou slots.",
       "IDs e timestamps podem ser omitidos em JSONs manuais; o aplicativo os gera automaticamente.",
       "Cada JSON usa imagePath para referenciar a imagem correspondente dentro do pack.",
       "Ao importar, o aplicativo descompacta a imagem, envia-a novamente e grava a nova URL na criatura.",
