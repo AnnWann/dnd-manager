@@ -72,6 +72,7 @@ type OptionalViteImportMeta = ImportMeta & {
 type SessionInventoryBootstrapSettings = {
   carryCapacity?: number
   additionalSupplyConsumption?: number
+  partyInventoryAccessible?: boolean
 }
 
 export type SessionRuntimeContextValue = {
@@ -371,6 +372,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
       groundInventory,
       carryCapacity: settings.carryCapacity,
       additionalSupplyConsumption: settings.additionalSupplyConsumption,
+      partyInventoryAccessible: settings.partyInventoryAccessible,
     }) ?? false, [])
   const initializeMissions = useCallback((missions: Mission[]) =>
     socketRef.current?.send({ type: "session.missions.initialize", missions }) ?? false, [])
