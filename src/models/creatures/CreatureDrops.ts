@@ -137,7 +137,7 @@ function normalizeDropItems(value: unknown): Itemmable[] {
         desc: stringValue(record.desc),
         notes: stringValue(record.notes),
         quantity: Math.max(1, Math.trunc(finiteNumber(record.quantity, 1))),
-        ...(dropQuantityFormula ? { dropQuantityFormula } : {}),
+        dropQuantityFormula,
         weight: Math.max(0, finiteNumber(record.weight, 0)),
         pocketable: Boolean(record.pocketable),
         kind: stringValue(record.kind, "common"),
