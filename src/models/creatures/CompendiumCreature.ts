@@ -103,6 +103,12 @@ export type CompendiumCreature = {
   senses: string
   languages: string
 
+  /**
+   * Session user allowed to control this creature like a familiar, mount or
+   * companion. Undefined keeps the full stat block MASTER-only.
+   */
+  ownerUserId?: string
+
   /** Optional monster-style spellcasting block backed by compendium spells. */
   spellcasting?: CreatureSpellcasting
 
@@ -188,6 +194,7 @@ export function createCompendiumCreature(
     conditionImmunities: patch.conditionImmunities ?? "",
     senses: patch.senses ?? "",
     languages: patch.languages ?? "",
+    ownerUserId: optionalString(patch.ownerUserId),
     spellcasting: normalizeCreatureSpellcasting(patch.spellcasting),
     traits: normalizeCreatureFeatures(patch.traits, "Traço"),
     actions: normalizeCreatureFeatures(patch.actions, "Ação"),
@@ -261,6 +268,7 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
     conditionImmunities: stringValue(value.conditionImmunities),
     senses: stringValue(value.senses),
     languages: stringValue(value.languages),
+    ownerUserId: optionalString(value.ownerUserId),
     spellcasting: normalizeCreatureSpellcasting(value.spellcasting),
     traits: normalizeCreatureFeatures(
       value.traits ?? featureGroups?.traits,
