@@ -79,7 +79,7 @@ export function getCharacterGrantedSpells(
         castingMode,
         source: {
           type: "equipment",
-          name: equipment.name || "Equipamento",
+          name: equipment.name || "Item",
           sourceId: equipment.id,
           attribute: grant.attribute ?? "cha",
         },
@@ -94,7 +94,7 @@ export function getCharacterGrantedSpells(
     for (const ability of equipment.abilities ?? []) {
       addAbilitySpellGrants(results, ability, {
         type: "equipment",
-        name: `${equipment.name || "Equipamento"} — ${ability.name || "Habilidade"}`,
+        name: `${equipment.name || "Item"} — ${ability.name || "Habilidade"}`,
         sourceId: `${equipment.id}:${ability.id}`,
       }, { type: "equipment", itemId: equipment.id, abilityId: ability.id })
     }
