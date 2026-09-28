@@ -30,6 +30,8 @@ type Props = {
   attunedItemIds?: string[]
   onTransferItem?: (item: Itemmable) => void
   transferLabel?: string
+  /** Hide the currency wallet when this editor represents a specialized subset. */
+  showCurrencyWallet?: boolean
 }
 
 type InventoryFilter =
@@ -105,6 +107,7 @@ export function InventoryEditor({
   attunedItemIds = [],
   onTransferItem,
   transferLabel = "Transferir",
+  showCurrencyWallet = true,
 }: Props) {
   const [filter, setFilter] = useState<InventoryFilter>("all")
   const [creatingItem, setCreatingItem] = useState(false)
@@ -154,19 +157,21 @@ export function InventoryEditor({
       </CardHeader>
 
       <CardContent>
-        <CurrencyWallet
-          items={currencyItems}
-          mutationsDisabled={mutationsDisabled}
-          onAddItem={onAddItem}
-          onUpdateItem={onUpdateItem}
-          onRemoveItem={onRemoveItem}
-          onTransferItem={onTransferItem}
-          onMoveAllCurrenciesToBagOfHolding={
-            onMoveAllCurrenciesToBagOfHolding
-          }
-          transferLabel={transferLabel}
-          onViewItem={openDetails}
-        />
+        {showCurrencyWallet ? (
+          <CurrencyWallet
+            items={currencyItems}
+            mutationsDisabled={mutationsDisabled}
+            onAddItem={onAddItem}
+            onUpdateItem={onUpdateItem}
+            onRemoveItem={onRemoveItem}
+            onTransferItem={onTransferItem}
+            onMoveAllCurrenciesToBagOfHolding={
+              onMoveAllCurrenciesToBagOfHolding
+            }
+            transferLabel={transferLabel}
+            onViewItem={openDetails}
+          />
+        ) : null}
 
         <div className="mb-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {INVENTORY_FILTERS.map((option) => (
