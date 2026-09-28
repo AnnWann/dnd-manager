@@ -30,6 +30,7 @@ import {
 
 type CreatureEditorDialogProps = {
   creature: CompendiumCreature
+  ownerOptions?: Array<{ id: string; name: string }>
   onClose: () => void
   onSave: (creature: CompendiumCreature) => void
 }
@@ -55,6 +56,7 @@ const FEATURE_GROUPS: Array<{
 
 export function CreatureEditorDialog({
   creature,
+  ownerOptions = [],
   onClose,
   onSave,
 }: CreatureEditorDialogProps) {
@@ -362,6 +364,30 @@ export function CreatureEditorDialog({
                   <option value="neutral">Neutro</option>
                 </SharedSelect>
               </Field>
+
+              <Field label="Controlador">
+                <SharedSelect
+                  className={selectClassName}
+                  value={draft.ownerUserId ?? ""}
+                  onChange={(event) =>
+                    patch({
+                      ownerUserId: event.target.value || undefined,
+                    })
+                  }
+                >
+                  <option value="">Somente mestre</option>
+                  {ownerOptions.map((owner) => (
+                    <option key={owner.id} value={owner.id}>
+                      {owner.name}
+                    </option>
+                  ))}
+                </SharedSelect>
+              </Field>
+              <p className="text-xs leading-5 text-textMuted sm:col-span-2">
+                Um controlador recebe acesso à ficha completa da criatura durante
+                a sessão e pode realizar suas rolagens. Use para familiares,
+                montarias, companheiros e invocações persistentes.
+              </p>
 
               <label className="flex items-center gap-3 rounded-lg border border-border bg-bg p-3 text-sm text-textH sm:col-span-2">
                 <input
