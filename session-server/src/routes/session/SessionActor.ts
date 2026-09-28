@@ -892,6 +892,33 @@ export class SessionActor extends DurableObject<Env> {
           conditions: structuredClone(currentConditions),
         },
       };
+    } else if (operation.resourceFree === true) {
+      if (connection.role !== "MASTER") {
+        this.sendError(
+          webSocket,
+          "MASTER_REQUIRED",
+          "Only the MASTER can grant a resource-free long rest.",
+        );
+        return;
+      }
+
+      next = takeLongRest(current, restDefinitions);
+      canonicalOperation = {
+        ...operation,
+        recovery: "full",
+        selection: [],
+        resourceFree: true,
+      };
+      reverseOperation = {
+        type: "session.rest.restore",
+        characterId: operation.characterId,
+        snapshot: {
+          ability: structuredClone(storedAbility),
+          hp: structuredClone(currentHp),
+          conditions: structuredClone(currentConditions),
+        },
+      };
+      affectedScopes = [characterScope(operation.characterId)];
     } else {
       const supplied = operation.selection;
       if (!isLongRestSelection(supplied)) {
