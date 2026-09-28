@@ -176,6 +176,14 @@ export async function PATCH(
     const nextDiceRollingEnabled = domains.settings
       ? data.diceRollingEnabled !== false
       : currentSnapshot.data.diceRollingEnabled !== false
+    const nextCreatureFolders = domains.creatures
+      ? readCreatureFolders([
+          ...(data.creatureFolders ?? []),
+          ...creatures.flatMap((creature) =>
+            creature.folder?.trim() ? [creature.folder] : [],
+          ),
+        ])
+      : currentSnapshot.data.creatureFolders ?? []
 
     await prisma.$transaction(async (tx) => {
       const campaign = await tx.campaign.findUnique({
@@ -369,6 +377,7 @@ export async function PATCH(
           data: {
             ...nextManagedDomains,
             diceRollingEnabled: nextDiceRollingEnabled,
+            creatureFolders: nextCreatureFolders,
           },
           addedById: session.user.id,
         },
@@ -376,6 +385,7 @@ export async function PATCH(
           data: {
             ...nextManagedDomains,
             diceRollingEnabled: nextDiceRollingEnabled,
+            creatureFolders: nextCreatureFolders,
           },
           addedById: session.user.id,
         },
@@ -457,6 +467,7 @@ function projectCreationSnapshot(
       spells: access.magic ? snapshot.data.spells : [],
       itemCompendium: access.items ? snapshot.data.itemCompendium : [],
       creatureCompendium: access.creatures ? snapshot.data.creatureCompendium : [],
+      creatureFolders: access.creatures ? snapshot.data.creatureFolders ?? [] : [],
       // Character configuration needs system definitions to install/configure
       // systems without granting permission to modify the global definitions.
       customSystems:
@@ -556,6 +567,7 @@ async function buildCreationSnapshot(campaignId: string): Promise<CreationSnapsh
     customSystems: markerData?.customSystems === true,
   }
   const diceRollingEnabled = markerData?.diceRollingEnabled !== false
+  const creatureFolders = readCreatureFolders(markerData?.creatureFolders)
 
   const characters = characterLinks.map((link) => {
     updatedAt = laterDate(updatedAt, link.character.updatedAt)
@@ -606,6 +618,7 @@ async function buildCreationSnapshot(campaignId: string): Promise<CreationSnapsh
     spells,
     itemCompendium,
     creatureCompendium,
+    creatureFolders,
     customSystems,
   }
 
@@ -683,6 +696,21 @@ function readRevision(value: unknown): number {
   return Number(value)
 }
 
+function readCreatureFolders(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const byKey = new Map<string, string>()
+  for (const entry of value) {
+    if (typeof entry !== "string") continue
+    const normalized = entry.trim().replace(/\s+/g, " ")
+    if (!normalized) continue
+    const key = normalized.toLocaleLowerCase("pt-BR")
+    if (!byKey.has(key)) byKey.set(key, normalized)
+  }
+  return [...byKey.values()].sort((left, right) =>
+    left.localeCompare(right, "pt-BR"),
+  )
+}
+
 function readCreationState(value: unknown): CreationState {
   const state = asRecord(value)
   if (
@@ -692,6 +720,13 @@ function readCreationState(value: unknown): CreationState {
     !Array.isArray(state.spells) ||
     !Array.isArray(state.itemCompendium) ||
     !Array.isArray(state.creatureCompendium) ||
+    (
+      state.creatureFolders !== undefined &&
+      (
+        !Array.isArray(state.creatureFolders) ||
+        state.creatureFolders.some((entry) => typeof entry !== "string")
+      )
+    ) ||
     !Array.isArray(state.customSystems) ||
     (
       state.diceRollingEnabled !== undefined
@@ -707,6 +742,7 @@ function readCreationState(value: unknown): CreationState {
   return {
     ...(state as unknown as CreationState),
     diceRollingEnabled: state.diceRollingEnabled !== false,
+    creatureFolders: readCreatureFolders(state.creatureFolders),
   }
 }
 
