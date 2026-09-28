@@ -21,6 +21,7 @@ import { useCharacterContext } from "../../contexts/characterContext"
 import { useSyncContext } from "../../contexts/syncContext"
 import { CharacterSettingsModal } from "../../features/characters/settings/CharacterSettingsModal"
 import { CampaignProgressionSettingsEditor } from "../../features/characters/progression/CampaignProgressionSettingsEditor"
+import { LongRestSupplySettingsEditor } from "../../features/characters/rest/LongRestSupplySettingsEditor"
 import { useOptionalCreationEditor } from "../../features/creation/CreationEditorProvider"
 import {
   isSuppressedConfiguredCustomSystemState,
@@ -278,6 +279,18 @@ export function SessionCreationSettingsView() {
             editor.updateDraft((draft) => ({
               ...draft,
               progression,
+            }))
+          }
+        />
+      ) : null}
+
+      {editor?.draft ? (
+        <LongRestSupplySettingsEditor
+          value={editor.draft.longRestSupplies}
+          onChange={(longRestSupplies) =>
+            editor.updateDraft((draft) => ({
+              ...draft,
+              longRestSupplies,
             }))
           }
         />
