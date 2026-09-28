@@ -30,6 +30,8 @@ type SharedInventoryState = {
   additionalSupplyConsumption?: number;
   supplyConsumers?: Array<{ characterId: string; name: string }>;
   supplyPerLongRest?: number;
+  foodPerLongRest?: number;
+  drinkPerLongRest?: number;
 };
 
 type CapabilityAwareConnection = SessionConnection & {
