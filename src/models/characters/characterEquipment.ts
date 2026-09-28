@@ -564,7 +564,10 @@ export function getEquippedItems(character: CharacterTemplate): Equipment[] {
     ...(equipment.necklaces ?? []),
     ...equipment.rings,
     ...equipment.weapons,
-    ...(equipment.heldItems ?? []).filter((item) => item.kind === "focus"),
+    // Anything actively held can carry equipment-style bonuses, abilities or
+    // granted spells. The item's kind does not determine whether those
+    // properties are active; being in the character's hands does.
+    ...(equipment.heldItems ?? []),
     ...equipment.pockets.filter((item) => item.kind === "equipment"),
   ].filter(Boolean) as Equipment[]
 }
@@ -687,7 +690,10 @@ function updateEquipmentById(
   const inventory = character.get("inventory")
 
   const updateItem = <T extends Itemmable | undefined>(item: T): T => {
-    if (!item || item.id !== itemId || item.kind !== "equipment") return item
+    if (!item || item.id !== itemId) return item
+    // Resource-bearing items are not required to use kind="equipment".
+    // Focuses, shields and ordinary held magic items may all own abilities or
+    // spell-charge state.
     return updater(item as Equipment) as T
   }
 
