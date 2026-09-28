@@ -20,10 +20,13 @@ import { consumeItemQuantity } from "../models/items/itemConsumption"
 import { getItemStackWeightKg } from "../models/items/itemWeight"
 import {
   calculatePartySupplies,
-  getRequiredSupplyForRace,
-  STANDARD_PORTIONS_PER_BARREL,
-  STANDARD_PORTIONS_PER_RATION,
+  getEffectiveRaceSupplyConsumption,
+  getLongRestSupplyRequirements,
 } from "../models/supplies/partySupply"
+import {
+  formatSupplyPhysicalAmount,
+  normalizeLongRestSupplySettings,
+} from "../shared/rest/longRestSupplySettings"
 
 export function PartyInventoryView() {
   const runtime = useOptionalSessionRuntime()
@@ -55,6 +58,9 @@ export function PartyInventoryView() {
   // server therefore publishes a privacy-safe authoritative consumer list and
   // aggregate consumption for sessions. Local mode still derives the same
   // values from all character sheets available to the workspace.
+  const supplySettings = normalizeLongRestSupplySettings(
+    runtime?.runtimeConfigSnapshot?.config.longRestSupplies,
+  )
   const supplyCalculation = useMemo(
     () => calculatePartySupplies(partyInventory, []),
     [partyInventory],
@@ -63,16 +69,20 @@ export function PartyInventoryView() {
     () => new Map(
       transferCharacters.map((character) => {
         const race = character.get("sheet").race
+        const requirements = getLongRestSupplyRequirements(
+          race,
+          supplySettings,
+        )
         return [
           character.get("id"),
           {
             race: race.race,
-            supplyPerLongRest: getRequiredSupplyForRace(race),
+            requirements,
           },
         ] as const
       }),
     ),
-    [transferCharacters],
+    [supplySettings, transferCharacters],
   )
   const localSupplyConsumers = useMemo(
     () => transferCharacters.map((character) => ({
@@ -81,25 +91,66 @@ export function PartyInventoryView() {
     })),
     [transferCharacters],
   )
-  const localSupplyPerLongRest = useMemo(
+  const localRawConsumption = useMemo(
     () => transferCharacters.reduce(
-      (total, character) =>
-        total + getRequiredSupplyForRace(character.get("sheet").race),
-      0,
+      (total, character) => {
+        const consumption = getEffectiveRaceSupplyConsumption(
+          character.get("sheet").race,
+        )
+        return {
+          food: total.food + consumption.food,
+          drink: total.drink + consumption.drink,
+        }
+      },
+      { food: 0, drink: 0 },
     ),
     [transferCharacters],
   )
-  const supplyConsumers = runtime?.inventoryState?.supplyConsumers ?? localSupplyConsumers
-  const groupSupplyPerLongRest = runtime?.inventoryState?.supplyPerLongRest ?? localSupplyPerLongRest
-  const supplyItemCount = partyInventory.filter((item) => item.kind === "supply").length
-  const effectiveSupplyPerLongRest = groupSupplyPerLongRest + additionalSupplyConsumption
-  const effectiveSupplyLongRests = effectiveSupplyPerLongRest > 0
-    ? supplyCalculation.supplyPortions / effectiveSupplyPerLongRest
-    : Number.POSITIVE_INFINITY
-  const effectiveSupportedLongRests = Number.isFinite(effectiveSupplyLongRests)
+  const supplyConsumers =
+    runtime?.inventoryState?.supplyConsumers ?? localSupplyConsumers
+  const rawFoodPerLongRest =
+    runtime?.inventoryState?.foodPerLongRest
+    ?? runtime?.inventoryState?.supplyPerLongRest
+    ?? localRawConsumption.food
+  const rawDrinkPerLongRest =
+    runtime?.inventoryState?.drinkPerLongRest
+    ?? localRawConsumption.drink
+  const supplyItemCount = partyInventory.filter(
+    (item) => item.kind === "supply",
+  ).length
+  const standardConsumerCount = additionalSupplyConsumption
+  const foodPerLongRest =
+    supplySettings.enabled && supplySettings.food.enabled
+      ? (
+          rawFoodPerLongRest
+          + standardConsumerCount
+        ) * supplySettings.food.portionsPerStandardRest
+      : 0
+  const drinkPerLongRest =
+    supplySettings.enabled && supplySettings.drink.enabled
+      ? (
+          rawDrinkPerLongRest
+          + standardConsumerCount
+        ) * supplySettings.drink.portionsPerStandardRest
+      : 0
+  const foodLongRests =
+    foodPerLongRest > 0
+      ? supplyCalculation.foodPortions / foodPerLongRest
+      : Number.POSITIVE_INFINITY
+  const drinkLongRests =
+    drinkPerLongRest > 0
+      ? supplyCalculation.drinkPortions / drinkPerLongRest
+      : Number.POSITIVE_INFINITY
+  const effectiveSupplyLongRests = !supplySettings.enabled
+    ? Number.POSITIVE_INFINITY
+    : Math.min(foodLongRests, drinkLongRests)
+  const effectiveSupportedLongRests = Number.isFinite(
+    effectiveSupplyLongRests,
+  )
     ? Math.max(0, Math.floor(effectiveSupplyLongRests))
     : Number.POSITIVE_INFINITY
-  const hasSupplyConsumers = supplyConsumers.length > 0 || additionalSupplyConsumption > 0
+  const hasSupplyConsumers =
+    supplyConsumers.length > 0 || additionalSupplyConsumption > 0
 
   const totalWeight = partyInventory.reduce((total, item) => total + getItemStackWeightKg(item), 0)
   const hasCapacity = carryCapacity > 0
@@ -212,8 +263,19 @@ export function PartyInventoryView() {
             <SummaryCard label="Capacidade" value={hasCapacity ? formatNumber(carryCapacity) : "Não definida"} />
             <SummaryCard
               label="Descansos completos"
-              value={formatSupportedLongRests(effectiveSupportedLongRests, hasSupplyConsumers)}
-              danger={hasSupplyConsumers && effectiveSupportedLongRests < 1}
+              value={
+                supplySettings.enabled
+                  ? formatSupportedLongRests(
+                      effectiveSupportedLongRests,
+                      hasSupplyConsumers,
+                    )
+                  : "Não exigidos"
+              }
+              danger={
+                supplySettings.enabled
+                && hasSupplyConsumers
+                && effectiveSupportedLongRests < 1
+              }
             />
           </div>
         </CardContent>
@@ -287,107 +349,193 @@ export function PartyInventoryView() {
             <span className="break-words">Autonomia de suprimentos</span>
           </div>
           <p className="mt-1 break-words text-xs leading-5 text-textMuted">
-            Comida e bebida contam igualmente como suprimento. Uma ração vale {" "}
-            {STANDARD_PORTIONS_PER_RATION} porção e um barril vale {" "}
-            {STANDARD_PORTIONS_PER_BARREL}. Cada item é contado apenas uma vez,
-            mesmo quando sua categoria é mista.
+            {supplySettings.enabled
+              ? "Comida e bebida são verificadas separadamente conforme as regras de descanso longo definidas pelo mestre."
+              : "Esta campanha não exige suprimentos para concluir descansos longos."}
           </p>
         </CardHeader>
 
         <CardContent className="grid gap-4">
-          {canEditAdditionalSupplyConsumption ? (
+          {canEditAdditionalSupplyConsumption && supplySettings.enabled ? (
             <div className="rounded-xl border border-border bg-bg-subtle p-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold text-textH">Consumo adicional</div>
+                  <div className="text-xs font-semibold text-textH">
+                    Consumidores adicionais
+                  </div>
                   <p className="mt-1 max-w-2xl text-[11px] leading-4 text-textMuted">
-                    Acrescente o consumo de NPCs, acompanhantes, tripulação ou outras criaturas que viajam com o grupo sem possuir uma ficha própria.
+                    Cada unidade equivale a um humanoide padrão adicional e
+                    recebe os mesmos requisitos de comida e bebida configurados
+                    para a campanha.
                   </p>
                 </div>
                 <label className="grid min-w-40 gap-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Porções por descanso</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+                    Consumidores padrão
+                  </span>
                   <Input
                     type="number"
                     min={0}
                     step="any"
                     value={additionalSupplyConsumption}
-                    onChange={(event) => setAuthoritativeAdditionalSupplyConsumption(Number(event.target.value) || 0)}
+                    onChange={(event) =>
+                      setAuthoritativeAdditionalSupplyConsumption(
+                        Number(event.target.value) || 0,
+                      )
+                    }
                   />
                 </label>
               </div>
             </div>
-          ) : additionalSupplyConsumption > 0 ? (
-            <div className="rounded-xl border border-border bg-bg-subtle px-3 py-2 text-xs text-textMuted">
-              O mestre adicionou {formatNumber(additionalSupplyConsumption)} porções de consumo extra por descanso.
-            </div>
           ) : null}
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <SupplyMetric label="Suprimento total" value={formatNumber(supplyCalculation.supplyPortions)} detail={`${supplyItemCount} tipos registrados`} />
-            <SupplyMetric
-              label="Consumo do grupo"
-              value={formatNumber(effectiveSupplyPerLongRest)}
-              detail={additionalSupplyConsumption > 0
-                ? `${formatNumber(groupSupplyPerLongRest)} do grupo + ${formatNumber(additionalSupplyConsumption)} adicional`
-                : "porções por rodada de descansos"}
-            />
-            <SupplyMetric label="Descansos equivalentes" value={formatLongRestEstimate(effectiveSupplyLongRests, hasSupplyConsumers)} detail="antes do arredondamento" />
-            <SupplyMetric label="Comida / bebida" value={`${formatNumber(supplyCalculation.foodPortions)} / ${formatNumber(supplyCalculation.drinkPortions)}`} detail="apenas composição informativa" />
-          </div>
+          {supplySettings.enabled ? (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {supplySettings.food.enabled ? (
+                  <SupplyMetric
+                    label={`${supplySettings.food.label} disponível`}
+                    value={formatSupplyPhysicalAmount(
+                      supplyCalculation.foodPortions,
+                      supplySettings.food,
+                    )}
+                    detail={`${formatNumber(supplyCalculation.foodPortions)} porções no estoque`}
+                  />
+                ) : null}
+                {supplySettings.drink.enabled ? (
+                  <SupplyMetric
+                    label={`${supplySettings.drink.label} disponível`}
+                    value={formatSupplyPhysicalAmount(
+                      supplyCalculation.drinkPortions,
+                      supplySettings.drink,
+                    )}
+                    detail={`${formatNumber(supplyCalculation.drinkPortions)} porções no estoque`}
+                  />
+                ) : null}
+                {supplySettings.food.enabled ? (
+                  <SupplyMetric
+                    label={`${supplySettings.food.label} por rodada de descanso`}
+                    value={formatSupplyPhysicalAmount(
+                      foodPerLongRest,
+                      supplySettings.food,
+                    )}
+                    detail={`${formatNumber(foodPerLongRest)} porções necessárias`}
+                  />
+                ) : null}
+                {supplySettings.drink.enabled ? (
+                  <SupplyMetric
+                    label={`${supplySettings.drink.label} por rodada de descanso`}
+                    value={formatSupplyPhysicalAmount(
+                      drinkPerLongRest,
+                      supplySettings.drink,
+                    )}
+                    detail={`${formatNumber(drinkPerLongRest)} porções necessárias`}
+                  />
+                ) : null}
+              </div>
 
-          <div className="rounded-xl border border-accentBorder bg-accentBg p-4">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">Descansos longos completos sustentados pelo estoque</div>
-            <div className="mt-1 text-2xl font-bold text-textH">{formatSupportedLongRests(effectiveSupportedLongRests, hasSupplyConsumers)}</div>
-            <p className="mt-1 text-xs leading-5 text-textMuted">
-              Cada personagem precisa apenas atingir seu requisito total de suprimento. A escolha pode misturar comida e bebida livremente.
-              Descansos abaixo do requisito continuam possíveis, mas recuperam apenas metade dos recursos e aumentam a exaustão.
-            </p>
-          </div>
+              <div className="rounded-xl border border-accentBorder bg-accentBg p-4">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+                  Descansos longos completos sustentados pelo estoque
+                </div>
+                <div className="mt-1 text-2xl font-bold text-textH">
+                  {formatSupportedLongRests(
+                    effectiveSupportedLongRests,
+                    hasSupplyConsumers,
+                  )}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-textMuted">
+                  O estoque precisa cobrir todos os recursos habilitados.{" "}
+                  {supplySettings.shortageMode === "partial"
+                    ? "Se faltar comida ou bebida, o descanso ainda pode ser concluído parcialmente."
+                    : "Se faltar comida ou bebida, o descanso longo é bloqueado."}
+                </p>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-xl border border-accentBorder bg-accentBg p-4 text-sm text-textH">
+              Descansos longos não consomem suprimentos nesta campanha.
+            </div>
+          )}
 
           <div className="grid gap-2">
             <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-textH">
               <UserRound className="h-4 w-4 shrink-0 text-accent" />
-              Consumidores considerados ({supplyConsumers.length}{additionalSupplyConsumption > 0 ? " + adicionais" : ""})
+              Consumidores considerados ({supplyConsumers.length}
+              {additionalSupplyConsumption > 0 ? " + adicionais" : ""})
             </div>
 
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {supplyConsumers.map((consumer) => {
-                const details = visibleSupplyConsumerDetails.get(consumer.characterId)
-                const canViewDetails = canViewCharacterDetails(consumer.characterId) && Boolean(details)
+                const details = visibleSupplyConsumerDetails.get(
+                  consumer.characterId,
+                )
+                const canViewDetails =
+                  canViewCharacterDetails(consumer.characterId)
+                  && Boolean(details)
                 return (
-                  <div key={consumer.characterId} className="min-w-0 rounded-xl border border-border bg-bg-subtle p-3">
-                    <div className="truncate text-sm font-semibold text-textH">{consumer.name}</div>
+                  <div
+                    key={consumer.characterId}
+                    className="min-w-0 rounded-xl border border-border bg-bg-subtle p-3"
+                  >
+                    <div className="truncate text-sm font-semibold text-textH">
+                      {consumer.name}
+                    </div>
                     {canViewDetails && details ? (
                       <>
-                        <div className="mt-1 text-[11px] text-textMuted">{formatRaceName(details.race)}</div>
-                        <div className="mt-2 text-xs text-text">Suprimento por descanso: {formatNumber(details.supplyPerLongRest)}</div>
+                        <div className="mt-1 text-[11px] text-textMuted">
+                          {formatRaceName(details.race)}
+                        </div>
+                        {supplySettings.enabled ? (
+                          <div className="mt-2 grid gap-1 text-xs text-text">
+                            {supplySettings.food.enabled ? (
+                              <span>
+                                {supplySettings.food.label}:{" "}
+                                {formatSupplyPhysicalAmount(
+                                  details.requirements.foodPortions,
+                                  supplySettings.food,
+                                )}
+                              </span>
+                            ) : null}
+                            {supplySettings.drink.enabled ? (
+                              <span>
+                                {supplySettings.drink.label}:{" "}
+                                {formatSupplyPhysicalAmount(
+                                  details.requirements.drinkPortions,
+                                  supplySettings.drink,
+                                )}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </>
                     ) : (
                       <>
-                        <div className="mt-1 text-[11px] font-medium text-textMuted">Personagem privado</div>
-                        <div className="mt-2 text-xs text-textMuted">Raça, ficha e consumo individual ocultos.</div>
+                        <div className="mt-1 text-[11px] font-medium text-textMuted">
+                          Personagem privado
+                        </div>
+                        <div className="mt-2 text-xs text-textMuted">
+                          Raça, ficha e consumo individual ocultos.
+                        </div>
                       </>
                     )}
                   </div>
                 )
               })}
-
-              {additionalSupplyConsumption > 0 ? (
-                <div className="min-w-0 rounded-xl border border-accentBorder bg-accentBg p-3">
-                  <div className="text-sm font-semibold text-textH">NPCs e acompanhantes</div>
-                  <div className="mt-1 text-[11px] text-textMuted">Consumo definido manualmente pelo mestre</div>
-                  <div className="mt-2 text-xs text-text">Suprimento por descanso: {formatNumber(additionalSupplyConsumption)}</div>
-                </div>
-              ) : null}
             </div>
 
             {!hasSupplyConsumers ? (
-              <p className="text-xs leading-5 text-textMuted">Nenhum personagem da sessão ou consumo adicional está disponível para o cálculo.</p>
+              <p className="text-xs leading-5 text-textMuted">
+                Nenhum personagem da sessão ou consumidor adicional está
+                disponível para o cálculo.
+              </p>
             ) : null}
           </div>
 
           <p className="text-[11px] leading-4 text-textMuted">
-            Personagens privados aparecem pelo nome para permitir organização e transferências, mas seus detalhes continuam visíveis apenas ao dono e ao mestre.
+            {supplyItemCount} tipos de suprimento registrados. Itens marcados
+            como “Comida e bebida” contribuem para os dois requisitos ao mesmo
+            tempo.
           </p>
         </CardContent>
       </Card>
