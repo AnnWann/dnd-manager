@@ -68,6 +68,7 @@ import { AppRouter } from "../Router"
 
 type SessionCompatibleAppState = AppStateV1 & {
   partyAdditionalSupplyConsumption?: number
+  partyInventoryAccessible?: boolean
   missions?: unknown[]
 }
 
@@ -257,6 +258,9 @@ export function CampaignLayout() {
           const partyAdditionalSupplyConsumption = stateBelongsToThisSession
             ? previousCompatible.partyAdditionalSupplyConsumption ?? 0
             : legacyBootstrap?.partyAdditionalSupplyConsumption ?? 0
+          const partyInventoryAccessible = stateBelongsToThisSession
+            ? previousCompatible.partyInventoryAccessible !== false
+            : true
           const missions = stateBelongsToThisSession
             ? previousCompatible.missions ?? []
             : legacyBootstrap?.missions ?? []
@@ -277,6 +281,7 @@ export function CampaignLayout() {
             JSON.stringify(previous.groundInventory ?? []) === JSON.stringify(groundInventory) &&
             (previous.partyCarryCapacity ?? 0) === partyCarryCapacity &&
             (previousCompatible.partyAdditionalSupplyConsumption ?? 0) === partyAdditionalSupplyConsumption &&
+            (previousCompatible.partyInventoryAccessible !== false) === partyInventoryAccessible &&
             JSON.stringify(previousCompatible.missions ?? []) === JSON.stringify(missions)
 
           if (charactersUnchanged && spellsUnchanged && sharedStateUnchanged) return previous
@@ -290,6 +295,7 @@ export function CampaignLayout() {
             groundInventory,
             partyCarryCapacity,
             partyAdditionalSupplyConsumption,
+            partyInventoryAccessible,
             missions,
           } as SessionCompatibleAppState
         })
@@ -542,6 +548,9 @@ export function CampaignLayout() {
           carryCapacity={appState.partyCarryCapacity ?? 0}
           additionalSupplyConsumption={
             (appState as SessionCompatibleAppState).partyAdditionalSupplyConsumption ?? 0
+          }
+          inventoryAccessible={
+            (appState as SessionCompatibleAppState).partyInventoryAccessible !== false
           }
           canEditCarryCapacity={effectiveUserRole === "master"}
           setAppState={setAppState}
