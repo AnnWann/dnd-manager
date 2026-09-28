@@ -33,6 +33,9 @@ import {
 import {
   normalizeCampaignProgressionSettings,
 } from "../../../src/shared/progression/campaignProgression.js"
+import {
+  normalizeLongRestSupplySettings,
+} from "../../../src/shared/rest/longRestSupplySettings.js"
 import type {
   CreationCharacterConfiguration,
   CreationCharacterCustomSystemConfiguration,
@@ -182,6 +185,9 @@ export async function PATCH(
     const nextProgression = domains.settings
       ? normalizeCampaignProgressionSettings(data.progression)
       : normalizeCampaignProgressionSettings(currentSnapshot.data.progression)
+    const nextLongRestSupplies = domains.settings
+      ? normalizeLongRestSupplySettings(data.longRestSupplies)
+      : normalizeLongRestSupplySettings(currentSnapshot.data.longRestSupplies)
     const nextCreatureFolders = domains.creatures
       ? readCreatureFolders([
           ...(data.creatureFolders ?? []),
@@ -384,6 +390,7 @@ export async function PATCH(
             ...nextManagedDomains,
             diceRollingEnabled: nextDiceRollingEnabled,
             progression: nextProgression,
+            longRestSupplies: nextLongRestSupplies,
             creatureFolders: nextCreatureFolders,
           },
           addedById: session.user.id,
@@ -393,6 +400,7 @@ export async function PATCH(
             ...nextManagedDomains,
             diceRollingEnabled: nextDiceRollingEnabled,
             progression: nextProgression,
+            longRestSupplies: nextLongRestSupplies,
             creatureFolders: nextCreatureFolders,
           },
           addedById: session.user.id,
@@ -472,6 +480,7 @@ function projectCreationSnapshot(
       version: 1,
       diceRollingEnabled: snapshot.data.diceRollingEnabled,
       progression: access.settings ? snapshot.data.progression : undefined,
+      longRestSupplies: access.settings ? snapshot.data.longRestSupplies : undefined,
       characters: access.settings ? snapshot.data.characters : [],
       spells: access.magic ? snapshot.data.spells : [],
       itemCompendium: access.items ? snapshot.data.itemCompendium : [],
@@ -577,6 +586,7 @@ async function buildCreationSnapshot(campaignId: string): Promise<CreationSnapsh
   }
   const diceRollingEnabled = markerData?.diceRollingEnabled !== false
   const progression = normalizeCampaignProgressionSettings(markerData?.progression)
+  const longRestSupplies = normalizeLongRestSupplySettings(markerData?.longRestSupplies)
   const creatureFolders = readCreatureFolders(markerData?.creatureFolders)
 
   const characters = characterLinks.map((link) => {
@@ -625,6 +635,7 @@ async function buildCreationSnapshot(campaignId: string): Promise<CreationSnapsh
     version: 1,
     diceRollingEnabled,
     progression,
+    longRestSupplies,
     characters,
     spells,
     itemCompendium,
@@ -754,6 +765,7 @@ function readCreationState(value: unknown): CreationState {
     ...(state as unknown as CreationState),
     diceRollingEnabled: state.diceRollingEnabled !== false,
     progression: normalizeCampaignProgressionSettings(state.progression),
+    longRestSupplies: normalizeLongRestSupplySettings(state.longRestSupplies),
     creatureFolders: readCreatureFolders(state.creatureFolders),
   }
 }
