@@ -62,9 +62,12 @@ import type { CustomSystemDefinition } from "../../../../src/models/customSystem
 import type { Itemmable } from "../../../../src/models/items/item";
 import {
   consumeSelectedSupplies,
-  getRequiredSupplyForRace,
+  getLongRestSupplyRequirements,
+  getSupplySelectionTotals,
+  hasEnoughLongRestSupplies,
   type LongRestSupplySelection,
 } from "../../../../src/models/supplies/partySupply";
+import { normalizeLongRestSupplySettings } from "../../../../src/shared/rest/longRestSupplySettings";
 import {
   encodeServerSessionMessage,
   parseClientSessionMessage,
@@ -893,20 +896,63 @@ export class SessionActor extends DurableObject<Env> {
         this.sendError(webSocket, "INVALID_LONG_REST_SUPPLIES", "Long rests require a valid server-verifiable supply selection.");
         return;
       }
-      const consumption = consumeSelectedSupplies(inventory.partyInventory as Itemmable[], supplied);
+      const supplySettings = normalizeLongRestSupplySettings(
+        runtimeConfig?.longRestSupplies,
+      );
+      const requirements = getLongRestSupplyRequirements(
+        current.get("sheet").race,
+        supplySettings,
+      );
+      const selectionTotals = getSupplySelectionTotals(
+        inventory.partyInventory as Itemmable[],
+        supplied,
+      );
+      const enoughSupplies =
+        !supplySettings.enabled
+        || hasEnoughLongRestSupplies(selectionTotals, requirements);
+
+      if (
+        supplySettings.enabled
+        && !enoughSupplies
+        && supplySettings.shortageMode === "block"
+      ) {
+        this.sendError(
+          webSocket,
+          "LONG_REST_SUPPLIES_REQUIRED",
+          "This campaign requires the configured food and drink before a long rest can be completed.",
+        );
+        return;
+      }
+
+      const consumption = supplySettings.enabled
+        ? consumeSelectedSupplies(
+            inventory.partyInventory as Itemmable[],
+            supplied,
+          )
+        : {
+            items: inventory.partyInventory as Itemmable[],
+            valid: true,
+            selectedPortions: 0,
+            selectedFoodPortions: 0,
+            selectedDrinkPortions: 0,
+          };
       if (!consumption.valid) {
         this.sendError(webSocket, "INVALID_LONG_REST_SUPPLIES", "The selected supplies are no longer available in the shared inventory.");
         return;
       }
-      const required = getRequiredSupplyForRace(current.get("sheet").race);
-      const recovery = consumption.selectedPortions + 0.000001 < required ? "partial" : "full";
-      next = recovery === "partial" ? takePartialLongRest(current, restDefinitions) : takeLongRest(current, restDefinitions);
-      nextInventory = {
-        ...inventory,
-        initialized: true,
-        revision: inventory.revision + 1,
-        partyInventory: consumption.items,
-      };
+
+      const recovery = enoughSupplies ? "full" : "partial";
+      next = recovery === "partial"
+        ? takePartialLongRest(current, restDefinitions)
+        : takeLongRest(current, restDefinitions);
+      nextInventory = supplySettings.enabled
+        ? {
+            ...inventory,
+            initialized: true,
+            revision: inventory.revision + 1,
+            partyInventory: consumption.items,
+          }
+        : inventory;
       canonicalOperation = { ...operation, recovery };
       reverseOperation = {
         type: "session.rest.restore",
