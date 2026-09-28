@@ -23,8 +23,12 @@ export type SessionSharedInventoryState = {
   additionalSupplyConsumption?: number
   /** Active session consumers, calculated from unfiltered authoritative state. */
   supplyConsumers?: SessionSupplyConsumerSummary[]
-  /** Sum of character consumption only; additionalSupplyConsumption is separate. */
+  /** Legacy aggregate retained for compatibility; mirrors food consumption. */
   supplyPerLongRest?: number
+  /** Raw racial food portions consumed by active characters per long rest. */
+  foodPerLongRest?: number
+  /** Raw racial drink portions consumed by active characters per long rest. */
+  drinkPerLongRest?: number
 }
 
 export type SessionInventoryOperation =
