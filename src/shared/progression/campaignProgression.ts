@@ -368,11 +368,14 @@ function isProgressionTrack(value: unknown): boolean {
 }
 
 function cleanString(value: unknown, fallback: string): string {
-  return typeof value === "string" && value.trim() ? value.trim() : fallback
+  // Preserve the user's exact in-progress text while editing. Trimming here
+  // made a trailing space disappear on every keystroke, so typing
+  // "Pontos de Descoberta" became "PontosdeDescoberta".
+  return typeof value === "string" && value.trim() ? value : fallback
 }
 
 function cleanOptionalString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined
+  return typeof value === "string" && value.trim() ? value : undefined
 }
 
 function positiveNumber(value: unknown, fallback: number): number {
