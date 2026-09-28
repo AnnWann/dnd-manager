@@ -32,6 +32,7 @@ const PartyInventoryView = lazy(() => import("./views/PartyInventoryView").then(
 const GroundInventoryView = lazy(() => import("./views/GroundInventoryView").then((module) => ({ default: module.GroundInventoryView })))
 const MissionsView = lazy(() => import("./views/MissionsView").then((module) => ({ default: module.MissionsView })))
 const InitiativeRoleView = lazy(() => import("./views/InitiativeRoleView").then((module) => ({ default: module.InitiativeRoleView })))
+const OwnedCreaturesView = lazy(() => import("./views/OwnedCreaturesView").then((module) => ({ default: module.OwnedCreaturesView })))
 const SessionCreationSettingsView = lazy(() => import("./views/session/SessionCreationSettingsView").then((module) => ({ default: module.SessionCreationSettingsView })))
 const SessionCreationRequestsView = lazy(() => import("./views/session/SessionCreationRequestsView").then((module) => ({ default: module.SessionCreationRequestsView })))
 const SessionHomebrewView = lazy(() => import("./views/session/SessionHomebrewView").then((module) => ({ default: module.SessionHomebrewView })))
@@ -90,6 +91,7 @@ export function AppRouter() {
           <Route path="ground-inventory" element={<GroundInventoryView />} />
           <Route path="missions" element={<MissionsView />} />
           <Route path="initiative" element={<InitiativeRoleView />} />
+          <Route path="creatures" element={<OwnedCreaturesView />} />
 
           <Route path="creation" element={<CreationEditorRouteOutlet />}>
             <Route index element={<Navigate to="settings" replace />} />
