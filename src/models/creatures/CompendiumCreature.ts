@@ -81,6 +81,8 @@ export type CompendiumCreature = {
   category: string
   size: string
   challengeRating: string
+  /** Optional named folder used only to organize the compendium UI. */
+  folder?: string
   unique: boolean
   /** Number of initiative turns created for this unique creature. */
   initiativeTurns: number
@@ -172,6 +174,7 @@ export function createCompendiumCreature(
     category: patch.category ?? "Monstro",
     size: patch.size ?? "Médio",
     challengeRating: patch.challengeRating ?? "",
+    folder: optionalStringValue(patch.folder),
     unique: patch.unique ?? false,
     initiativeTurns: Math.max(1, Math.trunc(finiteNumber(patch.initiativeTurns, 1))),
     defaultSide: patch.defaultSide ?? "enemy",
@@ -234,6 +237,7 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
     category: stringValue(value.category, "Monstro"),
     size: stringValue(value.size, "Médio"),
     challengeRating: stringValue(value.challengeRating),
+    folder: optionalStringValue(value.folder),
     unique: booleanValue(value.unique),
     initiativeTurns: Math.max(1, Math.trunc(finiteNumber(value.initiativeTurns, 1))),
     defaultSide: creatureSideValue(value.defaultSide),
