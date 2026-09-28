@@ -40,6 +40,7 @@ type SharedInventoryState = {
   groundInventory: Itemmable[];
   carryCapacity?: number;
   additionalSupplyConsumption?: number;
+  partyInventoryAccessible?: boolean;
   supplyConsumers?: Array<{ characterId: string; name: string }>;
   supplyPerLongRest?: number;
   foodPerLongRest?: number;
@@ -91,6 +92,8 @@ export class SessionActor extends EquipmentSessionActor {
           ...(parsed.additionalSupplyConsumption !== undefined
             ? { additionalSupplyConsumption: parsed.additionalSupplyConsumption }
             : {}),
+          partyInventoryAccessible:
+            parsed.partyInventoryAccessible !== false,
         };
         await this.ctx.storage.put(INVENTORY_STATE_KEY, state);
         const projection = await reconcileSessionSupplyProjection(this.ctx.storage);
@@ -107,10 +110,17 @@ export class SessionActor extends EquipmentSessionActor {
           ...(current.additionalSupplyConsumption === undefined && parsed.additionalSupplyConsumption !== undefined
             ? { additionalSupplyConsumption: parsed.additionalSupplyConsumption }
             : {}),
+          ...(current.partyInventoryAccessible === undefined
+            ? {
+                partyInventoryAccessible:
+                  parsed.partyInventoryAccessible !== false,
+              }
+            : {}),
         };
         const migrated =
           next.carryCapacity !== current.carryCapacity ||
-          next.additionalSupplyConsumption !== current.additionalSupplyConsumption;
+          next.additionalSupplyConsumption !== current.additionalSupplyConsumption ||
+          next.partyInventoryAccessible !== current.partyInventoryAccessible;
         if (migrated) await this.ctx.storage.put(INVENTORY_STATE_KEY, next);
         const projection = await reconcileSessionSupplyProjection(this.ctx.storage);
         const authoritativeState = projection.state ?? next;
@@ -152,7 +162,15 @@ export class SessionActor extends EquipmentSessionActor {
         return sendError(webSocket, "INVENTORY_CHARACTER_NOT_INITIALIZED", "A character required by this inventory operation is not initialized.");
       }
     }
-    if (!canPerform(connection, operation, hp)) return sendError(webSocket, "CHARACTER_ACCESS_DENIED", "You cannot perform this inventory operation.");
+    if (!canPerform(connection, operation, hp, inventory)) {
+      return sendError(
+        webSocket,
+        "CHARACTER_ACCESS_DENIED",
+        inventory.partyInventoryAccessible === false
+          ? "The shared party inventory is currently inaccessible to players."
+          : "You cannot perform this inventory operation.",
+      );
+    }
 
     const snapshotsAllCharacters = isPartySettingsOperation(operation);
     const beforeAbilities = snapshotsAllCharacters ? structuredClone(abilities) : pick(abilities, touchedIds);
@@ -357,6 +375,15 @@ function applyInventoryOperation(
       const value = Math.max(0, operation.value);
       if (inventory.additionalSupplyConsumption === value) return result(false);
       inventory.additionalSupplyConsumption = value;
+      inventory.revision += 1;
+      sharedChanged = true;
+      return result(true);
+    }
+    case "party.settings.accessible.set": {
+      if (inventory.partyInventoryAccessible === operation.value) {
+        return result(false);
+      }
+      inventory.partyInventoryAccessible = operation.value;
       inventory.revision += 1;
       sharedChanged = true;
       return result(true);
@@ -584,7 +611,8 @@ function inventoryOperationScopes(operation: SessionInventoryOperation): string[
 
 function isPartySettingsOperation(operation: SessionInventoryOperation): boolean {
   return operation.type === "party.settings.carryCapacity.set"
-    || operation.type === "party.settings.additionalSupplyConsumption.set";
+    || operation.type === "party.settings.additionalSupplyConsumption.set"
+    || operation.type === "party.settings.accessible.set";
 }
 
 function hydrate(
@@ -657,19 +685,38 @@ function canPerform(
   connection: SessionConnection,
   operation: SessionInventoryOperation,
   hp: Record<string, SessionHpState>,
+  inventory: SharedInventoryState,
 ): boolean {
   if (connection.role === "MASTER") return true;
   if (isPartySettingsOperation(operation)) return false;
+
+  const partyAccessible = inventory.partyInventoryAccessible !== false;
+
   if (
     operation.type === "party.item.add" ||
     operation.type === "party.item.update" ||
     operation.type === "party.item.remove"
-  ) return true;
+  ) {
+    return partyAccessible;
+  }
+
   if (operation.type.startsWith("ground.")) return false;
+
   if (operation.type === "inventory.item.transfer") {
+    if (
+      !partyAccessible
+      && (
+        operation.request.from.type === "party"
+        || operation.request.to.type === "party"
+      )
+    ) {
+      return false;
+    }
+
     return operation.request.from.type !== "character" ||
       hp[operation.request.from.characterId]?.ownerUserId === connection.userId;
   }
+
   return hp[operation.characterId]?.ownerUserId === connection.userId;
 }
 
