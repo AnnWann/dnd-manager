@@ -226,9 +226,10 @@ export function CreaturesCompendiumView() {
       {editingCreature ? (
         <CreatureEditorDialog
           creature={editingCreature}
-          ownerOptions={sessionMembers
-            .filter((member) => member.status === "ACTIVE")
-            .map((member) => ({ id: member.id, name: member.name }))}
+          ownerOptions={sessionMembers.map((member) => ({
+            id: member.id,
+            name: member.name,
+          }))}
           onClose={() => setEditingCreature(undefined)}
           onSave={(creature) => {
             upsertCreature(creature)
