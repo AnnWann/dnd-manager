@@ -293,6 +293,7 @@ export function CharacterSpellLibrary({
                   <Badge label={formatLevel(spell.slotLevel)} />
                   <Badge label={MAGIC_SCHOOLS_MAP[spell.school] ?? String(spell.school)} />
                   <Badge label={spell.homebrew ? "Homebrew" : "Oficial"} />
+                  {spell.rebalanced ? <Badge label="Rebalanceada" /> : null}
                 </div>
                 <div className="mt-1 text-xs text-textMuted">
                   {spell.classes.map((entry) => CLASS_NAMES[entry]).join(", ") || "Sem classe"}
@@ -350,6 +351,7 @@ export function CharacterSpellLibrary({
                 <Badge label={`Componentes: ${viewingSpell.components.join(", ") || "nenhum"}`} />
                 {viewingSpell.concentration ? <Badge label="Concentração" /> : null}
                 {viewingSpell.ritual ? <Badge label="Ritual" /> : null}
+                {viewingSpell.rebalanced ? <Badge label="Rebalanceada" /> : null}
                 {viewingSpell.targeting.hasAttackRoll ? <Badge label="Jogada de ataque" /> : null}
                 {viewingSpell.targeting.hasSavingThrow ? <Badge label="Teste de resistência" /> : null}
               </div>
