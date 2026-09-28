@@ -13,6 +13,7 @@ import type { AppStateV1 } from "../lib/remoteState"
 
 export type PartyInventoryAppState = AppStateV1 & {
   partyAdditionalSupplyConsumption?: number
+  partyInventoryAccessible?: boolean
 }
 
 type PartyInventorySettingsContextValue = {
@@ -22,12 +23,16 @@ type PartyInventorySettingsContextValue = {
   additionalSupplyConsumption: number
   canEditAdditionalSupplyConsumption: boolean
   setAdditionalSupplyConsumption: (value: number) => void
+  inventoryAccessible: boolean
+  canEditInventoryAccessible: boolean
+  setInventoryAccessible: (value: boolean) => void
 }
 
 type Props = {
   children: ReactNode
   carryCapacity: number
   additionalSupplyConsumption: number
+  inventoryAccessible: boolean
   canEditCarryCapacity: boolean
   setAppState: Dispatch<SetStateAction<PartyInventoryAppState>>
 }
@@ -39,6 +44,7 @@ export function PartyInventorySettingsProvider({
   children,
   carryCapacity,
   additionalSupplyConsumption,
+  inventoryAccessible,
   canEditCarryCapacity,
   setAppState,
 }: Props) {
@@ -49,6 +55,7 @@ export function PartyInventorySettingsProvider({
     0,
     additionalSupplyConsumption,
   )
+  const normalizedInventoryAccessible = inventoryAccessible !== false
 
   useEffect(() => {
     if (
@@ -65,8 +72,14 @@ export function PartyInventorySettingsProvider({
     const missingCarryCapacity = runtime.inventoryState.carryCapacity === undefined
     const missingAdditionalSupplyConsumption =
       runtime.inventoryState.additionalSupplyConsumption === undefined
+    const missingInventoryAccessible =
+      runtime.inventoryState.partyInventoryAccessible === undefined
 
-    if (!missingCarryCapacity && !missingAdditionalSupplyConsumption) {
+    if (
+      !missingCarryCapacity
+      && !missingAdditionalSupplyConsumption
+      && !missingInventoryAccessible
+    ) {
       inventorySettingsMigrationSent.current = true
       return
     }
@@ -79,6 +92,7 @@ export function PartyInventorySettingsProvider({
       {
         carryCapacity: normalizedCarryCapacity,
         additionalSupplyConsumption: normalizedAdditionalSupplyConsumption,
+        partyInventoryAccessible: normalizedInventoryAccessible,
       },
     )
     if (!sent) inventorySettingsMigrationSent.current = false
@@ -86,10 +100,12 @@ export function PartyInventorySettingsProvider({
     canEditCarryCapacity,
     normalizedAdditionalSupplyConsumption,
     normalizedCarryCapacity,
+    normalizedInventoryAccessible,
     runtime?.initializeInventory,
     runtime?.inventoryState?.additionalSupplyConsumption,
     runtime?.inventoryState?.carryCapacity,
     runtime?.inventoryState?.initialized,
+    runtime?.inventoryState?.partyInventoryAccessible,
     runtime?.inventoryState?.groundInventory,
     runtime?.inventoryState?.partyInventory,
     runtime?.role,
@@ -122,6 +138,15 @@ export function PartyInventorySettingsProvider({
     }))
   }
 
+  function setInventoryAccessible(value: boolean) {
+    if (!canEditCarryCapacity) return
+
+    setAppState((previous) => ({
+      ...previous,
+      partyInventoryAccessible: value,
+    }))
+  }
+
   return (
     <PartyInventorySettingsContext.Provider
       value={{
@@ -131,6 +156,9 @@ export function PartyInventorySettingsProvider({
         additionalSupplyConsumption: normalizedAdditionalSupplyConsumption,
         canEditAdditionalSupplyConsumption: canEditCarryCapacity,
         setAdditionalSupplyConsumption,
+        inventoryAccessible: normalizedInventoryAccessible,
+        canEditInventoryAccessible: canEditCarryCapacity,
+        setInventoryAccessible,
       }}
     >
       {children}
