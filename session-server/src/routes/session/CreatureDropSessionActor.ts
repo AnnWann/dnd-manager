@@ -37,6 +37,7 @@ type SharedInventoryState = {
   groundInventory: Itemmable[];
   carryCapacity?: number;
   additionalSupplyConsumption?: number;
+  partyInventoryAccessible?: boolean;
   supplyConsumers?: Array<{ characterId: string; name: string }>;
   supplyPerLongRest?: number;
   foodPerLongRest?: number;
