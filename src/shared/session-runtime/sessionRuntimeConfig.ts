@@ -11,6 +11,10 @@ import {
   projectCampaignProgressionForPlayers,
   type CampaignProgressionSettings,
 } from "../progression/campaignProgression"
+import {
+  normalizeLongRestSupplySettings,
+  type LongRestSupplySettings,
+} from "../rest/longRestSupplySettings"
 
 /**
  * Small projection of CreationState required by the authoritative session
@@ -22,6 +26,8 @@ export type SessionRuntimeConfig = {
   diceRollingEnabled?: boolean
   /** Player-safe projection. Hidden custom goals are deliberately omitted. */
   progression?: CampaignProgressionSettings
+  /** Authoritative long-rest supply policy for this campaign. */
+  longRestSupplies?: LongRestSupplySettings
   characters: SessionRuntimeCharacterConfig[]
   spells: Spell[]
   customSystems: CustomSystemDefinition[]
@@ -49,6 +55,7 @@ export function toSessionRuntimeConfig(
   return {
     diceRollingEnabled: creation.diceRollingEnabled !== false,
     progression: projectCampaignProgressionForPlayers(creation.progression),
+    longRestSupplies: normalizeLongRestSupplySettings(creation.longRestSupplies),
     characters: creation.characters.map((character) => ({
       characterId: character.characterId,
       type: character.type,
