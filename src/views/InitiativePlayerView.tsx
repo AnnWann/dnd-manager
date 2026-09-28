@@ -204,49 +204,59 @@ function ReadOnlyEntry({
         <div className="text-lg font-bold text-textH">{entry.initiative}</div>
       </div>
 
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="min-w-0 break-words text-sm font-semibold text-textH">
-            {initiativeEntryDisplayName(entry, "player")}
-          </h2>
-          {active ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
-              <Clock3 className="h-3 w-3" /> Turno atual
-            </span>
+      <div className="flex min-w-0 items-center gap-3">
+        {entry.imageUrl ? (
+          <img
+            src={entry.imageUrl}
+            alt=""
+            className="h-12 w-12 shrink-0 rounded-lg border border-border object-cover"
+          />
+        ) : null}
+
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="min-w-0 break-words text-sm font-semibold text-textH">
+              {initiativeEntryDisplayName(entry, "player")}
+            </h2>
+            {active ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+                <Clock3 className="h-3 w-3" /> Turno atual
+              </span>
+            ) : null}
+            {entry.downed ? (
+              <span className="rounded-full border border-danger/50 bg-danger/10 px-2 py-1 text-[10px] font-semibold text-danger">
+                Caído
+              </span>
+            ) : entry.defeated ? (
+              <span className="rounded-full border border-border px-2 py-1 text-[10px] text-textMuted">
+                Derrotado
+              </span>
+            ) : null}
+          </div>
+
+          {entry.conditions.length ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {entry.conditions.map((condition) => (
+                <span
+                  key={condition.id}
+                  title={condition.description}
+                  className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-[10px] text-textH"
+                >
+                  {condition.name}
+                </span>
+              ))}
+            </div>
           ) : null}
-          {entry.downed ? (
-            <span className="rounded-full border border-danger/50 bg-danger/10 px-2 py-1 text-[10px] font-semibold text-danger">
-              Caído
-            </span>
-          ) : entry.defeated ? (
-            <span className="rounded-full border border-border px-2 py-1 text-[10px] text-textMuted">
-              Derrotado
-            </span>
+          {entry.downed && showDeathSaves ? (
+            <div className="mt-2 rounded-lg border border-danger/40 bg-danger/10 p-2">
+              <DeathSaveCounter
+                entry={entry}
+                editable={editDeathSaves}
+                onChange={onDeathSaves}
+              />
+            </div>
           ) : null}
         </div>
-
-        {entry.conditions.length ? (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {entry.conditions.map((condition) => (
-              <span
-                key={condition.id}
-                title={condition.description}
-                className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-[10px] text-textH"
-              >
-                {condition.name}
-              </span>
-            ))}
-          </div>
-        ) : null}
-        {entry.downed && showDeathSaves ? (
-          <div className="mt-2 rounded-lg border border-danger/40 bg-danger/10 p-2">
-            <DeathSaveCounter
-              entry={entry}
-              editable={editDeathSaves}
-              onChange={onDeathSaves}
-            />
-          </div>
-        ) : null}
       </div>
 
       {showPrivateStats ? <PrivateStats entry={entry} /> : null}
