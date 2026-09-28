@@ -69,11 +69,13 @@ function newSpell(): Spell {
 type Props = {
   saveSpell: (spell: Spell) => void
   editingSpell?: Spell | null
+  submitLabel?: string
 }
 
 export function SpellCreatorModule({
   saveSpell,
-  editingSpell = null
+  editingSpell = null,
+  submitLabel,
 }: Props
 ) {
   const [spell, setSpell] = useState<Spell>(() => editingSpell ?? newSpell())
@@ -416,9 +418,11 @@ export function SpellCreatorModule({
   }
 
   function resetSpell() {
-    const nextSpell = newSpell()
+    const nextSpell = editingSpell ?? newSpell()
     setSpell(nextSpell)
-    setSchoolMode(nextSpell.school as MagicSchool)
+    setSchoolMode(
+      isKnownSchool(nextSpell.school) ? nextSpell.school : "other",
+    )
   }
 
   function toggleClass(spell: Spell, className: ClassName): ClassName[] {
@@ -1094,14 +1098,14 @@ export function SpellCreatorModule({
 
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={resetSpell}>
-              Limpar
+              {editingSpell ? "Desfazer alterações" : "Limpar"}
             </Button>
 
             <Button variant="primary" onClick={() => {
               saveSpell(spell);
               resetSpell()
             }}>
-              {editingSpell ? "Salvar alterações" : "Salvar magia"}
+              {submitLabel ?? (editingSpell ? "Salvar alterações" : "Salvar magia")}
             </Button>
           </div>
         </div>
@@ -1378,7 +1382,8 @@ function parseSpellJson(text: string, current: Spell): Spell {
   return {
     ...base,
     index: current.index,
-    homebrew: true,
+    homebrew: current.homebrew,
+    rebalanced: current.rebalanced,
     name,
     description: optionalString(parsed.description) ?? "",
     higherLevelText: optionalString(parsed.higherLevelText) ?? "",
