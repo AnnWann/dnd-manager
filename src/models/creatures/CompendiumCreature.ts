@@ -194,7 +194,7 @@ export function createCompendiumCreature(
     conditionImmunities: patch.conditionImmunities ?? "",
     senses: patch.senses ?? "",
     languages: patch.languages ?? "",
-    ownerUserId: optionalString(patch.ownerUserId),
+    ownerUserId: optionalStringValue(patch.ownerUserId),
     spellcasting: normalizeCreatureSpellcasting(patch.spellcasting),
     traits: normalizeCreatureFeatures(patch.traits, "Traço"),
     actions: normalizeCreatureFeatures(patch.actions, "Ação"),
@@ -268,7 +268,7 @@ export function normalizeCompendiumCreature(raw: unknown): CompendiumCreature {
     conditionImmunities: stringValue(value.conditionImmunities),
     senses: stringValue(value.senses),
     languages: stringValue(value.languages),
-    ownerUserId: optionalString(value.ownerUserId),
+    ownerUserId: optionalStringValue(value.ownerUserId),
     spellcasting: normalizeCreatureSpellcasting(value.spellcasting),
     traits: normalizeCreatureFeatures(
       value.traits ?? featureGroups?.traits,
