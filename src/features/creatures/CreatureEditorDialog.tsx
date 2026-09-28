@@ -350,6 +350,12 @@ export function CreatureEditorDialog({
                 placeholder="Ex.: 5"
                 onChange={(challengeRating) => patch({ challengeRating })}
               />
+              <TextInput
+                label="Pasta"
+                value={draft.folder ?? ""}
+                placeholder="Ex.: Mortos-vivos, Chefes, Mar..."
+                onChange={(folder) => patch({ folder: folder.trim() || undefined })}
+              />
 
               <Field label="Lado padrão">
                 <SharedSelect
