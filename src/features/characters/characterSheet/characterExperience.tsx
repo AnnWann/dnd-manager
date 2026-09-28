@@ -8,7 +8,10 @@ import { getExperienceProgress } from "../../../models/characters/characterExper
 import { useCharacterWorkspace } from "../workspace/CharacterWorkspaceContext"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import {
+  getCustomProgressionSummary,
   normalizeCampaignProgressionSettings,
+  type CampaignProgressionPointSystem,
+  type CampaignProgressionSettings,
   type CampaignProgressionTrack,
 } from "../../../shared/progression/campaignProgression"
 
@@ -63,8 +66,7 @@ export function CharacterExperience({
     return (
       <CustomProgressionCard
         level={progress.level}
-        title={progression.title}
-        tracks={progression.customTracks ?? []}
+        progression={progression}
       />
     )
   }
@@ -224,19 +226,15 @@ function MilestoneProgressionCard({
 
 function CustomProgressionCard({
   level,
-  title,
-  tracks,
+  progression,
 }: {
   level: number
-  title?: string
-  tracks: CampaignProgressionTrack[]
+  progression: CampaignProgressionSettings
 }) {
-  const ready = tracks.some(
-    (track) =>
-      track.grantsLevel
-      && !track.levelGranted
-      && track.current >= track.levelUpAt,
-  )
+  const tracks = progression.customTracks ?? []
+  const pointSystem = progression.pointSystem
+  const summary = getCustomProgressionSummary(progression)
+  const ready = summary.totalLevelsAvailable > 0
 
   return (
     <Card>
@@ -248,42 +246,115 @@ function CustomProgressionCard({
             </span>
             <div>
               <div className="text-sm font-semibold text-textH">
-                {title?.trim() || "Progressão"}
+                {progression.title?.trim() || "Progressão"}
               </div>
               <div className="mt-1 text-xs text-textMuted">
                 Nível total {level}. O progresso é definido pelas regras desta campanha.
               </div>
             </div>
           </div>
+
           {ready ? (
             <div className="rounded-lg border border-accentBorder bg-accentBg px-3 py-1.5 text-xs font-semibold text-accent">
-              Nível liberado
+              {summary.totalLevelsAvailable === 1
+                ? "1 nível liberado"
+                : String(summary.totalLevelsAvailable) + " níveis liberados"}
             </div>
           ) : null}
         </div>
       </CardHeader>
 
       <CardContent>
-        {tracks.length ? (
-          <div className="grid gap-3">
-            {tracks.map((track) => (
-              <CustomProgressTrack key={track.id} track={track} />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-textMuted">
-            Nenhum objetivo de progressão foi revelado ainda.
-          </div>
-        )}
+        <div className="grid gap-3">
+          {pointSystem?.visibleToPlayers ? (
+            <ProgressionPointBank
+              pointSystem={pointSystem}
+              summary={summary}
+            />
+          ) : null}
+
+          {tracks.length ? (
+            tracks.map((track) => (
+              <CustomProgressTrack
+                key={track.id}
+                track={track}
+                pointSystem={pointSystem}
+              />
+            ))
+          ) : (
+            <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-textMuted">
+              Nenhum objetivo de progressão foi revelado ainda.
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   )
 }
 
+function ProgressionPointBank({
+  pointSystem,
+  summary,
+}: {
+  pointSystem: CampaignProgressionPointSystem
+  summary: ReturnType<typeof getCustomProgressionSummary>
+}) {
+  const cost = Math.max(1, summary.pointsPerLevel)
+  const towardNext = summary.availablePoints % cost
+  const percent =
+    summary.levelsAvailableFromPoints > 0
+      ? 100
+      : Math.max(0, Math.min(100, (towardNext / cost) * 100))
+
+  return (
+    <section className="rounded-xl border border-accentBorder bg-accentBg/30 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-textH">
+            {pointSystem.name}
+          </div>
+          <div className="mt-1 text-xs text-textMuted">
+            {formatPointValue(summary.availablePoints, pointSystem.unit)}
+            {" disponíveis · "}
+            {formatPointValue(summary.pointsPerLevel, pointSystem.unit)}
+            {" por nível"}
+          </div>
+        </div>
+        <div className="rounded-lg border border-accentBorder bg-bg px-3 py-1.5 text-xs font-semibold text-textH">
+          {formatPointValue(summary.earnedPoints, pointSystem.unit)} ganhos
+        </div>
+      </div>
+
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-bg">
+        <div
+          className="h-full rounded-full bg-accent transition-[width]"
+          style={{ width: String(percent) + "%" }}
+        />
+      </div>
+
+      <div className="mt-2 text-[10px] text-textMuted">
+        {summary.levelsAvailableFromPoints > 0
+          ? String(summary.levelsAvailableFromPoints)
+            + " nível"
+            + (summary.levelsAvailableFromPoints === 1 ? "" : "is")
+            + " disponível"
+            + (summary.levelsAvailableFromPoints === 1 ? "" : "eis")
+            + " por pontos"
+          : formatPointValue(
+              Math.max(0, cost - towardNext),
+              pointSystem.unit,
+            ) + " para o próximo nível"}
+      </div>
+    </section>
+  )
+}
+
 function CustomProgressTrack({
   track,
+  pointSystem,
 }: {
   track: CampaignProgressionTrack
+  pointSystem?: CampaignProgressionPointSystem
 }) {
   const maximum = Math.max(1, track.maximum)
   const percent = Math.max(0, Math.min(100, (track.current / maximum) * 100))
@@ -291,10 +362,14 @@ function CustomProgressTrack({
     0,
     Math.min(100, (track.levelUpAt / maximum) * 100),
   )
-  const ready =
-    track.grantsLevel
-    && !track.levelGranted
-    && track.current >= track.levelUpAt
+  const unlocked = track.current >= track.levelUpAt
+  const directRemaining =
+    track.rewardType === "level" && unlocked
+      ? Math.max(
+          0,
+          Math.floor(track.rewardAmount) - Math.floor(track.rewardConsumed),
+        )
+      : 0
 
   return (
     <article className="rounded-xl border border-border bg-bg-subtle p-4">
@@ -307,39 +382,105 @@ function CustomProgressTrack({
             </p>
           ) : null}
         </div>
-        <div className={ready ? "text-xs font-semibold text-accent" : "text-xs text-textMuted"}>
-          {track.levelGranted
-            ? "Meta concluída — nível concedido"
-            : ready
-              ? "Meta atingida — nível liberado"
-              : `${formatCustomValue(track.current, track.unit)} / ${formatCustomValue(track.maximum, track.unit)}`}
+
+        <div
+          className={
+            unlocked && track.rewardType !== "none"
+              ? "text-xs font-semibold text-accent"
+              : "text-xs text-textMuted"
+          }
+        >
+          {formatTrackStatus(track, pointSystem, directRemaining)}
         </div>
       </div>
 
       <div className="relative mt-3 h-2 rounded-full bg-bg">
         <div
           className="h-full rounded-full bg-accent transition-[width]"
-          style={{ width: `${percent}%` }}
+          style={{ width: String(percent) + "%" }}
         />
-        {track.grantsLevel ? (
+        {track.rewardType !== "none" ? (
           <span
             className="absolute top-[-3px] h-3.5 w-0.5 bg-textH"
-            style={{ left: `${thresholdPercent}%` }}
-            title={`Nível em ${formatCustomValue(track.levelUpAt, track.unit)}`}
+            style={{ left: String(thresholdPercent) + "%" }}
+            title={"Recompensa em " + formatCustomValue(track.levelUpAt, track.unit)}
           />
         ) : null}
       </div>
 
       <div className="mt-2 flex flex-wrap justify-between gap-2 text-[10px] text-textMuted">
         <span>{formatCustomValue(track.current, track.unit)}</span>
-        {track.grantsLevel ? (
-          <span>Meta de nível: {formatCustomValue(track.levelUpAt, track.unit)}</span>
+        {track.rewardType !== "none" ? (
+          <span>
+            {formatCustomValue(track.levelUpAt, track.unit)}
+            {" → "}
+            {formatTrackReward(track, pointSystem)}
+          </span>
         ) : (
           <span>Medidor informativo</span>
         )}
       </div>
     </article>
   )
+}
+
+function formatTrackStatus(
+  track: CampaignProgressionTrack,
+  pointSystem: CampaignProgressionPointSystem | undefined,
+  directRemaining: number,
+): string {
+  if (track.rewardType === "none") {
+    return (
+      formatCustomValue(track.current, track.unit)
+      + " / "
+      + formatCustomValue(track.maximum, track.unit)
+    )
+  }
+
+  if (track.current < track.levelUpAt) {
+    return (
+      formatCustomValue(track.current, track.unit)
+      + " / "
+      + formatCustomValue(track.maximum, track.unit)
+    )
+  }
+
+  if (track.rewardType === "points") {
+    return "Meta atingida — " + formatTrackReward(track, pointSystem)
+  }
+
+  return directRemaining > 0
+    ? String(directRemaining)
+      + " nível"
+      + (directRemaining === 1 ? "" : "is")
+      + " liberado"
+      + (directRemaining === 1 ? "" : "s")
+    : "Meta concluída"
+}
+
+function formatTrackReward(
+  track: CampaignProgressionTrack,
+  pointSystem?: CampaignProgressionPointSystem,
+): string {
+  if (track.rewardType === "points") {
+    return "+"
+      + formatPointValue(
+          track.rewardAmount,
+          pointSystem?.unit || "PP",
+        )
+  }
+  if (track.rewardType === "level") {
+    const amount = Math.max(0, Math.floor(track.rewardAmount))
+    return String(amount) + " nível" + (amount === 1 ? "" : "is")
+  }
+  return "Sem recompensa"
+}
+
+function formatPointValue(value: number, unit: string): string {
+  const display = Number.isInteger(value)
+    ? value.toLocaleString("pt-BR")
+    : value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })
+  return (display + " " + unit).trim()
 }
 
 function formatCustomValue(value: number, unit: string): string {
