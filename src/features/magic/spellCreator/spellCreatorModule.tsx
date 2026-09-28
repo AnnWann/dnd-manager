@@ -1,8 +1,10 @@
 import { Select as SharedSelect } from "../../../components/ui/Select"
+import { ClipboardCopy, FileJson, X } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
+import { Textarea } from "../../../components/ui/Textarea"
 import type {
   MagicCircleLevel,
   MagicSchool,
@@ -75,6 +77,10 @@ export function SpellCreatorModule({
 }: Props
 ) {
   const [spell, setSpell] = useState<Spell>(() => editingSpell ?? newSpell())
+  const [jsonOpen, setJsonOpen] = useState(false)
+  const [jsonText, setJsonText] = useState("")
+  const [jsonError, setJsonError] = useState("")
+  const [copyFeedback, setCopyFeedback] = useState("")
 
   function isKnownSchool(school: unknown): school is MagicSchool {
   return MAGIC_SCHOOLS.some((entry) => entry.value === school)
@@ -91,7 +97,46 @@ export function SpellCreatorModule({
     setSchoolMode(
       isKnownSchool(nextSpell.school) ? nextSpell.school : "other",
     )
+    setJsonOpen(false)
+    setJsonText("")
+    setJsonError("")
+    setCopyFeedback("")
   }, [editingSpell])
+
+  function openJsonEditor() {
+    setJsonText(JSON.stringify(spellForJsonEditor(spell), null, 2))
+    setJsonError("")
+    setJsonOpen(true)
+  }
+
+  async function copyAiTemplate() {
+    const template = buildSpellAiTemplate()
+    try {
+      await copyTextToClipboard(template)
+      setCopyFeedback("Estrutura copiada.")
+      window.setTimeout(() => setCopyFeedback(""), 1800)
+    } catch {
+      setCopyFeedback("Não foi possível copiar.")
+    }
+  }
+
+  function applyJson() {
+    try {
+      const imported = parseSpellJson(jsonText, spell)
+      setSpell(imported)
+      setSchoolMode(
+        isKnownSchool(imported.school) ? imported.school : "other",
+      )
+      setJsonError("")
+      setJsonOpen(false)
+    } catch (error) {
+      setJsonError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível interpretar o JSON da magia.",
+      )
+    }
+  }
 
   const hasDistance =
     spell.range.origin !== "self" && spell.range.origin !== "touch"
@@ -385,10 +430,40 @@ export function SpellCreatorModule({
   const resolution = currentResolution()
 
   return (
+    <>
     <Card>
 
       <CardContent>
         <div className="grid gap-3">
+          <section className="rounded-xl border border-border bg-bg-subtle p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold text-textH">
+                  Entrada por JSON
+                </div>
+                <p className="mt-1 text-[11px] leading-5 text-textMuted">
+                  Cole uma magia estruturada para preencher este formulário ou copie
+                  um modelo completo para gerar a magia com IA.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="secondary" onClick={openJsonEditor}>
+                  <FileJson className="h-4 w-4" />
+                  Editar via JSON
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => void copyAiTemplate()}>
+                  <ClipboardCopy className="h-4 w-4" />
+                  Copiar estrutura para IA
+                </Button>
+              </div>
+            </div>
+            {copyFeedback ? (
+              <div className="mt-2 text-[11px] font-medium text-accent">
+                {copyFeedback}
+              </div>
+            ) : null}
+          </section>
+
           <Input
             value={spell.name}
             onChange={(e) => updateSpell("name", e.target.value)}
@@ -1032,7 +1107,668 @@ export function SpellCreatorModule({
         </div>
       </CardContent>
     </Card>
+
+    {jsonOpen ? (
+      <SpellJsonEditorModal
+        value={jsonText}
+        error={jsonError}
+        template={buildSpellAiTemplate()}
+        onChange={(value) => {
+          setJsonText(value)
+          if (jsonError) setJsonError("")
+        }}
+        onUseTemplate={() => {
+          setJsonText(buildSpellAiTemplate())
+          setJsonError("")
+        }}
+        onCopyTemplate={() => void copyAiTemplate()}
+        onApply={applyJson}
+        onClose={() => {
+          setJsonOpen(false)
+          setJsonError("")
+        }}
+      />
+    ) : null}
+    </>
   )
+}
+
+function SpellJsonEditorModal({
+  value,
+  error,
+  template,
+  onChange,
+  onUseTemplate,
+  onCopyTemplate,
+  onApply,
+  onClose,
+}: {
+  value: string
+  error: string
+  template: string
+  onChange: (value: string) => void
+  onUseTemplate: () => void
+  onCopyTemplate: () => void
+  onApply: () => void
+  onClose: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(event) => {
+        if (event.currentTarget === event.target) onClose()
+      }}
+    >
+      <section className="grid max-h-[94dvh] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-border bg-bg-elevated shadow-theme-lg">
+        <header className="flex items-start justify-between gap-3 border-b border-border p-4">
+          <div>
+            <h2 className="font-heading text-lg font-semibold text-textH">
+              Magia por JSON
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-textMuted">
+              O JSON substitui os campos do formulário atual. O ID interno da magia
+              é preservado para evitar duplicatas acidentais.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Fechar"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-textMuted hover:bg-bg-subtle hover:text-textH"
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="grid min-h-0 gap-4 overflow-y-auto p-4 lg:grid-cols-2">
+          <section className="grid content-start gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-textH">JSON da magia</h3>
+              <p className="mt-1 text-xs text-textMuted">
+                Cole aqui a resposta da IA ou edite diretamente a estrutura atual.
+              </p>
+            </div>
+            <Textarea
+              className="min-h-[520px] resize-y font-mono text-xs leading-5"
+              value={value}
+              invalid={Boolean(error)}
+              spellCheck={false}
+              onChange={(event) => onChange(event.target.value)}
+            />
+            {error ? (
+              <div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+                {error}
+              </div>
+            ) : null}
+          </section>
+
+          <section className="grid content-start gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-textH">
+                Estrutura para IA
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-textMuted">
+                O modelo inclui os campos mecânicos usados pelo servidor, inclusive
+                ataque, resistência, dano, crítico e escalonamento.
+              </p>
+            </div>
+            <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-bg p-3 font-mono text-[11px] leading-5 text-text">
+              {template}
+            </pre>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" onClick={onCopyTemplate}>
+                <ClipboardCopy className="h-4 w-4" />
+                Copiar estrutura
+              </Button>
+              <Button size="sm" variant="secondary" onClick={onUseTemplate}>
+                Usar modelo no editor
+              </Button>
+            </div>
+          </section>
+        </div>
+
+        <footer className="flex flex-wrap justify-end gap-2 border-t border-border p-4">
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button variant="primary" disabled={!value.trim()} onClick={onApply}>
+            Aplicar JSON ao formulário
+          </Button>
+        </footer>
+      </section>
+    </div>
+  )
+}
+
+function spellForJsonEditor(spell: Spell): Record<string, unknown> {
+  const {
+    index: _index,
+    homebrew: _homebrew,
+    damageDice: _legacyDamage,
+    ...editable
+  } = spell
+  return editable
+}
+
+function buildSpellAiTemplate(): string {
+  return JSON.stringify(
+    {
+      _aiGuide: [
+        "Retorne apenas um objeto JSON compatível com esta estrutura.",
+        "slotLevel vai de 0 a 9; 0 representa truque.",
+        "school usa abjuration, conjuration, divination, enchantment, evocation, illusion, necromancy ou transmutation.",
+        "classes aceita artificer, barbarian, bard, cleric, druid, fighter, monk, paladin, ranger, rogue, sorcerer, warlock e wizard.",
+        "resolution.roll.type deve ser none, attack ou save. Em save informe attribute e onSuccess.",
+        "damage[].appliesOn aceita hit, failed-save, successful-save ou always.",
+        "Para truques, escalonamento normalmente usa source character-level e thresholds 5, 11 e 17.",
+        "Para magias que escalam por espaço, use source slot-level.",
+        "Não inclua index nem homebrew; o sistema controla esses campos.",
+      ],
+      name: "Nome da magia",
+      description: "Descrição completa da magia.",
+      higherLevelText: "Texto de níveis superiores, ou string vazia.",
+      displayName: "Nome opcional exibido",
+      headcanon: "",
+      slotLevel: 1,
+      school: "evocation",
+      classes: ["wizard", "sorcerer"],
+      castingTime: {
+        value: 1,
+        type: "action",
+      },
+      range: {
+        origin: "target",
+        distance: 18,
+        area: {
+          shape: "circle",
+          size: 6,
+        },
+      },
+      duration: {
+        value: 0,
+        unit: "instantaneous",
+      },
+      concentration: false,
+      ritual: false,
+      components: ["V", "S", "M"],
+      material: "Componente material opcional.",
+      resolution: {
+        roll: {
+          type: "save",
+          attribute: "dex",
+          onSuccess: "half",
+        },
+        instances: {
+          base: 1,
+        },
+        damage: [
+          {
+            id: "dano-principal",
+            label: "Dano",
+            damageType: "fire",
+            dice: {
+              quantity: 3,
+              sides: "d6",
+            },
+            flat: 0,
+            addCastingModifier: false,
+            appliesOn: "failed-save",
+            critical: false,
+            diceScaling: {
+              type: "step",
+              source: "slot-level",
+              startLevel: 1,
+              interval: 1,
+              amountPerStep: 1,
+            },
+          },
+        ],
+      },
+      targeting: {
+        kind: "area",
+        targetsSelf: false,
+        targetCount: 1,
+        canTargetMoreAtHigherLevels: false,
+        hasAttackRoll: false,
+        hasSavingThrow: true,
+        savingThrowAttribute: "dex",
+        affectsArea: true,
+        areaShape: "circle",
+        areaSize: 6,
+      },
+      effects: [],
+    },
+    null,
+    2,
+  )
+}
+
+function parseSpellJson(text: string, current: Spell): Spell {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text) as unknown
+  } catch {
+    throw new Error("O conteúdo não é um JSON válido.")
+  }
+  if (!isRecord(parsed)) {
+    throw new Error("A magia precisa ser um objeto JSON.")
+  }
+
+  const base = newSpell()
+  const name = stringField(parsed.name, "name", true)
+  const slotLevel = integerInRange(parsed.slotLevel, "slotLevel", 0, 9)
+  const school = stringField(parsed.school, "school", true)
+  const classes = stringArray(parsed.classes, "classes").filter((className) =>
+    SPELL_CLASS_OPTIONS.some((entry) => entry.value === className),
+  ) as ClassName[]
+
+  const castingTime = parseCastingTime(parsed.castingTime, base.castingTime)
+  const range = parseRange(parsed.range, base.range)
+  const duration = parseDuration(parsed.duration, base.duration)
+  const components = stringArray(parsed.components, "components").filter(
+    (entry): entry is "V" | "S" | "M" =>
+      entry === "V" || entry === "S" || entry === "M",
+  )
+  const resolution = parseResolution(parsed.resolution)
+  const firstDamage = resolution.damage?.[0]
+  const targeting = buildTargetingFromJson(parsed.targeting, resolution, range)
+
+  return {
+    ...base,
+    index: current.index,
+    homebrew: true,
+    name,
+    description: optionalString(parsed.description) ?? "",
+    higherLevelText: optionalString(parsed.higherLevelText) ?? "",
+    displayName: optionalString(parsed.displayName),
+    headcanon: optionalString(parsed.headcanon),
+    slotLevel: slotLevel as MagicCircleLevel,
+    school,
+    classes,
+    castingTime,
+    range,
+    duration,
+    concentration: Boolean(parsed.concentration),
+    ritual: Boolean(parsed.ritual),
+    components,
+    material: components.includes("M")
+      ? optionalString(parsed.material)
+      : undefined,
+    resourceCost: parseResourceCost(parsed.resourceCost),
+    resolution,
+    damageDice: firstDamage?.dice
+      ? {
+          quantity: Math.max(0, Math.trunc(firstDamage.dice.quantity)),
+          sides: firstDamage.dice.sides,
+        }
+      : undefined,
+    rollMode:
+      resolution.roll.type === "attack"
+        ? ["attack"]
+        : resolution.roll.type === "save"
+          ? ["save"]
+          : [],
+    targeting,
+    effects: Array.isArray(parsed.effects)
+      ? structuredClone(parsed.effects) as Spell["effects"]
+      : [],
+  }
+}
+
+function parseCastingTime(
+  value: unknown,
+  fallback: Spell["castingTime"],
+): Spell["castingTime"] {
+  if (!isRecord(value)) return fallback
+  const allowed = ["action", "bonusAction", "reaction", "minute", "hour", "special"]
+  const type = typeof value.type === "string" && allowed.includes(value.type)
+    ? value.type as Spell["castingTime"]["type"]
+    : fallback.type
+  return {
+    value: Math.max(0, finiteNumber(value.value, fallback.value)),
+    type,
+    reactionWhen: type === "reaction" ? optionalString(value.reactionWhen) : undefined,
+    special: type === "special" ? optionalString(value.special) : undefined,
+  }
+}
+
+function parseRange(value: unknown, fallback: Spell["range"]): Spell["range"] {
+  if (!isRecord(value)) return fallback
+  const origins = ["self", "touch", "point", "target", "ally", "enemy"]
+  const origin =
+    typeof value.origin === "string" && origins.includes(value.origin)
+      ? value.origin as Spell["range"]["origin"]
+      : fallback.origin
+  const area = isRecord(value.area)
+    ? {
+        shape: parseAreaShape(value.area.shape),
+        size: Math.max(0, finiteNumber(value.area.size, 0)),
+      }
+    : undefined
+  return {
+    origin,
+    distance:
+      origin === "self" || origin === "touch"
+        ? 0
+        : Math.max(0, finiteNumber(value.distance, fallback.distance)),
+    area,
+  }
+}
+
+function parseDuration(
+  value: unknown,
+  fallback: Spell["duration"],
+): Spell["duration"] {
+  if (!isRecord(value)) return fallback
+  const units = [
+    "instantaneous",
+    "turn",
+    "round",
+    "minute",
+    "hour",
+    "day",
+    "special",
+    "untilDispelled",
+    "short rest",
+    "long rest",
+    "permanent",
+  ]
+  const unit =
+    typeof value.unit === "string" && units.includes(value.unit)
+      ? value.unit as Spell["duration"]["unit"]
+      : fallback.unit
+  return {
+    value: Math.max(0, finiteNumber(value.value, fallback.value)),
+    unit,
+  }
+}
+
+function parseResolution(value: unknown): SpellResolution {
+  if (!isRecord(value)) return { roll: { type: "none" }, damage: [] }
+
+  const rollRecord = isRecord(value.roll) ? value.roll : {}
+  const rollType =
+    rollRecord.type === "attack" || rollRecord.type === "save"
+      ? rollRecord.type
+      : "none"
+
+  const roll: SpellResolution["roll"] =
+    rollType === "attack"
+      ? { type: "attack" }
+      : rollType === "save"
+        ? {
+            type: "save",
+            attribute: parseAttribute(rollRecord.attribute),
+            onSuccess:
+              rollRecord.onSuccess === "half" || rollRecord.onSuccess === "full"
+                ? rollRecord.onSuccess
+                : "none",
+          }
+        : { type: "none" }
+
+  const damage = Array.isArray(value.damage)
+    ? value.damage.map((entry, index) => parseDamage(entry, index, roll.type))
+    : []
+
+  const instances = isRecord(value.instances)
+    ? {
+        base: Math.max(1, Math.trunc(finiteNumber(value.instances.base, 1))),
+        scaling: parseScaling(value.instances.scaling),
+      }
+    : undefined
+
+  return {
+    roll,
+    instances,
+    damage,
+  }
+}
+
+function parseDamage(
+  value: unknown,
+  index: number,
+  rollType: SpellResolution["roll"]["type"],
+): SpellDamageComponent {
+  if (!isRecord(value)) {
+    throw new Error(`resolution.damage[${index}] precisa ser um objeto.`)
+  }
+
+  const diceRecord = isRecord(value.dice) ? value.dice : undefined
+  const quantity = diceRecord
+    ? Math.max(0, Math.trunc(finiteNumber(diceRecord.quantity, 0)))
+    : 0
+  const sides = diceRecord ? parseDieSides(diceRecord.sides) : undefined
+  const appliesOnValues = ["hit", "failed-save", "successful-save", "always"]
+  const fallbackAppliesOn =
+    rollType === "attack"
+      ? "hit"
+      : rollType === "save"
+        ? "failed-save"
+        : "always"
+  const appliesOn =
+    typeof value.appliesOn === "string" &&
+    appliesOnValues.includes(value.appliesOn)
+      ? value.appliesOn as SpellDamageComponent["appliesOn"]
+      : fallbackAppliesOn
+
+  return {
+    id: optionalString(value.id) || `damage-${index + 1}`,
+    label: optionalString(value.label),
+    damageType: optionalString(value.damageType),
+    dice:
+      quantity > 0 && sides
+        ? { quantity, sides }
+        : undefined,
+    flat: value.flat === undefined ? undefined : finiteNumber(value.flat, 0),
+    addCastingModifier: Boolean(value.addCastingModifier),
+    appliesOn,
+    critical:
+      value.critical === undefined
+        ? rollType === "attack"
+        : Boolean(value.critical),
+    diceScaling: parseScaling(value.diceScaling),
+  }
+}
+
+function parseScaling(value: unknown): SpellNumericScaling | undefined {
+  if (!isRecord(value)) return undefined
+  const source =
+    value.source === "character-level" ? "character-level" : "slot-level"
+
+  if (value.type === "step") {
+    return {
+      type: "step",
+      source,
+      startLevel: Math.max(0, Math.trunc(finiteNumber(value.startLevel, 0))),
+      interval: Math.max(1, Math.trunc(finiteNumber(value.interval, 1))),
+      amountPerStep: Math.trunc(finiteNumber(value.amountPerStep, 1)),
+      maxSteps:
+        value.maxSteps === undefined
+          ? undefined
+          : Math.max(0, Math.trunc(finiteNumber(value.maxSteps, 0))),
+    }
+  }
+
+  if (value.type === "thresholds") {
+    const thresholds = Array.isArray(value.thresholds)
+      ? value.thresholds.flatMap((entry) => {
+          if (!isRecord(entry)) return []
+          const level = Math.max(0, Math.trunc(finiteNumber(entry.level, -1)))
+          const amount = Math.trunc(finiteNumber(entry.amount, 0))
+          return level >= 0 ? [{ level, amount }] : []
+        })
+      : []
+    return {
+      type: "thresholds",
+      source,
+      thresholds,
+    }
+  }
+
+  return undefined
+}
+
+function buildTargetingFromJson(
+  value: unknown,
+  resolution: SpellResolution,
+  range: Spell["range"],
+): Spell["targeting"] {
+  const record = isRecord(value) ? value : {}
+  const kinds = [
+    "self",
+    "single-creature",
+    "multiple-creatures",
+    "area",
+    "object",
+    "special",
+  ]
+  const kind =
+    typeof record.kind === "string" && kinds.includes(record.kind)
+      ? record.kind as Spell["targeting"]["kind"]
+      : range.area
+        ? "area"
+        : "special"
+  return {
+    kind,
+    targetsSelf:
+      record.targetsSelf === undefined
+        ? range.origin === "self"
+        : Boolean(record.targetsSelf),
+    targetCount:
+      record.targetCount === undefined
+        ? undefined
+        : Math.max(1, Math.trunc(finiteNumber(record.targetCount, 1))),
+    canTargetMoreAtHigherLevels: Boolean(record.canTargetMoreAtHigherLevels),
+    hasAttackRoll: resolution.roll.type === "attack",
+    hasSavingThrow: resolution.roll.type === "save",
+    savingThrowAttribute:
+      resolution.roll.type === "save"
+        ? resolution.roll.attribute
+        : undefined,
+    affectsArea:
+      record.affectsArea === undefined
+        ? Boolean(range.area)
+        : Boolean(record.affectsArea),
+    areaShape: range.area?.shape,
+    areaSize: range.area?.size,
+  }
+}
+
+function parseResourceCost(value: unknown): Spell["resourceCost"] {
+  if (!isRecord(value)) return undefined
+  const resource =
+    value.resource === "ki" ||
+    value.resource === "sorceryPoints" ||
+    value.resource === "channelDivinity"
+      ? value.resource
+      : undefined
+  if (!resource) return undefined
+  return {
+    resource,
+    amount: Math.max(1, Math.trunc(finiteNumber(value.amount, 1))),
+  }
+}
+
+function parseAreaShape(value: unknown): NonNullable<Spell["range"]["area"]>["shape"] {
+  return value === "square" || value === "cone" || value === "line"
+    ? value
+    : "circle"
+}
+
+function parseAttribute(value: unknown): Attribute {
+  return value === "str" ||
+    value === "con" ||
+    value === "int" ||
+    value === "wis" ||
+    value === "cha"
+    ? value
+    : "dex"
+}
+
+function parseDieSides(value: unknown): DieSides | undefined {
+  return value === "d2" ||
+    value === "d3" ||
+    value === "d4" ||
+    value === "d6" ||
+    value === "d8" ||
+    value === "d10" ||
+    value === "d12" ||
+    value === "d20" ||
+    value === "d100"
+    ? value
+    : undefined
+}
+
+function stringField(
+  value: unknown,
+  name: string,
+  required: boolean,
+): string {
+  if (typeof value === "string" && (!required || value.trim())) {
+    return value.trim()
+  }
+  if (required) throw new Error(`O campo "${name}" é obrigatório.`)
+  return ""
+}
+
+function stringArray(value: unknown, name: string): string[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+    throw new Error(`O campo "${name}" precisa ser um array de textos.`)
+  }
+  return value
+}
+
+function integerInRange(
+  value: unknown,
+  name: string,
+  min: number,
+  max: number,
+): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value < min ||
+    value > max
+  ) {
+    throw new Error(`O campo "${name}" precisa ser um inteiro entre ${min} e ${max}.`)
+  }
+  return value
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim()
+    ? value.trim()
+    : undefined
+}
+
+function finiteNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : fallback
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+async function copyTextToClipboard(value: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value)
+    return
+  }
+
+  const textarea = document.createElement("textarea")
+  textarea.value = value
+  textarea.style.position = "fixed"
+  textarea.style.opacity = "0"
+  document.body.appendChild(textarea)
+  textarea.select()
+  const copied = document.execCommand("copy")
+  textarea.remove()
+  if (!copied) throw new Error("Clipboard unavailable")
 }
 
 function ScalingEditor({
