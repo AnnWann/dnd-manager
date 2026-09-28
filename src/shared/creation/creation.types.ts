@@ -7,6 +7,7 @@ import type { CompendiumCreature } from "../../models/creatures/CompendiumCreatu
 import type { Itemmable } from "../../models/items/item"
 import type { Spell } from "../../models/magic/spells/Spell"
 import type { CampaignProgressionSettings } from "../progression/campaignProgression"
+import type { LongRestSupplySettings } from "../rest/longRestSupplySettings"
 
 /**
  * Persistent configuration authored from the MASTER Creation area.
@@ -21,6 +22,8 @@ export type CreationState = {
   diceRollingEnabled?: boolean
   /** Campaign-wide rule for when character level-ups become available. */
   progression?: CampaignProgressionSettings
+  /** Campaign-wide requirements for supplies consumed by a full long rest. */
+  longRestSupplies?: LongRestSupplySettings
   characters: CreationCharacterConfiguration[]
   spells: Spell[]
   itemCompendium: CreationItemCompendiumEntry[]
