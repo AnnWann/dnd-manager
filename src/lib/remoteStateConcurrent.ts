@@ -62,6 +62,7 @@ function defaultState(): ConcurrentAppState {
     activeCharacterId: '',
     partyInventory: [],
     partyCarryCapacity: 0,
+    partyInventoryAccessible: true,
     spells: [],
     missions: [],
     entityVersions: {},
@@ -489,6 +490,7 @@ function normalizeState(state: unknown): ConcurrentAppState {
         Number.isFinite(parsedCapacity) && parsedCapacity >= 0
           ? parsedCapacity
           : 0,
+      partyInventoryAccessible: raw.partyInventoryAccessible !== false,
       spells: Array.isArray(raw.spells) ? raw.spells : [],
       missions: normalizeMissions(raw.missions),
     } as ConcurrentAppState)
