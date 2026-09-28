@@ -244,6 +244,7 @@ export function SpellLibraryView({
     levelFilter,
     officialSummaries,
     query,
+    rebalancedByIndex,
     ritualFilter,
     saveFilter,
     schoolFilter,
