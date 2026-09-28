@@ -4,7 +4,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { Coffee, Moon, X } from "lucide-react"
+import { Coffee, Moon, Sparkles, X } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
 import { usePartyInventorySettings } from "../../../contexts/partyInventorySettingsContext"
@@ -164,6 +164,26 @@ export function CharacterRestControls({
     setLongRestOpen(false)
   }
 
+  function grantResourceFreeLongRest() {
+    if (!runtime || runtime.role !== "MASTER") return
+
+    if (runtime.status !== "connected") {
+      console.warn(
+        "[session-runtime] Resource-free long rest ignored while the authoritative session server is disconnected.",
+      )
+      return
+    }
+
+    runtime.dispatchHpOperation({
+      type: "character.rest.long",
+      characterId,
+      recovery: "full",
+      selection: [],
+      resourceFree: true,
+    })
+    setLongRestOpen(false)
+  }
+
   return (
     <>
       <section className="flex flex-col gap-3 rounded-xl border border-border bg-bg p-3 shadow-theme-sm sm:flex-row sm:items-center sm:justify-between">
@@ -183,6 +203,18 @@ export function CharacterRestControls({
             <Moon className="h-4 w-4" />
             Descanso longo
           </Button>
+          {runtime?.role === "MASTER" ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={runtime.status !== "connected"}
+              title="Concede um descanso longo completo sem consumir comida, água ou outros suprimentos."
+              onClick={grantResourceFreeLongRest}
+            >
+              <Sparkles className="h-4 w-4" />
+              Conceder descanso sem recursos
+            </Button>
+          ) : null}
         </div>
       </section>
 
