@@ -517,22 +517,30 @@ export function CreaturesCompendiumView() {
           onClose={() => setEditingCreature(undefined)}
           onSave={(creature) => {
             const normalizedFolder = normalizeFolderName(creature.folder)
-            if (normalizedFolder && creationEditor?.draft) {
-              creationEditor.updateDraft((draft) => ({
-                ...draft,
-                creatureFolders: mergeFolderNames([
-                  ...(draft.creatureFolders ?? []),
-                  normalizedFolder,
-                ]),
-                creatureCompendium: draft.creatureCompendium.map((entry) =>
-                  entry.id === creature.id
-                    ? {
-                        ...creature,
-                        folder: normalizedFolder,
-                      }
-                    : entry,
-                ),
-              }))
+            if (creationEditor?.draft) {
+              creationEditor.updateDraft((draft) => {
+                const nextCreature = {
+                  ...creature,
+                  folder: normalizedFolder || undefined,
+                  updatedAt: Date.now(),
+                }
+                const byId = new Map(
+                  draft.creatureCompendium.map((entry) => [entry.id, entry]),
+                )
+                byId.set(nextCreature.id, nextCreature)
+                return {
+                  ...draft,
+                  creatureFolders: normalizedFolder
+                    ? mergeFolderNames([
+                        ...(draft.creatureFolders ?? []),
+                        normalizedFolder,
+                      ])
+                    : draft.creatureFolders,
+                  creatureCompendium: [...byId.values()].sort((left, right) =>
+                    left.name.localeCompare(right.name),
+                  ),
+                }
+              })
             } else {
               upsertCreature({
                 ...creature,
