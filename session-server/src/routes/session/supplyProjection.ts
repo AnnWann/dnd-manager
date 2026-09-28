@@ -2,7 +2,7 @@ import {
   CharacterTemplate,
   type CharacterTemplateProps,
 } from "../../../../src/models/characters/CharacterTemplate";
-import { getRequiredSupplyForRace } from "../../../../src/models/supplies/partySupply";
+import { getEffectiveRaceSupplyConsumption } from "../../../../src/models/supplies/partySupply";
 import type {
   SessionSharedInventoryState,
   SessionSupplyConsumerSummary,
@@ -43,8 +43,12 @@ export async function reconcileSessionSupplyProjection(
   const projected = buildAuthoritativeSupplyProjection(abilities, lifecycle);
   const currentConsumers = inventory.supplyConsumers ?? [];
   const currentPerLongRest = normalizeSupply(inventory.supplyPerLongRest ?? 0);
+  const currentFoodPerLongRest = normalizeSupply(inventory.foodPerLongRest ?? currentPerLongRest);
+  const currentDrinkPerLongRest = normalizeSupply(inventory.drinkPerLongRest ?? 0);
   const changed =
     currentPerLongRest !== projected.supplyPerLongRest ||
+    currentFoodPerLongRest !== projected.foodPerLongRest ||
+    currentDrinkPerLongRest !== projected.drinkPerLongRest ||
     JSON.stringify(currentConsumers) !== JSON.stringify(projected.consumers);
 
   if (!changed) return { state: inventory, changed: false };
@@ -53,6 +57,8 @@ export async function reconcileSessionSupplyProjection(
     ...inventory,
     supplyConsumers: projected.consumers,
     supplyPerLongRest: projected.supplyPerLongRest,
+    foodPerLongRest: projected.foodPerLongRest,
+    drinkPerLongRest: projected.drinkPerLongRest,
   };
   await storage.put(INVENTORY_STATE_KEY, next);
   return { state: next, changed: true };
@@ -64,8 +70,12 @@ function buildAuthoritativeSupplyProjection(
 ): {
   consumers: SessionSupplyConsumerSummary[];
   supplyPerLongRest: number;
+  foodPerLongRest: number;
+  drinkPerLongRest: number;
 } {
-  const consumers: Array<SessionSupplyConsumerSummary & { supply: number }> = [];
+  const consumers: Array<
+    SessionSupplyConsumerSummary & { food: number; drink: number }
+  > = [];
 
   for (const state of Object.values(abilities)) {
     if (!state?.initialized) continue;
@@ -78,10 +88,15 @@ function buildAuthoritativeSupplyProjection(
         state.character as Partial<CharacterTemplateProps>,
       );
       const name = character.get("name").trim() || characterId;
-      const supply = normalizeSupply(
-        getRequiredSupplyForRace(character.get("sheet").race),
+      const consumption = getEffectiveRaceSupplyConsumption(
+        character.get("sheet").race,
       );
-      consumers.push({ characterId, name, supply });
+      consumers.push({
+        characterId,
+        name,
+        food: normalizeSupply(consumption.food),
+        drink: normalizeSupply(consumption.drink),
+      });
     } catch {
       // Invalid snapshots are already rejected by the character runtime. A bad
       // legacy record must not make the shared inventory projection unusable.
@@ -93,11 +108,18 @@ function buildAuthoritativeSupplyProjection(
     left.characterId.localeCompare(right.characterId),
   );
 
+  const foodPerLongRest = normalizeSupply(
+    consumers.reduce((total, consumer) => total + consumer.food, 0),
+  );
+  const drinkPerLongRest = normalizeSupply(
+    consumers.reduce((total, consumer) => total + consumer.drink, 0),
+  );
+
   return {
     consumers: consumers.map(({ characterId, name }) => ({ characterId, name })),
-    supplyPerLongRest: normalizeSupply(
-      consumers.reduce((total, consumer) => total + consumer.supply, 0),
-    ),
+    supplyPerLongRest: foodPerLongRest,
+    foodPerLongRest,
+    drinkPerLongRest,
   };
 }
 
