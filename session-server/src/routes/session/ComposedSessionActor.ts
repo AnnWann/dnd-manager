@@ -69,6 +69,7 @@ type SharedInventoryState = {
   groundInventory: unknown[];
   carryCapacity?: number;
   additionalSupplyConsumption?: number;
+  partyInventoryAccessible?: boolean;
 };
 
 type CharacterLifecycleReverse = {
