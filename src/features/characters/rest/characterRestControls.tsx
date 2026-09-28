@@ -7,6 +7,7 @@ import {
 import { Coffee, Moon, X } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
+import { usePartyInventorySettings } from "../../../contexts/partyInventorySettingsContext"
 import { Input } from "../../../components/ui/Input"
 import {
   DICE_ROLL_RESULT_EVENT,
@@ -86,6 +87,8 @@ export function CharacterRestControls({
   completeLongRest,
 }: Props) {
   const runtime = useOptionalSessionRuntime()
+  const { inventoryAccessible: localPartyInventoryAccessible } =
+    usePartyInventorySettings()
   const [shortRestOpen, setShortRestOpen] = useState(false)
   const [longRestOpen, setLongRestOpen] = useState(false)
   const characterId = character.get("id")
@@ -93,6 +96,12 @@ export function CharacterRestControls({
   const longRestSupplySettings = normalizeLongRestSupplySettings(
     runtime?.runtimeConfigSnapshot?.config.longRestSupplies,
   )
+  const partyInventoryAccessible =
+    runtime?.inventoryState?.partyInventoryAccessible
+    ?? localPartyInventoryAccessible
+  const longRestInventory = partyInventoryAccessible
+    ? partyInventory
+    : character.get("inventory")
 
   function completeShortRest(
     healing: number,
@@ -130,7 +139,7 @@ export function CharacterRestControls({
           character.get("sheet").race,
           longRestSupplySettings,
         )
-        const totals = getSupplySelectionTotals(partyInventory, selection)
+        const totals = getSupplySelectionTotals(longRestInventory, selection)
         const recovery =
           !longRestSupplySettings.enabled
           || hasEnoughLongRestSupplies(totals, requirements)
@@ -189,8 +198,11 @@ export function CharacterRestControls({
       <LongRestDialog
         open={longRestOpen}
         character={character}
-        partyInventory={partyInventory}
+        partyInventory={longRestInventory}
         settings={longRestSupplySettings}
+        inventorySource={
+          partyInventoryAccessible ? "group" : "character"
+        }
         onClose={() => setLongRestOpen(false)}
         onConfirm={confirmLongRest}
       />
@@ -424,6 +436,7 @@ function LongRestDialog({
   character,
   partyInventory,
   settings,
+  inventorySource,
   onClose,
   onConfirm,
 }: {
@@ -431,6 +444,7 @@ function LongRestDialog({
   character: CharacterTemplate
   partyInventory: Itemmable[]
   settings: LongRestSupplySettings
+  inventorySource: "group" | "character"
   onClose: () => void
   onConfirm: (selection: LongRestSupplySelection[]) => void
 }) {
@@ -532,7 +546,9 @@ function LongRestDialog({
         title="Preparar descanso longo"
         description={
           settings.enabled
-            ? "Selecione comida e bebida suficientes para cumprir as regras de descanso desta campanha."
+            ? inventorySource === "group"
+              ? "Selecione comida e bebida do inventário do grupo para cumprir as regras de descanso desta campanha."
+              : "O inventário do grupo está inacessível. Este personagem só pode usar os suprimentos que carrega no próprio inventário."
             : "Esta campanha não exige suprimentos para completar um descanso longo."
         }
         onClose={resetAndClose}
