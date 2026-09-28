@@ -48,6 +48,7 @@ export function CampaignProgressionSettingsEditor({
           unit: "%",
           revealed: false,
           grantsLevel: true,
+          levelGranted: false,
         },
       ],
     })
@@ -258,7 +259,10 @@ function TrackEditor({
 }) {
   const percent = Math.max(0, Math.min(100, (track.current / Math.max(1, track.maximum)) * 100))
   const thresholdPercent = Math.max(0, Math.min(100, (track.levelUpAt / Math.max(1, track.maximum)) * 100))
-  const ready = track.grantsLevel && track.current >= track.levelUpAt
+  const ready =
+    track.grantsLevel
+    && !track.levelGranted
+    && track.current >= track.levelUpAt
 
   function patch(next: Partial<CampaignProgressionTrack>) {
     onChange(normalizeTrack({ ...track, ...next }))
@@ -307,7 +311,11 @@ function TrackEditor({
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
           <span className="font-medium text-textH">Prévia: {formatTrackValue(track.current, track.unit)}</span>
           <span className={ready ? "font-semibold text-accent" : "text-textMuted"}>
-            {ready ? "Meta atingida — nível liberado" : `Meta: ${formatTrackValue(track.levelUpAt, track.unit)}`}
+            {track.levelGranted
+              ? "Meta concluída — nível já concedido"
+              : ready
+                ? "Meta atingida — nível liberado"
+                : `Meta: ${formatTrackValue(track.levelUpAt, track.unit)}`}
           </span>
         </div>
         <div className="relative mt-3 h-2 overflow-visible rounded-full bg-bg-subtle">
@@ -340,6 +348,14 @@ function TrackEditor({
           description="Ao alcançar a meta configurada, a ficha indica que há um nível disponível."
           onChange={(checked) => patch({ grantsLevel: checked })}
         />
+        {track.grantsLevel ? (
+          <ToggleCard
+            checked={track.levelGranted}
+            title="Nível já concedido"
+            description="Marque depois que o grupo efetivamente usar o nível liberado por este medidor."
+            onChange={(checked) => patch({ levelGranted: checked })}
+          />
+        ) : null}
       </div>
     </article>
   )

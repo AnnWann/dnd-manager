@@ -232,7 +232,10 @@ function CustomProgressionCard({
   tracks: CampaignProgressionTrack[]
 }) {
   const ready = tracks.some(
-    (track) => track.grantsLevel && track.current >= track.levelUpAt,
+    (track) =>
+      track.grantsLevel
+      && !track.levelGranted
+      && track.current >= track.levelUpAt,
   )
 
   return (
@@ -288,7 +291,10 @@ function CustomProgressTrack({
     0,
     Math.min(100, (track.levelUpAt / maximum) * 100),
   )
-  const ready = track.grantsLevel && track.current >= track.levelUpAt
+  const ready =
+    track.grantsLevel
+    && !track.levelGranted
+    && track.current >= track.levelUpAt
 
   return (
     <article className="rounded-xl border border-border bg-bg-subtle p-4">
@@ -302,9 +308,11 @@ function CustomProgressTrack({
           ) : null}
         </div>
         <div className={ready ? "text-xs font-semibold text-accent" : "text-xs text-textMuted"}>
-          {ready
-            ? "Meta atingida — nível liberado"
-            : `${formatCustomValue(track.current, track.unit)} / ${formatCustomValue(track.maximum, track.unit)}`}
+          {track.levelGranted
+            ? "Meta concluída — nível concedido"
+            : ready
+              ? "Meta atingida — nível liberado"
+              : `${formatCustomValue(track.current, track.unit)} / ${formatCustomValue(track.maximum, track.unit)}`}
         </div>
       </div>
 

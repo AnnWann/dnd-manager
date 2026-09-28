@@ -21,6 +21,8 @@ export type CampaignProgressionTrack = {
   /** Hidden tracks are omitted from the runtime sent to players. */
   revealed: boolean
   grantsLevel: boolean
+  /** Set after the unlocked level has actually been consumed by the party. */
+  levelGranted: boolean
 }
 
 export type CampaignProgressionSettings = {
@@ -68,6 +70,7 @@ export function normalizeCampaignProgressionSettings(
             unit: cleanString(track.unit, "%"),
             revealed: track.revealed === true,
             grantsLevel: track.grantsLevel !== false,
+            levelGranted: track.levelGranted === true,
           }
         })
     : []
@@ -153,6 +156,7 @@ function isProgressionTrack(value: unknown): boolean {
     && typeof value.unit === "string"
     && typeof value.revealed === "boolean"
     && typeof value.grantsLevel === "boolean"
+    && typeof value.levelGranted === "boolean"
     && (
       value.description === undefined
       || typeof value.description === "string"
