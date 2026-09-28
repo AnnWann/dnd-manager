@@ -15,7 +15,7 @@ export function InitiativePlayerView() {
   const { session, hydrated } = useInitiativeSession()
   const runtime = useOptionalSessionRuntime()
   const { userKey } = useSyncContext()
-  const [viewMode, setViewMode] = useState<PlayerViewMode>("table")
+  const [viewMode, setViewMode] = useState<PlayerViewMode>("cards")
   const cardRefs = useRef(new Map<string, HTMLDivElement>())
 
   const ownedCharacterIds = useMemo(() => {
