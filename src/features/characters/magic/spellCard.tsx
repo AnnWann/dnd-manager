@@ -506,6 +506,7 @@ export function SpellCard({
                 <SpellMeta>{formatAreaTiles(spell)}</SpellMeta>
               ) : null}
               <SpellMeta>{formatSpellOrigin(source)}</SpellMeta>
+              {spell.rebalanced ? <SpellMeta>Rebalanceada</SpellMeta> : null}
               {accessLabel ? (
                 <SpellMeta className="font-semibold text-accent">
                   {accessLabel}
