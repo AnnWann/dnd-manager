@@ -940,7 +940,10 @@ function describeSessionOperation(
     case "character.stat.inspiration.set": return operation.value ? `${characterName} recebeu inspiração.` : `${characterName} gastou a inspiração.`
     case "character.stat.experience.set": return `Definiu a experiência de ${characterName} para ${operation.value.toLocaleString("pt-BR")} XP.`
     case "character.rest.short": return `${characterName} concluiu um descanso curto.`
-    case "character.rest.long": return `${characterName} concluiu um descanso longo${operation.recovery === "partial" ? " parcial" : ""}.`
+    case "character.rest.long":
+      return operation.resourceFree
+        ? `O mestre concedeu a ${characterName} um descanso longo completo sem consumir suprimentos.`
+        : `${characterName} concluiu um descanso longo${operation.recovery === "partial" ? " parcial" : ""}.`
     case "character.ability.save": return `Atualizou ${operation.ability.name || "uma habilidade"} de ${characterName}.`
     case "character.ability.remove": return `Removeu ${operation.abilityName || "uma habilidade"} de ${characterName}.`
     case "character.ability.use": return `${characterName} usou ${operation.abilityName || "uma habilidade"}.${formatBonusRollResults(operation.bonusRollResults)}`
