@@ -633,6 +633,7 @@ export function PartyInventoryView() {
         <InventoryEditor
           title="Suprimentos do grupo"
           description="Comida, água e outros recursos consumidos pela viagem e pelos descansos ficam separados dos demais itens."
+          showCurrencyWallet={false}
           items={supplyItems}
           emptyMessage="O grupo não possui suprimentos armazenados."
           onAddItem={addItem}
