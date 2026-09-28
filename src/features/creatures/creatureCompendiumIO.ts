@@ -53,6 +53,7 @@ export function getCreatureJsonTemplate(): string {
       category: "Monstro",
       size: "Médio",
       challengeRating: "5",
+      folder: "Aberrações",
       unique: false,
       initiativeTurns: 1,
       defaultSide: "enemy",
