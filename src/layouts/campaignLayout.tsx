@@ -522,6 +522,7 @@ export function CampaignLayout() {
         campaignCapabilities: effectiveCapabilities,
         userKey: effectiveUserKey,
         setUserKey,
+        sessionMembers,
         canSync,
         pullFromServer,
         syncStatus,
