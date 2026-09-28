@@ -669,6 +669,39 @@ function TrackEditor({
   )
 }
 
+function ProgressionStat({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string
+  value: string
+  highlight?: boolean
+}) {
+  return (
+    <div
+      className={
+        highlight
+          ? "rounded-lg border border-accentBorder bg-accentBg p-3"
+          : "rounded-lg border border-border bg-bg p-3"
+      }
+    >
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+        {label}
+      </div>
+      <div
+        className={
+          highlight
+            ? "mt-1 font-semibold text-accent"
+            : "mt-1 font-semibold text-textH"
+        }
+      >
+        {value}
+      </div>
+    </div>
+  )
+}
+
 function NumberField({
   label,
   value,
@@ -728,13 +761,69 @@ function ToggleCard({
 
 function normalizeTrack(track: CampaignProgressionTrack): CampaignProgressionTrack {
   const maximum = Math.max(1, finite(track.maximum, 100))
+  const rewardAmount =
+    track.rewardType === "none"
+      ? 0
+      : Math.max(1, finite(track.rewardAmount, 1))
+
   return {
     ...track,
     current: clamp(finite(track.current, 0), 0, maximum),
     maximum,
     levelUpAt: clamp(finite(track.levelUpAt, maximum), 0, maximum),
     unit: track.unit.trim() || "%",
+    rewardAmount,
+    rewardConsumed:
+      track.rewardType === "level"
+        ? clamp(
+            finite(track.rewardConsumed, 0),
+            0,
+            Math.floor(rewardAmount),
+          )
+        : 0,
   }
+}
+
+function rewardLabel(
+  track: CampaignProgressionTrack,
+  pointSystem: CampaignProgressionPointSystem,
+): string {
+  if (track.rewardType === "points") {
+    return "+" + formatPointValue(track.rewardAmount, pointSystem.unit)
+  }
+  if (track.rewardType === "level") {
+    const amount = Math.max(0, Math.floor(track.rewardAmount))
+    return String(amount) + " nível" + (amount === 1 ? "" : "is")
+  }
+  return "Sem recompensa"
+}
+
+function rewardStatus(
+  track: CampaignProgressionTrack,
+  pointSystem: CampaignProgressionPointSystem,
+  directRemaining: number,
+): string {
+  if (track.rewardType === "points") {
+    return "Meta atingida — " + rewardLabel(track, pointSystem)
+  }
+  if (track.rewardType === "level") {
+    return directRemaining > 0
+      ? "Meta atingida — "
+        + String(directRemaining)
+        + " nível"
+        + (directRemaining === 1 ? "" : "is")
+        + " disponível"
+        + (directRemaining === 1 ? "" : "eis")
+      : "Meta concluída — recompensa consumida"
+  }
+  return "Meta atingida"
+}
+
+function formatPointValue(value: number, unit: string): string {
+  const display = Number.isInteger(value)
+    ? value.toLocaleString("pt-BR")
+    : value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })
+  return (display + " " + unit).trim()
 }
 
 function formatTrackValue(value: number, unit: string): string {
