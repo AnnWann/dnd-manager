@@ -34,6 +34,8 @@ export type AppStateV1 = {
   groundInventory?: Itemmable[]
   /** Carrying capacity of the party vehicle, including carriage and draft animals. */
   partyCarryCapacity?: number
+  /** Whether players may access the shared party inventory. Defaults to true. */
+  partyInventoryAccessible?: boolean
   /** Optional: reusable homebrew spell definitions keyed by hb:... index (synced across devices). */
   spells?: Spell[]
 }
@@ -82,6 +84,7 @@ function defaultState(): AppStateV1 {
     partyInventory: [],
     groundInventory: [],
     partyCarryCapacity: 0,
+    partyInventoryAccessible: true,
     spells: [],
     entityVersions: {},
     operations: [],
@@ -544,6 +547,7 @@ function normalizeState(state: unknown): AppStateV1 {
         Number.isFinite(parsedCapacity) && parsedCapacity >= 0
           ? parsedCapacity
           : 0,
+      partyInventoryAccessible: raw.partyInventoryAccessible !== false,
       spells: Array.isArray(raw.spells) ? raw.spells : [],
     })
   } catch {
