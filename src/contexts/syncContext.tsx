@@ -1,6 +1,7 @@
 // src/contexts/SyncContext.tsx
 
 import { createContext, useContext, type ReactNode } from "react"
+import type { CampaignSessionMember } from "../api/campaign-session"
 import { useLocation } from "react-router-dom"
 import { SessionRuntimeProvider } from "../features/session-runtime/SessionRuntimeProvider"
 import { sessionIdFromPathname } from "../lib/campaignRoutes"
@@ -20,6 +21,7 @@ export type SyncContextValue = {
 
   userKey: string
   setUserKey: (value: string) => void
+  sessionMembers: CampaignSessionMember[]
 
   canSync: boolean
   pullFromServer: () => void | Promise<void>
