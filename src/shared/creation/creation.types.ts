@@ -22,6 +22,8 @@ export type CreationState = {
   spells: Spell[]
   itemCompendium: CreationItemCompendiumEntry[]
   creatureCompendium: CompendiumCreature[]
+  /** Named folders used to organize the creature compendium. */
+  creatureFolders?: string[]
   customSystems: CustomSystemDefinition[]
 }
 
