@@ -437,22 +437,43 @@ function MilestoneEditor({
 
 function TrackEditor({
   track,
+  pointSystem,
   onChange,
   onRemove,
 }: {
   track: CampaignProgressionTrack
+  pointSystem: CampaignProgressionPointSystem
   onChange: (track: CampaignProgressionTrack) => void
   onRemove: () => void
 }) {
-  const percent = Math.max(0, Math.min(100, (track.current / Math.max(1, track.maximum)) * 100))
-  const thresholdPercent = Math.max(0, Math.min(100, (track.levelUpAt / Math.max(1, track.maximum)) * 100))
-  const ready =
-    track.grantsLevel
-    && !track.levelGranted
-    && track.current >= track.levelUpAt
+  const percent = Math.max(
+    0,
+    Math.min(100, (track.current / Math.max(1, track.maximum)) * 100),
+  )
+  const thresholdPercent = Math.max(
+    0,
+    Math.min(100, (track.levelUpAt / Math.max(1, track.maximum)) * 100),
+  )
+  const unlocked = track.current >= track.levelUpAt
+  const directRemaining =
+    track.rewardType === "level"
+      ? Math.max(
+          0,
+          Math.floor(track.rewardAmount) - Math.floor(track.rewardConsumed),
+        )
+      : 0
 
   function patch(next: Partial<CampaignProgressionTrack>) {
     onChange(normalizeTrack({ ...track, ...next }))
+  }
+
+  function changeRewardType(rewardType: CampaignProgressionRewardType) {
+    patch({
+      rewardType,
+      rewardAmount:
+        rewardType === "none" ? 0 : Math.max(1, track.rewardAmount || 1),
+      rewardConsumed: 0,
+    })
   }
 
   return (
@@ -461,7 +482,7 @@ function TrackEditor({
         <div className="min-w-0 flex-1">
           <Input
             value={track.name}
-            placeholder="Nome do medidor"
+            placeholder="Nome do objetivo"
             onChange={(event) => patch({ name: event.target.value })}
           />
           <Textarea
@@ -479,71 +500,171 @@ function TrackEditor({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-4">
-        <NumberField label="Atual" value={track.current} onChange={(value) => patch({ current: value })} />
-        <NumberField label="Máximo" value={track.maximum} minimum={1} onChange={(value) => patch({ maximum: value })} />
-        <NumberField label="Libera nível em" value={track.levelUpAt} onChange={(value) => patch({ levelUpAt: value })} />
+        <NumberField
+          label="Atual"
+          value={track.current}
+          onChange={(current) => patch({ current })}
+        />
+        <NumberField
+          label="Máximo"
+          value={track.maximum}
+          minimum={1}
+          onChange={(maximum) => patch({ maximum })}
+        />
+        <NumberField
+          label="Recompensa em"
+          value={track.levelUpAt}
+          onChange={(levelUpAt) => patch({ levelUpAt })}
+        />
         <label className="grid gap-1.5">
           <span className="text-xs font-medium text-textH">Unidade</span>
-          <Input value={track.unit} placeholder="%" onChange={(event) => patch({ unit: event.target.value })} />
+          <Input
+            value={track.unit}
+            placeholder="%"
+            onChange={(event) => patch({ unit: event.target.value })}
+          />
         </label>
       </div>
 
+      <div className="grid gap-3 rounded-lg border border-border bg-bg p-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+        <label className="grid gap-1.5">
+          <span className="text-xs font-medium text-textH">
+            Recompensa ao atingir a meta
+          </span>
+          <SharedSelect
+            className="h-10 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-textH outline-none"
+            value={track.rewardType}
+            onChange={(event) =>
+              changeRewardType(
+                event.target.value as CampaignProgressionRewardType,
+              )
+            }
+          >
+            <option value="points">Pontos de progressão</option>
+            <option value="level">Nível direto</option>
+            <option value="none">Sem recompensa</option>
+          </SharedSelect>
+        </label>
+
+        {track.rewardType !== "none" ? (
+          <NumberField
+            label={
+              track.rewardType === "points"
+                ? "Quantidade (" + pointSystem.unit + ")"
+                : "Quantidade de níveis"
+            }
+            value={track.rewardAmount}
+            minimum={1}
+            onChange={(rewardAmount) =>
+              patch({
+                rewardAmount,
+                rewardConsumed:
+                  track.rewardType === "level"
+                    ? Math.min(track.rewardConsumed, rewardAmount)
+                    : 0,
+              })
+            }
+          />
+        ) : null}
+      </div>
+
+      {track.rewardType === "level" ? (
+        <div className="grid gap-3 rounded-lg border border-border bg-bg p-3 sm:grid-cols-[minmax(0,1fr)_10rem] sm:items-end">
+          <div className="text-xs leading-5 text-textMuted">
+            Níveis diretos ignoram o banco de pontos. Registre quantos já
+            foram consumidos para que não continuem disponíveis.
+          </div>
+          <NumberField
+            label="Níveis consumidos"
+            value={track.rewardConsumed}
+            minimum={0}
+            onChange={(rewardConsumed) =>
+              patch({
+                rewardConsumed: Math.min(
+                  Math.max(0, rewardConsumed),
+                  Math.max(0, Math.floor(track.rewardAmount)),
+                ),
+              })
+            }
+          />
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="secondary" onClick={() => patch({ current: track.current - 5 })}>−5</Button>
-        <Button size="sm" variant="secondary" onClick={() => patch({ current: track.current + 5 })}>+5</Button>
-        <Button size="sm" variant="secondary" onClick={() => patch({ current: track.current + 10 })}>+10</Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => patch({ current: track.current - 5 })}
+        >
+          −5
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => patch({ current: track.current + 5 })}
+        >
+          +5
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => patch({ current: track.current + 10 })}
+        >
+          +10
+        </Button>
       </div>
 
       <div className="rounded-lg border border-border bg-bg p-3">
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span className="font-medium text-textH">Prévia: {formatTrackValue(track.current, track.unit)}</span>
-          <span className={ready ? "font-semibold text-accent" : "text-textMuted"}>
-            {track.levelGranted
-              ? "Meta concluída — nível já concedido"
-              : ready
-                ? "Meta atingida — nível liberado"
-                : `Meta: ${formatTrackValue(track.levelUpAt, track.unit)}`}
+          <span className="font-medium text-textH">
+            Prévia: {formatTrackValue(track.current, track.unit)}
+          </span>
+          <span className={unlocked ? "font-semibold text-accent" : "text-textMuted"}>
+            {track.rewardType === "none"
+              ? "Medidor informativo"
+              : unlocked
+                ? rewardStatus(track, pointSystem, directRemaining)
+                : "Recompensa em " + formatTrackValue(track.levelUpAt, track.unit)}
           </span>
         </div>
+
         <div className="relative mt-3 h-2 overflow-visible rounded-full bg-bg-subtle">
-          <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${percent}%` }} />
-          {track.grantsLevel ? (
+          <div
+            className="h-full rounded-full bg-accent transition-[width]"
+            style={{ width: String(percent) + "%" }}
+          />
+          {track.rewardType !== "none" ? (
             <span
               className="absolute top-[-3px] h-3.5 w-0.5 bg-textH"
-              style={{ left: `${thresholdPercent}%` }}
-              title="Meta para liberar nível"
+              style={{ left: String(thresholdPercent) + "%" }}
+              title="Meta de recompensa"
             />
           ) : null}
         </div>
-      </div>
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        <ToggleCard
-          checked={track.revealed}
-          title={track.revealed ? "Visível aos jogadores" : "Oculto dos jogadores"}
-          description={
-            track.revealed
-              ? "O medidor e seu nome são enviados para a ficha dos jogadores."
-              : "O nome, a descrição e o progresso não são enviados para os jogadores."
-          }
-          icon={track.revealed ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-          onChange={(checked) => patch({ revealed: checked })}
-        />
-        <ToggleCard
-          checked={track.grantsLevel}
-          title="Concede nível"
-          description="Ao alcançar a meta configurada, a ficha indica que há um nível disponível."
-          onChange={(checked) => patch({ grantsLevel: checked })}
-        />
-        {track.grantsLevel ? (
-          <ToggleCard
-            checked={track.levelGranted}
-            title="Nível já concedido"
-            description="Marque depois que o grupo efetivamente usar o nível liberado por este medidor."
-            onChange={(checked) => patch({ levelGranted: checked })}
-          />
+        {track.rewardType !== "none" ? (
+          <div className="mt-2 text-[10px] text-textMuted">
+            Ao atingir {formatTrackValue(track.levelUpAt, track.unit)}:{" "}
+            {rewardLabel(track, pointSystem)}
+          </div>
         ) : null}
       </div>
+
+      <ToggleCard
+        checked={track.revealed}
+        title={track.revealed ? "Visível aos jogadores" : "Oculto dos jogadores"}
+        description={
+          track.revealed
+            ? "Nome, descrição, progresso e recompensa aparecem na ficha."
+            : "Nenhum dado deste objetivo é enviado aos jogadores."
+        }
+        icon={
+          track.revealed
+            ? <Eye className="h-4 w-4" />
+            : <EyeOff className="h-4 w-4" />
+        }
+        onChange={(revealed) => patch({ revealed })}
+      />
     </article>
   )
 }
