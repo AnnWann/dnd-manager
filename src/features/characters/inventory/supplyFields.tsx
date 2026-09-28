@@ -1,4 +1,5 @@
 import { Input } from "../../../components/ui/Input"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 import { Select } from "../../../components/ui/Select"
 import type { Itemmable } from "../../../models/items/item"
 import type {
@@ -10,9 +11,12 @@ import {
   getTotalSupplyPortions,
   STANDARD_PORTIONS_PER_BARREL,
   STANDARD_PORTIONS_PER_RATION,
-  STANDARD_RATION_WEIGHT_KG,
   type SupplyPackageKind,
 } from "../../../models/supplies/partySupply"
+import {
+  formatSupplyPhysicalAmount,
+  normalizeLongRestSupplySettings,
+} from "../../../shared/rest/longRestSupplySettings"
 
 const SUPPLY_CATEGORIES: Array<{
   value: SupplyCategory
@@ -53,10 +57,7 @@ export function withSupplyDefaults(item: Itemmable): SupplyItem {
     equipSlot: undefined,
     pocketable: false,
     insideBagOfHolding: false,
-    weight:
-      !hasSupplyData && supplyPackage === "ration" && currentWeight === 0
-        ? STANDARD_RATION_WEIGHT_KG
-        : currentWeight,
+    weight: currentWeight,
     supplyCategory: current.supplyCategory ?? "food",
     supplyPackage,
     supplyUnitsPerItem: Math.max(
@@ -81,6 +82,10 @@ export function SupplyFields({
   onUpdate: (updater: (item: Itemmable) => Itemmable) => void
 }) {
   const supply = withSupplyDefaults(item)
+  const runtime = useOptionalSessionRuntime()
+  const supplySettings = normalizeLongRestSupplySettings(
+    runtime?.runtimeConfigSnapshot?.config.longRestSupplies,
+  )
 
   return (
     <section className="grid min-w-0 gap-3 rounded-xl border border-border bg-bg-subtle p-3 md:col-span-3">
@@ -89,8 +94,12 @@ export function SupplyFields({
           Dados de suprimento
         </div>
         <p className="mt-1 max-w-full break-words text-[11px] leading-4 text-textMuted">
-          Uma porção sustenta um humanoide Médio por um descanso longo. Uma
-          ração individual vale {STANDARD_PORTIONS_PER_RATION} porção e pesa {STANDARD_RATION_WEIGHT_KG.toLocaleString("pt-BR")} kg; um barril
+          O inventário armazena suprimentos em porções. Pela regra atual da
+          campanha, 1 porção de comida equivale a{" "}
+          {formatSupplyPhysicalAmount(1, supplySettings.food)} e 1 porção de
+          bebida equivale a{" "}
+          {formatSupplyPhysicalAmount(1, supplySettings.drink)}. Uma ração
+          padrão vale {STANDARD_PORTIONS_PER_RATION} porção; um barril padrão
           vale {STANDARD_PORTIONS_PER_BARREL} porções.
         </p>
       </div>
@@ -130,10 +139,7 @@ export function SupplyFields({
                   nextPackage === "custom"
                     ? withSupplyDefaults(current).supplyUnitsPerItem
                     : defaults.portions,
-                weight:
-                  nextPackage === "ration"
-                    ? STANDARD_RATION_WEIGHT_KG
-                    : withSupplyDefaults(current).weight,
+                weight: withSupplyDefaults(current).weight,
                 remainingSupplyUnits: undefined,
                 supplyUnitLabel: defaults.label,
               }))
