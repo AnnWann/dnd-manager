@@ -150,7 +150,14 @@ export type SessionLongRestSupplySelection = {
 
 export type SessionRestOperation =
   | { type: "character.rest.short"; characterId: string; healing: number; hitDiceConsumption: Partial<Record<SessionDieSides, number>> }
-  | { type: "character.rest.long"; characterId: string; recovery: "partial" | "full"; selection: SessionLongRestSupplySelection[] }
+  | {
+      type: "character.rest.long"
+      characterId: string
+      recovery: "partial" | "full"
+      selection: SessionLongRestSupplySelection[]
+      /** MASTER-only override: complete a full long rest without consuming supplies. */
+      resourceFree?: boolean
+    }
 
 export type SessionAuthoritativeOperation = SessionHpOperation | SessionHitDiceOperation | SessionStatOperation | SessionAttributeOperation | SessionSavingThrowOperation | SessionSkillOperation | SessionRestOperation
 export type SessionLoggedOperation = SessionAuthoritativeOperation | SessionConditionOperation | SessionConcentrationOperation
