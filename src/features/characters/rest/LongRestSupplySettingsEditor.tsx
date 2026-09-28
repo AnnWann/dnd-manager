@@ -1,4 +1,5 @@
 import { Droplets, Utensils } from "lucide-react"
+import type { ReactNode } from "react"
 
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
@@ -125,7 +126,7 @@ function ResourceEditor({
   rule,
   onChange,
 }: {
-  icon: React.ReactNode
+  icon: ReactNode
   title: string
   rule: LongRestSupplyResourceRule
   onChange: (patch: Partial<LongRestSupplyResourceRule>) => void
