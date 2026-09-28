@@ -260,8 +260,12 @@ function completeLongRest<TState extends AppStateV1>(
   const requiredSupply = getRequiredSupplyForRace(
     restedCharacter.get("sheet").race,
   )
+  const useSharedInventory = state.partyInventoryAccessible !== false
+  const sourceInventory = useSharedInventory
+    ? state.partyInventory ?? []
+    : restedCharacter.get("inventory")
   const consumption = consumeSelectedSupplies(
-    state.partyInventory ?? [],
+    sourceInventory,
     selection,
   )
 
@@ -269,6 +273,12 @@ function completeLongRest<TState extends AppStateV1>(
 
   const isPartialRest =
     consumption.selectedPortions + 0.000001 < requiredSupply
+  const suppliedCharacter = useSharedInventory
+    ? restedCharacter
+    : restedCharacter.with(
+        "inventory",
+        consumption.items.map((item) => touchItem(item, meta)),
+      )
 
   return {
     ...state,
@@ -277,12 +287,14 @@ function completeLongRest<TState extends AppStateV1>(
 
       return touchCharacter(
         isPartialRest
-          ? takePartialLongRest(restedCharacter)
-          : takeLongRest(restedCharacter),
+          ? takePartialLongRest(suppliedCharacter)
+          : takeLongRest(suppliedCharacter),
         meta,
       ).toJSON()
     }),
-    partyInventory: consumption.items.map((item) => touchItem(item, meta)),
+    partyInventory: useSharedInventory
+      ? consumption.items.map((item) => touchItem(item, meta))
+      : state.partyInventory ?? [],
   }
 }
 
