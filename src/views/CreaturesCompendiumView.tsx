@@ -38,7 +38,7 @@ import {
 } from "../models/creatures/CompendiumCreature"
 
 export function CreaturesCompendiumView() {
-  const { campaignCapabilities } = useSyncContext()
+  const { campaignCapabilities, sessionMembers } = useSyncContext()
   const {
     creatures,
     hydrated,
@@ -226,6 +226,9 @@ export function CreaturesCompendiumView() {
       {editingCreature ? (
         <CreatureEditorDialog
           creature={editingCreature}
+          ownerOptions={sessionMembers
+            .filter((member) => member.status === "ACTIVE")
+            .map((member) => ({ id: member.id, name: member.name }))}
           onClose={() => setEditingCreature(undefined)}
           onSave={(creature) => {
             upsertCreature(creature)
