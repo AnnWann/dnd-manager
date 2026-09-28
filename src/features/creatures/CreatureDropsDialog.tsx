@@ -1,10 +1,9 @@
-import { PackagePlus, Plus, Trash2 } from "lucide-react"
+import { PackagePlus, Plus, Search, Trash2 } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import { Button } from "../../components/ui/Button"
 import { Input } from "../../components/ui/Input"
 import { Modal } from "../../components/ui/Modal"
-import { Select as SharedSelect } from "../../components/ui/Select"
 import { useCreationEditor } from "../creation/CreationEditorProvider"
 import { ItemCreationDialog } from "../items/ItemCreationDialog"
 import {
@@ -206,6 +205,127 @@ export function CreatureDropsDialog({
   )
 }
 
+function CompendiumItemSearch({
+  compendium,
+  selectedTemplateId,
+  onSelectTemplate,
+}: {
+  compendium: SessionCompendiumItem[]
+  selectedTemplateId: string
+  onSelectTemplate: (value: string) => void
+}) {
+  const selectedEntry = compendium.find(
+    (entry) => entry.item.id === selectedTemplateId,
+  )
+  const [query, setQuery] = useState("")
+
+  const results = useMemo(() => {
+    const normalizedQuery = normalizeItemSearch(query)
+    if (!normalizedQuery) return []
+
+    return compendium
+      .filter((entry) => {
+        const item = entry.item
+        const searchable = normalizeItemSearch(
+          [
+            item.name,
+            item.desc,
+            item.notes,
+            item.kind,
+            entry.custom ? "customizado homebrew" : "padrão oficial",
+          ].join(" "),
+        )
+        return searchable.includes(normalizedQuery)
+      })
+      .sort((left, right) =>
+        left.item.name.localeCompare(right.item.name, "pt-BR"),
+      )
+      .slice(0, 12)
+  }, [compendium, query])
+
+  function select(entry: SessionCompendiumItem) {
+    onSelectTemplate(entry.item.id)
+    setQuery(entry.item.name)
+  }
+
+  return (
+    <div className="grid gap-2">
+      <label className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-textMuted" />
+        <Input
+          className="pl-9"
+          value={query}
+          placeholder="Buscar item no compêndio…"
+          onChange={(event) => {
+            setQuery(event.target.value)
+            if (selectedTemplateId) onSelectTemplate("")
+          }}
+        />
+      </label>
+
+      {query.trim() ? (
+        <div className="max-h-64 overflow-y-auto rounded-lg border border-border bg-bg p-1">
+          {results.length ? (
+            results.map((entry) => {
+              const selected = entry.item.id === selectedTemplateId
+              return (
+                <button
+                  key={`${entry.custom ? "custom" : "standard"}-${entry.item.id}`}
+                  type="button"
+                  className={[
+                    "flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left transition-colors",
+                    selected
+                      ? "bg-accentBg text-accent"
+                      : "text-textH hover:bg-bg-subtle",
+                  ].join(" ")}
+                  onClick={() => select(entry)}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">
+                      {entry.item.name}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[11px] text-textMuted">
+                      {entry.item.kind}
+                      {entry.custom ? " · Customizado" : " · Compêndio"}
+                    </span>
+                  </span>
+                  {selected ? (
+                    <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide">
+                      Selecionado
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })
+          ) : (
+            <div className="px-3 py-5 text-center text-xs text-textMuted">
+              Nenhum item encontrado.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-border px-3 py-3 text-xs text-textMuted">
+          Digite parte do nome, descrição ou tipo do item para pesquisar.
+        </div>
+      )}
+
+      {selectedEntry ? (
+        <div className="rounded-lg border border-accentBorder bg-accentBg px-3 py-2 text-xs text-text">
+          Selecionado: <span className="font-semibold text-textH">{selectedEntry.item.name}</span>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function normalizeItemSearch(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLocaleLowerCase("pt-BR")
+}
+
 function DropGroupEditor({
   title,
   description,
@@ -247,32 +367,30 @@ function DropGroupEditor({
         ) : null}
       </div>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-        <SharedSelect
-          className="h-10 min-w-0 rounded-lg border border-border bg-bg px-3 text-sm text-textH"
-          value={selectedTemplateId}
-          onChange={(event) => onSelectTemplate(event.target.value)}
-        >
-          <option value="">Selecionar item do compêndio</option>
-          {compendium.map((entry) => (
-            <option key={`${entry.custom ? "custom" : "standard"}-${entry.item.id}`} value={entry.item.id}>
-              {entry.item.name}
-            </option>
-          ))}
-        </SharedSelect>
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={!selectedEntry}
-          onClick={() => selectedEntry && onAddCompendium(selectedEntry)}
-        >
-          <PackagePlus className="h-4 w-4" />
-          Do compêndio
-        </Button>
-        <Button size="sm" variant="secondary" onClick={onAddManual}>
-          <Plus className="h-4 w-4" />
-          Item manual
-        </Button>
+      <div className="mt-4 grid gap-2">
+        <CompendiumItemSearch
+          compendium={compendium}
+          selectedTemplateId={selectedTemplateId}
+          onSelectTemplate={onSelectTemplate}
+        />
+
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!selectedEntry}
+            onClick={() => selectedEntry && onAddCompendium(selectedEntry)}
+          >
+            <PackagePlus className="h-4 w-4" />
+            {selectedEntry
+              ? `Adicionar ${selectedEntry.item.name}`
+              : "Do compêndio"}
+          </Button>
+          <Button size="sm" variant="secondary" onClick={onAddManual}>
+            <Plus className="h-4 w-4" />
+            Item manual
+          </Button>
+        </div>
       </div>
 
       {items.length ? (
