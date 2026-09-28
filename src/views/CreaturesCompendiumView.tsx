@@ -1,7 +1,9 @@
 import { Select as SharedSelect } from "../components/ui/Select"
 import {
   Archive,
+  ArrowLeft,
   BookOpen,
+  ChevronRight,
   Copy,
   FileImage,
   FileJson,
@@ -40,10 +42,6 @@ import {
   type CreatureSide,
 } from "../models/creatures/CompendiumCreature"
 
-const ALL_FOLDERS = "__all_folders__"
-const UNFILED = "__unfiled__"
-const FOLDER_PREFIX = "folder:"
-
 export function CreaturesCompendiumView() {
   const { campaignCapabilities, sessionMembers } = useSyncContext()
   const creationEditor = useOptionalCreationEditor()
@@ -57,7 +55,7 @@ export function CreaturesCompendiumView() {
   } = useCreatureCompendium()
   const [query, setQuery] = useState("")
   const [sideFilter, setSideFilter] = useState<CreatureSide | "all">("all")
-  const [folderFilter, setFolderFilter] = useState(ALL_FOLDERS)
+  const [activeFolder, setActiveFolder] = useState<string>()
   const [editingCreature, setEditingCreature] = useState<CompendiumCreature>()
   const [viewingCreature, setViewingCreature] = useState<CompendiumCreature>()
   const [dropCreature, setDropCreature] = useState<CompendiumCreature>()
@@ -73,73 +71,40 @@ export function CreaturesCompendiumView() {
     [creationEditor?.draft?.creatureFolders, creatures],
   )
 
-  const filteredCreatures = useMemo(() => {
-    const normalizedQuery = normalizeSearchText(query)
-    const selectedFolder = folderFromFilter(folderFilter)
+  const normalizedQuery = normalizeSearchText(query)
 
-    return creatures.filter((creature) => {
-      const featureText = creatureFeatureSearchText([
-        ...creature.traits,
-        ...creature.actions,
-        ...creature.bonusActions,
-        ...creature.reactions,
-        ...creature.legendaryActions,
-      ])
-      const searchableText = normalizeSearchText(
-        `${creature.name} ${creature.category} ${creature.folder ?? ""} ${featureText}`,
+  const visibleFolders = useMemo(() => {
+    if (activeFolder) return []
+
+    return folderNames.filter((folder) => {
+      if (!normalizedQuery) return true
+      if (normalizeSearchText(folder).includes(normalizedQuery)) return true
+
+      return creatures.some(
+        (creature) =>
+          sameFolder(creature.folder, folder) &&
+          creatureMatchesQuery(creature, normalizedQuery),
       )
-      const matchesQuery =
-        !normalizedQuery || searchableText.includes(normalizedQuery)
-      const matchesSide =
-        sideFilter === "all" || creature.defaultSide === sideFilter
-      const matchesFolder =
-        folderFilter === ALL_FOLDERS
-          ? true
-          : folderFilter === UNFILED
-            ? !normalizeFolderName(creature.folder)
-            : sameFolder(creature.folder, selectedFolder)
-
-      return matchesQuery && matchesSide && matchesFolder
     })
-  }, [creatures, folderFilter, query, sideFilter])
+  }, [activeFolder, creatures, folderNames, normalizedQuery])
 
-  const groupedCreatures = useMemo(() => {
-    const groups: Array<{
-      folder?: string
-      creatures: CompendiumCreature[]
-    }> = []
+  const visibleCreatures = useMemo(
+    () =>
+      creatures.filter((creature) => {
+        const matchesLocation = activeFolder
+          ? sameFolder(creature.folder, activeFolder)
+          : !normalizeFolderName(creature.folder)
+        const matchesSide =
+          sideFilter === "all" || creature.defaultSide === sideFilter
 
-    const selectedFolder = folderFromFilter(folderFilter)
-    const candidateFolders =
-      folderFilter === ALL_FOLDERS
-        ? folderNames
-        : selectedFolder
-          ? [selectedFolder]
-          : []
-
-    for (const folder of candidateFolders) {
-      const entries = filteredCreatures.filter((creature) =>
-        sameFolder(creature.folder, folder),
-      )
-      if (
-        entries.length > 0 ||
-        (!query.trim() && sideFilter === "all")
-      ) {
-        groups.push({ folder, creatures: entries })
-      }
-    }
-
-    if (folderFilter === ALL_FOLDERS || folderFilter === UNFILED) {
-      const unfiled = filteredCreatures.filter(
-        (creature) => !normalizeFolderName(creature.folder),
-      )
-      if (unfiled.length > 0 || (folderFilter === UNFILED && !query.trim())) {
-        groups.push({ creatures: unfiled })
-      }
-    }
-
-    return groups
-  }, [filteredCreatures, folderFilter, folderNames, query, sideFilter])
+        return (
+          matchesLocation &&
+          matchesSide &&
+          creatureMatchesQuery(creature, normalizedQuery)
+        )
+      }),
+    [activeFolder, creatures, normalizedQuery, sideFilter],
+  )
 
   if (!campaignCapabilities.includes("creation.creatures.manage")) {
     return (
@@ -180,6 +145,16 @@ export function CreaturesCompendiumView() {
     }
   }
 
+  function openFolder(folder: string) {
+    setActiveFolder(folder)
+    setQuery("")
+  }
+
+  function leaveFolder() {
+    setActiveFolder(undefined)
+    setQuery("")
+  }
+
   function createFolder() {
     const requested = window.prompt("Nome da nova pasta:")
     if (requested === null) return
@@ -187,6 +162,13 @@ export function CreaturesCompendiumView() {
     const folder = normalizeFolderName(requested)
     if (!folder) {
       window.alert("Informe um nome para a pasta.")
+      return
+    }
+
+    if (folderNames.some((entry) => sameFolder(entry, folder))) {
+      openFolder(
+        folderNames.find((entry) => sameFolder(entry, folder)) ?? folder,
+      )
       return
     }
 
@@ -200,7 +182,7 @@ export function CreaturesCompendiumView() {
       }))
     }
 
-    setFolderFilter(folderFilterValue(folder))
+    openFolder(folder)
   }
 
   function renameFolder(folder: string) {
@@ -213,6 +195,14 @@ export function CreaturesCompendiumView() {
       return
     }
     if (sameFolder(folder, nextFolder)) return
+
+    const duplicateFolder = folderNames.find(
+      (entry) => !sameFolder(entry, folder) && sameFolder(entry, nextFolder),
+    )
+    if (duplicateFolder) {
+      window.alert("Já existe uma pasta com esse nome.")
+      return
+    }
 
     if (creationEditor?.draft) {
       creationEditor.updateDraft((draft) => ({
@@ -244,15 +234,15 @@ export function CreaturesCompendiumView() {
       )
     }
 
-    if (sameFolder(folderFromFilter(folderFilter), folder)) {
-      setFolderFilter(folderFilterValue(nextFolder))
+    if (activeFolder && sameFolder(activeFolder, folder)) {
+      setActiveFolder(nextFolder)
     }
   }
 
   function deleteFolder(folder: string) {
     if (
       !window.confirm(
-        `Remover a pasta "${folder}"? As criaturas dela ficarão em "Sem pasta".`,
+        `Remover a pasta "${folder}"? As criaturas dela ficarão na raiz do compêndio.`,
       )
     ) {
       return
@@ -285,14 +275,14 @@ export function CreaturesCompendiumView() {
       )
     }
 
-    if (sameFolder(folderFromFilter(folderFilter), folder)) {
-      setFolderFilter(ALL_FOLDERS)
+    if (activeFolder && sameFolder(activeFolder, folder)) {
+      leaveFolder()
     }
   }
 
   function moveCreatureToFolder(creature: CompendiumCreature) {
     const requested = window.prompt(
-      'Nome da pasta. Deixe vazio para mover para "Sem pasta":',
+      "Nome da pasta. Deixe vazio para mover para a raiz:",
       creature.folder ?? "",
     )
     if (requested === null) return
@@ -325,13 +315,16 @@ export function CreaturesCompendiumView() {
     })
   }
 
-  const selectedFolderForNewCreature = folderFromFilter(folderFilter)
+  const activeFolderCreatureCount = activeFolder
+    ? creatures.filter((creature) => sameFolder(creature.folder, activeFolder))
+        .length
+    : 0
 
   return (
     <div className="grid gap-4">
       <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <BookOpen className="h-6 w-6 text-accent" />
               <h1 className="font-heading text-xl font-semibold text-textH">
@@ -341,23 +334,49 @@ export function CreaturesCompendiumView() {
                 {creatures.length} criatura{creatures.length === 1 ? "" : "s"}
               </span>
             </div>
-            <p className="mt-2 max-w-3xl text-sm text-text">
-              Fichas enxutas para a Criação: estatísticas de combate, habilidades,
-              ações, drops, notas e uma imagem opcional da ficha original.
-            </p>
+
+            {activeFolder ? (
+              <nav
+                className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 text-sm"
+                aria-label="Caminho da pasta"
+              >
+                <button
+                  type="button"
+                  className="text-textMuted transition-colors hover:text-accent"
+                  onClick={leaveFolder}
+                >
+                  Compêndio
+                </button>
+                <ChevronRight className="h-3.5 w-3.5 text-textMuted" />
+                <span className="truncate font-semibold text-textH">
+                  {activeFolder}
+                </span>
+              </nav>
+            ) : (
+              <p className="mt-2 max-w-3xl text-sm text-text">
+                Organize as fichas em pastas e abra cada pasta para consultar suas criaturas.
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={createFolder}>
-              <FolderPlus className="h-4 w-4" />
-              Nova pasta
-            </Button>
+            {activeFolder ? (
+              <Button variant="secondary" onClick={leaveFolder}>
+                <ArrowLeft className="h-4 w-4" />
+                Voltar
+              </Button>
+            ) : (
+              <Button variant="secondary" onClick={createFolder}>
+                <FolderPlus className="h-4 w-4" />
+                Nova pasta
+              </Button>
+            )}
             <Button
               variant="primary"
               onClick={() =>
                 setEditingCreature(
                   createCompendiumCreature({
-                    folder: selectedFolderForNewCreature,
+                    folder: activeFolder,
                   }),
                 )
               }
@@ -374,15 +393,59 @@ export function CreaturesCompendiumView() {
         onImport={upsertCreatures}
       />
 
+      {activeFolder ? (
+        <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-accentBorder bg-accentBg">
+                <Folder className="h-5 w-5 text-accent" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="truncate font-heading text-lg font-semibold text-textH">
+                  {activeFolder}
+                </h2>
+                <p className="text-xs text-textMuted">
+                  {activeFolderCreatureCount} criatura
+                  {activeFolderCreatureCount === 1 ? "" : "s"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => renameFolder(activeFolder)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Renomear
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => deleteFolder(activeFolder)}
+              >
+                <Trash2 className="h-3.5 w-3.5 text-danger" />
+                Remover pasta
+              </Button>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <section className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_14rem]">
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
           <label className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-textMuted" />
             <Input
               className="pl-9"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Buscar por nome, categoria, pasta ou habilidade…"
+              placeholder={
+                activeFolder
+                  ? `Buscar em ${activeFolder}…`
+                  : "Buscar pastas ou criaturas na raiz…"
+              }
             />
           </label>
 
@@ -398,114 +461,88 @@ export function CreaturesCompendiumView() {
             <option value="ally">Aliados</option>
             <option value="neutral">Neutros</option>
           </SharedSelect>
-
-          <SharedSelect
-            className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH shadow-theme-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/25"
-            value={folderFilter}
-            onChange={(event) => setFolderFilter(event.target.value)}
-          >
-            <option value={ALL_FOLDERS}>Todas as pastas</option>
-            <option value={UNFILED}>Sem pasta</option>
-            {folderNames.map((folder) => (
-              <option key={folder} value={folderFilterValue(folder)}>
-                {folder}
-              </option>
-            ))}
-          </SharedSelect>
         </div>
       </section>
 
-      {groupedCreatures.length > 0 ? (
-        <div className="grid gap-4">
-          {groupedCreatures.map((group) => (
-            <section
-              key={group.folder ?? UNFILED}
-              className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <Folder className="h-5 w-5 shrink-0 text-accent" />
-                  <h2 className="truncate font-heading text-base font-semibold text-textH">
-                    {group.folder ?? "Sem pasta"}
-                  </h2>
-                  <span className="rounded-full border border-border bg-bg-subtle px-2 py-0.5 text-[10px] text-textMuted">
-                    {group.creatures.length}
-                  </span>
-                </div>
+      {!activeFolder && visibleFolders.length > 0 ? (
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {visibleFolders.map((folder) => {
+            const folderCreatures = creatures.filter((creature) =>
+              sameFolder(creature.folder, folder),
+            )
+            return (
+              <FolderCard
+                key={folder}
+                folder={folder}
+                creatureCount={folderCreatures.length}
+                imageUrls={folderCreatures
+                  .map((creature) => creature.sheetImageUrl)
+                  .filter((url): url is string => Boolean(url))
+                  .slice(0, 4)}
+                onOpen={() => openFolder(folder)}
+              />
+            )
+          })}
+        </section>
+      ) : null}
 
-                {group.folder ? (
-                  <div className="flex items-center gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => renameFolder(group.folder!)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      Renomear
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => deleteFolder(group.folder!)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-danger" />
-                      Remover pasta
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-
-              {group.creatures.length > 0 ? (
-                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {group.creatures.map((creature) => (
-                    <CreatureCard
-                      key={creature.id}
-                      creature={creature}
-                      onView={() => setViewingCreature(creature)}
-                      onMove={() => moveCreatureToFolder(creature)}
-                      onDrops={() => setDropCreature(creature)}
-                      onEdit={() => setEditingCreature(creature)}
-                      onDuplicate={() => {
-                        const duplicate = duplicateCreature(creature.id)
-                        if (duplicate) setEditingCreature(duplicate)
-                      }}
-                      onExportJson={() => downloadCreatureJson(creature)}
-                      onExportZip={() => void exportCreatureZip(creature)}
-                      onDelete={() => {
-                        if (
-                          window.confirm(
-                            `Remover ${creature.name} do compêndio?`,
-                          )
-                        ) {
-                          deleteCreature(creature.id)
-                        }
-                      }}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-4 rounded-lg border border-dashed border-border bg-bg-subtle px-4 py-6 text-center text-sm text-textMuted">
-                  Pasta vazia. Crie uma criatura aqui ou mova uma criatura existente para esta pasta.
-                </div>
-              )}
-            </section>
+      {visibleCreatures.length > 0 ? (
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {visibleCreatures.map((creature) => (
+            <CreatureCard
+              key={creature.id}
+              creature={creature}
+              onView={() => setViewingCreature(creature)}
+              onMove={() => moveCreatureToFolder(creature)}
+              onDrops={() => setDropCreature(creature)}
+              onEdit={() => setEditingCreature(creature)}
+              onDuplicate={() => {
+                const duplicate = duplicateCreature(creature.id)
+                if (duplicate) setEditingCreature(duplicate)
+              }}
+              onExportJson={() => downloadCreatureJson(creature)}
+              onExportZip={() => void exportCreatureZip(creature)}
+              onDelete={() => {
+                if (
+                  window.confirm(
+                    `Remover ${creature.name} do compêndio?`,
+                  )
+                ) {
+                  deleteCreature(creature.id)
+                }
+              }}
+            />
           ))}
-        </div>
-      ) : (
+        </section>
+      ) : null}
+
+      {visibleFolders.length === 0 && visibleCreatures.length === 0 ? (
         <section className="rounded-xl border border-dashed border-border bg-bg p-10 text-center">
-          <BookOpen className="mx-auto h-12 w-12 text-textMuted" />
+          {activeFolder ? (
+            <Folder className="mx-auto h-12 w-12 text-textMuted" />
+          ) : (
+            <BookOpen className="mx-auto h-12 w-12 text-textMuted" />
+          )}
           <h2 className="mt-3 text-sm font-semibold text-textH">
-            {creatures.length === 0 && folderNames.length === 0
-              ? "O compêndio está vazio"
-              : "Nenhuma criatura encontrada"}
+            {query.trim()
+              ? "Nenhum resultado encontrado"
+              : activeFolder
+                ? "Esta pasta está vazia"
+                : creatures.length === 0 && folderNames.length === 0
+                  ? "O compêndio está vazio"
+                  : "Nenhuma criatura na raiz"}
           </h2>
           <p className="mt-1 text-sm text-text">
-            {creatures.length === 0 && folderNames.length === 0
-              ? "Crie fichas rápidas, organize-as em pastas ou importe arquivos JSON e ZIP."
-              : "Tente alterar a busca, o lado ou a pasta selecionada."}
+            {query.trim()
+              ? "Tente alterar a busca ou o filtro de lado."
+              : activeFolder
+                ? "Crie uma criatura nesta pasta ou mova uma criatura existente para cá."
+                : creatures.length === 0 && folderNames.length === 0
+                  ? "Crie uma pasta, uma criatura ou importe arquivos JSON e ZIP."
+                  : "As criaturas organizadas em pastas aparecem dentro de suas respectivas pastas."}
           </p>
         </section>
-      )}
+      ) : null}
 
       {editingCreature ? (
         <CreatureEditorDialog
@@ -576,6 +613,68 @@ export function CreaturesCompendiumView() {
         </Modal>
       ) : null}
     </div>
+  )
+}
+
+function FolderCard({
+  folder,
+  creatureCount,
+  imageUrls,
+  onOpen,
+}: {
+  folder: string
+  creatureCount: number
+  imageUrls: string[]
+  onOpen: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className="group overflow-hidden rounded-xl border border-border bg-bg text-left shadow-theme-sm transition-colors hover:border-accentBorder hover:bg-bg-subtle"
+      onClick={onOpen}
+    >
+      <div className="relative h-28 border-b border-border bg-bg-subtle">
+        {imageUrls.length > 0 ? (
+          <div
+            className={[
+              "grid h-full w-full",
+              imageUrls.length === 1
+                ? "grid-cols-1"
+                : "grid-cols-2",
+            ].join(" ")}
+          >
+            {imageUrls.map((url) => (
+              <img
+                key={url}
+                src={url}
+                alt=""
+                className="h-full min-h-0 w-full object-cover object-top"
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <Folder className="h-10 w-10 text-accent" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
+      </div>
+
+      <div className="flex items-center justify-between gap-3 p-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Folder className="h-4 w-4 shrink-0 text-accent" />
+            <h2 className="truncate font-heading text-base font-semibold text-textH">
+              {folder}
+            </h2>
+          </div>
+          <p className="mt-1 text-xs text-textMuted">
+            {creatureCount} criatura{creatureCount === 1 ? "" : "s"}
+          </p>
+        </div>
+        <ChevronRight className="h-5 w-5 shrink-0 text-textMuted transition-transform group-hover:translate-x-0.5 group-hover:text-accent" />
+      </div>
+    </button>
   )
 }
 
@@ -740,6 +839,25 @@ function MiniStat({ label, value }: { label: string; value: string }) {
   )
 }
 
+function creatureMatchesQuery(
+  creature: CompendiumCreature,
+  normalizedQuery: string,
+): boolean {
+  if (!normalizedQuery) return true
+
+  const featureText = creatureFeatureSearchText([
+    ...creature.traits,
+    ...creature.actions,
+    ...creature.bonusActions,
+    ...creature.reactions,
+    ...creature.legendaryActions,
+  ])
+
+  return normalizeSearchText(
+    `${creature.name} ${creature.category} ${featureText}`,
+  ).includes(normalizedQuery)
+}
+
 function normalizeFolderName(value?: string): string {
   return value?.trim().replace(/\s+/g, " ") ?? ""
 }
@@ -766,16 +884,6 @@ function mergeFolderNames(values: string[]): string[] {
   return [...byKey.values()].sort((left, right) =>
     left.localeCompare(right, "pt-BR"),
   )
-}
-
-function folderFilterValue(folder: string): string {
-  return `${FOLDER_PREFIX}${folder}`
-}
-
-function folderFromFilter(value: string): string | undefined {
-  return value.startsWith(FOLDER_PREFIX)
-    ? value.slice(FOLDER_PREFIX.length)
-    : undefined
 }
 
 function normalizeSearchText(value: string): string {
