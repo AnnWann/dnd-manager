@@ -74,6 +74,39 @@ export function withSupplyDefaults(item: Itemmable): SupplyItem {
   } as SupplyItem
 }
 
+export function setSupplyPackageQuantity(
+  item: Itemmable,
+  quantity: number,
+): SupplyItem {
+  const supply = withSupplyDefaults(item)
+  const nextQuantity = Math.max(0, Number(quantity) || 0)
+  const portionsPerItem = Math.max(0, supply.supplyUnitsPerItem || 0)
+
+  return {
+    ...supply,
+    quantity: nextQuantity,
+    remainingSupplyUnits: nextQuantity * portionsPerItem,
+  }
+}
+
+export function setSupplyRemainingPortions(
+  item: Itemmable,
+  remainingPortions: number,
+): SupplyItem {
+  const supply = withSupplyDefaults(item)
+  const remaining = Math.max(0, Number(remainingPortions) || 0)
+  const portionsPerItem = Math.max(0, supply.supplyUnitsPerItem || 0)
+
+  return {
+    ...supply,
+    quantity:
+      portionsPerItem > 0
+        ? Math.ceil(remaining / portionsPerItem)
+        : 0,
+    remainingSupplyUnits: remaining,
+  }
+}
+
 export function SupplyFields({
   item,
   onUpdate,
@@ -132,17 +165,24 @@ export function SupplyFields({
               const nextPackage = event.target.value as SupplyPackageKind
               const defaults = getSupplyPackageDefaults(nextPackage)
 
-              onUpdate((current) => ({
-                ...withSupplyDefaults(current),
-                supplyPackage: nextPackage,
-                supplyUnitsPerItem:
+              onUpdate((current) => {
+                const supply = withSupplyDefaults(current)
+                const unitsPerItem =
                   nextPackage === "custom"
-                    ? withSupplyDefaults(current).supplyUnitsPerItem
-                    : defaults.portions,
-                weight: withSupplyDefaults(current).weight,
-                remainingSupplyUnits: undefined,
-                supplyUnitLabel: defaults.label,
-              }))
+                    ? supply.supplyUnitsPerItem
+                    : defaults.portions
+
+                return {
+                  ...supply,
+                  supplyPackage: nextPackage,
+                  supplyUnitsPerItem: unitsPerItem,
+                  weight: supply.weight,
+                  remainingSupplyUnits:
+                    Math.max(0, Number(supply.quantity) || 0)
+                    * Math.max(0, unitsPerItem),
+                  supplyUnitLabel: defaults.label,
+                }
+              })
             }}
           >
             {PACKAGE_OPTIONS.map((option) => (
@@ -164,15 +204,22 @@ export function SupplyFields({
             disabled={supply.supplyPackage !== "custom"}
             value={supply.supplyUnitsPerItem}
             onChange={(event) =>
-              onUpdate((current) => ({
-                ...withSupplyDefaults(current),
-                supplyPackage: "custom",
-                supplyUnitsPerItem: Math.max(
+              onUpdate((current) => {
+                const supply = withSupplyDefaults(current)
+                const unitsPerItem = Math.max(
                   0,
                   Number(event.target.value) || 0,
-                ),
-                remainingSupplyUnits: undefined,
-              }))
+                )
+
+                return {
+                  ...supply,
+                  supplyPackage: "custom",
+                  supplyUnitsPerItem: unitsPerItem,
+                  remainingSupplyUnits:
+                    Math.max(0, Number(supply.quantity) || 0)
+                    * unitsPerItem,
+                }
+              })
             }
           />
         </label>
@@ -187,22 +234,22 @@ export function SupplyFields({
             step="any"
             value={getTotalSupplyPortions(supply)}
             onChange={(event) =>
-              onUpdate((current) => ({
-                ...withSupplyDefaults(current),
-                remainingSupplyUnits: Math.max(
-                  0,
+              onUpdate((current) =>
+                setSupplyRemainingPortions(
+                  current,
                   Number(event.target.value) || 0,
                 ),
-              }))
+              )
             }
           />
         </label>
       </div>
 
       <p className="text-[11px] leading-4 text-textMuted">
-        A quantidade geral representa quantas embalagens físicas existem. As
-        porções restantes diminuem quando um personagem conclui um descanso
-        longo e podem ser ajustadas manualmente pelo mestre.
+        Quantidade e estoque ficam vinculados. Alterar a quantidade recalcula
+        as porções disponíveis; alterar as porções recalcula quantas embalagens
+        são necessárias. Estoques parcialmente consumidos podem manter a última
+        embalagem incompleta.
       </p>
     </section>
   )
