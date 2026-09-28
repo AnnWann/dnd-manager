@@ -255,11 +255,6 @@ export class SessionActor extends DurableObject<Env> {
     connection: SessionConnection,
     request: SessionCreatureRollRequest,
   ): Promise<void> {
-    if (connection.role !== "MASTER") {
-      this.sendError(webSocket, "MASTER_REQUIRED", "Only the MASTER can roll creature stat blocks.");
-      return;
-    }
-
     const [runtimeConfig, initiativeState] = await Promise.all([
       readRuntimeConfig(this.ctx.storage),
       this.ctx.storage.get<SessionInitiativeState>("initiative-state"),
@@ -269,6 +264,17 @@ export class SessionActor extends DurableObject<Env> {
     );
     if (!creature) {
       this.sendError(webSocket, "CREATURE_NOT_FOUND", "The requested creature is not available in the authoritative compendium.");
+      return;
+    }
+    if (
+      connection.role !== "MASTER" &&
+      creature.ownerUserId !== connection.userId
+    ) {
+      this.sendError(
+        webSocket,
+        "CREATURE_ACCESS_DENIED",
+        "You cannot roll a creature controlled by another player.",
+      );
       return;
     }
 
