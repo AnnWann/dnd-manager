@@ -148,24 +148,196 @@ export function CampaignProgressionSettingsEditor({
         {progression.mode === "custom" ? (
           <div className="grid gap-4">
             <label className="grid gap-1.5">
-              <span className="text-xs font-medium text-textH">Nome da progressão</span>
+              <span className="text-xs font-medium text-textH">
+                Nome da progressão
+              </span>
               <Input
-                value={progression.title ?? "Exploração"}
+                value={progression.title ?? "Progressão"}
                 placeholder="Ex.: Exploração"
                 onChange={(event) => update({ title: event.target.value })}
               />
             </label>
 
+            <section className="grid gap-3 rounded-xl border border-accentBorder bg-accentBg/30 p-4">
+              <div>
+                <div className="text-sm font-semibold text-textH">
+                  Banco de progressão
+                </div>
+                <p className="mt-1 text-xs leading-5 text-textMuted">
+                  Objetivos podem conceder pontos a um banco compartilhado. Ao
+                  acumular a quantidade configurada, um nível fica disponível.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <label className="grid gap-1.5 lg:col-span-2">
+                  <span className="text-xs font-medium text-textH">
+                    Nome dos pontos
+                  </span>
+                  <Input
+                    value={pointSystem.name}
+                    onChange={(event) =>
+                      update({
+                        pointSystem: {
+                          ...pointSystem,
+                          name: event.target.value,
+                          earnedPoints: undefined,
+                        },
+                      })
+                    }
+                  />
+                </label>
+
+                <label className="grid gap-1.5">
+                  <span className="text-xs font-medium text-textH">Unidade</span>
+                  <Input
+                    value={pointSystem.unit}
+                    placeholder="PP"
+                    onChange={(event) =>
+                      update({
+                        pointSystem: {
+                          ...pointSystem,
+                          unit: event.target.value,
+                          earnedPoints: undefined,
+                        },
+                      })
+                    }
+                  />
+                </label>
+
+                <NumberField
+                  label="Pontos por nível"
+                  value={pointSystem.pointsPerLevel}
+                  minimum={1}
+                  onChange={(pointsPerLevel) =>
+                    update({
+                      pointSystem: {
+                        ...pointSystem,
+                        pointsPerLevel: Math.max(1, pointsPerLevel),
+                        earnedPoints: undefined,
+                      },
+                    })
+                  }
+                />
+
+                <NumberField
+                  label="Pontos manuais"
+                  value={pointSystem.manualPoints}
+                  minimum={-999999}
+                  onChange={(manualPoints) =>
+                    update({
+                      pointSystem: {
+                        ...pointSystem,
+                        manualPoints,
+                        earnedPoints: undefined,
+                      },
+                    })
+                  }
+                />
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-4">
+                <ProgressionStat
+                  label="Ganhos"
+                  value={formatPointValue(
+                    progressionSummary.earnedPoints,
+                    pointSystem.unit,
+                  )}
+                />
+                <ProgressionStat
+                  label="Disponíveis"
+                  value={formatPointValue(
+                    progressionSummary.availablePoints,
+                    pointSystem.unit,
+                  )}
+                />
+                <ProgressionStat
+                  label="Gastos"
+                  value={formatPointValue(
+                    pointSystem.spentPoints,
+                    pointSystem.unit,
+                  )}
+                />
+                <ProgressionStat
+                  label="Níveis disponíveis"
+                  value={String(progressionSummary.totalLevelsAvailable)}
+                  highlight={progressionSummary.totalLevelsAvailable > 0}
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={
+                    progressionSummary.availablePoints
+                    < progressionSummary.pointsPerLevel
+                  }
+                  onClick={() =>
+                    update({
+                      pointSystem: {
+                        ...pointSystem,
+                        spentPoints:
+                          pointSystem.spentPoints
+                          + progressionSummary.pointsPerLevel,
+                        earnedPoints: undefined,
+                      },
+                    })
+                  }
+                >
+                  Registrar 1 nível por pontos
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={pointSystem.spentPoints <= 0}
+                  onClick={() =>
+                    update({
+                      pointSystem: {
+                        ...pointSystem,
+                        spentPoints: Math.max(
+                          0,
+                          pointSystem.spentPoints
+                          - progressionSummary.pointsPerLevel,
+                        ),
+                        earnedPoints: undefined,
+                      },
+                    })
+                  }
+                >
+                  Desfazer último gasto
+                </Button>
+              </div>
+
+              <ToggleCard
+                checked={pointSystem.visibleToPlayers}
+                title="Mostrar banco aos jogadores"
+                description="Se desativado, os jogadores veem os objetivos revelados e o aviso de nível disponível, mas não o total de pontos."
+                onChange={(visibleToPlayers) =>
+                  update({
+                    pointSystem: {
+                      ...pointSystem,
+                      visibleToPlayers,
+                      earnedPoints: undefined,
+                    },
+                  })
+                }
+              />
+            </section>
+
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-semibold text-textH">Medidores personalizados</div>
+                <div className="text-sm font-semibold text-textH">
+                  Objetivos e medidores
+                </div>
                 <div className="mt-1 text-xs text-textMuted">
-                  Cada medidor pode permanecer secreto até o mestre revelá-lo.
+                  Cada objetivo pode dar uma quantidade diferente de pontos,
+                  conceder níveis diretamente ou ser apenas informativo.
                 </div>
               </div>
               <Button size="sm" variant="secondary" onClick={addTrack}>
                 <Plus className="h-4 w-4" />
-                Adicionar medidor
+                Adicionar objetivo
               </Button>
             </div>
 
@@ -175,6 +347,7 @@ export function CampaignProgressionSettingsEditor({
                   <TrackEditor
                     key={track.id}
                     track={track}
+                    pointSystem={pointSystem}
                     onChange={(next) => updateTrack(track.id, () => next)}
                     onRemove={() =>
                       update({
@@ -188,8 +361,8 @@ export function CampaignProgressionSettingsEditor({
               </div>
             ) : (
               <div className="rounded-xl border border-dashed border-border px-4 py-7 text-center text-sm text-textMuted">
-                Nenhum medidor criado. Para uma campanha de exploração, crie um
-                medidor por ilha e revele-o quando o grupo encontrá-la.
+                Nenhum objetivo criado. Um objetivo pode ser uma ilha, missão,
+                capítulo, descoberta, reputação ou qualquer outro medidor.
               </div>
             )}
           </div>
