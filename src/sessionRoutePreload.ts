@@ -14,6 +14,7 @@ export function preloadSessionRouteModules(isMaster: boolean): Promise<void> {
     import("./views/campaign/CampaignCharactersView"),
     import("./views/CharacterRouteViews"),
     import("./views/CharacterCreateView"),
+    import("./views/OwnedCreaturesView"),
     import("./views/session/SessionCharacterLevelUpView"),
     import("./views/PartyInventoryView"),
     import("./views/GroundInventoryView"),
