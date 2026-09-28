@@ -12,6 +12,7 @@ import {
 } from "./itemCompendium"
 
 const TRAVEL_RATIONS_COMPENDIUM_ID = "compendium-rations"
+const WATERSKIN_COMPENDIUM_ID = "compendium-waterskin"
 
 export type StandardItemDefinition = {
   item: Itemmable
@@ -274,22 +275,39 @@ export function normalizeItemLookupName(value: string): string {
 }
 
 function withCanonicalStandardMetadata(item: Itemmable): Itemmable {
-  if (item.id !== TRAVEL_RATIONS_COMPENDIUM_ID) return item
+  if (item.id === TRAVEL_RATIONS_COMPENDIUM_ID) {
+    return {
+      ...item,
+      supplyCategory: "food",
+      supplyPackage: "ration",
+      supplyUnitsPerItem: 1,
+      supplyUnitLabel: "porção de comida",
+    } as Itemmable
+  }
 
-  return {
-    ...item,
-    supplyCategory: "food",
-    supplyPackage: "ration",
-    supplyUnitsPerItem: 1,
-    supplyUnitLabel: "porção padrão",
-  } as Itemmable
+  if (item.id === WATERSKIN_COMPENDIUM_ID) {
+    return {
+      ...item,
+      supplyCategory: "drink",
+      supplyPackage: "custom",
+      supplyUnitsPerItem: 1,
+      supplyUnitLabel: "porção de bebida",
+    } as Itemmable
+  }
+
+  return item
 }
 
 function restoreCanonicalSupplyMetadata(
   item: Itemmable,
   canonical: Itemmable,
 ): Itemmable {
-  if (canonical.id !== TRAVEL_RATIONS_COMPENDIUM_ID) return item
+  if (
+    canonical.id !== TRAVEL_RATIONS_COMPENDIUM_ID
+    && canonical.id !== WATERSKIN_COMPENDIUM_ID
+  ) {
+    return item
+  }
 
   const currentSupply = item as Partial<SupplyItem>
   const canonicalSupply = canonical as SupplyItem
