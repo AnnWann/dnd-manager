@@ -1,5 +1,6 @@
 import type { SessionRuntimeConfigSnapshot } from "../../shared/session-runtime/sessionRuntimeConfig"
 import { isCampaignProgressionSettings } from "../../shared/progression/campaignProgression"
+import { isLongRestSupplySettings } from "../../shared/rest/longRestSupplySettings"
 
 export type SessionRuntimeConfigPublishMessage = {
   type: "session.config.publish"
@@ -61,6 +62,10 @@ function isRuntimeConfigSnapshot(
     (
       config.progression === undefined
       || isCampaignProgressionSettings(config.progression)
+    ) &&
+    (
+      config.longRestSupplies === undefined
+      || isLongRestSupplySettings(config.longRestSupplies)
     ) &&
     Array.isArray(config.characters) &&
     Array.isArray(config.spells) &&
