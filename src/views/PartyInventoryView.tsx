@@ -9,6 +9,7 @@ import {
 
 import { Card, CardContent, CardHeader } from "../components/ui/Card"
 import { Input } from "../components/ui/Input"
+import { Select } from "../components/ui/Select"
 import { useCharacterContext } from "../contexts/characterContext"
 import { usePartyInventorySettings } from "../contexts/partyInventorySettingsContext"
 import { InventoryEditor } from "../features/characters/inventory/inventoryEditor"
@@ -49,10 +50,28 @@ export function PartyInventoryView() {
     additionalSupplyConsumption: localAdditionalSupplyConsumption,
     canEditAdditionalSupplyConsumption,
     setAdditionalSupplyConsumption: setLocalAdditionalSupplyConsumption,
+    inventoryAccessible: localInventoryAccessible,
+    canEditInventoryAccessible,
+    setInventoryAccessible: setLocalInventoryAccessible,
   } = usePartyInventorySettings()
-  const carryCapacity = runtime?.inventoryState?.carryCapacity ?? localCarryCapacity
-  const additionalSupplyConsumption = runtime?.inventoryState?.additionalSupplyConsumption ?? localAdditionalSupplyConsumption
-  const [transferringItem, setTransferringItem] = useState<Itemmable | null>(null)
+  const carryCapacity =
+    runtime?.inventoryState?.carryCapacity ?? localCarryCapacity
+  const additionalSupplyConsumption =
+    runtime?.inventoryState?.additionalSupplyConsumption
+    ?? localAdditionalSupplyConsumption
+  const inventoryAccessible =
+    runtime?.inventoryState?.partyInventoryAccessible
+    ?? localInventoryAccessible
+  const isMaster = runtime
+    ? runtime.role === "MASTER"
+    : canEditInventoryAccessible
+  const canUseSharedInventory = isMaster || inventoryAccessible
+  const supplyItems = partyInventory.filter((item) => item.kind === "supply")
+  const regularPartyItems = partyInventory.filter(
+    (item) => item.kind !== "supply",
+  )
+  const [transferringItem, setTransferringItem] =
+    useState<Itemmable | null>(null)
 
   // Inventory composition is shared, but character visibility is not. The
   // server therefore publishes a privacy-safe authoritative consumer list and
@@ -194,6 +213,24 @@ export function PartyInventoryView() {
     setLocalAdditionalSupplyConsumption(next)
   }
 
+  function setAuthoritativeInventoryAccessible(value: boolean) {
+    if (runtime) {
+      if (runtime.status !== "connected" || runtime.role !== "MASTER") {
+        console.warn(
+          "[session-runtime] Shared-inventory access change ignored without a connected MASTER.",
+        )
+        return
+      }
+      runtime.dispatchInventoryOperation({
+        type: "party.settings.accessible.set",
+        characterId: "session",
+        value,
+      })
+      return
+    }
+    setLocalInventoryAccessible(value)
+  }
+
   function addItem(item: Itemmable) {
     if (runtime) {
       runtime.dispatchInventoryOperation({ type: "party.item.add", characterId: "session", item })
@@ -256,31 +293,83 @@ export function PartyInventoryView() {
           </p>
         </CardHeader>
 
-        <CardContent>
-          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <SummaryCard label="Itens diferentes" value={String(partyInventory.length)} />
-            <SummaryCard label="Peso atual" value={formatNumber(totalWeight)} />
-            <SummaryCard label="Capacidade" value={hasCapacity ? formatNumber(carryCapacity) : "Não definida"} />
-            <SummaryCard
-              label="Descansos completos"
-              value={
-                supplySettings.enabled
-                  ? formatSupportedLongRests(
-                      effectiveSupportedLongRests,
-                      hasSupplyConsumers,
-                    )
-                  : "Não exigidos"
-              }
-              danger={
-                supplySettings.enabled
-                && hasSupplyConsumers
-                && effectiveSupportedLongRests < 1
-              }
-            />
-          </div>
+        <CardContent className="grid gap-4">
+          {canEditInventoryAccessible ? (
+            <label className="grid gap-1.5 rounded-xl border border-border bg-bg-subtle p-3">
+              <span className="text-xs font-semibold text-textH">
+                Acesso dos jogadores
+              </span>
+              <Select
+                value={inventoryAccessible ? "accessible" : "inaccessible"}
+                onChange={(event) =>
+                  setAuthoritativeInventoryAccessible(
+                    event.target.value === "accessible",
+                  )
+                }
+              >
+                <option value="accessible">
+                  Acessível — jogadores podem usar o inventário do grupo
+                </option>
+                <option value="inaccessible">
+                  Inacessível — jogadores usam apenas o que carregam
+                </option>
+              </Select>
+              <span className="text-[11px] leading-4 text-textMuted">
+                Quando inacessível, jogadores não podem retirar, guardar ou
+                consumir itens e suprimentos daqui. Descansos usam apenas o
+                inventário pessoal do personagem.
+              </span>
+            </label>
+          ) : null}
+
+          {canUseSharedInventory ? (
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <SummaryCard
+                label="Itens diferentes"
+                value={String(partyInventory.length)}
+              />
+              <SummaryCard
+                label="Peso atual"
+                value={formatNumber(totalWeight)}
+              />
+              <SummaryCard
+                label="Capacidade"
+                value={hasCapacity ? formatNumber(carryCapacity) : "Não definida"}
+              />
+              <SummaryCard
+                label="Descansos completos"
+                value={
+                  supplySettings.enabled
+                    ? formatSupportedLongRests(
+                        effectiveSupportedLongRests,
+                        hasSupplyConsumers,
+                      )
+                    : "Não exigidos"
+                }
+                danger={
+                  supplySettings.enabled
+                  && hasSupplyConsumers
+                  && effectiveSupportedLongRests < 1
+                }
+              />
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-bg-subtle p-4">
+              <div className="text-sm font-semibold text-textH">
+                Inventário do grupo inacessível
+              </div>
+              <p className="mt-1 text-xs leading-5 text-textMuted">
+                O mestre bloqueou o acesso ao estoque compartilhado. Você pode
+                usar, consumir e levar para descansos apenas os itens presentes
+                no inventário do seu próprio personagem.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
+      {canUseSharedInventory ? (
+        <>
       <Card>
         <CardHeader>
           <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-textH">
@@ -542,12 +631,10 @@ export function PartyInventoryView() {
 
       <div className="w-full min-w-0 max-w-full overflow-hidden">
         <InventoryEditor
-          title="Itens do grupo"
-          description={hasCapacity
-            ? `Peso compartilhado: ${formatNumber(totalWeight)} de ${formatNumber(carryCapacity)}.`
-            : `Peso compartilhado: ${formatNumber(totalWeight)}. A capacidade ainda não foi definida pelo mestre.`}
-          items={partyInventory}
-          emptyMessage="O inventário do grupo está vazio."
+          title="Suprimentos do grupo"
+          description="Comida, água e outros recursos consumidos pela viagem e pelos descansos ficam separados dos demais itens."
+          items={supplyItems}
+          emptyMessage="O grupo não possui suprimentos armazenados."
           onAddItem={addItem}
           onUpdateItem={updateItem}
           onRemoveItem={removeItem}
@@ -557,8 +644,29 @@ export function PartyInventoryView() {
         />
       </div>
 
+      <div className="w-full min-w-0 max-w-full overflow-hidden">
+        <InventoryEditor
+          title="Itens do grupo"
+          description={hasCapacity
+            ? `Peso compartilhado: ${formatNumber(totalWeight)} de ${formatNumber(carryCapacity)}.`
+            : `Peso compartilhado: ${formatNumber(totalWeight)}. A capacidade ainda não foi definida pelo mestre.`}
+          items={regularPartyItems}
+          emptyMessage="O inventário do grupo não possui outros itens."
+          onAddItem={addItem}
+          onUpdateItem={updateItem}
+          onRemoveItem={removeItem}
+          onConsumeItem={consumePartyItem}
+          onTransferItem={setTransferringItem}
+          transferLabel="Enviar a personagem"
+        />
+      </div>
+
+
+        </>
+      ) : null}
+
       <TransferItemDialog
-        open={transferringItem !== null}
+        open={canUseSharedInventory && transferringItem !== null}
         item={transferringItem}
         from={{ type: "party" }}
         characters={transferCharacters}
