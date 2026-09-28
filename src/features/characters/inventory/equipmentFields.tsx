@@ -419,7 +419,7 @@ function EquipmentAbilitiesFields({
         <div>
           <div className="text-xs font-medium text-textH">Habilidades</div>
           <div className="mt-0.5 text-[11px] text-textMuted">
-            Habilidades concedidas enquanto o item estiver equipado.
+            Habilidades concedidas enquanto o item estiver equipado ou segurado.
           </div>
         </div>
 
@@ -481,7 +481,7 @@ function EquipmentAbilitiesFields({
   )
 }
 
-function EquipmentSpellsFields({
+export function EquipmentSpellsFields({
   item,
   onUpdate,
 }: {
