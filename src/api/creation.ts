@@ -39,6 +39,7 @@ export async function getCreationSnapshot(
         spells: [],
         itemCompendium: [],
         creatureCompendium: [],
+        creatureFolders: [],
         customSystems: [],
       },
     }
