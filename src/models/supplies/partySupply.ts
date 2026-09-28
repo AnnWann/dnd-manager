@@ -9,6 +9,10 @@ import type {
   RaceSupplyConsumption,
 } from "../races/CharacterRace"
 import type { Race } from "../races/Race"
+import {
+  normalizeLongRestSupplySettings,
+  type LongRestSupplySettings,
+} from "../../shared/rest/longRestSupplySettings"
 
 export const STANDARD_PORTIONS_PER_RATION = 1
 export const STANDARD_PORTIONS_PER_BARREL = 40
@@ -40,14 +44,23 @@ export type LongRestSupplySelection = {
   portions: number
 }
 
+export type LongRestSupplyRequirements = {
+  foodPortions: number
+  drinkPortions: number
+}
+
 export type SupplySelectionTotals = {
   selectedPortions: number
+  selectedFoodPortions: number
+  selectedDrinkPortions: number
 }
 
 export type SelectedSupplyConsumptionResult = {
   items: Itemmable[]
   valid: boolean
   selectedPortions: number
+  selectedFoodPortions: number
+  selectedDrinkPortions: number
 }
 
 export function getDefaultRaceSupplyConsumption(
@@ -87,6 +100,46 @@ export function getEffectiveRaceSupplyConsumption(
 
 export function getRequiredSupplyForRace(race: CharacterRace): number {
   return getEffectiveRaceSupplyConsumption(race).food
+}
+
+export function getLongRestSupplyRequirements(
+  race: CharacterRace,
+  settings?: LongRestSupplySettings,
+): LongRestSupplyRequirements {
+  const policy = normalizeLongRestSupplySettings(settings)
+  if (!policy.enabled) {
+    return { foodPortions: 0, drinkPortions: 0 }
+  }
+
+  const racial = policy.useRaceMultipliers
+    ? getEffectiveRaceSupplyConsumption(race)
+    : { food: 1, drink: 1 }
+
+  return {
+    foodPortions: policy.food.enabled
+      ? roundPortions(
+          policy.food.portionsPerStandardRest * racial.food,
+        )
+      : 0,
+    drinkPortions: policy.drink.enabled
+      ? roundPortions(
+          policy.drink.portionsPerStandardRest * racial.drink,
+        )
+      : 0,
+  }
+}
+
+export function hasEnoughLongRestSupplies(
+  totals: Pick<
+    SupplySelectionTotals,
+    "selectedFoodPortions" | "selectedDrinkPortions"
+  >,
+  requirements: LongRestSupplyRequirements,
+): boolean {
+  return (
+    totals.selectedFoodPortions + 0.000001 >= requirements.foodPortions
+    && totals.selectedDrinkPortions + 0.000001 >= requirements.drinkPortions
+  )
 }
 
 export function getSupplyPackageDefaults(kind: SupplyPackageKind): {
@@ -199,6 +252,8 @@ export function getSupplySelectionTotals(
 ): SupplySelectionTotals {
   const selectedById = normalizeSelection(selection)
   let selectedPortions = 0
+  let selectedFoodPortions = 0
+  let selectedDrinkPortions = 0
 
   for (const item of items) {
     if (!isConsumableSupply(item)) continue
@@ -208,18 +263,47 @@ export function getSupplySelectionTotals(
       getTotalSupplyPortions(item),
       Math.max(0, requested),
     )
+    if (selected <= 0) continue
 
     selectedPortions = roundPortions(selectedPortions + selected)
+    const category = getSupplyCategory(item)
+    if (category === "food" || category === "mixed") {
+      selectedFoodPortions = roundPortions(
+        selectedFoodPortions + selected,
+      )
+    }
+    if (category === "drink" || category === "mixed") {
+      selectedDrinkPortions = roundPortions(
+        selectedDrinkPortions + selected,
+      )
+    }
   }
 
-  return { selectedPortions }
+  return {
+    selectedPortions,
+    selectedFoodPortions,
+    selectedDrinkPortions,
+  }
 }
 
 export function createAutomaticLongRestSelection(
   items: Itemmable[],
-  requiredSupply: number,
+  required:
+    | number
+    | LongRestSupplyRequirements,
 ): LongRestSupplySelection[] {
-  let remaining = roundPortions(Math.max(0, requiredSupply))
+  const requirements =
+    typeof required === "number"
+      ? { foodPortions: Math.max(0, required), drinkPortions: 0 }
+      : {
+          foodPortions: Math.max(0, required.foodPortions),
+          drinkPortions: Math.max(0, required.drinkPortions),
+        }
+
+  let foodRemaining = roundPortions(requirements.foodPortions)
+  let drinkRemaining = roundPortions(requirements.drinkPortions)
+  const selection = new Map<string, number>()
+
   const supplies = items
     .filter(isConsumableSupply)
     .filter((item) => getTotalSupplyPortions(item) > 0)
@@ -227,20 +311,70 @@ export function createAutomaticLongRestSelection(
       (left, right) =>
         getTotalSupplyPortions(left) - getTotalSupplyPortions(right),
     )
-  const selection: LongRestSupplySelection[] = []
 
-  for (const item of supplies) {
-    if (remaining <= 0) break
-
-    const available = getTotalSupplyPortions(item)
-    const portions = roundPortions(Math.min(available, remaining))
-    if (portions <= 0) continue
-
-    selection.push({ itemId: item.id, portions })
-    remaining = roundPortions(Math.max(0, remaining - portions))
+  function takeFrom(item: SupplyItem, needed: number) {
+    if (needed <= 0) return 0
+    const already = selection.get(item.id) ?? 0
+    const available = Math.max(
+      0,
+      getTotalSupplyPortions(item) - already,
+    )
+    const amount = roundPortions(Math.min(available, needed))
+    if (amount > 0) {
+      selection.set(item.id, roundPortions(already + amount))
+    }
+    return amount
   }
 
-  return selection
+  for (const item of supplies) {
+    if (foodRemaining <= 0) break
+    if (getSupplyCategory(item) !== "food") continue
+    foodRemaining = roundPortions(
+      Math.max(0, foodRemaining - takeFrom(item, foodRemaining)),
+    )
+  }
+
+  for (const item of supplies) {
+    if (drinkRemaining <= 0) break
+    if (getSupplyCategory(item) !== "drink") continue
+    drinkRemaining = roundPortions(
+      Math.max(0, drinkRemaining - takeFrom(item, drinkRemaining)),
+    )
+  }
+
+  for (const item of supplies) {
+    if (foodRemaining <= 0 && drinkRemaining <= 0) break
+    if (getSupplyCategory(item) !== "mixed") continue
+    const amount = takeFrom(
+      item,
+      Math.max(foodRemaining, drinkRemaining),
+    )
+    foodRemaining = roundPortions(Math.max(0, foodRemaining - amount))
+    drinkRemaining = roundPortions(Math.max(0, drinkRemaining - amount))
+  }
+
+  // If a campaign only tracks one resource, allow mixed packages to satisfy it
+  // even after the dedicated-resource pass above.
+  if (foodRemaining > 0 || drinkRemaining > 0) {
+    for (const item of supplies) {
+      if (foodRemaining <= 0 && drinkRemaining <= 0) break
+      const category = getSupplyCategory(item)
+      if (category === "food" && foodRemaining > 0) {
+        foodRemaining = roundPortions(
+          Math.max(0, foodRemaining - takeFrom(item, foodRemaining)),
+        )
+      } else if (category === "drink" && drinkRemaining > 0) {
+        drinkRemaining = roundPortions(
+          Math.max(0, drinkRemaining - takeFrom(item, drinkRemaining)),
+        )
+      }
+    }
+  }
+
+  return Array.from(selection, ([itemId, portions]) => ({
+    itemId,
+    portions,
+  }))
 }
 
 export function consumeSelectedSupplies(
@@ -269,6 +403,8 @@ export function consumeSelectedSupplies(
       items,
       valid: false,
       selectedPortions: totals.selectedPortions,
+      selectedFoodPortions: totals.selectedFoodPortions,
+      selectedDrinkPortions: totals.selectedDrinkPortions,
     }
   }
 
@@ -309,6 +445,8 @@ export function consumeSelectedSupplies(
     items: nextItems,
     valid: true,
     selectedPortions: totals.selectedPortions,
+    selectedFoodPortions: totals.selectedFoodPortions,
+    selectedDrinkPortions: totals.selectedDrinkPortions,
   }
 }
 
