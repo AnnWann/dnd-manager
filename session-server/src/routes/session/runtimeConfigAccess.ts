@@ -93,9 +93,12 @@ export function visibleRuntimeConfigSnapshot(
       characters: snapshot.config.characters.filter((character) =>
         canViewRuntimeCharacter(connection, character),
       ),
-      // Creature stat blocks and real names are MASTER rules data. Initiative
-      // visibility sends only the public projection required by players.
-      creatureCompendium: [],
+      // Creature stat blocks remain private by default. A creature explicitly
+      // assigned to this session user is projected so familiars, mounts and
+      // companions can use the same quick-sheet rules as MASTER creatures.
+      creatureCompendium: snapshot.config.creatureCompendium.filter(
+        (creature) => creature.ownerUserId === connection.userId,
+      ),
     },
   };
 }
