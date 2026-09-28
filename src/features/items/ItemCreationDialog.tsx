@@ -27,7 +27,11 @@ import {
   EquipmentSpellsFields,
   withEquipmentDefaults,
 } from "../characters/inventory/equipmentFields"
-import { SupplyFields, withSupplyDefaults } from "../characters/inventory/supplyFields"
+import {
+  setSupplyPackageQuantity,
+  SupplyFields,
+  withSupplyDefaults,
+} from "../characters/inventory/supplyFields"
 import { ThrowableFields, withThrowableDefaults } from "../characters/inventory/throwableFields"
 import {
   itemJsonTemplate,
@@ -283,10 +287,15 @@ export function ItemCreationDialog({
                   step="any"
                   value={draft.quantity}
                   onChange={(event) =>
-                    patch((current) => ({
-                      ...current,
-                      quantity: Math.max(0, Number(event.target.value) || 0),
-                    }))
+                    patch((current) => {
+                      const quantity = Math.max(
+                        0,
+                        Number(event.target.value) || 0,
+                      )
+                      return current.kind === "supply"
+                        ? setSupplyPackageQuantity(current, quantity)
+                        : { ...current, quantity }
+                    })
                   }
                 />
               </label>
