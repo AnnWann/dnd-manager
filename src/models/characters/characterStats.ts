@@ -71,9 +71,7 @@ export function getEquippedItems(character: CharacterTemplate): Equipment[] {
     ...(equipment.necklaces ?? []),
     ...equipment.rings,
     ...equipment.weapons,
-    ...(equipment.heldItems ?? []).filter(
-      (item): item is Equipment => item.kind === "focus",
-    ),
+    ...(equipment.heldItems ?? []).map((item) => item as Equipment),
     ...equipment.pockets.filter(
       (item): item is Equipment => item.kind === "equipment",
     ),
