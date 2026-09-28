@@ -305,6 +305,7 @@ function collectReferencedSpellIndexes(
     equipment.cape,
     ...equipment.rings,
     ...equipment.weapons,
+    ...(equipment.heldItems ?? []),
     ...equipment.pockets,
   ]
 
