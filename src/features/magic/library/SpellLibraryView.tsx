@@ -10,7 +10,6 @@ import {
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
-import { Textarea } from "../../../components/ui/Textarea"
 import {
   CASTING_TIME_NAMES,
   CLASS_NAMES,
@@ -78,8 +77,6 @@ export function SpellLibraryView({
   const [editingSpell, setEditingSpell] = useState<Spell | null>(null)
   const [viewingSpell, setViewingSpell] = useState<Spell | null>(null)
   const [rebalancingSpell, setRebalancingSpell] = useState<Spell | null>(null)
-  const [rebalanceDescription, setRebalanceDescription] = useState("")
-  const [rebalanceHigherLevelText, setRebalanceHigherLevelText] = useState("")
   const [rebalanceLoadingIndex, setRebalanceLoadingIndex] = useState("")
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState("")
@@ -406,37 +403,16 @@ export function SpellLibraryView({
       const effective =
         rebalancedByIndex.get(spell.index)
         ?? (isFullSpell(spell) ? spell : await getOfficialSpell(spell.index))
-      setRebalancingSpell(effective)
-      setRebalanceDescription(effective.description ?? "")
-      setRebalanceHigherLevelText(effective.higherLevelText ?? "")
+      setRebalancingSpell({
+        ...effective,
+        homebrew: false,
+        rebalanced: effective.rebalanced === true,
+      })
     } catch {
       setDetailError("Não foi possível carregar a magia oficial para rebalanceamento.")
     } finally {
       setRebalanceLoadingIndex("")
     }
-  }
-
-  function saveRebalancedText() {
-    if (!rebalancingSpell) return
-    saveSpell({
-      ...rebalancingSpell,
-      description: rebalanceDescription,
-      higherLevelText: rebalanceHigherLevelText,
-      homebrew: false,
-      rebalanced: true,
-    })
-    setViewingSpell((current) =>
-      current?.index === rebalancingSpell.index
-        ? {
-            ...rebalancingSpell,
-            description: rebalanceDescription,
-            higherLevelText: rebalanceHigherLevelText,
-            homebrew: false,
-            rebalanced: true,
-          }
-        : current,
-    )
-    setRebalancingSpell(null)
   }
 
   async function restoreOfficialSpell(spellIndex: string, displayName: string) {
@@ -626,7 +602,7 @@ export function SpellLibraryView({
                       loading={rebalanceLoadingIndex === spell.index}
                       onClick={() => void openRebalance(spell)}
                     >
-                      {isRebalancedSpell(spell) ? "Editar rebalanceamento" : "Rebalancear texto"}
+                      {isRebalancedSpell(spell) ? "Editar rebalanceamento" : "Rebalancear"}
                     </Button>
                   ) : null}
                   {isSession && isRebalancedSpell(spell) ? (
@@ -673,37 +649,21 @@ export function SpellLibraryView({
 
       {rebalancingSpell ? (
         <ModalFrame
-          title={`Rebalancear texto — ${spellName(rebalancingSpell)}`}
+          title={`Rebalancear — ${spellName(rebalancingSpell)}`}
           onClose={() => setRebalancingSpell(null)}
+          wide
         >
           <div className="rounded-xl border border-accentBorder bg-accentBg p-3 text-xs leading-5 text-text">
-            Apenas o texto da magia é alterado. Nível, escola, componentes,
-            alcance, duração e resolução mecânica continuam usando os dados da
-            magia oficial.
+            Esta é uma cópia de campanha da magia oficial. Você pode alterar
+            qualquer parte da magia — nível, escola, classes, componentes,
+            conjuração, alcance, duração, alvos, salvaguardas, dano,
+            escalonamento e texto. O mesmo índice oficial é preservado, então
+            personagens que já conhecem a magia passam a usar esta versão
+            rebalanceada automaticamente.
           </div>
 
-          <label className="grid gap-1.5">
-            <span className="text-xs font-semibold text-textH">Descrição</span>
-            <Textarea
-              className="min-h-56"
-              value={rebalanceDescription}
-              onChange={(event) => setRebalanceDescription(event.target.value)}
-            />
-          </label>
-
-          <label className="grid gap-1.5">
-            <span className="text-xs font-semibold text-textH">
-              Em níveis superiores
-            </span>
-            <Textarea
-              className="min-h-28"
-              value={rebalanceHigherLevelText}
-              onChange={(event) => setRebalanceHigherLevelText(event.target.value)}
-            />
-          </label>
-
-          <div className="flex flex-wrap justify-end gap-2">
-            {rebalancingSpell.rebalanced ? (
+          {rebalancingSpell.rebalanced ? (
+            <div className="flex justify-end">
               <Button
                 variant="secondary"
                 onClick={() => {
@@ -715,14 +675,28 @@ export function SpellLibraryView({
               >
                 Voltar ao padrão
               </Button>
-            ) : null}
-            <Button variant="secondary" onClick={() => setRebalancingSpell(null)}>
-              Cancelar
-            </Button>
-            <Button onClick={saveRebalancedText}>
-              Salvar rebalanceamento
-            </Button>
-          </div>
+            </div>
+          ) : null}
+
+          <SpellCreatorModule
+            editingSpell={rebalancingSpell}
+            submitLabel="Salvar rebalanceamento"
+            saveSpell={(spell) => {
+              const rebalancedSpell: Spell = {
+                ...spell,
+                index: rebalancingSpell.index,
+                homebrew: false,
+                rebalanced: true,
+              }
+              saveSpell(rebalancedSpell)
+              setViewingSpell((current) =>
+                current?.index === rebalancedSpell.index
+                  ? rebalancedSpell
+                  : current,
+              )
+              setRebalancingSpell(null)
+            }}
+          />
         </ModalFrame>
       ) : null}
 
@@ -757,7 +731,40 @@ function isRebalancedSpell(spell: LibrarySpell): spell is Spell {
   return isFullSpell(spell) && spell.rebalanced === true
 }
 function booleanFilterValue(filter: BooleanFilter): boolean | undefined { return filter === "all" ? undefined : filter === "yes" }
-function ModalFrame({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) { return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true"><div className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-bg shadow-xl"><div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-bg p-4"><h2 className="text-lg font-semibold text-textH">{title}</h2><Button size="sm" variant="secondary" onClick={onClose}>Fechar</Button></div><div className="grid gap-4 p-4">{children}</div></div></div> }
+function ModalFrame({
+  title,
+  onClose,
+  children,
+  wide = false,
+}: {
+  title: string
+  onClose: () => void
+  children: ReactNode
+  wide?: boolean
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className={[
+          "max-h-[90dvh] w-full overflow-y-auto rounded-2xl bg-bg shadow-xl",
+          wide ? "max-w-6xl" : "max-w-3xl",
+        ].join(" ")}
+      >
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-bg p-4">
+          <h2 className="text-lg font-semibold text-textH">{title}</h2>
+          <Button size="sm" variant="secondary" onClick={onClose}>
+            Fechar
+          </Button>
+        </div>
+        <div className="grid gap-4 p-4">{children}</div>
+      </div>
+    </div>
+  )
+}
 function FilterSelect<T extends string>({ value, onChange, children }: { value: T; onChange: (value: T) => void; children: ReactNode }) { return <SharedSelect className="h-9 rounded-xl border border-accentBorder bg-bg px-3 text-sm text-text outline-none transition-colors focus:border-accent" value={value} onChange={(event) => onChange(event.target.value as T)}>{children}</SharedSelect> }
 function LibraryBadge({ label }: { label: string }) { return <span className="rounded-full border border-accentBorder bg-accentBg px-2.5 py-1 text-textH">{label}</span> }
 function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border border-border bg-bg-subtle p-3"><div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">{label}</div><div className="mt-1 text-sm text-textH">{value}</div></div> }
