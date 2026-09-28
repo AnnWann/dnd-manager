@@ -10,6 +10,7 @@ import {
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
+import { Textarea } from "../../../components/ui/Textarea"
 import {
   CASTING_TIME_NAMES,
   CLASS_NAMES,
@@ -59,7 +60,7 @@ export function SpellLibraryView({
   creatorPrelude,
   prepareSpellForSave,
 }: Props) {
-  const { spells, saveSpell, deleteSpell } = useMagicContext()
+  const { spells, savedSpells, saveSpell, deleteSpell } = useMagicContext()
   const initialOfficialPage = getCachedAllOfficialSpellSummaries()
   const [query, setQuery] = useState("")
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all")
@@ -76,6 +77,10 @@ export function SpellLibraryView({
   const [creatorOpen, setCreatorOpen] = useState(false)
   const [editingSpell, setEditingSpell] = useState<Spell | null>(null)
   const [viewingSpell, setViewingSpell] = useState<Spell | null>(null)
+  const [rebalancingSpell, setRebalancingSpell] = useState<Spell | null>(null)
+  const [rebalanceDescription, setRebalanceDescription] = useState("")
+  const [rebalanceHigherLevelText, setRebalanceHigherLevelText] = useState("")
+  const [rebalanceLoadingIndex, setRebalanceLoadingIndex] = useState("")
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState("")
   const [officialSummaries, setOfficialSummaries] = useState<SpellCompendiumSummary[]>(
@@ -96,6 +101,15 @@ export function SpellLibraryView({
   const homebrewSpells = useMemo(
     () => spells.filter((spell) => spell.homebrew),
     [spells],
+  )
+  const rebalancedByIndex = useMemo(
+    () =>
+      new Map(
+        savedSpells
+          .filter((spell) => !spell.homebrew && spell.rebalanced)
+          .map((spell) => [spell.index, spell]),
+      ),
+    [savedSpells],
   )
 
   // Session libraries can query/filter the server independently. The user
@@ -176,6 +190,7 @@ export function SpellLibraryView({
     isSession,
     levelFilter,
     query,
+    rebalancedByIndex,
     ritualFilter,
     saveFilter,
     schoolFilter,
@@ -183,7 +198,11 @@ export function SpellLibraryView({
   ])
 
   const filteredOfficial = useMemo(() => {
-    if (isSession) return officialSummaries
+    if (isSession) {
+      return officialSummaries.map(
+        (spell) => rebalancedByIndex.get(spell.index) ?? spell,
+      )
+    }
     if (sourceFilter !== "all" && sourceFilter !== "official") return []
 
     const normalizedQuery = normalizeSearch(query)
@@ -215,7 +234,7 @@ export function SpellLibraryView({
         matchesBoolean(saveFilter, spell.targeting.hasSavingThrow) &&
         (castingTimeFilter === "all" || spell.castingTime.type === castingTimeFilter)
       )
-    })
+    }).map((spell) => rebalancedByIndex.get(spell.index) ?? spell)
   }, [
     attackFilter,
     castingTimeFilter,
@@ -378,8 +397,76 @@ export function SpellLibraryView({
     if (window.confirm(`${verb} “${spellName(spell)}”? ${consequence}`)) deleteSpell(spell.index)
   }
 
+  async function openRebalance(spell: LibrarySpell) {
+    if (!isSession) return
+    setDetailError("")
+    setRebalanceLoadingIndex(spell.index)
+    try {
+      const effective =
+        rebalancedByIndex.get(spell.index)
+        ?? (isFullSpell(spell) ? spell : await getOfficialSpell(spell.index))
+      setRebalancingSpell(effective)
+      setRebalanceDescription(effective.description ?? "")
+      setRebalanceHigherLevelText(effective.higherLevelText ?? "")
+    } catch {
+      setDetailError("Não foi possível carregar a magia oficial para rebalanceamento.")
+    } finally {
+      setRebalanceLoadingIndex("")
+    }
+  }
+
+  function saveRebalancedText() {
+    if (!rebalancingSpell) return
+    saveSpell({
+      ...rebalancingSpell,
+      description: rebalanceDescription,
+      higherLevelText: rebalanceHigherLevelText,
+      homebrew: false,
+      rebalanced: true,
+    })
+    setViewingSpell((current) =>
+      current?.index === rebalancingSpell.index
+        ? {
+            ...rebalancingSpell,
+            description: rebalanceDescription,
+            higherLevelText: rebalanceHigherLevelText,
+            homebrew: false,
+            rebalanced: true,
+          }
+        : current,
+    )
+    setRebalancingSpell(null)
+  }
+
+  async function restoreOfficialSpell(spellIndex: string, displayName: string) {
+    if (!isSession || !rebalancedByIndex.has(spellIndex)) return
+    if (
+      !window.confirm(
+        `Restaurar “${displayName}” para o texto oficial? O rebalanceamento desta campanha será removido.`,
+      )
+    ) {
+      return
+    }
+
+    deleteSpell(spellIndex)
+    try {
+      const official = await getOfficialSpell(spellIndex)
+      setViewingSpell((current) =>
+        current?.index === spellIndex ? official : current,
+      )
+    } catch {
+      // The override is already removed. A future details request can fetch the
+      // official spell again if this refresh fails.
+    }
+  }
+
   async function openDetails(spell: LibrarySpell) {
     setDetailError("")
+    const rebalanced = rebalancedByIndex.get(spell.index)
+    if (rebalanced) {
+      setViewingSpell(rebalanced)
+      return
+    }
     if (isFullSpell(spell)) {
       setViewingSpell(spell)
       return
@@ -513,6 +600,7 @@ export function SpellLibraryView({
                     <LibraryBadge label={formatLevel(spell.slotLevel)} />
                     <LibraryBadge label={schoolLabel(String(spell.school))} />
                     {!spell.homebrew ? <LibraryBadge label="Oficial" /> : owned ? <LibraryBadge label={isSession ? "Homebrew da sessão" : "Sua homebrew"} /> : <LibraryBadge label="Homebrew compartilhada" />}
+                    {isRebalancedSpell(spell) ? <LibraryBadge label="Rebalanceada" /> : null}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-textMuted">
                     <span>{formatCastingTime(spell)}</span><span>{formatRange(spell)}</span><span>{formatDuration(spell)}</span><span>{formatComponents(spell)}</span>
@@ -530,8 +618,27 @@ export function SpellLibraryView({
                 </button>
                 <div className="flex shrink-0 flex-wrap gap-2">
                   <Button size="sm" variant="secondary" loading={detailLoading} onClick={() => void openDetails(spell)}>Ver detalhes</Button>
-                  {owned && fullSpell ? <Button size="sm" variant="secondary" onClick={() => openEdit(fullSpell)}>Editar</Button> : null}
-                  {owned && fullSpell ? <Button size="sm" variant="danger" onClick={() => removeSpell(fullSpell)}>{isSession ? "Remover" : "Arquivar"}</Button> : null}
+                  {isSession && !spell.homebrew ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      loading={rebalanceLoadingIndex === spell.index}
+                      onClick={() => void openRebalance(spell)}
+                    >
+                      {isRebalancedSpell(spell) ? "Editar rebalanceamento" : "Rebalancear texto"}
+                    </Button>
+                  ) : null}
+                  {isSession && isRebalancedSpell(spell) ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => void restoreOfficialSpell(spell.index, spellName(spell))}
+                    >
+                      Voltar ao padrão
+                    </Button>
+                  ) : null}
+                  {owned && fullSpell && spell.homebrew ? <Button size="sm" variant="secondary" onClick={() => openEdit(fullSpell)}>Editar</Button> : null}
+                  {owned && fullSpell && spell.homebrew ? <Button size="sm" variant="danger" onClick={() => removeSpell(fullSpell)}>{isSession ? "Remover" : "Arquivar"}</Button> : null}
                 </div>
               </div>
             </article>
@@ -563,6 +670,61 @@ export function SpellLibraryView({
         </ModalFrame>
       ) : null}
 
+      {rebalancingSpell ? (
+        <ModalFrame
+          title={`Rebalancear texto — ${spellName(rebalancingSpell)}`}
+          onClose={() => setRebalancingSpell(null)}
+        >
+          <div className="rounded-xl border border-accentBorder bg-accentBg p-3 text-xs leading-5 text-text">
+            Apenas o texto da magia é alterado. Nível, escola, componentes,
+            alcance, duração e resolução mecânica continuam usando os dados da
+            magia oficial.
+          </div>
+
+          <label className="grid gap-1.5">
+            <span className="text-xs font-semibold text-textH">Descrição</span>
+            <Textarea
+              className="min-h-56"
+              value={rebalanceDescription}
+              onChange={(event) => setRebalanceDescription(event.target.value)}
+            />
+          </label>
+
+          <label className="grid gap-1.5">
+            <span className="text-xs font-semibold text-textH">
+              Em níveis superiores
+            </span>
+            <Textarea
+              className="min-h-28"
+              value={rebalanceHigherLevelText}
+              onChange={(event) => setRebalanceHigherLevelText(event.target.value)}
+            />
+          </label>
+
+          <div className="flex flex-wrap justify-end gap-2">
+            {rebalancingSpell.rebalanced ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const index = rebalancingSpell.index
+                  const name = spellName(rebalancingSpell)
+                  setRebalancingSpell(null)
+                  void restoreOfficialSpell(index, name)
+                }}
+              >
+                Voltar ao padrão
+              </Button>
+            ) : null}
+            <Button variant="secondary" onClick={() => setRebalancingSpell(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={saveRebalancedText}>
+              Salvar rebalanceamento
+            </Button>
+          </div>
+        </ModalFrame>
+      ) : null}
+
       {viewingSpell ? (
         <ModalFrame title={spellName(viewingSpell)} onClose={() => setViewingSpell(null)}>
           <SpellDetails spell={viewingSpell} />
@@ -575,7 +737,7 @@ export function SpellLibraryView({
 function SpellDetails({ spell }: { spell: Spell }) {
   return (
     <div className="grid gap-5 text-sm text-text">
-      <div className="flex flex-wrap gap-2 text-xs"><LibraryBadge label={formatLevel(spell.slotLevel)} /><LibraryBadge label={schoolLabel(String(spell.school))} />{spell.concentration ? <LibraryBadge label="Concentração" /> : null}{spell.ritual ? <LibraryBadge label="Ritual" /> : null}</div>
+      <div className="flex flex-wrap gap-2 text-xs"><LibraryBadge label={formatLevel(spell.slotLevel)} /><LibraryBadge label={schoolLabel(String(spell.school))} />{spell.rebalanced ? <LibraryBadge label="Rebalanceada" /> : null}{spell.concentration ? <LibraryBadge label="Concentração" /> : null}{spell.ritual ? <LibraryBadge label="Ritual" /> : null}</div>
       <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         <Info label="Tempo de conjuração" value={formatCastingTime(spell)} /><Info label="Alcance" value={formatRange(spell)} /><Info label="Duração" value={formatDuration(spell)} /><Info label="Componentes" value={formatComponents(spell)} /><Info label="Classes" value={spell.classes.map((entry) => CLASS_NAMES[entry]).join(", ") || "Nenhuma"} /><Info label="Alvo" value={formatTargeting(spell)} /><Info label="Área" value={formatArea(spell)} /><Info label="Rolagens" value={spell.rollMode.join(", ") || "Nenhuma"} /><Info label="Dano" value={formatStructuredDamage(spell)} />
       </section>
@@ -589,6 +751,9 @@ function SpellDetails({ spell }: { spell: Spell }) {
 
 function isFullSpell(spell: LibrarySpell): spell is Spell {
   return "higherLevelText" in spell && "effects" in spell
+}
+function isRebalancedSpell(spell: LibrarySpell): spell is Spell {
+  return isFullSpell(spell) && spell.rebalanced === true
 }
 function booleanFilterValue(filter: BooleanFilter): boolean | undefined { return filter === "all" ? undefined : filter === "yes" }
 function ModalFrame({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) { return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true"><div className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-bg shadow-xl"><div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-bg p-4"><h2 className="text-lg font-semibold text-textH">{title}</h2><Button size="sm" variant="secondary" onClick={onClose}>Fechar</Button></div><div className="grid gap-4 p-4">{children}</div></div></div> }
