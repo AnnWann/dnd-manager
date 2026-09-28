@@ -21,6 +21,8 @@ export type SessionSharedInventoryState = {
   groundInventory: Itemmable[]
   carryCapacity?: number
   additionalSupplyConsumption?: number
+  /** Whether players can access the shared party inventory. Defaults to true. */
+  partyInventoryAccessible?: boolean
   /** Active session consumers, calculated from unfiltered authoritative state. */
   supplyConsumers?: SessionSupplyConsumerSummary[]
   /** Legacy aggregate retained for compatibility; mirrors food consumption. */
@@ -47,6 +49,7 @@ export type SessionInventoryOperation =
   | { type: "party.item.remove"; characterId: string; itemId: string }
   | { type: "party.settings.carryCapacity.set"; characterId: "session"; value: number }
   | { type: "party.settings.additionalSupplyConsumption.set"; characterId: "session"; value: number }
+  | { type: "party.settings.accessible.set"; characterId: "session"; value: boolean }
   | { type: "ground.item.add"; characterId: string; item: Itemmable }
   | { type: "ground.item.update"; characterId: string; itemId: string; item: Itemmable }
   | { type: "ground.item.remove"; characterId: string; itemId: string }
@@ -59,6 +62,7 @@ export type SessionInventoryClientMessage =
       groundInventory: Itemmable[]
       carryCapacity?: number
       additionalSupplyConsumption?: number
+      partyInventoryAccessible?: boolean
     }
   | { type: "session.inventory.operation"; operation: SessionInventoryOperation }
 
