@@ -15,12 +15,14 @@ type InitiativeCardsProps = InitiativeRosterProps & {
   cardRefs: { current: Map<string, HTMLDivElement> }
   readOnly?: boolean
   canViewPrivateStats?: (entry: InitiativeEntry) => boolean
+  canOpenEntry?: (entry: InitiativeEntry) => boolean
 }
 
 export function InitiativeCards({
   cardRefs,
   readOnly = false,
   canViewPrivateStats,
+  canOpenEntry,
   ...props
 }: InitiativeCardsProps) {
   return (
@@ -30,6 +32,7 @@ export function InitiativeCards({
           const active = entry.id === props.activeEntryId
           const anchor = props.started && entry.id === props.roundAnchorEntryId
           const showPrivateStats = !readOnly || Boolean(canViewPrivateStats?.(entry))
+          const canOpen = !readOnly || Boolean(canOpenEntry?.(entry))
 
           return (
             <div
@@ -72,7 +75,13 @@ export function InitiativeCards({
                 ) : null}
                 {readOnly ? (
                   <>
-                    <div className="relative aspect-[4/3] w-full overflow-hidden border-b border-border bg-bg-subtle">
+                    <button
+                      type="button"
+                      disabled={!canOpen}
+                      className="relative aspect-[4/3] w-full overflow-hidden border-b border-border bg-bg-subtle text-left disabled:cursor-default"
+                      onClick={() => canOpen && props.onOpen(entry.id)}
+                      title={canOpen ? "Abrir ficha da criatura" : undefined}
+                    >
                       {entry.imageUrl ? (
                         <img
                           src={entry.imageUrl}
@@ -94,11 +103,12 @@ export function InitiativeCards({
                           {entry.initiative}
                         </div>
                       </div>
-                    </div>
+                    </button>
 
                     <div className="p-4">
                       <EntryIdentity
                         entry={{ ...entry, imageUrl: undefined }}
+                        onOpen={canOpen ? () => props.onOpen(entry.id) : undefined}
                         showTemporaryHp={showPrivateStats}
                         viewer="player"
                       />
