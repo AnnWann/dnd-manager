@@ -3,9 +3,13 @@ import type { ReactNode } from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
+import { Select as SharedSelect } from "../../../components/ui/Select"
 import { Textarea } from "../../../components/ui/Textarea"
 import {
+  getCustomProgressionSummary,
   normalizeCampaignProgressionSettings,
+  type CampaignProgressionPointSystem,
+  type CampaignProgressionRewardType,
   type CampaignProgressionSettings,
   type CampaignProgressionTrack,
 } from "../../../shared/progression/campaignProgression"
@@ -18,6 +22,15 @@ export function CampaignProgressionSettingsEditor({
   onChange: (value: CampaignProgressionSettings) => void
 }) {
   const progression = normalizeCampaignProgressionSettings(value)
+  const pointSystem = progression.pointSystem ?? {
+    name: "Pontos de progressão",
+    unit: "PP",
+    pointsPerLevel: 5,
+    manualPoints: 0,
+    spentPoints: 0,
+    visibleToPlayers: true,
+  }
+  const progressionSummary = getCustomProgressionSummary(progression)
 
   function update(patch: Partial<CampaignProgressionSettings>) {
     onChange({ ...progression, ...patch })
@@ -47,8 +60,9 @@ export function CampaignProgressionSettingsEditor({
           levelUpAt: 80,
           unit: "%",
           revealed: false,
-          grantsLevel: true,
-          levelGranted: false,
+          rewardType: "points",
+          rewardAmount: 1,
+          rewardConsumed: 0,
         },
       ],
     })
