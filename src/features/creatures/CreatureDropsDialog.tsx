@@ -14,7 +14,7 @@ import {
 import {
   createCreatureDropGroup,
   normalizeCreatureDrops,
-  type CreatureDropGroup,
+  validateCreatureDropQuantityFormula,
   type CreatureDrops,
 } from "../../models/creatures/CreatureDrops"
 import type { CompendiumCreature } from "../../models/creatures/CompendiumCreature"
@@ -105,7 +105,13 @@ export function CreatureDropsDialog({
     }))
   }
 
+  const hasInvalidQuantities = useMemo(
+    () => hasInvalidCreatureDropQuantities(drops),
+    [drops],
+  )
+
   function save() {
+    if (hasInvalidQuantities) return
     onSave({
       ...creature,
       drops: normalizeCreatureDrops(drops),
@@ -186,7 +192,13 @@ export function CreatureDropsDialog({
 
           <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button onClick={onClose}>Cancelar</Button>
-            <Button variant="primary" onClick={save}>Salvar drops</Button>
+            <Button
+              variant="primary"
+              disabled={hasInvalidQuantities}
+              onClick={save}
+            >
+              Salvar drops
+            </Button>
           </div>
         </div>
       </Modal>
@@ -398,7 +410,7 @@ function DropGroupEditor({
           {items.map((item) => (
             <div
               key={item.id}
-              className="grid gap-2 rounded-lg border border-border bg-bg p-3 sm:grid-cols-[minmax(0,1fr)_7rem_auto] sm:items-center"
+              className="grid gap-2 rounded-lg border border-border bg-bg p-3 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-center"
             >
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium text-textH">{item.name}</div>
@@ -406,23 +418,16 @@ function DropGroupEditor({
                   {item.compendiumItemId ? "Compêndio" : "Manual"} · {item.weight} kg/un.
                 </div>
               </div>
-              <label className="grid gap-1 text-[11px] text-textMuted">
-                Quantidade
-                <Input
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={item.quantity}
-                  onChange={(event) => {
-                    const quantity = Math.max(1, Math.trunc(Number(event.target.value) || 1))
-                    onChangeItems((current) =>
-                      current.map((entry) =>
-                        entry.id === item.id ? { ...entry, quantity } : entry,
-                      ),
-                    )
-                  }}
-                />
-              </label>
+              <DropQuantityField
+                item={item}
+                onChange={(patch) =>
+                  onChangeItems((current) =>
+                    current.map((entry) =>
+                      entry.id === item.id ? { ...entry, ...patch } : entry,
+                    ),
+                  )
+                }
+              />
               <Button
                 size="icon"
                 variant="ghost"
@@ -443,4 +448,80 @@ function DropGroupEditor({
       )}
     </section>
   )
+}
+
+
+function DropQuantityField({
+  item,
+  onChange,
+}: {
+  item: Itemmable
+  onChange: (patch: Pick<Itemmable, "quantity" | "dropQuantityFormula">) => void
+}) {
+  const value =
+    item.dropQuantityFormula !== undefined
+      ? item.dropQuantityFormula
+      : String(item.quantity)
+  const error = validateDropQuantityValue(value)
+
+  return (
+    <label className="grid gap-1 text-[11px] text-textMuted">
+      Quantidade
+      <Input
+        type="text"
+        inputMode="text"
+        value={value}
+        placeholder="1 ou 1d6"
+        aria-invalid={Boolean(error)}
+        title={error ?? "Quantidade fixa ou rolagem, como 1d6 ou 2d4+1."}
+        onChange={(event) => {
+          const raw = event.target.value
+          const trimmed = raw.trim()
+          if (/^\d+$/.test(trimmed)) {
+            onChange({
+              quantity: Number(trimmed),
+              dropQuantityFormula: undefined,
+            })
+            return
+          }
+
+          onChange({
+            quantity: item.quantity,
+            dropQuantityFormula: raw,
+          })
+        }}
+      />
+      {error ? (
+        <span className="text-[10px] leading-4 text-danger">{error}</span>
+      ) : (
+        <span className="text-[10px] leading-4">Fixo ou dado, ex.: 1d6.</span>
+      )}
+    </label>
+  )
+}
+
+function validateDropQuantityValue(value: string): string | undefined {
+  const trimmed = value.trim()
+  if (/^\d+$/.test(trimmed)) {
+    const quantity = Number(trimmed)
+    if (Number.isSafeInteger(quantity) && quantity >= 1) return undefined
+    return "Use uma quantidade de pelo menos 1."
+  }
+
+  return validateCreatureDropQuantityFormula(trimmed)
+}
+
+function hasInvalidCreatureDropQuantities(drops: CreatureDrops): boolean {
+  const items = [
+    ...drops.guaranteed,
+    ...drops.rollGroups.flatMap((group) => group.items),
+  ]
+
+  return items.some((item) => {
+    const value =
+      item.dropQuantityFormula !== undefined
+        ? item.dropQuantityFormula
+        : String(item.quantity)
+    return Boolean(validateDropQuantityValue(value))
+  })
 }

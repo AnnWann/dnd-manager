@@ -40,6 +40,8 @@ export type Item = {
   desc: string
   notes: string
   quantity: number
+  /** Optional dice expression used only while this item is configured as creature loot. */
+  dropQuantityFormula?: string
   weight: number
 
   pocketable: boolean

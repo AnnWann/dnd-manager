@@ -1,3 +1,4 @@
+import { parseManualDiceExpression } from "../../shared/session-runtime/manualDiceExpression"
 import type { Itemmable } from "../items/item"
 
 export type CreatureDropGroup = {
@@ -42,15 +43,62 @@ export function normalizeCreatureDrops(value: unknown): CreatureDrops {
   }
 }
 
-export function cloneCreatureDropItemForGround(item: Itemmable): Itemmable {
+export function cloneCreatureDropItemForGround(
+  item: Itemmable,
+  random: () => number = Math.random,
+): Itemmable {
   return {
     ...structuredClone(item),
     id: crypto.randomUUID(),
-    quantity: Math.max(1, finiteNumber(item.quantity, 1)),
+    quantity: rollCreatureDropQuantity(item, random),
+    dropQuantityFormula: undefined,
     heldHands: undefined,
     insideBagOfHolding: false,
     attuned: false,
   }
+}
+
+export function validateCreatureDropQuantityFormula(
+  expression: string,
+): string | undefined {
+  const parsed = parseManualDiceExpression(expression)
+  if (!parsed.ok) return parsed.message
+  if (parsed.value.terms.some((term) => term.mode !== "normal")) {
+    return "A quantidade do drop não aceita vantagem ou desvantagem."
+  }
+  return undefined
+}
+
+export function normalizeCreatureDropQuantityFormula(
+  value: unknown,
+): string | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined
+  const parsed = parseManualDiceExpression(value)
+  if (!parsed.ok) return undefined
+  if (parsed.value.terms.some((term) => term.mode !== "normal")) return undefined
+  return parsed.value.expression
+}
+
+export function rollCreatureDropQuantity(
+  item: Pick<Itemmable, "quantity" | "dropQuantityFormula">,
+  random: () => number = Math.random,
+): number {
+  const fallback = Math.max(1, Math.trunc(finiteNumber(item.quantity, 1)))
+  const expression = normalizeCreatureDropQuantityFormula(item.dropQuantityFormula)
+  if (!expression) return fallback
+
+  const parsed = parseManualDiceExpression(expression)
+  if (!parsed.ok) return fallback
+
+  let total = parsed.value.modifier
+  for (const term of parsed.value.terms) {
+    for (let index = 0; index < term.quantity; index += 1) {
+      const normalizedRandom = Math.min(0.9999999999999999, Math.max(0, random()))
+      total += Math.floor(normalizedRandom * term.sides) + 1
+    }
+  }
+
+  return Math.max(1, Math.trunc(total))
 }
 
 function normalizeCreatureDropGroups(value: unknown): CreatureDropGroup[] {
@@ -77,6 +125,10 @@ function normalizeDropItems(value: unknown): Itemmable[] {
     const name = stringValue(record.name).trim()
     if (!name) return []
 
+    const dropQuantityFormula = normalizeCreatureDropQuantityFormula(
+      record.dropQuantityFormula,
+    )
+
     return [
       {
         ...structuredClone(record),
@@ -84,7 +136,8 @@ function normalizeDropItems(value: unknown): Itemmable[] {
         name,
         desc: stringValue(record.desc),
         notes: stringValue(record.notes),
-        quantity: Math.max(1, finiteNumber(record.quantity, 1)),
+        quantity: Math.max(1, Math.trunc(finiteNumber(record.quantity, 1))),
+        dropQuantityFormula,
         weight: Math.max(0, finiteNumber(record.weight, 0)),
         pocketable: Boolean(record.pocketable),
         kind: stringValue(record.kind, "common"),
