@@ -14,6 +14,7 @@ export type SessionInventoryOperation =
   | { type: "party.item.remove"; characterId: string; itemId: string }
   | { type: "party.settings.carryCapacity.set"; characterId: "session"; value: number }
   | { type: "party.settings.additionalSupplyConsumption.set"; characterId: "session"; value: number }
+  | { type: "party.settings.accessible.set"; characterId: "session"; value: boolean }
   | { type: "ground.item.add"; characterId: string; item: Record<string, unknown> }
   | { type: "ground.item.update"; characterId: string; itemId: string; item: Record<string, unknown> }
   | { type: "ground.item.remove"; characterId: string; itemId: string }
@@ -35,6 +36,7 @@ export type SessionInventoryClientMessage =
       groundInventory: Record<string, unknown>[];
       carryCapacity?: number;
       additionalSupplyConsumption?: number;
+      partyInventoryAccessible?: boolean;
     }
   | { type: "session.inventory.operation"; operation: SessionInventoryOperation };
 
@@ -47,6 +49,10 @@ export function parseInventoryClientMessage(raw: string): SessionInventoryClient
     if (!Array.isArray(message.partyInventory) || !Array.isArray(message.groundInventory)) return null;
     if (!isOptionalNonNegativeNumber(message.carryCapacity)) return null;
     if (!isOptionalNonNegativeNumber(message.additionalSupplyConsumption)) return null;
+    if (
+      message.partyInventoryAccessible !== undefined
+      && typeof message.partyInventoryAccessible !== "boolean"
+    ) return null;
     return message as SessionInventoryClientMessage;
   }
   if (message.type !== "session.inventory.operation" || !message.operation || typeof message.operation !== "object") return null;
@@ -65,6 +71,13 @@ export function parseInventoryClientMessage(raw: string): SessionInventoryClient
   if (
     (operation.type === "party.settings.carryCapacity.set" || operation.type === "party.settings.additionalSupplyConsumption.set")
     && (operation.characterId !== "session" || typeof operation.value !== "number" || !Number.isFinite(operation.value) || operation.value < 0)
+  ) return null;
+  if (
+    operation.type === "party.settings.accessible.set"
+    && (
+      operation.characterId !== "session"
+      || typeof operation.value !== "boolean"
+    )
   ) return null;
   return message as SessionInventoryClientMessage;
 }
