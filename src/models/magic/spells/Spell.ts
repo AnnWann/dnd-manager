@@ -19,6 +19,12 @@ export type Spell = {
   displayName?: string
   headcanon?: string
   homebrew: boolean
+  /**
+   * Campaign override of an official spell's rules text. Rebalanced spells keep
+   * the official index and mechanics, but their description text is authored
+   * by the campaign master.
+   */
+  rebalanced?: boolean
   slotLevel: MagicCircleLevel
   school: MagicSchool | string
   classes: ClassName[]
