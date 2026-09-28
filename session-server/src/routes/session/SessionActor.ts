@@ -125,6 +125,7 @@ type SharedInventoryState = {
   revision: number;
   partyInventory: unknown[];
   groundInventory: unknown[];
+  partyInventoryAccessible?: boolean;
 };
 
 export class SessionActor extends DurableObject<Env> {
@@ -866,6 +867,7 @@ export class SessionActor extends DurableObject<Env> {
     let canonicalOperation: SessionLogRecord["operation"] = operation;
     let reverseOperation: SessionLogRecord["reverseOperation"];
     let affectedScopes: string[] | undefined;
+    let longRestUsedSharedInventory = false;
 
     if (operation.type === "character.rest.short") {
       if (!Number.isInteger(operation.healing) || operation.healing < 0) {
@@ -899,12 +901,18 @@ export class SessionActor extends DurableObject<Env> {
       const supplySettings = normalizeLongRestSupplySettings(
         runtimeConfig?.longRestSupplies,
       );
+      const useSharedInventory =
+        inventory.partyInventoryAccessible !== false;
+      const supplySource = useSharedInventory
+        ? inventory.partyInventory as Itemmable[]
+        : current.get("inventory");
+
       const requirements = getLongRestSupplyRequirements(
         current.get("sheet").race,
         supplySettings,
       );
       const selectionTotals = getSupplySelectionTotals(
-        inventory.partyInventory as Itemmable[],
+        supplySource,
         supplied,
       );
       const enoughSupplies =
@@ -919,33 +927,43 @@ export class SessionActor extends DurableObject<Env> {
         this.sendError(
           webSocket,
           "LONG_REST_SUPPLIES_REQUIRED",
-          "This campaign requires the configured food and drink before a long rest can be completed.",
+          useSharedInventory
+            ? "This campaign requires the configured food and drink before a long rest can be completed."
+            : "The shared inventory is inaccessible. This character must carry the required food and drink personally before completing a long rest.",
         );
         return;
       }
 
       const consumption = supplySettings.enabled
-        ? consumeSelectedSupplies(
-            inventory.partyInventory as Itemmable[],
-            supplied,
-          )
+        ? consumeSelectedSupplies(supplySource, supplied)
         : {
-            items: inventory.partyInventory as Itemmable[],
+            items: supplySource,
             valid: true,
             selectedPortions: 0,
             selectedFoodPortions: 0,
             selectedDrinkPortions: 0,
           };
       if (!consumption.valid) {
-        this.sendError(webSocket, "INVALID_LONG_REST_SUPPLIES", "The selected supplies are no longer available in the shared inventory.");
+        this.sendError(
+          webSocket,
+          "INVALID_LONG_REST_SUPPLIES",
+          "The selected supplies are no longer available in the inventory used for this rest.",
+        );
         return;
+      }
+
+      if (supplySettings.enabled && !useSharedInventory) {
+        current = current.with("inventory", consumption.items);
       }
 
       const recovery = enoughSupplies ? "full" : "partial";
       next = recovery === "partial"
         ? takePartialLongRest(current, restDefinitions)
         : takeLongRest(current, restDefinitions);
-      nextInventory = supplySettings.enabled
+
+      longRestUsedSharedInventory =
+        supplySettings.enabled && useSharedInventory;
+      nextInventory = longRestUsedSharedInventory
         ? {
             ...inventory,
             initialized: true,
@@ -961,10 +979,14 @@ export class SessionActor extends DurableObject<Env> {
           ability: structuredClone(storedAbility),
           hp: structuredClone(currentHp),
           conditions: structuredClone(currentConditions),
-          inventory: structuredClone(inventory),
+          ...(longRestUsedSharedInventory
+            ? { inventory: structuredClone(inventory) }
+            : {}),
         },
       };
-      affectedScopes = [characterScope(operation.characterId), SHARED_INVENTORY_SCOPE];
+      affectedScopes = longRestUsedSharedInventory
+        ? [characterScope(operation.characterId), SHARED_INVENTORY_SCOPE]
+        : [characterScope(operation.characterId)];
     }
 
     if (runtimeConfig) {
@@ -1013,7 +1035,9 @@ export class SessionActor extends DurableObject<Env> {
       [HP_STATE_KEY]: hpState,
       [CONDITIONS_STATE_KEY]: conditionsState,
     };
-    if (operation.type === "character.rest.long") writes[INVENTORY_STATE_KEY] = nextInventory;
+    if (longRestUsedSharedInventory) {
+      writes[INVENTORY_STATE_KEY] = nextInventory;
+    }
 
     await commitSessionMutation(this.ctx.storage, this.ctx.getWebSockets(), {
       writes,
@@ -1025,8 +1049,11 @@ export class SessionActor extends DurableObject<Env> {
     this.broadcastSessionRaw({ type: "session.abilities.updated", character: nextAbility });
     this.broadcast({ type: "session.hp.updated", character: nextHp });
     this.broadcast({ type: "session.conditions.updated", character: nextConditions });
-    if (operation.type === "character.rest.long") {
-      this.broadcastSessionRaw({ type: "session.inventory.updated", state: nextInventory });
+    if (longRestUsedSharedInventory) {
+      this.broadcastSessionRaw({
+        type: "session.inventory.updated",
+        state: nextInventory,
+      });
     }
   }
 
