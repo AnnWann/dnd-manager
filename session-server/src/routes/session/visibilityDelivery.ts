@@ -291,6 +291,10 @@ function filterMessageForSocket(socket: WebSocket, message: unknown): unknown | 
   if (type === "session.dice.result" || type === "session.action.result") {
     const characterId = readCharacterId(record.result);
     if (!characterId) return message;
+    // Creature rolls use a synthetic id instead of a character id. Visibility
+    // was already enforced above (public vs roller-master), so do not run them
+    // through character ownership filtering.
+    if (characterId.startsWith("creature:")) return message;
     return canReceiveCharacter(connection, characterId)
       ? message
       : null;
