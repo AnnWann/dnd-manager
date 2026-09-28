@@ -427,8 +427,16 @@ function BonusDetails({
   )
 }
 
-function isEquipment(item: Itemmable): boolean {
-  return item.kind === "equipment" || item.kind === "shield"
+function isEquipment(item: Itemmable): item is Equipment {
+  const resourceItem = item as Itemmable & Partial<Equipment>
+  return (
+    item.kind === "equipment" ||
+    item.kind === "shield" ||
+    item.kind === "focus" ||
+    Boolean(resourceItem.bonuses) ||
+    Boolean(resourceItem.abilities?.length) ||
+    Boolean(resourceItem.spells?.length)
+  )
 }
 
 function isWeapon(item: Itemmable): boolean {
