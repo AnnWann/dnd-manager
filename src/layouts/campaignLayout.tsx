@@ -434,6 +434,14 @@ export function CampaignLayout() {
       active: location.pathname === toSession("initiative"),
       onClick: () => navigate(toSession("initiative")),
     },
+    ...(effectiveUserRole !== "master"
+      ? [{
+          label: "Minhas criaturas",
+          icon: <IconCompendium />,
+          active: location.pathname === toSession("creatures"),
+          onClick: () => navigate(toSession("creatures")),
+        }]
+      : []),
   ]
 
   const creationSidebarItems = creationNavItems.map((item) => ({
