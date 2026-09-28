@@ -182,6 +182,7 @@ export function SpellCard({
                     {MAGIC_SCHOOLS_MAP[spell.school] ?? spell.school}
                   </SpellMeta>
                   <SpellMeta>{formatSpellOrigin(source)}</SpellMeta>
+                  {spell.rebalanced ? <SpellMeta>Rebalanceada</SpellMeta> : null}
                   <SpellMeta>
                     {formatPreparationStatus(prepared, alwaysPrepared)}
                   </SpellMeta>
