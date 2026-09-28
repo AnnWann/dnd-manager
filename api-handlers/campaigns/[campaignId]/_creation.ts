@@ -30,6 +30,9 @@ import {
   CUSTOM_SYSTEM_SUPPRESSED_FIELD,
   reconcileConfiguredCustomSystemStates,
 } from "../../../src/lib/customSystems/CustomSystemConfigurationReconciliation.js"
+import {
+  normalizeCampaignProgressionSettings,
+} from "../../../src/shared/progression/campaignProgression.js"
 import type {
   CreationCharacterConfiguration,
   CreationCharacterCustomSystemConfiguration,
@@ -176,6 +179,9 @@ export async function PATCH(
     const nextDiceRollingEnabled = domains.settings
       ? data.diceRollingEnabled !== false
       : currentSnapshot.data.diceRollingEnabled !== false
+    const nextProgression = domains.settings
+      ? normalizeCampaignProgressionSettings(data.progression)
+      : normalizeCampaignProgressionSettings(currentSnapshot.data.progression)
     const nextCreatureFolders = domains.creatures
       ? readCreatureFolders([
           ...(data.creatureFolders ?? []),
@@ -377,6 +383,7 @@ export async function PATCH(
           data: {
             ...nextManagedDomains,
             diceRollingEnabled: nextDiceRollingEnabled,
+            progression: nextProgression,
             creatureFolders: nextCreatureFolders,
           },
           addedById: session.user.id,
@@ -385,6 +392,7 @@ export async function PATCH(
           data: {
             ...nextManagedDomains,
             diceRollingEnabled: nextDiceRollingEnabled,
+            progression: nextProgression,
             creatureFolders: nextCreatureFolders,
           },
           addedById: session.user.id,
@@ -463,6 +471,7 @@ function projectCreationSnapshot(
     data: {
       version: 1,
       diceRollingEnabled: snapshot.data.diceRollingEnabled,
+      progression: access.settings ? snapshot.data.progression : undefined,
       characters: access.settings ? snapshot.data.characters : [],
       spells: access.magic ? snapshot.data.spells : [],
       itemCompendium: access.items ? snapshot.data.itemCompendium : [],
@@ -567,6 +576,7 @@ async function buildCreationSnapshot(campaignId: string): Promise<CreationSnapsh
     customSystems: markerData?.customSystems === true,
   }
   const diceRollingEnabled = markerData?.diceRollingEnabled !== false
+  const progression = normalizeCampaignProgressionSettings(markerData?.progression)
   const creatureFolders = readCreatureFolders(markerData?.creatureFolders)
 
   const characters = characterLinks.map((link) => {
@@ -614,6 +624,7 @@ async function buildCreationSnapshot(campaignId: string): Promise<CreationSnapsh
   const data: CreationState = {
     version: 1,
     diceRollingEnabled,
+    progression,
     characters,
     spells,
     itemCompendium,
@@ -742,6 +753,7 @@ function readCreationState(value: unknown): CreationState {
   return {
     ...(state as unknown as CreationState),
     diceRollingEnabled: state.diceRollingEnabled !== false,
+    progression: normalizeCampaignProgressionSettings(state.progression),
     creatureFolders: readCreatureFolders(state.creatureFolders),
   }
 }

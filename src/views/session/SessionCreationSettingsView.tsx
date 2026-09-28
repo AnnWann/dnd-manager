@@ -20,6 +20,7 @@ import { Button } from "../../components/ui/Button"
 import { useCharacterContext } from "../../contexts/characterContext"
 import { useSyncContext } from "../../contexts/syncContext"
 import { CharacterSettingsModal } from "../../features/characters/settings/CharacterSettingsModal"
+import { CampaignProgressionSettingsEditor } from "../../features/characters/progression/CampaignProgressionSettingsEditor"
 import { useOptionalCreationEditor } from "../../features/creation/CreationEditorProvider"
 import {
   isSuppressedConfiguredCustomSystemState,
@@ -268,6 +269,18 @@ export function SessionCreationSettingsView() {
         <div className="rounded-xl border border-danger bg-dangerBg px-4 py-3 text-sm text-danger">
           {errorMessage}
         </div>
+      ) : null}
+
+      {editor?.draft ? (
+        <CampaignProgressionSettingsEditor
+          value={editor.draft.progression}
+          onChange={(progression) =>
+            editor.updateDraft((draft) => ({
+              ...draft,
+              progression,
+            }))
+          }
+        />
       ) : null}
 
       {editor?.draft ? (

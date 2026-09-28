@@ -7,6 +7,10 @@ import type { CharacterType } from "../../models/characters/CharacterType"
 import type { CustomSystemDefinition } from "../../models/customSystems/CustomSystemDefinition"
 import type { CompendiumCreature } from "../../models/creatures/CompendiumCreature"
 import type { Spell } from "../../models/magic/spells/Spell"
+import {
+  projectCampaignProgressionForPlayers,
+  type CampaignProgressionSettings,
+} from "../progression/campaignProgression"
 
 /**
  * Small projection of CreationState required by the authoritative session
@@ -16,6 +20,8 @@ import type { Spell } from "../../models/magic/spells/Spell"
 export type SessionRuntimeConfig = {
   /** Defaults to true for snapshots created before this setting existed. */
   diceRollingEnabled?: boolean
+  /** Player-safe projection. Hidden custom goals are deliberately omitted. */
+  progression?: CampaignProgressionSettings
   characters: SessionRuntimeCharacterConfig[]
   spells: Spell[]
   customSystems: CustomSystemDefinition[]
@@ -42,6 +48,7 @@ export function toSessionRuntimeConfig(
 ): SessionRuntimeConfig {
   return {
     diceRollingEnabled: creation.diceRollingEnabled !== false,
+    progression: projectCampaignProgressionForPlayers(creation.progression),
     characters: creation.characters.map((character) => ({
       characterId: character.characterId,
       type: character.type,

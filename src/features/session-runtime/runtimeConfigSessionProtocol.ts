@@ -1,4 +1,5 @@
 import type { SessionRuntimeConfigSnapshot } from "../../shared/session-runtime/sessionRuntimeConfig"
+import { isCampaignProgressionSettings } from "../../shared/progression/campaignProgression"
 
 export type SessionRuntimeConfigPublishMessage = {
   type: "session.config.publish"
@@ -56,6 +57,10 @@ function isRuntimeConfigSnapshot(
     (
       config.diceRollingEnabled === undefined
       || typeof config.diceRollingEnabled === "boolean"
+    ) &&
+    (
+      config.progression === undefined
+      || isCampaignProgressionSettings(config.progression)
     ) &&
     Array.isArray(config.characters) &&
     Array.isArray(config.spells) &&

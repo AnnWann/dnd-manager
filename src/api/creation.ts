@@ -35,6 +35,7 @@ export async function getCreationSnapshot(
       data: {
         version: 1,
         diceRollingEnabled: true,
+        progression: { mode: "xp" },
         characters: [],
         spells: [],
         itemCompendium: [],
