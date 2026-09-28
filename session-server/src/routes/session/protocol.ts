@@ -166,6 +166,8 @@ export type SessionRestOperation =
       characterId: string;
       selection: Array<{ itemId: string; portions: number }>;
       recovery: "full" | "partial";
+      /** MASTER-only override: complete a full long rest without consuming supplies. */
+      resourceFree?: boolean;
     };
 
 export type SessionConditionOperation =
@@ -519,7 +521,11 @@ function isAuthoritativeOperation(value: unknown): value is SessionAuthoritative
     case "character.rest.long":
       return (value.recovery === "full" || value.recovery === "partial")
         && Array.isArray(value.selection)
-        && value.selection.every(isLongRestSelection);
+        && value.selection.every(isLongRestSelection)
+        && (
+          value.resourceFree === undefined
+          || typeof value.resourceFree === "boolean"
+        );
     default:
       return false;
   }
