@@ -2,8 +2,13 @@ import { Clock3, Grid2X2, List, Shield, Swords } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Button } from "../components/ui/Button"
+import { Modal } from "../components/ui/Modal"
 import { useSyncContext } from "../contexts/syncContext"
 import { InitiativeCards } from "../features/initiative/InitiativeCards"
+import {
+  CreatureQuickSheet,
+  quickSheetFromCompendiumCreature,
+} from "../features/creatures/CreatureQuickSheet"
 import { DeathSaveCounter } from "../features/initiative/InitiativeEntryParts"
 import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
 import { useInitiativeSession } from "../hooks/useInitiativeSession"
@@ -16,6 +21,7 @@ export function InitiativePlayerView() {
   const runtime = useOptionalSessionRuntime()
   const { userKey } = useSyncContext()
   const [viewMode, setViewMode] = useState<PlayerViewMode>("cards")
+  const [viewingCreatureEntryId, setViewingCreatureEntryId] = useState<string>()
   const cardRefs = useRef(new Map<string, HTMLDivElement>())
 
   const ownedCharacterIds = useMemo(() => {
@@ -33,11 +39,28 @@ export function InitiativePlayerView() {
     )
   }, [runtime?.sessionCharactersById, userKey])
 
+  const ownedCreaturesById = useMemo(
+    () =>
+      new Map(
+        (runtime?.runtimeConfigSnapshot?.config.creatureCompendium ?? []).map(
+          (creature) => [creature.id, creature] as const,
+        ),
+      ),
+    [runtime?.runtimeConfigSnapshot],
+  )
+
   const entries = useMemo(
     () => session.entries.filter((entry) => !entry.hidden),
     [session.entries],
   )
   const active = entries.find((entry) => entry.id === session.activeEntryId)
+  const viewingCreatureEntry = viewingCreatureEntryId
+    ? entries.find((entry) => entry.id === viewingCreatureEntryId)
+    : undefined
+  const viewingCreatureId = creatureIdFromSourceId(viewingCreatureEntry?.sourceId)
+  const viewingCreature = viewingCreatureId
+    ? ownedCreaturesById.get(viewingCreatureId)
+    : undefined
 
   useEffect(() => {
     if (viewMode !== "cards" || !session.activeEntryId) return
@@ -57,8 +80,16 @@ export function InitiativePlayerView() {
     )
   }
 
-  const canViewPrivateStats = (entry: InitiativeEntry) =>
-    Boolean(entry.sourceId && ownedCharacterIds.has(entry.sourceId))
+  const canViewPrivateStats = (entry: InitiativeEntry) => {
+    if (!entry.sourceId) return false
+    if (ownedCharacterIds.has(entry.sourceId)) return true
+    const creatureId = creatureIdFromSourceId(entry.sourceId)
+    return Boolean(creatureId && ownedCreaturesById.has(creatureId))
+  }
+  const canOpenCreature = (entry: InitiativeEntry) => {
+    const creatureId = creatureIdFromSourceId(entry.sourceId)
+    return Boolean(creatureId && ownedCreaturesById.has(creatureId))
+  }
   const canViewDeathSaves = (entry: InitiativeEntry) =>
     Boolean(entry.deathSaves) && (
       session.deathSaveVisibility === "everyone" ||
@@ -146,8 +177,9 @@ export function InitiativePlayerView() {
             cardRefs={cardRefs}
             readOnly
             canViewPrivateStats={canViewPrivateStats}
+            canOpenEntry={canOpenCreature}
             patchEntry={noop}
-            onOpen={noop}
+            onOpen={(entryId) => setViewingCreatureEntryId(entryId)}
             onCondition={noop}
             onRemove={noop}
             onTrade={noop}
@@ -166,10 +198,32 @@ export function InitiativePlayerView() {
               showDeathSaves={canViewDeathSaves(entry)}
               editDeathSaves={canEditDeathSaves(entry)}
               onDeathSaves={(deathSaves) => setDeathSaves(entry, deathSaves)}
+              onOpenCreature={
+                canOpenCreature(entry)
+                  ? () => setViewingCreatureEntryId(entry.id)
+                  : undefined
+              }
             />
           ))}
         </div>
       )}
+
+      {viewingCreature && viewingCreatureEntry ? (
+        <Modal
+          title={viewingCreature.name}
+          onClose={() => setViewingCreatureEntryId(undefined)}
+          className="max-w-5xl"
+        >
+          <CreatureQuickSheet
+            data={quickSheetFromCompendiumCreature(
+              viewingCreature,
+              viewingCreatureEntry,
+              { enableRolls: true },
+            )}
+            preferImage={Boolean(viewingCreature.sheetImageUrl)}
+          />
+        </Modal>
+      ) : null}
     </div>
   )
 }
@@ -181,6 +235,7 @@ function ReadOnlyEntry({
   showDeathSaves,
   editDeathSaves,
   onDeathSaves,
+  onOpenCreature,
 }: {
   entry: InitiativeEntry
   active: boolean
@@ -188,6 +243,7 @@ function ReadOnlyEntry({
   showDeathSaves: boolean
   editDeathSaves: boolean
   onDeathSaves: (deathSaves: { successes: number; failures: number }) => void
+  onOpenCreature?: () => void
 }) {
   return (
     <article
@@ -206,18 +262,36 @@ function ReadOnlyEntry({
 
       <div className="flex min-w-0 items-center gap-3">
         {entry.imageUrl ? (
-          <img
-            src={entry.imageUrl}
-            alt=""
-            className="h-12 w-12 shrink-0 rounded-lg border border-border object-cover"
-          />
+          <button
+            type="button"
+            className="shrink-0 rounded-lg disabled:cursor-default"
+            disabled={!onOpenCreature}
+            onClick={onOpenCreature}
+            title={onOpenCreature ? "Abrir ficha da criatura" : undefined}
+          >
+            <img
+              src={entry.imageUrl}
+              alt=""
+              className="h-12 w-12 rounded-lg border border-border object-cover"
+            />
+          </button>
         ) : null}
 
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="min-w-0 break-words text-sm font-semibold text-textH">
-              {initiativeEntryDisplayName(entry, "player")}
-            </h2>
+            {onOpenCreature ? (
+              <button
+                type="button"
+                className="min-w-0 break-words text-left text-sm font-semibold text-textH hover:text-accent"
+                onClick={onOpenCreature}
+              >
+                {initiativeEntryDisplayName(entry, "player")}
+              </button>
+            ) : (
+              <h2 className="min-w-0 break-words text-sm font-semibold text-textH">
+                {initiativeEntryDisplayName(entry, "player")}
+              </h2>
+            )}
             {active ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
                 <Clock3 className="h-3 w-3" /> Turno atual
@@ -279,6 +353,11 @@ function PrivateStats({ entry }: { entry: InitiativeEntry }) {
       ) : null}
     </div>
   )
+}
+
+function creatureIdFromSourceId(sourceId?: string): string | undefined {
+  const prefix = "compendium:"
+  return sourceId?.startsWith(prefix) ? sourceId.slice(prefix.length) : undefined
 }
 
 function formatHp(entry: InitiativeEntry): string {
