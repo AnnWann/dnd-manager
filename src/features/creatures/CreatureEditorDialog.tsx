@@ -354,7 +354,7 @@ export function CreatureEditorDialog({
                 label="Pasta"
                 value={draft.folder ?? ""}
                 placeholder="Ex.: Mortos-vivos, Chefes, Mar..."
-                onChange={(folder) => patch({ folder: folder.trim() || undefined })}
+                onChange={(folder) => patch({ folder: folder || undefined })}
               />
 
               <Field label="Lado padrão">
