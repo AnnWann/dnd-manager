@@ -22,7 +22,11 @@ import {
   isAutomaticallyPocketableKind,
 } from "../../models/items/itemPocketability"
 import { ConsumableFields, withConsumableDefaults } from "../characters/inventory/consumableFields"
-import { EquipmentFields, withEquipmentDefaults } from "../characters/inventory/equipmentFields"
+import {
+  EquipmentFields,
+  EquipmentSpellsFields,
+  withEquipmentDefaults,
+} from "../characters/inventory/equipmentFields"
 import { SupplyFields, withSupplyDefaults } from "../characters/inventory/supplyFields"
 import { ThrowableFields, withThrowableDefaults } from "../characters/inventory/throwableFields"
 import {
@@ -438,6 +442,20 @@ export function ItemCreationDialog({
 
               {draft.kind === "equipment" || draft.kind === "shield" ? (
                 <EquipmentFields item={draft} onUpdate={patch} />
+              ) : draft.kind !== "currency" ? (
+                <div className="grid gap-3 md:col-span-3 rounded-xl border border-border bg-bg-subtle p-3">
+                  <div>
+                    <div className="text-xs font-semibold text-textH">
+                      Magias enquanto estiver ativo
+                    </div>
+                    <p className="mt-1 text-[11px] leading-5 text-textMuted">
+                      Estas magias ficam disponíveis quando o item estiver sendo
+                      segurado na mão. O item não precisa ser uma arma nem ter o tipo
+                      Equipamento.
+                    </p>
+                  </div>
+                  <EquipmentSpellsFields item={draft} onUpdate={patch} />
+                </div>
               ) : null}
               {draft.kind === "consumable" ? (
                 <ConsumableFields item={draft} onUpdate={patch} />
