@@ -469,7 +469,11 @@ function JsonImportModal({
             <section className="grid content-start gap-3">
               <div>
                 <h3 className="text-sm font-medium text-textH">Estrutura esperada</h3>
-                <p className="mt-1 text-xs text-text">O modelo inclui um exemplo de configuração específica com usos ilimitados.</p>
+                <p className="mt-1 text-xs text-text">
+                  O modelo inclui configuração específica de ação, rolagem,
+                  dano, upcast e usos. Use <code>rollDisabled: true</code> para
+                  uma habilidade ignorar a rolagem padrão do tipo.
+                </p>
               </div>
               <pre className="max-h-[420px] overflow-auto rounded-lg border border-border bg-bg p-3 text-xs text-text">
                 {templateJson}
@@ -565,6 +569,20 @@ function createLibraryTemplate(type: CustomAbilityTypeDefinition): AbilityLibrar
         values: exampleValues,
         activation: {
           actionKind: 'action',
+          roll: {
+            mode: 'automatic',
+            kind: 'attack',
+            attribute: 'str',
+            proficient: true,
+            damage: [
+              {
+                id: 'dano-principal',
+                dice: '1d8',
+                damageType: 'slashing',
+                critical: true,
+              },
+            ],
+          },
           usage: { mode: 'unlimited', reset: 'manual' },
         },
       },
