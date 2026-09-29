@@ -2,6 +2,7 @@ import type { CharacterTemplate } from '../../models/characters/CharacterTemplat
 import type { CustomAbilityTypeDefinition } from '../../models/customSystems/CustomAbilityDefinition'
 import type { CustomFieldDefinition } from '../../models/customSystems/CustomFieldDefinition'
 import type { JsonValue } from '../../models/customSystems/CustomGenerals'
+import type { Attribute } from '../../models/sheet/Attribute'
 import type {
   CharacterCustomSystemState,
   CustomSystemDefinition,
@@ -53,6 +54,26 @@ export function listCustomFormulaVariables(
       valueType: field.resultType,
     }))
 
+  const attributeFieldVariables: CustomFormulaVariable[] = definition.fields
+    .filter((field) => field.type === 'attribute')
+    .flatMap((field) => [
+      {
+        path: `field.${field.id}.modifier`,
+        label: `${field.name} — modificador do atributo escolhido`,
+        valueType: 'number' as const,
+      },
+      {
+        path: `field.${field.id}.score`,
+        label: `${field.name} — valor do atributo escolhido`,
+        valueType: 'number' as const,
+      },
+      {
+        path: `field.${field.id}.save`,
+        label: `${field.name} — salvaguarda do atributo escolhido`,
+        valueType: 'number' as const,
+      },
+    ])
+
   const abilityVariables: CustomFormulaVariable[] = (abilityType?.fields ?? [])
     .filter(isFormulaCompatibleAbilityField)
     .flatMap((field) => [
@@ -67,6 +88,42 @@ export function listCustomFormulaVariables(
         valueType: formulaValueType(field),
       },
     ])
+
+  const abilityAttributeVariables: CustomFormulaVariable[] =
+    (abilityType?.fields ?? [])
+      .filter((field) => field.type === 'attribute')
+      .flatMap((field) => [
+        {
+          path: `ability.${field.id}.modifier`,
+          label: `${field.name} — modificador escolhido na habilidade`,
+          valueType: 'number' as const,
+        },
+        {
+          path: `ability.${field.id}.score`,
+          label: `${field.name} — valor escolhido na habilidade`,
+          valueType: 'number' as const,
+        },
+        {
+          path: `ability.${field.id}.save`,
+          label: `${field.name} — salvaguarda escolhida na habilidade`,
+          valueType: 'number' as const,
+        },
+        {
+          path: `${abilityType!.id}.${field.id}.modifier`,
+          label: `${field.name} — modificador (${abilityType!.name})`,
+          valueType: 'number' as const,
+        },
+        {
+          path: `${abilityType!.id}.${field.id}.score`,
+          label: `${field.name} — valor (${abilityType!.name})`,
+          valueType: 'number' as const,
+        },
+        {
+          path: `${abilityType!.id}.${field.id}.save`,
+          label: `${field.name} — salvaguarda (${abilityType!.name})`,
+          valueType: 'number' as const,
+        },
+      ])
 
   const rollVariables: CustomFormulaVariable[] = abilityType?.activation?.roll
     ? [{ path: 'roll.value', label: 'Resultado da rolagem', valueType: 'number' }]
@@ -111,7 +168,17 @@ export function listCustomFormulaVariables(
       customSystemId: definition.id,
       customSystemName: definition.name,
     })),
+    ...attributeFieldVariables.map((variable) => ({
+      ...variable,
+      customSystemId: definition.id,
+      customSystemName: definition.name,
+    })),
     ...abilityVariables.map((variable) => ({
+      ...variable,
+      customSystemId: definition.id,
+      customSystemName: definition.name,
+    })),
+    ...abilityAttributeVariables.map((variable) => ({
       ...variable,
       customSystemId: definition.id,
       customSystemName: definition.name,
@@ -214,6 +281,47 @@ function transformFormulaContext(
       }))
     : []
 
+  const systemAttributeReplacements = definition.fields
+    .filter((field) => field.type === 'attribute')
+    .flatMap((field) => {
+      const attribute = resolveAttributeFieldValue(
+        state.fields[field.id] ?? field.defaultValue,
+        field.allowedAttributes,
+      )
+      return attributeMetricReplacements(
+        `field.${field.id}`,
+        '__system_attribute',
+        field.id,
+        attribute,
+        character,
+      )
+    })
+
+  const abilityAttributeReplacements = (ability?.type.fields ?? [])
+    .filter((field) => field.type === 'attribute')
+    .flatMap((field) => {
+      const attribute = resolveAttributeFieldValue(
+        ability?.values?.[field.id] ?? field.defaultValue,
+        field.allowedAttributes,
+      )
+      return [
+        ...attributeMetricReplacements(
+          `ability.${field.id}`,
+          '__ability_attribute',
+          field.id,
+          attribute,
+          character,
+        ),
+        ...attributeMetricReplacements(
+          `${ability!.type.id}.${field.id}`,
+          '__ability_attribute_alias',
+          field.id,
+          attribute,
+          character,
+        ),
+      ]
+    })
+
   const rollReplacement = ability?.type.activation?.roll
     ? { path: 'roll.value', fieldId: toVirtualFieldId('__roll', 'value') }
     : undefined
@@ -275,6 +383,8 @@ function transformFormulaContext(
     ...characterReplacements,
     ...abilityReplacements,
     ...abilityAliasReplacements,
+    ...systemAttributeReplacements,
+    ...abilityAttributeReplacements,
     ...(rollReplacement ? [rollReplacement] : []),
     ...activationReplacements,
   ].sort((left, right) => right.path.length - left.path.length)
@@ -326,6 +436,18 @@ function transformFormulaContext(
     }
   })
 
+  const attributeMetricReplacementsAll = [
+    ...systemAttributeReplacements,
+    ...abilityAttributeReplacements,
+  ]
+  const attributeMetricVirtualFields: CustomFieldDefinition[] =
+    attributeMetricReplacementsAll.map(({ path, fieldId }) => ({
+      id: fieldId,
+      name: path,
+      type: 'number',
+      editPermission: 'automaticOnly',
+    }))
+
   const rollVirtualFields: CustomFieldDefinition[] = rollReplacement
     ? [{
         id: rollReplacement.fieldId,
@@ -367,6 +489,7 @@ function transformFormulaContext(
         ),
         ...characterVirtualFields,
         ...abilityVirtualFields,
+        ...attributeMetricVirtualFields,
         ...rollVirtualFields,
         ...activationVirtualFields,
       ],
@@ -383,6 +506,12 @@ function transformFormulaContext(
           characterReplacements.map(({ path, fieldId }) => [fieldId, characterValues[path]]),
         ),
         ...abilityStateValues,
+        ...Object.fromEntries(
+          attributeMetricReplacementsAll.map(({ fieldId, value }) => [
+            fieldId,
+            value,
+          ]),
+        ),
         ...(rollReplacement ? { [rollReplacement.fieldId]: ability?.rollValue ?? 0 } : {}),
         ...Object.fromEntries(
           activationReplacements.map(({ fieldId, value }) => [fieldId, value]),
@@ -411,7 +540,9 @@ function createMockState(
                 ? 0
                 : field.type === 'dice'
                   ? field.allowedDice?.[0] ?? 'd6'
-                  : ''
+                  : field.type === 'attribute'
+                    ? field.allowedAttributes?.[0] ?? 'str'
+                    : ''
           ),
         ]),
     ),
@@ -450,6 +581,45 @@ function normalizeAbilityFormulaValue(
   if (typeof value === 'string') return value
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   return valueType === 'dice' ? 'd6' : ''
+}
+
+function resolveAttributeFieldValue(
+  value: JsonValue | undefined,
+  allowedAttributes?: Attribute[],
+): Attribute {
+  const allowed =
+    allowedAttributes?.length
+      ? allowedAttributes
+      : ['str', 'dex', 'con', 'int', 'wis', 'cha'] as Attribute[]
+  return typeof value === 'string' && allowed.includes(value as Attribute)
+    ? value as Attribute
+    : allowed[0] ?? 'str'
+}
+
+function attributeMetricReplacements(
+  pathPrefix: string,
+  virtualPrefix: string,
+  fieldId: string,
+  attribute: Attribute,
+  character?: CharacterTemplate,
+) {
+  return [
+    {
+      path: `${pathPrefix}.modifier`,
+      fieldId: toVirtualFieldId(virtualPrefix, `${fieldId}_modifier`),
+      value: character?.getEffectiveAttributeModifier(attribute) ?? 0,
+    },
+    {
+      path: `${pathPrefix}.score`,
+      fieldId: toVirtualFieldId(virtualPrefix, `${fieldId}_score`),
+      value: character?.getEffectiveAttribute(attribute) ?? 10,
+    },
+    {
+      path: `${pathPrefix}.save`,
+      fieldId: toVirtualFieldId(virtualPrefix, `${fieldId}_save`),
+      value: character?.getSavingThrowBonus(attribute) ?? 0,
+    },
+  ]
 }
 
 function collectReferencedCharacterPaths(
