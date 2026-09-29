@@ -169,6 +169,9 @@ function defaultValueForField(field: CustomFieldDefinition): JsonValue {
   if (field.type === 'boolean') return false
   if (field.type === 'multiSelect') return []
   if (field.type === 'dice') return field.allowedDice?.[0] ?? 'd6'
+  if (field.type === 'attribute') {
+    return field.allowedAttributes?.[0] ?? 'str'
+  }
   return ''
 }
 
