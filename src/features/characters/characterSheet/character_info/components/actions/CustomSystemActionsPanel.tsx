@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react"
 import { Play } from "lucide-react"
-import { requestActionAnnouncement } from "../../../../../../lib/diceRoller"
+import {
+  getRollVisibility,
+  requestActionAnnouncement,
+} from "../../../../../../lib/diceRoller"
 
 import type { AbilityActionKind } from "../../../../../../models/abilities/Ability"
 import type { CharacterTemplate } from "../../../../../../models/characters/CharacterTemplate"
@@ -206,17 +209,28 @@ export function CustomSystemActionsPanel({
         ) {
           operation = { ...operation, rollDamageValues: damageValues }
         }
+        if (
+          operation.type === "character.customSystem.ability.activate"
+          || operation.type === "character.customSystem.action.execute"
+        ) {
+          operation = {
+            ...operation,
+            visibility: getRollVisibility(),
+          }
+        }
         const sent = sessionRuntime.dispatchAbilityOperation(operation)
         if (!sent) {
           setError("Não foi possível enviar esta ação para a sessão.")
           return
         }
-        requestActionAnnouncement({
-          characterId: character.get("id"),
-          title: entry.name,
-          subtitle: `${CATEGORY_LABELS[entry.actionKind]} · ${entry.source}`,
-          description: entry.description,
-        })
+        if (!entry.roll) {
+          requestActionAnnouncement({
+            characterId: character.get("id"),
+            title: entry.name,
+            subtitle: `${CATEGORY_LABELS[entry.actionKind]} · ${entry.source}`,
+            description: entry.description,
+          })
+        }
         return
       }
       updateCharacter(
