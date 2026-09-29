@@ -8,6 +8,7 @@ import type {
   CustomPredefinedAbilityDefinition,
 } from '../../models/customSystems/CustomAbilityDefinition'
 import type { CustomFieldDefinition } from '../../models/customSystems/CustomFieldDefinition'
+import type { Attribute } from '../../models/sheet/Attribute'
 import type { JsonValue } from '../../models/customSystems/CustomGenerals'
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
 import { CustomAbilitySpecificActivationEditor } from './CustomAbilitySpecificActivationEditor'
@@ -743,6 +744,16 @@ function validateImportedFieldValue(
     ) throw error()
     return value
   }
+  if (field.type === 'attribute') {
+    const allowed = field.allowedAttributes?.length
+      ? field.allowedAttributes
+      : ['str', 'dex', 'con', 'int', 'wis', 'cha'] as Attribute[]
+    if (
+      typeof value !== 'string'
+      || !allowed.includes(value as Attribute)
+    ) throw error()
+    return value
+  }
   if (field.type === 'multiSelect') {
     if (
       !Array.isArray(value) ||
@@ -823,6 +834,35 @@ function PresetField({
           {field.options.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
+        </Select>
+      </label>
+    )
+  }
+  if (field.type === 'attribute') {
+    const allowed = field.allowedAttributes?.length
+      ? new Set(field.allowedAttributes)
+      : undefined
+    const options: ReadonlyArray<readonly [Attribute, string]> = [
+      ['str', 'Força'],
+      ['dex', 'Destreza'],
+      ['con', 'Constituição'],
+      ['int', 'Inteligência'],
+      ['wis', 'Sabedoria'],
+      ['cha', 'Carisma'],
+    ]
+    return (
+      <label className="grid gap-1">
+        <span className="label">{field.name}</span>
+        <Select
+          value={typeof value === 'string' ? value : ''}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          <option value="">Selecione</option>
+          {options
+            .filter(([attribute]) => !allowed || allowed.has(attribute))
+            .map(([attribute, label]) => (
+              <option key={attribute} value={attribute}>{label}</option>
+            ))}
         </Select>
       </label>
     )
