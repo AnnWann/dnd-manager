@@ -103,6 +103,20 @@ export type SessionResolvedDamageRoll = {
   critical: boolean
   label?: string
   damageType?: string
+  /** Original effective dice expression, useful for manual/physical rolls. */
+  expression?: string
+}
+
+export type SessionResolvedPrimaryRoll = {
+  kind: "generic" | "abilityCheck" | "savingThrow"
+  label: string
+  mode: SessionDiceRollMode
+  groups: SessionDiceRollGroupResult[]
+  modifier: number
+  total: number
+  natural?: number
+  /** Original effective dice expression when this is not a d20 roll. */
+  expression?: string
 }
 
 export type SessionActionInstanceResult = {
@@ -123,6 +137,8 @@ export type SessionActionRollResult = {
   description?: string
   details?: string[]
   attack?: SessionResolvedD20Roll
+  /** Generic/check/save roll used by custom systems and similar actions. */
+  primary?: SessionResolvedPrimaryRoll
   save?: {
     attribute: Attribute
     dc: number
