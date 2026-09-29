@@ -409,6 +409,95 @@ function ActionRow({ definition, value, onChange, onRemove }: {
         <label className="flex items-center gap-2 text-sm font-semibold text-textH">
           <input
             type="checkbox"
+            checked={value.level !== undefined}
+            onChange={(event) =>
+              onChange({
+                ...value,
+                level: event.target.checked
+                  ? {
+                      baseLevel: value.level?.baseLevel ?? 1,
+                      maximumLevel: value.level?.maximumLevel ?? 1,
+                      label: value.level?.label,
+                    }
+                  : undefined,
+              })
+            }
+          />
+          Usar níveis / upcast
+        </label>
+        <p className="mt-1 text-xs leading-5 text-textMuted">
+          O jogador escolhe o nível ao executar este botão. Fórmulas podem usar
+          <code>activation.level</code>. Isso também funciona para ações como
+          Empoderar.
+        </p>
+        {value.level ? (
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <TextInput
+              label="Nível base"
+              type="number"
+              value={String(value.level.baseLevel)}
+              onChange={(raw) => {
+                const baseLevel = Math.max(
+                  1,
+                  Math.floor(Number(raw) || 1),
+                )
+                onChange({
+                  ...value,
+                  level: {
+                    ...value.level!,
+                    baseLevel,
+                    maximumLevel:
+                      value.level?.maximumLevel === undefined
+                        ? undefined
+                        : Math.max(baseLevel, value.level.maximumLevel),
+                  },
+                })
+              }}
+            />
+            <TextInput
+              label="Nível máximo"
+              type="number"
+              value={
+                value.level.maximumLevel === undefined
+                  ? ""
+                  : String(value.level.maximumLevel)
+              }
+              onChange={(raw) =>
+                onChange({
+                  ...value,
+                  level: {
+                    ...value.level!,
+                    maximumLevel: raw.trim()
+                      ? Math.max(
+                          value.level?.baseLevel ?? 1,
+                          Math.floor(Number(raw) || 1),
+                        )
+                      : undefined,
+                  },
+                })
+              }
+            />
+            <TextInput
+              label="Rótulo para o jogador"
+              value={value.level.label ?? ""}
+              onChange={(label) =>
+                onChange({
+                  ...value,
+                  level: {
+                    ...value.level!,
+                    label: label || undefined,
+                  },
+                })
+              }
+            />
+          </div>
+        ) : null}
+      </section>
+
+      <section className="mt-4 rounded-xl border border-border bg-bg p-3">
+        <label className="flex items-center gap-2 text-sm font-semibold text-textH">
+          <input
+            type="checkbox"
             checked={value.initiative?.enabled === true}
             onChange={(event) => onChange({
               ...value,
