@@ -124,6 +124,17 @@ export interface CustomAbilityDamageRollDefinition {
   damageType?: string
   /** Soma um valor calculado depois dos dados. */
   modifierFormula?: FormulaExpression
+  /**
+   * Dados adicionais rolados uma vez para cada nível de ativação acima do
+   * nível-base. Ex.: dano 2d6 com upcastDicePerLevel=1d6 vira 4d6 no nível 3
+   * quando o nível-base da ativação é 1.
+   */
+  upcastDicePerLevel?: string
+  /**
+   * Sobrescreve apenas para este dano o nível a partir do qual o upcast começa.
+   * Se ausente, usa activation.level.baseLevel.
+   */
+  upcastBaseLevel?: number
   /** Em um ataque crítico, dobra os dados deste componente. Padrão: true. */
   critical?: boolean
 }
