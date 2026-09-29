@@ -1,5 +1,5 @@
 import { Eye, EyeOff, Gauge, Plus, Trash2 } from "lucide-react"
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
@@ -462,6 +462,11 @@ function TrackEditor({
           Math.floor(track.rewardAmount) - Math.floor(track.rewardConsumed),
         )
       : 0
+  const [progressAdjustment, setProgressAdjustment] = useState("5")
+  const progressAdjustmentValue = Math.max(
+    0,
+    finite(Number(progressAdjustment), 0),
+  )
 
   function patch(next: Partial<CampaignProgressionTrack>) {
     onChange(normalizeTrack({ ...track, ...next }))
@@ -590,27 +595,41 @@ function TrackEditor({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="grid gap-1.5">
+          <span className="text-xs font-medium text-textH">
+            Ajustar progresso
+          </span>
+          <Input
+            className="w-28"
+            type="number"
+            min={0}
+            step="any"
+            value={progressAdjustment}
+            onChange={(event) => setProgressAdjustment(event.target.value)}
+          />
+        </label>
         <Button
           size="sm"
           variant="secondary"
-          onClick={() => patch({ current: track.current - 5 })}
+          disabled={progressAdjustmentValue <= 0 || track.current <= 0}
+          onClick={() =>
+            patch({ current: track.current - progressAdjustmentValue })
+          }
         >
-          −5
+          Remover
         </Button>
         <Button
           size="sm"
           variant="secondary"
-          onClick={() => patch({ current: track.current + 5 })}
+          disabled={
+            progressAdjustmentValue <= 0 || track.current >= track.maximum
+          }
+          onClick={() =>
+            patch({ current: track.current + progressAdjustmentValue })
+          }
         >
-          +5
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => patch({ current: track.current + 10 })}
-        >
-          +10
+          Adicionar
         </Button>
       </div>
 
