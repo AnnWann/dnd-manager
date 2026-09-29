@@ -16,7 +16,7 @@ import {
 import { getApiStatus } from "../../api/api-client"
 import { getSessionCreationSettings } from "../../api/session-settings"
 import { useCharacterContext } from "../../contexts/characterContext"
-import { setCreationCustomSystemOverride } from "../../lib/customSystems/creationCustomSystemsBridge"
+import { setCreationEditorCustomSystemOverride } from "../../lib/customSystems/creationCustomSystemsBridge"
 import {
   buildSessionRuntimeConfigSnapshot,
   collectSessionReferencedSpellIndexes,
@@ -114,14 +114,15 @@ export function CreationEditorProvider({
   )
 
   useEffect(() => {
-    // The user area preloads this snapshot before session navigation. Consume
-    // that cache here instead of issuing another database request per route.
-    void loadSnapshot(false)
+    // Creation is the authoring surface and must start from the authoritative
+    // database revision. An in-memory cache can legitimately be older after
+    // another tab/master saves the campaign.
+    void loadSnapshot(true)
   }, [loadSnapshot])
 
   useEffect(() => {
-    setCreationCustomSystemOverride(draft?.customSystems ?? null)
-    return () => setCreationCustomSystemOverride(null)
+    setCreationEditorCustomSystemOverride(draft?.customSystems ?? null)
+    return () => setCreationEditorCustomSystemOverride(null)
   }, [draft?.customSystems])
 
   const runtimeRole = runtime?.role
@@ -195,6 +196,33 @@ export function CreationEditorProvider({
     () => Boolean(base && draft && !creationStatesEqual(base, draft)),
     [base, draft],
   )
+
+  const runtimeCreationRevision =
+    runtime?.runtimeConfigSnapshot?.creationRevision ?? null
+
+  useEffect(() => {
+    if (
+      status !== "ready" ||
+      saving ||
+      dirty ||
+      baseRevision === null ||
+      runtimeCreationRevision === null ||
+      runtimeCreationRevision <= baseRevision
+    ) {
+      return
+    }
+
+    // Another tab/master published a newer Creation revision. Refresh the
+    // editor automatically when there are no local edits to protect.
+    void loadSnapshot(true)
+  }, [
+    baseRevision,
+    dirty,
+    loadSnapshot,
+    runtimeCreationRevision,
+    saving,
+    status,
+  ])
 
   const blocker = useBlocker(({ currentLocation, nextLocation }) => {
     if (!dirty) return false
