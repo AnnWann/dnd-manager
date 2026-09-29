@@ -16,8 +16,8 @@ export type SessionCustomSystemOperation =
   | { type: "character.customSystem.ability.learned.set"; characterId: string; systemId: string; abilityId: string; learned: boolean }
   | { type: "character.customSystem.ability.prepared.set"; characterId: string; systemId: string; abilityId: string; prepared: boolean }
   | { type: "character.customSystem.ability.usage.set"; characterId: string; systemId: string; abilityId: string; used: number }
-  | { type: "character.customSystem.ability.activate"; characterId: string; systemId: string; abilityId: string; rollValue?: number; rollDice?: string; rollTotal?: number; activationLevel?: number }
-  | { type: "character.customSystem.action.execute"; characterId: string; systemId: string; actionId: string; rollValue?: number; rollDice?: string; rollTotal?: number; activationLevel?: number }
+  | { type: "character.customSystem.ability.activate"; characterId: string; systemId: string; abilityId: string; rollValue?: number; rollDice?: string; rollTotal?: number; rollDamageValues?: number[]; rollSummary?: string[]; activationLevel?: number }
+  | { type: "character.customSystem.action.execute"; characterId: string; systemId: string; actionId: string; rollValue?: number; rollDice?: string; rollTotal?: number; rollDamageValues?: number[]; rollSummary?: string[]; activationLevel?: number }
   | { type: "character.customSystem.automation.execute"; characterId: string; systemId: string; automationId: string };
 
 export type SessionCustomSystemClientMessage = {
@@ -54,7 +54,9 @@ function isOperation(value: unknown): value is SessionCustomSystemOperation {
     case "character.customSystem.ability.activate":
       return nonEmpty(value.abilityId)
         && (value.rollValue === undefined || finite(value.rollValue))
-        && (value.activationLevel === undefined || positiveInteger(value.activationLevel));
+        && (value.activationLevel === undefined || positiveInteger(value.activationLevel))
+        && optionalFiniteNumberArray(value.rollDamageValues)
+        && optionalStringArray(value.rollSummary);
     case "character.customSystem.ability.field.set":
       return nonEmpty(value.abilityId) && nonEmpty(value.fieldId) && isJsonValue(value.value);
     case "character.customSystem.ability.learned.set":
@@ -69,7 +71,9 @@ function isOperation(value: unknown): value is SessionCustomSystemOperation {
         && (
           value.activationLevel === undefined
           || positiveInteger(value.activationLevel)
-        );
+        )
+        && optionalFiniteNumberArray(value.rollDamageValues)
+        && optionalStringArray(value.rollSummary);
     case "character.customSystem.automation.execute":
       return nonEmpty(value.automationId);
     default:
@@ -115,6 +119,32 @@ function finiteNonZero(value: unknown): value is number {
 
 function nonNegativeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+function optionalFiniteNumberArray(value: unknown): boolean {
+  return value === undefined
+    || (
+      Array.isArray(value)
+      && value.length <= 20
+      && value.every(
+        (entry) =>
+          typeof entry === "number"
+          && Number.isFinite(entry),
+      )
+    );
+}
+
+function optionalStringArray(value: unknown): boolean {
+  return value === undefined
+    || (
+      Array.isArray(value)
+      && value.length <= 20
+      && value.every(
+        (entry) =>
+          typeof entry === "string"
+          && entry.length <= 500,
+      )
+    );
 }
 
 function positiveInteger(value: unknown): value is number {
