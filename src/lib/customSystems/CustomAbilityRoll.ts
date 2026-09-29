@@ -55,6 +55,74 @@ export type CustomAbilityRollResolution = {
   damages?: CustomAbilityDamageRollResolution[]
 }
 
+export function formatCustomRollResolutionSummary(
+  resolution: CustomAbilityRollResolution,
+): string[] {
+  const lines: string[] = []
+
+  if (
+    resolution.kind === "attack"
+    || resolution.kind === "abilityCheck"
+    || resolution.kind === "savingThrow"
+  ) {
+    const label =
+      resolution.kind === "attack"
+        ? "Ataque"
+        : resolution.kind === "abilityCheck"
+          ? "Teste"
+          : "Resistência"
+    lines.push(
+      `${label}: ${resolution.natural ?? resolution.value}${formatSignedPart(
+        resolution.modifier ?? 0,
+      )} = ${resolution.total ?? resolution.value}`,
+    )
+  } else if (resolution.kind === "targetSave") {
+    const attribute = resolution.saveAttribute
+      ? resolution.saveAttribute.toUpperCase()
+      : ""
+    const success =
+      resolution.onSave === "half"
+        ? " · sucesso: metade"
+        : resolution.onSave === "full"
+          ? " · sucesso: dano completo"
+          : resolution.onSave === "none"
+            ? " · sucesso: sem efeito"
+            : ""
+    lines.push(
+      `Resistência do alvo: ${attribute ? `${attribute} ` : ""}CD ${resolution.dc ?? resolution.value}${success}`,
+    )
+  } else if (resolution.kind === "generic") {
+    lines.push(
+      `Rolagem: ${resolution.dice ? `${resolution.dice} = ` : ""}${resolution.value}${formatSignedPart(
+        resolution.modifier ?? 0,
+      )}${resolution.total !== undefined ? ` = ${resolution.total}` : ""}`,
+    )
+  }
+
+  for (const damage of resolution.damages ?? []) {
+    const type = damage.damageType?.trim()
+      ? ` ${damage.damageType.trim()}`
+      : ""
+    const critical = damage.critical ? " · crítico" : ""
+    lines.push(
+      `${damage.label?.trim() || "Dano"}: ${damage.dice} = ${damage.value}${formatSignedPart(
+        damage.modifier,
+      )} = ${damage.total}${type}${critical}`,
+    )
+  }
+
+  if (resolution.kind === "damage" && !(resolution.damages?.length)) {
+    lines.push(`Dano total: ${resolution.total ?? resolution.value}`)
+  }
+
+  return lines
+}
+
+function formatSignedPart(value: number): string {
+  if (!value) return ""
+  return value > 0 ? ` + ${value}` : ` - ${Math.abs(value)}`
+}
+
 export function getCustomAbilityRollDefinition(
   definition: CustomSystemDefinition,
   state: CharacterCustomSystemState,
