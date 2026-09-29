@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ArrowLeft, Copy, Download, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, Copy, Download, RotateCcw, Save, Trash2 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useCustomSystemsContext } from '../contexts/customSystemsContext'
 import { useOptionalCreationEditor } from '../features/creation/CreationEditorProvider'
@@ -208,6 +208,22 @@ export function CustomSystemEditorView() {
     if (copy) navigate(pathFor(copy.id, activeTab))
   }
 
+  function discardDraft() {
+    if (!definition) return
+    if (
+      dirty
+      && !window.confirm(
+        'Descartar o rascunho local e recarregar a última versão salva do sistema? Todas as alterações não publicadas neste dispositivo serão perdidas.',
+      )
+    ) return
+
+    removeDraft(systemId)
+    setDraft(structuredClone(definition))
+    setRestoredDraft(false)
+    setError('')
+    setSavedMessage('Rascunho local removido. A versão salva foi recarregada.')
+  }
+
   function removeSystem() {
     if (!draft) return
     if (!window.confirm(`Remover o sistema “${draft.name}”? O estado já salvo nos personagens continuará preservado.`)) return
@@ -235,6 +251,9 @@ export function CustomSystemEditorView() {
         <div className="flex flex-wrap gap-2">
           <ActionButton onClick={() => exportDefinition(draft)}><Download className="h-4 w-4" /> Exportar</ActionButton>
           <ActionButton onClick={duplicateSystem}><Copy className="h-4 w-4" /> Duplicar</ActionButton>
+          {dirty || restoredDraft ? (
+            <ActionButton onClick={discardDraft}><RotateCcw className="h-4 w-4" /> Descartar rascunho</ActionButton>
+          ) : null}
           <ActionButton danger onClick={removeSystem}><Trash2 className="h-4 w-4" /> Remover</ActionButton>
           <ActionButton primary onClick={() => void saveSystem()}><Save className="h-4 w-4" /> Salvar e publicar</ActionButton>
         </div>
