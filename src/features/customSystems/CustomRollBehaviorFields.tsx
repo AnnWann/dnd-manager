@@ -111,6 +111,75 @@ export function CustomRollBehaviorFields({
     onChange({ ...roll, ...patchValue })
   }
 
+  function applyPreset(
+    preset: "attack" | "check" | "selfSave" | "targetSave" | "damage",
+  ) {
+    if (preset === "attack") {
+      onChange({
+        mode: roll.mode,
+        kind: "attack",
+        label: roll.label,
+        d20Mode: "normal",
+        attribute: "str",
+        proficient: true,
+        modifierFormula: roll.modifierFormula,
+        damage:
+          roll.damage?.length
+            ? roll.damage
+            : [newDamageComponent()],
+      })
+      return
+    }
+
+    if (preset === "check") {
+      onChange({
+        mode: roll.mode,
+        kind: "abilityCheck",
+        label: roll.label,
+        d20Mode: "normal",
+        attribute: "str",
+        modifierFormula: roll.modifierFormula,
+      })
+      return
+    }
+
+    if (preset === "selfSave") {
+      onChange({
+        mode: roll.mode,
+        kind: "savingThrow",
+        label: roll.label,
+        d20Mode: "normal",
+        attribute: "con",
+        modifierFormula: roll.modifierFormula,
+      })
+      return
+    }
+
+    if (preset === "targetSave") {
+      onChange({
+        mode: roll.mode,
+        kind: "targetSave",
+        label: roll.label,
+        saveAttribute: "con",
+        dcAttribute: "str",
+        onSave: "none",
+        dcFormula: roll.dcFormula,
+        damage: roll.damage,
+      })
+      return
+    }
+
+    onChange({
+      mode: roll.mode,
+      kind: "damage",
+      label: roll.label,
+      damage:
+        roll.damage?.length
+          ? roll.damage
+          : [newDamageComponent()],
+    })
+  }
+
   function setKind(nextKind: CustomAbilityRollKind) {
     const next: CustomAbilityRollDefinition = {
       ...roll,
@@ -136,7 +205,8 @@ export function CustomRollBehaviorFields({
     }
     if (nextKind === "targetSave") {
       next.dice = undefined
-      next.saveAttribute = roll.saveAttribute ?? roll.attribute ?? "str"
+      next.saveAttribute = roll.saveAttribute ?? "con"
+      next.dcAttribute = roll.dcAttribute ?? roll.attribute ?? "str"
       next.onSave = roll.onSave ?? "none"
     }
     if (nextKind === "damage") {
@@ -152,6 +222,52 @@ export function CustomRollBehaviorFields({
 
   return (
     <div className="grid gap-4">
+      <section className="rounded-xl border border-border bg-bg-subtle p-3">
+        <div className="text-xs font-semibold text-textH">
+          Configuração rápida
+        </div>
+        <p className="mt-1 text-[11px] leading-4 text-textMuted">
+          Comece por um comportamento comum e ajuste os campos abaixo.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-lg border border-border px-3 py-2 text-xs text-textH hover:bg-accentBg"
+            onClick={() => applyPreset("attack")}
+          >
+            Ataque + dano
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-border px-3 py-2 text-xs text-textH hover:bg-accentBg"
+            onClick={() => applyPreset("check")}
+          >
+            Teste
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-border px-3 py-2 text-xs text-textH hover:bg-accentBg"
+            onClick={() => applyPreset("selfSave")}
+          >
+            Resistência própria
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-border px-3 py-2 text-xs text-textH hover:bg-accentBg"
+            onClick={() => applyPreset("targetSave")}
+          >
+            CD para o alvo
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-border px-3 py-2 text-xs text-textH hover:bg-accentBg"
+            onClick={() => applyPreset("damage")}
+          >
+            Somente dano
+          </button>
+        </div>
+      </section>
+
       <div className="grid gap-3 md:grid-cols-3">
         <Field label="Comportamento">
           <Select
@@ -325,13 +441,28 @@ export function CustomRollBehaviorFields({
       ) : null}
 
       {kind === "targetSave" ? (
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           <Field label="Resistência do alvo">
             <Select
               className="input-base"
-              value={roll.saveAttribute ?? roll.attribute ?? "str"}
+              value={roll.saveAttribute ?? "con"}
               onChange={(event) =>
                 patch({ saveAttribute: event.target.value as Attribute })
+              }
+            >
+              {ATTRIBUTES.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Atributo da CD">
+            <Select
+              className="input-base"
+              value={roll.dcAttribute ?? roll.attribute ?? "str"}
+              onChange={(event) =>
+                patch({ dcAttribute: event.target.value as Attribute })
               }
             >
               {ATTRIBUTES.map(([value, label]) => (
@@ -361,8 +492,10 @@ export function CustomRollBehaviorFields({
           </Field>
           <div className="rounded-lg border border-border bg-bg-subtle p-3 text-[11px] leading-5 text-textMuted">
             Se a fórmula de CD ficar vazia, o sistema usa{" "}
-            <strong>8 + proficiência + modificador do atributo</strong> e aplica
-            bônus de CD de habilidade da ficha.
+            <strong>
+              8 + proficiência + modificador do atributo da CD
+            </strong>{" "}
+            e aplica bônus de CD de habilidade da ficha.
           </div>
         </div>
       ) : null}
