@@ -497,10 +497,13 @@ function resolveStructuredRoll(
       )
     total = natural + modifier
   } else if (kind === "targetSave") {
-    const attribute = roll.saveAttribute ?? roll.attribute ?? "str"
+    const dcAttribute =
+      roll.dcAttribute
+      ?? roll.attribute
+      ?? "str"
     dc = resolveTargetSaveDc(
       roll,
-      attribute,
+      dcAttribute,
       definition,
       state,
       character,
@@ -542,7 +545,7 @@ function resolveStructuredRoll(
     dc,
     saveAttribute:
       kind === "targetSave"
-        ? roll.saveAttribute ?? roll.attribute ?? "str"
+        ? roll.saveAttribute ?? "str"
         : undefined,
     onSave: kind === "targetSave" ? roll.onSave ?? "none" : undefined,
     damages: damages.length ? damages : undefined,
