@@ -516,7 +516,13 @@ export function MinimalCharacterActions({
       }
 
       const costError = customAbilityCostError(
-        resolveCustomAbilityCosts(character, definitions, source, rollValue),
+        resolveCustomAbilityCosts(
+          character,
+          definitions,
+          source,
+          rollValue,
+          activationLevel,
+        ),
       )
       if (costError) {
         setError(costError)
