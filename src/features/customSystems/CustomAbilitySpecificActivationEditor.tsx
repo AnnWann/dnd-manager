@@ -12,7 +12,7 @@ import type {
 } from '../../models/customSystems/CustomAbilityDefinition'
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
 import { listCustomFormulaVariables, validateCustomFormula } from '../../lib/customSystems'
-import { validateCustomAbilityDiceExpression } from '../../lib/customSystems/CustomAbilityRoll'
+import { CustomRollBehaviorFields } from './CustomRollBehaviorFields'
 import {
   AbilityConditionChangesEditor,
   ResourceAmountFormulaField,
@@ -53,7 +53,7 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
   const usageMode = !activation?.usage ? 'inherit' : (activation.usage.mode ?? 'limited')
   const resourceMode = activation?.resourceChanges === undefined ? 'inherit' : 'specific'
   const conditionMode = activation?.conditionChanges === undefined ? 'inherit' : 'specific'
-  const rollMode = activation?.roll?.mode ?? 'inherit'
+  const rollMode = activation?.roll ? 'specific' : 'inherit'
   const formulaAbilityType = resolvedAbilityType && activation?.roll
     ? {
         ...resolvedAbilityType,
@@ -93,23 +93,20 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
     })
   }
 
-  function setRollMode(mode: 'inherit' | CustomAbilityRollDefinition['mode']) {
+  function setRollMode(mode: "inherit" | "specific") {
     const next = { ...(activation ?? {}) }
-    if (mode === 'inherit') {
+    if (mode === "inherit") {
       delete next.roll
     } else {
-      next.roll = {
-        mode,
-        dice: activation?.roll?.dice,
-        label: activation?.roll?.label,
-      }
+      next.roll = activation?.roll
+        ?? resolvedAbilityType?.activation?.roll
+        ?? {
+          mode: "automatic",
+          kind: "generic",
+          dice: "1d6",
+        }
     }
     setActivation(next)
-  }
-
-  function patchRoll(patch: Partial<CustomAbilityRollDefinition>) {
-    if (!activation?.roll) return
-    patchActivation({ roll: { ...activation.roll, ...patch } })
   }
 
   function setResourceMode(mode: 'inherit' | 'specific') {
@@ -128,12 +125,6 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
 
   const setResourceChanges = (resourceChanges: CustomAbilityResourceChangeDefinition[]) =>
     patchActivation({ resourceChanges })
-
-  const rollDiceError = activation?.roll?.dice?.trim()
-    ? validateCustomAbilityDiceExpression(activation.roll.dice)
-    : activation?.roll?.mode === 'automatic'
-      ? 'Informe os dados da rolagem automática.'
-      : undefined
 
   return (
     <section className="rounded-lg border border-border p-3">
@@ -290,42 +281,27 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
           </div>
 
           <div className="rounded-lg border border-border bg-bg-subtle p-3">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <SelectField
-                label="Rolagem"
-                value={rollMode}
-                options={[
-                  ['inherit', 'Herdar do tipo'],
-                  ['automatic', 'Automática'],
-                  ['manual', 'Manual antes de usar'],
-                ]}
-                onChange={(mode) => setRollMode(mode as 'inherit' | CustomAbilityRollDefinition['mode'])}
-              />
-              {activation.roll ? <>
-                <TextField
-                  label="Rótulo"
-                  value={activation.roll.label ?? ''}
-                  placeholder="Ex.: Recuperar Fôlego"
-                  onChange={(label) => patchRoll({ label: label || undefined })}
-                />
-                <TextField
-                  label={`Dados${activation.roll.mode === 'manual' ? ' (opcional)' : ''}`}
-                  value={activation.roll.dice ?? ''}
-                  placeholder="1d6"
-                  mono
-                  onChange={(dice) => patchRoll({ dice: dice || undefined })}
-                />
-              </> : null}
-            </div>
+            <SelectField
+              label="Comportamento de rolagem"
+              value={rollMode}
+              options={[
+                ["inherit", "Herdar do tipo"],
+                ["specific", "Configurar para esta habilidade"],
+              ]}
+              onChange={(mode) =>
+                setRollMode(mode as "inherit" | "specific")
+              }
+            />
             {activation.roll ? (
-              <div className="mt-2 text-xs leading-5 text-textMuted">
-                {activation.roll.mode === 'automatic'
-                  ? 'O servidor fará a rolagem ao usar esta habilidade.'
-                  : 'O jogador informará o resultado antes de confirmar o uso.'}
-                {' '}Use <code>roll.value</code> nas fórmulas dos efeitos abaixo.
+              <div className="mt-3">
+                <CustomRollBehaviorFields
+                  definition={definition}
+                  abilityType={formulaAbilityType}
+                  roll={activation.roll}
+                  onChange={(roll) => patchActivation({ roll })}
+                />
               </div>
             ) : null}
-            {rollDiceError ? <div className="mt-2 text-xs text-red-300">{rollDiceError}</div> : null}
           </div>
 
           <div className="rounded-lg border border-border bg-bg-subtle p-3">
