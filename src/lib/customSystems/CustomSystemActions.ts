@@ -62,6 +62,7 @@ export function activateCustomSystemAction(
   definitions: CustomSystemDefinition[],
   sourceSystemId: string,
   actionId: string,
+  activationLevel?: number,
 ): CharacterTemplate {
   const originalStates = (character.get("sheet").customSystems ?? []) as CharacterCustomSystemState[]
   const states = originalStates.map(cloneState)
@@ -73,9 +74,21 @@ export function activateCustomSystemAction(
   if (action.enabled === false) throw new Error("Esta ação está desativada.")
   if (sourceState.enabled === false) throw new Error("Este sistema está desativado.")
 
+  const resolvedActivationLevel = resolveActionLevel(
+    action.level,
+    activationLevel,
+  )
+
   const resolvedChanges = (action.resourceChanges ?? []).map((change) => ({
     change,
-    amount: resolveAmount(change, sourceDefinition, sourceState, character),
+    amount: resolveAmount(
+      change,
+      sourceDefinition,
+      sourceState,
+      character,
+      resolvedActivationLevel,
+      action.level?.baseLevel ?? 1,
+    ),
   }))
 
   validateResourceChanges(character, definitions, states, resolvedChanges)
@@ -133,6 +146,8 @@ function resolveAmount(
   definition: CustomSystemDefinition,
   state: CharacterCustomSystemState,
   character: CharacterTemplate,
+  activationLevel: number,
+  activationBaseLevel: number,
 ): number {
   if (change.formula?.trim()) {
     const result = evaluateCustomFormula(
@@ -140,6 +155,12 @@ function resolveAmount(
       definition,
       state,
       character,
+      undefined,
+      {
+        level: activationLevel,
+        baseLevel: activationBaseLevel,
+        scope: 'action',
+      },
     )
     if (
       !result.ok ||
@@ -150,9 +171,54 @@ function resolveAmount(
         `A fórmula do efeito de recurso “${change.id}” não retornou um número válido.`,
       )
     }
-    return Math.max(0, result.value)
+    const baseAmount = Math.max(0, result.value)
+    return applyUpcastAmount(
+      baseAmount,
+      change,
+      activationLevel,
+    )
   }
-  return Math.max(0, change.amount ?? 0)
+  return applyUpcastAmount(
+    Math.max(0, change.amount ?? 0),
+    change,
+    activationLevel,
+  )
+}
+
+function applyUpcastAmount(
+  baseAmount: number,
+  change: CustomAbilityResourceChangeDefinition,
+  activationLevel: number,
+): number {
+  if (change.operation !== "spend") return baseAmount
+  const perLevel = Math.max(0, change.upcastAmountPerLevel ?? 0)
+  if (perLevel <= 0) return baseAmount
+  const baseLevel = Math.max(
+    1,
+    Math.floor(change.upcastBaseLevel ?? 1),
+  )
+  const resolvedLevel = Math.max(baseLevel, Math.floor(activationLevel))
+  return baseAmount + (resolvedLevel - baseLevel) * perLevel
+}
+
+function resolveActionLevel(
+  level: CustomSystemActionDefinition["level"],
+  requested: number | undefined,
+): number {
+  const baseLevel = Math.max(1, Math.floor(level?.baseLevel ?? 1))
+  const maximumLevel =
+    level?.maximumLevel === undefined
+      ? undefined
+      : Math.max(baseLevel, Math.floor(level.maximumLevel))
+  const resolved = Math.max(baseLevel, Math.floor(requested ?? baseLevel))
+
+  if (maximumLevel !== undefined && resolved > maximumLevel) {
+    throw new Error(
+      `O nível de uso máximo desta ação é ${maximumLevel}.`,
+    )
+  }
+
+  return resolved
 }
 
 function validateResourceChanges(
