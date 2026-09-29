@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft, Copy, Download, Save, Trash2 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useCustomSystemsContext } from '../contexts/customSystemsContext'
+import { useOptionalCreationEditor } from '../features/creation/CreationEditorProvider'
 import { AdvancedSystemEditors } from '../features/customSystems/AdvancedSystemEditors'
 import { CustomAbilityConfigurationEditor } from '../features/customSystems/CustomAbilityConfigurationEditor'
 import { CustomAbilityLibraryEditor } from '../features/customSystems/CustomAbilityLibraryEditor'
@@ -53,6 +54,7 @@ export function CustomSystemEditorView() {
   const { campaignId, systemId = '', tab } = useParams<{ campaignId?: string; systemId: string; tab?: string }>()
   const navigate = useNavigate()
   const systems = useCustomSystemsContext()
+  const creationEditor = useOptionalCreationEditor()
   const definition = systems.definitions.find((entry) => entry.id === systemId)
   const activeTab = isEditorTab(tab) ? tab : 'general'
   const [draft, setDraft] = useState<CustomSystemDefinition | null>(null)
@@ -117,7 +119,7 @@ export function CustomSystemEditorView() {
     navigate(listPath)
   }
 
-  function saveSystem() {
+  async function saveSystem() {
     if (!draft) return
     const currentDraft = draft
     const validation = validateCustomSystemDefinition(currentDraft)
@@ -127,20 +129,77 @@ export function CustomSystemEditorView() {
       return
     }
 
-    const collision = systems.definitions.some((entry) => entry.id === currentDraft.id && entry.id !== systemId)
+    const collision = systems.definitions.some(
+      (entry) => entry.id === currentDraft.id && entry.id !== systemId,
+    )
     if (collision) {
       setError(`Já existe outro sistema com o ID “${currentDraft.id}”.`)
       setSavedMessage('')
       return
     }
 
-    systems.saveDefinition(currentDraft, systemId)
-    removeDraft(systemId)
-    if (currentDraft.id !== systemId) removeDraft(currentDraft.id)
-    setRestoredDraft(false)
-    setError('')
-    setSavedMessage('Sistema salvo localmente. A sincronização remota continuará em segundo plano.')
-    if (currentDraft.id !== systemId) navigate(pathFor(currentDraft.id, activeTab), { replace: true })
+    try {
+      if (creationEditor?.draft) {
+        await creationEditor.updateAndSave((creation) => {
+          const withoutPrevious =
+            currentDraft.id !== systemId
+              ? creation.customSystems.filter(
+                  (entry) => entry.id !== systemId,
+                )
+              : creation.customSystems
+          const exists = withoutPrevious.some(
+            (entry) => entry.id === currentDraft.id,
+          )
+          const customSystems = exists
+            ? withoutPrevious.map((entry) =>
+                entry.id === currentDraft.id
+                  ? structuredClone(currentDraft)
+                  : entry,
+              )
+            : [...withoutPrevious, structuredClone(currentDraft)]
+
+          return {
+            ...creation,
+            customSystems,
+            characters: creation.characters.map((character) => ({
+              ...character,
+              customSystems: character.customSystems.map((installation) =>
+                installation.systemId === systemId
+                || installation.systemId === currentDraft.id
+                  ? {
+                      ...installation,
+                      systemId: currentDraft.id,
+                      systemVersion: currentDraft.version,
+                    }
+                  : installation,
+              ),
+            })),
+          }
+        })
+      } else {
+        systems.saveDefinition(currentDraft, systemId)
+      }
+
+      removeDraft(systemId)
+      if (currentDraft.id !== systemId) removeDraft(currentDraft.id)
+      setRestoredDraft(false)
+      setError('')
+      setSavedMessage(
+        creationEditor
+          ? 'Sistema salvo e publicado na sessão.'
+          : 'Sistema salvo. A sincronização remota continuará em segundo plano.',
+      )
+      if (currentDraft.id !== systemId) {
+        navigate(pathFor(currentDraft.id, activeTab), { replace: true })
+      }
+    } catch (cause) {
+      setSavedMessage('')
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Não foi possível salvar o sistema.',
+      )
+    }
   }
 
   function duplicateSystem() {
@@ -177,7 +236,7 @@ export function CustomSystemEditorView() {
           <ActionButton onClick={() => exportDefinition(draft)}><Download className="h-4 w-4" /> Exportar</ActionButton>
           <ActionButton onClick={duplicateSystem}><Copy className="h-4 w-4" /> Duplicar</ActionButton>
           <ActionButton danger onClick={removeSystem}><Trash2 className="h-4 w-4" /> Remover</ActionButton>
-          <ActionButton primary onClick={saveSystem}><Save className="h-4 w-4" /> Salvar</ActionButton>
+          <ActionButton primary onClick={() => void saveSystem()}><Save className="h-4 w-4" /> Salvar e publicar</ActionButton>
         </div>
       </header>
 
