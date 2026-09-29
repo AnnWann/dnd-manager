@@ -216,6 +216,7 @@ export class SessionActor extends BaseSessionActor {
           operation.systemId,
           operation.actionId,
           operation.rollValue,
+          operation.activationLevel,
         );
         nextCharacter = activation.character;
         if (activation.roll) {
