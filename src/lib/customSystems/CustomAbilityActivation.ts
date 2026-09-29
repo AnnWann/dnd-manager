@@ -57,7 +57,19 @@ export function activateCustomAbility(
   }
 
   const activation = mergeActivation(type.activation, preset)
-  const usage = resolveUsage(activation, sourceDefinition, sourceState, type, ability, character)
+  const resolvedActivationLevel = resolveActivationLevel(
+    activation.level,
+    activationLevel,
+  )
+  const usage = resolveUsage(
+    activation,
+    sourceDefinition,
+    sourceState,
+    type,
+    ability,
+    character,
+    resolvedActivationLevel,
+  )
   if (usage.maximum !== undefined && usage.used >= usage.maximum) {
     throw new Error('A habilidade não possui usos restantes.')
   }
@@ -72,7 +84,8 @@ export function activateCustomAbility(
       type,
       ability,
       character,
-      activationLevel,
+      resolvedActivationLevel,
+      activation.level?.baseLevel ?? 1,
     ),
   }))
 
@@ -147,13 +160,32 @@ function mergeActivation(base: CustomAbilityActivationDefinition | undefined, pr
   }
 }
 
-function resolveUsage(activation: CustomAbilityActivationDefinition, definition: CustomSystemDefinition, state: CharacterCustomSystemState, type: CustomAbilityTypeDefinition, ability: CustomAbilityInstance, character: CharacterTemplate) {
+function resolveUsage(
+  activation: CustomAbilityActivationDefinition,
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  type: CustomAbilityTypeDefinition,
+  ability: CustomAbilityInstance,
+  character: CharacterTemplate,
+  activationLevel: number,
+) {
   const usage = activation.usage
   const limited = Boolean(usage && (usage.mode ?? 'limited') === 'limited')
   if (!limited) return { limited: false, used: 0, maximum: undefined as number | undefined }
   let maximum = ability.usage?.maximum ?? usage?.maximum
   if (usage?.maximumFormula?.trim()) {
-    const result = evaluateCustomFormula(usage.maximumFormula, definition, state, character, { type, values: ability.values })
+    const result = evaluateCustomFormula(
+      usage.maximumFormula,
+      definition,
+      state,
+      character,
+      { type, values: ability.values },
+      {
+        level: activationLevel,
+        baseLevel: activation.level?.baseLevel ?? 1,
+        scope: 'ability',
+      },
+    )
     if (result.ok && typeof result.value === 'number' && Number.isFinite(result.value)) maximum = Math.max(0, Math.floor(result.value))
   }
   return { limited: true, used: ability.usage?.used ?? 0, maximum }
@@ -191,10 +223,22 @@ function resolveAmount(
   ability: CustomAbilityInstance,
   character: CharacterTemplate,
   activationLevel?: number,
+  activationBaseLevel = 1,
 ): number {
   let baseAmount = Math.max(0, change.amount ?? 0)
   if (change.formula?.trim()) {
-    const result = evaluateCustomFormula(change.formula, definition, state, character, { type, values: ability.values })
+    const result = evaluateCustomFormula(
+      change.formula,
+      definition,
+      state,
+      character,
+      { type, values: ability.values },
+      {
+        level: activationLevel,
+        baseLevel: activationBaseLevel,
+        scope: 'ability',
+      },
+    )
     if (!result.ok || typeof result.value !== 'number' || !Number.isFinite(result.value)) throw new Error(`A fórmula do efeito de recurso “${change.id}” não retornou um número válido.`)
     baseAmount = Math.max(0, result.value)
   }
@@ -205,6 +249,29 @@ function resolveAmount(
   const baseLevel = Math.max(1, Math.floor(change.upcastBaseLevel ?? 1))
   const resolvedLevel = Math.max(baseLevel, Math.floor(activationLevel ?? baseLevel))
   return baseAmount + ((resolvedLevel - baseLevel) * perLevel)
+}
+
+function resolveActivationLevel(
+  level: CustomAbilityActivationDefinition['level'],
+  requested: number | undefined,
+): number {
+  const baseLevel = Math.max(1, Math.floor(level?.baseLevel ?? 1))
+  const maximumLevel =
+    level?.maximumLevel === undefined
+      ? undefined
+      : Math.max(baseLevel, Math.floor(level.maximumLevel))
+  const resolved = Math.max(
+    baseLevel,
+    Math.floor(requested ?? baseLevel),
+  )
+
+  if (maximumLevel !== undefined && resolved > maximumLevel) {
+    throw new Error(
+      `O nível de uso máximo desta habilidade é ${maximumLevel}.`,
+    )
+  }
+
+  return resolved
 }
 
 function buildSpendBranches(changes: ResolvedResourceChange[]): ResolvedResourceChange[][] {
