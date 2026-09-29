@@ -481,7 +481,6 @@ function buildCustomSystemActionRollResult(
     ...(resolution.kind === "abilityCheck"
       || resolution.kind === "savingThrow"
       || resolution.kind === "generic"
-      || resolution.kind === "damage"
         ? formatCustomRollResolutionSummary(resolution)
         : []),
   ];
@@ -509,10 +508,6 @@ function buildCustomSystemActionRollResult(
           }
         : undefined,
     damages,
-    damage:
-      damages?.length === 1
-        ? damages[0]
-        : undefined,
     critical:
       resolution.kind === "attack"
       && resolution.natural === 20,
