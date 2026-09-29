@@ -6,7 +6,11 @@ import { Input } from "../../../components/ui/Input"
 import { Modal } from "../../../components/ui/Modal"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
-import { requestActionAnnouncement, requestActionRoll } from "../../../lib/diceRoller"
+import {
+  getRollVisibility,
+  requestActionAnnouncement,
+  requestActionRoll,
+} from "../../../lib/diceRoller"
 import {
   evaluateCustomFormula,
   getCustomAbilityAvailability,
@@ -450,13 +454,18 @@ export function MinimalCharacterActions({
           ...(activationLevel !== undefined
             ? { activationLevel }
             : {}),
+          ...(entry.customAbilityRoll
+            ? { visibility: getRollVisibility() }
+            : {}),
         })
         if (!sent) {
           setError("Não foi possível enviar esta ação para a sessão.")
           return
         }
 
-        announce(entry)
+        if (!entry.customAbilityRoll) {
+          announce(entry)
+        }
         setSelected(null)
         return
       }
@@ -548,6 +557,9 @@ export function MinimalCharacterActions({
             : {}),
           ...(activationLevel !== undefined
             ? { activationLevel }
+            : {}),
+          ...(entry.customAbilityRoll
+            ? { visibility: getRollVisibility() }
             : {}),
         })
         if (!sent) {
