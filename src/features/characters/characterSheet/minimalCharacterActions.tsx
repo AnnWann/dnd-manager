@@ -11,7 +11,13 @@ import {
   evaluateCustomFormula,
   getCustomAbilityAvailability,
 } from "../../../lib/customSystems"
-import { activateCustomAbilityWithRoll, activateCustomSystemActionWithRoll } from "../../../lib/customSystems/CustomAbilityRoll"
+import {
+  activateCustomAbilityWithRoll,
+  activateCustomSystemActionWithRoll,
+  customRollManualDamageCount,
+  customRollRequiresManualPrimary,
+  type CustomAbilityRollResolution,
+} from "../../../lib/customSystems/CustomAbilityRoll"
 import {
   getEffectiveCustomAbilityActivation,
 } from "../../../lib/customSystems/CustomSystemActions"
@@ -152,6 +158,7 @@ export function MinimalCharacterActions({
   const [error, setError] = useState("")
   const [variableMetamagicCost, setVariableMetamagicCost] = useState(1)
   const [manualRollValue, setManualRollValue] = useState("")
+  const [manualDamageValues, setManualDamageValues] = useState<string[]>([])
   const [customActivationLevel, setCustomActivationLevel] = useState(1)
   const [rollFeedback, setRollFeedback] = useState<Array<{
     label: string
@@ -263,6 +270,7 @@ export function MinimalCharacterActions({
     }
     setError("")
     setManualRollValue("")
+    setManualDamageValues([])
     setRollFeedback([])
     setCustomActivationLevel(entry.activationLevelBase ?? 1)
     if (entry.metamagicCost === "spell-level") setVariableMetamagicCost(1)
@@ -398,46 +406,33 @@ export function MinimalCharacterActions({
   function useCustomSystemAction(entry: ActionEntry) {
     const source = entry.customSystemActionSource
     if (!source) return
+
     try {
       setError("")
       const activationLevel = resolveEntryActivationLevel(
         entry,
         customActivationLevel,
       )
-      let rollValue: number | undefined
-      if (
-        entry.customAbilityRoll
-        && (entry.customAbilityRoll.mode === "manual" || physicalDiceMode)
-      ) {
-        const raw = manualRollValue.trim()
-        if (!raw || !Number.isFinite(Number(raw))) {
-          setError("Informe um resultado numérico válido para a rolagem.")
-          return
-        }
-        rollValue = Number(raw)
-      }
-      const resolved = activateCustomSystemActionWithRoll(
-        character,
-        definitions,
-        source.systemId,
-        source.actionId,
-        rollValue,
-        activationLevel,
+      const manual = isManualCustomRoll(
+        entry.customAbilityRoll,
+        physicalDiceMode,
       )
-      if (resolved.roll) {
-        rollValue = resolved.roll.value
-        setRollFeedback([{
-          label: entry.customAbilityRoll?.label?.trim() || entry.name,
-          dice: resolved.roll.dice,
-          diceValue: resolved.roll.value,
-          formulaBonus: (resolved.roll.total ?? resolved.roll.value) - resolved.roll.value,
-          total: resolved.roll.total ?? resolved.roll.value,
-        }])
+      const inputs = readCustomRollInputs(
+        entry.customAbilityRoll,
+        manual,
+        manualRollValue,
+        manualDamageValues,
+      )
+      if (!inputs.ok) {
+        setError(inputs.error)
+        return
       }
 
       if (sessionRuntime) {
         if (sessionRuntime.status !== "connected") {
-          setError("A sessão está desconectada. Não foi possível executar esta ação.")
+          setError(
+            "A sessão está desconectada. Não foi possível executar esta ação.",
+          )
           return
         }
 
@@ -446,8 +441,15 @@ export function MinimalCharacterActions({
           characterId: character.get("id"),
           systemId: source.systemId,
           actionId: source.actionId,
-          ...(rollValue !== undefined ? { rollValue } : {}),
-          ...(activationLevel !== undefined ? { activationLevel } : {}),
+          ...(inputs.rollValue !== undefined
+            ? { rollValue: inputs.rollValue }
+            : {}),
+          ...(inputs.damageValues?.length
+            ? { rollDamageValues: inputs.damageValues }
+            : {}),
+          ...(activationLevel !== undefined
+            ? { activationLevel }
+            : {}),
         })
         if (!sent) {
           setError("Não foi possível enviar esta ação para a sessão.")
@@ -455,11 +457,27 @@ export function MinimalCharacterActions({
         }
 
         announce(entry)
-        if (!resolved.roll) setSelected(null)
+        setSelected(null)
         return
       }
 
-      updateCharacter(character.get("id"), () => resolved.character)
+      const resolved = activateCustomSystemActionWithRoll(
+        character,
+        definitions,
+        source.systemId,
+        source.actionId,
+        inputs.rollValue,
+        activationLevel,
+        inputs.damageValues,
+      )
+      if (resolved.roll) {
+        setRollFeedback(customRollFeedback(resolved.roll, entry.name))
+      }
+
+      updateCharacter(
+        character.get("id"),
+        () => resolved.character,
+      )
       if (!resolved.roll) setSelected(null)
     } catch (caught) {
       setError(
@@ -473,46 +491,26 @@ export function MinimalCharacterActions({
   function useCustomAbility(entry: ActionEntry) {
     const source = entry.customAbilitySource
     if (!source) return
+
     try {
       setError("")
       const activationLevel = resolveEntryActivationLevel(
         entry,
         customActivationLevel,
       )
-      let rollValue: number | undefined
-      if (
-        entry.customAbilityRoll
-        && (entry.customAbilityRoll.mode === "manual" || physicalDiceMode)
-      ) {
-        const raw = manualRollValue.trim()
-        if (!raw) {
-          setError("Informe o resultado da rolagem antes de usar esta habilidade.")
-          return
-        }
-        rollValue = Number(raw)
-        if (!Number.isFinite(rollValue)) {
-          setError("Informe um resultado numérico válido para a rolagem.")
-          return
-        }
-      }
-
-      const resolved = activateCustomAbilityWithRoll(
-        character,
-        definitions,
-        source.systemId,
-        source.abilityId,
-        rollValue,
-        activationLevel,
+      const manual = isManualCustomRoll(
+        entry.customAbilityRoll,
+        physicalDiceMode,
       )
-      if (resolved.roll) {
-        rollValue = resolved.roll.value
-        setRollFeedback([{
-          label: entry.customAbilityRoll?.label?.trim() || entry.name,
-          dice: resolved.roll.dice,
-          diceValue: resolved.roll.value,
-          formulaBonus: (resolved.roll.total ?? resolved.roll.value) - resolved.roll.value,
-          total: resolved.roll.total ?? resolved.roll.value,
-        }])
+      const inputs = readCustomRollInputs(
+        entry.customAbilityRoll,
+        manual,
+        manualRollValue,
+        manualDamageValues,
+      )
+      if (!inputs.ok) {
+        setError(inputs.error)
+        return
       }
 
       const costError = customAbilityCostError(
@@ -520,7 +518,7 @@ export function MinimalCharacterActions({
           character,
           definitions,
           source,
-          rollValue,
+          inputs.rollValue,
           activationLevel,
         ),
       )
@@ -531,7 +529,9 @@ export function MinimalCharacterActions({
 
       if (sessionRuntime) {
         if (sessionRuntime.status !== "connected") {
-          setError("A sessão está desconectada. Não foi possível usar esta habilidade.")
+          setError(
+            "A sessão está desconectada. Não foi possível usar esta habilidade.",
+          )
           return
         }
 
@@ -540,19 +540,42 @@ export function MinimalCharacterActions({
           characterId: character.get("id"),
           systemId: source.systemId,
           abilityId: source.abilityId,
-          ...(rollValue !== undefined ? { rollValue } : {}),
-          ...(activationLevel !== undefined ? { activationLevel } : {}),
+          ...(inputs.rollValue !== undefined
+            ? { rollValue: inputs.rollValue }
+            : {}),
+          ...(inputs.damageValues?.length
+            ? { rollDamageValues: inputs.damageValues }
+            : {}),
+          ...(activationLevel !== undefined
+            ? { activationLevel }
+            : {}),
         })
         if (!sent) {
           setError("Não foi possível enviar esta habilidade para a sessão.")
           return
         }
 
-        if (!resolved.roll) setSelected(null)
+        setSelected(null)
         return
       }
 
-      updateCharacter(character.get("id"), () => resolved.character)
+      const resolved = activateCustomAbilityWithRoll(
+        character,
+        definitions,
+        source.systemId,
+        source.abilityId,
+        inputs.rollValue,
+        activationLevel,
+        inputs.damageValues,
+      )
+      if (resolved.roll) {
+        setRollFeedback(customRollFeedback(resolved.roll, entry.name))
+      }
+
+      updateCharacter(
+        character.get("id"),
+        () => resolved.character,
+      )
       if (!resolved.roll) setSelected(null)
     } catch (caught) {
       setError(
@@ -745,33 +768,90 @@ export function MinimalCharacterActions({
               </label>
             ) : null}
             {selected.customAbilityRoll
-              && (selected.customAbilityRoll.mode === "manual" || physicalDiceMode) ? (
-              <label className="grid gap-1 rounded-xl border border-accentBorder bg-accentBg/30 p-3">
-                <span className="text-xs font-semibold text-textH">
-                  {selected.customAbilityRoll.label?.trim() || "Resultado da rolagem"}
-                </span>
-                <span className="text-[11px] leading-4 text-textMuted">
-                  {selected.customAbilityRoll.dice?.trim()
-                    ? `Role ${selected.customAbilityRoll.dice} ${physicalDiceMode ? "com seus dados físicos " : ""}antes de usar e informe o resultado.`
-                    : "Faça a rolagem necessária antes de usar e informe o resultado."}
-                </span>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  value={manualRollValue}
-                  placeholder="Resultado"
-                  onChange={(event) => setManualRollValue(event.target.value)}
-                />
-              </label>
-            ) : selected.customAbilityRoll?.mode === "automatic" && digitalDiceEnabled ? (
+              && isManualCustomRoll(
+                selected.customAbilityRoll,
+                physicalDiceMode,
+              ) ? (
+              <div className="grid gap-2">
+                {customRollRequiresManualPrimary(
+                  selected.customAbilityRoll,
+                ) ? (
+                  <label className="grid gap-1 rounded-xl border border-accentBorder bg-accentBg/30 p-3">
+                    <span className="text-xs font-semibold text-textH">
+                      {selected.customAbilityRoll.label?.trim()
+                        || customRollPrimaryLabel(
+                          selected.customAbilityRoll,
+                        )}
+                    </span>
+                    <span className="text-[11px] leading-4 text-textMuted">
+                      {customRollPrimaryInstruction(
+                        selected.customAbilityRoll,
+                        physicalDiceMode,
+                      )}
+                    </span>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      value={manualRollValue}
+                      placeholder="Resultado"
+                      onChange={(event) =>
+                        setManualRollValue(event.target.value)
+                      }
+                    />
+                  </label>
+                ) : null}
+
+                {(selected.customAbilityRoll.damage ?? []).map(
+                  (damage, damageIndex) => (
+                    <label
+                      key={damage.id}
+                      className="grid gap-1 rounded-xl border border-border bg-bg-subtle p-3"
+                    >
+                      <span className="text-xs font-semibold text-textH">
+                        {damage.label?.trim()
+                          || damage.damageType?.trim()
+                          || `Dano ${damageIndex + 1}`}
+                      </span>
+                      <span className="text-[11px] leading-4 text-textMuted">
+                        Role {damage.dice}
+                        {physicalDiceMode
+                          ? " com seus dados físicos"
+                          : ""}
+                        {" "}e informe o resultado somente dos dados.
+                        {(selected.customAbilityRoll.kind ?? "generic")
+                          === "attack"
+                          && damage.critical !== false
+                          ? " Em um 20 natural, dobre os dados deste componente."
+                          : ""}
+                      </span>
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        value={manualDamageValues[damageIndex] ?? ""}
+                        placeholder="Dano rolado"
+                        onChange={(event) =>
+                          setManualDamageValues((current) => {
+                            const next = [...current]
+                            next[damageIndex] = event.target.value
+                            return next
+                          })
+                        }
+                      />
+                    </label>
+                  ),
+                )}
+              </div>
+            ) : selected.customAbilityRoll?.mode === "automatic"
+                && digitalDiceEnabled ? (
               <div className="rounded-xl border border-accentBorder bg-accentBg/30 p-3 text-xs leading-5 text-textMuted">
                 <span className="font-semibold text-textH">
-                  {selected.customAbilityRoll.label?.trim() || "Rolagem automática"}
+                  {customRollAutomaticSummary(
+                    selected.customAbilityRoll,
+                  )}
                 </span>
-                {selected.customAbilityRoll.dice?.trim()
-                  ? ` · ${selected.customAbilityRoll.dice}`
-                  : ""}
-                <div>O servidor resolve a rolagem ao confirmar o uso da habilidade.</div>
+                <div>
+                  O servidor resolve esta rolagem ao confirmar o uso.
+                </div>
               </div>
             ) : null}
             {selected.metamagicCost === "spell-level" ? (
@@ -820,9 +900,12 @@ export function MinimalCharacterActions({
                 <Button
                   variant="primary"
                   disabled={
-                    Boolean(selected.customAbilityRoll)
-                    && (selected.customAbilityRoll!.mode === "manual" || physicalDiceMode)
-                    && !isFiniteInput(manualRollValue)
+                    !areCustomRollInputsReady(
+                      selected.customAbilityRoll,
+                      physicalDiceMode,
+                      manualRollValue,
+                      manualDamageValues,
+                    )
                   }
                   onClick={() => useCustomSystemAction(selected)}
                 >Usar</Button>
@@ -832,10 +915,13 @@ export function MinimalCharacterActions({
                 <Button
                   variant="primary"
                   disabled={
-                    Boolean(selectedCustomAbilityCostError) ||
-                    (Boolean(selected.customAbilityRoll)
-                      && (selected.customAbilityRoll!.mode === "manual" || physicalDiceMode)
-                      && !isFiniteInput(manualRollValue))
+                    Boolean(selectedCustomAbilityCostError)
+                    || !areCustomRollInputsReady(
+                      selected.customAbilityRoll,
+                      physicalDiceMode,
+                      manualRollValue,
+                      manualDamageValues,
+                    )
                   }
                   onClick={() => useCustomAbility(selected)}
                 >
@@ -1409,6 +1495,206 @@ function getPassiveAbilities(character: CharacterTemplate): ActionEntry[] {
       abilitySource: source,
     }))
     .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
+}
+
+function isManualCustomRoll(
+  roll: CustomAbilityRollDefinition | undefined,
+  physicalDiceMode: boolean,
+): boolean {
+  return Boolean(
+    roll
+    && (roll.mode === "manual" || physicalDiceMode),
+  )
+}
+
+function readCustomRollInputs(
+  roll: CustomAbilityRollDefinition | undefined,
+  manual: boolean,
+  primaryInput: string,
+  damageInputs: string[],
+):
+  | {
+      ok: true
+      rollValue?: number
+      damageValues?: number[]
+    }
+  | { ok: false; error: string } {
+  if (!roll || !manual) return { ok: true }
+
+  let rollValue: number | undefined
+  if (customRollRequiresManualPrimary(roll)) {
+    if (!isFiniteInput(primaryInput)) {
+      return {
+        ok: false,
+        error: "Informe um resultado numérico válido para a rolagem principal.",
+      }
+    }
+    rollValue = Number(primaryInput)
+  }
+
+  const damageCount = customRollManualDamageCount(roll)
+  let damageValues: number[] | undefined
+  if (damageCount > 0) {
+    const values = damageInputs.slice(0, damageCount)
+    if (
+      values.length < damageCount
+      || values.some((value) => !isFiniteInput(value))
+    ) {
+      return {
+        ok: false,
+        error: `Informe os ${damageCount} resultado(s) de dano antes de usar.`,
+      }
+    }
+    damageValues = values.map(Number)
+  }
+
+  return { ok: true, rollValue, damageValues }
+}
+
+function areCustomRollInputsReady(
+  roll: CustomAbilityRollDefinition | undefined,
+  physicalDiceMode: boolean,
+  primaryInput: string,
+  damageInputs: string[],
+): boolean {
+  if (!roll || !isManualCustomRoll(roll, physicalDiceMode)) {
+    return true
+  }
+  return readCustomRollInputs(
+    roll,
+    true,
+    primaryInput,
+    damageInputs,
+  ).ok
+}
+
+function customRollFeedback(
+  roll: CustomAbilityRollResolution,
+  fallbackLabel: string,
+): Array<{
+  label: string
+  dice?: string
+  diceValue: number
+  formulaBonus?: number
+  total: number
+}> {
+  const feedback: Array<{
+    label: string
+    dice?: string
+    diceValue: number
+    formulaBonus?: number
+    total: number
+  }> = []
+
+  if (
+    roll.kind === "attack"
+    || roll.kind === "abilityCheck"
+    || roll.kind === "savingThrow"
+    || roll.kind === "generic"
+  ) {
+    feedback.push({
+      label:
+        roll.kind === "attack"
+          ? "Ataque"
+          : roll.kind === "abilityCheck"
+            ? "Teste"
+            : roll.kind === "savingThrow"
+              ? "Resistência"
+              : fallbackLabel,
+      dice: roll.dice,
+      diceValue: roll.natural ?? roll.value,
+      formulaBonus: roll.modifier ?? (
+        (roll.total ?? roll.value) - roll.value
+      ),
+      total: roll.total ?? roll.value,
+    })
+  } else if (roll.kind === "targetSave") {
+    feedback.push({
+      label: `CD ${roll.saveAttribute?.toUpperCase() ?? ""}`.trim(),
+      diceValue: roll.dc ?? roll.value,
+      total: roll.dc ?? roll.value,
+    })
+  }
+
+  for (const damage of roll.damages ?? []) {
+    feedback.push({
+      label:
+        damage.label?.trim()
+        || damage.damageType?.trim()
+        || "Dano",
+      dice: damage.dice,
+      diceValue: damage.value,
+      formulaBonus: damage.modifier,
+      total: damage.total,
+    })
+  }
+
+  return feedback
+}
+
+function customRollPrimaryLabel(
+  roll: CustomAbilityRollDefinition,
+): string {
+  switch (roll.kind ?? "generic") {
+    case "attack":
+      return "Resultado do d20 do ataque"
+    case "abilityCheck":
+      return "Resultado do d20 do teste"
+    case "savingThrow":
+      return "Resultado do d20 da resistência"
+    default:
+      return "Resultado da rolagem"
+  }
+}
+
+function customRollPrimaryInstruction(
+  roll: CustomAbilityRollDefinition,
+  physicalDiceMode: boolean,
+): string {
+  const physical = physicalDiceMode
+    ? " com seus dados físicos"
+    : ""
+  const kind = roll.kind ?? "generic"
+
+  if (
+    kind === "attack"
+    || kind === "abilityCheck"
+    || kind === "savingThrow"
+  ) {
+    const mode =
+      roll.d20Mode === "advantage"
+        ? " com vantagem"
+        : roll.d20Mode === "disadvantage"
+          ? " com desvantagem"
+          : ""
+    return `Role 1d20${mode}${physical} e informe o valor mantido. O sistema soma os modificadores configurados.`
+  }
+
+  return roll.dice?.trim()
+    ? `Role ${roll.dice}${physical} e informe o resultado.`
+    : "Informe o resultado obtido."
+}
+
+function customRollAutomaticSummary(
+  roll: CustomAbilityRollDefinition,
+): string {
+  const kind = roll.kind ?? "generic"
+  const damageCount = roll.damage?.length ?? 0
+  const base =
+    kind === "attack"
+      ? "Ataque automático"
+      : kind === "abilityCheck"
+        ? "Teste automático"
+        : kind === "savingThrow"
+          ? "Resistência automática"
+          : kind === "targetSave"
+            ? "CD de resistência do alvo"
+            : kind === "damage"
+              ? "Dano automático"
+              : "Rolagem automática"
+  return damageCount > 0
+    ? `${base} · ${damageCount} componente(s) de dano`
+    : base
 }
 
 function resolveEntryActivationLevel(
