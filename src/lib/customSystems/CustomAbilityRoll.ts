@@ -120,6 +120,7 @@ export function activateCustomSystemActionWithRoll(
   systemId: string,
   actionId: string,
   suppliedRollValue?: number,
+  activationLevel?: number,
 ): { character: CharacterTemplate; roll?: CustomAbilityRollResolution } {
   const definition = definitions.find((entry) => entry.id === systemId)
   const state = (character.get("sheet").customSystems ?? []).find(
@@ -133,6 +134,7 @@ export function activateCustomSystemActionWithRoll(
         definitions,
         systemId,
         actionId,
+        activationLevel,
       ),
     }
   }
@@ -158,6 +160,7 @@ export function activateCustomSystemActionWithRoll(
       resolvedDefinitions,
       systemId,
       actionId,
+      activationLevel,
     ),
     roll: {
       mode: action.roll.mode,
@@ -169,6 +172,13 @@ export function activateCustomSystemActionWithRoll(
         definition,
         state,
         character,
+        undefined,
+        undefined,
+        {
+          level: activationLevel ?? action.level?.baseLevel ?? 1,
+          baseLevel: action.level?.baseLevel ?? 1,
+          scope: "action",
+        },
       ),
     },
   }
@@ -300,6 +310,11 @@ function resolveRollFormulaTotal(
   character: CharacterTemplate,
   abilityType?: CustomAbilityTypeDefinition,
   abilityValues?: Record<string, JsonValue>,
+  activationContext?: {
+    level?: number
+    baseLevel?: number
+    scope?: "ability" | "action"
+  },
 ): number {
   for (const change of changes ?? []) {
     const formula = change.formula?.trim()
@@ -312,6 +327,7 @@ function resolveRollFormulaTotal(
       state,
       character,
       abilityType ? { type: abilityType, values: abilityValues } : undefined,
+      activationContext,
     )
     if (result.ok && typeof result.value === "number" && Number.isFinite(result.value)) {
       return result.value
