@@ -463,10 +463,17 @@ function TrackEditor({
         )
       : 0
   const [progressAdjustment, setProgressAdjustment] = useState("5")
+  const [progressSetValue, setProgressSetValue] = useState("")
   const progressAdjustmentValue = Math.max(
     0,
     finite(Number(progressAdjustment), 0),
   )
+  const parsedProgressSetValue =
+    progressSetValue.trim() === "" ? undefined : Number(progressSetValue)
+  const canSetProgress =
+    parsedProgressSetValue !== undefined
+    && Number.isFinite(parsedProgressSetValue)
+    && parsedProgressSetValue >= 0
 
   function patch(next: Partial<CampaignProgressionTrack>) {
     onChange(normalizeTrack({ ...track, ...next }))
@@ -630,6 +637,36 @@ function TrackEditor({
           }
         >
           Adicionar
+        </Button>
+
+        <div className="mx-1 hidden h-9 w-px bg-border sm:block" />
+
+        <label className="grid gap-1.5">
+          <span className="text-xs font-medium text-textH">
+            Definir progresso
+          </span>
+          <Input
+            className="w-28"
+            type="number"
+            min={0}
+            step="any"
+            max={track.maximum}
+            placeholder={String(track.current)}
+            value={progressSetValue}
+            onChange={(event) => setProgressSetValue(event.target.value)}
+          />
+        </label>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={!canSetProgress}
+          onClick={() => {
+            if (parsedProgressSetValue === undefined) return
+            patch({ current: parsedProgressSetValue })
+            setProgressSetValue("")
+          }}
+        >
+          Definir
         </Button>
       </div>
 
