@@ -53,7 +53,11 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
   const usageMode = !activation?.usage ? 'inherit' : (activation.usage.mode ?? 'limited')
   const resourceMode = activation?.resourceChanges === undefined ? 'inherit' : 'specific'
   const conditionMode = activation?.conditionChanges === undefined ? 'inherit' : 'specific'
-  const rollMode = activation?.roll ? 'specific' : 'inherit'
+  const rollMode = activation?.rollDisabled
+    ? "none"
+    : activation?.roll
+      ? "specific"
+      : "inherit"
   const formulaAbilityType = resolvedAbilityType && activation?.roll
     ? {
         ...resolvedAbilityType,
@@ -93,11 +97,19 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
     })
   }
 
-  function setRollMode(mode: "inherit" | "specific") {
+  function setRollMode(
+    mode: "inherit" | "none" | "specific",
+  ) {
     const next = { ...(activation ?? {}) }
+
     if (mode === "inherit") {
       delete next.roll
+      delete next.rollDisabled
+    } else if (mode === "none") {
+      delete next.roll
+      next.rollDisabled = true
     } else {
+      next.rollDisabled = undefined
       next.roll = activation?.roll
         ?? resolvedAbilityType?.activation?.roll
         ?? {
@@ -106,7 +118,12 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
           dice: "1d6",
         }
     }
-    setActivation(next)
+
+    setActivation(
+      Object.values(next).some((value) => value !== undefined)
+        ? next
+        : undefined,
+    )
   }
 
   function setResourceMode(mode: 'inherit' | 'specific') {
@@ -286,10 +303,13 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
               value={rollMode}
               options={[
                 ["inherit", "Herdar do tipo"],
+                ["none", "Sem rolagem nesta habilidade"],
                 ["specific", "Configurar para esta habilidade"],
               ]}
               onChange={(mode) =>
-                setRollMode(mode as "inherit" | "specific")
+                setRollMode(
+                  mode as "inherit" | "none" | "specific",
+                )
               }
             />
             {activation.roll ? (
@@ -298,7 +318,12 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
                   definition={definition}
                   abilityType={formulaAbilityType}
                   roll={activation.roll}
-                  onChange={(roll) => patchActivation({ roll })}
+                  onChange={(roll) =>
+                    patchActivation({
+                      roll,
+                      rollDisabled: undefined,
+                    })
+                  }
                 />
               </div>
             ) : null}
