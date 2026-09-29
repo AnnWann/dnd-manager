@@ -72,7 +72,9 @@ function MasterRuntimeConfigPublisher({ campaignId }: { campaignId: string }) {
     if (runtime?.role !== "MASTER" || runtime.status !== "connected") return
     let cancelled = false
 
-    void getCreationSnapshot(campaignId)
+    // A MASTER is the publisher of the authoritative runtime configuration.
+    // Do not seed the session server from an arbitrarily old SPA cache.
+    void getCreationSnapshot(campaignId, { force: true })
       .then((snapshot) =>
         buildSessionRuntimeConfigSnapshot({
           creationRevision: snapshot.revision,
