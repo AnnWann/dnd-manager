@@ -17,7 +17,7 @@ export type SessionCustomSystemOperation =
   | { type: "character.customSystem.ability.prepared.set"; characterId: string; systemId: string; abilityId: string; prepared: boolean }
   | { type: "character.customSystem.ability.usage.set"; characterId: string; systemId: string; abilityId: string; used: number }
   | { type: "character.customSystem.ability.activate"; characterId: string; systemId: string; abilityId: string; rollValue?: number; rollDice?: string; rollTotal?: number; activationLevel?: number }
-  | { type: "character.customSystem.action.execute"; characterId: string; systemId: string; actionId: string; rollValue?: number; rollDice?: string; rollTotal?: number }
+  | { type: "character.customSystem.action.execute"; characterId: string; systemId: string; actionId: string; rollValue?: number; rollDice?: string; rollTotal?: number; activationLevel?: number }
   | { type: "character.customSystem.automation.execute"; characterId: string; systemId: string; automationId: string };
 
 export type SessionCustomSystemClientMessage = {
@@ -65,7 +65,11 @@ function isOperation(value: unknown): value is SessionCustomSystemOperation {
       return nonEmpty(value.abilityId) && nonNegativeInteger(value.used);
     case "character.customSystem.action.execute":
       return nonEmpty(value.actionId)
-        && (value.rollValue === undefined || finite(value.rollValue));
+        && (value.rollValue === undefined || finite(value.rollValue))
+        && (
+          value.activationLevel === undefined
+          || positiveInteger(value.activationLevel)
+        );
     case "character.customSystem.automation.execute":
       return nonEmpty(value.automationId);
     default:
