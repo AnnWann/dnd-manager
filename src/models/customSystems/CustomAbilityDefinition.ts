@@ -65,6 +65,15 @@ export interface CustomAbilityAcquisitionExceptionPresetDefinition {
   alwaysPreparedSelectionCount?: number
 }
 
+export interface CustomActivationLevelDefinition {
+  /** Minimum/default level used when the ability/action is activated. */
+  baseLevel: number
+  /** Optional upper limit. Omit for no explicit maximum. */
+  maximumLevel?: number
+  /** Optional player-facing label. Defaults to "Nível de uso". */
+  label?: string
+}
+
 export interface CustomAbilityActivationDefinition {
   kind?: AbilityKind
   actionKind?: AbilityActionKind
@@ -84,6 +93,11 @@ export interface CustomAbilityActivationDefinition {
   /** Estados aplicados/removidos quando a habilidade é usada. */
   conditionChanges?: CustomAbilityConditionChangeDefinition[]
   usage?: CustomUsageDefinition
+  /**
+   * Enables a selectable activation level (upcast). The selected level is
+   * available to formulas as activation.level and ability.level.
+   */
+  level?: CustomActivationLevelDefinition
 }
 
 export interface CustomAbilityRollDefinition {
