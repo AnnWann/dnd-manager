@@ -4,6 +4,7 @@ import { Select as UiSelect } from '../../components/ui/Select'
 import { FormulaVariablePicker } from './FormulaVariablePicker'
 import { listCustomFormulaVariables, validateCustomFormula } from '../../lib/customSystems'
 import type { CustomFieldDefinition, CustomSelectOption } from '../../models/customSystems/CustomFieldDefinition'
+import type { Attribute } from '../../models/sheet/Attribute'
 import type { CustomResourceDefinition } from '../../models/customSystems/CustomResourceDefinition'
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
 
@@ -22,6 +23,7 @@ const FIELD_TYPES: Array<{ value: CustomFieldDefinition['type']; label: string }
   { value: 'select', label: 'Seleção' },
   { value: 'multiSelect', label: 'Seleção múltipla' },
   { value: 'dice', label: 'Dado' },
+  { value: 'attribute', label: 'Atributo' },
   { value: 'reference', label: 'Referência' },
   { value: 'formula', label: 'Fórmula' },
 ]
@@ -86,6 +88,21 @@ function FieldRow({ definition, field, onChange, onRemove }: {
 
     {(field.type === 'select' || field.type === 'multiSelect')
       ? <OptionListEditor options={field.options} onChange={(options) => onChange({ ...field, options })} />
+      : null}
+
+    {field.type === 'attribute'
+      ? <AttributeFieldEditor
+          allowed={field.allowedAttributes}
+          onChange={(allowedAttributes) => onChange({
+            ...field,
+            allowedAttributes,
+            defaultValue:
+              typeof field.defaultValue === 'string'
+              && allowedAttributes.includes(field.defaultValue as Attribute)
+                ? field.defaultValue
+                : allowedAttributes[0],
+          })}
+        />
       : null}
 
     {field.type === 'formula'
@@ -325,9 +342,74 @@ function convertFieldType(field: CustomFieldDefinition, type: CustomFieldDefinit
   if (type === 'number' || type === 'boolean') return { ...base, type }
   if (type === 'select' || type === 'multiSelect') return { ...base, type, options: [] }
   if (type === 'dice') return { ...base, type }
+  if (type === 'attribute') {
+    return {
+      ...base,
+      type,
+      allowedAttributes: ['str', 'dex', 'con', 'int', 'wis', 'cha'],
+      defaultValue: 'str',
+    }
+  }
   if (type === 'reference') return { ...base, type, target: 'character' }
   if (type === 'formula') return { ...base, type, formula: '', resultType: 'number', editPermission: 'automaticOnly' }
   return { ...base, type }
+}
+
+const ATTRIBUTE_OPTIONS: ReadonlyArray<readonly [Attribute, string]> = [
+  ['str', 'Força'],
+  ['dex', 'Destreza'],
+  ['con', 'Constituição'],
+  ['int', 'Inteligência'],
+  ['wis', 'Sabedoria'],
+  ['cha', 'Carisma'],
+]
+
+function AttributeFieldEditor({
+  allowed,
+  onChange,
+}: {
+  allowed?: Attribute[]
+  onChange: (allowed: Attribute[]) => void
+}) {
+  const selected = allowed?.length
+    ? allowed
+    : ATTRIBUTE_OPTIONS.map(([attribute]) => attribute)
+
+  return (
+    <section className="mt-3 rounded-lg border border-border p-3">
+      <div className="text-sm font-medium text-textH">
+        Atributos permitidos
+      </div>
+      <p className="mt-1 text-xs text-text">
+        Limite quais atributos podem ser escolhidos neste campo. Fórmulas
+        também poderão usar o modificador, valor e salvaguarda do atributo
+        selecionado.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {ATTRIBUTE_OPTIONS.map(([attribute, label]) => {
+          const checked = selected.includes(attribute)
+          return (
+            <label
+              key={attribute}
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-textH"
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={(event) => {
+                  const next = event.target.checked
+                    ? [...selected, attribute]
+                    : selected.filter((entry) => entry !== attribute)
+                  if (next.length) onChange(next)
+                }}
+              />
+              {label}
+            </label>
+          )
+        })}
+      </div>
+    </section>
+  )
 }
 
 function uniqueOptionValue(base: string, options: CustomSelectOption[], ignoredIndex = -1): string {
