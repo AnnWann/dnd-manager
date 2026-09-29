@@ -14,6 +14,7 @@ import type {
   CustomAbilityRollDefinition,
   CustomAbilityRollKind,
   CustomAbilityTypeDefinition,
+  CustomRollAttributeFieldReference,
 } from "../../models/customSystems/CustomAbilityDefinition"
 import type { CustomSystemDefinition } from "../../models/customSystems/CustomSystemDefinition"
 import type { Attribute } from "../../models/sheet/Attribute"
@@ -71,6 +72,12 @@ export function CustomRollBehaviorFields({
   onChange: (roll: CustomAbilityRollDefinition) => void
 }) {
   const kind = roll.kind ?? "generic"
+  const systemAttributeFields = definition.fields.filter(
+    (field) => field.type === "attribute",
+  )
+  const abilityAttributeFields = (abilityType?.fields ?? []).filter(
+    (field) => field.type === "attribute",
+  )
   const formulaAbilityType: CustomAbilityTypeDefinition =
     abilityType ?? {
       id: "__system-action-roll",
@@ -111,6 +118,22 @@ export function CustomRollBehaviorFields({
     onChange({ ...roll, ...patchValue })
   }
 
+  function setRollAttributeSource(value: string) {
+    const parsed = parseAttributeSource(value)
+    patch({
+      attribute: parsed.attribute,
+      attributeField: parsed.field,
+    })
+  }
+
+  function setDcAttributeSource(value: string) {
+    const parsed = parseAttributeSource(value)
+    patch({
+      dcAttribute: parsed.attribute,
+      dcAttributeField: parsed.field,
+    })
+  }
+
   function applyPreset(
     preset: "attack" | "check" | "selfSave" | "targetSave" | "damage",
   ) {
@@ -121,6 +144,7 @@ export function CustomRollBehaviorFields({
         label: roll.label,
         d20Mode: "normal",
         attribute: "str",
+        attributeField: undefined,
         proficient: true,
         modifierFormula: roll.modifierFormula,
         damage:
@@ -138,6 +162,7 @@ export function CustomRollBehaviorFields({
         label: roll.label,
         d20Mode: "normal",
         attribute: "str",
+        attributeField: undefined,
         modifierFormula: roll.modifierFormula,
       })
       return
@@ -150,6 +175,7 @@ export function CustomRollBehaviorFields({
         label: roll.label,
         d20Mode: "normal",
         attribute: "con",
+        attributeField: undefined,
         modifierFormula: roll.modifierFormula,
       })
       return
@@ -162,6 +188,7 @@ export function CustomRollBehaviorFields({
         label: roll.label,
         saveAttribute: "con",
         dcAttribute: "str",
+        dcAttributeField: undefined,
         onSave: "none",
         dcFormula: roll.dcFormula,
         damage: roll.damage,
@@ -343,6 +370,7 @@ export function CustomRollBehaviorFields({
                     ? patch({
                         skill: roll.skill ?? "athletics",
                         attribute: undefined,
+                        attributeField: undefined,
                       })
                     : patch({
                         skill: undefined,
@@ -384,16 +412,46 @@ export function CustomRollBehaviorFields({
             >
               <Select
                 className="input-base"
-                value={roll.attribute ?? (kind === "savingThrow" ? "con" : "str")}
+                value={formatAttributeSource(
+                  roll.attribute,
+                  roll.attributeField,
+                  kind === "savingThrow" ? "con" : "str",
+                )}
                 onChange={(event) =>
-                  patch({ attribute: event.target.value as Attribute })
+                  setRollAttributeSource(event.target.value)
                 }
               >
-                {ATTRIBUTES.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
+                <optgroup label="Atributo fixo">
+                  {ATTRIBUTES.map(([value, label]) => (
+                    <option key={value} value={`fixed:${value}`}>
+                      {label}
+                    </option>
+                  ))}
+                </optgroup>
+                {systemAttributeFields.length ? (
+                  <optgroup label="Campo do sistema">
+                    {systemAttributeFields.map((field) => (
+                      <option
+                        key={`system:${field.id}`}
+                        value={`system:${field.id}`}
+                      >
+                        {field.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {abilityAttributeFields.length ? (
+                  <optgroup label="Campo da habilidade">
+                    {abilityAttributeFields.map((field) => (
+                      <option
+                        key={`ability:${field.id}`}
+                        value={`ability:${field.id}`}
+                      >
+                        {field.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
               </Select>
             </Field>
           )}
@@ -460,16 +518,46 @@ export function CustomRollBehaviorFields({
           <Field label="Atributo da CD">
             <Select
               className="input-base"
-              value={roll.dcAttribute ?? roll.attribute ?? "str"}
+              value={formatAttributeSource(
+                roll.dcAttribute ?? roll.attribute,
+                roll.dcAttributeField,
+                "str",
+              )}
               onChange={(event) =>
-                patch({ dcAttribute: event.target.value as Attribute })
+                setDcAttributeSource(event.target.value)
               }
             >
-              {ATTRIBUTES.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
+              <optgroup label="Atributo fixo">
+                {ATTRIBUTES.map(([value, label]) => (
+                  <option key={value} value={`fixed:${value}`}>
+                    {label}
+                  </option>
+                ))}
+              </optgroup>
+              {systemAttributeFields.length ? (
+                <optgroup label="Campo do sistema">
+                  {systemAttributeFields.map((field) => (
+                    <option
+                      key={`system:${field.id}`}
+                      value={`system:${field.id}`}
+                    >
+                      {field.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {abilityAttributeFields.length ? (
+                <optgroup label="Campo da habilidade">
+                  {abilityAttributeFields.map((field) => (
+                    <option
+                      key={`ability:${field.id}`}
+                      value={`ability:${field.id}`}
+                    >
+                      {field.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
             </Select>
           </Field>
           <Field label="Em sucesso">
@@ -495,7 +583,8 @@ export function CustomRollBehaviorFields({
             <strong>
               8 + proficiência + modificador do atributo da CD
             </strong>{" "}
-            e aplica bônus de CD de habilidade da ficha.
+            e aplica bônus de CD de habilidade da ficha. O atributo pode ser
+            fixo ou vir de um campo do tipo Atributo.
           </div>
         </div>
       ) : null}
@@ -545,6 +634,34 @@ export function CustomRollBehaviorFields({
       </div>
     </div>
   )
+}
+
+function formatAttributeSource(
+  attribute: Attribute | undefined,
+  field: CustomRollAttributeFieldReference | undefined,
+  fallback: Attribute,
+): string {
+  if (field) return `${field.scope}:${field.fieldId}`
+  return `fixed:${attribute ?? fallback}`
+}
+
+function parseAttributeSource(value: string): {
+  attribute?: Attribute
+  field?: CustomRollAttributeFieldReference
+} {
+  const [scope, id] = value.split(":", 2)
+  if (scope === "system" || scope === "ability") {
+    return {
+      field: {
+        scope,
+        fieldId: id ?? "",
+      },
+    }
+  }
+  const attribute = ATTRIBUTES.some(([entry]) => entry === id)
+    ? id as Attribute
+    : "str"
+  return { attribute }
 }
 
 function DamageEditor({
