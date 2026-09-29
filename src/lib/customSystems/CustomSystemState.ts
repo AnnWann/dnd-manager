@@ -608,6 +608,23 @@ export function validateCustomFieldValue(
       }
       break
 
+    case 'attribute': {
+      const allowed =
+        field.allowedAttributes?.length
+          ? field.allowedAttributes
+          : ['str', 'dex', 'con', 'int', 'wis', 'cha']
+      if (typeof value !== 'string') {
+        errors.push(invalidType(field.name, 'an attribute id', path))
+      } else if (!allowed.includes(value as never)) {
+        errors.push({
+          code: 'invalidOption',
+          message: `"${value}" is not an allowed attribute for field "${field.name}".`,
+          path,
+        })
+      }
+      break
+    }
+
     case 'multiSelect': {
       if (!Array.isArray(value) || !value.every((entry) => typeof entry === 'string')) {
         errors.push(invalidType(field.name, 'a list of option values', path))
