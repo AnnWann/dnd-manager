@@ -52,6 +52,9 @@ export type CustomAbilityRollResolution = {
   /** Total principal depois de modificadores. */
   total?: number
   natural?: number
+  /** Raw d20 results, including both dice when rolling with advantage/disadvantage. */
+  d20Rolls?: number[]
+  d20Mode?: CustomAbilityRollDefinition["d20Mode"]
   modifier?: number
   dc?: number
   saveAttribute?: Attribute
@@ -443,6 +446,7 @@ function resolveStructuredRoll(
   let total: number | undefined
   let dice: string | undefined
   let natural: number | undefined
+  let d20Rolls: number[] | undefined
   let modifier: number | undefined
   let dc: number | undefined
 
@@ -475,12 +479,14 @@ function resolveStructuredRoll(
     || kind === "abilityCheck"
     || kind === "savingThrow"
   ) {
-    natural = resolveD20Value(
+    const resolvedD20 = resolveD20Value(
       roll,
       suppliedRollValue,
       subject,
       d20Mode,
     )
+    natural = resolvedD20.natural
+    d20Rolls = resolvedD20.rolls
     value = natural
     dice = "1d20"
     modifier =
@@ -541,6 +547,13 @@ function resolveStructuredRoll(
     dice,
     total,
     natural,
+    d20Rolls,
+    d20Mode:
+      kind === "attack"
+      || kind === "abilityCheck"
+      || kind === "savingThrow"
+        ? d20Mode
+        : undefined,
     modifier,
     dc,
     saveAttribute:
@@ -603,12 +616,13 @@ function resolveD20Value(
   suppliedRollValue: number | undefined,
   subject: "habilidade" | "ação",
   mode: NonNullable<CustomAbilityRollDefinition["d20Mode"]>,
-): number {
+): { natural: number; rolls: number[] } {
   if (
     typeof suppliedRollValue === "number"
     && Number.isFinite(suppliedRollValue)
   ) {
-    return Math.trunc(suppliedRollValue)
+    const natural = Math.trunc(suppliedRollValue)
+    return { natural, rolls: [natural] }
   }
   if (roll.mode === "manual") {
     throw new Error(
@@ -617,11 +631,18 @@ function resolveD20Value(
   }
 
   const first = randomInteger(20) + 1
-  if (mode === "normal") return first
+  if (mode === "normal") {
+    return { natural: first, rolls: [first] }
+  }
+
   const second = randomInteger(20) + 1
-  return mode === "advantage"
-    ? Math.max(first, second)
-    : Math.min(first, second)
+  return {
+    natural:
+      mode === "advantage"
+        ? Math.max(first, second)
+        : Math.min(first, second),
+    rolls: [first, second],
+  }
 }
 
 function resolveNativeD20Modifier(
