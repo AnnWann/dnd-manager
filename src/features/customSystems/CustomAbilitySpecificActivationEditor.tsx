@@ -176,6 +176,85 @@ export function CustomAbilitySpecificActivationEditor({ definition, abilityType,
           </div>
 
           <div className="rounded-lg border border-border bg-bg-subtle p-3">
+            <label className="flex items-center gap-2 text-sm font-semibold text-textH">
+              <input
+                type="checkbox"
+                checked={activation.level !== undefined}
+                onChange={(event) =>
+                  patchActivation({
+                    level: event.target.checked
+                      ? {
+                          baseLevel: activation.level?.baseLevel ?? 1,
+                          maximumLevel:
+                            activation.level?.maximumLevel ?? 1,
+                          label: activation.level?.label,
+                        }
+                      : undefined,
+                  })
+                }
+              />
+              Usar níveis / upcast
+            </label>
+            <p className="mt-1 text-xs leading-5 text-textMuted">
+              Ao usar a habilidade, o jogador escolhe um nível. Fórmulas podem
+              usar <code>activation.level</code> ou <code>ability.level</code>.
+            </p>
+            {activation.level ? (
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <NumberField
+                  label="Nível base"
+                  value={activation.level.baseLevel}
+                  onChange={(baseLevel) =>
+                    patchActivation({
+                      level: {
+                        ...activation.level!,
+                        baseLevel: Math.max(1, baseLevel ?? 1),
+                        maximumLevel: Math.max(
+                          Math.max(1, baseLevel ?? 1),
+                          activation.level?.maximumLevel
+                            ?? Math.max(1, baseLevel ?? 1),
+                        ),
+                      },
+                    })
+                  }
+                />
+                <NumberField
+                  label="Nível máximo"
+                  value={activation.level.maximumLevel}
+                  placeholder="Sem limite"
+                  onChange={(maximumLevel) =>
+                    patchActivation({
+                      level: {
+                        ...activation.level!,
+                        maximumLevel:
+                          maximumLevel === undefined
+                            ? undefined
+                            : Math.max(
+                                activation.level?.baseLevel ?? 1,
+                                maximumLevel,
+                              ),
+                      },
+                    })
+                  }
+                />
+                <TextField
+                  label="Rótulo para o jogador"
+                  value={activation.level.label ?? ""}
+                  placeholder="Nível de uso"
+                  onChange={(label) =>
+                    patchActivation({
+                      level: {
+                        ...activation.level!,
+                        label: label || undefined,
+                      },
+                    })
+                  }
+                />
+              </div>
+            ) : null}
+          </div>
+
+          <div className="rounded-lg border border-border bg-bg-subtle p-3">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <SelectField
                 label="Usos"
