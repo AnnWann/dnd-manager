@@ -71,7 +71,18 @@ export function CustomRollBehaviorFields({
   onChange: (roll: CustomAbilityRollDefinition) => void
 }) {
   const kind = roll.kind ?? "generic"
-  const variables = listCustomFormulaVariables(definition, abilityType)
+  const formulaAbilityType: CustomAbilityTypeDefinition =
+    abilityType ?? {
+      id: "__system-action-roll",
+      name: "Rolagem da ação",
+      fields: [],
+      display: { titleFieldId: "" },
+      activation: { roll },
+    }
+  const variables = listCustomFormulaVariables(
+    definition,
+    formulaAbilityType,
+  )
   const diceVariables = variables.filter((entry) => entry.valueType === "dice")
   const needsD20 =
     kind === "attack"
@@ -82,10 +93,18 @@ export function CustomRollBehaviorFields({
       ? validateCustomAbilityDiceSource(roll.dice, definition, abilityType)
       : undefined
   const modifierError = roll.modifierFormula?.trim()
-    ? validateCustomFormula(roll.modifierFormula, definition, abilityType)
+    ? validateCustomFormula(
+        roll.modifierFormula,
+        definition,
+        formulaAbilityType,
+      )
     : undefined
   const dcError = roll.dcFormula?.trim()
-    ? validateCustomFormula(roll.dcFormula, definition, abilityType)
+    ? validateCustomFormula(
+        roll.dcFormula,
+        definition,
+        formulaAbilityType,
+      )
     : undefined
 
   function patch(patchValue: Partial<CustomAbilityRollDefinition>) {
@@ -377,7 +396,7 @@ export function CustomRollBehaviorFields({
 
       <DamageEditor
         definition={definition}
-        abilityType={abilityType}
+        abilityType={formulaAbilityType}
         roll={roll}
         required={kind === "damage"}
         onChange={(damage) => patch({ damage })}
