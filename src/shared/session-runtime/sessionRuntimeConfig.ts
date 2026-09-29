@@ -52,6 +52,13 @@ export type SessionRuntimeCharacterConfig = {
 export function toSessionRuntimeConfig(
   creation: CreationState,
 ): SessionRuntimeConfig {
+  const customSystemVersionById = new Map(
+    creation.customSystems.map((definition) => [
+      definition.id,
+      definition.version,
+    ]),
+  )
+
   return {
     diceRollingEnabled: creation.diceRollingEnabled !== false,
     progression: projectCampaignProgressionForPlayers(creation.progression),
@@ -62,7 +69,12 @@ export function toSessionRuntimeConfig(
       visibility: character.visibility,
       unique: character.unique,
       ownerId: character.ownerId,
-      customSystems: character.customSystems,
+      customSystems: character.customSystems.map((installation) => ({
+        ...installation,
+        systemVersion:
+          customSystemVersionById.get(installation.systemId)
+          ?? installation.systemVersion,
+      })),
     })),
     spells: creation.spells,
     customSystems: creation.customSystems,
