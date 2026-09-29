@@ -91,6 +91,9 @@ type ActionEntry = {
   customAbilitySource?: CustomAbilitySource
   customAbilityRoll?: CustomAbilityRollDefinition
   customSystemActionSource?: CustomSystemActionSource
+  activationLevelBase?: number
+  activationLevelMaximum?: number
+  activationLevelLabel?: string
   metamagicCost?: number | "spell-level"
   usageRemaining?: number
   usageMaximum?: number
@@ -149,6 +152,7 @@ export function MinimalCharacterActions({
   const [error, setError] = useState("")
   const [variableMetamagicCost, setVariableMetamagicCost] = useState(1)
   const [manualRollValue, setManualRollValue] = useState("")
+  const [customActivationLevel, setCustomActivationLevel] = useState(1)
   const [rollFeedback, setRollFeedback] = useState<Array<{
     label: string
     dice?: string
@@ -214,8 +218,18 @@ export function MinimalCharacterActions({
       definitions,
       selected.customAbilitySource,
       previewRollValue,
+      selected.activationLevelBase === undefined
+        ? undefined
+        : customActivationLevel,
     )
-  }, [character, definitions, manualRollValue, physicalDiceMode, selected])
+  }, [
+    character,
+    customActivationLevel,
+    definitions,
+    manualRollValue,
+    physicalDiceMode,
+    selected,
+  ])
   const selectedCustomAbilityCostError = customAbilityCostError(
     selectedCustomAbilityCosts,
   )
@@ -250,6 +264,7 @@ export function MinimalCharacterActions({
     setError("")
     setManualRollValue("")
     setRollFeedback([])
+    setCustomActivationLevel(entry.activationLevelBase ?? 1)
     if (entry.metamagicCost === "spell-level") setVariableMetamagicCost(1)
     setSelected(entry)
   }
@@ -385,6 +400,10 @@ export function MinimalCharacterActions({
     if (!source) return
     try {
       setError("")
+      const activationLevel = resolveEntryActivationLevel(
+        entry,
+        customActivationLevel,
+      )
       let rollValue: number | undefined
       if (
         entry.customAbilityRoll
@@ -403,6 +422,7 @@ export function MinimalCharacterActions({
         source.systemId,
         source.actionId,
         rollValue,
+        activationLevel,
       )
       if (resolved.roll) {
         rollValue = resolved.roll.value
@@ -427,13 +447,13 @@ export function MinimalCharacterActions({
           systemId: source.systemId,
           actionId: source.actionId,
           ...(rollValue !== undefined ? { rollValue } : {}),
+          ...(activationLevel !== undefined ? { activationLevel } : {}),
         })
         if (!sent) {
           setError("Não foi possível enviar esta ação para a sessão.")
           return
         }
 
-        announce(entry)
         announce(entry)
         if (!resolved.roll) setSelected(null)
         return
@@ -455,6 +475,10 @@ export function MinimalCharacterActions({
     if (!source) return
     try {
       setError("")
+      const activationLevel = resolveEntryActivationLevel(
+        entry,
+        customActivationLevel,
+      )
       let rollValue: number | undefined
       if (
         entry.customAbilityRoll
@@ -478,6 +502,7 @@ export function MinimalCharacterActions({
         source.systemId,
         source.abilityId,
         rollValue,
+        activationLevel,
       )
       if (resolved.roll) {
         rollValue = resolved.roll.value
@@ -510,6 +535,7 @@ export function MinimalCharacterActions({
           systemId: source.systemId,
           abilityId: source.abilityId,
           ...(rollValue !== undefined ? { rollValue } : {}),
+          ...(activationLevel !== undefined ? { activationLevel } : {}),
         })
         if (!sent) {
           setError("Não foi possível enviar esta habilidade para a sessão.")
@@ -683,6 +709,34 @@ export function MinimalCharacterActions({
                   </div>
                 ))}
               </div>
+            ) : null}
+            {selected.activationLevelBase !== undefined ? (
+              <label className="grid gap-1 rounded-xl border border-accentBorder bg-accentBg/30 p-3">
+                <span className="text-xs font-semibold text-textH">
+                  {selected.activationLevelLabel?.trim() || "Nível de uso"}
+                </span>
+                <span className="text-[11px] leading-4 text-textMuted">
+                  Escolha o nível desta ativação. Custos e fórmulas podem
+                  escalar com esse valor.
+                </span>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={selected.activationLevelBase}
+                  max={selected.activationLevelMaximum}
+                  step={1}
+                  value={customActivationLevel}
+                  onChange={(event) =>
+                    setCustomActivationLevel(
+                      clampActivationLevel(
+                        Number(event.target.value),
+                        selected.activationLevelBase!,
+                        selected.activationLevelMaximum,
+                      ),
+                    )
+                  }
+                />
+              </label>
             ) : null}
             {selected.customAbilityRoll
               && (selected.customAbilityRoll.mode === "manual" || physicalDiceMode) ? (
@@ -943,6 +997,17 @@ function getCustomSystemActions(
         filter,
         source: definition.name,
         customAbilityRoll: action.roll,
+        activationLevelBase: action.level
+          ? Math.max(1, Math.floor(action.level.baseLevel))
+          : undefined,
+        activationLevelMaximum:
+          action.level?.maximumLevel === undefined
+            ? undefined
+            : Math.max(
+                Math.max(1, Math.floor(action.level.baseLevel)),
+                Math.floor(action.level.maximumLevel),
+              ),
+        activationLevelLabel: action.level?.label,
         customSystemActionSource: {
           systemId: definition.id,
           actionId: action.id,
@@ -1081,6 +1146,30 @@ function customAbilityEntry(
     ? displayValue(ability.values[type.display.descriptionFieldId])
     : preset?.description ?? type.description
 
+  const scalableCosts = (activation.resourceChanges ?? []).filter(
+    (change) =>
+      change.operation === "spend"
+      && (change.upcastAmountPerLevel ?? 0) > 0,
+  )
+  const legacyBase =
+    scalableCosts.length > 0
+      ? Math.min(
+          ...scalableCosts.map((change) =>
+            Math.max(1, Math.floor(change.upcastBaseLevel ?? 1)),
+          ),
+        )
+      : undefined
+  const activationLevelBase = activation.level
+    ? Math.max(1, Math.floor(activation.level.baseLevel))
+    : legacyBase
+  const activationLevelMaximum =
+    activation.level?.maximumLevel === undefined
+      ? undefined
+      : Math.max(
+          Math.max(1, Math.floor(activation.level.baseLevel)),
+          Math.floor(activation.level.maximumLevel),
+        )
+
   return {
     id: `custom-ability:${definition.id}:${ability.id}`,
     name: title,
@@ -1093,6 +1182,9 @@ function customAbilityEntry(
       canUse: true,
     },
     customAbilityRoll: activation.roll,
+    activationLevelBase,
+    activationLevelMaximum,
+    activationLevelLabel: activation.level?.label,
   }
 }
 
@@ -1101,6 +1193,7 @@ function resolveCustomAbilityCosts(
   definitions: CustomSystemDefinition[],
   source: CustomAbilitySource,
   rollValue?: number,
+  activationLevel?: number,
 ): CustomAbilityCostPreview[] {
   const states = (character.get("sheet").customSystems ?? []) as CharacterCustomSystemState[]
   const state = states.find((entry) => entry.systemId === source.systemId)
@@ -1123,6 +1216,8 @@ function resolveCustomAbilityCosts(
         ability,
         character,
         rollValue,
+        activationLevel,
+        activation.level?.baseLevel ?? 1,
       )
 
       if (change.target.source === "native") {
@@ -1180,8 +1275,27 @@ function resolveCustomAbilityCostAmount(
   ability: CustomAbilityInstance,
   character: CharacterTemplate,
   rollValue?: number,
+  activationLevel?: number,
+  activationBaseLevel = 1,
 ): number | undefined {
-  if (!change.formula?.trim()) return Math.max(0, change.amount ?? 0)
+  const applyUpcast = (baseAmount: number) => {
+    if (change.operation !== "spend") return baseAmount
+    const perLevel = Math.max(0, change.upcastAmountPerLevel ?? 0)
+    if (perLevel <= 0) return baseAmount
+    const baseLevel = Math.max(
+      1,
+      Math.floor(change.upcastBaseLevel ?? activationBaseLevel),
+    )
+    const resolvedLevel = Math.max(
+      baseLevel,
+      Math.floor(activationLevel ?? baseLevel),
+    )
+    return baseAmount + (resolvedLevel - baseLevel) * perLevel
+  }
+
+  if (!change.formula?.trim()) {
+    return applyUpcast(Math.max(0, change.amount ?? 0))
+  }
 
   let formula = change.formula
   if (formula.includes("roll.value")) {
@@ -1198,11 +1312,16 @@ function resolveCustomAbilityCostAmount(
     state,
     character,
     { type, values: ability.values },
+    {
+      level: activationLevel ?? activationBaseLevel,
+      baseLevel: activationBaseLevel,
+      scope: "ability",
+    },
   )
   if (!result.ok || typeof result.value !== "number" || !Number.isFinite(result.value)) {
     return undefined
   }
-  return Math.max(0, result.value)
+  return applyUpcast(Math.max(0, result.value))
 }
 
 function customAbilityCostError(costs: CustomAbilityCostPreview[]): string {
@@ -1284,6 +1403,35 @@ function getPassiveAbilities(character: CharacterTemplate): ActionEntry[] {
       abilitySource: source,
     }))
     .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
+}
+
+function resolveEntryActivationLevel(
+  entry: ActionEntry,
+  requested: number,
+): number | undefined {
+  if (entry.activationLevelBase === undefined) return undefined
+  const level = clampActivationLevel(
+    requested,
+    entry.activationLevelBase,
+    entry.activationLevelMaximum,
+  )
+  if (!Number.isInteger(level)) {
+    throw new Error("O nível de uso precisa ser um número inteiro.")
+  }
+  return level
+}
+
+function clampActivationLevel(
+  value: number,
+  base: number,
+  maximum?: number,
+): number {
+  const normalizedBase = Math.max(1, Math.floor(base))
+  const finite = Number.isFinite(value) ? Math.floor(value) : normalizedBase
+  const atLeastBase = Math.max(normalizedBase, finite)
+  return maximum === undefined
+    ? atLeastBase
+    : Math.min(Math.max(normalizedBase, Math.floor(maximum)), atLeastBase)
 }
 
 function formatMetamagicCost(cost: number | "spell-level"): string {
