@@ -470,6 +470,16 @@ function DamageEditor({
                   abilityType,
                 )
               : undefined
+            const upcastDiceError =
+              component.upcastDicePerLevel?.trim()
+                ? validateCustomAbilityDiceSource(
+                    component.upcastDicePerLevel,
+                    definition,
+                    abilityType,
+                  )
+                : undefined
+            const upcastEnabled =
+              Boolean(component.upcastDicePerLevel?.trim())
 
             function patchComponent(
               patchValue: Partial<CustomAbilityDamageRollDefinition>,
@@ -561,6 +571,94 @@ function DamageEditor({
                     />
                   </div>
                 ) : null}
+
+                <div className="mt-3 rounded-lg border border-border bg-bg-subtle p-3">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-textH">
+                    <input
+                      type="checkbox"
+                      checked={upcastEnabled}
+                      onChange={(event) =>
+                        patchComponent(
+                          event.target.checked
+                            ? {
+                                upcastDicePerLevel:
+                                  component.upcastDicePerLevel?.trim()
+                                  || "1d6",
+                              }
+                            : {
+                                upcastDicePerLevel: undefined,
+                                upcastBaseLevel: undefined,
+                              },
+                        )
+                      }
+                    />
+                    Escalar os dados com o nível de uso
+                  </label>
+                  <p className="mt-1 text-[11px] leading-4 text-textMuted">
+                    Para cada nível acima do nível-base, estes dados são
+                    adicionados uma vez. Ex.: 2d6 + 1d6 por nível vira 4d6
+                    ao usar no nível 3 se o nível-base for 1.
+                  </p>
+
+                  {upcastEnabled ? (
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <Field label="Dados extras por nível">
+                        <input
+                          className="input-base font-mono"
+                          value={component.upcastDicePerLevel ?? ""}
+                          placeholder="1d6"
+                          onChange={(event) =>
+                            patchComponent({
+                              upcastDicePerLevel:
+                                event.target.value || undefined,
+                            })
+                          }
+                        />
+                      </Field>
+                      <Field label="Nível-base deste dano (opcional)">
+                        <input
+                          className="input-base"
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={component.upcastBaseLevel ?? ""}
+                          placeholder="Usar nível-base da ativação"
+                          onChange={(event) => {
+                            const raw = event.target.value.trim()
+                            patchComponent({
+                              upcastBaseLevel: raw
+                                ? Math.max(
+                                    1,
+                                    Math.floor(Number(raw) || 1),
+                                  )
+                                : undefined,
+                            })
+                          }}
+                        />
+                      </Field>
+
+                      {diceVariables.length ? (
+                        <div className="md:col-span-2">
+                          <FormulaVariablePicker
+                            variables={diceVariables}
+                            buttonLabel="Usar variável nos dados de upcast"
+                            onSelect={(path) =>
+                              patchComponent({
+                                upcastDicePerLevel: path,
+                              })
+                            }
+                          />
+                        </div>
+                      ) : null}
+
+                      {upcastDiceError ? (
+                        <div className="text-xs text-red-300 md:col-span-2">
+                          {upcastDiceError}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
 
                 <div className="mt-3">
                   <FormulaField
