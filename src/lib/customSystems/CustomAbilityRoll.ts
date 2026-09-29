@@ -750,7 +750,7 @@ function resolveRollAttribute(
       ? abilityValues?.[field.id] ?? field.defaultValue
       : state.fields[field.id] ?? field.defaultValue
 
-  const allowed =
+  const allowed: Attribute[] =
     field.allowedAttributes?.length
       ? field.allowedAttributes
       : ["str", "dex", "con", "int", "wis", "cha"]
