@@ -26,7 +26,11 @@ import {
 export type CustomAbilityDamageRollResolution = {
   id: string
   label?: string
+  /** Expressão efetiva exibida ao jogador, já incluindo o escalonamento. */
   dice: string
+  baseDice: string
+  upcastDicePerLevel?: string
+  upcastLevels: number
   /** Resultado somente dos dados / valor manual informado. */
   value: number
   modifier: number
@@ -400,6 +404,23 @@ export function customRollManualDamageCount(
   return roll.damage?.length ?? 0
 }
 
+export function formatCustomDamageDiceForLevel(
+  component: NonNullable<CustomAbilityRollDefinition["damage"]>[number],
+  activationLevel?: number,
+  activationBaseLevel = 1,
+): string {
+  const upcastLevels = resolveDamageUpcastLevels(
+    component,
+    activationLevel,
+    activationBaseLevel,
+  )
+  return formatDamageDiceExpression(
+    component.dice,
+    component.upcastDicePerLevel,
+    upcastLevels,
+  )
+}
+
 function resolveStructuredRoll(
   roll: CustomAbilityRollDefinition,
   suppliedRollValue: number | undefined,
@@ -695,13 +716,33 @@ function resolveDamageRolls(
   primaryValue: number,
 ): CustomAbilityDamageRollResolution[] {
   return (roll.damage ?? []).map((component, index) => {
-    const dice = resolveCustomRollDiceExpression(
+    const baseDice = resolveCustomRollDiceExpression(
       component.dice,
       definition,
       state,
       character,
       abilityType,
       abilityValues,
+    )
+    const upcastDicePerLevel = component.upcastDicePerLevel?.trim()
+      ? resolveCustomRollDiceExpression(
+          component.upcastDicePerLevel,
+          definition,
+          state,
+          character,
+          abilityType,
+          abilityValues,
+        )
+      : undefined
+    const upcastLevels = resolveDamageUpcastLevels(
+      component,
+      activationContext?.level,
+      activationContext?.baseLevel ?? 1,
+    )
+    const dice = formatDamageDiceExpression(
+      baseDice,
+      upcastDicePerLevel,
+      upcastLevels,
     )
     const isCritical =
       attackCritical && component.critical !== false
@@ -715,7 +756,16 @@ function resolveDamageRolls(
         `Informe o resultado de dano “${component.label?.trim() || component.damageType?.trim() || index + 1}”.`,
       )
     } else {
-      value = rollCustomAbilityDice(dice, isCritical ? 2 : 1)
+      const diceMultiplier = isCritical ? 2 : 1
+      value = rollCustomAbilityDice(baseDice, diceMultiplier)
+      if (upcastDicePerLevel && upcastLevels > 0) {
+        for (let level = 0; level < upcastLevels; level += 1) {
+          value += rollCustomAbilityDice(
+            upcastDicePerLevel,
+            diceMultiplier,
+          )
+        }
+      }
     }
 
     const modifier = resolveFormulaNumber(
@@ -733,6 +783,9 @@ function resolveDamageRolls(
       id: component.id,
       label: component.label,
       dice,
+      baseDice,
+      upcastDicePerLevel,
+      upcastLevels,
       value,
       modifier,
       total: value + modifier,
@@ -740,6 +793,38 @@ function resolveDamageRolls(
       critical: isCritical,
     }
   })
+}
+
+function resolveDamageUpcastLevels(
+  component: NonNullable<CustomAbilityRollDefinition["damage"]>[number],
+  activationLevel: number | undefined,
+  activationBaseLevel: number,
+): number {
+  if (!component.upcastDicePerLevel?.trim()) return 0
+  const baseLevel = Math.max(
+    1,
+    Math.floor(
+      component.upcastBaseLevel
+      ?? activationBaseLevel,
+    ),
+  )
+  const level = Math.max(
+    baseLevel,
+    Math.floor(activationLevel ?? baseLevel),
+  )
+  return Math.max(0, level - baseLevel)
+}
+
+function formatDamageDiceExpression(
+  baseDice: string,
+  upcastDicePerLevel: string | undefined,
+  upcastLevels: number,
+): string {
+  if (!upcastDicePerLevel || upcastLevels <= 0) return baseDice
+  if (upcastLevels === 1) {
+    return `${baseDice} + ${upcastDicePerLevel}`
+  }
+  return `${baseDice} + ${upcastLevels}×${upcastDicePerLevel}`
 }
 
 function resolveFormulaNumber(
