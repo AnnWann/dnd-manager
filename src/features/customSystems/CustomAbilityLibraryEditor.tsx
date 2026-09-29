@@ -357,6 +357,7 @@ export function CustomAbilityLibraryEditor({
 
                 <CustomAbilitySpecificActivationEditor
                   definition={draft}
+                  abilityType={type}
                   ability={ability}
                   onChange={replaceAbility}
                 />
