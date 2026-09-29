@@ -50,6 +50,9 @@ type CreationEditorContextValue = {
   dirty: boolean
   saving: boolean
   updateDraft: (updater: (draft: CreationState) => CreationState) => void
+  updateAndSave: (
+    updater: (draft: CreationState) => CreationState,
+  ) => Promise<void>
   save: () => Promise<void>
   cancel: () => void
   reload: () => Promise<void>
@@ -255,10 +258,12 @@ export function CreationEditorProvider({
     return () => window.removeEventListener("beforeunload", beforeUnload)
   }, [dirty])
 
-  const save = useCallback(async () => {
-    if (!dirty || !draft || baseRevision === null || saving) return
+  const persistCandidate = useCallback(async (
+    candidate: CreationState,
+  ) => {
+    if (baseRevision === null || saving) return
 
-    const ownerChanges = collectOwnerChanges(base, draft)
+    const ownerChanges = collectOwnerChanges(base, candidate)
     if (
       ownerChanges.length > 0 &&
       (
@@ -313,7 +318,7 @@ export function CreationEditorProvider({
       const snapshot = await saveCreationSnapshot(
         campaignId,
         baseRevision,
-        draft,
+        candidate,
       )
       applySnapshot(snapshot)
 
@@ -355,13 +360,28 @@ export function CreationEditorProvider({
     base,
     baseRevision,
     campaignId,
-    dirty,
     dispatchCharacterLifecycleOperation,
-    draft,
     runtimeRole,
     runtimeStatus,
     saving,
   ])
+
+  const updateAndSave = useCallback(async (
+    updater: (current: CreationState) => CreationState,
+  ) => {
+    if (!draft || baseRevision === null || saving) return
+
+    const editable = structuredClone(draft)
+    const candidate = structuredClone(updater(editable))
+    setDraft(candidate)
+    setError("")
+    await persistCandidate(candidate)
+  }, [baseRevision, draft, persistCandidate, saving])
+
+  const save = useCallback(async () => {
+    if (!dirty || !draft || baseRevision === null || saving) return
+    await persistCandidate(draft)
+  }, [baseRevision, dirty, draft, persistCandidate, saving])
 
   const value = useMemo<CreationEditorContextValue>(
     () => ({
@@ -376,6 +396,7 @@ export function CreationEditorProvider({
       dirty,
       saving,
       updateDraft,
+      updateAndSave,
       save,
       cancel,
       reload,
@@ -393,6 +414,7 @@ export function CreationEditorProvider({
       save,
       saving,
       status,
+      updateAndSave,
       updateDraft,
       updatedAt,
     ],
