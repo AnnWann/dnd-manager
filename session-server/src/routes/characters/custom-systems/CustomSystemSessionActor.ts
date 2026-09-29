@@ -19,6 +19,9 @@ import {
 import {
   activateCustomAbilityWithRoll,
   activateCustomSystemActionWithRoll,
+  customRollManualDamageCount,
+  customRollRequiresManualPrimary,
+  formatCustomRollResolutionSummary,
   getCustomAbilityRollDefinition,
 } from "../../../../../src/lib/customSystems/CustomAbilityRoll";
 import {
@@ -153,30 +156,50 @@ export class SessionActor extends BaseSessionActor {
 
     const digitalDiceEnabled = isDigitalDiceRollingEnabled(activeRuntimeConfig);
     if (!digitalDiceEnabled) {
-      if (operation.type === "character.customSystem.ability.activate") {
-        const roll = getCustomAbilityRollDefinition(
-          definition,
-          currentState,
-          operation.abilityId,
-        );
-        if (roll && (typeof operation.rollValue !== "number" || !Number.isFinite(operation.rollValue))) {
+      const roll =
+        operation.type === "character.customSystem.ability.activate"
+          ? getCustomAbilityRollDefinition(
+              definition,
+              currentState,
+              operation.abilityId,
+            )
+          : operation.type === "character.customSystem.action.execute"
+            ? definition.actions?.find(
+                (entry) => entry.id === operation.actionId,
+              )?.roll
+            : undefined;
+
+      if (roll) {
+        if (
+          customRollRequiresManualPrimary(roll)
+          && (
+            typeof operation.rollValue !== "number"
+            || !Number.isFinite(operation.rollValue)
+          )
+        ) {
           sendError(
             webSocket,
             "PHYSICAL_ROLL_REQUIRED",
-            "Informe o resultado dos dados físicos antes de usar esta habilidade.",
+            "Informe o resultado da rolagem física principal antes de executar.",
           );
           return;
         }
-      }
-      if (operation.type === "character.customSystem.action.execute") {
-        const roll = definition.actions?.find(
-          (entry) => entry.id === operation.actionId,
-        )?.roll;
-        if (roll && (typeof operation.rollValue !== "number" || !Number.isFinite(operation.rollValue))) {
+
+        const damageCount = customRollManualDamageCount(roll);
+        const damageValues = operation.rollDamageValues ?? [];
+        if (
+          damageCount > 0
+          && (
+            damageValues.length < damageCount
+            || damageValues
+              .slice(0, damageCount)
+              .some((value) => !Number.isFinite(value))
+          )
+        ) {
           sendError(
             webSocket,
-            "PHYSICAL_ROLL_REQUIRED",
-            "Informe o resultado dos dados físicos antes de executar esta ação.",
+            "PHYSICAL_DAMAGE_ROLL_REQUIRED",
+            `Informe os ${damageCount} resultado(s) de dano físico antes de executar.`,
           );
           return;
         }
@@ -194,6 +217,7 @@ export class SessionActor extends BaseSessionActor {
           operation.abilityId,
           operation.rollValue,
           operation.activationLevel,
+          operation.rollDamageValues,
         );
         nextCharacter = activation.character;
         if (activation.roll) {
@@ -202,6 +226,9 @@ export class SessionActor extends BaseSessionActor {
             rollValue: activation.roll.value,
             rollDice: activation.roll.dice,
             rollTotal: activation.roll.total,
+            rollSummary: formatCustomRollResolutionSummary(
+              activation.roll,
+            ),
           };
         }
         nextCharacter = runCustomSystemAutomations(
@@ -217,6 +244,7 @@ export class SessionActor extends BaseSessionActor {
           operation.actionId,
           operation.rollValue,
           operation.activationLevel,
+          operation.rollDamageValues,
         );
         nextCharacter = activation.character;
         if (activation.roll) {
@@ -225,6 +253,9 @@ export class SessionActor extends BaseSessionActor {
             rollValue: activation.roll.value,
             rollDice: activation.roll.dice,
             rollTotal: activation.roll.total,
+            rollSummary: formatCustomRollResolutionSummary(
+              activation.roll,
+            ),
           };
         }
       } else if (operation.type === "character.customSystem.automation.execute") {
