@@ -620,6 +620,10 @@ function ActionRollEntry({
           <ResolvedAttackBlock attack={attack} />
         ) : null}
 
+        {roll.primary ? (
+          <ResolvedPrimaryRollBlock primary={roll.primary} />
+        ) : null}
+
         {roll.save ? (
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-subtle px-3 py-2">
             <div>
@@ -661,6 +665,40 @@ function ActionRollEntry({
         </div>
       </div>
     </article>
+  )
+}
+
+function ResolvedPrimaryRollBlock({
+  primary,
+}: {
+  primary: NonNullable<SessionActionRollResult["primary"]>
+}) {
+  const naturalClass = primary.natural === 20
+    ? "text-success"
+    : primary.natural === 1
+      ? "text-danger"
+      : "text-textH"
+  const modeLabel =
+    primary.mode === "advantage"
+      ? " · Vantagem"
+      : primary.mode === "disadvantage"
+        ? " · Desvantagem"
+        : ""
+
+  return (
+    <div className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-border bg-bg px-3 py-2">
+      <div>
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
+          {primary.label}{modeLabel}
+        </div>
+        <div className="mt-0.5 text-[10px] text-textMuted">
+          {formatResolvedPrimary(primary)}
+        </div>
+      </div>
+      <div className={`text-2xl font-black ${naturalClass}`}>
+        {primary.total}
+      </div>
+    </div>
   )
 }
 
@@ -731,9 +769,62 @@ function formatResolvedD20(roll: NonNullable<SessionActionRollResult["attack"]>)
   return `${d20}${roll.modifier ? ` ${formatDiceModifier(roll.modifier)}` : ""}`
 }
 
-function formatResolvedDamage(damage: NonNullable<SessionActionRollResult["damage"]>) {
-  const dice = damage.groups.flatMap((group) => group.rolls).join(" + ")
-  return `${dice ? `(${dice})` : ""}${damage.modifier ? ` ${formatDiceModifier(damage.modifier)}` : ""}` || String(damage.total)
+function formatResolvedDamage(
+  damage: NonNullable<SessionActionRollResult["damage"]>,
+) {
+  const breakdown = formatResolvedGroups(
+    damage.groups,
+    damage.expression,
+  )
+  return `${breakdown}${damage.modifier ? ` ${formatDiceModifier(damage.modifier)}` : ""}`
+    || String(damage.total)
+}
+
+function formatResolvedPrimary(
+  primary: NonNullable<SessionActionRollResult["primary"]>,
+): string {
+  const breakdown = formatResolvedGroups(
+    primary.groups,
+    primary.expression,
+    primary.mode,
+  )
+  return `${breakdown}${primary.modifier ? ` ${formatDiceModifier(primary.modifier)}` : ""}`
+    || String(primary.total)
+}
+
+function formatResolvedGroups(
+  groups: SessionDiceRollResult["groups"],
+  expression?: string,
+  mode: SessionDiceRollResult["mode"] = "normal",
+): string {
+  if (!groups.length) {
+    return expression?.trim()
+      ? `${expression.trim()} = valor informado`
+      : ""
+  }
+
+  return groups.map((group) => {
+    const advantagePrefix =
+      group.kept !== undefined && group.sides === 20
+        ? mode === "advantage"
+          ? "a-"
+          : mode === "disadvantage"
+            ? "d-"
+            : ""
+        : ""
+    const quantity =
+      group.kept !== undefined ? 1 : group.quantity
+    const dice = `${advantagePrefix}${quantity}d${group.sides}`
+    const values =
+      group.kept !== undefined
+        ? group.rolls.length > 1
+          ? `[${group.rolls.join(", ")}] → ${group.kept}`
+          : String(group.kept)
+        : group.rolls.length === 1
+          ? String(group.rolls[0])
+          : `[${group.rolls.join(", ")}]`
+    return `${dice}: ${values}`
+  }).join(" + ")
 }
 
 function DiceRollEntry({
