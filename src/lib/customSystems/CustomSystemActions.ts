@@ -124,6 +124,10 @@ function mergeActivation(
   return {
     ...base,
     ...preset.activation,
+    roll: preset.activation.rollDisabled
+      ? undefined
+      : preset.activation.roll ?? base?.roll,
+    rollDisabled: undefined,
     usage: preset.activation.usage ?? base?.usage,
     resourceChanges:
       preset.activation.resourceChanges ?? base?.resourceChanges,
