@@ -27,6 +27,15 @@ export type CustomAbilityFormulaContext = {
   rollValue?: number
 }
 
+export type CustomActivationFormulaContext = {
+  /** Selected activation/upcast level. */
+  level?: number
+  /** Minimum/default level configured for this activation. */
+  baseLevel?: number
+  /** Adds action.level/action.baseLevel aliases for standalone actions. */
+  scope?: 'ability' | 'action'
+}
+
 type SystemGroupedFormulaVariable = CustomFormulaVariable & {
   customSystemId?: string
   customSystemName?: string
@@ -56,6 +65,33 @@ export function listCustomFormulaVariables(
     ? [{ path: 'roll.value', label: 'Resultado da rolagem', valueType: 'number' }]
     : []
 
+  const activationVariables: CustomFormulaVariable[] = [
+    {
+      path: 'activation.level',
+      label: 'Nível de uso / upcast',
+      valueType: 'number',
+    },
+    {
+      path: 'activation.baseLevel',
+      label: 'Nível base da ativação',
+      valueType: 'number',
+    },
+    ...(abilityType
+      ? [
+          {
+            path: 'ability.level',
+            label: 'Nível de uso da habilidade',
+            valueType: 'number' as const,
+          },
+          {
+            path: 'ability.baseLevel',
+            label: 'Nível base da habilidade',
+            valueType: 'number' as const,
+          },
+        ]
+      : []),
+  ]
+
   const variables: SystemGroupedFormulaVariable[] = [
     ...listCharacterFormulaVariables(),
     ...listBaseFormulaVariables(definition).map((variable) => ({
@@ -78,6 +114,11 @@ export function listCustomFormulaVariables(
       customSystemId: definition.id,
       customSystemName: definition.name,
     })),
+    ...activationVariables.map((variable) => ({
+      ...variable,
+      customSystemId: definition.id,
+      customSystemName: definition.name,
+    })),
   ]
 
   return Array.from(
@@ -91,6 +132,7 @@ export function evaluateCustomFormula(
   state: CharacterCustomSystemState,
   character?: CharacterTemplate,
   ability?: CustomAbilityFormulaContext,
+  activation?: CustomActivationFormulaContext,
 ): CustomFormulaResult {
   const transformed = transformFormulaContext(
     formula,
@@ -101,6 +143,7 @@ export function evaluateCustomFormula(
       collectReferencedCharacterPaths(formula, definition, ability?.type),
     ),
     ability,
+    activation,
   )
 
   return evaluateBaseFormula(
@@ -124,6 +167,11 @@ export function validateCustomFormula(
       collectReferencedCharacterPaths(formula, definition, abilityType),
     ),
     abilityType ? { type: abilityType } : undefined,
+    {
+      level: abilityType?.activation?.level?.baseLevel ?? 1,
+      baseLevel: abilityType?.activation?.level?.baseLevel ?? 1,
+      scope: abilityType ? 'ability' : undefined,
+    },
   )
 
   return validateBaseFormula(transformed.formula, transformed.definition)
@@ -135,6 +183,7 @@ function transformFormulaContext(
   state: CharacterCustomSystemState,
   characterValues: Record<string, number | boolean | string>,
   ability?: CustomAbilityFormulaContext,
+  activation?: CustomActivationFormulaContext,
 ): {
   formula: string
   definition: CustomSystemDefinition
@@ -156,10 +205,64 @@ function transformFormulaContext(
     ? { path: 'roll.value', fieldId: toVirtualFieldId('__roll', 'value') }
     : undefined
 
+  const resolvedBaseLevel = Math.max(
+    1,
+    Math.floor(
+      activation?.baseLevel
+      ?? ability?.type.activation?.level?.baseLevel
+      ?? 1,
+    ),
+  )
+  const resolvedActivationLevel = Math.max(
+    resolvedBaseLevel,
+    Math.floor(activation?.level ?? resolvedBaseLevel),
+  )
+  const activationReplacements = [
+    {
+      path: 'activation.level',
+      fieldId: toVirtualFieldId('__activation', 'level'),
+      value: resolvedActivationLevel,
+    },
+    {
+      path: 'activation.baseLevel',
+      fieldId: toVirtualFieldId('__activation', 'baseLevel'),
+      value: resolvedBaseLevel,
+    },
+    ...(ability
+      ? [
+          {
+            path: 'ability.level',
+            fieldId: toVirtualFieldId('__ability', 'level'),
+            value: resolvedActivationLevel,
+          },
+          {
+            path: 'ability.baseLevel',
+            fieldId: toVirtualFieldId('__ability', 'baseLevel'),
+            value: resolvedBaseLevel,
+          },
+        ]
+      : []),
+    ...(activation?.scope === 'action'
+      ? [
+          {
+            path: 'action.level',
+            fieldId: toVirtualFieldId('__action', 'level'),
+            value: resolvedActivationLevel,
+          },
+          {
+            path: 'action.baseLevel',
+            fieldId: toVirtualFieldId('__action', 'baseLevel'),
+            value: resolvedBaseLevel,
+          },
+        ]
+      : []),
+  ]
+
   const replacements = [
     ...characterReplacements,
     ...abilityReplacements,
     ...(rollReplacement ? [rollReplacement] : []),
+    ...activationReplacements,
   ].sort((left, right) => right.path.length - left.path.length)
 
   const translate = (expression: string | undefined): string | undefined => {
@@ -218,6 +321,14 @@ function transformFormulaContext(
       }]
     : []
 
+  const activationVirtualFields: CustomFieldDefinition[] =
+    activationReplacements.map(({ path, fieldId }) => ({
+      id: fieldId,
+      name: path,
+      type: 'number',
+      editPermission: 'automaticOnly',
+    }))
+
   const abilityStateValues = Object.fromEntries(
     abilityReplacements
       .filter(({ field }) => field.type !== 'formula')
@@ -243,6 +354,7 @@ function transformFormulaContext(
         ...characterVirtualFields,
         ...abilityVirtualFields,
         ...rollVirtualFields,
+        ...activationVirtualFields,
       ],
       resources: definition.resources.map((resource) => ({
         ...resource,
@@ -258,6 +370,9 @@ function transformFormulaContext(
         ),
         ...abilityStateValues,
         ...(rollReplacement ? { [rollReplacement.fieldId]: ability?.rollValue ?? 0 } : {}),
+        ...Object.fromEntries(
+          activationReplacements.map(({ fieldId, value }) => [fieldId, value]),
+        ),
       },
     },
   }
