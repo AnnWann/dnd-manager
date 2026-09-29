@@ -41,7 +41,7 @@ import {
   type SessionRuntimeConfigClientMessage,
   type SessionRuntimeConfigServerMessage,
 } from "./runtimeConfigSessionProtocol"
-import { setCreationCustomSystemOverride } from "../../lib/customSystems/creationCustomSystemsBridge"
+import { setRuntimeCustomSystemOverride } from "../../lib/customSystems/creationCustomSystemsBridge"
 import type { SessionSheetOperationMessage } from "./sheetRoutes"
 
 export type SessionRuntimeStatus = "disconnected" | "connecting" | "connected" | "reconnecting" | "error"
@@ -138,7 +138,7 @@ export class SessionSocket {
     this.pendingMagicOperations = []
     this.magicFlushQueued = false
     this.latestAbilityStates.clear()
-    setCreationCustomSystemOverride(null)
+    setRuntimeCustomSystemOverride(null)
     const socket = this.socket
     this.socket = null
     if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000, "Session runtime disconnected")
@@ -201,7 +201,7 @@ export class SessionSocket {
       }
 
       if (runtimeConfigMessage) {
-        setCreationCustomSystemOverride(
+        setRuntimeCustomSystemOverride(
           runtimeConfigMessage.snapshot?.config.customSystems ?? null,
         )
       }
@@ -239,7 +239,7 @@ export class SessionSocket {
         this.pendingMagicOperations = []
         this.magicFlushQueued = false
         this.latestAbilityStates.clear()
-        setCreationCustomSystemOverride(null)
+        setRuntimeCustomSystemOverride(null)
         this.options.onStatusChange("disconnected")
         window.location.assign("/user")
         return
