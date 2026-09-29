@@ -4,6 +4,8 @@ import type { CharacterConditionDuration } from "../characters/CharacterConditio
 import type { CustomCondition } from "./CustomAutomationDefinition"
 import type { CustomFieldDefinition } from "./CustomFieldDefinition"
 import type { FormulaExpression, JsonValue } from "./CustomGenerals"
+import type { Attribute } from "../sheet/Attribute"
+import type { Skill } from "../sheet/Skills"
 
 export interface CustomAbilityTypeDefinition {
   id: string
@@ -100,12 +102,67 @@ export interface CustomAbilityActivationDefinition {
   level?: CustomActivationLevelDefinition
 }
 
-export interface CustomAbilityRollDefinition {
-  mode: 'automatic' | 'manual'
-  /** Notação simples de dados, por exemplo 1d6, 2d8+1 ou 1d10-1. Obrigatória no modo automático e opcional como instrução no modo manual. */
-  dice?: string
-  /** Rótulo exibido ao jogador. Ex.: Recuperar Fôlego. */
+export type CustomAbilityRollKind =
+  | "generic"
+  | "attack"
+  | "abilityCheck"
+  | "savingThrow"
+  | "targetSave"
+  | "damage"
+
+export type CustomAbilityD20Mode =
+  | "normal"
+  | "advantage"
+  | "disadvantage"
+
+export interface CustomAbilityDamageRollDefinition {
+  id: string
   label?: string
+  /** Dado do dano. Aceita literal (2d6+1) ou variável do tipo Dado. */
+  dice: string
+  /** Tipo livre para permitir dano padrão ou tipos homebrew. */
+  damageType?: string
+  /** Soma um valor calculado depois dos dados. */
+  modifierFormula?: FormulaExpression
+  /** Em um ataque crítico, dobra os dados deste componente. Padrão: true. */
+  critical?: boolean
+}
+
+export interface CustomAbilityRollDefinition {
+  /**
+   * automatic: o sistema resolve os dados.
+   * manual: o jogador informa os resultados obtidos com dados físicos.
+   */
+  mode: "automatic" | "manual"
+  /**
+   * Sem kind, definições antigas continuam funcionando como rolagem genérica.
+   */
+  kind?: CustomAbilityRollKind
+  /** Notação de dados para rolagens genéricas. Rolagens d20 usam 1d20 automaticamente. */
+  dice?: string
+  /** Rótulo exibido ao jogador. */
+  label?: string
+  /** Normal/vantagem/desvantagem para ataque, teste ou salvaguarda do usuário. */
+  d20Mode?: CustomAbilityD20Mode
+  /** Atributo usado por ataque, teste de atributo ou salvaguarda. */
+  attribute?: Attribute
+  /** Perícia usada quando kind=abilityCheck. Se presente, prevalece sobre attribute. */
+  skill?: Skill
+  /** Para ataques, soma proficiência ao modificador do atributo. Padrão: true. */
+  proficient?: boolean
+  /** Bônus adicional calculado e somado ao total principal. */
+  modifierFormula?: FormulaExpression
+  /** Atributo da resistência exigida do alvo quando kind=targetSave. */
+  saveAttribute?: Attribute
+  /**
+   * CD da resistência do alvo. Se ausente e saveAttribute/attribute existir,
+   * usa 8 + proficiência + modificador do atributo e aplica bônus de CD.
+   */
+  dcFormula?: FormulaExpression
+  /** O que acontece com o dano quando o alvo passa na resistência. */
+  onSave?: "none" | "half" | "full"
+  /** Componentes de dano que podem acompanhar qualquer comportamento. */
+  damage?: CustomAbilityDamageRollDefinition[]
 }
 
 export type CustomAbilityResourceReference =
