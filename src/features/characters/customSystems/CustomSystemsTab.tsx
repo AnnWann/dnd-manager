@@ -4,6 +4,7 @@ import { Pencil, Play, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
 import type { CustomAbilityTypeDefinition } from '../../../models/customSystems/CustomAbilityDefinition'
 import type { CustomFieldDefinition } from '../../../models/customSystems/CustomFieldDefinition'
+import type { Attribute } from '../../../models/sheet/Attribute'
 import type { JsonValue } from '../../../models/customSystems/CustomGenerals'
 import type {
   CharacterCustomSystemState,
@@ -967,6 +968,18 @@ function FieldEditor({
             <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </SharedSelect>
+      ) : field.type === 'attribute' ? (
+        <SharedSelect
+          className={commonClass}
+          value={typeof value === 'string' ? value : ''}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          <option value="">Selecione</option>
+          {getAllowedAttributeOptions(field).map(([attribute, label]) => (
+            <option key={attribute} value={attribute}>{label}</option>
+          ))}
+        </SharedSelect>
       ) : field.type === 'multiSelect' ? (
         <SharedSelect
           multiple
@@ -1217,12 +1230,38 @@ function getAbilityDisplay(
   return { title, subtitles, badges, description, details }
 }
 
+const CUSTOM_ATTRIBUTE_OPTIONS: ReadonlyArray<readonly [Attribute, string]> = [
+  ['str', 'Força'],
+  ['dex', 'Destreza'],
+  ['con', 'Constituição'],
+  ['int', 'Inteligência'],
+  ['wis', 'Sabedoria'],
+  ['cha', 'Carisma'],
+]
+
+function getAllowedAttributeOptions(
+  field: Extract<CustomFieldDefinition, { type: 'attribute' }>,
+): ReadonlyArray<readonly [Attribute, string]> {
+  const allowed = field.allowedAttributes?.length
+    ? new Set(field.allowedAttributes)
+    : undefined
+  return allowed
+    ? CUSTOM_ATTRIBUTE_OPTIONS.filter(([attribute]) => allowed.has(attribute))
+    : CUSTOM_ATTRIBUTE_OPTIONS
+}
+
 function formatFieldValue(
   field: CustomFieldDefinition,
   value: JsonValue | undefined,
 ): string {
   if (field.type === 'select' && typeof value === 'string') {
     return field.options.find((option) => option.value === value)?.label ?? value
+  }
+
+  if (field.type === 'attribute' && typeof value === 'string') {
+    return CUSTOM_ATTRIBUTE_OPTIONS.find(
+      ([attribute]) => attribute === value,
+    )?.[1] ?? value.toUpperCase()
   }
 
   if (field.type === 'multiSelect' && Array.isArray(value)) {
