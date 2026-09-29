@@ -55,11 +55,18 @@ export function listCustomFormulaVariables(
 
   const abilityVariables: CustomFormulaVariable[] = (abilityType?.fields ?? [])
     .filter(isFormulaCompatibleAbilityField)
-    .map((field) => ({
-      path: `ability.${field.id}`,
-      label: `${field.name} — habilidade`,
-      valueType: formulaValueType(field),
-    }))
+    .flatMap((field) => [
+      {
+        path: `ability.${field.id}`,
+        label: `${field.name} — habilidade`,
+        valueType: formulaValueType(field),
+      },
+      {
+        path: `${abilityType!.id}.${field.id}`,
+        label: `${field.name} — ${abilityType!.name}`,
+        valueType: formulaValueType(field),
+      },
+    ])
 
   const rollVariables: CustomFormulaVariable[] = abilityType?.activation?.roll
     ? [{ path: 'roll.value', label: 'Resultado da rolagem', valueType: 'number' }]
@@ -195,11 +202,18 @@ function transformFormulaContext(
   }))
 
   const abilityFields = (ability?.type.fields ?? []).filter(isFormulaCompatibleAbilityField)
-  const abilityReplacements = abilityFields.map((field) => ({
-    path: `ability.${field.id}`,
-    fieldId: toVirtualFieldId('__ability', field.id),
-    field,
-  }))
+  const abilityReplacements = abilityFields.flatMap((field) => [
+    {
+      path: `ability.${field.id}`,
+      fieldId: toVirtualFieldId('__ability', field.id),
+      field,
+    },
+    {
+      path: `${ability!.type.id}.${field.id}`,
+      fieldId: toVirtualFieldId('__ability', field.id),
+      field,
+    },
+  ])
 
   const rollReplacement = ability?.type.activation?.roll
     ? { path: 'roll.value', fieldId: toVirtualFieldId('__roll', 'value') }
