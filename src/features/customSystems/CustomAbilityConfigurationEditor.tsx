@@ -17,6 +17,7 @@ import type {
   CustomUsageResetKind,
 } from '../../models/customSystems/CustomAbilityDefinition'
 import type { CustomFieldDefinition } from '../../models/customSystems/CustomFieldDefinition'
+import type { Attribute } from '../../models/sheet/Attribute'
 import type { CustomSystemDefinition } from '../../models/customSystems/CustomSystemDefinition'
 import {
   AbilityConditionChangesEditor,
@@ -591,16 +592,88 @@ function AbilityFields({ fields, onChange }: {
             <TextField label="ID" value={field.id} onChange={(id) => onChange(fields.map((entry, current) => current === index ? { ...entry, id: slug(id) } : entry))} />
             <SelectField label="Tipo" value={field.type} options={[
               ['text', 'Texto'], ['richText', 'Texto longo'], ['number', 'Número'], ['boolean', 'Sim/Não'],
-              ['select', 'Seleção'], ['multiSelect', 'Seleção múltipla'], ['dice', 'Dado'], ['reference', 'Referência'], ['formula', 'Fórmula'],
+              ['select', 'Seleção'], ['multiSelect', 'Seleção múltipla'], ['dice', 'Dado'], ['attribute', 'Atributo'], ['reference', 'Referência'], ['formula', 'Fórmula'],
             ]} onChange={(nextType) => onChange(fields.map((entry, current) => current === index ? makeFieldOfType(entry, nextType as CustomFieldDefinition['type']) : entry))} />
             <div className="flex items-end">
               <button type="button" title="Remover campo" onClick={() => onChange(fields.filter((_, current) => current !== index))} className="rounded-lg border border-red-500/40 p-2 text-red-300 hover:bg-red-500/10"><Trash2 className="h-4 w-4" /></button>
             </div>
           </div>
+          {field.type === 'attribute' ? (
+            <AttributeFieldOptions
+              field={field}
+              onChange={(next) =>
+                onChange(
+                  fields.map((entry, current) =>
+                    current === index ? next : entry,
+                  ),
+                )
+              }
+            />
+          ) : null}
         </article>
       ))}
       <button type="button" onClick={add} className="justify-self-start inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-textH hover:bg-accentBg"><Plus className="h-4 w-4" /> Adicionar campo</button>
       {!fields.length ? <Empty>Nenhum campo. Você pode criar habilidades sem campos ou adicionar os dados necessários.</Empty> : null}
+    </div>
+  )
+}
+
+const ATTRIBUTE_OPTIONS: ReadonlyArray<readonly [Attribute, string]> = [
+  ['str', 'Força'],
+  ['dex', 'Destreza'],
+  ['con', 'Constituição'],
+  ['int', 'Inteligência'],
+  ['wis', 'Sabedoria'],
+  ['cha', 'Carisma'],
+]
+
+function AttributeFieldOptions({
+  field,
+  onChange,
+}: {
+  field: Extract<CustomFieldDefinition, { type: 'attribute' }>
+  onChange: (field: CustomFieldDefinition) => void
+}) {
+  const selected = field.allowedAttributes?.length
+    ? field.allowedAttributes
+    : ATTRIBUTE_OPTIONS.map(([attribute]) => attribute)
+
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-bg p-3">
+      <div className="text-xs font-semibold text-textH">
+        Atributos permitidos
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {ATTRIBUTE_OPTIONS.map(([attribute, label]) => (
+          <label
+            key={attribute}
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-textH"
+          >
+            <input
+              type="checkbox"
+              checked={selected.includes(attribute)}
+              onChange={(event) => {
+                const allowedAttributes = event.target.checked
+                  ? [...selected, attribute]
+                  : selected.filter((entry) => entry !== attribute)
+                if (!allowedAttributes.length) return
+                onChange({
+                  ...field,
+                  allowedAttributes,
+                  defaultValue:
+                    typeof field.defaultValue === 'string'
+                    && allowedAttributes.includes(
+                      field.defaultValue as Attribute,
+                    )
+                      ? field.defaultValue
+                      : allowedAttributes[0],
+                })
+              }}
+            />
+            {label}
+          </label>
+        ))}
+      </div>
     </div>
   )
 }
@@ -746,6 +819,14 @@ function makeFieldOfType(field: CustomFieldDefinition, type: CustomFieldDefiniti
   if (type === 'boolean') return { ...base, type }
   if (type === 'select' || type === 'multiSelect') return { ...base, type, options: [] }
   if (type === 'dice') return { ...base, type }
+  if (type === 'attribute') {
+    return {
+      ...base,
+      type,
+      allowedAttributes: ['str', 'dex', 'con', 'int', 'wis', 'cha'],
+      defaultValue: 'str',
+    }
+  }
   if (type === 'reference') return { ...base, type, target: 'character' }
   if (type === 'formula') return { ...base, type, formula: '', resultType: 'number', editPermission: 'automaticOnly' }
   return { ...base, type }
