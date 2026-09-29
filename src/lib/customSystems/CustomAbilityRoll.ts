@@ -23,6 +23,13 @@ import {
   getEffectiveCustomAbilityActivation,
 } from "./CustomSystemActions"
 
+export type CustomAbilityDiceGroupResolution = {
+  quantity: number
+  sides: number
+  rolls: number[]
+  kept?: number
+}
+
 export type CustomAbilityDamageRollResolution = {
   id: string
   label?: string
@@ -31,8 +38,13 @@ export type CustomAbilityDamageRollResolution = {
   baseDice: string
   upcastDicePerLevel?: string
   upcastLevels: number
-  /** Resultado somente dos dados / valor manual informado. */
+  /** Resultado dos dados, preservando a semântica legada do total da expressão. */
   value: number
+  /** Resultados individuais dos dados quando o sistema fez a rolagem digital. */
+  groups?: CustomAbilityDiceGroupResolution[]
+  /** Modificador literal embutido na expressão, por exemplo o +2 de 1d6+2. */
+  diceModifier?: number
+  /** Modificador adicional calculado por fórmula. */
   modifier: number
   total: number
   damageType?: string
@@ -49,6 +61,10 @@ export type CustomAbilityRollResolution = {
    */
   value: number
   dice?: string
+  /** Resultados individuais dos dados quando o sistema fez a rolagem digital. */
+  groups?: CustomAbilityDiceGroupResolution[]
+  /** Modificador literal embutido na expressão genérica. */
+  diceModifier?: number
   /** Total principal depois de modificadores. */
   total?: number
   natural?: number
@@ -373,19 +389,44 @@ export function resolveCustomRollDiceExpression(
   return resolved
 }
 
-export function rollCustomAbilityDice(
+export function rollCustomAbilityDiceDetailed(
   expression: string,
   diceMultiplier = 1,
-): number {
+): {
+  total: number
+  modifier: number
+  groups: CustomAbilityDiceGroupResolution[]
+} {
   const error = validateCustomAbilityDiceExpression(expression)
   if (error) throw new Error(error)
   const parsed = parseDiceExpression(expression)!
   const multiplier = Math.max(1, Math.floor(diceMultiplier))
-  let total = parsed.modifier
-  for (let index = 0; index < parsed.count * multiplier; index += 1) {
-    total += randomInteger(parsed.sides) + 1
+  const quantity = parsed.count * multiplier
+  const rolls = Array.from(
+    { length: quantity },
+    () => randomInteger(parsed.sides) + 1,
+  )
+  return {
+    total:
+      rolls.reduce((sum, value) => sum + value, 0)
+      + parsed.modifier,
+    modifier: parsed.modifier,
+    groups: [{
+      quantity,
+      sides: parsed.sides,
+      rolls,
+    }],
   }
-  return total
+}
+
+export function rollCustomAbilityDice(
+  expression: string,
+  diceMultiplier = 1,
+): number {
+  return rollCustomAbilityDiceDetailed(
+    expression,
+    diceMultiplier,
+  ).total
 }
 
 export function customRollKind(
@@ -445,6 +486,8 @@ function resolveStructuredRoll(
   let value = 0
   let total: number | undefined
   let dice: string | undefined
+  let groups: CustomAbilityDiceGroupResolution[] | undefined
+  let diceModifier: number | undefined
   let natural: number | undefined
   let d20Rolls: number[] | undefined
   let modifier: number | undefined
@@ -463,6 +506,8 @@ function resolveStructuredRoll(
     )
     value = resolved.value
     dice = resolved.dice
+    groups = resolved.groups
+    diceModifier = resolved.diceModifier
     modifier = resolveFormulaNumber(
       roll.modifierFormula,
       definition,
@@ -545,6 +590,8 @@ function resolveStructuredRoll(
     kind,
     value,
     dice,
+    groups,
+    diceModifier,
     total,
     natural,
     d20Rolls,
@@ -574,7 +621,12 @@ function resolvePrimaryDice(
   character: CharacterTemplate,
   abilityType?: CustomAbilityTypeDefinition,
   abilityValues?: Record<string, JsonValue>,
-): { value: number; dice?: string } {
+): {
+  value: number
+  dice?: string
+  groups?: CustomAbilityDiceGroupResolution[]
+  diceModifier?: number
+} {
   if (
     typeof suppliedRollValue === "number"
     && Number.isFinite(suppliedRollValue)
@@ -608,7 +660,13 @@ function resolvePrimaryDice(
     abilityType,
     abilityValues,
   )
-  return { value: rollCustomAbilityDice(dice), dice }
+  const rolled = rollCustomAbilityDiceDetailed(dice)
+  return {
+    value: rolled.total,
+    dice,
+    groups: rolled.groups,
+    diceModifier: rolled.modifier,
+  }
 }
 
 function resolveD20Value(
@@ -773,6 +831,8 @@ function resolveDamageRolls(
     let value: number
 
     const supplied = suppliedDamageValues?.[index]
+    let groups: CustomAbilityDiceGroupResolution[] | undefined
+    let diceModifier = 0
     if (typeof supplied === "number" && Number.isFinite(supplied)) {
       value = supplied
     } else if (roll.mode === "manual") {
@@ -781,13 +841,23 @@ function resolveDamageRolls(
       )
     } else {
       const diceMultiplier = isCritical ? 2 : 1
-      value = rollCustomAbilityDice(baseDice, diceMultiplier)
+      const baseRoll = rollCustomAbilityDiceDetailed(
+        baseDice,
+        diceMultiplier,
+      )
+      value = baseRoll.total
+      groups = [...baseRoll.groups]
+      diceModifier += baseRoll.modifier
+
       if (upcastDicePerLevel && upcastLevels > 0) {
         for (let level = 0; level < upcastLevels; level += 1) {
-          value += rollCustomAbilityDice(
+          const upcastRoll = rollCustomAbilityDiceDetailed(
             upcastDicePerLevel,
             diceMultiplier,
           )
+          value += upcastRoll.total
+          groups.push(...upcastRoll.groups)
+          diceModifier += upcastRoll.modifier
         }
       }
     }
@@ -811,6 +881,8 @@ function resolveDamageRolls(
       upcastDicePerLevel,
       upcastLevels,
       value,
+      groups,
+      diceModifier,
       modifier,
       total: value + modifier,
       damageType: component.damageType,
