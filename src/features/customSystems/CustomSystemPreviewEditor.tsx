@@ -17,6 +17,7 @@ import {
   setCustomSystemPresentationItems,
 } from '../../lib/customSystems'
 import type { CustomFieldDefinition } from '../../models/customSystems/CustomFieldDefinition'
+import type { Attribute } from '../../models/sheet/Attribute'
 import type {
   CustomSystemDefinition,
   CustomSystemPresentationItem,
@@ -185,6 +186,16 @@ function MockField({ field, disabled }: { field: CustomFieldDefinition; disabled
   const className = 'w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-textH disabled:opacity-60'
   if (field.type === 'boolean') return <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-textH"><input type="checkbox" disabled={disabled} readOnly /> Não</label>
   if (field.type === 'select') return <SharedSelect className={className} disabled={disabled} defaultValue=""><option value="">Selecione</option>{field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</SharedSelect>
+  if (field.type === 'attribute') {
+    const allowed = field.allowedAttributes?.length
+      ? new Set(field.allowedAttributes)
+      : undefined
+    const options: ReadonlyArray<readonly [Attribute, string]> = [
+      ['str', 'Força'], ['dex', 'Destreza'], ['con', 'Constituição'],
+      ['int', 'Inteligência'], ['wis', 'Sabedoria'], ['cha', 'Carisma'],
+    ]
+    return <SharedSelect className={className} disabled={disabled} defaultValue=""><option value="">Selecione</option>{options.filter(([attribute]) => !allowed || allowed.has(attribute)).map(([attribute, label]) => <option key={attribute} value={attribute}>{label}</option>)}</SharedSelect>
+  }
   if (field.type === 'multiSelect') return <SharedSelect className={`${className} min-h-24`} multiple disabled={disabled}>{field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</SharedSelect>
   if (field.type === 'richText') return <textarea className={`${className} min-h-24`} disabled={disabled} placeholder={field.placeholder || 'Texto longo'} />
   if (field.type === 'formula') return <div className="rounded-lg border border-border bg-[color:var(--social-bg)] px-3 py-2 text-sm text-text">Resultado calculado</div>
