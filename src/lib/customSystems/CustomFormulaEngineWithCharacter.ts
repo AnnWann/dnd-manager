@@ -202,18 +202,17 @@ function transformFormulaContext(
   }))
 
   const abilityFields = (ability?.type.fields ?? []).filter(isFormulaCompatibleAbilityField)
-  const abilityReplacements = abilityFields.flatMap((field) => [
-    {
-      path: `ability.${field.id}`,
-      fieldId: toVirtualFieldId('__ability', field.id),
-      field,
-    },
-    {
-      path: `${ability!.type.id}.${field.id}`,
-      fieldId: toVirtualFieldId('__ability', field.id),
-      field,
-    },
-  ])
+  const abilityReplacements = abilityFields.map((field) => ({
+    path: `ability.${field.id}`,
+    fieldId: toVirtualFieldId('__ability', field.id),
+    field,
+  }))
+  const abilityAliasReplacements = ability
+    ? abilityFields.map((field) => ({
+        path: `${ability.type.id}.${field.id}`,
+        fieldId: toVirtualFieldId('__ability', field.id),
+      }))
+    : []
 
   const rollReplacement = ability?.type.activation?.roll
     ? { path: 'roll.value', fieldId: toVirtualFieldId('__roll', 'value') }
@@ -275,6 +274,7 @@ function transformFormulaContext(
   const replacements = [
     ...characterReplacements,
     ...abilityReplacements,
+    ...abilityAliasReplacements,
     ...(rollReplacement ? [rollReplacement] : []),
     ...activationReplacements,
   ].sort((left, right) => right.path.length - left.path.length)
