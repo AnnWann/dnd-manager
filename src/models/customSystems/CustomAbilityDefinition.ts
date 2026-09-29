@@ -121,6 +121,11 @@ export type CustomAbilityD20Mode =
   | "advantage"
   | "disadvantage"
 
+export type CustomRollAttributeFieldReference = {
+  scope: "system" | "ability"
+  fieldId: string
+}
+
 export interface CustomAbilityDamageRollDefinition {
   id: string
   label?: string
@@ -161,8 +166,10 @@ export interface CustomAbilityRollDefinition {
   label?: string
   /** Normal/vantagem/desvantagem para ataque, teste ou salvaguarda do usuário. */
   d20Mode?: CustomAbilityD20Mode
-  /** Atributo usado por ataque, teste de atributo ou salvaguarda. */
+  /** Atributo fixo usado por ataque, teste de atributo ou salvaguarda. */
   attribute?: Attribute
+  /** Campo do tipo attribute que substitui attribute dinamicamente. */
+  attributeField?: CustomRollAttributeFieldReference
   /** Perícia usada quando kind=abilityCheck. Se presente, prevalece sobre attribute. */
   skill?: Skill
   /** Para ataques, soma proficiência ao modificador do atributo. Padrão: true. */
@@ -177,6 +184,8 @@ export interface CustomAbilityRollDefinition {
    * FOR do usuário para a CD: 8 + proficiência + FOR.
    */
   dcAttribute?: Attribute
+  /** Campo do tipo attribute que substitui dcAttribute dinamicamente. */
+  dcAttributeField?: CustomRollAttributeFieldReference
   /**
    * CD da resistência do alvo. Se ausente, usa
    * 8 + proficiência + modificador de dcAttribute (ou attribute por
