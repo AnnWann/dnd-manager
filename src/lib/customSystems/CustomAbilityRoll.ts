@@ -109,6 +109,11 @@ export function activateCustomAbilityWithRoll(
         character,
         type,
         ability.values,
+        {
+          level: activationLevel ?? activation.level?.baseLevel ?? 1,
+          baseLevel: activation.level?.baseLevel ?? 1,
+          scope: "ability",
+        },
       ),
     },
   }
