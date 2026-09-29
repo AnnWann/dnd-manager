@@ -24,6 +24,18 @@ type AbilityLibraryJson = {
     type: string
     required?: boolean
     allowedValues?: string[]
+    /** Formula fields may be configured directly by the library JSON. */
+    formula?: string
+    resultType?: "number" | "text" | "boolean" | "dice"
+  }>
+  /**
+   * Legacy AI-authored rule block. Dynamic formulas are matched to formula
+   * fields by rule id (camelCase and kebab-case are both accepted).
+   */
+  rules?: Record<string, {
+    dynamic?: boolean
+    formula?: string
+    [key: string]: unknown
   }>
   abilities: CustomPredefinedAbilityDefinition[]
 }
@@ -98,7 +110,7 @@ export function CustomAbilityLibraryEditor({
       await navigator.clipboard.writeText(templateJson)
       setJsonFeedback({
         kind: 'success',
-        message: 'Modelo JSON copiado. Ele inclui campos e a estrutura opcional de ativação específica.',
+        message: 'Modelo JSON copiado. Ele inclui campos calculados, fórmulas e a estrutura opcional de ativação/upcast.',
       })
     } catch {
       setJsonText(templateJson)
@@ -121,6 +133,7 @@ export function CustomAbilityLibraryEditor({
     if (!type) return
     try {
       const parsed = JSON.parse(jsonText) as unknown
+      const formulaFields = readImportedFormulaFields(parsed, type)
       const imported = readImportedAbilities(parsed, type)
       if (!imported.length) throw new Error('Nenhuma habilidade válida foi encontrada no JSON.')
 
@@ -151,11 +164,26 @@ export function CustomAbilityLibraryEditor({
         ]
       }
 
-      replaceType({ ...type, predefinedAbilities: nextAbilities })
+      replaceType({
+        ...type,
+        fields: type.fields.map((field) =>
+          field.type === 'formula' && formulaFields.has(field.id)
+            ? {
+                ...field,
+                formula: formulaFields.get(field.id)!,
+              }
+            : field,
+        ),
+        predefinedAbilities: nextAbilities,
+      })
       setAbilityIndex(Math.max(0, nextAbilities.length - imported.length))
       setJsonFeedback({
         kind: 'success',
-        message: `${imported.length} habilidade(s) importada(s) com sucesso.`,
+        message:
+          `${imported.length} habilidade(s) importada(s) com sucesso.`
+          + (formulaFields.size
+            ? ` ${formulaFields.size} fórmula(s) dinâmica(s) do tipo também foram atualizadas.`
+            : ''),
       })
       setJsonText('')
     } catch (error) {
@@ -515,7 +543,7 @@ function createLibraryTemplate(type: CustomAbilityTypeDefinition): AbilityLibrar
     schema: 'dnd-manager.custom-ability-library',
     version: 1,
     abilityTypeId: type.id,
-    fields: editableFields.map((field) => ({
+    fields: type.fields.map((field) => ({
       id: field.id,
       name: field.name,
       type: field.type,
@@ -526,6 +554,8 @@ function createLibraryTemplate(type: CustomAbilityTypeDefinition): AbilityLibrar
           : field.type === 'dice'
             ? field.allowedDice
             : undefined,
+      formula: field.type === 'formula' ? field.formula : undefined,
+      resultType: field.type === 'formula' ? field.resultType : undefined,
     })),
     abilities: [
       {
@@ -539,6 +569,56 @@ function createLibraryTemplate(type: CustomAbilityTypeDefinition): AbilityLibrar
       },
     ],
   }
+}
+
+function readImportedFormulaFields(
+  value: unknown,
+  type: CustomAbilityTypeDefinition,
+): Map<string, string> {
+  const result = new Map<string, string>()
+  if (!isRecord(value)) return result
+
+  const formulaFields = new Map(
+    type.fields
+      .filter((field) => field.type === 'formula')
+      .map((field) => [field.id, field]),
+  )
+
+  if (Array.isArray(value.fields)) {
+    for (const rawField of value.fields) {
+      if (!isRecord(rawField) || typeof rawField.id !== 'string') continue
+      const field = formulaFields.get(rawField.id)
+      if (!field || typeof rawField.formula !== 'string') continue
+      if (rawField.formula.trim()) result.set(field.id, rawField.formula)
+    }
+  }
+
+  if (isRecord(value.rules)) {
+    for (const [ruleId, rawRule] of Object.entries(value.rules)) {
+      if (!isRecord(rawRule) || rawRule.dynamic !== true) continue
+      if (typeof rawRule.formula !== 'string' || !rawRule.formula.trim()) {
+        continue
+      }
+
+      const candidateIds = [
+        ruleId,
+        camelToKebab(ruleId),
+      ]
+      const target = candidateIds
+        .map((candidate) => formulaFields.get(candidate))
+        .find(Boolean)
+      if (target) result.set(target.id, rawRule.formula)
+    }
+  }
+
+  return result
+}
+
+function camelToKebab(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[_\s]+/g, '-')
+    .toLowerCase()
 }
 
 function readImportedAbilities(
