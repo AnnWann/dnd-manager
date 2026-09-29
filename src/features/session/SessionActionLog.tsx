@@ -775,6 +775,8 @@ function formatResolvedDamage(
   const breakdown = formatResolvedGroups(
     damage.groups,
     damage.expression,
+    "normal",
+    damage.total - damage.modifier,
   )
   return `${breakdown}${damage.modifier ? ` ${formatDiceModifier(damage.modifier)}` : ""}`
     || String(damage.total)
@@ -787,6 +789,7 @@ function formatResolvedPrimary(
     primary.groups,
     primary.expression,
     primary.mode,
+    primary.total - primary.modifier,
   )
   return `${breakdown}${primary.modifier ? ` ${formatDiceModifier(primary.modifier)}` : ""}`
     || String(primary.total)
@@ -796,11 +799,16 @@ function formatResolvedGroups(
   groups: SessionDiceRollResult["groups"],
   expression?: string,
   mode: SessionDiceRollResult["mode"] = "normal",
+  suppliedValue?: number,
 ): string {
   if (!groups.length) {
     return expression?.trim()
-      ? `${expression.trim()} = valor informado`
-      : ""
+      ? suppliedValue !== undefined && Number.isFinite(suppliedValue)
+        ? `${expression.trim()}: ${suppliedValue} (informado)`
+        : `${expression.trim()} = valor informado`
+      : suppliedValue !== undefined && Number.isFinite(suppliedValue)
+        ? String(suppliedValue)
+        : ""
   }
 
   return groups.map((group) => {
