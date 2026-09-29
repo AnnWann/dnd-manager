@@ -166,8 +166,15 @@ export interface CustomAbilityRollDefinition {
   /** Atributo da resistência exigida do alvo quando kind=targetSave. */
   saveAttribute?: Attribute
   /**
-   * CD da resistência do alvo. Se ausente e saveAttribute/attribute existir,
-   * usa 8 + proficiência + modificador do atributo e aplica bônus de CD.
+   * Atributo do usuário usado para calcular a CD automática do efeito.
+   * Ex.: uma Técnica Marcial pode exigir resistência de CON do alvo, mas usar
+   * FOR do usuário para a CD: 8 + proficiência + FOR.
+   */
+  dcAttribute?: Attribute
+  /**
+   * CD da resistência do alvo. Se ausente, usa
+   * 8 + proficiência + modificador de dcAttribute (ou attribute por
+   * compatibilidade) e aplica os bônus de CD da ficha.
    */
   dcFormula?: FormulaExpression
   /** O que acontece com o dano quando o alvo passa na resistência. */
