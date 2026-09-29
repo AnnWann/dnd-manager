@@ -307,9 +307,18 @@ export class SessionActor extends BaseSessionActor {
         return;
       }
     }
+    const resolvedRollOnly =
+      aggregateOperation
+      && (
+        loggedOperation.type === "character.customSystem.ability.activate"
+        || loggedOperation.type === "character.customSystem.action.execute"
+      )
+      && Boolean(loggedOperation.rollSummary?.length);
+
     if (
-      aggregateOperation &&
-      JSON.stringify(character.toJSON()) === JSON.stringify(nextCharacter.toJSON())
+      aggregateOperation
+      && !resolvedRollOnly
+      && JSON.stringify(character.toJSON()) === JSON.stringify(nextCharacter.toJSON())
     ) {
       sendError(webSocket, "CUSTOM_SYSTEM_OPERATION_NO_CHANGE", "The requested custom-system operation does not change the current state.");
       return;
