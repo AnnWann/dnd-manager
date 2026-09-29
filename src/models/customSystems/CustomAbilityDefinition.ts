@@ -89,6 +89,12 @@ export interface CustomAbilityActivationDefinition {
    * `roll.value`.
    */
   roll?: CustomAbilityRollDefinition
+  /**
+   * When true on a predefined ability override, disables the roll inherited
+   * from the ability type. This is separate from an absent roll, which means
+   * "inherit the type default".
+   */
+  rollDisabled?: boolean
   /** @deprecated Use resourceChanges com operation='spend'. */
   resourceCosts?: CustomResourceCostDefinition[]
   resourceChanges?: CustomAbilityResourceChangeDefinition[]
