@@ -1161,10 +1161,20 @@ function customRollDetails(
     type: "character.customSystem.ability.activate" | "character.customSystem.action.execute"
   }>,
 ): string {
+  if (operation.rollSummary?.length) {
+    return ` — ${operation.rollSummary.join(" · ")}`
+  }
   if (operation.rollValue === undefined) return ""
   const dice = operation.rollDice?.trim()
-  const base = dice ? ` — rolagem ${dice} = ${operation.rollValue}` : ` — rolagem = ${operation.rollValue}`
-  if (operation.rollTotal === undefined || operation.rollTotal === operation.rollValue) return base
+  const base = dice
+    ? ` — rolagem ${dice} = ${operation.rollValue}`
+    : ` — rolagem = ${operation.rollValue}`
+  if (
+    operation.rollTotal === undefined
+    || operation.rollTotal === operation.rollValue
+  ) {
+    return base
+  }
   return `${base}; total com fórmula ${operation.rollTotal}`
 }
 
