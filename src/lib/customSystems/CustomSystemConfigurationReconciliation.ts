@@ -27,21 +27,27 @@ export function reconcileConfiguredCustomSystemStates(
 
   return configuredSystems.flatMap((configured) => {
     const definition = definitionById.get(configured.systemId)
-    if (!definition || definition.version !== configured.systemVersion) return []
+    if (!definition) return []
+
+    const latestConfiguration = {
+      ...configured,
+      systemVersion: definition.version,
+    }
 
     if (configured.suppressed) {
-      return [createSuppressedState(configured)]
+      return [createSuppressedState(latestConfiguration)]
     }
 
     const current = currentById.get(configured.systemId)
-    const base = isCompatibleRuntimeState(current, configured)
-      ? current
-      : createCharacterCustomSystemState(definition)
+    const base =
+      current && !isSuppressedConfiguredCustomSystemState(current)
+        ? migrateRuntimeState(current, definition)
+        : createCharacterCustomSystemState(definition)
 
     return [{
       ...base,
       systemId: configured.systemId,
-      systemVersion: configured.systemVersion,
+      systemVersion: definition.version,
       enabled: configured.enabled,
       abilityAcquisitionExceptions: configured.abilityAcquisitionExceptions,
       installationSource: configured.installationSource,
@@ -63,20 +69,44 @@ function createSuppressedState(
   }
 }
 
-function isCompatibleRuntimeState(
-  state: CharacterCustomSystemState | undefined,
-  configured: CreationCharacterCustomSystemConfiguration,
-): state is CharacterCustomSystemState {
-  return Boolean(
-    state
-    && !isSuppressedConfiguredCustomSystemState(state)
-    && state.systemVersion === configured.systemVersion
-    && state.fields
-    && typeof state.fields === "object"
-    && !Array.isArray(state.fields)
-    && state.resources
-    && typeof state.resources === "object"
-    && !Array.isArray(state.resources)
-    && Array.isArray(state.abilities),
+function migrateRuntimeState(
+  state: CharacterCustomSystemState,
+  definition: CustomSystemDefinition,
+): CharacterCustomSystemState {
+  const fresh = createCharacterCustomSystemState(definition)
+  const fieldIds = new Set(definition.fields.map((field) => field.id))
+  const resourceIds = new Set(
+    definition.resources.map((resource) => resource.id),
   )
+  const abilityTypeIds = new Set(
+    definition.abilityTypes.map((abilityType) => abilityType.id),
+  )
+
+  return {
+    ...fresh,
+    enabled: state.enabled,
+    fields: {
+      ...fresh.fields,
+      ...Object.fromEntries(
+        Object.entries(state.fields ?? {}).filter(([fieldId]) =>
+          fieldIds.has(fieldId),
+        ),
+      ),
+    },
+    resources: {
+      ...fresh.resources,
+      ...Object.fromEntries(
+        Object.entries(state.resources ?? {}).filter(([resourceId]) =>
+          resourceIds.has(resourceId),
+        ),
+      ),
+    },
+    abilities: Array.isArray(state.abilities)
+      ? state.abilities.filter((ability) =>
+          abilityTypeIds.has(ability.abilityTypeId),
+        )
+      : [],
+    abilityAcquisitionExceptions: state.abilityAcquisitionExceptions,
+    installationSource: state.installationSource,
+  }
 }
