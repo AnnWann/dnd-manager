@@ -1,4 +1,5 @@
 import { Plus, Trash2 } from "lucide-react"
+import type { ReactNode } from "react"
 
 import { Select } from "../../components/ui/Select"
 import {
@@ -622,7 +623,7 @@ function Field({
   children,
 }: {
   label: string
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <label className="grid gap-1 text-xs text-text">
