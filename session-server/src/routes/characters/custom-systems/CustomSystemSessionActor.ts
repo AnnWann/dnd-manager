@@ -28,6 +28,7 @@ import {
 import type {
   SessionActionRollResult,
   SessionResolvedDamageRoll,
+  SessionResolvedPrimaryRoll,
 } from "../../../../../src/shared/session-runtime/diceRollProtocol";
 import {
   runCustomSystemAutomation,
@@ -462,15 +463,58 @@ function buildCustomSystemActionRollResult(
         }
       : undefined;
 
+  const primary: SessionResolvedPrimaryRoll | undefined =
+    resolution.kind === "abilityCheck"
+    || resolution.kind === "savingThrow"
+    || resolution.kind === "generic"
+      ? {
+          kind: resolution.kind,
+          label:
+            resolution.kind === "abilityCheck"
+              ? "Teste"
+              : resolution.kind === "savingThrow"
+                ? "Resistência"
+                : "Rolagem",
+          mode:
+            resolution.kind === "generic"
+              ? "normal"
+              : d20Mode,
+          groups:
+            resolution.kind === "generic"
+              ? resolution.groups ?? []
+              : [{
+                  quantity: Math.max(1, d20Rolls.length),
+                  sides: 20,
+                  rolls: d20Rolls.length ? d20Rolls : [natural],
+                  kept: natural,
+                }],
+          modifier:
+            (resolution.modifier ?? 0)
+            + (resolution.diceModifier ?? 0),
+          total: resolution.total ?? resolution.value,
+          natural:
+            resolution.kind === "generic"
+              ? undefined
+              : natural,
+          expression:
+            resolution.kind === "generic"
+              ? resolution.dice
+              : undefined,
+        }
+      : undefined;
+
   const damages: SessionResolvedDamageRoll[] | undefined =
     resolution.damages?.length
       ? resolution.damages.map((damage) => ({
-          groups: [],
-          modifier: damage.modifier,
+          groups: damage.groups ?? [],
+          modifier:
+            damage.modifier
+            + (damage.diceModifier ?? 0),
           total: damage.total,
           critical: damage.critical,
           label: damage.label,
           damageType: damage.damageType,
+          expression: damage.dice,
         }))
       : undefined;
 
@@ -478,9 +522,7 @@ function buildCustomSystemActionRollResult(
     ...(operation.activationLevel !== undefined
       ? [`Nível de uso: ${operation.activationLevel}`]
       : []),
-    ...(resolution.kind === "abilityCheck"
-      || resolution.kind === "savingThrow"
-      || resolution.kind === "generic"
+    ...(resolution.kind === "targetSave"
         ? formatCustomRollResolutionSummary(resolution)
         : []),
   ];
@@ -497,6 +539,7 @@ function buildCustomSystemActionRollResult(
     description: presentation.description,
     details: details.length ? details : undefined,
     attack,
+    primary,
     save:
       resolution.kind === "targetSave"
       && resolution.saveAttribute
