@@ -818,7 +818,7 @@ export function MinimalCharacterActions({
                           ? " com seus dados físicos"
                           : ""}
                         {" "}e informe o resultado somente dos dados.
-                        {(selected.customAbilityRoll.kind ?? "generic")
+                        {(selected.customAbilityRoll?.kind ?? "generic")
                           === "attack"
                           && damage.critical !== false
                           ? " Em um 20 natural, dobre os dados deste componente."
