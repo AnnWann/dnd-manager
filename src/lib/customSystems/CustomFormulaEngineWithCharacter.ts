@@ -216,6 +216,7 @@ export function evaluateCustomFormula(
       character,
       collectReferencedCharacterPaths(formula, definition, ability?.type),
     ),
+    character,
     ability,
     activation,
   )
@@ -240,6 +241,7 @@ export function validateCustomFormula(
       undefined,
       collectReferencedCharacterPaths(formula, definition, abilityType),
     ),
+    undefined,
     abilityType ? { type: abilityType } : undefined,
     {
       level: abilityType?.activation?.level?.baseLevel ?? 1,
@@ -256,6 +258,7 @@ function transformFormulaContext(
   definition: CustomSystemDefinition,
   state: CharacterCustomSystemState,
   characterValues: Record<string, number | boolean | string>,
+  character?: CharacterTemplate,
   ability?: CustomAbilityFormulaContext,
   activation?: CustomActivationFormulaContext,
 ): {
