@@ -534,8 +534,21 @@ function resolveStructuredRoll(
     d20Rolls = resolvedD20.rolls
     value = natural
     dice = "1d20"
+    const rollAttribute = resolveRollAttribute(
+      roll.attributeField,
+      roll.attribute ?? (kind === "savingThrow" ? "con" : "str"),
+      definition,
+      state,
+      abilityType,
+      abilityValues,
+    )
     modifier =
-      resolveNativeD20Modifier(roll, kind, character)
+      resolveNativeD20Modifier(
+        roll,
+        kind,
+        character,
+        rollAttribute,
+      )
       + resolveFormulaNumber(
         roll.modifierFormula,
         definition,
@@ -548,10 +561,14 @@ function resolveStructuredRoll(
       )
     total = natural + modifier
   } else if (kind === "targetSave") {
-    const dcAttribute =
-      roll.dcAttribute
-      ?? roll.attribute
-      ?? "str"
+    const dcAttribute = resolveRollAttribute(
+      roll.dcAttributeField,
+      roll.dcAttribute ?? roll.attribute ?? "str",
+      definition,
+      state,
+      abilityType,
+      abilityValues,
+    )
     dc = resolveTargetSaveDc(
       roll,
       dcAttribute,
@@ -703,13 +720,53 @@ function resolveD20Value(
   }
 }
 
+function resolveRollAttribute(
+  reference: CustomAbilityRollDefinition["attributeField"],
+  fallback: Attribute,
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  abilityType?: CustomAbilityTypeDefinition,
+  abilityValues?: Record<string, JsonValue>,
+): Attribute {
+  if (!reference) return fallback
+
+  const field =
+    reference.scope === "ability"
+      ? abilityType?.fields.find(
+          (entry) =>
+            entry.id === reference.fieldId
+            && entry.type === "attribute",
+        )
+      : definition.fields.find(
+          (entry) =>
+            entry.id === reference.fieldId
+            && entry.type === "attribute",
+        )
+
+  if (!field || field.type !== "attribute") return fallback
+
+  const raw =
+    reference.scope === "ability"
+      ? abilityValues?.[field.id] ?? field.defaultValue
+      : state.fields[field.id] ?? field.defaultValue
+
+  const allowed =
+    field.allowedAttributes?.length
+      ? field.allowedAttributes
+      : ["str", "dex", "con", "int", "wis", "cha"]
+
+  return typeof raw === "string" && allowed.includes(raw as Attribute)
+    ? raw as Attribute
+    : allowed[0] ?? fallback
+}
+
 function resolveNativeD20Modifier(
   roll: CustomAbilityRollDefinition,
   kind: "attack" | "abilityCheck" | "savingThrow",
   character: CharacterTemplate,
+  attribute: Attribute,
 ): number {
   if (kind === "attack") {
-    const attribute = roll.attribute ?? "str"
     const base =
       character.getEffectiveAttributeModifier(attribute)
       + (roll.proficient === false ? 0 : character.getProficiencyBonus())
@@ -717,7 +774,7 @@ function resolveNativeD20Modifier(
   }
 
   if (kind === "savingThrow") {
-    return character.getSavingThrowBonus(roll.attribute ?? "con")
+    return character.getSavingThrowBonus(attribute)
   }
 
   if (roll.skill) {
@@ -739,7 +796,6 @@ function resolveNativeD20Modifier(
     )
   }
 
-  const attribute = roll.attribute ?? "str"
   return character.getEffectiveAbilityCheckBonus(attribute)
 }
 
