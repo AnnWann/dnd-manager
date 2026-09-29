@@ -200,7 +200,7 @@ export function activateCustomAbilityWithRoll(
     roll: {
       ...resolved,
       total:
-        resolved.kind === "generic"
+        resolved.kind === "generic" && !roll.modifierFormula?.trim()
           ? resolveRollFormulaTotal(
               activation.resourceChanges,
               resolved.value,
@@ -280,7 +280,7 @@ export function activateCustomSystemActionWithRoll(
     roll: {
       ...resolved,
       total:
-        resolved.kind === "generic"
+        resolved.kind === "generic" && !action.roll.modifierFormula?.trim()
           ? resolveRollFormulaTotal(
               action.resourceChanges,
               resolved.value,
