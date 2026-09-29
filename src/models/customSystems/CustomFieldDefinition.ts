@@ -1,4 +1,5 @@
 import type { CustomCondition } from "./CustomAutomationDefinition"
+import type { Attribute } from "../sheet/Attribute"
 import type { CustomDie, CustomReferenceTarget, CustomSystemEditPermission, FormulaExpression } from "./CustomGenerals"
 
 export type JsonPrimitive = string | number | boolean | null
@@ -11,6 +12,7 @@ export type CustomFieldType =
   | 'select'
   | 'multiSelect'
   | 'dice'
+  | 'attribute'
   | 'richText'
   | 'reference'
   | 'formula'
@@ -62,6 +64,12 @@ export interface CustomDiceFieldDefinition extends CustomFieldBase {
   allowedDice?: CustomDie[]
 }
 
+export interface CustomAttributeFieldDefinition extends CustomFieldBase {
+  type: 'attribute'
+  /** Restrict which character attributes may be selected. Defaults to all six. */
+  allowedAttributes?: Attribute[]
+}
+
 export interface CustomReferenceFieldDefinition extends CustomFieldBase {
   type: 'reference'
   target: CustomReferenceTarget
@@ -81,5 +89,6 @@ export type CustomFieldDefinition =
   | CustomBooleanFieldDefinition
   | CustomSelectFieldDefinition
   | CustomDiceFieldDefinition
+  | CustomAttributeFieldDefinition
   | CustomReferenceFieldDefinition
   | CustomFormulaFieldDefinition
