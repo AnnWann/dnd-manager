@@ -153,6 +153,10 @@ function mergeActivation(base: CustomAbilityActivationDefinition | undefined, pr
   return {
     ...base,
     ...preset.activation,
+    roll: preset.activation.rollDisabled
+      ? undefined
+      : preset.activation.roll ?? base?.roll,
+    rollDisabled: undefined,
     usage: preset.activation.usage ?? base?.usage,
     resourceCosts: preset.activation.resourceCosts ?? base?.resourceCosts,
     resourceChanges: preset.activation.resourceChanges ?? base?.resourceChanges,
