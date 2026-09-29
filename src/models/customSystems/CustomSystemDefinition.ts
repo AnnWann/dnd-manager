@@ -67,6 +67,11 @@ export interface CustomSystemActionDefinition {
   enabled?: boolean
   /** Rolagem opcional resolvida antes dos efeitos; o resultado fica disponível como `roll.value`. */
   roll?: CustomAbilityRollDefinition
+  /**
+   * Optional selectable level/upcast for standalone system actions.
+   * The selected value is exposed to formulas as activation.level.
+   */
+  level?: CustomActivationLevelDefinition
   resourceChanges?: CustomAbilityResourceChangeDefinition[]
   conditionChanges?: CustomSystemConditionChangeDefinition[]
   /** Exposição opcional desta ação como automação de alvos na iniciativa do mestre. */
