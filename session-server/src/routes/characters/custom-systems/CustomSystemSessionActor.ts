@@ -23,7 +23,12 @@ import {
   customRollRequiresManualPrimary,
   formatCustomRollResolutionSummary,
   getCustomAbilityRollDefinition,
+  type CustomAbilityRollResolution,
 } from "../../../../../src/lib/customSystems/CustomAbilityRoll";
+import type {
+  SessionActionRollResult,
+  SessionResolvedDamageRoll,
+} from "../../../../../src/shared/session-runtime/diceRollProtocol";
 import {
   runCustomSystemAutomation,
   runCustomSystemAutomations,
@@ -208,6 +213,7 @@ export class SessionActor extends BaseSessionActor {
 
     let nextCharacter: CharacterTemplate;
     let loggedOperation: SessionCustomSystemOperation = operation;
+    let resolvedCustomRoll: CustomAbilityRollResolution | undefined;
     try {
       if (operation.type === "character.customSystem.ability.activate") {
         const activation = activateCustomAbilityWithRoll(
@@ -221,6 +227,7 @@ export class SessionActor extends BaseSessionActor {
         );
         nextCharacter = activation.character;
         if (activation.roll) {
+          resolvedCustomRoll = activation.roll;
           loggedOperation = {
             ...operation,
             rollValue: activation.roll.value,
@@ -248,6 +255,7 @@ export class SessionActor extends BaseSessionActor {
         );
         nextCharacter = activation.character;
         if (activation.roll) {
+          resolvedCustomRoll = activation.roll;
           loggedOperation = {
             ...operation,
             rollValue: activation.roll.value,
@@ -385,7 +393,211 @@ export class SessionActor extends BaseSessionActor {
         character: nextConditions,
       });
     }
+
+    if (
+      resolvedCustomRoll
+      && (
+        loggedOperation.type === "character.customSystem.ability.activate"
+        || loggedOperation.type === "character.customSystem.action.execute"
+      )
+    ) {
+      const rollResult = buildCustomSystemActionRollResult(
+        connection.userId,
+        character,
+        definition,
+        currentState,
+        loggedOperation,
+        resolvedCustomRoll,
+      );
+      broadcastVisibilityFiltered(sockets, {
+        type: "session.action.result",
+        result: rollResult,
+      });
+    }
   }
+}
+
+function buildCustomSystemActionRollResult(
+  actorId: string,
+  character: CharacterTemplate,
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  operation: Extract<
+    SessionCustomSystemOperation,
+    {
+      type:
+        | "character.customSystem.ability.activate"
+        | "character.customSystem.action.execute";
+    }
+  >,
+  resolution: CustomAbilityRollResolution,
+): SessionActionRollResult {
+  const presentation = customRollPresentation(
+    definition,
+    state,
+    operation,
+  );
+  const d20Mode = resolution.d20Mode ?? "normal";
+  const d20Rolls =
+    resolution.d20Rolls?.length
+      ? resolution.d20Rolls
+      : resolution.natural !== undefined
+        ? [resolution.natural]
+        : [];
+  const natural = resolution.natural ?? resolution.value;
+
+  const attack =
+    resolution.kind === "attack"
+      ? {
+          mode: d20Mode,
+          groups: [{
+            quantity: Math.max(1, d20Rolls.length),
+            sides: 20,
+            rolls: d20Rolls.length ? d20Rolls : [natural],
+            kept: natural,
+          }],
+          modifier: resolution.modifier ?? 0,
+          total: resolution.total ?? natural,
+          natural,
+        }
+      : undefined;
+
+  const damages: SessionResolvedDamageRoll[] | undefined =
+    resolution.damages?.length
+      ? resolution.damages.map((damage) => ({
+          groups: [],
+          modifier: damage.modifier,
+          total: damage.total,
+          critical: damage.critical,
+          label: damage.label,
+          damageType: damage.damageType,
+        }))
+      : undefined;
+
+  const details = [
+    ...(operation.activationLevel !== undefined
+      ? [`Nível de uso: ${operation.activationLevel}`]
+      : []),
+    ...(resolution.kind === "abilityCheck"
+      || resolution.kind === "savingThrow"
+      || resolution.kind === "generic"
+      || resolution.kind === "damage"
+        ? formatCustomRollResolutionSummary(resolution)
+        : []),
+  ];
+
+  return {
+    id: crypto.randomUUID(),
+    requestId: crypto.randomUUID(),
+    actorId,
+    characterId: operation.characterId,
+    sourceName: character.get("name"),
+    sourceType: "ability",
+    title: presentation.title,
+    subtitle: presentation.subtitle,
+    description: presentation.description,
+    details: details.length ? details : undefined,
+    attack,
+    save:
+      resolution.kind === "targetSave"
+      && resolution.saveAttribute
+      && resolution.dc !== undefined
+        ? {
+            attribute: resolution.saveAttribute,
+            dc: resolution.dc,
+            onSuccess: resolution.onSave,
+          }
+        : undefined,
+    damages,
+    damage:
+      damages?.length === 1
+        ? damages[0]
+        : undefined,
+    critical:
+      resolution.kind === "attack"
+      && resolution.natural === 20,
+    visibility: operation.visibility ?? "public",
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function customRollPresentation(
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  operation: Extract<
+    SessionCustomSystemOperation,
+    {
+      type:
+        | "character.customSystem.ability.activate"
+        | "character.customSystem.action.execute";
+    }
+  >,
+): {
+  title: string;
+  subtitle: string;
+  description?: string;
+} {
+  if (operation.type === "character.customSystem.action.execute") {
+    const action = definition.actions?.find(
+      (entry) => entry.id === operation.actionId,
+    );
+    return {
+      title: action?.name?.trim() || "Ação personalizada",
+      subtitle: definition.name,
+      description: action?.description?.trim() || undefined,
+    };
+  }
+
+  const ability = state.abilities.find(
+    (entry) => entry.id === operation.abilityId,
+  );
+  const type = ability
+    ? definition.abilityTypes.find(
+        (entry) => entry.id === ability.abilityTypeId,
+      )
+    : undefined;
+  const preset =
+    ability?.predefinedAbilityId && type
+      ? type.predefinedAbilities?.find(
+          (entry) => entry.id === ability.predefinedAbilityId,
+        )
+      : undefined;
+  const titleValue =
+    ability && type
+      ? displayCustomValue(
+          ability.values[type.display.titleFieldId],
+        )
+      : "";
+  const descriptionValue =
+    ability && type?.display.descriptionFieldId
+      ? displayCustomValue(
+          ability.values[type.display.descriptionFieldId],
+        )
+      : "";
+
+  return {
+    title:
+      titleValue
+      || type?.name?.trim()
+      || "Habilidade personalizada",
+    subtitle:
+      type?.name?.trim()
+        ? `${definition.name} · ${type.name}`
+        : definition.name,
+    description:
+      descriptionValue
+      || preset?.description?.trim()
+      || type?.description?.trim()
+      || undefined,
+  };
+}
+
+function displayCustomValue(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return "";
 }
 
 function didOperationChangeState(
