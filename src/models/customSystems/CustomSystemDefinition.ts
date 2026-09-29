@@ -4,6 +4,7 @@ import type { ClassName } from "../sheet/Class"
 import type { ProficiencyCategory } from "../sheet/Proficiency"
 import type {
   CustomAbilityConditionChangeDefinition,
+  CustomActivationLevelDefinition,
   CustomAbilityResourceChangeDefinition,
   CustomAbilityRollDefinition,
   CustomAbilityTypeDefinition,
