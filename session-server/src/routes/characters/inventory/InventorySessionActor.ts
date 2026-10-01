@@ -38,6 +38,7 @@ type SharedInventoryState = {
   revision: number;
   partyInventory: Itemmable[];
   groundInventory: Itemmable[];
+  pendingConditionalLoot?: Array<{ id: string; creatureName: string; item: Itemmable; dmHint?: string }>;
   carryCapacity?: number;
   additionalSupplyConsumption?: number;
   partyInventoryAccessible?: boolean;
@@ -401,6 +402,16 @@ function applyInventoryOperation(
       inventory.revision += 1;
       return result(true);
     }
+    case "conditional.loot.resolve": {
+      const pending = inventory.pendingConditionalLoot ?? [];
+      const entry = pending.find((candidate) => candidate.id === operation.pendingId);
+      if (!entry) return result(false);
+      inventory.pendingConditionalLoot = pending.filter((candidate) => candidate.id !== operation.pendingId);
+      if (operation.drop) inventory.groundInventory.push(entry.item);
+      sharedChanged = true;
+      inventory.revision += 1;
+      return result(true);
+    }
     case "ground.item.remove": {
       const next = inventory.groundInventory.filter((item) => item.id !== operation.itemId);
       if (next.length === inventory.groundInventory.length) return result(false);
@@ -688,6 +699,7 @@ function canPerform(
   inventory: SharedInventoryState,
 ): boolean {
   if (connection.role === "MASTER") return true;
+  if (operation.type === "conditional.loot.resolve") return false;
   if (isPartySettingsOperation(operation)) return false;
 
   const partyAccessible = inventory.partyInventoryAccessible !== false;
