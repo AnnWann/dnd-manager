@@ -494,7 +494,8 @@ export function ItemCreationDialog({
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -522,8 +523,8 @@ function ItemKindButtons({
         </button>
       ))}
     </div>
-  , document.body)
-}}
+  )
+}
 
 function updateItemKind(item: Itemmable, kind: ItemKind): Itemmable {
   if (kind === "equipment") {
