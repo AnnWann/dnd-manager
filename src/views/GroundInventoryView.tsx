@@ -30,6 +30,12 @@ export function GroundInventoryView() {
   const [transferringItem, setTransferringItem] = useState<Itemmable | null>(null)
   const [creatingItem, setCreatingItem] = useState(false)
   const canManage = userRole === "master"
+  const pendingConditionalLoot = canManage && runtime?.inventoryState?.initialized
+    ? runtime.inventoryState.pendingConditionalLoot ?? []
+    : []
+  const resolveConditionalLoot = (pendingId: string, drop: boolean) => {
+    runtime?.dispatchInventoryOperation({ type: "conditional.loot.resolve", characterId: "session", pendingId, drop })
+  }
 
   const addItem = (item: Itemmable) => {
     if (runtime) {
@@ -94,6 +100,31 @@ export function GroundInventoryView() {
           </div>
         </CardContent>
       </Card>
+
+      {pendingConditionalLoot.length ? (
+        <Card>
+          <CardHeader>
+            <div className="text-sm font-semibold text-textH">Drops condicionais aguardando decisão</div>
+            <p className="mt-1 text-xs leading-5 text-textMuted">Estes itens nunca caem automaticamente. Decida com base no que aconteceu na ficção.</p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2">
+              {pendingConditionalLoot.map((entry) => (
+                <div key={entry.id} className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3 sm:grid-cols-[1fr_auto] sm:items-center">
+                  <div>
+                    <div className="text-sm font-medium text-textH">{entry.item.name} <span className="font-normal text-textMuted">— {entry.creatureName}</span></div>
+                    {entry.dmHint ? <div className="mt-1 text-xs text-textMuted">{entry.dmHint}</div> : null}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="secondary" onClick={() => resolveConditionalLoot(entry.id, false)}>Descartar</Button>
+                    <Button size="sm" variant="primary" onClick={() => resolveConditionalLoot(entry.id, true)}>Dropar</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <InventoryEditor
         title="Itens no chão"

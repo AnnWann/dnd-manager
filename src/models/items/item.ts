@@ -34,6 +34,9 @@ export type ItemKind =
 export type ItemCategory = "bagOfHolding"
 export type ItemOrigin = "standard" | "custom"
 
+/** Opaque per-system item metadata. Custom systems own and interpret their namespace. */
+export type ItemCustomSystemData = Record<string, Record<string, unknown>>
+
 export type Item = {
   id: string
   name: string
@@ -51,6 +54,9 @@ export type Item = {
   /** Stable source definition used to restore protected canonical fields. */
   compendiumItemId?: string
   itemOrigin?: ItemOrigin
+
+  /** Extensible metadata owned by installed custom systems (crafting, durability, alchemy, etc.). */
+  customSystemData?: ItemCustomSystemData
 
   equippable?: boolean
   equipSlot?: EquipSlot

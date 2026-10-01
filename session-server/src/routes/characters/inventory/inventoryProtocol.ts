@@ -18,6 +18,7 @@ export type SessionInventoryOperation =
   | { type: "ground.item.add"; characterId: string; item: Record<string, unknown> }
   | { type: "ground.item.update"; characterId: string; itemId: string; item: Record<string, unknown> }
   | { type: "ground.item.remove"; characterId: string; itemId: string }
+  | { type: "conditional.loot.resolve"; characterId: "session"; pendingId: string; drop: boolean }
   | { type: "character.equipment.move.ground"; characterId: string; reference: EquippedReference };
 
 type InventoryLocation = { type: "party" } | { type: "ground" } | { type: "character"; characterId: string };
@@ -71,6 +72,10 @@ export function parseInventoryClientMessage(raw: string): SessionInventoryClient
   if (
     (operation.type === "party.settings.carryCapacity.set" || operation.type === "party.settings.additionalSupplyConsumption.set")
     && (operation.characterId !== "session" || typeof operation.value !== "number" || !Number.isFinite(operation.value) || operation.value < 0)
+  ) return null;
+  if (
+    operation.type === "conditional.loot.resolve"
+    && (operation.characterId !== "session" || typeof operation.pendingId !== "string" || !operation.pendingId.trim() || typeof operation.drop !== "boolean")
   ) return null;
   if (
     operation.type === "party.settings.accessible.set"

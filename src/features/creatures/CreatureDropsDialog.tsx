@@ -16,6 +16,7 @@ import {
   normalizeCreatureDrops,
   validateCreatureDropQuantityFormula,
   type CreatureDrops,
+  type CreatureConditionalDrop,
 } from "../../models/creatures/CreatureDrops"
 import type { CompendiumCreature } from "../../models/creatures/CompendiumCreature"
 import type { Itemmable } from "../../models/items/item"
@@ -24,6 +25,7 @@ import type { SessionItemCompendiumEntry } from "../../api/session-item-compendi
 type DropTarget =
   | { kind: "guaranteed" }
   | { kind: "roll"; groupId: string }
+  | { kind: "conditional"; conditionalId: string }
 
 export function CreatureDropsDialog({
   creature,
@@ -61,6 +63,16 @@ export function CreatureDropsDialog({
       if (target.kind === "guaranteed") {
         return { ...current, guaranteed: updater(current.guaranteed) }
       }
+      if (target.kind === "conditional") {
+        return {
+          ...current,
+          conditional: current.conditional.map((entry) =>
+            entry.id === target.conditionalId
+              ? { ...entry, item: updater([entry.item])[0] ?? entry.item }
+              : entry,
+          ),
+        }
+      }
       return {
         ...current,
         rollGroups: current.rollGroups.map((group) =>
@@ -89,6 +101,14 @@ export function CreatureDropsDialog({
       },
     ])
     setManualTarget(null)
+  }
+
+  function addConditionalDrop(item: Itemmable) {
+    const entry: CreatureConditionalDrop = {
+      id: crypto.randomUUID(),
+      item: { ...structuredClone(item), id: item.id || crypto.randomUUID() },
+    }
+    setDrops((current) => ({ ...current, conditional: [...current.conditional, entry] }))
   }
 
   function addRollGroup() {
@@ -147,6 +167,25 @@ export function CreatureDropsDialog({
             onAddManual={() => setManualTarget({ kind: "guaranteed" })}
             onChangeItems={(updater) => updateItems({ kind: "guaranteed" }, updater)}
           />
+
+          <section className="grid gap-3 rounded-xl border border-border bg-bg-subtle p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-textH">Drops condicionais</h3>
+                <p className="mt-1 text-xs text-textMuted">Não caem automaticamente. O mestre decide após a morte com base na ficção.</p>
+              </div>
+              <Button size="sm" variant="secondary" onClick={() => setManualTarget({ kind: "conditional", conditionalId: "__new__" })}>
+                <Plus className="h-4 w-4" /> Adicionar condicional
+              </Button>
+            </div>
+            {drops.conditional.map((entry) => (
+              <div key={entry.id} className="grid gap-2 rounded-lg border border-border bg-bg p-3 sm:grid-cols-[1fr_2fr_auto] sm:items-center">
+                <div className="text-sm font-medium text-textH">{entry.item.name}</div>
+                <Input value={entry.dmHint ?? ""} placeholder="Lembrete para o mestre (ex.: se o olho estiver intacto)" onChange={(event) => setDrops((current) => ({ ...current, conditional: current.conditional.map((candidate) => candidate.id === entry.id ? { ...candidate, dmHint: event.target.value } : candidate) }))} />
+                <Button size="icon" variant="ghost" title="Remover drop condicional" onClick={() => setDrops((current) => ({ ...current, conditional: current.conditional.filter((candidate) => candidate.id !== entry.id) }))}><Trash2 className="h-4 w-4 text-danger" /></Button>
+              </div>
+            ))}
+          </section>
 
           <section className="grid gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -210,7 +249,13 @@ export function CreatureDropsDialog({
         saveLabel="Adicionar ao grupo"
         onClose={() => setManualTarget(null)}
         onSave={(item) => {
-          if (manualTarget) addManualItem(manualTarget, item)
+          if (!manualTarget) return
+          if (manualTarget.kind === "conditional" && manualTarget.conditionalId === "__new__") {
+            addConditionalDrop(item)
+            setManualTarget(null)
+            return
+          }
+          addManualItem(manualTarget, item)
         }}
       />
     </>
@@ -515,6 +560,7 @@ function hasInvalidCreatureDropQuantities(drops: CreatureDrops): boolean {
   const items = [
     ...drops.guaranteed,
     ...drops.rollGroups.flatMap((group) => group.items),
+    ...drops.conditional.map((entry) => entry.item),
   ]
 
   return items.some((item) => {

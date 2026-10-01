@@ -14,11 +14,20 @@ export type SessionSupplyConsumerSummary = {
   name: string
 }
 
+export type PendingConditionalLoot = {
+  id: string
+  creatureName: string
+  item: Itemmable
+  dmHint?: string
+}
+
 export type SessionSharedInventoryState = {
   initialized: boolean
   revision: number
   partyInventory: Itemmable[]
   groundInventory: Itemmable[]
+  /** DM-only decisions waiting to be resolved. Server delivery filters this for players. */
+  pendingConditionalLoot?: PendingConditionalLoot[]
   carryCapacity?: number
   additionalSupplyConsumption?: number
   /** Whether players can access the shared party inventory. Defaults to true. */
@@ -53,6 +62,7 @@ export type SessionInventoryOperation =
   | { type: "ground.item.add"; characterId: string; item: Itemmable }
   | { type: "ground.item.update"; characterId: string; itemId: string; item: Itemmable }
   | { type: "ground.item.remove"; characterId: string; itemId: string }
+  | { type: "conditional.loot.resolve"; characterId: "session"; pendingId: string; drop: boolean }
   | { type: "character.equipment.move.ground"; characterId: string; reference: EquippedItemReference }
 
 export type SessionInventoryClientMessage =

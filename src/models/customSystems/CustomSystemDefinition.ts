@@ -43,7 +43,17 @@ export interface CustomSystemDefinition {
   characterPlacement?: CustomSystemCharacterPlacement
   presentation?: CustomSystemPresentationDefinition
   tags?: string[]
+  /** Optional metadata schema this system may attach to inventory/loot items. */
+  itemExtension?: CustomSystemItemExtensionDefinition
 }
+
+export interface CustomSystemItemExtensionDefinition {
+  /** Fields stored under item.customSystemData[systemId]. */
+  fields: CustomFieldDefinition[]
+  /** Optional label used by generic item editors. */
+  label?: string
+}
+
 
 export type CustomNativeStatTarget =
   | "armorClass"
