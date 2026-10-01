@@ -165,7 +165,7 @@ export function ItemCreationDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[12000] flex max-w-[100vw] items-center justify-center overflow-x-hidden bg-black/65 p-2 backdrop-blur-sm sm:p-4"
+      className="fixed inset-0 z-[20000] flex max-w-[100vw] items-center justify-center overflow-x-hidden bg-black/65 p-2 backdrop-blur-sm sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="item-creation-title"
