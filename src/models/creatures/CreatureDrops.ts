@@ -6,9 +6,17 @@ export type CreatureDropGroup = {
   items: Itemmable[]
 }
 
+export type CreatureConditionalDrop = {
+  id: string
+  item: Itemmable
+  /** DM-facing reminder; deliberately not evaluated by game rules. */
+  dmHint?: string
+}
+
 export type CreatureDrops = {
   guaranteed: Itemmable[]
   rollGroups: CreatureDropGroup[]
+  conditional: CreatureConditionalDrop[]
 }
 
 export function createCreatureDrops(
@@ -17,6 +25,7 @@ export function createCreatureDrops(
   return {
     guaranteed: normalizeDropItems(patch.guaranteed),
     rollGroups: normalizeCreatureDropGroups(patch.rollGroups),
+    conditional: normalizeConditionalDrops(patch.conditional),
   }
 }
 
@@ -40,6 +49,7 @@ export function normalizeCreatureDrops(value: unknown): CreatureDrops {
     rollGroups: normalizeCreatureDropGroups(
       record.rollGroups ?? record.groups,
     ),
+    conditional: normalizeConditionalDrops(record.conditional ?? record.conditionalDrops),
   }
 }
 
@@ -113,6 +123,21 @@ function normalizeCreatureDropGroups(value: unknown): CreatureDropGroup[] {
         items: normalizeDropItems(record.items),
       }),
     ]
+  })
+}
+
+function normalizeConditionalDrops(value: unknown): CreatureConditionalDrop[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    const record = asRecord(entry)
+    if (!record) return []
+    const items = normalizeDropItems([record.item])
+    if (!items.length) return []
+    return [{
+      id: stringValue(record.id).trim() || crypto.randomUUID(),
+      item: items[0],
+      ...(stringValue(record.dmHint).trim() ? { dmHint: stringValue(record.dmHint).trim() } : {}),
+    }]
   })
 }
 
