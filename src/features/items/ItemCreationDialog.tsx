@@ -1,6 +1,7 @@
 import { Select as SharedSelect } from "../../components/ui/Select"
 import { Check, ClipboardCopy, FileJson, FormInput } from "lucide-react"
 import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 
 import { Button } from "../../components/ui/Button"
 import { Input } from "../../components/ui/Input"
@@ -163,7 +164,7 @@ export function ItemCreationDialog({
     draft.kind === "shield" ||
     draft.kind === "currency"
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[20000] flex max-w-[100vw] items-center justify-center overflow-x-hidden bg-black/65 p-2 backdrop-blur-sm sm:p-4"
       role="dialog"
@@ -521,8 +522,8 @@ function ItemKindButtons({
         </button>
       ))}
     </div>
-  )
-}
+  , document.body)
+}}
 
 function updateItemKind(item: Itemmable, kind: ItemKind): Itemmable {
   if (kind === "equipment") {
