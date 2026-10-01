@@ -35,6 +35,7 @@ type SharedInventoryState = {
   revision: number;
   partyInventory: Itemmable[];
   groundInventory: Itemmable[];
+  pendingConditionalLoot?: Array<{ id: string; creatureName: string; item: Itemmable; dmHint?: string }>;
   carryCapacity?: number;
   additionalSupplyConsumption?: number;
   partyInventoryAccessible?: boolean;
@@ -115,6 +116,7 @@ export class SessionActor extends BaseSessionActor {
     );
     const droppedItems: Itemmable[] = [];
     const results: CreatureLootResult[] = [];
+    const pendingConditionalLoot: NonNullable<SharedInventoryState["pendingConditionalLoot"]> = [];
 
     for (const entry of entries) {
       const creatureId = creatureIdFromSourceId(entry.sourceId);
@@ -133,6 +135,14 @@ export class SessionActor extends BaseSessionActor {
 
       const spawned = selected.map(cloneCreatureDropItemForGround);
       droppedItems.push(...spawned);
+      for (const conditional of drops.conditional) {
+        pendingConditionalLoot.push({
+          id: crypto.randomUUID(),
+          creatureName: creature.name,
+          item: cloneCreatureDropItemForGround(conditional.item),
+          ...(conditional.dmHint ? { dmHint: conditional.dmHint } : {}),
+        });
+      }
       results.push({
         entryId: entry.id,
         creatureId,
@@ -143,12 +153,15 @@ export class SessionActor extends BaseSessionActor {
       });
     }
 
-    if (!droppedItems.length) return;
+    if (!droppedItems.length && !pendingConditionalLoot.length) return;
 
     const connection = readConnection(webSocket);
     if (!connection) return;
     const beforeInventory = structuredClone(inventory);
     inventory.groundInventory.push(...droppedItems);
+    if (pendingConditionalLoot.length) {
+      inventory.pendingConditionalLoot = [...(inventory.pendingConditionalLoot ?? []), ...pendingConditionalLoot];
+    }
     inventory.revision += 1;
 
     const affectedScopes = [SHARED_INVENTORY_SCOPE];
@@ -159,6 +172,7 @@ export class SessionActor extends BaseSessionActor {
         characterId: "session",
         creatures: results,
         itemCount: droppedItems.length,
+        pendingConditionalItemCount: pendingConditionalLoot.length,
       },
       affectedScopes,
       reverseOperation: {
