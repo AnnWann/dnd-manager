@@ -48,6 +48,7 @@ export function CustomSystemCollectionsEditor({ draft, setDraft }: {
               <Select label="Tipo" value={field.type} options={FIELD_TYPES} onChange={type=>replaceField(index,fi,makeField(field,type as CustomFieldType),collections,setCollections)}/>
               <div className="flex items-end"><IconButton onClick={()=>replace(index,{...collection,fields:collection.fields.filter((_,i)=>i!==fi)})}><Trash2 className="h-4 w-4"/></IconButton></div>
             </div>
+            {field.type === "number" ? <NumberDisplayOptions field={field} collection={collection} onChange={(next)=>replaceField(index,fi,next,collections,setCollections)}/> : null}
             {field.type === "reference" ? <ReferenceFieldOptions field={field} collections={collections} itemTypes={draft.itemTypes??[]} systemId={draft.id} onChange={(next)=>replaceField(index,fi,next,collections,setCollections)}/> : null}
           </div>)}
           {!collection.fields.length?<div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-text">Adicione os campos que cada registro desta coleção deve possuir.</div>:null}
@@ -74,6 +75,13 @@ function makeField(old:CustomFieldDefinition,type:CustomFieldType):CustomFieldDe
   return {...base,type:"text"}
 }
 
+function NumberDisplayOptions({field,collection,onChange}:{field:Extract<CustomFieldDefinition,{type:"number"}>;collection:CustomCollectionDefinition;onChange:(field:Extract<CustomFieldDefinition,{type:"number"}>)=>void}){
+  const numeric=collection.fields.filter((candidate)=>candidate.type==="number"&&candidate.id!==field.id)
+  return <div className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3 md:grid-cols-2">
+    <Select label="Exibição" value={field.display?.type??"number"} options={["number","progressBar","progressBarValue"]} onChange={(type)=>onChange({...field,display:{...field.display,type:type as "number"|"progressBar"|"progressBarValue"}})}/>
+    {(field.display?.type==="progressBar"||field.display?.type==="progressBarValue")?<Select label="Máximo vindo do campo" value={field.display.maximumFieldId??""} options={["",...numeric.map((candidate)=>candidate.id)]} onChange={(maximumFieldId)=>onChange({...field,display:{...field.display,type:field.display?.type??"progressBar",maximumFieldId:maximumFieldId||undefined}})}/>:null}
+  </div>
+}
 function ReferenceFieldOptions({field,collections,itemTypes,systemId,onChange}:{field:CustomReferenceFieldDefinition,collections:CustomCollectionDefinition[],itemTypes:NonNullable<CustomSystemDefinition["itemTypes"]>,systemId:string,onChange:(field:CustomReferenceFieldDefinition)=>void}){
   const targets=field.targets ?? (field.target ? [{type:field.target} as const] : [])
   const has=(type:string,targetId?:string)=>targets.some((target)=>target.type===type && (type==="collection"?("collectionId" in target&&target.collectionId===targetId):type==="itemType"?("itemTypeId" in target&&target.itemTypeId===targetId):true))
