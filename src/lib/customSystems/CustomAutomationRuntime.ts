@@ -143,7 +143,7 @@ function evaluateEntryNumber(formula: string, values: Record<string, JsonValue>)
   const replaced = formula.replace(/entry\.([a-zA-Z0-9_-]+)/g, (_, key: string) => String(Number(values[key]) || 0))
   if (!/^[0-9+\-*/().\s]+$/.test(replaced)) return Number(formula) || 0
   try {
-    const value = Function(`"use strict"; return (\${replaced})`)()
+    const value = Function(`"use strict"; return (${replaced})`)()
     return Number.isFinite(value) ? Number(value) : 0
   } catch { return 0 }
 }
