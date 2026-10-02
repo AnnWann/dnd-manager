@@ -153,9 +153,53 @@ function runCollectionAutomation(
         }
       }
     }
+    state = findEnabledState(nextCharacter, definition.id)
+    const effectEntry = state?.collections?.[scope.collectionId]?.find((candidate) => candidate.id === originalEntry.id)
+    if (effectEntry) {
+      nextCharacter = applyCollectionEffects(nextCharacter, definition, scope.collectionId, effectEntry.id, automation.effects ?? [])
+    }
     applied.push({ collectionId: scope.collectionId, entryId: originalEntry.id, ...(roll === undefined ? {} : { roll }), ...(completedItemName ? { completedItemName } : {}) })
   }
   return { character: nextCharacter, applied }
+}
+
+function applyCollectionEffects(character: CharacterTemplate, definition: CustomSystemDefinition, collectionId: string, entryId: string, effects: CustomEffectDefinition[]): CharacterTemplate {
+  let next = character
+  for (const effect of effects) {
+    const state = findEnabledState(next, definition.id)
+    const entry = state?.collections?.[collectionId]?.find((candidate) => candidate.id === entryId)
+    if (!entry) break
+    if (effect.type === "setCollectionEntryField") {
+      const value = effect.formula?.trim() ? evaluateEntryNumber(effect.formula, entry.values) : effect.value
+      if (value !== undefined) next = updateCollectionEntry(next, definition.id, collectionId, entryId, effect.fieldId, value)
+    } else if (effect.type === "modifyCollectionEntryField") {
+      const current = Number(entry.values[effect.fieldId]) || 0
+      const operand = effect.formula?.trim() ? evaluateEntryNumber(effect.formula, entry.values) : Number(effect.value) || 0
+      next = updateCollectionEntry(next, definition.id, collectionId, entryId, effect.fieldId, applyNumeric(current, effect.operation, operand))
+    } else if (effect.type === "removeCollectionEntry") {
+      next = removeCollectionEntryById(next, definition.id, collectionId, entryId)
+    } else if (effect.type === "addReferencedItem") {
+      const source = entry.values[effect.referenceFieldId]
+      const related = referencedItemSnapshot(source)
+      const relatedData = related ? customItemData(related, definition.id) : undefined
+      const output = effect.referencedItemFieldId && relatedData ? relatedData[effect.referencedItemFieldId] as JsonValue | undefined : source
+      const item = referencedItemSnapshot(output)
+      if (item) next = next.addInventoryItem({ ...item, id: crypto.randomUUID(), quantity: Math.max(1, Math.trunc(effect.quantity ?? Number(item.quantity) ?? 1)) } as Itemmable)
+    } else if (effect.type === "removeReferencedItems") {
+      const related = effect.relatedItemReferenceFieldId ? referencedItemSnapshot(entry.values[effect.relatedItemReferenceFieldId]) : undefined
+      const relatedData = related ? customItemData(related, definition.id) : undefined
+      const group = relatedData ? relatedData[effect.groupFieldId] : entry.values[effect.groupFieldId]
+      if (hasItemIngredientGroup(next, group)) next = consumeItemIngredientGroup(next, group)
+    }
+  }
+  return next
+}
+
+function removeCollectionEntryById(character: CharacterTemplate, systemId: string, collectionId: string, entryId: string): CharacterTemplate {
+  const state = findEnabledState(character, systemId)
+  if (!state) return character
+  const entries = state.collections?.[collectionId] ?? []
+  return replaceState(character, { ...state, collections: { ...(state.collections ?? {}), [collectionId]: entries.filter((entry) => entry.id !== entryId) } })
 }
 
 function evaluateEntryNumber(formula: string, values: Record<string, JsonValue>): number {
@@ -372,6 +416,7 @@ function applyEffect(
   sourceDefinition: CustomSystemDefinition,
   character: CharacterTemplate,
 ): CharacterTemplate {
+  if (effect.type === "setCollectionEntryField" || effect.type === "modifyCollectionEntryField" || effect.type === "removeCollectionEntry" || effect.type === "addReferencedItem" || effect.type === "removeReferencedItems") return character
   const sourceState = findEnabledState(character, sourceDefinition.id)
   if (!sourceState) return character
 
