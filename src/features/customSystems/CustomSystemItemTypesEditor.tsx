@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import type { CustomFieldDefinition, CustomReferenceSource } from "../../models/customSystems/CustomFieldDefinition"
 import type { CustomSystemItemTypeDefinition } from "../../models/customSystems/CustomItemTypeDefinition"
@@ -61,7 +62,7 @@ function ReferenceTargetEditor({targets,itemTypes,onChange}:{targets:CustomRefer
   }}><option value="">Qualquer item permitido</option>{itemTypes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
 }
 function Input({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){return <label className="grid gap-1 text-xs text-text"><span>{label}</span><input className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH" value={value} onChange={e=>onChange(e.target.value)}/></label>}
-function Button({children,onClick}:{children:React.ReactNode;onClick:()=>void}){return <button type="button" onClick={onClick} className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1.5 text-xs text-textH hover:bg-accentBg">{children}</button>}
-function Danger({children,onClick}:{children:React.ReactNode;onClick:()=>void}){return <button type="button" onClick={onClick} className="rounded-lg border border-red-500/40 p-2 text-red-300 hover:bg-red-500/10">{children}</button>}
+function Button({children,onClick}:{children:ReactNode;onClick:()=>void}){return <button type="button" onClick={onClick} className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1.5 text-xs text-textH hover:bg-accentBg">{children}</button>}
+function Danger({children,onClick}:{children:ReactNode;onClick:()=>void}){return <button type="button" onClick={onClick} className="rounded-lg border border-red-500/40 p-2 text-red-300 hover:bg-red-500/10">{children}</button>}
 function slugify(v:string){return v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")}
 function uniqueId(base:string,ids:string[]){let id=base,n=2;while(ids.includes(id))id=`${base}-${n++}`;return id}
