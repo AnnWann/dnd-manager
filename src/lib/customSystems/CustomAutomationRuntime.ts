@@ -228,7 +228,18 @@ function applyCollectionEffects(character: CharacterTemplate, definition: Custom
       const item = referencedItemSnapshot(output)
       if (item) next = next.addInventoryItem({ ...item, id: crypto.randomUUID(), quantity: Math.max(1, Math.trunc(effect.quantity ?? Number(item.quantity) ?? 1)) } as Itemmable)
     } else if (effect.type === "removeReferencedItems") {
-      const related = effect.relatedItemReferenceFieldId ? referencedItemSnapshot(entry.values[effect.relatedItemReferenceFieldId]) : undefined
+      const source = effect.relatedItemReferenceFieldId ? entry.values[effect.relatedItemReferenceFieldId] : undefined
+      const sourceRef = asReference(source)
+      const sourceItemId = typeof sourceRef?.itemId === "string" ? sourceRef.itemId : undefined
+      // Inventory references only carry identity. Resolve the actual related
+      // item before reading its grouped references (e.g. recipe ingredients).
+      const liveRelated = sourceItemId
+        ? next.get("inventory").find((candidate) =>
+            candidate.id === sourceItemId || candidate.compendiumItemId === sourceItemId)
+        : undefined
+      const related = liveRelated
+        ? liveRelated as unknown as Record<string, unknown>
+        : referencedItemSnapshot(source)
       const relatedData = related ? customItemData(related, definition.id) : undefined
       const group = relatedData ? relatedData[effect.groupFieldId] : entry.values[effect.groupFieldId]
       if (hasItemIngredientGroup(next, group)) next = consumeItemIngredientGroup(next, group)
