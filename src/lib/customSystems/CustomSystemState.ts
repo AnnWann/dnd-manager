@@ -733,15 +733,19 @@ export function validateCustomFieldValue(
       }
       break
 
-    case 'reference':
+    case 'reference': {
+      const isReference = (entry: JsonValue): boolean =>
+        typeof entry === 'string'
+        || (entry !== null && typeof entry === 'object' && !Array.isArray(entry) && typeof entry.type === 'string')
       if (field.multiple) {
-        if (!Array.isArray(value) || !value.every((entry) => typeof entry === 'string')) {
-          errors.push(invalidType(field.name, 'a list of reference ids', path))
+        if (!Array.isArray(value) || !value.every((entry) => isReference(entry))) {
+          errors.push(invalidType(field.name, 'a list of typed references', path))
         }
-      } else if (typeof value !== 'string') {
-        errors.push(invalidType(field.name, 'a reference id', path))
+      } else if (!isReference(value)) {
+        errors.push(invalidType(field.name, 'a typed reference', path))
       }
       break
+    }
   }
 
   return errors
