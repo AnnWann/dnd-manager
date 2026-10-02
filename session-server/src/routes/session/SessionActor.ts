@@ -1027,6 +1027,30 @@ export class SessionActor extends DurableObject<Env> {
           { partyInventoryAccessible: inventory.partyInventoryAccessible !== false },
         );
         next = automationResult.character;
+        if (isDigitalDiceRollingEnabled(runtimeConfig)) {
+          for (const entry of automationResult.applied) {
+            if (entry.roll === undefined) continue;
+            const modifier = entry.rollModifier ?? 0;
+            const natural = entry.naturalRoll ?? entry.roll - modifier;
+            const diceResult: SessionDiceRollResult = {
+              id: crypto.randomUUID(),
+              requestId: crypto.randomUUID(),
+              actorId: connection.userId,
+              characterId: operation.characterId,
+              sourceName: entry.automationName,
+              label: entry.automationName,
+              kind: "manual",
+              mode: "normal",
+              groups: [{ quantity: 1, sides: 20, rolls: [natural], kept: natural }],
+              modifier,
+              total: entry.roll,
+              natural,
+              visibility: "public",
+              createdAt: new Date().toISOString(),
+            };
+            this.broadcast({ type: "session.dice.result", result: diceResult });
+          }
+        }
         customAutomationNotices = automationResult.applied
           .filter((entry) => Boolean(entry.completedItemName))
           .map((entry) => ({
