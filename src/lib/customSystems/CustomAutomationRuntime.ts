@@ -209,23 +209,21 @@ function applyCollectionEffects(character: CharacterTemplate, definition: Custom
       next = removeCollectionEntryById(next, definition.id, collectionId, entryId)
     } else if (effect.type === "addReferencedItem") {
       const source = entry.values[effect.referenceFieldId]
-      const related = referencedItemSnapshot(source)
-      const relatedData = related ? customItemData(related, definition.id) : undefined
-      // A referenced recipe may have been materialized from an older reference
-      // without its custom-system snapshot. In that case, resolve the recipe
-      // from the character inventory by compendium/id before reading Resultado.
       const sourceRef = asReference(source)
       const sourceItemId = typeof sourceRef?.itemId === "string" ? sourceRef.itemId : undefined
+      // Collection references to character inventory intentionally store only
+      // identity. Resolve that identity first; otherwise referencedItemSnapshot
+      // fabricates a generic fallback and hides the real recipe data.
       const liveRelated = sourceItemId
         ? next.get("inventory").find((candidate) =>
             candidate.id === sourceItemId || candidate.compendiumItemId === sourceItemId)
         : undefined
-      const liveRelatedData = liveRelated
-        ? customItemData(liveRelated as unknown as Record<string, unknown>, definition.id)
-        : undefined
-      const data = relatedData ?? liveRelatedData
-      const output = effect.referencedItemFieldId && data
-        ? data[effect.referencedItemFieldId] as JsonValue | undefined
+      const related = liveRelated
+        ? liveRelated as unknown as Record<string, unknown>
+        : referencedItemSnapshot(source)
+      const data = related ? customItemData(related, definition.id) : undefined
+      const output = effect.referencedItemFieldId
+        ? data?.[effect.referencedItemFieldId] as JsonValue | undefined
         : source
       const item = referencedItemSnapshot(output)
       if (item) next = next.addInventoryItem({ ...item, id: crypto.randomUUID(), quantity: Math.max(1, Math.trunc(effect.quantity ?? Number(item.quantity) ?? 1)) } as Itemmable)
