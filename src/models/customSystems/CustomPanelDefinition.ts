@@ -41,6 +41,12 @@ export interface CustomAbilityListBlock extends CustomPanelBlockBase {
   filters?: Record<string, JsonValue>
 }
 
+export interface CustomCollectionBlock extends CustomPanelBlockBase {
+  type: "collection"
+  collectionId: string
+  layout?: "list" | "cards" | "compact"
+}
+
 export interface CustomTextBlock extends CustomPanelBlockBase {
   type: 'text'
   content: string
@@ -66,6 +72,7 @@ export type CustomPanelBlock =
   | CustomResourceBlock
   | CustomFieldBlock
   | CustomAbilityListBlock
+  | CustomCollectionBlock
   | CustomTextBlock
   | CustomDividerBlock
   | CustomFormulaDisplayBlock
