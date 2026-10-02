@@ -96,6 +96,7 @@ function PanelBlocksEditor({ blocks, draft, onChange }: { blocks: CustomPanelBlo
     const block: CustomPanelBlock = type === 'resource' ? { id, type, resourceId: draft.resources[0]?.id ?? '', display: 'number' }
       : type === 'field' ? { id, type, fieldId: draft.fields[0]?.id ?? '' }
       : type === 'abilityList' ? { id, type, abilityTypeId: draft.abilityTypes[0]?.id ?? '', layout: 'list' }
+      : type === 'collection' ? { id, type, collectionId: draft.collections?.[0]?.id ?? '', layout: 'cards' }
       : type === 'text' ? { id, type, content: '' }
       : type === 'formulaDisplay' ? { id, type, formula: '0', label: 'Resultado' }
       : type === 'grid' ? { id, type, columns: 2, blocks: [] }
@@ -116,7 +117,7 @@ function PanelBlocksEditor({ blocks, draft, onChange }: { blocks: CustomPanelBlo
   return <div>
     <div className="mb-3 flex flex-wrap gap-2">
       {([
-        ['resource','Recurso'],['field','Campo'],['abilityList','Lista de habilidades'],['text','Texto'],['formulaDisplay','Fórmula'],['divider','Divisor'],['grid','Grade'],
+        ['resource','Recurso'],['field','Campo'],['abilityList','Lista de habilidades'],['collection','Coleção'],['text','Texto'],['formulaDisplay','Fórmula'],['divider','Divisor'],['grid','Grade'],
       ] as const).map(([type, label]) => <SmallButton key={type} onClick={() => add(type)}><Plus className="h-3.5 w-3.5" /> {label}</SmallButton>)}
     </div>
     <div className="grid gap-3">
@@ -134,6 +135,7 @@ function PanelBlocksEditor({ blocks, draft, onChange }: { blocks: CustomPanelBlo
           {block.type === 'resource' ? <><ReferenceSelect label="Recurso" value={block.resourceId} options={draft.resources} onChange={(resourceId) => replace(index, { ...block, resourceId })} /><Select label="Exibição" value={block.display} options={['number','bar','checkboxes','dicePool']} labels={['Número','Barra','Caixas','Dados']} onChange={(display) => replace(index, { ...block, display: display as any })} /></> : null}
           {block.type === 'field' ? <ReferenceSelect label="Campo" value={block.fieldId} options={draft.fields} onChange={(fieldId) => replace(index, { ...block, fieldId })} /> : null}
           {block.type === 'abilityList' ? <><ReferenceSelect label="Tipo de habilidade" value={block.abilityTypeId} options={draft.abilityTypes} onChange={(abilityTypeId) => replace(index, { ...block, abilityTypeId })} /><Select label="Layout" value={block.layout ?? 'list'} options={['list','cards','compact']} labels={['Lista','Cartões','Compacto']} onChange={(layout) => replace(index, { ...block, layout: layout as any })} /></> : null}
+          {block.type === 'collection' ? <><ReferenceSelect label="Coleção" value={block.collectionId} options={(draft.collections ?? []).map((entry) => ({ id: entry.id, name: entry.name }))} onChange={(collectionId) => replace(index, { ...block, collectionId })} /><Select label="Layout" value={block.layout ?? 'cards'} options={['list','cards','compact']} labels={['Lista','Cartões','Compacto']} onChange={(layout) => replace(index, { ...block, layout: layout as any })} /></> : null}
           {block.type === 'text' ? <TextArea label="Conteúdo" value={block.content} onChange={(content) => replace(index, { ...block, content })} /> : null}
           {block.type === 'formulaDisplay' ? <><Input label="Rótulo" value={block.label ?? ''} onChange={(label) => replace(index, { ...block, label: label || undefined })} /><Input label="Fórmula" value={block.formula} onChange={(formula) => replace(index, { ...block, formula })} /></> : null}
           {block.type === 'grid' ? <Select label="Colunas" value={String(block.columns)} options={['1','2','3','4']} onChange={(columns) => replace(index, { ...block, columns: Number(columns) as 1|2|3|4 })} /> : null}

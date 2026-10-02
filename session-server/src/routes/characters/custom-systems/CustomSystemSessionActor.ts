@@ -1,5 +1,8 @@
 import {
   addCustomAbility,
+  createCustomCollectionEntry,
+  removeCustomCollectionEntry,
+  updateCustomCollectionEntryField,
   adjustCustomResource,
   CustomSystemOperationError,
   removeCustomAbility,
@@ -653,6 +656,17 @@ function didOperationChangeState(
     case "character.customSystem.resource.adjust":
     case "character.customSystem.resource.reset":
       return !sameResourceState(before.resources[operation.resourceId], after.resources[operation.resourceId]);
+    case "character.customSystem.collection.entry.add":
+      return !(before.collections?.[operation.collectionId] ?? []).some((entry) => entry.id === operation.entryId)
+        && (after.collections?.[operation.collectionId] ?? []).some((entry) => entry.id === operation.entryId);
+    case "character.customSystem.collection.entry.remove":
+      return (before.collections?.[operation.collectionId] ?? []).some((entry) => entry.id === operation.entryId)
+        && !(after.collections?.[operation.collectionId] ?? []).some((entry) => entry.id === operation.entryId);
+    case "character.customSystem.collection.entry.field.set": {
+      const previous = (before.collections?.[operation.collectionId] ?? []).find((entry) => entry.id === operation.entryId);
+      const next = (after.collections?.[operation.collectionId] ?? []).find((entry) => entry.id === operation.entryId);
+      return !sameSmallJson(previous?.values[operation.fieldId], next?.values[operation.fieldId]);
+    }
     case "character.customSystem.ability.add":
       return !before.abilities.some((ability) => ability.id === operation.ability.id)
         && after.abilities.some((ability) => ability.id === operation.ability.id);
@@ -717,6 +731,12 @@ function applyOperation(
       return adjustCustomResource(definition, state, operation.resourceId, operation.amount, actor);
     case "character.customSystem.resource.reset":
       return resetCustomResource(definition, state, operation.resourceId, actor);
+    case "character.customSystem.collection.entry.add":
+      return createCustomCollectionEntry(definition, state, operation.collectionId, operation.entryId, actor);
+    case "character.customSystem.collection.entry.remove":
+      return removeCustomCollectionEntry(definition, state, operation.collectionId, operation.entryId, actor);
+    case "character.customSystem.collection.entry.field.set":
+      return updateCustomCollectionEntryField(definition, state, operation.collectionId, operation.entryId, operation.fieldId, operation.value, actor);
     case "character.customSystem.ability.add":
       return addCustomAbility(
         definition,

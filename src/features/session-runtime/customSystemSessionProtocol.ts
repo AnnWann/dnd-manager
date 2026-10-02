@@ -18,6 +18,9 @@ export type SessionCustomSystemOperation =
   | { type: "character.customSystem.ability.usage.set"; characterId: string; systemId: string; abilityId: string; used: number }
   | { type: "character.customSystem.ability.activate"; characterId: string; systemId: string; abilityId: string; rollValue?: number; rollDice?: string; rollTotal?: number; rollDamageValues?: number[]; rollSummary?: string[]; activationLevel?: number; visibility?: "public" | "roller-master" }
   | { type: "character.customSystem.action.execute"; characterId: string; systemId: string; actionId: string; rollValue?: number; rollDice?: string; rollTotal?: number; rollDamageValues?: number[]; rollSummary?: string[]; activationLevel?: number; visibility?: "public" | "roller-master" }
+  | { type: "character.customSystem.collection.entry.add"; characterId: string; systemId: string; collectionId: string; entryId: string }
+  | { type: "character.customSystem.collection.entry.remove"; characterId: string; systemId: string; collectionId: string; entryId: string }
+  | { type: "character.customSystem.collection.entry.field.set"; characterId: string; systemId: string; collectionId: string; entryId: string; fieldId: string; value: JsonValue }
   | { type: "character.customSystem.automation.execute"; characterId: string; systemId: string; automationId: string }
 
 export type SessionCustomSystemClientMessage = {

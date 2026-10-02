@@ -68,6 +68,7 @@ export function createCharacterCustomSystemState(
     fields,
     resources,
     abilities: [],
+    collections: {},
   }
 }
 
@@ -435,6 +436,68 @@ export function setCustomAbilityUsage(
       maximum,
     },
   })
+}
+
+export function createCustomCollectionEntry(
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  collectionId: string,
+  entryId: string,
+  actor: CustomSystemActor,
+): CharacterCustomSystemState {
+  assertCompatibleSystem(definition, state)
+  assertEnabled(state)
+  const collection = definition.collections?.find((entry) => entry.id === collectionId)
+  if (!collection) throwOperationError({ code: 'definitionNotFound', message: `Collection "${collectionId}" was not found.`, path: `collections.${collectionId}` })
+  assertCanEdit(collection.permissions?.create, actor, `collections.${collectionId}`)
+  const entries = state.collections?.[collectionId] ?? []
+  if (collection.maximumEntries !== undefined && entries.length >= collection.maximumEntries) {
+    throwOperationError({ code: 'maximumExceeded', message: `Collection "${collection.name}" is full.`, path: `collections.${collectionId}` })
+  }
+  const values = collection.fields.reduce<Record<string, JsonValue>>((result, field) => {
+    if (field.defaultValue !== undefined && field.type !== 'formula') result[field.id] = cloneJsonValue(field.defaultValue)
+    return result
+  }, {})
+  const now = new Date().toISOString()
+  return { ...state, collections: { ...(state.collections ?? {}), [collectionId]: [...entries, { id: entryId, values, createdAt: now, updatedAt: now }] } }
+}
+
+export function updateCustomCollectionEntryField(
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  collectionId: string,
+  entryId: string,
+  fieldId: string,
+  value: JsonValue,
+  actor: CustomSystemActor,
+): CharacterCustomSystemState {
+  assertCompatibleSystem(definition, state)
+  assertEnabled(state)
+  const collection = definition.collections?.find((entry) => entry.id === collectionId)
+  if (!collection) throwOperationError({ code: 'definitionNotFound', message: `Collection "${collectionId}" was not found.`, path: `collections.${collectionId}` })
+  const field = findFieldDefinition(collection.fields, fieldId)
+  assertCanEdit(field.editPermission, actor, `collections.${collectionId}.${entryId}.${fieldId}`)
+  assertValidFieldValue(field, value, `collections.${collectionId}.${entryId}.${fieldId}`)
+  const entries = state.collections?.[collectionId] ?? []
+  if (!entries.some((entry) => entry.id === entryId)) throwOperationError({ code: 'definitionNotFound', message: `Collection entry "${entryId}" was not found.`, path: `collections.${collectionId}.${entryId}` })
+  return { ...state, collections: { ...(state.collections ?? {}), [collectionId]: entries.map((entry) => entry.id === entryId ? { ...entry, values: { ...entry.values, [fieldId]: cloneJsonValue(value) }, updatedAt: new Date().toISOString() } : entry) } }
+}
+
+export function removeCustomCollectionEntry(
+  definition: CustomSystemDefinition,
+  state: CharacterCustomSystemState,
+  collectionId: string,
+  entryId: string,
+  actor: CustomSystemActor,
+): CharacterCustomSystemState {
+  assertCompatibleSystem(definition, state)
+  assertEnabled(state)
+  const collection = definition.collections?.find((entry) => entry.id === collectionId)
+  if (!collection) throwOperationError({ code: 'definitionNotFound', message: `Collection "${collectionId}" was not found.`, path: `collections.${collectionId}` })
+  assertCanEdit(collection.permissions?.remove, actor, `collections.${collectionId}`)
+  const entries = state.collections?.[collectionId] ?? []
+  if (collection.minimumEntries !== undefined && entries.length <= collection.minimumEntries) throwOperationError({ code: 'minimumNotMet', message: `Collection "${collection.name}" requires at least ${collection.minimumEntries} entries.`, path: `collections.${collectionId}` })
+  return { ...state, collections: { ...(state.collections ?? {}), [collectionId]: entries.filter((entry) => entry.id !== entryId) } }
 }
 
 export function validateCharacterCustomSystemState(
