@@ -331,8 +331,13 @@ export function ItemCreationDialog({
                 <span className="text-xs text-text">Tipo</span>
                 <ItemKindButtons
                   value={draft.kind ?? "common"}
+                  customSystems={customSystems}
+                  customTypes={draft.customSystemTypes ?? {}}
                   onChange={(kind) =>
                     patch((current) => updateItemKind(current, kind))
+                  }
+                  onToggleCustomType={(systemId,typeId) =>
+                    patch((current) => toggleCustomItemType(current, systemId, typeId))
                   }
                 />
               </div>
@@ -518,10 +523,16 @@ export function ItemCreationDialog({
 
 function ItemKindButtons({
   value,
+  customSystems,
+  customTypes,
   onChange,
+  onToggleCustomType,
 }: {
   value: ItemKind
+  customSystems: ReturnType<typeof useCustomSystemDefinitions>
+  customTypes: Record<string,string[]>
   onChange: (value: ItemKind) => void
+  onToggleCustomType: (systemId:string,typeId:string) => void
 }) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
@@ -539,8 +550,28 @@ function ItemKindButtons({
           {option.label}
         </button>
       ))}
+      {customSystems.flatMap(system=>(system.itemTypes??[]).map(type=>({system,type}))).map(({system,type}) => {
+        const selected=(customTypes[system.id]??[]).includes(type.id)
+        return <button
+          key={`custom:${system.id}:${type.id}`}
+          type="button"
+          className={selected
+            ? "rounded-md border border-accentBorder bg-accentBg px-2 py-2 text-xs font-medium text-textH"
+            : "rounded-md border border-border px-2 py-2 text-xs text-text hover:bg-[color:var(--social-bg)]"}
+          onClick={()=>onToggleCustomType(system.id,type.id)}
+        >
+          {type.name}
+        </button>
+      })}
     </div>
   )
+}
+
+function toggleCustomItemType(item:Itemmable,systemId:string,typeId:string):Itemmable {
+  const assigned=item.customSystemTypes??{}
+  const current=assigned[systemId]??[]
+  const next=current.includes(typeId)?current.filter(id=>id!==typeId):Array.from(new Set([...current,typeId]))
+  return {...item,customSystemTypes:{...assigned,[systemId]:next}}
 }
 
 function updateItemKind(item: Itemmable, kind: ItemKind): Itemmable {
@@ -595,29 +626,11 @@ function normalizeEditorItem(item: Itemmable): Itemmable {
 
 
 function CustomItemTypesFields({item,systems,compendiumItems,campaignId,onChange}:{item:Itemmable;systems:ReturnType<typeof useCustomSystemDefinitions>;compendiumItems:Itemmable[];campaignId?:string;onChange:(item:Itemmable)=>void}) {
-  const available=systems.flatMap(system=>(system.itemTypes??[]).map(type=>({system,type})))
-  if(!available.length) return null
   const assigned=item.customSystemTypes??{}
-  const toggle=(systemId:string,typeId:string)=>{
-    const current=assigned[systemId]??[]
-    const selected=current.includes(typeId)
-    const nextTypes=selected?current.filter(id=>id!==typeId):Array.from(new Set([...current,typeId]))
-    onChange({...item,customSystemTypes:{...assigned,[systemId]:nextTypes}})
-  }
+  const active=systems.flatMap(system=>(system.itemTypes??[]).filter(type=>(assigned[system.id]??[]).includes(type.id)).map(type=>({system,type})))
+  if(!active.length) return null
   return <div className="grid gap-3 md:col-span-3">
-    <div className="grid min-w-0 gap-2">
-      <span className="text-xs text-text">Tipos personalizados</span>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-        {available.map(({system,type})=>{
-          const selected=(assigned[system.id]??[]).includes(type.id)
-          return <button key={system.id+":"+type.id} type="button" className={selected
-            ?"rounded-md border border-accentBorder bg-accentBg px-2 py-2 text-xs font-medium text-textH"
-            :"rounded-md border border-border px-2 py-2 text-xs text-text hover:bg-[color:var(--social-bg)]"}
-            onClick={()=>toggle(system.id,type.id)}>{type.name}</button>
-        })}
-      </div>
-    </div>
-    {available.filter(({system,type})=>(assigned[system.id]??[]).includes(type.id)).map(({system,type})=><div key={"fields:"+system.id+":"+type.id} className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
+    {active.map(({system,type})=><div key={"fields:"+system.id+":"+type.id} className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
       <strong className="text-xs text-textH">{type.name}</strong>
       <CustomItemFieldList fields={type.fields} value={(item.customSystemData?.[system.id]??{}) as Record<string,unknown>} systemId={system.id} compendiumItems={compendiumItems} campaignId={campaignId} onChange={value=>onChange({...item,customSystemData:{...(item.customSystemData??{}),[system.id]:value}})}/>
     </div>)}
