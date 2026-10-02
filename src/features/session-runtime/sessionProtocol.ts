@@ -199,13 +199,13 @@ export type SessionHpLogMessage = { type: "session.hp.log"; records: SessionHpLo
 export type SessionPongMessage = { type: "session.pong"; serverTime: number }
 export type SessionDiceResultMessage = { type: "session.dice.result"; result: SessionDiceRollResult }
 export type SessionActionResultMessage = { type: "session.action.result"; result: SessionActionRollResult }
-export type SessionErrorMessage = { type: "session.error"; code: string; message: string }
+export type SessionErrorMessage = { type: "session.error"; code: string; message: string }\nexport type SessionCustomSystemNoticeMessage = { type: "session.customSystem.notice"; characterId: string; title: string; message: string }
 
 export type ServerSessionMessage =
   | SessionReadyMessage | SessionHeartbeatAckMessage | SessionPresenceMessage
   | SessionHpSnapshotMessage | SessionHpUpdatedMessage
   | SessionConditionsSnapshotMessage | SessionConditionsUpdatedMessage
-  | SessionHpLogMessage | SessionPongMessage | SessionDiceResultMessage | SessionActionResultMessage | SessionErrorMessage
+  | SessionHpLogMessage | SessionPongMessage | SessionDiceResultMessage | SessionActionResultMessage | SessionCustomSystemNoticeMessage | SessionErrorMessage
 
 export type CharacterSheetRoute =
   | "characters/sheet/hp"
@@ -258,7 +258,7 @@ export function parseServerSessionMessage(raw: string): ServerSessionMessage | n
     case "session.hp.log": if (Array.isArray(message.records)) return message as SessionHpLogMessage; break
     case "session.dice.result": if (message.result && typeof message.result === "object") return message as SessionDiceResultMessage; break
     case "session.action.result": if (message.result && typeof message.result === "object") return message as SessionActionResultMessage; break
-    case "session.error": if (typeof message.code === "string" && typeof message.message === "string") return message as SessionErrorMessage; break
+    case "session.customSystem.notice": if (typeof message.characterId === "string" && typeof message.title === "string" && typeof message.message === "string") return message as SessionCustomSystemNoticeMessage; break\n    case "session.error": if (typeof message.code === "string" && typeof message.message === "string") return message as SessionErrorMessage; break
   }
   return null
 }
