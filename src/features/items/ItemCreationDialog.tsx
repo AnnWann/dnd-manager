@@ -334,10 +334,10 @@ export function ItemCreationDialog({
                   customSystems={customSystems}
                   customTypes={draft.customSystemTypes ?? {}}
                   onChange={(kind) =>
-                    patch((current) => updateItemKind(current, kind))
+                    patch((current) => updateItemKind({ ...current, customSystemTypes: {} }, kind))
                   }
                   onToggleCustomType={(systemId,typeId) =>
-                    patch((current) => toggleCustomItemType(current, systemId, typeId))
+                    patch((current) => selectCustomItemType(current, systemId, typeId))
                   }
                 />
               </div>
@@ -567,11 +567,11 @@ function ItemKindButtons({
   )
 }
 
-function toggleCustomItemType(item:Itemmable,systemId:string,typeId:string):Itemmable {
-  const assigned=item.customSystemTypes??{}
-  const current=assigned[systemId]??[]
-  const next=current.includes(typeId)?[]:[typeId]
-  return {...item,customSystemTypes:{...assigned,[systemId]:next}}
+function selectCustomItemType(item:Itemmable,systemId:string,typeId:string):Itemmable {
+  return {
+    ...updateItemKind(item, "common"),
+    customSystemTypes: { [systemId]: [typeId] },
+  }
 }
 
 function updateItemKind(item: Itemmable, kind: ItemKind): Itemmable {
