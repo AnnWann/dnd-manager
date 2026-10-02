@@ -189,6 +189,18 @@ function AutomationsEditor({ draft, setDraft }: EditorProps) {
         <ConditionsEditor conditions={current.conditions ?? []} draft={draft} definitions={definitions} variables={variables} onChange={(conditions) => replace({ ...current, conditions })} />
       </Section>
 
+      <Section title="Condições de contexto" description="Restrições vindas da campanha ou sessão, independentes dos campos do personagem.">
+        <div className="grid gap-2">
+          <Check
+            label="Exigir acesso ao inventário do grupo"
+            checked={(current.contextConditions??[]).some(condition=>condition.type==='inventoryAccess'&&condition.location==='party'&&condition.accessible)}
+            onChange={checked=>replace({...current,contextConditions:checked
+              ? [...(current.contextConditions??[]).filter(condition=>!(condition.type==='inventoryAccess'&&condition.location==='party')),{type:'inventoryAccess',location:'party',accessible:true}]
+              : (current.contextConditions??[]).filter(condition=>!(condition.type==='inventoryAccess'&&condition.location==='party'))})}
+          />
+        </div>
+      </Section>
+
       <Section title="Escopo de coleção" description="Opcional. Executa a automação para cada registro correspondente e permite testes, progresso e conclusão.">
         <CollectionScopeEditor scope={current.collectionScope} draft={draft} onChange={(collectionScope) => replace({ ...current, collectionScope })} />
       </Section>
