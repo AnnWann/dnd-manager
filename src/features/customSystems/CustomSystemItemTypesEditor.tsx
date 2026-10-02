@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import { Plus, Trash2 } from "lucide-react"
+import { Select } from "../../components/ui/Select"
 import type { CustomFieldDefinition, CustomReferenceSource } from "../../models/customSystems/CustomFieldDefinition"
 import type { CustomSystemItemTypeDefinition } from "../../models/customSystems/CustomItemTypeDefinition"
 import type { CustomSystemDefinition } from "../../models/customSystems/CustomSystemDefinition"
@@ -56,10 +57,10 @@ function FieldSchema({fields,itemTypes,onChange}:{fields:CustomFieldDefinition[]
 function ReferenceTargetEditor({targets,itemTypes,onChange}:{targets:CustomReferenceSource[];itemTypes:CustomSystemItemTypeDefinition[];onChange:(targets:CustomReferenceSource[])=>void}) {
   const selected=targets.find(t=>t.type==="itemType")
   const value=selected&&"itemTypeId" in selected?selected.itemTypeId:""
-  return <label className="grid gap-1 text-xs text-text"><span>Restringir a tipo de item</span><select className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH" value={value} onChange={e=>{
+  return <label className="grid gap-1 text-xs text-text"><span>Restringir a tipo de item</span><Select className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH" value={value} onChange={e=>{
     const rest=targets.filter(t=>t.type!=="itemType")
     onChange(e.target.value?[...rest,{type:"itemType",itemTypeId:e.target.value}]:rest.length?rest:[{type:"compendiumItem"}])
-  }}><option value="">Qualquer item permitido</option>{itemTypes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+  }}><option value="">Qualquer item permitido</option>{itemTypes.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</Select></label>
 }
 function Input({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){return <label className="grid gap-1 text-xs text-text"><span>{label}</span><input className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH" value={value} onChange={e=>onChange(e.target.value)}/></label>}
 function Button({children,onClick}:{children:ReactNode;onClick:()=>void}){return <button type="button" onClick={onClick} className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1.5 text-xs text-textH hover:bg-accentBg">{children}</button>}
