@@ -189,6 +189,10 @@ function AutomationsEditor({ draft, setDraft }: EditorProps) {
         <ConditionsEditor conditions={current.conditions ?? []} draft={draft} definitions={definitions} variables={variables} onChange={(conditions) => replace({ ...current, conditions })} />
       </Section>
 
+      <Section title="Escopo de coleção" description="Opcional. Executa a automação para cada registro correspondente e permite testes, progresso e conclusão.">
+        <CollectionScopeEditor scope={current.collectionScope} draft={draft} onChange={(collectionScope) => replace({ ...current, collectionScope })} />
+      </Section>
+
       <Section title="Efeitos" description="Os efeitos são executados na ordem exibida. Campos e recursos podem pertencer a qualquer sistema personalizado instalado.">
         <EffectsEditor effects={current.effects} draft={draft} definitions={definitions} variables={variables} onChange={(effects) => replace({ ...current, effects })} />
       </Section>
@@ -196,6 +200,57 @@ function AutomationsEditor({ draft, setDraft }: EditorProps) {
       <DangerButton onClick={remove}>Remover automação</DangerButton>
     </div> : null}
   </MasterDetail>
+}
+
+function CollectionScopeEditor({scope,draft,onChange}:{scope:CustomAutomationDefinition['collectionScope'];draft:CustomSystemDefinition;onChange:(scope:CustomAutomationDefinition['collectionScope'])=>void}) {
+  const collections=draft.collections??[]
+  const collection=collections.find(entry=>entry.id===scope?.collectionId)??collections[0]
+  const fields=collection?.fields??[]
+  const numeric=fields.filter(field=>field.type==='number')
+  const booleans=fields.filter(field=>field.type==='boolean')
+  const enabled=Boolean(scope)
+  const patch=(value:Partial<NonNullable<CustomAutomationDefinition['collectionScope']>>)=>onChange({...scope,collectionId:scope?.collectionId??collection?.id??'',conditions:scope?.conditions??[],...value})
+  const roll=scope?.roll
+  const completion=scope?.completion
+  return <div className="grid gap-3">
+    <Check label="Usar escopo de coleção" checked={enabled} onChange={checked=>onChange(checked?{collectionId:collection?.id??'',conditions:[]}:undefined)}/>
+    {enabled?<>
+      <ReferenceSelect label="Coleção" value={scope?.collectionId??''} options={collections} allowEmpty onChange={collectionId=>onChange({collectionId,conditions:[]})}/>
+      <div className="rounded-lg border border-border p-3">
+        <strong className="text-sm text-textH">Filtros dos registros</strong>
+        <div className="mt-2 grid gap-2">
+          {(scope?.conditions??[]).map((condition,index)=><div key={index} className="grid gap-2 md:grid-cols-[1fr_180px_1fr_auto]">
+            <ReferenceSelect label="Campo" value={condition.fieldId} options={fields} allowEmpty onChange={fieldId=>patch({conditions:(scope?.conditions??[]).map((c,i)=>i===index?{...c,fieldId}:c)})}/>
+            <Select label="Comparação" value={condition.operator} options={['equals','notEquals','greaterThan','greaterThanOrEqual','lessThan','lessThanOrEqual','truthy','falsy']} onChange={operator=>patch({conditions:(scope?.conditions??[]).map((c,i)=>i===index?{...c,operator:operator as any}:c)})}/>
+            {!['truthy','falsy'].includes(condition.operator)?<Input label="Valor" value={String(condition.value??'')} onChange={value=>patch({conditions:(scope?.conditions??[]).map((c,i)=>i===index?{...c,value:parseLiteral(value)}:c)})}/>:<div/>}
+            <div className="flex items-end"><IconButton title="Remover filtro" onClick={()=>patch({conditions:(scope?.conditions??[]).filter((_,i)=>i!==index)})}><Trash2 className="h-4 w-4"/></IconButton></div>
+          </div>)}
+          <SmallButton onClick={()=>patch({conditions:[...(scope?.conditions??[]),{fieldId:booleans[0]?.id??fields[0]?.id??'',operator:'equals',value:true}]})}><Plus className="h-3.5 w-3.5"/> Adicionar filtro</SmallButton>
+        </div>
+      </div>
+      <div className="rounded-lg border border-border p-3">
+        <Check label="Fazer teste e modificar progresso" checked={Boolean(roll)} onChange={checked=>patch({roll:checked?{formula:'0',dcFormula:'10',progressFieldId:numeric[0]?.id??'',progressOnCriticalFailure:-1,progressOnFailure:0,progressOnSuccess:1,progressOnCriticalSuccess:2}:undefined})}/>
+        {roll?<div className="mt-3 grid gap-3 md:grid-cols-3">
+          <Input label="Fórmula do bônus" value={roll.formula} onChange={formula=>patch({roll:{...roll,formula}})}/>
+          <Input label="Fórmula da CD" value={roll.dcFormula} onChange={dcFormula=>patch({roll:{...roll,dcFormula}})}/>
+          <ReferenceSelect label="Campo de progresso" value={roll.progressFieldId} options={numeric} allowEmpty onChange={progressFieldId=>patch({roll:{...roll,progressFieldId}})}/>
+          <Input label="1 natural" value={String(roll.progressOnCriticalFailure)} onChange={value=>patch({roll:{...roll,progressOnCriticalFailure:optionalNumber(value)??0}})}/>
+          <Input label="Falha" value={String(roll.progressOnFailure)} onChange={value=>patch({roll:{...roll,progressOnFailure:optionalNumber(value)??0}})}/>
+          <Input label="Sucesso" value={String(roll.progressOnSuccess)} onChange={value=>patch({roll:{...roll,progressOnSuccess:optionalNumber(value)??0}})}/>
+          <Input label="20 natural" value={String(roll.progressOnCriticalSuccess)} onChange={value=>patch({roll:{...roll,progressOnCriticalSuccess:optionalNumber(value)??0}})}/>
+        </div>:null}
+      </div>
+      <div className="rounded-lg border border-border p-3">
+        <Check label="Detectar conclusão" checked={Boolean(completion)} onChange={checked=>patch({completion:checked?{progressFieldId:roll?.progressFieldId??numeric[0]?.id??'',targetFieldId:numeric[1]?.id??numeric[0]?.id??'',notify:true,emitEvent:true}:undefined})}/>
+        {completion?<div className="mt-3 grid gap-3 md:grid-cols-2">
+          <ReferenceSelect label="Campo de progresso" value={completion.progressFieldId} options={numeric} allowEmpty onChange={progressFieldId=>patch({completion:{...completion,progressFieldId}})}/>
+          <ReferenceSelect label="Campo da meta" value={completion.targetFieldId} options={numeric} allowEmpty onChange={targetFieldId=>patch({completion:{...completion,targetFieldId}})}/>
+          <Check label="Notificar conclusão" checked={completion.notify!==false} onChange={notify=>patch({completion:{...completion,notify}})}/>
+          <Check label="Emitir evento de conclusão" checked={completion.emitEvent!==false} onChange={emitEvent=>patch({completion:{...completion,emitEvent}})}/>
+        </div>:null}
+      </div>
+    </>:null}
+  </div>
 }
 
 function ConditionsEditor({ conditions, draft, definitions, variables, onChange }: {
