@@ -1022,7 +1022,7 @@ function readCreationCustomSystem(value: unknown): CustomSystemDefinition {
     )
   }
 
-  for (const field of ["fields", "resources", "abilityTypes", "panels", "automations"] as const) {
+  for (const field of ["fields", "resources", "abilityTypes", "collections", "panels", "automations"] as const) {
     if (!Array.isArray(system[field])) {
       throw new ApiError(
         400,
