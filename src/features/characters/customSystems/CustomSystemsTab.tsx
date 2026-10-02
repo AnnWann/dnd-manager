@@ -40,7 +40,7 @@ import type { SessionCustomSystemOperation } from '../../session-runtime/customS
 import { useOptionalSessionRuntime } from '../../session-runtime/useSessionRuntime'
 import { CustomSystemIcon } from '../../customSystems/CustomSystemIcon'
 import { CompendiumItemPickerDialog } from '../../items/CompendiumItemPickerDialog'
-import { useCharacterContext } from '../../../contexts/characterContext'
+import { useCharacterWorkspace } from '../workspace/CharacterWorkspaceContext'
 import { useParams } from 'react-router-dom'
 
 const PREDEFINED_MARKER = '__predefinedAbilityId'
@@ -1082,7 +1082,6 @@ function FieldEditor({
 
 function ReferencePicker({field,value,disabled,character,definition,state,onChange}:{field:CustomReferenceFieldDefinition,value:JsonValue|undefined,disabled?:boolean,character?:CharacterTemplate,definition?:CustomSystemDefinition,state?:CharacterCustomSystemState,onChange:(value:JsonValue)=>void}) {
   const { campaignId } = useParams<{campaignId?:string}>()
-  const { groundInventory = [] } = useCharacterContext()
   const [open,setOpen]=useState(false)
   const [compendiumOpen,setCompendiumOpen]=useState(false)
   const targets=field.targets ?? (field.target ? [{type:field.target}] : [])
