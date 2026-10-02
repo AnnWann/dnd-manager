@@ -18,6 +18,7 @@ type Props = {
   campaignId: string
   onClose: () => void
   onSelect: (item: Itemmable) => void
+  itemFilter?: (item: Itemmable) => boolean
 }
 
 export function CompendiumItemPickerDialog({
@@ -25,6 +26,7 @@ export function CompendiumItemPickerDialog({
   campaignId,
   onClose,
   onSelect,
+  itemFilter,
 }: Props) {
   const [entries, setEntries] = useState<SessionItemCompendiumEntry[]>([])
   const [isMaster, setIsMaster] = useState(false)
@@ -67,9 +69,9 @@ export function CompendiumItemPickerDialog({
   const availableItems = useMemo(
     () =>
       buildSessionCompendiumItems(entries).filter(
-        (entry) => isMaster || entry.visibility === "PUBLIC",
+        (entry) => (isMaster || entry.visibility === "PUBLIC") && (!itemFilter || itemFilter(entry.item)),
       ),
-    [entries, isMaster],
+    [entries, isMaster, itemFilter],
   )
 
   const filtered = useMemo(() => {
