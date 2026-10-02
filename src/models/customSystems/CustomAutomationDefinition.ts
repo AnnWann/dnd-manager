@@ -153,6 +153,12 @@ export interface CustomCollectionAutomationScope {
     progressOnFailure?: number
     progressOnSuccess?: number
     progressOnCriticalSuccess?: number
+    /** Consume a related quantity-reference group proportionally as progress advances. */
+    consumeIngredientsOnProgress?: {
+      relatedItemReferenceFieldId: string
+      ingredientGroupFieldId: string
+      targetFieldId: string
+    }
   }
   completion?: {
     progressFieldId: string
