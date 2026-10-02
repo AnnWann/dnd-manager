@@ -128,6 +128,10 @@ function runCollectionAutomation(
           ? referencedItemSnapshot(currentEntry.values[completion.relatedItemReferenceFieldId])
           : undefined
         const relatedData = relatedItem ? customItemData(relatedItem, definition.id) : undefined
+        if (completion.ingredientGroupFieldId && relatedData && !hasItemIngredientGroup(nextCharacter, relatedData[completion.ingredientGroupFieldId])) {
+          applied.push({ collectionId: scope.collectionId, entryId: originalEntry.id, ...(roll === undefined ? {} : { roll }) })
+          continue
+        }
         const output = completion.outputFromRelatedItemFieldId && relatedData
           ? relatedData[completion.outputFromRelatedItemFieldId] as JsonValue | undefined
           : completion.outputReferenceFieldId
@@ -184,6 +188,29 @@ function customItemData(item: Record<string, unknown>, systemId: string): Record
   if (!all || typeof all !== "object" || Array.isArray(all)) return undefined
   const data = (all as Record<string, unknown>)[systemId]
   return data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : undefined
+}
+
+function hasItemIngredientGroup(character: CharacterTemplate, raw: unknown): boolean {
+  if (!Array.isArray(raw)) return true
+  const available = new Map<string, number>()
+  for (const item of character.get("inventory")) {
+    const keys = [item.id, item.compendiumItemId, item.name].filter((key): key is string => Boolean(key))
+    for (const key of keys) available.set(key, (available.get(key) ?? 0) + Math.max(0, Math.trunc(Number(item.quantity) || 0)))
+  }
+  for (const row of raw) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) continue
+    const record = row as Record<string, unknown>
+    const rawRef = record.reference ?? record.item ?? record.recurso
+    const itemRef = rawRef && typeof rawRef === "object" && !Array.isArray(rawRef) ? rawRef as Record<string, unknown> : undefined
+    const needed = Math.max(0, Math.trunc(Number(record.quantity ?? record.quantidade) || 0))
+    if (!itemRef || needed <= 0) continue
+    const sourceId = typeof itemRef.itemId === "string" ? itemRef.itemId : ""
+    const sourceName = typeof itemRef.name === "string" ? itemRef.name : ""
+    const key = sourceId && (available.get(sourceId) ?? 0) >= needed ? sourceId : sourceName
+    if (!key || (available.get(key) ?? 0) < needed) return false
+    available.set(key, (available.get(key) ?? 0) - needed)
+  }
+  return true
 }
 
 function consumeItemIngredientGroup(character: CharacterTemplate, raw: unknown): CharacterTemplate {
