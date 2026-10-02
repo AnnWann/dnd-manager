@@ -3,6 +3,7 @@ import { Copy, Download, FileJson, Pencil, Plus, RefreshCw, Search, Trash2, Uplo
 import { useNavigate, useParams } from 'react-router-dom'
 import { useCustomSystemsContext } from '../contexts/customSystemsContext'
 import { sessionCustomSystemPath } from '../lib/campaignRoutes'
+import { removeLocalStorage } from '../lib/storage'
 import type { CustomSystemDefinition } from '../models/customSystems/CustomSystemDefinition'
 
 export function CustomSystemsListView() {
@@ -68,6 +69,12 @@ export function CustomSystemsListView() {
       const collisions = imported.filter((definition) => systems.definitions.some((current) => current.id === definition.id))
       if (collisions.length && !window.confirm(`${collisions.length} sistema(s) já existem e serão substituídos pelos dados importados. Continuar?`)) return
 
+      // An imported definition replaces the published definition. A stale local
+      // editor draft for the same id would otherwise hide the imported data
+      // (notably newly added domains such as collections) when the editor opens.
+      for (const definition of imported) {
+        removeLocalStorage(`dndmm.customSystemDraft.v1.${encodeURIComponent(definition.id)}`)
+      }
       systems.saveDefinitions(imported)
       setFeedback({ kind: 'success', message: `${imported.length} sistema(s) importado(s) com sucesso.` })
     } catch (error) {
