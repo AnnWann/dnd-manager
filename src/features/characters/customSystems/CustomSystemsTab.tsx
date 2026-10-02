@@ -356,7 +356,9 @@ function CustomSystemEditor({
                   <button type="button" onClick={() => run(() => removeCustomCollectionEntry(definition, state, collection.id, entry.id, actor))} className="rounded p-1.5 text-red-300 hover:bg-red-500/10"><Trash2 className="h-4 w-4"/></button>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  {collection.fields.map((field) => <FieldEditor key={field.id} field={field} value={entry.values[field.id]} character={character} definition={definition} state={state} disabled={field.type === "formula" || (field.editPermission === "masterOnly" && actor !== "master")} onChange={(value) => run(() => updateCustomCollectionEntryField(definition, state, collection.id, entry.id, field.id, value, actor))}/>)}
+                  {collection.fields.map((field) => field.type === "number" && field.display?.type && field.display.type !== "number"
+                    ? <CollectionProgressField key={field.id} field={field} values={entry.values}/>
+                    : <FieldEditor key={field.id} field={field} value={entry.values[field.id]} character={character} definition={definition} state={state} disabled={field.type === "formula" || field.editPermission === "automaticOnly" || (field.editPermission === "masterOnly" && actor !== "master")} onChange={(value) => run(() => updateCustomCollectionEntryField(definition, state, collection.id, entry.id, field.id, value, actor))}/>)}
                 </div>
               </article>
             ))}
@@ -372,6 +374,18 @@ function CustomSystemEditor({
       ) : null}
     </section>
   )
+}
+
+function CollectionProgressField({field,values}:{field:Extract<CustomFieldDefinition,{type:"number"}>;values:Record<string,JsonValue>}) {
+  const value=Number(values[field.id])||0
+  const dynamicMaximum=field.display?.maximumFieldId ? Number(values[field.display.maximumFieldId]) : undefined
+  const maximum=(dynamicMaximum&&dynamicMaximum>0?dynamicMaximum:field.maximum)??100
+  const minimum=field.minimum??0
+  const percent=Math.max(0,Math.min(100,((value-minimum)/Math.max(1,maximum-minimum))*100))
+  return <div className="grid gap-1">
+    <div className="flex justify-between text-xs text-text"><span>{field.name}</span>{field.display?.type==="progressBarValue"?<span>{value} / {maximum}</span>:null}</div>
+    <div className="h-3 overflow-hidden rounded-full border border-border bg-bg-subtle"><div className="h-full bg-accent transition-[width]" style={{width:`${percent}%`}}/></div>
+  </div>
 }
 
 function ResourceSection({
