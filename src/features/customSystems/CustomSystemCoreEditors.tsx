@@ -351,6 +351,8 @@ function convertFieldType(field: CustomFieldDefinition, type: CustomFieldDefinit
     }
   }
   if (type === 'reference') return { ...base, type, target: 'character' }
+  if (type === 'collectionGroup') return { ...base, type, fields: [] }
+  if (type === 'quantityReference') return { ...base, type, targets: [{ type: 'compendiumItem' }], minimumQuantity: 1 }
   if (type === 'formula') return { ...base, type, formula: '', resultType: 'number', editPermission: 'automaticOnly' }
   return { ...base, type }
 }
