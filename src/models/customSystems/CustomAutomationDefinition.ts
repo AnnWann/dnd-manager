@@ -64,6 +64,11 @@ export type CustomEffectDefinition =
   | CustomModifyResourceEffect
   | CustomSetFieldEffect
   | CustomModifyFieldEffect
+  | CustomSetCollectionEntryFieldEffect
+  | CustomModifyCollectionEntryFieldEffect
+  | CustomRemoveCollectionEntryEffect
+  | CustomAddReferencedItemEffect
+  | CustomRemoveReferencedItemsEffect
 
 /**
  * `systemId` follows the same compatibility rule as operands: undefined means
@@ -94,6 +99,35 @@ export interface CustomModifyFieldEffect {
   operation: CustomNumericOperation
   value?: number
   formula?: FormulaExpression
+}
+
+export interface CustomSetCollectionEntryFieldEffect {
+  type: 'setCollectionEntryField'
+  fieldId: string
+  value?: JsonValue
+  formula?: FormulaExpression
+}
+export interface CustomModifyCollectionEntryFieldEffect {
+  type: 'modifyCollectionEntryField'
+  fieldId: string
+  operation: Exclude<CustomNumericOperation, 'resetToMaximum'>
+  value?: number
+  formula?: FormulaExpression
+}
+export interface CustomRemoveCollectionEntryEffect { type: 'removeCollectionEntry' }
+export interface CustomAddReferencedItemEffect {
+  type: 'addReferencedItem'
+  /** Reference field on the current collection entry. */
+  referenceFieldId: string
+  /** Optional field on the referenced item's custom-system data containing the actual output reference. */
+  referencedItemFieldId?: string
+  quantity?: number
+}
+export interface CustomRemoveReferencedItemsEffect {
+  type: 'removeReferencedItems'
+  /** Quantity-reference/group field on the current entry, or on a referenced item. */
+  groupFieldId: string
+  relatedItemReferenceFieldId?: string
 }
 
 export type CustomNumericOperation = 'set' | 'add' | 'subtract' | 'multiply' | 'resetToMaximum'
