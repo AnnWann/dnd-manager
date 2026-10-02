@@ -7,6 +7,11 @@ export interface CustomAutomationDefinition {
   conditions?: CustomCondition[]
   effects: CustomEffectDefinition[]
   enabled?: boolean
+  /**
+   * Optional repeatable-record scope. When present, this automation runs once
+   * for every matching collection entry instead of once for the character.
+   */
+  collectionScope?: CustomCollectionAutomationScope
 }
 
 export type CustomSystemEventType =
@@ -23,6 +28,7 @@ export type CustomSystemEventType =
   | 'abilityUsed'
   | 'shortRestCompleted'
   | 'longRestCompleted'
+  | 'collectionEntryCompleted'
   | 'manual'
 
 export interface CustomCondition {
@@ -91,3 +97,43 @@ export interface CustomModifyFieldEffect {
 }
 
 export type CustomNumericOperation = 'set' | 'add' | 'subtract' | 'multiply' | 'resetToMaximum'
+
+
+export interface CustomCollectionAutomationScope {
+  collectionId: string
+  conditions?: CustomCollectionCondition[]
+  roll?: {
+    formula: FormulaExpression
+    dc?: number
+    dcFormula?: FormulaExpression
+    progressFieldId: string
+    progressOnCriticalFailure?: number
+    progressOnFailure?: number
+    progressOnSuccess?: number
+    progressOnCriticalSuccess?: number
+  }
+  completion?: {
+    progressFieldId: string
+    targetFieldId: string
+    /** Reference field containing the item produced by this entry. */
+    outputReferenceFieldId?: string
+    /** Reference to another collection entry, such as a recipe. */
+    relatedEntryReferenceFieldId?: string
+    /**
+     * On the related entry, a multiple reference field containing ingredient
+     * records. Each ingredient record can point at an item and define quantity.
+     */
+    ingredientReferencesFieldId?: string
+    ingredientItemFieldId?: string
+    ingredientQuantityFieldId?: string
+    deactivateFieldId?: string
+    notify?: boolean
+    emitEvent?: boolean
+  }
+}
+
+export interface CustomCollectionCondition {
+  fieldId: string
+  operator: CustomComparisonOperator
+  value?: JsonValue
+}
