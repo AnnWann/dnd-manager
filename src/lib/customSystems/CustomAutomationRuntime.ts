@@ -27,6 +27,7 @@ export type AppliedCustomAutomation = {
   entryId?: string
   roll?: number
   completedItemName?: string
+  completed?: boolean
 }
 
 export type CustomAutomationRunResult = {
@@ -38,18 +39,20 @@ export function runCustomSystemAutomations(
   character: CharacterTemplate,
   definitions: CustomSystemDefinition[],
   event: CustomSystemEventType,
+  eventContext?: { systemId: string; collectionId: string; entryId: string },
 ): CustomAutomationRunResult {
   let nextCharacter = character
   const applied: AppliedCustomAutomation[] = []
 
   for (const definition of definitions) {
+    if (eventContext && definition.id !== eventContext.systemId) continue
     const state = findEnabledState(nextCharacter, definition.id)
     if (!state) continue
 
     for (const automation of definition.automations ?? []) {
       if (automation.enabled === false || automation.event !== event) continue
       if (automation.collectionScope) {
-        const result = runCollectionAutomation(nextCharacter, definition, automation)
+        const result = runCollectionAutomation(nextCharacter, definition, automation, eventContext)
         nextCharacter = result.character
         applied.push(...result.applied.map((entry) => ({
           systemId: definition.id,
@@ -71,10 +74,17 @@ export function runCustomSystemAutomations(
     }
   }
 
-  if (event !== "collectionEntryCompleted" && applied.some((entry) => Boolean(entry.completedItemName))) {
-    const completionResult = runCustomSystemAutomations(nextCharacter, definitions, "collectionEntryCompleted")
-    nextCharacter = completionResult.character
-    applied.push(...completionResult.applied)
+  if (event !== "collectionEntryCompleted") {
+    const completions = applied.filter((entry) => entry.completed === true && entry.collectionId && entry.entryId)
+    for (const completed of completions) {
+      const completionResult = runCustomSystemAutomations(nextCharacter, definitions, "collectionEntryCompleted", {
+        systemId: completed.systemId,
+        collectionId: completed.collectionId!,
+        entryId: completed.entryId!,
+      })
+      nextCharacter = completionResult.character
+      applied.push(...completionResult.applied)
+    }
   }
   return { character: nextCharacter, applied }
 }
@@ -83,13 +93,17 @@ function runCollectionAutomation(
   character: CharacterTemplate,
   definition: CustomSystemDefinition,
   automation: CustomAutomationDefinition,
-): { character: CharacterTemplate; applied: Array<{collectionId:string;entryId:string;roll?:number;completedItemName?:string}> } {
+  eventContext?: { systemId: string; collectionId: string; entryId: string },
+): { character: CharacterTemplate; applied: Array<{collectionId:string;entryId:string;roll?:number;completedItemName?:string;completed?:boolean}> } {
   const scope = automation.collectionScope
   if (!scope) return { character, applied: [] }
   let nextCharacter = character
-  const applied: Array<{collectionId:string;entryId:string;roll?:number;completedItemName?:string}> = []
+  const applied: Array<{collectionId:string;entryId:string;roll?:number;completedItemName?:string;completed?:boolean}> = []
   const initialState = findEnabledState(nextCharacter, definition.id)
-  const entries = initialState?.collections?.[scope.collectionId] ?? []
+  const allEntries = initialState?.collections?.[scope.collectionId] ?? []
+  const entries = eventContext
+    ? (scope.collectionId === eventContext.collectionId ? allEntries.filter((entry) => entry.id === eventContext.entryId) : [])
+    : allEntries
 
   for (const originalEntry of entries) {
     let state = findEnabledState(nextCharacter, definition.id)
@@ -117,6 +131,7 @@ function runCollectionAutomation(
     }
 
     let completedItemName: string | undefined
+    let completed = false
     state = findEnabledState(nextCharacter, definition.id)
     const currentEntry = state?.collections?.[scope.collectionId]?.find((candidate) => candidate.id === originalEntry.id)
     const completion = scope.completion
@@ -124,6 +139,7 @@ function runCollectionAutomation(
       const progress = Number(currentEntry.values[completion.progressFieldId]) || 0
       const target = Number(currentEntry.values[completion.targetFieldId]) || 0
       if (target > 0 && progress >= target) {
+        completed = completion.emitEvent !== false
         const relatedItem = completion.relatedItemReferenceFieldId
           ? referencedItemSnapshot(currentEntry.values[completion.relatedItemReferenceFieldId])
           : undefined
@@ -158,7 +174,7 @@ function runCollectionAutomation(
     if (effectEntry) {
       nextCharacter = applyCollectionEffects(nextCharacter, definition, scope.collectionId, effectEntry.id, automation.effects ?? [])
     }
-    applied.push({ collectionId: scope.collectionId, entryId: originalEntry.id, ...(roll === undefined ? {} : { roll }), ...(completedItemName ? { completedItemName } : {}) })
+    applied.push({ collectionId: scope.collectionId, entryId: originalEntry.id, ...(roll === undefined ? {} : { roll }), ...(completedItemName ? { completedItemName } : {}), ...(completed ? { completed: true } : {}) })
   }
   return { character: nextCharacter, applied }
 }
