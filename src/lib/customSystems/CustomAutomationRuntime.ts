@@ -247,8 +247,21 @@ function asReference(value: JsonValue | undefined): Record<string, JsonValue> | 
 }
 function referencedItemSnapshot(value: JsonValue | undefined): Record<string, unknown> | undefined {
   const ref = asReference(value)
-  const item = ref?.item
-  return item && typeof item === "object" && !Array.isArray(item) ? item as Record<string, unknown> : undefined
+  if (!ref) return undefined
+  const item = ref.item
+  if (item && typeof item === "object" && !Array.isArray(item)) return item as Record<string, unknown>
+  // References saved without a snapshot still contain enough identity to
+  // materialize a basic inventory item instead of silently dropping output.
+  const itemId = typeof ref.itemId === "string" ? ref.itemId : undefined
+  const name = typeof ref.name === "string" ? ref.name : undefined
+  if (!itemId && !name) return undefined
+  return {
+    id: itemId ?? crypto.randomUUID(),
+    ...(itemId ? { compendiumItemId: itemId } : {}),
+    name: name ?? "Item",
+    kind: "misc",
+    quantity: 1,
+  }
 }
 function customItemData(item: Record<string, unknown>, systemId: string): Record<string, unknown> | undefined {
   const all = item.customSystemData
