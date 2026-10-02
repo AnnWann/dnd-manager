@@ -268,63 +268,66 @@ function EffectsEditor({ effects, draft, definitions, variables, onChange }: {
   variables: CustomFormulaVariable[]
   onChange: (effects: CustomEffectDefinition[]) => void
 }) {
+  const collection=draft.collections?.[0]
   function add(type: CustomEffectDefinition['type']) {
-    const definition = type === 'modifyResource'
-      ? firstDefinitionWithResources(definitions) ?? draft
-      : type === 'modifyField'
-        ? firstDefinitionWithNumericFields(definitions) ?? draft
-        : firstDefinitionWithFields(definitions) ?? draft
-    const systemId = externalSystemId(definition.id, draft.id)
-    const effect: CustomEffectDefinition = type === 'modifyResource'
-      ? { type, systemId, resourceId: definition.resources[0]?.id ?? '', operation: 'add', value: 1 }
-      : type === 'setField'
-        ? { type, systemId, fieldId: writableFields(definition)[0]?.id ?? '', value: true }
-        : { type, systemId, fieldId: numericFields(definition)[0]?.id ?? '', operation: 'add', value: 1 }
-    onChange([...effects, effect])
+    let effect: CustomEffectDefinition
+    if(type==='setCollectionEntryField') effect={type,fieldId:collection?.fields[0]?.id??'',value:true}
+    else if(type==='modifyCollectionEntryField') effect={type,fieldId:collection?.fields.find(f=>f.type==='number')?.id??'',operation:'add',value:1}
+    else if(type==='removeCollectionEntry') effect={type}
+    else if(type==='addReferencedItem') effect={type,referenceFieldId:collection?.fields.find(f=>f.type==='reference')?.id??'',quantity:1}
+    else if(type==='removeReferencedItems') effect={type,groupFieldId:''}
+    else {
+      const definition = type === 'modifyResource' ? firstDefinitionWithResources(definitions) ?? draft : type === 'modifyField' ? firstDefinitionWithNumericFields(definitions) ?? draft : firstDefinitionWithFields(definitions) ?? draft
+      const systemId = externalSystemId(definition.id, draft.id)
+      effect = type === 'modifyResource' ? { type, systemId, resourceId: definition.resources[0]?.id ?? '', operation: 'add', value: 1 }
+        : type === 'setField' ? { type, systemId, fieldId: writableFields(definition)[0]?.id ?? '', value: true }
+        : { type:'modifyField', systemId, fieldId: numericFields(definition)[0]?.id ?? '', operation: 'add', value: 1 }
+    }
+    onChange([...effects,effect])
   }
-  function replace(index: number, effect: CustomEffectDefinition) { onChange(effects.map((entry, current) => current === index ? effect : entry)) }
-  function move(index: number, direction: -1 | 1) {
-    const target = index + direction
-    if (target < 0 || target >= effects.length) return
-    const next = [...effects]
-    ;[next[index], next[target]] = [next[target], next[index]]
-    onChange(next)
-  }
-
+  function replace(index:number,effect:CustomEffectDefinition){onChange(effects.map((entry,current)=>current===index?effect:entry))}
+  function move(index:number,direction:-1|1){const target=index+direction;if(target<0||target>=effects.length)return;const next=[...effects];[next[index],next[target]]=[next[target],next[index]];onChange(next)}
+  const collectionFields=collection?.fields??[]
+  const refFields=collectionFields.filter(f=>f.type==='reference')
   return <div className="grid gap-3">
     <div className="flex flex-wrap gap-2">
-      <SmallButton onClick={() => add('modifyResource')}><Plus className="h-3.5 w-3.5" /> Modificar recurso</SmallButton>
-      <SmallButton onClick={() => add('setField')}><Plus className="h-3.5 w-3.5" /> Definir campo</SmallButton>
-      <SmallButton onClick={() => add('modifyField')}><Plus className="h-3.5 w-3.5" /> Modificar número</SmallButton>
+      <SmallButton onClick={()=>add('modifyResource')}><Plus className="h-3.5 w-3.5"/> Modificar recurso</SmallButton>
+      <SmallButton onClick={()=>add('setField')}><Plus className="h-3.5 w-3.5"/> Definir campo</SmallButton>
+      <SmallButton onClick={()=>add('modifyField')}><Plus className="h-3.5 w-3.5"/> Modificar número</SmallButton>
+      <SmallButton onClick={()=>add('setCollectionEntryField')}><Plus className="h-3.5 w-3.5"/> Definir campo do registro</SmallButton>
+      <SmallButton onClick={()=>add('modifyCollectionEntryField')}><Plus className="h-3.5 w-3.5"/> Modificar número do registro</SmallButton>
+      <SmallButton onClick={()=>add('addReferencedItem')}><Plus className="h-3.5 w-3.5"/> Adicionar item referenciado</SmallButton>
+      <SmallButton onClick={()=>add('removeReferencedItems')}><Plus className="h-3.5 w-3.5"/> Consumir itens referenciados</SmallButton>
+      <SmallButton onClick={()=>add('removeCollectionEntry')}><Plus className="h-3.5 w-3.5"/> Remover registro atual</SmallButton>
     </div>
-    {effects.map((effect, index) => {
-      const selectedSystemId = effect.systemId ?? draft.id
-      const selectedDefinition = definitions.find((entry) => entry.id === selectedSystemId) ?? draft
-      const fields = effect.type === 'modifyField' ? numericFields(selectedDefinition) : writableFields(selectedDefinition)
-
+    {effects.map((effect,index)=>{
+      const collectionOnly=['setCollectionEntryField','modifyCollectionEntryField','removeCollectionEntry','addReferencedItem','removeReferencedItems'].includes(effect.type)
       return <article key={`effect-${index}`} className="rounded-lg border border-border p-3">
-        <div className="mb-3 flex items-center justify-between"><strong className="text-sm text-textH">{effectTypeLabel(effect.type)}</strong><div className="flex gap-1"><IconButton title="Mover para cima" onClick={() => move(index, -1)}><ChevronUp className="h-4 w-4" /></IconButton><IconButton title="Mover para baixo" onClick={() => move(index, 1)}><ChevronDown className="h-4 w-4" /></IconButton><IconButton title="Remover efeito" onClick={() => onChange(effects.filter((_, current) => current !== index))}><Trash2 className="h-4 w-4" /></IconButton></div></div>
-        <div className="grid gap-3 md:grid-cols-3">
-          <SystemSelect value={selectedSystemId} definitions={definitions} onChange={(systemId) => {
-            const definition = definitions.find((entry) => entry.id === systemId) ?? draft
-            const nextSystemId = externalSystemId(systemId, draft.id)
-            if (effect.type === 'modifyResource') replace(index, { ...effect, systemId: nextSystemId, resourceId: definition.resources[0]?.id ?? '' })
-            else if (effect.type === 'modifyField') replace(index, { ...effect, systemId: nextSystemId, fieldId: numericFields(definition)[0]?.id ?? '' })
-            else replace(index, { ...effect, systemId: nextSystemId, fieldId: writableFields(definition)[0]?.id ?? '' })
-          }} />
-          {effect.type === 'modifyResource'
-            ? <ReferenceSelect label="Recurso" value={effect.resourceId} options={selectedDefinition.resources} allowEmpty onChange={(resourceId) => replace(index, { ...effect, resourceId })} />
-            : <ReferenceSelect label="Campo" value={effect.fieldId} options={fields} allowEmpty onChange={(fieldId) => replace(index, { ...effect, fieldId })} />}
-          {effect.type !== 'setField' ? <Select label="Operação" value={effect.operation} options={OPERATIONS} labels={OPERATION_LABELS} onChange={(operation) => replace(index, { ...effect, operation: operation as CustomNumericOperation })} /> : <div />}
-          <Input label="Valor" value={String(effect.value ?? '')} onChange={(value) => {
-            if (effect.type === 'setField') replace(index, { ...effect, value: parseLiteral(value), formula: undefined })
-            else replace(index, { ...effect, value: optionalNumber(value), formula: undefined })
-          }} />
-          <div className="md:col-span-2"><FormulaInput label="Ou fórmula" value={effect.formula ?? ''} variables={variables} onChange={(formula) => replace(index, { ...effect, formula: formula || undefined } as CustomEffectDefinition)} /></div>
-        </div>
+        <div className="mb-3 flex items-center justify-between"><strong className="text-sm text-textH">{effectTypeLabel(effect.type)}</strong><div className="flex gap-1"><IconButton title="Mover para cima" onClick={()=>move(index,-1)}><ChevronUp className="h-4 w-4"/></IconButton><IconButton title="Mover para baixo" onClick={()=>move(index,1)}><ChevronDown className="h-4 w-4"/></IconButton><IconButton title="Remover efeito" onClick={()=>onChange(effects.filter((_,current)=>current!==index))}><Trash2 className="h-4 w-4"/></IconButton></div></div>
+        {collectionOnly ? <div className="grid gap-3 md:grid-cols-3">
+          {(effect.type==='setCollectionEntryField'||effect.type==='modifyCollectionEntryField')?<ReferenceSelect label="Campo do registro" value={effect.fieldId} options={effect.type==='modifyCollectionEntryField'?collectionFields.filter(f=>f.type==='number'):collectionFields} allowEmpty onChange={fieldId=>replace(index,{...effect,fieldId})}/>:null}
+          {effect.type==='setCollectionEntryField'?<Input label="Valor" value={String(effect.value??'')} onChange={value=>replace(index,{...effect,value:parseLiteral(value),formula:undefined})}/>:null}
+          {effect.type==='modifyCollectionEntryField'?<><Select label="Operação" value={effect.operation} options={['set','add','subtract','multiply']} onChange={operation=>replace(index,{...effect,operation:operation as any})}/><Input label="Valor" value={String(effect.value??'')} onChange={value=>replace(index,{...effect,value:optionalNumber(value),formula:undefined})}/></>:null}
+          {effect.type==='addReferencedItem'?<><ReferenceSelect label="Referência do item" value={effect.referenceFieldId} options={refFields} allowEmpty onChange={referenceFieldId=>replace(index,{...effect,referenceFieldId})}/><Input label="Campo no item referenciado (opcional)" value={effect.referencedItemFieldId??''} onChange={referencedItemFieldId=>replace(index,{...effect,referencedItemFieldId:referencedItemFieldId||undefined})}/><Input label="Quantidade" value={String(effect.quantity??1)} onChange={quantity=>replace(index,{...effect,quantity:optionalNumber(quantity)})}/></>:null}
+          {effect.type==='removeReferencedItems'?<><Input label="Campo agrupado/quantitativo" value={effect.groupFieldId} onChange={groupFieldId=>replace(index,{...effect,groupFieldId})}/><ReferenceSelect label="Referência relacionada (opcional)" value={effect.relatedItemReferenceFieldId??''} options={refFields} allowEmpty onChange={relatedItemReferenceFieldId=>replace(index,{...effect,relatedItemReferenceFieldId:relatedItemReferenceFieldId||undefined})}/></>:null}
+          {effect.type==='removeCollectionEntry'?<p className="text-xs text-text md:col-span-3">Remove o registro atual da coleção ao executar.</p>:null}
+        </div> : <StandardEffectEditor effect={effect as Extract<CustomEffectDefinition,{type:'modifyResource'|'setField'|'modifyField'}>} index={index} draft={draft} definitions={definitions} variables={variables} replace={replace}/>}
       </article>
     })}
-    {!effects.length ? <Empty>Nenhum efeito adicionado.</Empty> : null}
+    {!effects.length?<Empty>Nenhum efeito adicionado.</Empty>:null}
+  </div>
+}
+
+function StandardEffectEditor({effect,index,draft,definitions,variables,replace}:{effect:Extract<CustomEffectDefinition,{type:'modifyResource'|'setField'|'modifyField'}>;index:number;draft:CustomSystemDefinition;definitions:CustomSystemDefinition[];variables:CustomFormulaVariable[];replace:(index:number,effect:CustomEffectDefinition)=>void}) {
+  const selectedSystemId=effect.systemId??draft.id
+  const selectedDefinition=definitions.find(entry=>entry.id===selectedSystemId)??draft
+  const fields=effect.type==='modifyField'?numericFields(selectedDefinition):writableFields(selectedDefinition)
+  return <div className="grid gap-3 md:grid-cols-3">
+    <SystemSelect value={selectedSystemId} definitions={definitions} onChange={systemId=>{const definition=definitions.find(entry=>entry.id===systemId)??draft;const nextSystemId=externalSystemId(systemId,draft.id);if(effect.type==='modifyResource')replace(index,{...effect,systemId:nextSystemId,resourceId:definition.resources[0]?.id??''});else if(effect.type==='modifyField')replace(index,{...effect,systemId:nextSystemId,fieldId:numericFields(definition)[0]?.id??''});else replace(index,{...effect,systemId:nextSystemId,fieldId:writableFields(definition)[0]?.id??''})}}/>
+    {effect.type==='modifyResource'?<ReferenceSelect label="Recurso" value={effect.resourceId} options={selectedDefinition.resources} allowEmpty onChange={resourceId=>replace(index,{...effect,resourceId})}/>:<ReferenceSelect label="Campo" value={effect.fieldId} options={fields} allowEmpty onChange={fieldId=>replace(index,{...effect,fieldId})}/>}
+    {effect.type!=='setField'?<Select label="Operação" value={effect.operation} options={OPERATIONS} labels={OPERATION_LABELS} onChange={operation=>replace(index,{...effect,operation:operation as CustomNumericOperation})}/>:<div/>}
+    <Input label="Valor" value={String(effect.value??'')} onChange={value=>effect.type==='setField'?replace(index,{...effect,value:parseLiteral(value),formula:undefined}):replace(index,{...effect,value:optionalNumber(value),formula:undefined})}/>
+    <div className="md:col-span-2"><FormulaInput label="Ou fórmula" value={effect.formula??''} variables={variables} onChange={formula=>replace(index,{...effect,formula:formula||undefined} as CustomEffectDefinition)}/></div>
   </div>
 }
 
