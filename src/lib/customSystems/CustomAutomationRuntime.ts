@@ -140,7 +140,27 @@ function runCollectionAutomation(
             ? scope.roll.progressOnSuccess ?? 0
             : scope.roll.progressOnFailure ?? 0
       const current = Number(entry.values[scope.roll.progressFieldId]) || 0
-      nextCharacter = updateCollectionEntry(nextCharacter, definition.id, scope.collectionId, entry.id, scope.roll.progressFieldId, Math.max(0, current + delta))
+      let nextProgress = Math.max(0, current + delta)
+      const consumption = scope.roll.consumeIngredientsOnProgress
+      if (delta > 0 && consumption) {
+        const target = Math.max(1, Number(entry.values[consumption.targetFieldId]) || 1)
+        const source = entry.values[consumption.relatedItemReferenceFieldId]
+        const related = resolveInventoryReferencedItem(nextCharacter, source)
+        const relatedData = related ? customItemData(related, definition.id) : undefined
+        const group = relatedData?.[consumption.ingredientGroupFieldId]
+        // Advance one work unit at a time. Each unit consumes only the delta
+        // between cumulative material requirements at the old/new progress.
+        let allowed = current
+        const desired = Math.min(target, nextProgress)
+        while (allowed < desired) {
+          const stepGroup = proportionalIngredientDelta(group, allowed, allowed + 1, target)
+          if (!hasItemIngredientGroup(nextCharacter, stepGroup)) break
+          nextCharacter = consumeItemIngredientGroup(nextCharacter, stepGroup)
+          allowed += 1
+        }
+        nextProgress = allowed
+      }
+      nextCharacter = updateCollectionEntry(nextCharacter, definition.id, scope.collectionId, entry.id, scope.roll.progressFieldId, nextProgress)
     }
 
     let completedItemName: string | undefined
@@ -298,6 +318,28 @@ function customItemData(item: Record<string, unknown>, systemId: string): Record
   if (!all || typeof all !== "object" || Array.isArray(all)) return undefined
   const data = (all as Record<string, unknown>)[systemId]
   return data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : undefined
+}
+
+function resolveInventoryReferencedItem(character: CharacterTemplate, value: JsonValue | undefined): Record<string, unknown> | undefined {
+  const ref = asReference(value)
+  const itemId = typeof ref?.itemId === "string" ? ref.itemId : undefined
+  const live = itemId
+    ? character.get("inventory").find((item) => item.id === itemId || item.compendiumItemId === itemId)
+    : undefined
+  return live ? live as unknown as Record<string, unknown> : referencedItemSnapshot(value)
+}
+
+function proportionalIngredientDelta(raw: unknown, fromProgress: number, toProgress: number, target: number): unknown[] {
+  if (!Array.isArray(raw) || target <= 0) return []
+  return raw.flatMap((row) => {
+    if (!row || typeof row !== "object" || Array.isArray(row)) return []
+    const record = row as Record<string, unknown>
+    const total = Math.max(0, Math.trunc(Number(record.quantity ?? record.quantidade) || 0))
+    const before = Math.floor(total * Math.max(0, Math.min(target, fromProgress)) / target)
+    const after = Math.floor(total * Math.max(0, Math.min(target, toProgress)) / target)
+    const quantity = Math.max(0, after - before)
+    return quantity > 0 ? [{ ...record, quantity }] : []
+  })
 }
 
 function hasItemIngredientGroup(character: CharacterTemplate, raw: unknown): boolean {
