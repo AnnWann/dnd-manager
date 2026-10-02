@@ -12,6 +12,14 @@ export interface CustomAutomationDefinition {
    * for every matching collection entry instead of once for the character.
    */
   collectionScope?: CustomCollectionAutomationScope
+  /** Conditions supplied by the campaign/session environment rather than character fields. */
+  contextConditions?: CustomAutomationContextCondition[]
+}
+
+export interface CustomAutomationContextCondition {
+  type: 'inventoryAccess'
+  location: 'party'
+  accessible: boolean
 }
 
 export type CustomSystemEventType =
