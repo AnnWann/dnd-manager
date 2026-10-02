@@ -41,10 +41,10 @@ function FieldSchema({fields,itemTypes,onChange}:{fields:CustomFieldDefinition[]
     <div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-sm text-textH">Campos do tipo</strong><div className="flex flex-wrap gap-1">
       <Button onClick={()=>add("text")}>Texto</Button><Button onClick={()=>add("number")}>Número</Button><Button onClick={()=>add("boolean")}>Sim/Não</Button><Button onClick={()=>add("reference")}>Referência</Button><Button onClick={()=>add("quantityReference")}>Referência quantitativa</Button><Button onClick={()=>add("collectionGroup")}>Agrupado</Button>
     </div></div>
-    {fields.map((field,index)=><div key={field.id} className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
+    {fields.map((field,index)=><div key={`${field.id}:${index}`} className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
       <div className="grid gap-2 md:grid-cols-[1fr_1fr_170px_auto]">
         <Input label="Nome" value={field.name} onChange={name=>onChange(fields.map((f,i)=>i===index?{...f,name}:f))}/>
-        <Input label="ID" value={field.id} onChange={id=>onChange(fields.map((f,i)=>i===index?{...f,id:slugify(id)}:f))}/>
+        <Input label="ID" value={field.id} onChange={id=>onChange(fields.map((f,i)=>i===index?{...f,id:uniqueFieldId(slugify(id),fields,index)}:f))}/>
         <div className="grid gap-1 text-xs text-text"><span>Tipo</span><div className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH">{field.type}</div></div>
         <div className="flex items-end"><Danger onClick={()=>onChange(fields.filter((_,i)=>i!==index))}><Trash2 className="h-4 w-4"/></Danger></div>
       </div>
@@ -66,4 +66,5 @@ function Input({label,value,onChange}:{label:string;value:string;onChange:(v:str
 function Button({children,onClick}:{children:ReactNode;onClick:()=>void}){return <button type="button" onClick={onClick} className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1.5 text-xs text-textH hover:bg-accentBg">{children}</button>}
 function Danger({children,onClick}:{children:ReactNode;onClick:()=>void}){return <button type="button" onClick={onClick} className="rounded-lg border border-red-500/40 p-2 text-red-300 hover:bg-red-500/10">{children}</button>}
 function slugify(v:string){return v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")}
+function uniqueFieldId(candidate:string,fields:CustomFieldDefinition[],index:number){const base=candidate||"campo";const used=fields.filter((_,i)=>i!==index).map(f=>f.id);return uniqueId(base,used)}
 function uniqueId(base:string,ids:string[]){let id=base,n=2;while(ids.includes(id))id=`${base}-${n++}`;return id}
