@@ -16,6 +16,9 @@ import {
   adjustCustomResource,
   countCustomAbilities,
   createCharacterCustomSystemState,
+  createCustomCollectionEntry,
+  removeCustomCollectionEntry,
+  updateCustomCollectionEntryField,
   createCustomAbility,
   getCustomAbilityAvailability,
   getCustomAbilityLimit,
@@ -333,7 +336,30 @@ function CustomSystemEditor({
         )
       })}
 
-      {!items.length ? (
+      {(definition.collections ?? []).map((collection) => (
+        <section key={collection.id} className="rounded-xl border border-border bg-bg p-4">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div><h3 className="font-medium text-textH">{collection.name}</h3>{collection.description ? <p className="mt-1 text-xs text-text">{collection.description}</p> : null}</div>
+            <button type="button" onClick={() => run(() => createCustomCollectionEntry(definition, state, collection.id, crypto.randomUUID(), actor))} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-textH hover:bg-accentBg"><Plus className="h-4 w-4"/> Adicionar</button>
+          </div>
+          <div className="grid gap-3">
+            {(state.collections?.[collection.id] ?? []).map((entry) => (
+              <article key={entry.id} className="rounded-lg border border-border p-3">
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <strong className="text-sm text-textH">{displayJsonValue(entry.values[collection.display?.titleFieldId ?? ""]) || collection.name}</strong>
+                  <button type="button" onClick={() => run(() => removeCustomCollectionEntry(definition, state, collection.id, entry.id, actor))} className="rounded p-1.5 text-red-300 hover:bg-red-500/10"><Trash2 className="h-4 w-4"/></button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {collection.fields.map((field) => <FieldEditor key={field.id} field={field} value={entry.values[field.id]} disabled={field.type === "formula" || (field.editPermission === "masterOnly" && actor !== "master")} onChange={(value) => run(() => updateCustomCollectionEntryField(definition, state, collection.id, entry.id, field.id, value, actor))}/>)}
+                </div>
+              </article>
+            ))}
+            {!(state.collections?.[collection.id] ?? []).length ? <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-text">Nenhum registro.</div> : null}
+          </div>
+        </section>
+      ))}
+
+      {!items.length && !(definition.collections ?? []).length ? (
         <div className="rounded-xl border border-dashed border-border bg-bg p-8 text-center text-sm text-text">
           Nenhum item está visível para esta função.
         </div>
@@ -1333,6 +1359,25 @@ function deriveCustomSystemOperation(
       systemId,
       resourceId,
       state: next,
+    }
+  }
+
+  for (const collectionId of new Set([...Object.keys(before.collections ?? {}), ...Object.keys(after.collections ?? {})])) {
+    const beforeEntries = before.collections?.[collectionId] ?? []
+    const afterEntries = after.collections?.[collectionId] ?? []
+    const beforeMap = new Map(beforeEntries.map((entry) => [entry.id, entry]))
+    const afterMap = new Map(afterEntries.map((entry) => [entry.id, entry]))
+    const added = afterEntries.find((entry) => !beforeMap.has(entry.id))
+    if (added) return { type: 'character.customSystem.collection.entry.add', characterId, systemId, collectionId, entryId: added.id }
+    const removed = beforeEntries.find((entry) => !afterMap.has(entry.id))
+    if (removed) return { type: 'character.customSystem.collection.entry.remove', characterId, systemId, collectionId, entryId: removed.id }
+    for (const nextEntry of afterEntries) {
+      const previous = beforeMap.get(nextEntry.id)
+      if (!previous) continue
+      for (const fieldId of new Set([...Object.keys(previous.values), ...Object.keys(nextEntry.values)])) {
+        if (sameJson(previous.values[fieldId], nextEntry.values[fieldId])) continue
+        return { type: 'character.customSystem.collection.entry.field.set', characterId, systemId, collectionId, entryId: nextEntry.id, fieldId, value: nextEntry.values[fieldId] }
+      }
     }
   }
 
