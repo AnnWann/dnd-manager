@@ -180,7 +180,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
   const [inventoryState, setInventoryState] = useState<SessionSharedInventoryState | null>(null)
   const [missionState, setMissionState] = useState<SessionMissionState | null>(null)
   const [initiativeState, setInitiativeState] = useState<SessionInitiativeState | null>(null)
-  const [hpLog, setHpLog] = useState<SessionLogRecord[]>([])
+  const [hpLog, setHpLog] = useState<SessionLogRecord[]>([])\n  const [customNotice, setCustomNotice] = useState<{title:string;message:string}|null>(null)
   const socketRef = useRef<SessionSocket | null>(null)
   const clientId = useMemo(() => getOrCreateClientId(sessionId), [sessionId])
   const baseUrl = resolveSessionServerUrl()
@@ -303,7 +303,7 @@ function SessionRuntimeProviderInner({ sessionId, userId, role, children }: {
           publishServerActionRoll(message.result)
           return
         }
-        if (message.type === "session.error") console.error(`[session-runtime] ${message.code}: ${message.message}`)
+        if (message.type === "session.customSystem.notice") { setCustomNotice({ title: message.title, message: message.message }); return }\n        if (message.type === "session.error") console.error(`[session-runtime] ${message.code}: ${message.message}`)
       },
     })
 
