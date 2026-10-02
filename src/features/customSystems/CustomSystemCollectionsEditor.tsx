@@ -1,7 +1,7 @@
 import { Plus, Trash2 } from "lucide-react"
 import { Select as SharedSelect } from "../../components/ui/Select"
 import type { ReactNode } from "react"
-import type { CustomFieldDefinition, CustomFieldType } from "../../models/customSystems/CustomFieldDefinition"
+import type { CustomFieldDefinition, CustomFieldType, CustomReferenceFieldDefinition } from "../../models/customSystems/CustomFieldDefinition"
 import type { CustomCollectionDefinition } from "../../models/customSystems/CustomCollectionDefinition"
 import type { CustomSystemDefinition } from "../../models/customSystems/CustomSystemDefinition"
 
@@ -41,11 +41,14 @@ export function CustomSystemCollectionsEditor({ draft, setDraft }: {
           replace(index,{...collection,fields:[...collection.fields,{id,name:"Novo campo",type:"text"}]})
         }}><Plus className="h-3.5 w-3.5"/> Campo</Button></div>
         <div className="grid gap-2">
-          {collection.fields.map((field,fi)=><div key={field.id} className="grid gap-2 rounded-lg border border-border p-3 md:grid-cols-[1fr_1fr_160px_auto]">
-            <Input label="Nome" value={field.name} onChange={name=>replaceField(index,fi,{...field,name},collections,setCollections)}/>
-            <Input label="ID" value={field.id} onChange={id=>replaceField(index,fi,{...field,id:slugify(id)},collections,setCollections)}/>
-            <Select label="Tipo" value={field.type} options={FIELD_TYPES} onChange={type=>replaceField(index,fi,makeField(field,type as CustomFieldType),collections,setCollections)}/>
-            <div className="flex items-end"><IconButton onClick={()=>replace(index,{...collection,fields:collection.fields.filter((_,i)=>i!==fi)})}><Trash2 className="h-4 w-4"/></IconButton></div>
+          {collection.fields.map((field,fi)=><div key={field.id} className="grid gap-2 rounded-lg border border-border p-3">
+            <div className="grid gap-2 md:grid-cols-[1fr_1fr_160px_auto]">
+              <Input label="Nome" value={field.name} onChange={name=>replaceField(index,fi,{...field,name},collections,setCollections)}/>
+              <Input label="ID" value={field.id} onChange={id=>replaceField(index,fi,{...field,id:slugify(id)},collections,setCollections)}/>
+              <Select label="Tipo" value={field.type} options={FIELD_TYPES} onChange={type=>replaceField(index,fi,makeField(field,type as CustomFieldType),collections,setCollections)}/>
+              <div className="flex items-end"><IconButton onClick={()=>replace(index,{...collection,fields:collection.fields.filter((_,i)=>i!==fi)})}><Trash2 className="h-4 w-4"/></IconButton></div>
+            </div>
+            {field.type === "reference" ? <ReferenceFieldOptions field={field} collections={collections} onChange={(next)=>replaceField(index,fi,next,collections,setCollections)}/> : null}
           </div>)}
           {!collection.fields.length?<div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-text">Adicione os campos que cada registro desta coleção deve possuir.</div>:null}
         </div>
@@ -67,9 +70,29 @@ function makeField(old:CustomFieldDefinition,type:CustomFieldType):CustomFieldDe
   if(type==="number") return {...base,type:"number"}
   if(type==="boolean") return {...base,type:"boolean"}
   if(type==="richText") return {...base,type:"richText"}
-  if(type==="reference") return {...base,type:"reference",target:"item"}
+  if(type==="reference") return {...base,type:"reference",targets:[{type:"inventoryItem",scope:"character"},{type:"compendiumItem"}]}
   return {...base,type:"text"}
 }
+
+function ReferenceFieldOptions({field,collections,onChange}:{field:CustomReferenceFieldDefinition,collections:CustomCollectionDefinition[],onChange:(field:CustomReferenceFieldDefinition)=>void}){
+  const targets=field.targets ?? (field.target ? [{type:field.target} as const] : [])
+  const has=(type:string,collectionId?:string)=>targets.some((target)=>target.type===type && (type!=="collection" || ("collectionId" in target && target.collectionId===collectionId)))
+  const toggle=(target:CustomReferenceFieldDefinition["targets"] extends (infer T)[]|undefined ? T : never,checked:boolean)=>{
+    const next=checked?[...targets,target]:targets.filter((entry)=>!(entry.type===target.type && (entry.type!=="collection" || (target.type==="collection" && entry.collectionId===target.collectionId))))
+    onChange({...field,target:undefined,targets:next})
+  }
+  return <div className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
+    <div className="text-xs font-medium text-textH">Fontes permitidas</div>
+    <div className="flex flex-wrap gap-3 text-xs text-text">
+      <Check label="Itens do inventário do personagem" checked={has("inventoryItem")} onChange={(v)=>toggle({type:"inventoryItem",scope:"character"},v)}/>
+      <Check label="Itens do compêndio" checked={has("compendiumItem")} onChange={(v)=>toggle({type:"compendiumItem"},v)}/>
+      {collections.map((collection)=><Check key={collection.id} label={`Coleção: ${collection.name}`} checked={has("collection",collection.id)} onChange={(v)=>toggle({type:"collection",collectionId:collection.id},v)}/>)}
+      <Check label="Múltiplas referências" checked={field.multiple===true} onChange={(multiple)=>onChange({...field,multiple})}/>
+    </div>
+  </div>
+}
+function Check({label,checked,onChange}:{label:string,checked:boolean,onChange:(v:boolean)=>void}){return <label className="inline-flex items-center gap-2"><input type="checkbox" checked={checked} onChange={(e)=>onChange(e.target.checked)}/><span>{label}</span></label>}
+
 function Input({label,value,onChange}:{label:string,value:string,onChange:(v:string)=>void}){return <label className="grid gap-1 text-xs text-text"><span>{label}</span><input className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH" value={value} onChange={e=>onChange(e.target.value)}/></label>}
 function Select({label,value,options,onChange}:{label:string,value:string,options:readonly string[],onChange:(v:string)=>void}){return <label className="grid gap-1 text-xs text-text"><span>{label}</span><SharedSelect className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH" value={value} onChange={e=>onChange(e.target.value)}>{options.map(o=><option key={o} value={o}>{o||"Nenhum"}</option>)}</SharedSelect></label>}
 function Button({children,onClick}:{children:ReactNode,onClick:()=>void}){return <button type="button" onClick={onClick} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-textH hover:bg-accentBg">{children}</button>}
