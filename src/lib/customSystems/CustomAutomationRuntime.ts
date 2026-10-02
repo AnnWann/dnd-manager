@@ -10,6 +10,8 @@ import type {
   CharacterCustomSystemState,
   CustomSystemDefinition,
 } from "../../models/customSystems/CustomSystemDefinition"
+import type { JsonValue } from "../../models/customSystems/CustomGenerals"
+import type { Itemmable } from "../../models/items/item"
 import { getCharacterFormulaValues } from "./CharacterFormulaVariables"
 import { evaluateCustomFormula } from "./CustomFormulaEngineWithCharacter"
 import {
@@ -21,6 +23,10 @@ export type AppliedCustomAutomation = {
   systemId: string
   automationId: string
   automationName: string
+  collectionId?: string
+  entryId?: string
+  roll?: number
+  completedItemName?: string
 }
 
 export type CustomAutomationRunResult = {
@@ -42,6 +48,17 @@ export function runCustomSystemAutomations(
 
     for (const automation of definition.automations ?? []) {
       if (automation.enabled === false || automation.event !== event) continue
+      if (automation.collectionScope) {
+        const result = runCollectionAutomation(nextCharacter, definition, automation)
+        nextCharacter = result.character
+        applied.push(...result.applied.map((entry) => ({
+          systemId: definition.id,
+          automationId: automation.id,
+          automationName: automation.name,
+          ...entry,
+        })))
+        continue
+      }
       const result = runAutomation(nextCharacter, definitions, definition, automation)
       nextCharacter = result.character
       if (result.applied) {
@@ -55,6 +72,130 @@ export function runCustomSystemAutomations(
   }
 
   return { character: nextCharacter, applied }
+}
+
+function runCollectionAutomation(
+  character: CharacterTemplate,
+  definition: CustomSystemDefinition,
+  automation: CustomAutomationDefinition,
+): { character: CharacterTemplate; applied: Array<{collectionId:string;entryId:string;roll?:number;completedItemName?:string}> } {
+  const scope = automation.collectionScope
+  if (!scope) return { character, applied: [] }
+  let nextCharacter = character
+  const applied: Array<{collectionId:string;entryId:string;roll?:number;completedItemName?:string}> = []
+  const initialState = findEnabledState(nextCharacter, definition.id)
+  const entries = initialState?.collections?.[scope.collectionId] ?? []
+
+  for (const originalEntry of entries) {
+    let state = findEnabledState(nextCharacter, definition.id)
+    if (!state) break
+    const entry = state.collections?.[scope.collectionId]?.find((candidate) => candidate.id === originalEntry.id)
+    if (!entry || !(scope.conditions ?? []).every((condition) => compare(entry.values[condition.fieldId], condition.operator, condition.value))) continue
+
+    let roll: number | undefined
+    if (scope.roll) {
+      const d20 = Math.floor(Math.random() * 20) + 1
+      const bonus = evaluateEntryNumber(scope.roll.formula, entry.values)
+      const dc = scope.roll.dcFormula?.trim()
+        ? evaluateEntryNumber(scope.roll.dcFormula, entry.values)
+        : scope.roll.dc ?? 10
+      roll = d20 + bonus
+      const delta = d20 === 1
+        ? scope.roll.progressOnCriticalFailure ?? 0
+        : d20 === 20
+          ? scope.roll.progressOnCriticalSuccess ?? 0
+          : roll >= dc
+            ? scope.roll.progressOnSuccess ?? 0
+            : scope.roll.progressOnFailure ?? 0
+      const current = Number(entry.values[scope.roll.progressFieldId]) || 0
+      nextCharacter = updateCollectionEntry(nextCharacter, definition.id, scope.collectionId, entry.id, scope.roll.progressFieldId, Math.max(0, current + delta))
+    }
+
+    let completedItemName: string | undefined
+    state = findEnabledState(nextCharacter, definition.id)
+    const currentEntry = state?.collections?.[scope.collectionId]?.find((candidate) => candidate.id === originalEntry.id)
+    const completion = scope.completion
+    if (currentEntry && completion) {
+      const progress = Number(currentEntry.values[completion.progressFieldId]) || 0
+      const target = Number(currentEntry.values[completion.targetFieldId]) || 0
+      if (target > 0 && progress >= target) {
+        const output = completion.outputReferenceFieldId ? currentEntry.values[completion.outputReferenceFieldId] : undefined
+        const outputItem = referencedItemSnapshot(output)
+        if (outputItem) {
+          const item = { ...outputItem, id: crypto.randomUUID(), quantity: Math.max(1, Number(outputItem.quantity) || 1) } as Itemmable
+          nextCharacter = nextCharacter.addInventoryItem(item)
+          completedItemName = item.name
+        }
+        if (completion.relatedEntryReferenceFieldId) {
+          nextCharacter = consumeRelatedIngredients(nextCharacter, definition, currentEntry.values[completion.relatedEntryReferenceFieldId], completion)
+        }
+        if (completion.deactivateFieldId) {
+          nextCharacter = updateCollectionEntry(nextCharacter, definition.id, scope.collectionId, currentEntry.id, completion.deactivateFieldId, false)
+        }
+      }
+    }
+    applied.push({ collectionId: scope.collectionId, entryId: originalEntry.id, ...(roll === undefined ? {} : { roll }), ...(completedItemName ? { completedItemName } : {}) })
+  }
+  return { character: nextCharacter, applied }
+}
+
+function evaluateEntryNumber(formula: string, values: Record<string, JsonValue>): number {
+  const replaced = formula.replace(/entry\.([a-zA-Z0-9_-]+)/g, (_, key: string) => String(Number(values[key]) || 0))
+  if (!/^[0-9+\-*/().\s]+$/.test(replaced)) return Number(formula) || 0
+  try {
+    const value = Function(`"use strict"; return (\${replaced})`)()
+    return Number.isFinite(value) ? Number(value) : 0
+  } catch { return 0 }
+}
+
+function updateCollectionEntry(character: CharacterTemplate, systemId: string, collectionId: string, entryId: string, fieldId: string, value: JsonValue): CharacterTemplate {
+  const state = findEnabledState(character, systemId)
+  if (!state) return character
+  const entries = state.collections?.[collectionId] ?? []
+  const nextState = { ...state, collections: { ...(state.collections ?? {}), [collectionId]: entries.map((entry) => entry.id === entryId ? { ...entry, values: { ...entry.values, [fieldId]: value }, updatedAt: new Date().toISOString() } : entry) } }
+  return replaceState(character, nextState)
+}
+
+function asReference(value: JsonValue | undefined): Record<string, JsonValue> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, JsonValue> : undefined
+}
+function referencedItemSnapshot(value: JsonValue | undefined): Record<string, unknown> | undefined {
+  const ref = asReference(value)
+  const item = ref?.item
+  return item && typeof item === "object" && !Array.isArray(item) ? item as Record<string, unknown> : undefined
+}
+function collectionEntryFromReference(definition: CustomSystemDefinition, state: CharacterCustomSystemState, value: JsonValue | undefined) {
+  const ref = asReference(value)
+  if (ref?.type !== "collectionEntry" || typeof ref.collectionId !== "string" || typeof ref.entryId !== "string") return undefined
+  return state.collections?.[ref.collectionId]?.find((entry) => entry.id === ref.entryId)
+}
+function consumeRelatedIngredients(character: CharacterTemplate, definition: CustomSystemDefinition, relatedRef: JsonValue | undefined, completion: NonNullable<NonNullable<CustomAutomationDefinition["collectionScope"]>["completion"]>): CharacterTemplate {
+  const state = findEnabledState(character, definition.id)
+  if (!state || !completion.ingredientReferencesFieldId || !completion.ingredientItemFieldId || !completion.ingredientQuantityFieldId) return character
+  const related = collectionEntryFromReference(definition, state, relatedRef)
+  const ingredientRefs = related?.values[completion.ingredientReferencesFieldId]
+  if (!Array.isArray(ingredientRefs)) return character
+  let inventory = [...character.get("inventory")]
+  for (const ingredientRef of ingredientRefs) {
+    const ingredient = collectionEntryFromReference(definition, state, ingredientRef)
+    if (!ingredient) continue
+    const itemRef = asReference(ingredient.values[completion.ingredientItemFieldId])
+    const needed = Math.max(0, Math.trunc(Number(ingredient.values[completion.ingredientQuantityFieldId]) || 0))
+    if (!itemRef || needed <= 0) continue
+    const sourceId = typeof itemRef.itemId === "string" ? itemRef.itemId : ""
+    const sourceName = typeof itemRef.name === "string" ? itemRef.name : ""
+    let remaining = needed
+    inventory = inventory.flatMap((item) => {
+      if (remaining <= 0) return [item]
+      const matches = (sourceId && (item.id === sourceId || item.compendiumItemId === sourceId)) || (sourceName && item.name === sourceName)
+      if (!matches) return [item]
+      const available = Math.max(0, Math.trunc(Number(item.quantity) || 0))
+      const used = Math.min(available, remaining)
+      remaining -= used
+      return available - used > 0 ? [{ ...item, quantity: available - used } as Itemmable] : []
+    })
+  }
+  return character.with("inventory", inventory)
 }
 
 export function runCustomSystemAutomation(
