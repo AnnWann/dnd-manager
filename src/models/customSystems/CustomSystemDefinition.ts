@@ -20,6 +20,7 @@ import type {
 import type { CustomPanelDefinition } from "./CustomPanelDefinition"
 import type { CustomResourceDefinition } from "./CustomResourceDefinition"
 import type { CustomCollectionDefinition, CustomCollectionEntry } from "./CustomCollectionDefinition"
+import type { CustomSystemItemTypeDefinition } from "./CustomItemTypeDefinition"
 
 export interface CustomSystemDefinition {
   id: CustomSystemId
@@ -44,6 +45,8 @@ export interface CustomSystemDefinition {
   characterPlacement?: CustomSystemCharacterPlacement
   presentation?: CustomSystemPresentationDefinition
   tags?: string[]
+  /** Generic item classifications owned by this system (for example resource or recipe). */
+  itemTypes?: CustomSystemItemTypeDefinition[]
   /** Optional metadata schema this system may attach to inventory/loot items. */
   itemExtension?: CustomSystemItemExtensionDefinition
   /** User-defined repeatable record types. The engine assigns no domain meaning to them. */
