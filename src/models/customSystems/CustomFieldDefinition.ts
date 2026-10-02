@@ -15,6 +15,8 @@ export type CustomFieldType =
   | 'attribute'
   | 'richText'
   | 'reference'
+  | 'collectionGroup'
+  | 'quantityReference'
   | 'formula'
 
 export interface CustomFieldBase {
@@ -74,6 +76,7 @@ export type CustomReferenceSource =
   | { type: CustomReferenceTarget }
   | { type: 'inventoryItem'; scope?: 'character' | 'party' | 'ground' | 'any' }
   | { type: 'compendiumItem' }
+  | { type: 'itemType'; systemId?: string; itemTypeId: string }
   | { type: 'collection'; systemId?: string; collectionId: string }
 
 export interface CustomReferenceFieldDefinition extends CustomFieldBase {
@@ -83,6 +86,19 @@ export interface CustomReferenceFieldDefinition extends CustomFieldBase {
   /** Allowed reference sources. Multiple sources can be combined in one picker. */
   targets?: CustomReferenceSource[]
   multiple?: boolean
+}
+
+export interface CustomCollectionGroupFieldDefinition extends CustomFieldBase {
+  type: 'collectionGroup'
+  fields: CustomFieldDefinition[]
+  minimumEntries?: number
+  maximumEntries?: number
+}
+
+export interface CustomQuantityReferenceFieldDefinition extends CustomFieldBase {
+  type: 'quantityReference'
+  targets: CustomReferenceSource[]
+  minimumQuantity?: number
 }
 
 export interface CustomFormulaFieldDefinition extends CustomFieldBase {
@@ -100,4 +116,6 @@ export type CustomFieldDefinition =
   | CustomDiceFieldDefinition
   | CustomAttributeFieldDefinition
   | CustomReferenceFieldDefinition
+  | CustomCollectionGroupFieldDefinition
+  | CustomQuantityReferenceFieldDefinition
   | CustomFormulaFieldDefinition
