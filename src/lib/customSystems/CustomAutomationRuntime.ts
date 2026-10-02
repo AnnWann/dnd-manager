@@ -26,6 +26,8 @@ export type AppliedCustomAutomation = {
   collectionId?: string
   entryId?: string
   roll?: number
+  naturalRoll?: number
+  rollModifier?: number
   completedItemName?: string
   completed?: boolean
 }
@@ -101,11 +103,11 @@ function runCollectionAutomation(
   definition: CustomSystemDefinition,
   automation: CustomAutomationDefinition,
   eventContext?: { systemId: string; collectionId: string; entryId: string },
-): { character: CharacterTemplate; applied: Array<{collectionId:string;entryId:string;roll?:number;completedItemName?:string;completed?:boolean}> } {
+): { character: CharacterTemplate; applied: Array<{collectionId:string;entryId:string;roll?:number;naturalRoll?:number;rollModifier?:number;completedItemName?:string;completed?:boolean}> } {
   const scope = automation.collectionScope
   if (!scope) return { character, applied: [] }
   let nextCharacter = character
-  const applied: Array<{collectionId:string;entryId:string;roll?:number;completedItemName?:string;completed?:boolean}> = []
+  const applied: Array<{collectionId:string;entryId:string;roll?:number;naturalRoll?:number;rollModifier?:number;completedItemName?:string;completed?:boolean}> = []
   const initialState = findEnabledState(nextCharacter, definition.id)
   const allEntries = initialState?.collections?.[scope.collectionId] ?? []
   const entries = eventContext
@@ -119,9 +121,13 @@ function runCollectionAutomation(
     if (!entry || !(scope.conditions ?? []).every((condition) => compare(entry.values[condition.fieldId], condition.operator, condition.value))) continue
 
     let roll: number | undefined
+    let naturalRoll: number | undefined
+    let rollModifier: number | undefined
     if (scope.roll) {
       const d20 = Math.floor(Math.random() * 20) + 1
       const bonus = evaluateEntryNumber(scope.roll.formula, entry.values)
+      naturalRoll = d20
+      rollModifier = bonus
       const dc = scope.roll.dcFormula?.trim()
         ? evaluateEntryNumber(scope.roll.dcFormula, entry.values)
         : scope.roll.dc ?? 10
@@ -181,7 +187,7 @@ function runCollectionAutomation(
     if (effectEntry) {
       nextCharacter = applyCollectionEffects(nextCharacter, definition, scope.collectionId, effectEntry.id, automation.effects ?? [])
     }
-    applied.push({ collectionId: scope.collectionId, entryId: originalEntry.id, ...(roll === undefined ? {} : { roll }), ...(completedItemName ? { completedItemName } : {}), ...(completed ? { completed: true } : {}) })
+    applied.push({ collectionId: scope.collectionId, entryId: originalEntry.id, ...(roll === undefined ? {} : { roll, naturalRoll, rollModifier }), ...(completedItemName ? { completedItemName } : {}), ...(completed ? { completed: true } : {}) })
   }
   return { character: nextCharacter, applied }
 }
