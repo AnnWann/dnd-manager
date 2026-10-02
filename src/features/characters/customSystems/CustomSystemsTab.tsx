@@ -1041,7 +1041,7 @@ function FieldEditor({
         <BufferedTextArea
           className={`${commonClass} min-h-28 resize-y`}
           value={typeof value === 'string' ? value : ''}
-          placeholder={field.placeholder}
+          placeholder={'placeholder' in field ? field.placeholder : undefined}
           disabled={disabled}
           onCommit={onChange}
         />
