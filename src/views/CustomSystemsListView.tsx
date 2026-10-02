@@ -176,6 +176,7 @@ function normalizeImportedDefinition(value: unknown): CustomSystemDefinition | u
     fields: Array.isArray(value.fields) ? value.fields as CustomSystemDefinition['fields'] : [],
     resources: Array.isArray(value.resources) ? value.resources as CustomSystemDefinition['resources'] : [],
     abilityTypes: Array.isArray(value.abilityTypes) ? value.abilityTypes as CustomSystemDefinition['abilityTypes'] : [],
+    collections: Array.isArray(value.collections) ? value.collections as CustomSystemDefinition['collections'] : [],
     panels: Array.isArray(value.panels) ? value.panels as CustomSystemDefinition['panels'] : [],
     automations: Array.isArray(value.automations) ? value.automations as CustomSystemDefinition['automations'] : [],
     nativeStatOverrides: Array.isArray(value.nativeStatOverrides) ? value.nativeStatOverrides as CustomSystemDefinition['nativeStatOverrides'] : [],
