@@ -1063,14 +1063,18 @@ function FieldEditor({
         <div className="rounded-lg border border-border bg-[color:var(--social-bg)] px-3 py-2 text-sm text-text">
           {displayJsonValue(value) || field.formula}
         </div>
-      ) : (
+      ) : field.type === 'text' || field.type === 'richText' || field.type === 'select' ? (
         <BufferedTextInput
           className={commonClass}
           value={typeof value === 'string' ? value : ''}
-          placeholder={field.placeholder}
+          placeholder={'placeholder' in field ? field.placeholder : undefined}
           disabled={disabled}
           onCommit={onChange}
         />
+      ) : (
+        <div className="rounded-lg border border-border bg-bg-subtle px-3 py-2 text-xs text-textMuted">
+          Este tipo de campo é editado em seu componente estruturado.
+        </div>
       )}
 
       {field.description ? (
