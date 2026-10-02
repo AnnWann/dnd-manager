@@ -1032,7 +1032,7 @@ function readCreationCustomSystem(value: unknown): CustomSystemDefinition {
     }
   }
 
-  for (const field of ["nativeStatOverrides", "actions", "standardActionOverrides"] as const) {
+  for (const field of ["itemTypes", "nativeStatOverrides", "actions", "standardActionOverrides"] as const) {
     if (system[field] !== undefined && !Array.isArray(system[field])) {
       throw new ApiError(
         400,
