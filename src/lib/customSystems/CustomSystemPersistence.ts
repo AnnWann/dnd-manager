@@ -225,6 +225,26 @@ function normalizeSystem(
     }
   }
 
+  const collections: CharacterCustomSystemState['collections'] = {}
+  if (isRecord(value.collections)) {
+    for (const [collectionId, rawEntries] of Object.entries(value.collections)) {
+      if (!collectionId.trim() || !Array.isArray(rawEntries)) continue
+      const entries = rawEntries.flatMap((rawEntry) => {
+        if (!isRecord(rawEntry)) return []
+        const id = readNonEmptyString(rawEntry.id)
+        if (!id || !isRecord(rawEntry.values)) return []
+        const values: Record<string, JsonValue> = {}
+        for (const [fieldId, fieldValue] of Object.entries(rawEntry.values).slice(0, MAX_FIELDS_PER_SYSTEM)) {
+          if (isSafePersistedJson(fieldValue)) values[fieldId] = cloneJson(fieldValue)
+        }
+        const createdAt = readNonEmptyString(rawEntry.createdAt)
+        const updatedAt = readNonEmptyString(rawEntry.updatedAt)
+        return [{ id, values, ...(createdAt ? { createdAt } : {}), ...(updatedAt ? { updatedAt } : {}) }]
+      })
+      collections[collectionId] = entries
+    }
+  }
+
   const abilityAcquisitionExceptions = normalizeAbilityAcquisitionExceptions(
     value.abilityAcquisitionExceptions,
   )
@@ -241,6 +261,7 @@ function normalizeSystem(
       fields,
       resources,
       abilities,
+      collections,
       ...(abilityAcquisitionExceptions
         ? { abilityAcquisitionExceptions }
         : {}),
@@ -377,6 +398,7 @@ function mergeDuplicateSystemStates(
     fields: { ...first.fields, ...second.fields },
     resources: { ...first.resources, ...second.resources },
     abilities: [...abilities.values()],
+    collections: { ...(first.collections ?? {}), ...(second.collections ?? {}) },
     ...(Object.keys(abilityAcquisitionExceptions).length
       ? { abilityAcquisitionExceptions }
       : {}),
