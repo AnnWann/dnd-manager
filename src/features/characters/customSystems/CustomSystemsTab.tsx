@@ -1063,7 +1063,7 @@ function FieldEditor({
         <div className="rounded-lg border border-border bg-[color:var(--social-bg)] px-3 py-2 text-sm text-text">
           {displayJsonValue(value) || field.formula}
         </div>
-      ) : field.type === 'text' || field.type === 'richText' || field.type === 'select' ? (
+      ) : field.type === 'text' ? (
         <BufferedTextInput
           className={commonClass}
           value={typeof value === 'string' ? value : ''}
