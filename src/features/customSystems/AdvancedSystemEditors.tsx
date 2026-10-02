@@ -231,8 +231,8 @@ function CollectionScopeEditor({scope,draft,onChange}:{scope:CustomAutomationDef
       <div className="rounded-lg border border-border p-3">
         <Check label="Fazer teste e modificar progresso" checked={Boolean(roll)} onChange={checked=>patch({roll:checked?{formula:'0',dcFormula:'10',progressFieldId:numeric[0]?.id??'',progressOnCriticalFailure:-1,progressOnFailure:0,progressOnSuccess:1,progressOnCriticalSuccess:2}:undefined})}/>
         {roll?<div className="mt-3 grid gap-3 md:grid-cols-3">
-          <Input label="Fórmula do bônus" value={roll.formula} onChange={formula=>patch({roll:{...roll,formula}})}/>
-          <Input label="Fórmula da CD" value={roll.dcFormula} onChange={dcFormula=>patch({roll:{...roll,dcFormula}})}/>
+          <Input label="Fórmula do bônus" value={roll.formula??''} onChange={formula=>patch({roll:{...roll,formula}})}/>
+          <Input label="Fórmula da CD" value={roll.dcFormula??''} onChange={dcFormula=>patch({roll:{...roll,dcFormula}})}/>
           <ReferenceSelect label="Campo de progresso" value={roll.progressFieldId} options={numeric} allowEmpty onChange={progressFieldId=>patch({roll:{...roll,progressFieldId}})}/>
           <Input label="1 natural" value={String(roll.progressOnCriticalFailure)} onChange={value=>patch({roll:{...roll,progressOnCriticalFailure:optionalNumber(value)??0}})}/>
           <Input label="Falha" value={String(roll.progressOnFailure)} onChange={value=>patch({roll:{...roll,progressOnFailure:optionalNumber(value)??0}})}/>
