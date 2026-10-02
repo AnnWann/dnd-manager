@@ -34,6 +34,11 @@ export interface CustomNumberFieldDefinition extends CustomFieldBase {
   minimum?: number
   maximum?: number
   step?: number
+  display?: {
+    type: 'number' | 'progressBar' | 'progressBarValue'
+    /** Optional field on the same record used as the progress maximum. */
+    maximumFieldId?: string
+  }
 }
 
 export interface CustomTextFieldDefinition extends CustomFieldBase {
