@@ -1,6 +1,10 @@
 import { Select as SharedSelect } from "../../components/ui/Select"
 import { Check, ClipboardCopy, FileJson, FormInput } from "lucide-react"
 import { useEffect, useState } from "react"
+import { useCustomSystemDefinitions } from "../../lib/customSystems/CustomSystemRegistry"
+import { useOptionalCreationEditor } from "../creation/CreationEditorProvider"
+import type { CustomFieldDefinition, CustomReferenceSource } from "../../models/customSystems/CustomFieldDefinition"
+import type { JsonValue } from "../../models/customSystems/CustomGenerals"
 import { createPortal } from "react-dom"
 
 import { Button } from "../../components/ui/Button"
@@ -101,6 +105,8 @@ export function ItemCreationDialog({
   const [jsonValue, setJsonValue] = useState("")
   const [jsonMessage, setJsonMessage] = useState("")
   const [copied, setCopied] = useState(false)
+  const customSystems = useCustomSystemDefinitions()
+  const creationEditor = useOptionalCreationEditor()
 
   useEffect(() => {
     if (!open) {
@@ -450,6 +456,13 @@ export function ItemCreationDialog({
                 />
               </label>
 
+              <CustomItemTypesFields
+                item={draft}
+                systems={customSystems}
+                compendiumItems={(creationEditor?.draft?.itemCompendium ?? []).flatMap((entry) => entry.item ? [entry.item] : [])}
+                onChange={(next) => setDraft(next)}
+              />
+
               {draft.kind === "equipment" || draft.kind === "shield" ? (
                 <EquipmentFields item={draft} onUpdate={patch} />
               ) : draft.kind !== "currency" ? (
@@ -574,4 +587,50 @@ function normalizeEditorItem(item: Itemmable): Itemmable {
   return normalized.kind === "currency"
     ? normalizeCurrencyItem(normalized)
     : normalized
+}
+
+
+function CustomItemTypesFields({item,systems,compendiumItems,onChange}:{item:Itemmable;systems:ReturnType<typeof useCustomSystemDefinitions>;compendiumItems:Itemmable[];onChange:(item:Itemmable)=>void}) {
+  const available=systems.flatMap(system=>(system.itemTypes??[]).map(type=>({system,type})))
+  if(!available.length) return null
+  const assigned=item.customSystemTypes??{}
+  const toggle=(systemId:string,typeId:string,checked:boolean)=>{
+    const current=assigned[systemId]??[]
+    const nextTypes=checked?Array.from(new Set([...current,typeId])):current.filter(id=>id!==typeId)
+    onChange({...item,customSystemTypes:{...assigned,[systemId]:nextTypes}})
+  }
+  return <div className="grid gap-3 rounded-lg border border-border bg-bg-subtle p-3 md:col-span-3">
+    <div><div className="text-xs font-medium text-textH">Tipos de sistemas personalizados</div><p className="mt-1 text-xs text-textMuted">Classifique o item para habilitar os campos definidos pelo sistema.</p></div>
+    <div className="flex flex-wrap gap-3">{available.map(({system,type})=><label key={system.id+":"+type.id} className="inline-flex items-center gap-2 text-xs text-text"><input type="checkbox" checked={(assigned[system.id]??[]).includes(type.id)} onChange={e=>toggle(system.id,type.id,e.target.checked)}/><span>{system.name}: {type.name}</span></label>)}</div>
+    {available.filter(({system,type})=>(assigned[system.id]??[]).includes(type.id)).map(({system,type})=><div key={"fields:"+system.id+":"+type.id} className="grid gap-2 border-t border-border pt-3">
+      <strong className="text-xs text-textH">{type.name}</strong>
+      <CustomItemFieldList fields={type.fields} value={(item.customSystemData?.[system.id]??{}) as Record<string,unknown>} systemId={system.id} compendiumItems={compendiumItems} onChange={value=>onChange({...item,customSystemData:{...(item.customSystemData??{}),[system.id]:value}})}/>
+    </div>)}
+  </div>
+}
+
+function CustomItemFieldList({fields,value,systemId,compendiumItems,onChange}:{fields:CustomFieldDefinition[];value:Record<string,unknown>;systemId:string;compendiumItems:Itemmable[];onChange:(value:Record<string,unknown>)=>void}) {
+  const set=(id:string,next:unknown)=>onChange({...value,[id]:next})
+  return <div className="grid gap-2">{fields.map(field=>{
+    if(field.type==="text"||field.type==="richText") return <label key={field.id} className="grid gap-1 text-xs text-text"><span>{field.name}</span><Input value={String(value[field.id]??"")} onChange={e=>set(field.id,e.target.value)}/></label>
+    if(field.type==="number") return <label key={field.id} className="grid gap-1 text-xs text-text"><span>{field.name}</span><Input type="number" value={Number(value[field.id]??field.defaultValue??0)} onChange={e=>set(field.id,Number(e.target.value)||0)}/></label>
+    if(field.type==="boolean") return <label key={field.id} className="inline-flex items-center gap-2 text-xs text-text"><input type="checkbox" checked={value[field.id]===true} onChange={e=>set(field.id,e.target.checked)}/><span>{field.name}</span></label>
+    if(field.type==="reference") return <ItemReferenceInput key={field.id} label={field.name} targets={field.targets??[]} value={value[field.id]} systemId={systemId} items={compendiumItems} onChange={next=>set(field.id,next)}/>
+    if(field.type==="quantityReference") {
+      const rows=Array.isArray(value[field.id])?value[field.id] as Array<{reference?:unknown;quantity?:number}>:[]
+      return <div key={field.id} className="grid gap-2"><span className="text-xs text-text">{field.name}</span>{rows.map((row,index)=><div key={index} className="grid grid-cols-[1fr_90px_auto] gap-2"><ItemReferenceInput label="" targets={field.targets} value={row.reference} systemId={systemId} items={compendiumItems} onChange={reference=>set(field.id,rows.map((r,i)=>i===index?{...r,reference}:r))}/><Input type="number" min={field.minimumQuantity??1} value={row.quantity??1} onChange={e=>set(field.id,rows.map((r,i)=>i===index?{...r,quantity:Math.max(field.minimumQuantity??1,Number(e.target.value)||1)}:r))}/><Button size="sm" variant="secondary" onClick={()=>set(field.id,rows.filter((_,i)=>i!==index))}>Remover</Button></div>)}<Button size="sm" variant="secondary" onClick={()=>set(field.id,[...rows,{reference:null,quantity:field.minimumQuantity??1}])}>Adicionar</Button></div>
+    }
+    if(field.type==="collectionGroup") {
+      const rows=Array.isArray(value[field.id])?value[field.id] as Record<string,unknown>[]:[]
+      return <div key={field.id} className="grid gap-2"><span className="text-xs text-text">{field.name}</span>{rows.map((row,index)=><div key={index} className="grid gap-2 rounded border border-border p-2"><CustomItemFieldList fields={field.fields} value={row} systemId={systemId} compendiumItems={compendiumItems} onChange={next=>set(field.id,rows.map((r,i)=>i===index?next:r))}/><Button size="sm" variant="secondary" onClick={()=>set(field.id,rows.filter((_,i)=>i!==index))}>Remover</Button></div>)}<Button size="sm" variant="secondary" onClick={()=>set(field.id,[...rows,{}])}>Adicionar</Button></div>
+    }
+    return null
+  })}</div>
+}
+
+function ItemReferenceInput({label,targets,value,systemId,items,onChange}:{label:string;targets:CustomReferenceSource[];value:unknown;systemId:string;items:Itemmable[];onChange:(value:JsonValue)=>void}) {
+  const typeTarget=targets.find(target=>target.type==="itemType")
+  const filtered=typeTarget&&"itemTypeId" in typeTarget?items.filter(item=>(item.customSystemTypes?.[typeTarget.systemId??systemId]??[]).includes(typeTarget.itemTypeId)):items
+  const current=value&&typeof value==="object"&&!Array.isArray(value)&&"itemId" in value?String((value as {itemId?:unknown}).itemId??""):""
+  return <label className="grid gap-1 text-xs text-text">{label?<span>{label}</span>:null}<SharedSelect className="h-10 rounded-lg border border-border bg-bg px-3 text-sm text-textH" value={current} onChange={e=>{const selected=filtered.find(item=>(item.compendiumItemId??item.id)===e.target.value);onChange(selected?({type:"compendiumItem",itemId:selected.compendiumItemId??selected.id,name:selected.name,item:JSON.parse(JSON.stringify(selected))} as JsonValue):null)}}><option value="">Selecionar…</option>{filtered.map(candidate=><option key={candidate.compendiumItemId??candidate.id} value={candidate.compendiumItemId??candidate.id}>{candidate.name}</option>)}</SharedSelect></label>
 }

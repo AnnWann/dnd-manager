@@ -36,6 +36,8 @@ export type ItemOrigin = "standard" | "custom"
 
 /** Opaque per-system item metadata. Custom systems own and interpret their namespace. */
 export type ItemCustomSystemData = Record<string, Record<string, unknown>>
+/** Item type ids assigned by each custom system. */
+export type ItemCustomSystemTypes = Record<string, string[]>
 
 export type Item = {
   id: string
@@ -57,6 +59,8 @@ export type Item = {
 
   /** Extensible metadata owned by installed custom systems (crafting, durability, alchemy, etc.). */
   customSystemData?: ItemCustomSystemData
+  /** Semantic classifications supplied by custom systems without replacing the native item kind. */
+  customSystemTypes?: ItemCustomSystemTypes
 
   equippable?: boolean
   equipSlot?: EquipSlot

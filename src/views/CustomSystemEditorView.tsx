@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { CustomSystemItemTypesEditor } from '../features/customSystems/CustomSystemItemTypesEditor'
 import { ArrowLeft, Copy, Download, RotateCcw, Save, Trash2 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useCustomSystemsContext } from '../contexts/customSystemsContext'
@@ -28,7 +29,7 @@ import { sessionCustomSystemPath } from '../lib/campaignRoutes'
 import { readLocalStorageJson, removeLocalStorage, writeLocalStorageJson } from '../lib/storage'
 import type { CustomSystemDefinition } from '../models/customSystems/CustomSystemDefinition'
 
-export type CustomSystemEditorTab = 'general' | 'fields' | 'resources' | 'abilities' | 'collections' | 'sheet' | 'requirements' | 'library' | 'preview' | 'advanced'
+export type CustomSystemEditorTab = 'general' | 'fields' | 'resources' | 'abilities' | 'types' | 'collections' | 'sheet' | 'requirements' | 'library' | 'preview' | 'advanced'
 
 type LocalCustomSystemDraft = {
   schema: 'dndmm.custom-system-draft'
@@ -44,6 +45,7 @@ const TABS: Array<{ id: CustomSystemEditorTab; label: string }> = [
   { id: 'fields', label: 'Campos' },
   { id: 'resources', label: 'Recursos' },
   { id: 'abilities', label: 'Habilidades' },
+  { id: 'types', label: 'Tipos' },
   { id: 'collections', label: 'Coleções' },
   { id: 'sheet', label: 'Ficha e ações' },
   { id: 'requirements', label: 'Requisitos' },
@@ -290,6 +292,7 @@ export function CustomSystemEditorView() {
           <CustomAbilityConfigurationEditor draft={draft} setDraft={setDraft} definitions={systems.definitions} />
           <CustomAbilityRollEditor draft={draft} setDraft={setDraft} />
         </div> : null}
+        {activeTab === 'types' ? <CustomSystemItemTypesEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'collections' ? <CustomSystemCollectionsEditor draft={draft} setDraft={setDraft} /> : null}
         {activeTab === 'sheet' ? <CustomSystemSheetIntegrationEditor draft={draft} setDraft={setDraft} definitions={systems.definitions} /> : null}
         {activeTab === 'requirements' ? <CustomSystemRequirementsEditor draft={draft} setDraft={setDraft} /> : null}
