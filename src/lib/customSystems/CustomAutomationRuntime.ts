@@ -71,6 +71,11 @@ export function runCustomSystemAutomations(
     }
   }
 
+  if (event !== "collectionEntryCompleted" && applied.some((entry) => Boolean(entry.completedItemName))) {
+    const completionResult = runCustomSystemAutomations(nextCharacter, definitions, "collectionEntryCompleted")
+    nextCharacter = completionResult.character
+    applied.push(...completionResult.applied)
+  }
   return { character: nextCharacter, applied }
 }
 
