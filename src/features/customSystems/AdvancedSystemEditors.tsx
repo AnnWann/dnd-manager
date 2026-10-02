@@ -474,7 +474,16 @@ function externalSystemId(systemId: string, ownerSystemId: string): string | und
 }
 
 function blockTypeLabel(type: CustomPanelBlock['type']): string { return ({ resource:'Recurso', field:'Campo', abilityList:'Lista de habilidades', collection:'Coleção', text:'Texto', divider:'Divisor', formulaDisplay:'Fórmula', grid:'Grade' } as const)[type] }
-function effectTypeLabel(type: CustomEffectDefinition['type']): string { return ({ modifyResource:'Modificar recurso', setField:'Definir campo', modifyField:'Modificar campo numérico' } as const)[type] }
+function effectTypeLabel(type: CustomEffectDefinition['type']): string { return ({
+  modifyResource:'Modificar recurso',
+  setField:'Definir campo',
+  modifyField:'Modificar campo numérico',
+  setCollectionEntryField:'Definir campo do registro',
+  modifyCollectionEntryField:'Modificar número do registro',
+  removeCollectionEntry:'Remover registro atual',
+  addReferencedItem:'Adicionar item referenciado',
+  removeReferencedItems:'Consumir itens referenciados',
+} as const)[type] }
 function optionalNumber(value: string): number | undefined { if (!value.trim()) return undefined; const parsed = Number(value); return Number.isFinite(parsed) ? parsed : undefined }
 function parseLiteral(value: string): string | number | boolean { if (value === 'true') return true; if (value === 'false') return false; const numeric = Number(value); return value.trim() && Number.isFinite(numeric) ? numeric : value }
 function slugify(value: string): string { return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') }
