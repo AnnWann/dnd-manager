@@ -1023,6 +1023,8 @@ export class SessionActor extends DurableObject<Env> {
           next,
           restDefinitions,
           operation.type === "character.rest.short" ? "shortRestCompleted" : "longRestCompleted",
+          undefined,
+          { partyInventoryAccessible: inventory.partyInventoryAccessible !== false },
         );
         next = automationResult.character;
         customAutomationNotices = automationResult.applied
