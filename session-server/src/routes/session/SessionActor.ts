@@ -1016,13 +1016,21 @@ export class SessionActor extends DurableObject<Env> {
         : [characterScope(operation.characterId)];
     }
 
+    let customAutomationNotices: Array<{ title: string; message: string }> = [];
     if (runtimeConfig) {
       try {
-        next = runCustomSystemAutomations(
+        const automationResult = runCustomSystemAutomations(
           next,
           restDefinitions,
           operation.type === "character.rest.short" ? "shortRestCompleted" : "longRestCompleted",
-        ).character;
+        );
+        next = automationResult.character;
+        customAutomationNotices = automationResult.applied
+          .filter((entry) => Boolean(entry.completedItemName))
+          .map((entry) => ({
+            title: "Criação concluída",
+            message: `${entry.completedItemName} foi concluído e adicionado ao inventário.`,
+          }));
       } catch (error) {
         this.sendError(
           webSocket,
@@ -1074,6 +1082,9 @@ export class SessionActor extends DurableObject<Env> {
     });
 
     this.broadcastSessionRaw({ type: "session.abilities.updated", character: nextAbility });
+    for (const notice of customAutomationNotices) {
+      this.broadcastSessionRaw({ type: "session.customSystem.notice", characterId: operation.characterId, ...notice });
+    }
     this.broadcast({ type: "session.hp.updated", character: nextHp });
     this.broadcast({ type: "session.conditions.updated", character: nextConditions });
     if (longRestUsedSharedInventory) {
