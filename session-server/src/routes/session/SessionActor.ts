@@ -1048,7 +1048,13 @@ export class SessionActor extends DurableObject<Env> {
               visibility: "public",
               createdAt: new Date().toISOString(),
             };
-            this.broadcast({ type: "session.dice.result", result: diceResult });
+            // Rest handling is initiated by one client and the roll panel is
+            // event-driven, so publish through the same visibility-aware path
+            // used by ordinary dice rolls.
+            broadcastVisibilityFiltered(this.ctx.getWebSockets(), {
+              type: "session.dice.result",
+              result: diceResult,
+            });
           }
         }
         customAutomationNotices = automationResult.applied
