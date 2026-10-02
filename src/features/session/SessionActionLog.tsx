@@ -1201,6 +1201,19 @@ function describeCustomSystemOperation(
       const resourceName = definition?.resources.find((resource) => resource.id === operation.resourceId)?.name ?? operation.resourceId
       return `${characterName} restaurou ${resourceName}${suffix}`
     }
+    case "character.customSystem.collection.entry.add": {
+      const collectionName = definition?.collections?.find((entry) => entry.id === operation.collectionId)?.name ?? operation.collectionId
+      return `${characterName} adicionou um registro em ${collectionName}${suffix}`
+    }
+    case "character.customSystem.collection.entry.remove": {
+      const collectionName = definition?.collections?.find((entry) => entry.id === operation.collectionId)?.name ?? operation.collectionId
+      return `${characterName} removeu um registro de ${collectionName}${suffix}`
+    }
+    case "character.customSystem.collection.entry.field.set": {
+      const collection = definition?.collections?.find((entry) => entry.id === operation.collectionId)
+      const fieldName = collection?.fields.find((field) => field.id === operation.fieldId)?.name ?? operation.fieldId
+      return `${characterName} alterou ${fieldName} em ${collection?.name ?? operation.collectionId} para ${formatLogValue(operation.value)}${suffix}`
+    }
     case "character.customSystem.ability.add": {
       const abilityName = customAbilityName(definition, operation.ability, previous)
       return `${characterName} adicionou a habilidade ${abilityName}${suffix}`
