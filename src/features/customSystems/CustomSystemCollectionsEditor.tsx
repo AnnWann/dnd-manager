@@ -48,7 +48,7 @@ export function CustomSystemCollectionsEditor({ draft, setDraft }: {
               <Select label="Tipo" value={field.type} options={FIELD_TYPES} onChange={type=>replaceField(index,fi,makeField(field,type as CustomFieldType),collections,setCollections)}/>
               <div className="flex items-end"><IconButton onClick={()=>replace(index,{...collection,fields:collection.fields.filter((_,i)=>i!==fi)})}><Trash2 className="h-4 w-4"/></IconButton></div>
             </div>
-            {field.type === "reference" ? <ReferenceFieldOptions field={field} collections={collections} onChange={(next)=>replaceField(index,fi,next,collections,setCollections)}/> : null}
+            {field.type === "reference" ? <ReferenceFieldOptions field={field} collections={collections} itemTypes={draft.itemTypes??[]} onChange={(next)=>replaceField(index,fi,next,collections,setCollections)}/> : null}
           </div>)}
           {!collection.fields.length?<div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-text">Adicione os campos que cada registro desta coleção deve possuir.</div>:null}
         </div>
@@ -74,11 +74,11 @@ function makeField(old:CustomFieldDefinition,type:CustomFieldType):CustomFieldDe
   return {...base,type:"text"}
 }
 
-function ReferenceFieldOptions({field,collections,onChange}:{field:CustomReferenceFieldDefinition,collections:CustomCollectionDefinition[],onChange:(field:CustomReferenceFieldDefinition)=>void}){
+function ReferenceFieldOptions({field,collections,itemTypes,onChange}:{field:CustomReferenceFieldDefinition,collections:CustomCollectionDefinition[],itemTypes:NonNullable<CustomSystemDefinition["itemTypes"]>,onChange:(field:CustomReferenceFieldDefinition)=>void}){
   const targets=field.targets ?? (field.target ? [{type:field.target} as const] : [])
-  const has=(type:string,collectionId?:string)=>targets.some((target)=>target.type===type && (type!=="collection" || ("collectionId" in target && target.collectionId===collectionId)))
+  const has=(type:string,targetId?:string)=>targets.some((target)=>target.type===type && (type==="collection"?("collectionId" in target&&target.collectionId===targetId):type==="itemType"?("itemTypeId" in target&&target.itemTypeId===targetId):true))
   const toggle=(target:CustomReferenceFieldDefinition["targets"] extends (infer T)[]|undefined ? T : never,checked:boolean)=>{
-    const next=checked?[...targets,target]:targets.filter((entry)=>!(entry.type===target.type && (entry.type!=="collection" || (target.type==="collection" && entry.collectionId===target.collectionId))))
+    const next=checked?[...targets,target]:targets.filter((entry)=>!(entry.type===target.type && (entry.type==="collection"&&target.type==="collection"?entry.collectionId===target.collectionId:entry.type==="itemType"&&target.type==="itemType"?entry.itemTypeId===target.itemTypeId:entry.type===target.type)))
     onChange({...field,target:undefined,targets:next})
   }
   return <div className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
@@ -86,6 +86,7 @@ function ReferenceFieldOptions({field,collections,onChange}:{field:CustomReferen
     <div className="flex flex-wrap gap-3 text-xs text-text">
       <Check label="Itens do inventário do personagem" checked={has("inventoryItem")} onChange={(v)=>toggle({type:"inventoryItem",scope:"character"},v)}/>
       <Check label="Itens do compêndio" checked={has("compendiumItem")} onChange={(v)=>toggle({type:"compendiumItem"},v)}/>
+      {itemTypes.map((itemType)=><Check key={"item-type:"+itemType.id} label={`Tipo de item: ${itemType.name}`} checked={has("itemType",itemType.id)} onChange={(v)=>toggle({type:"itemType",itemTypeId:itemType.id},v)}/>)}
       {collections.map((collection)=><Check key={collection.id} label={`Coleção: ${collection.name}`} checked={has("collection",collection.id)} onChange={(v)=>toggle({type:"collection",collectionId:collection.id},v)}/>)}
       <Check label="Múltiplas referências" checked={field.multiple===true} onChange={(multiple)=>onChange({...field,multiple})}/>
     </div>
