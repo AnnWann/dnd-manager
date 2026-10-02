@@ -70,9 +70,18 @@ export interface CustomAttributeFieldDefinition extends CustomFieldBase {
   allowedAttributes?: Attribute[]
 }
 
+export type CustomReferenceSource =
+  | { type: CustomReferenceTarget }
+  | { type: 'inventoryItem'; scope?: 'character' | 'party' | 'ground' | 'any' }
+  | { type: 'compendiumItem' }
+  | { type: 'collection'; systemId?: string; collectionId: string }
+
 export interface CustomReferenceFieldDefinition extends CustomFieldBase {
   type: 'reference'
-  target: CustomReferenceTarget
+  /** Legacy single target. Kept for backwards compatibility. */
+  target?: CustomReferenceTarget
+  /** Allowed reference sources. Multiple sources can be combined in one picker. */
+  targets?: CustomReferenceSource[]
   multiple?: boolean
 }
 
