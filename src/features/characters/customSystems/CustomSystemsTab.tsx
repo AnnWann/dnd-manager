@@ -1,9 +1,9 @@
 import { Select as SharedSelect } from "../../../components/ui/Select"
 import { useEffect, useState, type ReactNode } from 'react'
-import { Pencil, Play, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { Pencil, Play, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react'
 import type { CharacterTemplate } from '../../../models/characters/CharacterTemplate'
 import type { CustomAbilityTypeDefinition } from '../../../models/customSystems/CustomAbilityDefinition'
-import type { CustomFieldDefinition } from '../../../models/customSystems/CustomFieldDefinition'
+import type { CustomFieldDefinition, CustomReferenceFieldDefinition } from '../../../models/customSystems/CustomFieldDefinition'
 import type { Attribute } from '../../../models/sheet/Attribute'
 import type { JsonValue } from '../../../models/customSystems/CustomGenerals'
 import type {
@@ -39,6 +39,9 @@ import { useCustomSystemDefinitions } from '../../../lib/customSystems/CustomSys
 import type { SessionCustomSystemOperation } from '../../session-runtime/customSystemSessionProtocol'
 import { useOptionalSessionRuntime } from '../../session-runtime/useSessionRuntime'
 import { CustomSystemIcon } from '../../customSystems/CustomSystemIcon'
+import { CompendiumItemPickerDialog } from '../../items/CompendiumItemPickerDialog'
+import { useCharacterContext } from '../../../contexts/characterContext'
+import { useParams } from 'react-router-dom'
 
 const PREDEFINED_MARKER = '__predefinedAbilityId'
 
@@ -300,6 +303,9 @@ function CustomSystemEditor({
               <FieldEditor
                 field={field}
                 value={state.fields[field.id]}
+                character={character}
+                definition={definition}
+                state={state}
                 disabled={field.type === 'formula' || masterOnly}
                 onReset={() =>
                   run(() =>
@@ -350,7 +356,7 @@ function CustomSystemEditor({
                   <button type="button" onClick={() => run(() => removeCustomCollectionEntry(definition, state, collection.id, entry.id, actor))} className="rounded p-1.5 text-red-300 hover:bg-red-500/10"><Trash2 className="h-4 w-4"/></button>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  {collection.fields.map((field) => <FieldEditor key={field.id} field={field} value={entry.values[field.id]} disabled={field.type === "formula" || (field.editPermission === "masterOnly" && actor !== "master")} onChange={(value) => run(() => updateCustomCollectionEntryField(definition, state, collection.id, entry.id, field.id, value, actor))}/>)}
+                  {collection.fields.map((field) => <FieldEditor key={field.id} field={field} value={entry.values[field.id]} character={character} definition={definition} state={state} disabled={field.type === "formula" || (field.editPermission === "masterOnly" && actor !== "master")} onChange={(value) => run(() => updateCustomCollectionEntryField(definition, state, collection.id, entry.id, field.id, value, actor))}/>)}
                 </div>
               </article>
             ))}
@@ -835,6 +841,9 @@ function AbilityEditor({
                 key={field.id}
                 field={field}
                 value={ability.values[field.id]}
+                character={character}
+                definition={definition}
+                state={state}
                 disabled={
                   field.type === 'formula' ||
                   (field.editPermission === 'masterOnly' && actor !== 'master')
@@ -935,9 +944,15 @@ function FieldEditor({
   disabled,
   onChange,
   onReset,
+  character,
+  definition,
+  state,
 }: {
   field: CustomFieldDefinition
   value: JsonValue | undefined
+  character?: CharacterTemplate
+  definition?: CustomSystemDefinition
+  state?: CharacterCustomSystemState
   disabled?: boolean
   onChange: (value: JsonValue) => void
   onReset?: () => void
@@ -1043,13 +1058,7 @@ function FieldEditor({
           )}
         </SharedSelect>
       ) : field.type === 'reference' ? (
-        <BufferedTextInput
-          className={commonClass}
-          value={typeof value === 'string' ? value : ''}
-          placeholder={`Referência: ${field.target}`}
-          disabled={disabled}
-          onCommit={onChange}
-        />
+        <ReferencePicker field={field} value={value} disabled={disabled} character={character} definition={definition} state={state} onChange={onChange} />
       ) : field.type === 'formula' ? (
         <div className="rounded-lg border border-border bg-[color:var(--social-bg)] px-3 py-2 text-sm text-text">
           {displayJsonValue(value) || field.formula}
@@ -1069,6 +1078,34 @@ function FieldEditor({
       ) : null}
     </div>
   )
+}
+
+function ReferencePicker({field,value,disabled,character,definition,state,onChange}:{field:CustomReferenceFieldDefinition,value:JsonValue|undefined,disabled?:boolean,character?:CharacterTemplate,definition?:CustomSystemDefinition,state?:CharacterCustomSystemState,onChange:(value:JsonValue)=>void}) {
+  const { campaignId } = useParams<{campaignId?:string}>()
+  const { groundInventory = [] } = useCharacterContext()
+  const [open,setOpen]=useState(false)
+  const [compendiumOpen,setCompendiumOpen]=useState(false)
+  const targets=field.targets ?? (field.target ? [{type:field.target}] : [])
+  const refs=Array.isArray(value)?value:(value&&typeof value==="object"?[value]:[])
+  const inventoryAllowed=targets.some((target)=>target.type==="inventoryItem")
+  const compendiumAllowed=targets.some((target)=>target.type==="compendiumItem")
+  const collectionTargets=targets.filter((target):target is Extract<(typeof targets)[number],{type:"collection"}>=>target.type==="collection")
+  const add=(ref:JsonValue)=>{ if(field.multiple) onChange([...refs,ref]); else {onChange(ref);setOpen(false)} }
+  const remove=(index:number)=>onChange(field.multiple?refs.filter((_,i)=>i!==index):null)
+  const inventory=character?.get("inventory") ?? []
+  const choices=[
+    ...(inventoryAllowed?inventory.map((item)=>({label:item.name||"Item sem nome",detail:"Inventário",ref:{type:"inventoryItem",scope:"character",characterId:character?.get("id")??"",itemId:item.id} as JsonValue})):[]),
+    ...collectionTargets.flatMap((target)=>(state?.collections?.[target.collectionId]??[]).map((entry)=>({label:displayJsonValue(entry.values[definition?.collections?.find((c)=>c.id===target.collectionId)?.display?.titleFieldId??""])||entry.id,detail:`Coleção: ${definition?.collections?.find((c)=>c.id===target.collectionId)?.name??target.collectionId}`,ref:{type:"collectionEntry",systemId:definition?.id??"",collectionId:target.collectionId,entryId:entry.id} as JsonValue}))),
+  ]
+  return <div className="grid gap-2">
+    <div className="flex flex-wrap gap-2">{refs.map((ref,index)=><span key={index} className="inline-flex items-center gap-1 rounded-lg border border-border bg-bg-subtle px-2 py-1 text-xs text-textH">{referenceLabel(ref,choices)}{!disabled?<button type="button" onClick={()=>remove(index)}><X className="h-3 w-3"/></button>:null}</span>)}</div>
+    <button type="button" disabled={disabled} onClick={()=>setOpen(true)} className="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-left text-sm text-textH disabled:opacity-60"><Search className="h-4 w-4"/>{refs.length?"Alterar referência":"Selecionar referência"}</button>
+    {open?<div className="fixed inset-0 z-[20000] flex items-center justify-center bg-black/65 p-4"><div className="w-full max-w-xl rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg"><div className="mb-3 flex items-center justify-between"><strong className="text-textH">Selecionar {field.name}</strong><button type="button" onClick={()=>setOpen(false)}><X className="h-5 w-5"/></button></div><div className="grid max-h-[60vh] gap-2 overflow-y-auto">{choices.map((choice,index)=><button key={index} type="button" onClick={()=>add(choice.ref)} className="rounded-lg border border-border p-3 text-left hover:bg-bg-subtle"><div className="text-sm font-medium text-textH">{choice.label}</div><div className="text-xs text-textMuted">{choice.detail}</div></button>)}{compendiumAllowed&&campaignId?<button type="button" onClick={()=>setCompendiumOpen(true)} className="rounded-lg border border-accentBorder bg-accentBg p-3 text-left text-sm font-medium text-textH">Escolher item do compêndio…</button>:null}{!choices.length&&!compendiumAllowed?<div className="p-4 text-center text-sm text-textMuted">Nenhuma referência disponível.</div>:null}</div></div></div>:null}
+    {compendiumAllowed&&campaignId?<CompendiumItemPickerDialog open={compendiumOpen} campaignId={campaignId} onClose={()=>setCompendiumOpen(false)} onSelect={(item)=>{add({type:"compendiumItem",itemId:item.compendiumItemId??item.id,name:item.name});setCompendiumOpen(false)}}/>:null}
+  </div>
+}
+function referenceLabel(ref:JsonValue,choices:Array<{label:string,detail:string,ref:JsonValue}>):string {
+  const serialized=JSON.stringify(ref); return choices.find((choice)=>JSON.stringify(choice.ref)===serialized)?.label ?? (ref&&typeof ref==="object"&&!Array.isArray(ref)&&typeof ref.name==="string"?ref.name:"Referência")
 }
 
 function BufferedNumberInput({
