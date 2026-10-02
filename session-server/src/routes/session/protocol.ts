@@ -264,7 +264,8 @@ export type ServerSessionMessage =
   | { type: "session.hp.log"; records: SessionHpLogRecord[] }
   | { type: "session.dice.result"; result: SessionDiceRollResult }
   | { type: "session.action.result"; result: SessionActionRollResult }
-  | { type: "session.customSystem.notice"; characterId: string; title: string; message: string }\n  | { type: "session.error"; code: string; message: string };
+  | { type: "session.customSystem.notice"; characterId: string; title: string; message: string }
+  | { type: "session.error"; code: string; message: string };
 
 export function parseClientSessionMessage(raw: string): ClientSessionMessage | null {
   let value: unknown;
