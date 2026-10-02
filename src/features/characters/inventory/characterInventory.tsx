@@ -27,6 +27,7 @@ import { CharacterEncumbrancePanel } from "./characterEncumbrancePanel"
 import { EquipItemDialog } from "./equipItemDialog"
 import { InventoryEditor } from "./inventoryEditor"
 import { TransferItemDialog } from "./transferItemDialog"
+import { ItemCreationDialog } from "../../items/ItemCreationDialog"
 
 type Props = {
   character: CharacterTemplate
@@ -73,6 +74,7 @@ export function CharacterInventoryTab({
   const [equippingItem, setEquippingItem] = useState<Itemmable | null>(null)
   const [bagLimitMessage, setBagLimitMessage] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [creatingItem, setCreatingItem] = useState(false)
 
   const characterId = character.get("id")
   const items = character.get("inventory") ?? []
@@ -216,6 +218,11 @@ export function CharacterInventoryTab({
           <Input value={searchQuery} placeholder="Digite o nome do item" aria-label="Buscar item pelo nome" onChange={(event) => setSearchQuery(event.target.value)} />
         </label>
 
+        {mode === "campaign" ? (
+          <Button disabled={mutationsDisabled} onClick={() => setCreatingItem(true)}>
+            Criar item
+          </Button>
+        ) : null}
         {mode === "user" ? (
           <Button
             disabled={mutationsDisabled}
@@ -245,6 +252,17 @@ export function CharacterInventoryTab({
         onToggleAttunement={toggleAttunement}
         attunedItemIds={attunedItemIds}
         onTransferItem={canTransfer ? setTransferringItem : undefined}
+      />
+
+      <ItemCreationDialog
+        open={!mutationsDisabled && creatingItem}
+        title="Adicionar item ao inventário"
+        saveLabel="Adicionar ao inventário"
+        onClose={() => setCreatingItem(false)}
+        onSave={(item) => {
+          addCompendiumItem(item)
+          setCreatingItem(false)
+        }}
       />
 
       <EquipItemDialog
