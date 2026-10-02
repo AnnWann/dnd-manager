@@ -117,7 +117,13 @@ export interface CustomCollectionAutomationScope {
     targetFieldId: string
     /** Reference field containing the item produced by this entry. */
     outputReferenceFieldId?: string
-    /** Reference to another collection entry, such as a recipe. */
+    /** Item reference on the entry that owns structured data used by completion. */
+    relatedItemReferenceFieldId?: string
+    /** Field in related item's custom-system data containing the produced item reference. */
+    outputFromRelatedItemFieldId?: string
+    /** Quantity-reference or grouped field in related item's custom-system data. */
+    ingredientGroupFieldId?: string
+    /** Reference to another collection entry (legacy/general relational workflow). */
     relatedEntryReferenceFieldId?: string
     /**
      * On the related entry, a multiple reference field containing ingredient
