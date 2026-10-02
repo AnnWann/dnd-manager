@@ -19,6 +19,7 @@ import type {
 } from "./CustomGenerals"
 import type { CustomPanelDefinition } from "./CustomPanelDefinition"
 import type { CustomResourceDefinition } from "./CustomResourceDefinition"
+import type { CustomProjectDefinition, CustomProjectInstance } from "./CustomProjectDefinition"
 
 export interface CustomSystemDefinition {
   id: CustomSystemId
@@ -45,6 +46,8 @@ export interface CustomSystemDefinition {
   tags?: string[]
   /** Optional metadata schema this system may attach to inventory/loot items. */
   itemExtension?: CustomSystemItemExtensionDefinition
+  /** Reusable long-running activities owned by this system (crafting, research, training, rituals, etc.). */
+  projects?: CustomProjectDefinition[]
 }
 
 export interface CustomSystemItemExtensionDefinition {
@@ -214,6 +217,8 @@ export interface CharacterCustomSystemState {
   /** Exceções de aquisição/preparo definidas pelo mestre para este personagem. */
   abilityAcquisitionExceptions?: Record<string, CustomAbilityAcquisitionExceptionState>
   installationSource?: "master" | "automatic"
+  /** Active/completed long-running activities for this system. */
+  projects?: CustomProjectInstance[]
 }
 
 export interface CustomAbilityAcquisitionExceptionState {
