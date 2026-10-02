@@ -1,4 +1,5 @@
 import { Plus, Trash2 } from "lucide-react"
+import { Select as SharedSelect } from "../../components/ui/Select"
 import type { ReactNode } from "react"
 import type { CustomFieldDefinition, CustomFieldType } from "../../models/customSystems/CustomFieldDefinition"
 import type { CustomCollectionDefinition } from "../../models/customSystems/CustomCollectionDefinition"
@@ -70,7 +71,7 @@ function makeField(old:CustomFieldDefinition,type:CustomFieldType):CustomFieldDe
   return {...base,type:"text"}
 }
 function Input({label,value,onChange}:{label:string,value:string,onChange:(v:string)=>void}){return <label className="grid gap-1 text-xs text-text"><span>{label}</span><input className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH" value={value} onChange={e=>onChange(e.target.value)}/></label>}
-function Select({label,value,options,onChange}:{label:string,value:string,options:readonly string[],onChange:(v:string)=>void}){return <label className="grid gap-1 text-xs text-text"><span>{label}</span><select className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH" value={value} onChange={e=>onChange(e.target.value)}>{options.map(o=><option key={o} value={o}>{o||"Nenhum"}</option>)}</select></label>}
+function Select({label,value,options,onChange}:{label:string,value:string,options:readonly string[],onChange:(v:string)=>void}){return <label className="grid gap-1 text-xs text-text"><span>{label}</span><SharedSelect className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-textH" value={value} onChange={e=>onChange(e.target.value)}>{options.map(o=><option key={o} value={o}>{o||"Nenhum"}</option>)}</SharedSelect></label>}
 function Button({children,onClick}:{children:ReactNode,onClick:()=>void}){return <button type="button" onClick={onClick} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-textH hover:bg-accentBg">{children}</button>}
 function IconButton({children,onClick}:{children:ReactNode,onClick:()=>void}){return <button type="button" onClick={onClick} className="rounded-lg border border-red-500/40 p-2 text-red-300 hover:bg-red-500/10">{children}</button>}
 function slugify(v:string){return v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")}
