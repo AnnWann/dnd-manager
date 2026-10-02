@@ -40,6 +40,7 @@ export function runCustomSystemAutomations(
   definitions: CustomSystemDefinition[],
   event: CustomSystemEventType,
   eventContext?: { systemId: string; collectionId: string; entryId: string },
+  runtimeContext?: { partyInventoryAccessible?: boolean },
 ): CustomAutomationRunResult {
   let nextCharacter = character
   const applied: AppliedCustomAutomation[] = []
@@ -51,6 +52,12 @@ export function runCustomSystemAutomations(
 
     for (const automation of definition.automations ?? []) {
       if (automation.enabled === false || automation.event !== event) continue
+      if (!(automation.contextConditions ?? []).every((condition) => {
+        if (condition.type === "inventoryAccess" && condition.location === "party") {
+          return (runtimeContext?.partyInventoryAccessible !== false) === condition.accessible
+        }
+        return true
+      })) continue
       if (automation.collectionScope) {
         const result = runCollectionAutomation(nextCharacter, definition, automation, eventContext)
         nextCharacter = result.character
@@ -81,7 +88,7 @@ export function runCustomSystemAutomations(
         systemId: completed.systemId,
         collectionId: completed.collectionId!,
         entryId: completed.entryId!,
-      })
+      }, runtimeContext)
       nextCharacter = completionResult.character
       applied.push(...completionResult.applied)
     }
