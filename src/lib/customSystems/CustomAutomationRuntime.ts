@@ -335,8 +335,11 @@ function proportionalIngredientDelta(raw: unknown, fromProgress: number, toProgr
     if (!row || typeof row !== "object" || Array.isArray(row)) return []
     const record = row as Record<string, unknown>
     const total = Math.max(0, Math.trunc(Number(record.quantity ?? record.quantidade) || 0))
-    const before = Math.floor(total * Math.max(0, Math.min(target, fromProgress)) / target)
-    const after = Math.floor(total * Math.max(0, Math.min(target, toProgress)) / target)
+    // Use ceiling for cumulative consumption so the first unit of work always
+    // requires a share of every ingredient. Floor allowed early progress for
+    // low-quantity ingredients (e.g. 1 ingredient over 4 work units) for free.
+    const before = Math.ceil(total * Math.max(0, Math.min(target, fromProgress)) / target)
+    const after = Math.ceil(total * Math.max(0, Math.min(target, toProgress)) / target)
     const quantity = Math.max(0, after - before)
     return quantity > 0 ? [{ ...record, quantity }] : []
   })
