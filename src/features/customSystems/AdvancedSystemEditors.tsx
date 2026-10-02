@@ -250,6 +250,12 @@ function CollectionScopeEditor({scope,draft,onChange}:{scope:CustomAutomationDef
           <Input label="Falha" value={String(roll.progressOnFailure)} onChange={value=>patch({roll:{...roll,progressOnFailure:optionalNumber(value)??0}})}/>
           <Input label="Sucesso" value={String(roll.progressOnSuccess)} onChange={value=>patch({roll:{...roll,progressOnSuccess:optionalNumber(value)??0}})}/>
           <Input label="20 natural" value={String(roll.progressOnCriticalSuccess)} onChange={value=>patch({roll:{...roll,progressOnCriticalSuccess:optionalNumber(value)??0}})}/>
+          <Check label="Consumir referências quantitativas conforme o progresso" checked={Boolean(roll.consumeIngredientsOnProgress)} onChange={checked=>patch({roll:{...roll,consumeIngredientsOnProgress:checked?{relatedItemReferenceFieldId:'receita',ingredientGroupFieldId:'ingredientes',targetFieldId:numeric[1]?.id??numeric[0]?.id??''}:undefined}})}/>
+          {roll.consumeIngredientsOnProgress?<>
+            <ReferenceSelect label="Referência relacionada" value={roll.consumeIngredientsOnProgress.relatedItemReferenceFieldId} options={fields.filter(field=>field.id!==roll.progressFieldId)} allowEmpty onChange={relatedItemReferenceFieldId=>patch({roll:{...roll,consumeIngredientsOnProgress:{...roll.consumeIngredientsOnProgress!,relatedItemReferenceFieldId}}})}/>
+            <Input label="Campo de ingredientes no item relacionado" value={roll.consumeIngredientsOnProgress.ingredientGroupFieldId} onChange={ingredientGroupFieldId=>patch({roll:{...roll,consumeIngredientsOnProgress:{...roll.consumeIngredientsOnProgress!,ingredientGroupFieldId}}})}/>
+            <ReferenceSelect label="Campo da meta de trabalho" value={roll.consumeIngredientsOnProgress.targetFieldId} options={numeric} allowEmpty onChange={targetFieldId=>patch({roll:{...roll,consumeIngredientsOnProgress:{...roll.consumeIngredientsOnProgress!,targetFieldId}}})}/>
+          </>:null}
         </div>:null}
       </div>
       <div className="rounded-lg border border-border p-3">
