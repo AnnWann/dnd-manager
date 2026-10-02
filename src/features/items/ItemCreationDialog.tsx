@@ -570,7 +570,7 @@ function ItemKindButtons({
 function toggleCustomItemType(item:Itemmable,systemId:string,typeId:string):Itemmable {
   const assigned=item.customSystemTypes??{}
   const current=assigned[systemId]??[]
-  const next=current.includes(typeId)?current.filter(id=>id!==typeId):Array.from(new Set([...current,typeId]))
+  const next=current.includes(typeId)?[]:[typeId]
   return {...item,customSystemTypes:{...assigned,[systemId]:next}}
 }
 
