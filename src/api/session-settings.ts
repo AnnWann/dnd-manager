@@ -162,6 +162,24 @@ export async function updateSessionName(
   return response.data.campaign.name
 }
 
+export async function resetSessionMemberPassword(
+  campaignId: string,
+  userId: string,
+  password: string,
+): Promise<void> {
+  if (LOCAL_AUTH_BYPASS) {
+    throw new Error("Redefinição de senha não está disponível no modo local.")
+  }
+  if (password.length < 8) {
+    throw new Error("A nova senha deve ter pelo menos 8 caracteres.")
+  }
+
+  await apiClient.post(
+    `/me/campaigns/${encodeURIComponent(campaignId)}/members/${encodeURIComponent(userId)}/reset-password`,
+    { password },
+  )
+}
+
 export async function updateSessionMember(
   campaignId: string,
   userId: string,
