@@ -92,6 +92,18 @@ function matchRoute(request: Request): MatchedRoute | null {
     }
   }
   if (
+    segments.length === 5 &&
+    segments[0] === "campaigns" &&
+    segments[2] === "members" &&
+    segments[4] === "reset-password"
+  ) {
+    return {
+      load: async () =>
+        (await import("../api-handlers/me/campaigns/[campaignId]/members/_reset-password.js")) as RouteModule,
+      params: { campaignId: segments[1], userId: segments[3] },
+    }
+  }
+  if (
     segments.length === 4 &&
     segments[0] === "campaigns" &&
     segments[2] === "members"
