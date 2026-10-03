@@ -42,6 +42,7 @@ export function CreatureDropsDialog({
   )
   const [manualTarget, setManualTarget] = useState<DropTarget | null>(null)
   const [selectedByGroup, setSelectedByGroup] = useState<Record<string, string>>({})
+  const [conditionalTemplateId, setConditionalTemplateId] = useState("")
 
   const compendiumEntries = useMemo<SessionItemCompendiumEntry[]>(
     () => (editor.draft?.itemCompendium ?? []).map((entry) => ({
@@ -175,8 +176,31 @@ export function CreatureDropsDialog({
                 <p className="mt-1 text-xs text-textMuted">Não caem automaticamente. O mestre decide após a morte com base na ficção.</p>
               </div>
               <Button size="sm" variant="secondary" onClick={() => setManualTarget({ kind: "conditional", conditionalId: "__new__" })}>
-                <Plus className="h-4 w-4" /> Adicionar condicional
+                <Plus className="h-4 w-4" /> Item manual
               </Button>
+            </div>
+            <div className="grid gap-2">
+              <CompendiumItemSearch
+                compendium={compendium}
+                selectedTemplateId={conditionalTemplateId}
+                onSelectTemplate={setConditionalTemplateId}
+              />
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={!conditionalTemplateId}
+                  onClick={() => {
+                    const selectedEntry = compendium.find((candidate) => candidate.item.id === conditionalTemplateId)
+                    if (!selectedEntry) return
+                    addConditionalDrop(instantiateSessionCompendiumItem(selectedEntry))
+                    setConditionalTemplateId("")
+                  }}
+                >
+                  <PackagePlus className="h-4 w-4" />
+                  Do compêndio
+                </Button>
+              </div>
             </div>
             {drops.conditional.map((entry) => (
               <div key={entry.id} className="grid gap-2 rounded-lg border border-border bg-bg p-3 sm:grid-cols-[1fr_2fr_auto] sm:items-center">
