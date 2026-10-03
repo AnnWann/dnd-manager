@@ -5,6 +5,7 @@ import {
   Settings2,
   ShieldCheck,
   UserMinus,
+  KeyRound,
   UsersRound,
 } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
@@ -13,6 +14,7 @@ import { Navigate, useNavigate, useParams } from "react-router-dom"
 import {
   getSessionCreationSettings,
   updateSessionMember,
+  resetSessionMemberPassword,
   type SessionCreationSettings,
   type SessionSettingsMember,
 } from "../../api/session-settings"
@@ -63,6 +65,9 @@ export function SessionCreationSettingsView() {
   const [selectedCharacterId, setSelectedCharacterId] = useState("")
   const [loading, setLoading] = useState(true)
   const [workingUserId, setWorkingUserId] = useState("")
+  const [passwordResetMember, setPasswordResetMember] = useState<SessionSettingsMember | null>(null)
+  const [newPassword, setNewPassword] = useState("")
+  const [passwordResetMessage, setPasswordResetMessage] = useState("")
   const [errorMessage, setErrorMessage] = useState("")
 
   useEffect(() => {
@@ -445,6 +450,13 @@ export function SessionCreationSettingsView() {
                             permissions: {},
                           })
                       : undefined}
+                    onResetPassword={settings.canManageMembers
+                      ? () => {
+                          setPasswordResetMember(member)
+                          setNewPassword("")
+                          setPasswordResetMessage("")
+                        }
+                      : undefined}
                     onRemove={settings.canManageMembers
                       ? () => {
                           if (
@@ -467,6 +479,62 @@ export function SessionCreationSettingsView() {
             ) : null}
           </div>
         </section>
+      ) : null}
+
+      {passwordResetMember && settings?.canManageMembers ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
+          <section className="w-full max-w-md rounded-xl border border-border bg-bg-elevated p-5 shadow-xl">
+            <h2 className="text-lg font-semibold text-textH">Redefinir senha</h2>
+            <p className="mt-1 text-sm text-textMuted">
+              Defina uma nova senha para {passwordResetMember.name}. A alteração invalida as sessões atuais desse usuário.
+            </p>
+            <label className="mt-4 grid gap-1.5">
+              <span className="text-sm text-text">Nova senha</span>
+              <input
+                type="password"
+                minLength={8}
+                autoComplete="new-password"
+                className="rounded-lg border border-border bg-bg px-3 py-2 text-textH"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+              />
+            </label>
+            {passwordResetMessage ? (
+              <p className="mt-3 text-sm text-danger">{passwordResetMessage}</p>
+            ) : null}
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                disabled={workingUserId === passwordResetMember.id}
+                onClick={() => setPasswordResetMember(null)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                disabled={newPassword.length < 8 || workingUserId === passwordResetMember.id}
+                onClick={async () => {
+                  if (!campaignId || newPassword.length < 8) return
+                  setWorkingUserId(passwordResetMember.id)
+                  setPasswordResetMessage("")
+                  try {
+                    await resetSessionMemberPassword(campaignId, passwordResetMember.id, newPassword)
+                    setPasswordResetMember(null)
+                    setNewPassword("")
+                  } catch (error) {
+                    setPasswordResetMessage(
+                      error instanceof Error ? error.message : "Não foi possível redefinir a senha.",
+                    )
+                  } finally {
+                    setWorkingUserId("")
+                  }
+                }}
+              >
+                Redefinir senha
+              </Button>
+            </div>
+          </section>
+        </div>
       ) : null}
 
       {editor && selectedCharacter ? (
@@ -522,6 +590,7 @@ function MemberRow({
   onRoleChange,
   onCapabilityChange,
   onResetCapabilities,
+  onResetPassword,
   onRemove,
 }: {
   member: SessionSettingsMember
@@ -531,6 +600,7 @@ function MemberRow({
   onRoleChange?: (role: SessionSettingsMember["role"]) => void
   onCapabilityChange?: (capability: CampaignCapability, enabled: boolean) => void
   onResetCapabilities?: () => void
+  onResetPassword?: () => void
   onRemove?: () => void
 }) {
   const customizedCount = Object.keys(member.permissions ?? {}).length
@@ -574,6 +644,18 @@ function MemberRow({
               <option value="MODERATOR">Moderador</option>
               <option value="MASTER">Mestre</option>
             </SharedSelect>
+
+            {onResetPassword ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={working}
+                onClick={onResetPassword}
+              >
+                <KeyRound className="h-4 w-4" />
+                Redefinir senha
+              </Button>
+            ) : null}
 
             {onRemove ? (
               <Button
