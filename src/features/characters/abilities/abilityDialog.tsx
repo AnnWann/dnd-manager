@@ -193,7 +193,7 @@ export function AbilityDialog({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[12000] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/55 p-2 backdrop-blur-sm sm:p-4">
+    <div className="fixed inset-0 z-[21000] flex h-screen w-screen items-center justify-center overflow-hidden bg-black/55 p-2 backdrop-blur-sm sm:p-4">
       <div
         role="dialog"
         aria-modal="true"
