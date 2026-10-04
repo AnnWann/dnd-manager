@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react"
+import { useEffect } from "react"
 import { Outlet, useLocation, useParams } from "react-router-dom"
 
 import { getCreationSnapshot } from "../../api/creation"
@@ -62,10 +62,11 @@ export function SessionRouteOutlet() {
 function MasterRuntimeConfigPublisher({ campaignId }: { campaignId: string }) {
   const runtime = useOptionalSessionRuntime()
   const { visibleCharacters } = useCharacterContext()
-  const referencedSpellIndexes = useMemo(
-    () => collectSessionReferencedSpellIndexes(visibleCharacters),
-    [visibleCharacters],
-  )
+  // CharacterTemplate instances can be updated while the surrounding
+  // collection keeps the same reference. Recompute spell references on every
+  // render so newly hydrated/imported magic domains are published to the
+  // authoritative session configuration.
+  const referencedSpellIndexes = collectSessionReferencedSpellIndexes(visibleCharacters)
   const spellReferenceKey = sessionSpellReferenceKey(referencedSpellIndexes)
 
   useEffect(() => {
