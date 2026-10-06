@@ -120,8 +120,8 @@ export function InitiativePlayerView() {
 
   return (
     <div className="grid min-w-0 gap-4">
-      <header className="rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <header className="min-w-0 rounded-xl border border-border bg-bg p-4 shadow-theme-sm">
+        <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold text-textH">
               <Swords className="h-4 w-4 text-accent" />
@@ -131,7 +131,7 @@ export function InitiativePlayerView() {
               Visualização compartilhada. Somente o mestre pode alterar o combate.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs lg:justify-end">
             <Button
               size="sm"
               variant={viewMode === "table" ? "primary" : "secondary"}
@@ -167,7 +167,7 @@ export function InitiativePlayerView() {
           O mestre ainda não adicionou participantes à iniciativa.
         </div>
       ) : viewMode === "cards" ? (
-        <section className="rounded-xl border border-border bg-bg shadow-theme-sm">
+        <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-bg shadow-theme-sm">
           <InitiativeCards
             entries={entries}
             activeEntryId={session.activeEntryId}
