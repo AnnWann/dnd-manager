@@ -734,6 +734,11 @@ function applyInitiativeOperation(
               id: crypto.randomUUID(),
               name: change.name,
               description: change.description,
+              behavior: change.behavior,
+              source: change.source ?? system.name,
+              notes: change.notes,
+              tags: change.tags ? [...change.tags] : undefined,
+              bonuses: change.bonuses ? structuredClone(change.bonuses) : undefined,
               duration: customConditionDuration(change.duration, target.id),
             });
           } else {
