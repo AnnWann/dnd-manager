@@ -65,8 +65,16 @@ function TableEntryRows({
   onTrade,
   canTrade,
   onRemoveCondition,
-}: InitiativeRosterProps & { entry: InitiativeEntry }) {
+  readOnly = false,
+  canViewPrivateStats,
+  canOpenEntry,
+  canViewDeathSaves,
+  canEditDeathSaves,
+  onDeathSaves,
+}: InitiativeTableProps & { entry: InitiativeEntry }) {
   const active = entry.id === activeEntryId
+  const showPrivateStats = !readOnly || Boolean(canViewPrivateStats?.(entry))
+  const canOpen = !readOnly || Boolean(canOpenEntry?.(entry))
 
   return (
     <>
