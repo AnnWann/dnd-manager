@@ -13,7 +13,16 @@ import {
 } from "./InitiativeEntryParts"
 import type { InitiativeRosterProps } from "./initiativeRosterTypes"
 
-type InitiativeTableProps = InitiativeRosterProps & {\n  readOnly?: boolean\n  canViewPrivateStats?: (entry: InitiativeEntry) => boolean\n  canOpenEntry?: (entry: InitiativeEntry) => boolean\n  canViewDeathSaves?: (entry: InitiativeEntry) => boolean\n  canEditDeathSaves?: (entry: InitiativeEntry) => boolean\n  onDeathSaves?: (entry: InitiativeEntry, deathSaves: { successes: number; failures: number }) => void\n}\n\nexport function InitiativeTable(props: InitiativeTableProps) {
+type InitiativeTableProps = InitiativeRosterProps & {
+  readOnly?: boolean
+  canViewPrivateStats?: (entry: InitiativeEntry) => boolean
+  canOpenEntry?: (entry: InitiativeEntry) => boolean
+  canViewDeathSaves?: (entry: InitiativeEntry) => boolean
+  canEditDeathSaves?: (entry: InitiativeEntry) => boolean
+  onDeathSaves?: (entry: InitiativeEntry, deathSaves: { successes: number; failures: number }) => void
+}
+
+export function InitiativeTable(props: InitiativeTableProps) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[980px] border-collapse text-left text-sm">
