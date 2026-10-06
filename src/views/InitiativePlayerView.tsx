@@ -1,4 +1,4 @@
-import { Clock3, Grid2X2, List, Shield, Swords } from "lucide-react"
+import { Grid2X2, List, Swords } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Button } from "../components/ui/Button"
@@ -9,7 +9,7 @@ import {
   CreatureQuickSheet,
   quickSheetFromCompendiumCreature,
 } from "../features/creatures/CreatureQuickSheet"
-import { DeathSaveCounter } from "../features/initiative/InitiativeEntryParts"
+import { InitiativeTable } from "../features/initiative/InitiativeTable"
 import { useOptionalSessionRuntime } from "../features/session-runtime/useSessionRuntime"
 import { useInitiativeSession } from "../hooks/useInitiativeSession"
 import { initiativeEntryDisplayName, type InitiativeEntry } from "../models/initiative/Initiative"
@@ -188,24 +188,9 @@ export function InitiativePlayerView() {
           />
         </section>
       ) : (
-        <div className="grid gap-2">
-          {entries.map((entry) => (
-            <ReadOnlyEntry
-              key={entry.id}
-              entry={entry}
-              active={entry.id === session.activeEntryId}
-              showPrivateStats={canViewPrivateStats(entry)}
-              showDeathSaves={canViewDeathSaves(entry)}
-              editDeathSaves={canEditDeathSaves(entry)}
-              onDeathSaves={(deathSaves) => setDeathSaves(entry, deathSaves)}
-              onOpenCreature={
-                canOpenCreature(entry)
-                  ? () => setViewingCreatureEntryId(entry.id)
-                  : undefined
-              }
-            />
-          ))}
-        </div>
+        <section className="min-w-0 overflow-hidden rounded-xl border border-border bg-bg shadow-theme-sm">
+          <InitiativeTable entries={entries} activeEntryId={session.activeEntryId} roundAnchorEntryId={session.roundAnchorEntryId} round={session.round} started={session.started} readOnly canViewPrivateStats={canViewPrivateStats} canOpenEntry={canOpenCreature} canViewDeathSaves={canViewDeathSaves} canEditDeathSaves={canEditDeathSaves} onDeathSaves={(entry, deathSaves) => setDeathSaves(entry, deathSaves)} patchEntry={noop} onOpen={(entryId) => setViewingCreatureEntryId(entryId)} onCondition={noop} onRemove={noop} onTrade={noop} canTrade={() => false} onRemoveCondition={noop} />
+        </section>
       )}
 
       {viewingCreature && viewingCreatureEntry ? (
@@ -223,133 +208,6 @@ export function InitiativePlayerView() {
             preferImage={Boolean(viewingCreature.sheetImageUrl)}
           />
         </Modal>
-      ) : null}
-    </div>
-  )
-}
-
-function ReadOnlyEntry({
-  entry,
-  active,
-  showPrivateStats,
-  showDeathSaves,
-  editDeathSaves,
-  onDeathSaves,
-  onOpenCreature,
-}: {
-  entry: InitiativeEntry
-  active: boolean
-  showPrivateStats: boolean
-  showDeathSaves: boolean
-  editDeathSaves: boolean
-  onDeathSaves: (deathSaves: { successes: number; failures: number }) => void
-  onOpenCreature?: () => void
-}) {
-  return (
-    <article
-      className={[
-        "grid gap-3 rounded-xl border bg-bg p-3 shadow-theme-sm sm:grid-cols-[4rem_minmax(0,1fr)_auto] sm:items-center",
-        active ? "border-accent bg-accentBg" : "border-border",
-        entry.defeated ? "opacity-55" : "",
-      ].join(" ")}
-    >
-      <div className="flex items-center gap-2 sm:block sm:text-center">
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-textMuted">
-          Init.
-        </div>
-        <div className="text-lg font-bold text-textH">{entry.initiative}</div>
-      </div>
-
-      <div className="flex min-w-0 items-center gap-3">
-        {entry.imageUrl ? (
-          <button
-            type="button"
-            className="shrink-0 rounded-lg disabled:cursor-default"
-            disabled={!onOpenCreature}
-            onClick={onOpenCreature}
-            title={onOpenCreature ? "Abrir ficha da criatura" : undefined}
-          >
-            <img
-              src={entry.imageUrl}
-              alt=""
-              className="h-12 w-12 rounded-lg border border-border object-cover"
-            />
-          </button>
-        ) : null}
-
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            {onOpenCreature ? (
-              <button
-                type="button"
-                className="min-w-0 break-words text-left text-sm font-semibold text-textH hover:text-accent"
-                onClick={onOpenCreature}
-              >
-                {initiativeEntryDisplayName(entry, "player")}
-              </button>
-            ) : (
-              <h2 className="min-w-0 break-words text-sm font-semibold text-textH">
-                {initiativeEntryDisplayName(entry, "player")}
-              </h2>
-            )}
-            {active ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
-                <Clock3 className="h-3 w-3" /> Turno atual
-              </span>
-            ) : null}
-            {entry.downed ? (
-              <span className="rounded-full border border-danger/50 bg-danger/10 px-2 py-1 text-[10px] font-semibold text-danger">
-                Caído
-              </span>
-            ) : entry.defeated ? (
-              <span className="rounded-full border border-border px-2 py-1 text-[10px] text-textMuted">
-                Derrotado
-              </span>
-            ) : null}
-          </div>
-
-          {entry.conditions.length ? (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {entry.conditions.map((condition) => (
-                <span
-                  key={condition.id}
-                  title={condition.description}
-                  className="rounded-full border border-border bg-bg-subtle px-2 py-1 text-[10px] text-textH"
-                >
-                  {condition.name}
-                </span>
-              ))}
-            </div>
-          ) : null}
-          {entry.downed && showDeathSaves ? (
-            <div className="mt-2 rounded-lg border border-danger/40 bg-danger/10 p-2">
-              <DeathSaveCounter
-                entry={entry}
-                editable={editDeathSaves}
-                onChange={onDeathSaves}
-              />
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      {showPrivateStats ? <PrivateStats entry={entry} /> : null}
-    </article>
-  )
-}
-
-function PrivateStats({ entry }: { entry: InitiativeEntry }) {
-  return (
-    <div className="flex flex-wrap gap-2 text-xs text-textH sm:justify-end">
-      {entry.currentHp !== undefined ? (
-        <span className="rounded-lg border border-border bg-bg-subtle px-2.5 py-2">
-          PV {formatHp(entry)}
-        </span>
-      ) : null}
-      {entry.armorClass !== undefined ? (
-        <span className="inline-flex items-center gap-1 rounded-lg border border-border bg-bg-subtle px-2.5 py-2">
-          <Shield className="h-3.5 w-3.5" /> CA {entry.armorClass}
-        </span>
       ) : null}
     </div>
   )
