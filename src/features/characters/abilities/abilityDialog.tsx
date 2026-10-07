@@ -592,7 +592,7 @@ export function AbilityDialog({
                 description="Tudo que acontece ao usar ou manter a habilidade: bônus, condições e opções de ativação."
               />
               <div className={draft.usage ? "[&>div>section:first-child]:hidden" : ""}>
-                <AbilityAdvancedEffectsEditor ability={draft} onChange={setDraft} />
+                <AbilityAdvancedEffectsEditor ability={draft} character={character} onChange={setDraft} />
               </div>
               <div className="border-t border-border pt-4">
                 <BonusesFields
