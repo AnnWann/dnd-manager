@@ -193,6 +193,7 @@ export function AbilityAdvancedEffectsEditor({ ability, character, onChange }: {
                         <div className="border-t border-border p-3">
                           <MiniAbilityEditor
                             ability={embedded}
+                            character={character}
                             onChange={(next) => setOptionAbilities(
                               option,
                               abilities.map((current, currentIndex) => currentIndex === index ? next : current),
