@@ -17,6 +17,8 @@ import type {
 } from "../../../models/abilities/Ability"
 import { getActivationOptionAbilities } from "../../../models/abilities/abilityActivation"
 import type { CharacterConditionGrant } from "../../../models/characters/CharacterCondition"
+import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { AbilityResourceCostsEditor } from "./abilityResourceCostsEditor"
 import { BonusesFields } from "../inventory/equipmentBonusFields"
 import { GrantedSpellsEditor, type EditableSpellGrant } from "../magic/grantedSpellsEditor"
 import { GrantedProficienciesEditor } from "../proficiencies/grantedProficienciesEditor"
@@ -215,11 +217,11 @@ export function AbilityAdvancedEffectsEditor({ ability, onChange }: {
   )
 }
 
-function MiniAbilityEditor({ ability, onChange }: { ability: Ability; onChange: (ability: Ability) => void }) {
+function MiniAbilityEditor({ ability, character, onChange }: { ability: Ability; character?: CharacterTemplate; onChange: (ability: Ability) => void }) {
   const [tab, setTab] = useState<"basic" | "resource" | "effects" | "grants">("basic")
   const duration = ability.effectDuration ?? (ability.kind === "active" ? "instant" : "lasting")
   const persistence = ability.effectPersistence ?? "untilEnd"
-  const hasUsage = Boolean(ability.usage)
+  const hasUsage = Boolean(ability.usage)\n  const hasResourceCosts = (ability.resourceCosts ?? []).some((group) => group.costs.length > 0)
   const condition = ability.conditionOnUse
   const grantsCount = (ability.grantedSpells?.length ?? 0) + (ability.grantedProficiencies?.length ?? 0)
 
@@ -232,7 +234,7 @@ function MiniAbilityEditor({ ability, onChange }: { ability: Ability; onChange: 
         </div>
         <div className="mt-3 grid grid-cols-4 gap-1 rounded-lg bg-bg-subtle p-1">
           <TabButton active={tab === "basic"} onClick={() => setTab("basic")}>Básico</TabButton>
-          <TabButton active={tab === "resource"} onClick={() => setTab("resource")} marked={hasUsage}>Recurso</TabButton>
+          <TabButton active={tab === "resource"} onClick={() => setTab("resource")} marked={hasUsage || hasResourceCosts}>Recurso</TabButton>
           <TabButton active={tab === "effects"} onClick={() => setTab("effects")} marked={Boolean(condition)}>Efeitos</TabButton>
           <TabButton active={tab === "grants"} onClick={() => setTab("grants")} marked={grantsCount > 0}>Concede</TabButton>
         </div>
