@@ -221,7 +221,8 @@ function MiniAbilityEditor({ ability, character, onChange }: { ability: Ability;
   const [tab, setTab] = useState<"basic" | "resource" | "effects" | "grants">("basic")
   const duration = ability.effectDuration ?? (ability.kind === "active" ? "instant" : "lasting")
   const persistence = ability.effectPersistence ?? "untilEnd"
-  const hasUsage = Boolean(ability.usage)\n  const hasResourceCosts = (ability.resourceCosts ?? []).some((group) => group.costs.length > 0)
+  const hasUsage = Boolean(ability.usage)
+  const hasResourceCosts = (ability.resourceCosts ?? []).some((group) => group.costs.length > 0)
   const condition = ability.conditionOnUse
   const grantsCount = (ability.grantedSpells?.length ?? 0) + (ability.grantedProficiencies?.length ?? 0)
 
