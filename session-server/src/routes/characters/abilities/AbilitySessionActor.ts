@@ -5,7 +5,7 @@ import {
   restoreAbilityUse,
   useAbilityEffect,
 } from "../../../../../src/models/abilities/abilityActivation";
-import { spendAbilityResourceCosts } from "../../../../../src/models/abilities/abilityResourceCosts";
+import { hasAbilityResourceCosts, spendAbilityResourceCosts } from "../../../../../src/models/abilities/abilityResourceCosts";
 import { getChannelDivinityPool } from "../../../../../src/models/characters/characterChannelDivinity";
 import { getKiPool } from "../../../../../src/models/characters/characterKi";
 import {
@@ -409,8 +409,8 @@ function applyAbilityOperation(
   if (operation.type === "character.ability.use") {
     const ability = findAbilityForSource(character, source);
     if (!ability || !canActivateAbility(character, ability)) return null;
-    if ((source.type === "character" || source.type === "condition") && ability.category === "channelDivinity" && (getChannelDivinityPool(character)?.current ?? 0) <= 0) return null;
-    if ((source.type === "character" || source.type === "condition") && ability.category === "martialArts" && (getKiPool(character)?.current ?? 0) <= 0) return null;
+    if ((source.type === "character" || source.type === "condition") && ability.category === "channelDivinity" && !hasAbilityResourceCosts(ability) && (getChannelDivinityPool(character)?.current ?? 0) <= 0) return null;
+    if ((source.type === "character" || source.type === "condition") && ability.category === "martialArts" && !hasAbilityResourceCosts(ability) && (getKiPool(character)?.current ?? 0) <= 0) return null;
     const payment = spendAbilityResourceCosts(character, ability, operation.resourceSelection);
     if (!payment.ok) return null;
     nextCharacter = payment.character;
