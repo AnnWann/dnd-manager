@@ -1,6 +1,7 @@
 // models/characters/characterAbilities.ts
 
 import type { Ability } from "../abilities/Ability"
+import { hasAbilityResourceCosts } from "../abilities/abilityResourceCosts"
 import type { Attribute } from "../sheet/Attribute"
 import {
   abilityRequiresActivation,
@@ -193,7 +194,7 @@ export function useAbility(
       }
     : { type: "character" as const }
 
-  if (ability.category === "channelDivinity") {
+  if (ability.category === "channelDivinity" && !hasAbilityResourceCosts(ability)) {
     const pool = getChannelDivinityPool(character)
     if (!pool || pool.current <= 0) return character
     const activated = useAbilityEffect(
@@ -206,7 +207,7 @@ export function useAbility(
     return spendChannelDivinity(activated)
   }
 
-  if (ability.category === "martialArts") {
+  if (ability.category === "martialArts" && !hasAbilityResourceCosts(ability)) {
     const pool = getKiPool(character)
     if (!pool || pool.current <= 0) return character
     const activated = useAbilityEffect(
