@@ -285,6 +285,7 @@ function MiniAbilityEditor({ ability, character, onChange }: { ability: Ability;
                 <label className="grid gap-1 text-xs text-textMuted">Recupera<Select value={ability.usage.reset} onChange={(event) => onChange({ ...ability, usage: { ...ability.usage!, reset: event.target.value as AbilityUsageResetKind } })}>{USAGE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></label>
               </div>
             ) : <p className="text-xs text-textMuted">Sem contador próprio.</p>}
+            <AbilityResourceCostsEditor ability={ability} character={character} onChange={onChange} />
           </div>
         ) : null}
 
