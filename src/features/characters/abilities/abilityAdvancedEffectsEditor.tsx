@@ -29,8 +29,9 @@ import {
   USAGE_OPTIONS,
 } from "./abilityOptions"
 
-export function AbilityAdvancedEffectsEditor({ ability, onChange }: {
+export function AbilityAdvancedEffectsEditor({ ability, character, onChange }: {
   ability: Ability
+  character?: CharacterTemplate
   onChange: (ability: Ability) => void
 }) {
   const condition = ability.conditionOnUse
