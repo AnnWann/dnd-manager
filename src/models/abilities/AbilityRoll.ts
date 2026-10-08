@@ -10,6 +10,8 @@ export type AbilityRollDamage = {
   label?: string
   dice: string
   damageType?: DamageType
+  /** Add the configured ability attribute modifier to this damage component. */
+  addAttributeModifier?: boolean
   /** Whether critical hits double these dice. Default: true. */
   critical?: boolean
 }
