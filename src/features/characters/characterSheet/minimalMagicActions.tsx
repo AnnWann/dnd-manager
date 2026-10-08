@@ -19,6 +19,7 @@ import {
 } from "../../../models/characters/customClassConfig"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import type { Spell, SpellResourceCost, SpellResourceType } from "../../../models/magic/spells/Spell"
+import { getSpellOnCastAttackRiders } from "../../../models/magic/spells/spellAttackRiders"
 import { canPaySpellResourceCost, getEffectiveSpellResourceOptions, spellResourceLabel, spendSpellResourceCost } from "../../../models/magic/spells/spellResourceCost"
 import type { SpellSource } from "../../../models/magic/spells/SpellSource"
 import type { MagicCircleLevel } from "../../../models/magic/spells/spellDefinitions"
@@ -40,6 +41,7 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
   const [actionFilter, setActionFilter] = useState<ActionFilter>("action")
   const [levelFilter, setLevelFilter] = useState<number | "all">("all")
   const [selected, setSelected] = useState<MinimalSpellEntry | null>(null)
+  const [targetEntryId, setTargetEntryId] = useState("")
   const [castLevel, setCastLevel] = useState<number | null>(null)
   const [castingResource, setCastingResource] = useState<CastingResource>("slot")
   const [confirmConcentrationReplacement, setConfirmConcentrationReplacement] = useState(false)
@@ -98,6 +100,10 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
         return
       }
 
+      if (getSpellOnCastAttackRiders(spell).length && !targetEntryId) {
+        setError("Selecione o alvo marcado por esta magia.")
+        return
+      }
       const resolved = resolveAuthoritativeCastPayment()
       if (!resolved) return
       const sent = sessionRuntime.dispatchMagicOperation({
@@ -110,6 +116,7 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
         mode,
         visibility: getRollVisibility(),
         payment: resolved.payment,
+        targetEntryId: getSpellOnCastAttackRiders(spell).length ? targetEntryId : undefined,
       })
       if (!sent) {
         setError("Não foi possível enviar a conjuração para a sessão.")
@@ -250,10 +257,10 @@ export function MinimalMagicActions({ character, updateCharacter }: Props) {
       {ki ? <ResourcePill label="Ki" current={ki.current} max={ki.max} onDecrease={() => updateCharacter(character.get("id"), spendKi)} onIncrease={() => updateCharacter(character.get("id"), restoreKi)} /> : null}
     </div></div> : null}
 
-    {selected ? <Modal title={spellName(selected.spell)} onClose={() => setSelected(null)} className="max-w-xl"><div className="grid gap-3"><div className="text-xs text-textMuted">{sourceLabel(selected.source)}{selected.spell.concentration ? " • Concentração" : ""}</div><p className="max-h-56 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-text">{selected.spell.description}</p>{resourceChoices.length > 1 ? <label className="grid gap-1 text-xs text-textMuted">Recurso<SharedSelect className="h-9 rounded-lg border border-border bg-bg px-2 text-textH" value={castingResource} onChange={(event) => changeCastingResource(event.target.value as CastingResource)}>{resourceChoices.map((choice) => <option key={choice.value} value={choice.value} disabled={choice.disabled}>{choice.label}</option>)}</SharedSelect></label> : null}{asksCastLevel ? <label className="grid gap-1 text-xs text-textMuted">Nível de conjuração<SharedSelect className="h-9 rounded-lg border border-border bg-bg px-2 text-textH" value={castLevel ?? selected.spell.slotLevel} onChange={(event) => setCastLevel(Number(event.target.value))}>{getCastLevels(selected.spell, castingResource, slotChoices).map((level) => <option key={level} value={level}>Nível {level}{selectedBaseCost ? ` — ${getUpcastResourceCost(selected.spell, selectedBaseCost, level).amount} ${spellResourceLabel(selectedBaseCost.resource)}` : ""}</option>)}</SharedSelect></label> : null}{error ? <div className="rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">{error}</div> : null}{confirmConcentrationReplacement ? <div className="rounded-lg border border-warning bg-bg-subtle p-3 text-xs text-text"><p>O personagem já está concentrando. Usar esta magia encerra a concentração atual.</p><div className="mt-2 flex justify-end gap-2"><Button variant="secondary" onClick={() => setConfirmConcentrationReplacement(false)}>Cancelar</Button><Button variant="primary" onClick={() => executeSelectedCast(pendingRollMode)}>Substituir e usar</Button></div></div> : <div className="flex justify-end border-t border-border pt-3">
+    {selected ? <Modal title={spellName(selected.spell)} onClose={() => setSelected(null)} className="max-w-xl"><div className="grid gap-3"><div className="text-xs text-textMuted">{sourceLabel(selected.source)}{selected.spell.concentration ? " • Concentração" : ""}</div><p className="max-h-56 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-text">{selected.spell.description}</p>{resourceChoices.length > 1 ? <label className="grid gap-1 text-xs text-textMuted">Recurso<SharedSelect className="h-9 rounded-lg border border-border bg-bg px-2 text-textH" value={castingResource} onChange={(event) => changeCastingResource(event.target.value as CastingResource)}>{resourceChoices.map((choice) => <option key={choice.value} value={choice.value} disabled={choice.disabled}>{choice.label}</option>)}</SharedSelect></label> : null}{asksCastLevel ? <label className="grid gap-1 text-xs text-textMuted">Nível de conjuração<SharedSelect className="h-9 rounded-lg border border-border bg-bg px-2 text-textH" value={castLevel ?? selected.spell.slotLevel} onChange={(event) => setCastLevel(Number(event.target.value))}>{getCastLevels(selected.spell, castingResource, slotChoices).map((level) => <option key={level} value={level}>Nível {level}{selectedBaseCost ? ` — ${getUpcastResourceCost(selected.spell, selectedBaseCost, level).amount} ${spellResourceLabel(selectedBaseCost.resource)}` : ""}</option>)}</SharedSelect></label> : null}{getSpellOnCastAttackRiders(selected.spell).length > 0 && sessionRuntime ? <label className="grid gap-1 text-xs text-textMuted">Alvo marcado<SharedSelect className="h-9 rounded-lg border border-border bg-bg px-2 text-textH" value={targetEntryId} onChange={event => setTargetEntryId(event.target.value)}><option value="">Selecione um combatente</option>{(sessionRuntime.initiativeState?.session?.entries ?? []).map(entry => <option key={entry.id} value={entry.id}>{entry.customName || entry.name}</option>)}</SharedSelect></label> : null}{error ? <div className="rounded-lg border border-danger bg-dangerBg px-3 py-2 text-xs text-danger">{error}</div> : null}{confirmConcentrationReplacement ? <div className="rounded-lg border border-warning bg-bg-subtle p-3 text-xs text-text"><p>O personagem já está concentrando. Usar esta magia encerra a concentração atual.</p><div className="mt-2 flex justify-end gap-2"><Button variant="secondary" onClick={() => setConfirmConcentrationReplacement(false)}>Cancelar</Button><Button variant="primary" onClick={() => executeSelectedCast(pendingRollMode)}>Substituir e usar</Button></div></div> : <div className="flex justify-end border-t border-border pt-3">
   <Button
     variant="primary"
-    disabled={useDisabled}
+    disabled={useDisabled || Boolean(sessionRuntime && selected && getSpellOnCastAttackRiders(selected.spell).length && !targetEntryId)}
     title={rollModifierHint()}
     onClick={(event) => castSelected(rollModeFromEvent(event.nativeEvent))}
   >
