@@ -69,19 +69,26 @@ export function AttackRidersEditor({ riders, character, onChange, defaultScope =
           <label className="flex items-center gap-2 text-xs text-textH">
             <input type="checkbox" checked={Boolean(rider.damage)} onChange={e => patch(rider.id, {
               damage: e.target.checked ? { dice: "1d6", damageType: "fire" } : undefined,
+              weaponDamageTypeMode: !e.target.checked && rider.weaponDamageTypeMode === "extra"
+                ? undefined : rider.weaponDamageTypeMode,
             })} />
             Adicionar dano por acerto
           </label>
-          {(rider.damage || rider.replaceWeaponDamageType) ? <div className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
+          {(rider.damage || rider.replaceWeaponDamageType || rider.weaponDamageTypeMode === "selected") ? <div className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
             <div className="text-xs font-semibold text-textH">Escolha do tipo de dano ao ativar</div>
-            <p className="text-[11px] text-textMuted">Marque os tipos permitidos. Se houver opções, o jogador precisará escolher um deles ao usar a habilidade ou magia. A escolha também altera a substituição do tipo da arma, quando habilitada.</p>
+            <p className="text-[11px] text-textMuted">Marque os tipos permitidos. Ao ativar, o jogador escolhe um deles. Você pode usar esse tipo também para a arma, ou vincular a arma ao tipo do dano extra.</p>
             <div className="flex flex-wrap gap-2">
               {DAMAGE_TYPE_OPTIONS.map(option => (
                 <label key={option.value} className="flex items-center gap-1.5 text-xs text-textH">
                   <input type="checkbox" checked={(rider.damageTypeChoices ?? []).includes(option.value)}
-                    onChange={e => patch(rider.id, { damageTypeChoices: e.target.checked
-                      ? [...(rider.damageTypeChoices ?? []), option.value]
-                      : (rider.damageTypeChoices ?? []).filter(value => value !== option.value) })} />
+                    onChange={e => {
+                      const choices = e.target.checked
+                        ? [...(rider.damageTypeChoices ?? []), option.value]
+                        : (rider.damageTypeChoices ?? []).filter(value => value !== option.value)
+                      // A selected weapon type must always have at least one valid option.
+                      if (!choices.length && rider.weaponDamageTypeMode === "selected") return
+                      patch(rider.id, { damageTypeChoices: choices })
+                    }} />
                   {option.label}
                 </label>
               ))}
@@ -106,11 +113,43 @@ export function AttackRidersEditor({ riders, character, onChange, defaultScope =
               Escolher uma arma equipada ao ativar
             </label>
             <label className="grid gap-1 text-xs text-textMuted">Substituir o tipo de dano da arma
-              <Select value={rider.replaceWeaponDamageType ?? ""} onChange={e => patch(rider.id, { replaceWeaponDamageType: (e.target.value || undefined) as DamageType | undefined })}>
-                <option value="">Não alterar</option>
-                {DAMAGE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              <Select
+                value={rider.weaponDamageTypeMode
+                  ?? (rider.replaceWeaponDamageType
+                    ? (rider.damageTypeChoices?.length ? "selected" : "fixed")
+                    : "none")}
+                onChange={e => {
+                  const mode = e.target.value as "none" | "fixed" | "selected" | "extra"
+                  patch(rider.id, {
+                    weaponDamageTypeMode: mode === "none" ? undefined : mode,
+                    replaceWeaponDamageType: mode === "fixed"
+                      ? (rider.replaceWeaponDamageType ?? rider.damage?.damageType ?? "fire")
+                      : undefined,
+                    damageTypeChoices: mode === "selected" && !(rider.damageTypeChoices?.length)
+                      ? ["acid", "cold", "fire", "thunder", "lightning"]
+                      : rider.damageTypeChoices,
+                  })
+                }}
+              >
+                <option value="none">Não alterar</option>
+                <option value="fixed">Tipo fixo</option>
+                <option value="selected">Tipo escolhido ao ativar</option>
+                {rider.damage ? <option value="extra">Mesmo tipo do dano adicional</option> : null}
               </Select>
             </label>
+            {(rider.weaponDamageTypeMode
+              ?? (rider.replaceWeaponDamageType
+                ? (rider.damageTypeChoices?.length ? "selected" : "fixed")
+                : "none")) === "fixed" ? (
+              <label className="grid gap-1 text-xs text-textMuted">Tipo fixo da arma
+                <Select value={rider.replaceWeaponDamageType ?? "fire"} onChange={e => patch(rider.id, { replaceWeaponDamageType: e.target.value as DamageType })}>
+                  {DAMAGE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </Select>
+              </label>
+            ) : null}
+            {rider.weaponDamageTypeMode === "extra" ? (
+              <p className="text-[11px] text-textMuted">O dano base da arma passa a ter o mesmo tipo do dano extra, inclusive quando o jogador escolhe um elemento na ativação.</p>
+            ) : null}
             <label className="flex items-center gap-2 text-xs text-textH">
               <input type="checkbox" checked={Boolean(rider.addThrown)} onChange={e => patch(rider.id, { addThrown: e.target.checked })} />
               Conceder propriedade Arremesso
