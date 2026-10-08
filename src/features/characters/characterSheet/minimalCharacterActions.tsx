@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom"
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
-import { optionRequiresWeaponSelection } from "../../../models/combat/AttackRider"
+import { getAbilityAttackRiderDamageChoices, optionRequiresWeaponSelection } from "../../../models/combat/AttackRider"
 import { getCharacterConditions } from "../../../models/characters/characterConditionStorage"
 import { Modal } from "../../../components/ui/Modal"
 import { useMagicContext } from "../../../contexts/magicContext"
@@ -295,6 +295,7 @@ export function MinimalCharacterActions({
     optionId?: string,
     resourceSelection?: AbilityResourceSelection,
     bonusRollValues?: Record<string, number>,
+    weaponIdFromModal?: string,
   ) {
     const source = entry.abilitySource
     if (!source) return
@@ -303,7 +304,7 @@ export function MinimalCharacterActions({
       .flatMap(condition => condition.grantedAbilities ?? [])
       .flatMap(granted => granted.bonuses?.attackRiders ?? [])
       .find(rider => rider.weaponSelection === "onActivation" && rider.weaponId)?.weaponId
-    const activationWeaponId = boundWeaponId || selectedWeaponId
+    const activationWeaponId = boundWeaponId || weaponIdFromModal || selectedWeaponId
     if (action === "use" && entry.ability && optionRequiresWeaponSelection(entry.ability, optionId) && !activationWeaponId) {
       setError("Escolha a arma que receberá o efeito.")
       return
@@ -415,11 +416,11 @@ export function MinimalCharacterActions({
         )
         if (!ability) return current
         return action === "use"
-          ? useAbilityEffect(paidCurrent, ability, { type: "race", sourceLabel: "Raça" }, optionId, resolvedBonusRollValues, activationWeaponId)
+          ? useAbilityEffect(paidCurrent, ability, { type: "race", sourceLabel: "Raça" }, optionId, resolvedBonusRollValues, activationWeaponId, resourceSelection?.damageType)
           : endAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
       }
       return action === "use"
-        ? useCharacterAbility(paidCurrent, source.abilityId, optionId, resolvedBonusRollValues, activationWeaponId)
+        ? useCharacterAbility(paidCurrent, source.abilityId, optionId, resolvedBonusRollValues, activationWeaponId, resourceSelection?.damageType)
         : current.deactivateAbility(source.abilityId)
     })
     setAbilityResourceEntry(null)
@@ -980,7 +981,9 @@ export function MinimalCharacterActions({
                   <div className="flex justify-end">
                     <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>Encerrar efeito</Button>
                   </div>
-                ) : hasAbilityResourceCosts(selected.ability)
+                ) : getAbilityAttackRiderDamageChoices(selected.ability).length > 0
+                    || (selected.ability.activationOptions ?? []).some(option => getAbilityAttackRiderDamageChoices(selected.ability!, option.id).length > 0)
+                    || hasAbilityResourceCosts(selected.ability)
                     || selected.ability.resourceUpcast?.enabled
                     || hasManualBonusRolls(selected.ability.bonuses)
                     || (
@@ -1037,8 +1040,8 @@ export function MinimalCharacterActions({
           character={character}
           forceManualRolls={physicalDiceMode}
           onClose={() => setAbilityResourceEntry(null)}
-          onConfirm={(optionId, resourceSelection, bonusRollValues) =>
-            changeAbilityState(abilityResourceEntry, "use", optionId, resourceSelection, bonusRollValues)
+          onConfirm={(optionId, resourceSelection, bonusRollValues, weaponId) =>
+            changeAbilityState(abilityResourceEntry, "use", optionId, resourceSelection, bonusRollValues, weaponId)
           }
         />
       ) : null}
