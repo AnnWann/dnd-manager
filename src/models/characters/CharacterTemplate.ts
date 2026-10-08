@@ -374,7 +374,7 @@ export class CharacterTemplate {
   updateAbility(ability: Ability): CharacterTemplate {return updateAbility(this, ability)}
   removeAbility(abilityId: string): CharacterTemplate {return removeAbility(this, abilityId)}
   saveAbility(ability: Ability): CharacterTemplate {return saveAbility(this, ability)}
-  useAbility(abilityId: string, activationOptionId?: string, bonusRollValues?: Record<string, number>, selectedWeaponId?: string): CharacterTemplate {return useAbility(this, abilityId, activationOptionId, bonusRollValues, selectedWeaponId)}
+  useAbility(abilityId: string, activationOptionId?: string, bonusRollValues?: Record<string, number>, selectedWeaponId?: string, selectedDamageType?: import("../combat/Damage").DamageType): CharacterTemplate {return useAbility(this, abilityId, activationOptionId, bonusRollValues, selectedWeaponId, selectedDamageType)}
   restoreAbility(abilityId: string): CharacterTemplate {return restoreAbility(this, abilityId)}
   deactivateAbility(abilityId: string): CharacterTemplate {return deactivateAbility(this, abilityId)}
   resetAbility(abilityId: string): CharacterTemplate {return resetAbility(this, abilityId)}
