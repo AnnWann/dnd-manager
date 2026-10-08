@@ -17,6 +17,8 @@ export type AttackRider = {
   weaponSelection?: "onActivation"
   /** Restrict a mark to the selected combatant, never to all opponents. */
   targetEntryId?: string
+  /** A marked target is chosen when the spell is cast. */
+  targetSelection?: "onCast"
   /** Rolled once per successful hit; its type is independent of the base damage. */
   damage?: { dice: string; damageType?: DamageType }
   /** When present, a player must choose one of these types at activation/cast. */
