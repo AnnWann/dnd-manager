@@ -53,7 +53,7 @@ export function getAbilityRemainingUses(character: CharacterTemplate, usage: Usa
 }
 
 export function canActivateAbility(character: CharacterTemplate, ability: Ability): boolean {
-  if (abilityRequiresActivation(ability) && isAbilityBenefitsActive(ability)) return false
+  if (abilityRequiresActivation(ability) && isAbilityBenefitsActive(ability) && !ability.allowOptionSwitching) return false
   const usage = ability.usage
   if (!usage || usage.reset === "spellSlot") return true
   return usage.used < getAbilityUsageMax(character, usage)
@@ -102,6 +102,7 @@ export function useAbilityEffect(
   bonusRollValues?: Record<string, number>,
 ): CharacterTemplate {
   if (!abilityRequiresActivation(ability) || !canActivateAbility(character, ability)) return character
+  const switchingOption = Boolean(ability.allowOptionSwitching && isAbilityBenefitsActive(ability) && activationOptionId)
 
   const resolvedRolls = resolveBonusCollectionRolls(
     character,
@@ -117,8 +118,12 @@ export function useAbilityEffect(
   const persists = resolvedAbility.effectPersistence === "permanent"
   const previousEffectiveMaxHp = character.getEffectiveMaxHp()
   const previousCurrentHp = character.get("sheet").HP.current
-  const nextAbility = activateAbilityBenefits(character, resolvedAbility)
+  const nextAbility = switchingOption ? resolvedAbility : activateAbilityBenefits(character, resolvedAbility)
   let next = replaceAbilityAtSource(character, nextAbility, source)
+  if (switchingOption) {
+    const optionConditionIds = new Set((resolvedAbility.activationOptions ?? []).map(option => `${getAbilityConditionId(resolvedAbility.id, source)}:grant:${option.id}:abilities`))
+    next = withCharacterConditions(next, getCharacterConditions(next).filter(condition => !optionConditionIds.has(condition.id)))
+  }
 
   const maxHpBonuses = resolveBonuses(character, resolvedAbility.bonuses?.maxHp ?? [])
   if (maxHpBonuses.length > 0) {
