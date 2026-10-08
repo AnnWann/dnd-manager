@@ -1,3 +1,5 @@
+import type { DamageType } from "../combat/Damage"
+import { getAbilityAttackRiderDamageChoices, resolveAttackRiderDamageChoice } from "../combat/AttackRider"
 import { evaluateCharacterSheetFormula } from "../../lib/customSystems/CharacterSheetFormula"
 import type { Bonus } from "../bonuses/Bonus"
 import { resolveBonusCollectionRolls } from "../bonuses/BonusRoll"
@@ -55,7 +57,7 @@ export function getAbilityRemainingUses(character: CharacterTemplate, usage: Usa
 export function canActivateAbility(character: CharacterTemplate, ability: Ability): boolean {
   if (abilityRequiresActivation(ability) && isAbilityBenefitsActive(ability)) {
     // Changing an active elemental/stance option isn't another initial activation.
-    return Boolean(ability.allowOptionSwitching && (ability.activationOptions?.length ?? 0) > 0)
+    return Boolean(ability.allowOptionSwitching && ((ability.activationOptions?.length ?? 0) > 0 || getAbilityAttackRiderDamageChoices(ability).length > 0))
   }
   const usage = ability.usage
   if (!usage || usage.reset === "spellSlot") return true
@@ -104,10 +106,11 @@ export function useAbilityEffect(
   activationOptionId?: string,
   bonusRollValues?: Record<string, number>,
   selectedWeaponId?: string,
+  selectedDamageType?: DamageType,
 ): CharacterTemplate {
   if (!abilityRequiresActivation(ability) || !canActivateAbility(character, ability)) return character
-  const switchingOption = Boolean(ability.allowOptionSwitching && isAbilityBenefitsActive(ability) && activationOptionId)
-  if (ability.allowOptionSwitching && isAbilityBenefitsActive(ability) && !activationOptionId) return character
+  const switchingOption = Boolean(ability.allowOptionSwitching && isAbilityBenefitsActive(ability) && (activationOptionId || selectedDamageType))
+  if (ability.allowOptionSwitching && isAbilityBenefitsActive(ability) && !activationOptionId && !selectedDamageType) return character
   // The weapon initially infused by the ability cannot change when only the element changes.
   const originalWeaponId = switchingOption
     ? getCharacterConditions(character)
@@ -123,11 +126,16 @@ export function useAbilityEffect(
     ability.bonuses,
     bonusRollValues,
   )
+  const selectedOption = ability.activationOptions?.find(entry => entry.id === activationOptionId)
+  const choices = getAbilityAttackRiderDamageChoices(ability, activationOptionId)
+  if (choices.length && (!selectedDamageType || !choices.includes(selectedDamageType))) return character
   const resolvedAbility: Ability = {
     ...ability,
-    bonuses: resolvedRolls.bonuses,
+    bonuses: {
+      ...(resolvedRolls.bonuses ?? {}),
+      attackRiders: resolveAttackRiderDamageChoice(resolvedRolls.bonuses?.attackRiders ?? [], selectedDamageType),
+    },
   }
-  const selectedOption = resolvedAbility.activationOptions?.find((entry) => entry.id === activationOptionId)
   const duration = getAbilityEffectDuration(resolvedAbility)
   const persists = resolvedAbility.effectPersistence === "permanent"
   const previousEffectiveMaxHp = character.getEffectiveMaxHp()
@@ -173,7 +181,7 @@ export function useAbilityEffect(
         next,
         resolvedAbility,
         source,
-        optionAbilitiesGrant(selectedOption, resolvedAbility, optionAbilities, activeWeaponId),
+        optionAbilitiesGrant(selectedOption, resolvedAbility, optionAbilities, activeWeaponId, selectedDamageType),
         `${selectedOption.id}:abilities`,
         selectedOption.name,
       )
@@ -270,6 +278,7 @@ function optionAbilitiesGrant(
   parent: Ability,
   embedded: Ability[],
   weaponId?: string,
+  selectedDamageType?: DamageType,
 ): CharacterConditionGrant {
   return {
     name: option.name || embedded[0]?.name || "Opção de habilidade",
@@ -280,8 +289,11 @@ function optionAbilitiesGrant(
       ...granted,
       bonuses: {
         ...(granted.bonuses ?? {}),
-        attackRiders: (granted.bonuses?.attackRiders ?? []).map(rider =>
-          rider.weaponSelection === "onActivation" ? { ...rider, weaponId } : rider),
+        attackRiders: resolveAttackRiderDamageChoice(
+          (granted.bonuses?.attackRiders ?? []).map(rider =>
+            rider.weaponSelection === "onActivation" ? { ...rider, weaponId } : rider),
+          selectedDamageType,
+        ),
       },
     })),
     duration: option.duration ?? defaultOptionDuration(parent),
