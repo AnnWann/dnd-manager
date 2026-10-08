@@ -1,4 +1,6 @@
 import type { CharacterTemplate } from "../../../../../src/models/characters/CharacterTemplate";
+import { getActiveAttackRiders } from "../../../../../src/models/combat/AttackRider";
+import { rollAttackRiderDamages } from "../../session/attackRiderDice";
 import { abilityShortPtBr } from "../../../../../src/i18n/ptBR";
 import type { Spell } from "../../../../../src/models/magic/spells/Spell";
 import type { SpellSource } from "../../../../../src/models/magic/spells/SpellSource";
@@ -30,6 +32,7 @@ export function resolveSpellCastAction(args: {
   mode: SessionDiceRollMode;
   visibility?: SessionRollVisibility;
   rollDice?: boolean;
+  targetEntryId?: string;
 }): SessionActionRollResult {
   const {
     requestId,
@@ -41,6 +44,7 @@ export function resolveSpellCastAction(args: {
     mode,
     visibility,
     rollDice = true,
+    targetEntryId,
   } = args;
   const attribute = source.attribute;
   const modifier = character.getEffectiveAttributeModifier(attribute);
@@ -95,6 +99,7 @@ export function resolveSpellCastAction(args: {
   }
 
   if (resolution.roll.type === "attack") {
+    const riders = getActiveAttackRiders(character, { scope: "spell", targetEntryId });
     const attackModifier = character.getEffectiveSpellAttackBonus(
       attribute,
       modifier + proficiency,
@@ -107,14 +112,17 @@ export function resolveSpellCastAction(args: {
         return {
           label: instanceCount > 1 ? `Ataque ${index + 1}` : "Ataque",
           attack,
-          damages: resolveDamageComponents(
-            character,
-            resolution.damage ?? [],
-            context,
-            attribute,
-            critical,
-            new Set(["hit", "always"]),
-          ),
+          damages: [
+            ...resolveDamageComponents(
+              character,
+              resolution.damage ?? [],
+              context,
+              attribute,
+              critical,
+              new Set(["hit", "always"]),
+            ),
+            ...rollAttackRiderDamages(riders, critical),
+          ],
         };
       },
     );
