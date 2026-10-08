@@ -53,7 +53,10 @@ export function getAbilityRemainingUses(character: CharacterTemplate, usage: Usa
 }
 
 export function canActivateAbility(character: CharacterTemplate, ability: Ability): boolean {
-  if (abilityRequiresActivation(ability) && isAbilityBenefitsActive(ability) && !ability.allowOptionSwitching) return false
+  if (abilityRequiresActivation(ability) && isAbilityBenefitsActive(ability)) {
+    // Changing an active elemental/stance option isn't another initial activation.
+    return Boolean(ability.allowOptionSwitching && (ability.activationOptions?.length ?? 0) > 0)
+  }
   const usage = ability.usage
   if (!usage || usage.reset === "spellSlot") return true
   return usage.used < getAbilityUsageMax(character, usage)
