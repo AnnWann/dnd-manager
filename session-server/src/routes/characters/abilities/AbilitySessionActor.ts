@@ -410,6 +410,7 @@ function applyAbilityOperation(
   if (operation.type === "character.ability.use") {
     const ability = findAbilityForSource(character, source);
     if (!ability || !canActivateAbility(character, ability)) return null;
+    if (ability.allowOptionSwitching && ability.benefitsActive && !operation.activationOptionId) return null;
     if (optionRequiresWeaponSelection(ability, operation.activationOptionId)) {
       const previousWeapon = getCharacterConditions(character)
         .filter(condition => condition.sourceAbilityId === ability.id && condition.sourceAbilityOptionId?.endsWith(":abilities"))
