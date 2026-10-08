@@ -105,6 +105,7 @@ export function requestActionRoll(input: {
   characterId: string
   source: SessionActionRollSource
   mode?: SessionDiceRollMode
+  targetEntryId?: string
 }): void {
   publishActionRequest({
     requestId: createRequestId(),
@@ -112,6 +113,7 @@ export function requestActionRoll(input: {
     mode: input.mode ?? "normal",
     visibility: getRollVisibility(),
     source: input.source,
+    targetEntryId: input.targetEntryId,
   })
 }
 
