@@ -8,6 +8,7 @@ import type { MagicCircleLevel, MagicSchool } from "./spellDefinitions"
 import type { Attribute } from "../../sheet/Attribute"
 import type { DieSides } from "../../dice/Die"
 import type { AttackRider } from "../../combat/AttackRider"
+import type { DamageType } from "../../combat/Damage"
 
 export type SpellResourceType = 'ki' | 'sorceryPoints' | 'channelDivinity'
 export type SpellResourceCost = { resource: SpellResourceType; amount: number }
@@ -55,6 +56,8 @@ export type Spell = {
   resolution?: SpellResolution
   /** Effects placed on the caster while concentrating, usually bound to a selected mark target. */
   onCastAttackRiders?: AttackRider[]
+  /** Choice that changes the types of this spell\'s direct damage components. */
+  castDamageTypeChoices?: DamageType[]
   concentration: boolean
   ritual: boolean
   components: ('V' | 'S' | 'M')[]
