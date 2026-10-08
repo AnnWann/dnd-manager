@@ -73,7 +73,8 @@ export function AttackRidersEditor({ riders, character, onChange }: {
               {!parseAttackRiderDice(rider.damage.dice) ? <span className="text-danger">Use 1 a 20 dados d4, d6, d8, d10, d12 ou d20.</span> : null}
             </label>
             <label className="grid gap-1 text-xs text-textMuted">Tipo do dano adicional
-              <Select value={rider.damage.damageType} onChange={e => patch(rider.id, { damage: { ...rider.damage!, damageType: e.target.value as DamageType } })}>
+              <Select value={rider.damage.damageType ?? ""} onChange={e => patch(rider.id, { damage: { ...rider.damage!, damageType: (e.target.value || undefined) as DamageType | undefined } })}>
+                <option value="">Mesmo tipo da arma</option>
                 {DAMAGE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </Select>
             </label>
