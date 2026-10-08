@@ -20,7 +20,7 @@ export function getSpellOnCastAttackRiders(spell: Spell): AttackRider[] {
         id: "hunters-mark-damage",
         label: "Hunter's Mark — dano adicional",
         scope: "weapon",
-        damage: { dice: "1d6", damageType: "force" },
+        damage: { dice: "1d6" },
       }]
     default:
       return []
