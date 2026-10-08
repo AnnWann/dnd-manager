@@ -13,6 +13,7 @@ export function getSpellOnCastAttackRiders(spell: Spell): AttackRider[] {
       return [{
         id: "hex-necrotic",
         label: "Hex — dano necrótico",
+        targetSelection: "onCast",
         scope: "all",
         damage: { dice: "1d6", damageType: "necrotic" },
       }]
@@ -21,6 +22,7 @@ export function getSpellOnCastAttackRiders(spell: Spell): AttackRider[] {
       return [{
         id: "hunters-mark-damage",
         label: "Hunter's Mark — dano adicional",
+        targetSelection: "onCast",
         scope: "weapon",
         damage: { dice: "1d6" },
       }]
