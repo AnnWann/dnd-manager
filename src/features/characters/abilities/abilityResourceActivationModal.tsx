@@ -4,6 +4,8 @@ import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Modal } from "../../../components/ui/Modal"
 import { Select } from "../../../components/ui/Select"
+import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../../../models/combat/Damage"
+import { getAbilityAttackRiderDamageChoices } from "../../../models/combat/AttackRider"
 import type {
   Ability,
   AbilityResourceSelection,
@@ -46,6 +48,9 @@ export function AbilityResourceActivationModal({
       : baseLevel,
   )
   const [optionId, setOptionId] = useState(ability.activationOptions?.[0]?.id ?? "")
+  const damageTypeChoices = getAbilityAttackRiderDamageChoices(ability, optionId)
+  const [selectedDamageType, setSelectedDamageType] = useState<DamageType | "">("")
+  const effectiveDamageType = damageTypeChoices.includes(selectedDamageType as DamageType) ? selectedDamageType : ""
   const [alternatives, setAlternatives] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       (ability.resourceCosts ?? [])
@@ -76,12 +81,13 @@ export function AbilityResourceActivationModal({
   }, [ability.resourceUpcast?.enabled, baseLevel, maximumLevel, pactLevel, selectedUsesPact])
 
   const selection = useMemo<AbilityResourceSelection | undefined>(() => {
-    if (!(ability.resourceCosts?.length) && !ability.resourceUpcast?.enabled) return undefined
+    if (!(ability.resourceCosts?.length) && !ability.resourceUpcast?.enabled && !effectiveDamageType) return undefined
     return {
       activationLevel,
+      damageType: effectiveDamageType ? effectiveDamageType as DamageType : undefined,
       alternatives: Object.keys(alternatives).length ? alternatives : undefined,
     }
-  }, [ability.resourceCosts?.length, ability.resourceUpcast?.enabled, activationLevel, alternatives])
+  }, [ability.resourceCosts?.length, ability.resourceUpcast?.enabled, activationLevel, alternatives, effectiveDamageType])
 
   const payment = canPayAbilityResourceCosts(character, ability, selection)
   const optionRequired = (ability.activationOptions?.length ?? 0) > 0
@@ -89,7 +95,7 @@ export function AbilityResourceActivationModal({
     const raw = manualRollValues[entry.key]?.trim() ?? ""
     return raw !== "" && Number.isFinite(Number(raw))
   })
-  const canConfirm = payment.ok && (!optionRequired || Boolean(optionId)) && manualRollsValid
+  const canConfirm = payment.ok && (!optionRequired || Boolean(optionId)) && manualRollsValid && (!damageTypeChoices.length || Boolean(effectiveDamageType))
 
   return (
     <Modal title={`Usar habilidade — ${ability.name}`} onClose={onClose} className="max-w-xl">
@@ -109,6 +115,14 @@ export function AbilityResourceActivationModal({
             ) : null}
           </label>
         ) : null}
+
+        {damageTypeChoices.length > 0 ? <label className="grid gap-1 text-xs text-textMuted">
+          <span className="font-semibold text-textH">Tipo de dano desta ativação</span>
+          <Select value={effectiveDamageType} onChange={event => setSelectedDamageType(event.target.value as DamageType)}>
+            <option value="">Escolha o tipo de dano</option>
+            {DAMAGE_TYPE_OPTIONS.filter(option => damageTypeChoices.includes(option.value)).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </Select>
+        </label> : null}
 
         {ability.resourceUpcast?.enabled && baseLevel !== undefined && maximumLevel !== undefined ? (
           selectedUsesPact && pactLevel ? (
