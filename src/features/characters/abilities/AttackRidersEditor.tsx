@@ -44,7 +44,7 @@ export function AttackRidersEditor({ riders, character, onChange }: {
                 <option value="spell">Ataques mágicos</option>
               </Select>
             </label>
-            {rider.scope === "weapon" ? (
+            {rider.scope === "weapon" && !rider.weaponSelection ? (
               <label className="grid gap-1 text-xs text-textMuted">Arma afetada
                 <Select value={rider.weaponId ?? ""} onChange={e => patch(rider.id, { weaponId: e.target.value || undefined })}>
                   <option value="">Todas as armas</option>
@@ -80,6 +80,11 @@ export function AttackRidersEditor({ riders, character, onChange }: {
             </label>
           </div> : null}
           {rider.scope === "weapon" ? <>
+            <label className="flex items-center gap-2 text-xs text-textH">
+              <input type="checkbox" checked={rider.weaponSelection === "onActivation"}
+                onChange={e => patch(rider.id, { weaponSelection: e.target.checked ? "onActivation" : undefined, weaponId: undefined })} />
+              Escolher uma arma equipada ao ativar
+            </label>
             <label className="grid gap-1 text-xs text-textMuted">Substituir o tipo de dano da arma
               <Select value={rider.replaceWeaponDamageType ?? ""} onChange={e => patch(rider.id, { replaceWeaponDamageType: (e.target.value || undefined) as DamageType | undefined })}>
                 <option value="">Não alterar</option>
