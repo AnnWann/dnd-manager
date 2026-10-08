@@ -178,6 +178,10 @@ export function AbilityRollEditor({ roll, onChange }: {
                 </Field>
               </div>
               <label className="flex items-center gap-2 text-xs text-textH">
+                <input type="checkbox" checked={Boolean(damage.addAttributeModifier)} onChange={event => updateDamage({ addAttributeModifier: event.target.checked })} />
+                Somar modificador do atributo ao dano
+              </label>
+              <label className="flex items-center gap-2 text-xs text-textH">
                 <input type="checkbox" checked={damage.critical !== false} onChange={event => updateDamage({ critical: event.target.checked })} />
                 Dobrar dados em acertos críticos
               </label>
