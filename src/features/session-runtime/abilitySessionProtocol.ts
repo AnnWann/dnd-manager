@@ -29,6 +29,7 @@ export type SessionAbilityOperation =
       source: SessionAbilitySource
       abilityName?: string
       activationOptionId?: string
+      selectedWeaponId?: string
       resourceSelection?: AbilityResourceSelection
       /** Resultados dos dados informados pelo jogador para bônus em modo manual. */
       bonusRollValues?: Record<string, number>
