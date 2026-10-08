@@ -69,6 +69,8 @@ export function AttackRidersEditor({ riders, character, onChange, defaultScope =
           <label className="flex items-center gap-2 text-xs text-textH">
             <input type="checkbox" checked={Boolean(rider.damage)} onChange={e => patch(rider.id, {
               damage: e.target.checked ? { dice: "1d6", damageType: "fire" } : undefined,
+              weaponDamageTypeMode: !e.target.checked && rider.weaponDamageTypeMode === "extra"
+                ? undefined : rider.weaponDamageTypeMode,
             })} />
             Adicionar dano por acerto
           </label>
@@ -79,9 +81,14 @@ export function AttackRidersEditor({ riders, character, onChange, defaultScope =
               {DAMAGE_TYPE_OPTIONS.map(option => (
                 <label key={option.value} className="flex items-center gap-1.5 text-xs text-textH">
                   <input type="checkbox" checked={(rider.damageTypeChoices ?? []).includes(option.value)}
-                    onChange={e => patch(rider.id, { damageTypeChoices: e.target.checked
-                      ? [...(rider.damageTypeChoices ?? []), option.value]
-                      : (rider.damageTypeChoices ?? []).filter(value => value !== option.value) })} />
+                    onChange={e => {
+                      const choices = e.target.checked
+                        ? [...(rider.damageTypeChoices ?? []), option.value]
+                        : (rider.damageTypeChoices ?? []).filter(value => value !== option.value)
+                      // A selected weapon type must always have at least one valid option.
+                      if (!choices.length && rider.weaponDamageTypeMode === "selected") return
+                      patch(rider.id, { damageTypeChoices: choices })
+                    }} />
                   {option.label}
                 </label>
               ))}
