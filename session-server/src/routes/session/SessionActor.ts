@@ -2077,6 +2077,17 @@ function resolveServerDiceRoll(
     (sum, group) => sum + group.rolls.reduce((groupSum, value) => groupSum + value, 0),
     0,
   );
+  const damageContext = request.source.type === "weapon-damage"
+    ? { scope: "weapon" as const, weaponId: request.source.weaponId, targetEntryId: request.targetEntryId }
+    : { scope: "unarmed" as const, targetEntryId: request.targetEntryId };
+  const riders = getActiveAttackRiders(character, damageContext);
+  const weapon = request.source.type === "weapon-damage"
+    ? findEquippedWeapon(character, request.source.weaponId)
+    : undefined;
+  const damageType = weapon
+    ? getWeaponRiderTransformation(riders).damageType ?? weapon.damageType
+    : "bludgeoning";
+  const damages = rollAttackRiderDamages(riders, false, damageType);
 
   return {
     ok: true,
@@ -2088,6 +2099,8 @@ function resolveServerDiceRoll(
       visibility: request.visibility ?? "public",
       label: request.label,
       kind: "damage",
+      damageType,
+      damages,
       mode: "normal",
       groups,
       modifier: plan.plan.modifier,
