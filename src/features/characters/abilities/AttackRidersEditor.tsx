@@ -7,9 +7,10 @@ import type { AttackRider } from "../../../models/combat/AttackRider"
 import { parseAttackRiderDice } from "../../../models/combat/AttackRider"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 
-export function AttackRidersEditor({ riders, character, onChange }: {
+export function AttackRidersEditor({ riders, character, onChange, defaultScope = "weapon" }: {
   riders: AttackRider[]
   character?: CharacterTemplate
+  defaultScope?: AttackRider["scope"]
   onChange: (riders: AttackRider[]) => void
 }) {
   const runtime = useOptionalSessionRuntime()
@@ -26,7 +27,7 @@ export function AttackRidersEditor({ riders, character, onChange }: {
           <div className="text-[11px] text-textMuted">Dados extras por acerto, troca do tipo de dano e propriedades temporárias de armas.</div>
         </div>
         <Button size="sm" variant="secondary" onClick={() => onChange([...riders, {
-          id: crypto.randomUUID(), label: "Dano adicional", scope: "weapon", damage: { dice: "1d6", damageType: "fire" },
+          id: crypto.randomUUID(), label: "Dano adicional", scope: defaultScope, damage: { dice: "1d6", damageType: "fire" },
         }])}>+ Efeito</Button>
       </div>
       {riders.map(rider => (
