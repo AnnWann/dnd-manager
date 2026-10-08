@@ -10,7 +10,7 @@ export type SessionSpellCastPayment =
   | { type: "equipment-spell-use"; source: CharacterGrantedEquipmentSpellUsageSource }
 
 export type SessionMagicOperation =
-  | { type: "character.spell.cast"; characterId: string; requestId: string; spellIndex: string; sourceId: string; castLevel: number; mode: SessionDiceRollMode; visibility?: SessionRollVisibility; payment: SessionSpellCastPayment }
+  | { type: "character.spell.cast"; characterId: string; requestId: string; spellIndex: string; sourceId: string; castLevel: number; mode: SessionDiceRollMode; visibility?: SessionRollVisibility; payment: SessionSpellCastPayment; targetEntryId?: string }
   | { type: "character.spell.prepare"; characterId: string; spellIndex: string; prepared: boolean }
   | { type: "character.spell.add"; characterId: string; spellEntry: Record<string, unknown> }
   | { type: "character.spell.remove"; characterId: string; spellIndex: string }
