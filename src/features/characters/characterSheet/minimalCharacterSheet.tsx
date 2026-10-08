@@ -1,3 +1,4 @@
+import { getInitiativeRollSelection } from "../../initiative/initiativeRollSelection"
 import { Check, X } from "lucide-react"
 import { useEffect, useState } from "react"
 
@@ -862,6 +863,7 @@ function CompactWeaponTile({
           requestActionRoll({
             characterId: character.get("id"),
             source: { type: "weapon", weaponId: weapon.id },
+            targetEntryId: getInitiativeRollSelection()?.entryId,
             mode: rollModeFromEvent(event.nativeEvent),
           })
         }
@@ -877,6 +879,7 @@ function CompactWeaponTile({
             characterId: character.get("id"),
             label: `${weapon.name || "Arma"} — dano`,
             source: { type: "weapon-damage", weaponId: weapon.id },
+            targetEntryId: getInitiativeRollSelection()?.entryId,
           })
         }
       >
@@ -906,6 +909,7 @@ function CompactUnarmedTile({ character }: { character: CharacterTemplate }) {
           requestActionRoll({
             characterId: character.get("id"),
             source: { type: "unarmed" },
+            targetEntryId: getInitiativeRollSelection()?.entryId,
             mode: rollModeFromEvent(event.nativeEvent),
           })
         }
@@ -921,6 +925,7 @@ function CompactUnarmedTile({ character }: { character: CharacterTemplate }) {
             characterId: character.get("id"),
             label: "Ataque desarmado — dano",
             source: { type: "unarmed-damage" },
+            targetEntryId: getInitiativeRollSelection()?.entryId,
           })
         }
       >
