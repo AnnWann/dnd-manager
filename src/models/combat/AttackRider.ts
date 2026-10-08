@@ -1,4 +1,5 @@
 import type { DamageType } from "./Damage"
+import type { Ability } from "../abilities/Ability"
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import { getCharacterConditions } from "../characters/characterConditionStorage"
 import { getActiveAbilities, getEquippedItems } from "../characters/characterStats"
@@ -77,4 +78,12 @@ export function getWeaponRiderTransformation(riders: readonly AttackRider[]) {
     thrownLongRange: throwing?.thrownLongRange,
     returnsAfterThrow: returnAfterThrow,
   }
+}
+
+export function optionRequiresWeaponSelection(ability: Ability, optionId?: string): boolean {
+  const option = ability.activationOptions?.find(candidate => candidate.id === optionId)
+  if (!option) return false
+  return (option.abilities ?? (option.ability ? [option.ability] : [])).some(granted =>
+    (granted.bonuses?.attackRiders ?? []).some(rider => rider.weaponSelection === "onActivation"),
+  )
 }
