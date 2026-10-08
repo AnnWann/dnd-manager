@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { AttackRidersEditor } from "../abilities/AttackRidersEditor"
 import { Plus, Trash2, X } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
@@ -179,6 +180,11 @@ export function BonusesFields({
         </div>
       )}
 
+      <AttackRidersEditor
+        riders={bonuses.attackRiders ?? []}
+        character={character}
+        onChange={attackRiders => onChange({ ...bonuses, attackRiders })}
+      />
       <AddBonusDialog
         open={dialogOpen}
         character={character}
