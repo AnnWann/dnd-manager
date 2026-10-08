@@ -1,3 +1,4 @@
+import { getInitiativeRollSelection } from "../../initiative/initiativeRollSelection"
 import { useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
@@ -257,6 +258,8 @@ export function MinimalCharacterActions({
           type: "ability",
           abilityId: entry.abilitySource?.abilityId ?? entry.ability.id,
         },
+        mode: entry.ability.roll?.d20Mode ?? "normal",
+        targetEntryId: getInitiativeRollSelection()?.entryId,
       })
       return
     }
