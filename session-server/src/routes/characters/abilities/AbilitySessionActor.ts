@@ -471,6 +471,9 @@ function applyAbilityOperation(
         operation.type === "character.ability.use"
           ? operation.bonusRollValues
           : undefined,
+        operation.type === "character.ability.use"
+          ? operation.selectedWeaponId
+          : undefined,
       );
   }
 }
@@ -505,6 +508,7 @@ function updateRaceAbilityState(
   action: "use" | "restore" | "deactivate",
   optionId?: string,
   bonusRollValues?: Record<string, number>,
+  selectedWeaponId?: string,
 ): CharacterTemplate {
   const race = character.get("sheet").race;
   const ability = (race.naturalAbilities ?? []).find(
@@ -519,6 +523,7 @@ function updateRaceAbilityState(
       { type: "race", sourceLabel: "Raça" },
       optionId,
       bonusRollValues,
+      selectedWeaponId,
     );
   }
   if (action === "deactivate") {
