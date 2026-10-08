@@ -1,3 +1,4 @@
+import { getInitiativeRollSelection } from "../../initiative/initiativeRollSelection"
 import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
@@ -214,6 +215,8 @@ export function CharacterAbilitiesTab({ character, updateCharacter }: Props) {
             type: "ability",
             abilityId: ability.originalAbilityId ?? ability.id,
           },
+          mode: ability.roll?.d20Mode ?? "normal",
+          targetEntryId: getInitiativeRollSelection()?.entryId,
         })
         setActivationChoice(null)
         return
