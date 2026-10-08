@@ -36,7 +36,7 @@ export function validateAbilityRoll(roll: AbilityRollDefinition | undefined): st
   if (!roll) return undefined
   if (roll.damage && roll.damage.length > 20) return "Limite de 20 componentes de dano."
   for (const damage of roll.damage ?? []) {
-    if (!/^(?:[1-9]|1\\d|20)d(?:4|6|8|10|12|20)(?:[+-]\\d{1,3})?$/i.test(damage.dice.trim().replace(/\\s+/g, ""))) {
+    if (!/^(?:[1-9]|1\d|20)d(?:4|6|8|10|12|20)(?:[+-]\d{1,3})?$/i.test(damage.dice.trim().replace(/\s+/g, ""))) {
       return `Dados inválidos em ${damage.label || "dano"}: use 1d6, 2d8+3 etc.`
     }
   }
