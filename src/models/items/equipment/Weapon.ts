@@ -1,4 +1,5 @@
 import type { Die } from "../../dice/Die"
+import type { DamageType } from "../../combat/Damage"
 import type { Attribute } from "../../sheet/Attribute"
 import type { Equipment } from "./EquipmentSlot"
 
@@ -14,6 +15,8 @@ export type Weapon = Equipment & {
   versatileDamage?: Die
   properties: WeaponProperty[]
   damage: Die
+  /** Base damage type; may be temporarily overridden by active attack riders. */
+  damageType?: DamageType
   modifierAttribute: Attribute
   proficient: boolean
   /** Tipos de munição que esta instância de arma pode consumir. */

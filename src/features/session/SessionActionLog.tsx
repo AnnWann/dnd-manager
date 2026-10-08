@@ -871,7 +871,11 @@ function DiceRollEntry({
 
       <div className="mt-1 text-[10px] text-textMuted">
         {formatDiceBreakdown(roll)}
+        {roll.damageType ? ` · ${DAMAGE_TYPES.includes(roll.damageType as DamageType) ? damageTypeLabel(roll.damageType as DamageType) : roll.damageType}` : ""}
       </div>
+      {roll.damages?.length ? <div className="mt-2 grid gap-2">
+        {roll.damages.map((damage, index) => <ResolvedDamageBlock key={`${damage.label ?? "rider"}:${index}`} damage={damage} />)}
+      </div> : null}
 
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2 text-[10px] text-textMuted">
         <span className="truncate">

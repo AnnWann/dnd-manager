@@ -42,6 +42,7 @@ export type SessionDiceRollRequest = {
   mode: SessionDiceRollMode
   visibility?: SessionRollVisibility
   source: SessionDiceRollSource
+  targetEntryId?: string
 }
 
 export type SessionDiceRollGroupResult = {
@@ -65,6 +66,8 @@ export type SessionDiceRollResult = {
   total: number
   natural?: number
   visibility?: SessionRollVisibility
+  damages?: SessionResolvedDamageRoll[]
+  damageType?: string
   createdAt: string
 }
 
@@ -86,6 +89,8 @@ export type SessionActionRollRequest = {
   mode: SessionDiceRollMode
   visibility?: SessionRollVisibility
   source: SessionActionRollSource
+  /** Initiative combatant selected as the target of this attack. */
+  targetEntryId?: string
 }
 
 export type SessionResolvedD20Roll = {

@@ -60,6 +60,7 @@ export function requestDamageRoll(input: {
   characterId: string
   label: string
   source: SessionDiceDamageSource
+  targetEntryId?: string
 }): void {
   publishRequest({
     requestId: createRequestId(),
@@ -68,6 +69,7 @@ export function requestDamageRoll(input: {
     mode: "normal",
     visibility: getRollVisibility(),
     source: input.source,
+    targetEntryId: input.targetEntryId,
   })
 }
 
@@ -105,6 +107,7 @@ export function requestActionRoll(input: {
   characterId: string
   source: SessionActionRollSource
   mode?: SessionDiceRollMode
+  targetEntryId?: string
 }): void {
   publishActionRequest({
     requestId: createRequestId(),
@@ -112,6 +115,7 @@ export function requestActionRoll(input: {
     mode: input.mode ?? "normal",
     visibility: getRollVisibility(),
     source: input.source,
+    targetEntryId: input.targetEntryId,
   })
 }
 

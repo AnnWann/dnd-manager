@@ -99,6 +99,11 @@ export function AbilityAdvancedEffectsEditor({ ability, character, onChange }: {
 
         {options.length ? (
           <div className="mt-3 grid gap-3">
+            <label className="flex items-center gap-2 text-xs text-textH">
+              <input type="checkbox" checked={Boolean(ability.allowOptionSwitching)}
+                onChange={event => onChange({ ...ability, allowOptionSwitching: event.target.checked })} />
+              Permitir trocar a opção enquanto a habilidade estiver ativa
+            </label>
             {options.map((option) => {
               const abilities = optionAbilities(option)
               const optionDuration = option.duration ?? option.condition?.duration ?? createOptionDuration(ability.effectDurationText)
@@ -291,7 +296,7 @@ function MiniAbilityEditor({ ability, character, onChange }: { ability: Ability;
 
         {tab === "effects" ? (
           <div className="grid gap-3">
-            <BonusesFields bonuses={ability.bonuses ?? {}} onChange={(bonuses) => onChange({ ...ability, bonuses })} />
+            <BonusesFields bonuses={ability.bonuses ?? {}} character={character} onChange={(bonuses) => onChange({ ...ability, bonuses })} />
             <ConditionSection
               title="Condição ao usar"
               description="É aplicada quando esta habilidade concedida é usada."

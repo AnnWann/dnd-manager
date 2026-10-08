@@ -5,6 +5,7 @@ import {
   restoreAbilityUse,
   useAbilityEffect,
 } from "../../../../../src/models/abilities/abilityActivation";
+import { optionRequiresWeaponSelection } from "../../../../../src/models/combat/AttackRider";
 import { hasAbilityResourceCosts, spendAbilityResourceCosts } from "../../../../../src/models/abilities/abilityResourceCosts";
 import { getChannelDivinityPool } from "../../../../../src/models/characters/characterChannelDivinity";
 import { getKiPool } from "../../../../../src/models/characters/characterKi";
@@ -409,6 +410,16 @@ function applyAbilityOperation(
   if (operation.type === "character.ability.use") {
     const ability = findAbilityForSource(character, source);
     if (!ability || !canActivateAbility(character, ability)) return null;
+    if (ability.allowOptionSwitching && ability.benefitsActive && !operation.activationOptionId) return null;
+    if (optionRequiresWeaponSelection(ability, operation.activationOptionId)) {
+      const previousWeapon = getCharacterConditions(character)
+        .filter(condition => condition.sourceAbilityId === ability.id && condition.sourceAbilityOptionId?.endsWith(":abilities"))
+        .flatMap(condition => condition.grantedAbilities ?? [])
+        .flatMap(granted => granted.bonuses?.attackRiders ?? [])
+        .find(rider => rider.weaponSelection === "onActivation" && rider.weaponId)?.weaponId;
+      if (!previousWeapon && !operation.selectedWeaponId) return null;
+      if (operation.selectedWeaponId && !character.get("equipment").weapons.some(weapon => weapon.id === operation.selectedWeaponId)) return null;
+    }
     if ((source.type === "character" || source.type === "condition") && ability.category === "channelDivinity" && !hasAbilityResourceCosts(ability) && (getChannelDivinityPool(character)?.current ?? 0) <= 0) return null;
     if ((source.type === "character" || source.type === "condition") && ability.category === "martialArts" && !hasAbilityResourceCosts(ability) && (getKiPool(character)?.current ?? 0) <= 0) return null;
     const payment = spendAbilityResourceCosts(character, ability, operation.resourceSelection);
@@ -419,7 +430,7 @@ function applyAbilityOperation(
   switch (source.type) {
     case "character":
       if (operation.type === "character.ability.use") {
-        return nextCharacter.useAbility(source.abilityId, operation.activationOptionId, operation.bonusRollValues);
+        return nextCharacter.useAbility(source.abilityId, operation.activationOptionId, operation.bonusRollValues, operation.selectedWeaponId);
       }
       if (operation.type === "character.ability.restore") {
         return character.restoreAbility(source.abilityId);
@@ -438,7 +449,7 @@ function applyAbilityOperation(
     case "condition": {
       const projectedId = `condition:${source.conditionId}:${source.abilityId}`;
       if (operation.type === "character.ability.use") {
-        return nextCharacter.useAbility(projectedId, operation.activationOptionId, operation.bonusRollValues);
+        return nextCharacter.useAbility(projectedId, operation.activationOptionId, operation.bonusRollValues, operation.selectedWeaponId);
       }
       if (operation.type === "character.ability.restore") {
         return character.restoreAbility(projectedId);
@@ -460,6 +471,9 @@ function applyAbilityOperation(
           : undefined,
         operation.type === "character.ability.use"
           ? operation.bonusRollValues
+          : undefined,
+        operation.type === "character.ability.use"
+          ? operation.selectedWeaponId
           : undefined,
       );
   }
@@ -495,6 +509,7 @@ function updateRaceAbilityState(
   action: "use" | "restore" | "deactivate",
   optionId?: string,
   bonusRollValues?: Record<string, number>,
+  selectedWeaponId?: string,
 ): CharacterTemplate {
   const race = character.get("sheet").race;
   const ability = (race.naturalAbilities ?? []).find(
@@ -509,6 +524,7 @@ function updateRaceAbilityState(
       { type: "race", sourceLabel: "Raça" },
       optionId,
       bonusRollValues,
+      selectedWeaponId,
     );
   }
   if (action === "deactivate") {

@@ -31,6 +31,8 @@ import {
 import { GrantedProficienciesEditor } from "../proficiencies/grantedProficienciesEditor"
 import { AbilityAdvancedEffectsEditor } from "./abilityAdvancedEffectsEditor"
 import { AbilityBonusRollEditor } from "./abilityBonusRollEditor"
+import { AbilityRollEditor } from "./AbilityRollEditor"
+import { validateAbilityRoll } from "../../../models/abilities/AbilityRoll"
 import { AbilityResourceCostsEditor } from "./abilityResourceCostsEditor"
 import {
   ABILITY_ACTION_OPTIONS,
@@ -50,11 +52,12 @@ type Props = {
   onSave: (ability: Ability) => void
 }
 
-type EditorTab = "basic" | "resource" | "effects" | "grants"
+type EditorTab = "basic" | "resource" | "roll" | "effects" | "grants"
 
 const EDITOR_TABS: Array<{ value: EditorTab; label: string }> = [
   { value: "basic", label: "Básico" },
   { value: "resource", label: "Recurso" },
+  { value: "roll", label: "Rolagem" },
   { value: "effects", label: "Efeitos" },
   { value: "grants", label: "Concede" },
 ]
@@ -148,6 +151,7 @@ export function AbilityDialog({
   const maximumFormulaError = maximumFormula
     ? validateCharacterSheetFormula(maximumFormula)
     : undefined
+  const rollError = validateAbilityRoll(draft.roll)
   const requiresActivation = abilityRequiresActivation(draft)
   const duration = draft.effectDuration ?? (draft.kind === "active" ? "instant" : "lasting")
   const persistence = draft.effectPersistence ?? "untilEnd"
@@ -188,6 +192,7 @@ export function AbilityDialog({
   }
 
   function save() {
+    if (rollError) { setTab("roll"); return }
     const normalized = normalizeAbilityActivation(normalizeAbilityText(draft))
     onSave(withFixedCategory(normalized, fixedCategory))
   }
@@ -217,10 +222,12 @@ export function AbilityDialog({
             <Button size="sm" variant="ghost" onClick={onClose}>Fechar</Button>
           </div>
 
-          <nav className="mt-4 grid grid-cols-4 gap-1 rounded-xl bg-bg-subtle p-1" aria-label="Seções da habilidade">
+          <nav className="mt-4 grid grid-cols-5 gap-1 rounded-xl bg-bg-subtle p-1" aria-label="Seções da habilidade">
             {EDITOR_TABS.map((item) => {
               const badge = item.value === "resource" && hasConfiguredResource
                 ? "•"
+                : item.value === "roll" && Boolean(draft.roll)
+                  ? "•"
                 : item.value === "effects" && hasAdvancedEffects
                   ? "•"
                   : item.value === "grants" && grantedCount > 0
@@ -585,6 +592,16 @@ export function AbilityDialog({
             </div>
           ) : null}
 
+          {tab === "roll" ? (
+            <div className="grid gap-4">
+              <SectionIntro
+                title="Rolagem da habilidade"
+                description="Escolha os testes e danos efetuados ao usar a habilidade. Modificadores da ficha são calculados automaticamente."
+              />
+              <AbilityRollEditor roll={draft.roll} onChange={roll => setDraft(current => ({ ...current, roll }))} />
+            </div>
+          ) : null}
+
           {tab === "effects" ? (
             <div className="grid gap-4">
               <SectionIntro
@@ -641,7 +658,7 @@ export function AbilityDialog({
             <Button variant="secondary" onClick={onClose}>Cancelar</Button>
             <Button
               variant="primary"
-              disabled={!draft.name.trim() || Boolean(maximumFormulaError)}
+              disabled={!draft.name.trim() || Boolean(maximumFormulaError) || Boolean(rollError)}
               onClick={save}
             >
               Salvar

@@ -1,8 +1,12 @@
+import { getInitiativeRollSelection } from "../../initiative/initiativeRollSelection"
 import { useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
+import { Select } from "../../../components/ui/Select"
+import { optionRequiresWeaponSelection } from "../../../models/combat/AttackRider"
+import { getCharacterConditions } from "../../../models/characters/characterConditionStorage"
 import { Modal } from "../../../components/ui/Modal"
 import { useMagicContext } from "../../../contexts/magicContext"
 import { cn } from "../../../lib/cn"
@@ -159,6 +163,7 @@ export function MinimalCharacterActions({
   const [filter, setFilter] = useState<ActionFilter>("action")
   const [selected, setSelected] = useState<ActionEntry | null>(null)
   const [abilityResourceEntry, setAbilityResourceEntry] = useState<ActionEntry | null>(null)
+  const [selectedWeaponId, setSelectedWeaponId] = useState("")
   const [error, setError] = useState("")
   const [variableMetamagicCost, setVariableMetamagicCost] = useState(1)
   const [manualRollValue, setManualRollValue] = useState("")
@@ -253,6 +258,8 @@ export function MinimalCharacterActions({
           type: "ability",
           abilityId: entry.abilitySource?.abilityId ?? entry.ability.id,
         },
+        mode: entry.ability.roll?.d20Mode ?? "normal",
+        targetEntryId: getInitiativeRollSelection()?.entryId,
       })
       return
     }
@@ -276,6 +283,7 @@ export function MinimalCharacterActions({
     setManualRollValue("")
     setManualDamageValues([])
     setRollFeedback([])
+    setSelectedWeaponId("")
     setCustomActivationLevel(entry.activationLevelBase ?? 1)
     if (entry.metamagicCost === "spell-level") setVariableMetamagicCost(1)
     setSelected(entry)
@@ -290,6 +298,16 @@ export function MinimalCharacterActions({
   ) {
     const source = entry.abilitySource
     if (!source) return
+    const boundWeaponId = getCharacterConditions(character)
+      .filter(condition => condition.sourceAbilityId === entry.ability?.id && condition.sourceAbilityOptionId?.endsWith(":abilities"))
+      .flatMap(condition => condition.grantedAbilities ?? [])
+      .flatMap(granted => granted.bonuses?.attackRiders ?? [])
+      .find(rider => rider.weaponSelection === "onActivation" && rider.weaponId)?.weaponId
+    const activationWeaponId = boundWeaponId || selectedWeaponId
+    if (action === "use" && entry.ability && optionRequiresWeaponSelection(entry.ability, optionId) && !activationWeaponId) {
+      setError("Escolha a arma que receberá o efeito.")
+      return
+    }
 
     if (
       action === "use" &&
@@ -358,6 +376,7 @@ export function MinimalCharacterActions({
         ...(action === "use" && optionId
           ? { activationOptionId: optionId }
           : {}),
+        ...(action === "use" && activationWeaponId ? { selectedWeaponId: activationWeaponId } : {}),
         ...(action === "use" && resourceSelection
           ? { resourceSelection }
           : {}),
@@ -396,11 +415,11 @@ export function MinimalCharacterActions({
         )
         if (!ability) return current
         return action === "use"
-          ? useAbilityEffect(paidCurrent, ability, { type: "race", sourceLabel: "Raça" }, optionId, resolvedBonusRollValues)
+          ? useAbilityEffect(paidCurrent, ability, { type: "race", sourceLabel: "Raça" }, optionId, resolvedBonusRollValues, activationWeaponId)
           : endAbilityEffect(current, ability, { type: "race", sourceLabel: "Raça" })
       }
       return action === "use"
-        ? useCharacterAbility(paidCurrent, source.abilityId, optionId, resolvedBonusRollValues)
+        ? useCharacterAbility(paidCurrent, source.abilityId, optionId, resolvedBonusRollValues, activationWeaponId)
         : current.deactivateAbility(source.abilityId)
     })
     setAbilityResourceEntry(null)
@@ -942,7 +961,22 @@ export function MinimalCharacterActions({
               </div>
             ) : selected.ability && abilityRequiresActivation(selected.ability) ? (
               <div className="grid gap-2 border-t border-border pt-3">
-                {isAbilityBenefitsActive(selected.ability) ? (
+                {(selected.ability.activationOptions ?? []).some(option => optionRequiresWeaponSelection(selected.ability!, option.id)) ? (
+                  <label className="grid gap-1 text-xs text-textMuted">
+                    Arma a infundir
+                    <Select value={getCharacterConditions(character)
+                      .filter(condition => condition.sourceAbilityId === selected.ability?.id && condition.sourceAbilityOptionId?.endsWith(":abilities"))
+                      .flatMap(condition => condition.grantedAbilities ?? [])
+                      .flatMap(granted => granted.bonuses?.attackRiders ?? [])
+                      .find(rider => rider.weaponSelection === "onActivation" && rider.weaponId)?.weaponId || selectedWeaponId}
+                      disabled={isAbilityBenefitsActive(selected.ability)}
+                      onChange={event => setSelectedWeaponId(event.target.value)}>
+                      <option value="">Escolha uma arma equipada</option>
+                      {character.get("equipment").weapons.map(weapon => <option key={weapon.id} value={weapon.id}>{weapon.name}</option>)}
+                    </Select>
+                  </label>
+                ) : null}
+                {isAbilityBenefitsActive(selected.ability) && !selected.ability.allowOptionSwitching ? (
                   <div className="flex justify-end">
                     <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>Encerrar efeito</Button>
                   </div>
@@ -961,6 +995,11 @@ export function MinimalCharacterActions({
                 ) : (selected.ability.activationOptions?.length ?? 0) > 0 ? (
                   <>
                     <div className="text-xs font-semibold text-textH">Escolha o efeito</div>
+                    {isAbilityBenefitsActive(selected.ability) ? (
+                      <div className="flex justify-end">
+                        <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>Encerrar efeito</Button>
+                      </div>
+                    ) : null}
                     {(selected.ability.activationOptions ?? []).map((option) => (
                       <button
                         key={option.id}

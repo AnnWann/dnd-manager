@@ -1,4 +1,5 @@
 import type { BonusCollection } from "../bonuses/Bonus"
+import type { AbilityRollDefinition } from "./AbilityRoll"
 import type { CharacterAcquisitionMetadata } from "../characters/CharacterAcquisition"
 import type {
   CharacterConditionDuration,
@@ -100,10 +101,14 @@ export interface Ability {
   grantedSpells?: SpellGrant[]
   grantedProficiencies?: Proficiency[]
   bonuses?: BonusCollection
+  /** Configuração autoritativa do ataque, teste ou dano ao usar a habilidade. */
+  roll?: AbilityRollDefinition
   /** Condição adicional aplicada ao personagem quando a habilidade é usada. */
   conditionOnUse?: CharacterConditionGrant
   /** Alternativas apresentadas ao jogador antes de concluir a ativação. */
   activationOptions?: AbilityActivationOption[]
+  /** An active option can be replaced without ending the ongoing ability. */
+  allowOptionSwitching?: boolean
   /** Estado persistido dos benefícios de habilidades que precisam ser acionadas. */
   benefitsActive?: boolean
   /** Campo legado; novos cálculos usam benefitsActive. */

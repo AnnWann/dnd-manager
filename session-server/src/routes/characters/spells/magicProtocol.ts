@@ -10,7 +10,7 @@ export type SessionSpellCastPayment =
   | { type: "equipment-spell-use"; source: CharacterGrantedEquipmentSpellUsageSource };
 
 export type SessionMagicOperation =
-  | { type: "character.spell.cast"; characterId: string; requestId: string; spellIndex: string; sourceId: string; castLevel: number; mode: SessionDiceRollMode; visibility?: SessionRollVisibility; payment: SessionSpellCastPayment }
+  | { type: "character.spell.cast"; characterId: string; requestId: string; spellIndex: string; sourceId: string; castLevel: number; mode: SessionDiceRollMode; visibility?: SessionRollVisibility; payment: SessionSpellCastPayment; targetEntryId?: string }
   | { type: "character.spell.prepare"; characterId: string; spellIndex: string; prepared: boolean }
   | { type: "character.spell.add"; characterId: string; spellEntry: Record<string, unknown> }
   | { type: "character.spell.remove"; characterId: string; spellIndex: string }
@@ -116,6 +116,7 @@ function isMagicOperation(value: unknown): value is SessionMagicOperation {
           || value.visibility === "public"
           || value.visibility === "roller-master"
         )
+        && (value.targetEntryId === undefined || (nonEmpty(value.targetEntryId) && value.targetEntryId.length <= 200))
         && isSpellCastPayment(value.payment);
     case "character.spell.prepare": return nonEmpty(value.spellIndex) && typeof value.prepared === "boolean";
     case "character.spell.add": return isKnownSpellEntry(value.spellEntry);

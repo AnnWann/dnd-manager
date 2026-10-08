@@ -1,4 +1,5 @@
 import type { CharacterTemplateProps } from "../../../../../src/models/characters/CharacterTemplate";
+import { getSpellOnCastAttackRiders } from "../../../../../src/models/magic/spells/spellAttackRiders";
 import { getAbilityUsageMax } from "../../../../../src/models/abilities/abilityActivation";
 import { getCharacterGrantedSpells, spendGrantedEquipmentSpellUse, spendGrantedSpellAbilityUse, type CharacterGrantedSpell } from "../../../../../src/models/characters/characterGrantedSpells";
 import { CharacterTemplate } from "../../../../../src/models/characters/CharacterTemplate";
@@ -263,6 +264,20 @@ export class SessionActor extends AbilitySessionActor {
       return;
     }
 
+    const spellRiders = getSpellOnCastAttackRiders(spell);
+    if (spellRiders.length) {
+      if (!spell.concentration) {
+        sendError(webSocket, "SPELL_RIDER_CONCENTRATION", "Target-specific spell riders require concentration.");
+        return;
+      }
+      const initiative = await this.ctx.storage.get<{ session?: { entries?: Array<{ id: string }> } }>("initiative-state");
+      const targetId = operation.targetEntryId?.trim();
+      if (!targetId || !initiative?.session?.entries?.some(entry => entry.id === targetId)) {
+        sendError(webSocket, "SPELL_RIDER_TARGET_REQUIRED", "Choose a combat target for this mark before casting.");
+        return;
+      }
+    }
+
     let nextConditions = conditions;
     if (spell.concentration) {
       const concentration = applyConcentrationOperation(
@@ -281,6 +296,26 @@ export class SessionActor extends AbilitySessionActor {
         return;
       }
       nextConditions = concentration.next;
+      if (spellRiders.length) {
+        const targetEntryId = operation.targetEntryId!;
+        nextConditions = {
+          ...nextConditions,
+          conditions: nextConditions.conditions.map(condition =>
+            condition.tags.includes("dnd-manager:concentrating")
+              ? {
+                  ...condition,
+                  bonuses: {
+                    ...(typeof condition.bonuses === "object" && condition.bonuses !== null ? condition.bonuses : {}),
+                    attackRiders: spellRiders.map(rider => ({
+                      ...rider,
+                      targetEntryId,
+                    })),
+                  },
+                }
+              : condition,
+          ),
+        };
+      }
     }
 
     let actionResult: ReturnType<typeof resolveSpellCastAction>;
@@ -295,6 +330,7 @@ export class SessionActor extends AbilitySessionActor {
         mode: operation.mode,
         visibility: operation.visibility,
         rollDice: isDigitalDiceRollingEnabled(runtimeConfig),
+        targetEntryId: operation.targetEntryId,
       });
     } catch (error) {
       sendError(

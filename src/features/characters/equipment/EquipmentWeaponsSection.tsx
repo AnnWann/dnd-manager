@@ -2,6 +2,10 @@ import { useState } from "react"
 import { Crosshair, Hand, Scale, Sparkles, Swords } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
+import { Select } from "../../../components/ui/Select"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
+import { getActiveAttackRiders, getWeaponRiderTransformation } from "../../../models/combat/AttackRider"
+import { damageTypeLabel } from "../../../models/combat/Damage"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatBonusName, formatBonusValue, formatSkillName } from "../../../lib/formatBonus"
 import { formatSigned } from "../../../lib/formatSigned"
@@ -113,6 +117,9 @@ export function EquipmentWeaponsSection({
   updateCharacter,
 }: Props) {
   const { mode, isEditing, moveEquippedItem } = useCharacterWorkspace()
+  const runtime = useOptionalSessionRuntime()
+  const [targetEntryId, setTargetEntryId] = useState("")
+  const combatants = runtime?.initiativeState?.session?.entries ?? []
   const [dialogState, setDialogState] =
     useState<HandItemActionsDialogState | null>(null)
   const weapons = character.get("equipment").weapons
@@ -142,6 +149,12 @@ export function EquipmentWeaponsSection({
   return (
     <>
       <section>
+        {combatants.length ? <label className="mb-3 grid gap-1 text-xs text-textMuted">Alvo dos ataques (para marcas como Hex e Marca do Caçador)
+          <Select value={targetEntryId} onChange={event => setTargetEntryId(event.target.value)}>
+            <option value="">Sem alvo selecionado</option>
+            {combatants.map(entry => <option key={entry.id} value={entry.id}>{entry.customName || entry.name}</option>)}
+          </Select>
+        </label> : null}
         <div className="mb-3 flex items-end justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold text-textH">
@@ -170,6 +183,8 @@ export function EquipmentWeaponsSection({
               const attackBonus = weaponAttackBonus(character, weapon)
               const damageBonus = weaponDamageBonus(character, weapon)
               const damageText = formatDie(getWeaponDamageDie(weapon))
+              const activeRiders = getActiveAttackRiders(character, { scope: "weapon", weaponId: weapon.id, targetEntryId: targetEntryId || undefined })
+              const transformation = getWeaponRiderTransformation(activeRiders)
               const handUsage = getWeaponHandsUsed(weapon)
               const versatile = isVersatileWeapon(weapon)
               const improvised = isWeaponImprovisedGrip(weapon)
@@ -267,6 +282,7 @@ export function EquipmentWeaponsSection({
                           characterId: character.get("id"),
                           source: { type: "weapon", weaponId: weapon.id },
                           mode: rollModeFromEvent(event.nativeEvent),
+                          targetEntryId: targetEntryId || undefined,
                         })
                       }
                     />
@@ -280,6 +296,7 @@ export function EquipmentWeaponsSection({
                           characterId: character.get("id"),
                           label: `${weapon.name || "Arma"} — dano`,
                           source: { type: "weapon-damage", weaponId: weapon.id },
+                          targetEntryId: targetEntryId || undefined,
                         })
                       }
                     />
@@ -315,6 +332,13 @@ export function EquipmentWeaponsSection({
                       </div>
                     ) : null}
 
+                    {activeRiders.length ? <div className="mb-3 text-xs text-textMuted">
+                      <span className="font-semibold text-textH">Efeitos ativos: </span>
+                      {activeRiders.map(rider => rider.label).join(", ")}
+                      {transformation.damageType ? ` · Dano: ${damageTypeLabel(transformation.damageType)}` : ""}
+                      {transformation.thrown ? ` · Arremesso ${transformation.thrownNormalRange ?? 20}/${transformation.thrownLongRange ?? 60} pés` : ""}
+                      {transformation.returnsAfterThrow ? " · Retorna após o arremesso" : ""}
+                    </div> : null}
                     <WeaponBonusList weapon={weapon} />
 
                     <EquipmentFeaturesList

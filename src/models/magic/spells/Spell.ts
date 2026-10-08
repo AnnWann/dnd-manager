@@ -7,6 +7,7 @@ import type { Die } from "../../dice/Die"
 import type { MagicCircleLevel, MagicSchool } from "./spellDefinitions"
 import type { Attribute } from "../../sheet/Attribute"
 import type { DieSides } from "../../dice/Die"
+import type { AttackRider } from "../../combat/AttackRider"
 
 export type SpellResourceType = 'ki' | 'sorceryPoints' | 'channelDivinity'
 export type SpellResourceCost = { resource: SpellResourceType; amount: number }
@@ -52,6 +53,8 @@ export type Spell = {
   damageDice?: Die
   /** Structured mechanics used by authoritative spell casting and rolling. */
   resolution?: SpellResolution
+  /** Effects placed on the caster while concentrating, usually bound to a selected mark target. */
+  onCastAttackRiders?: AttackRider[]
   concentration: boolean
   ritual: boolean
   components: ('V' | 'S' | 'M')[]

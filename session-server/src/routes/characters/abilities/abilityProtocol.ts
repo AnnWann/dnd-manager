@@ -30,6 +30,7 @@ export type SessionAbilityOperation =
       source: SessionAbilitySource;
       abilityName?: string;
       activationOptionId?: string;
+      selectedWeaponId?: string;
       resourceSelection?: AbilityResourceSelection;
       bonusRollValues?: Record<string, number>;
       bonusRollResults?: BonusRollResolution[];
@@ -122,6 +123,7 @@ function isAbilityOperation(value: unknown): value is SessionAbilityOperation {
       return isAbilitySource(value.source) &&
         hasValidOptionalName &&
         (value.activationOptionId === undefined || typeof value.activationOptionId === "string") &&
+        (value.selectedWeaponId === undefined || (typeof value.selectedWeaponId === "string" && value.selectedWeaponId.length > 0 && value.selectedWeaponId.length <= 160)) &&
         (value.resourceSelection === undefined || isResourceSelection(value.resourceSelection)) &&
         (value.bonusRollValues === undefined || isFiniteNumberRecord(value.bonusRollValues));
     case "character.ability.usage.spend":

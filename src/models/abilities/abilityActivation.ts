@@ -53,7 +53,10 @@ export function getAbilityRemainingUses(character: CharacterTemplate, usage: Usa
 }
 
 export function canActivateAbility(character: CharacterTemplate, ability: Ability): boolean {
-  if (abilityRequiresActivation(ability) && isAbilityBenefitsActive(ability)) return false
+  if (abilityRequiresActivation(ability) && isAbilityBenefitsActive(ability)) {
+    // Changing an active elemental/stance option isn't another initial activation.
+    return Boolean(ability.allowOptionSwitching && (ability.activationOptions?.length ?? 0) > 0)
+  }
   const usage = ability.usage
   if (!usage || usage.reset === "spellSlot") return true
   return usage.used < getAbilityUsageMax(character, usage)
@@ -100,8 +103,20 @@ export function useAbilityEffect(
   source: AbilityEffectSource,
   activationOptionId?: string,
   bonusRollValues?: Record<string, number>,
+  selectedWeaponId?: string,
 ): CharacterTemplate {
   if (!abilityRequiresActivation(ability) || !canActivateAbility(character, ability)) return character
+  const switchingOption = Boolean(ability.allowOptionSwitching && isAbilityBenefitsActive(ability) && activationOptionId)
+  if (ability.allowOptionSwitching && isAbilityBenefitsActive(ability) && !activationOptionId) return character
+  // The weapon initially infused by the ability cannot change when only the element changes.
+  const originalWeaponId = switchingOption
+    ? getCharacterConditions(character)
+      .filter(condition => condition.sourceAbilityId === ability.id && condition.sourceAbilityOptionId?.endsWith(":abilities"))
+      .flatMap(condition => condition.grantedAbilities ?? [])
+      .flatMap(granted => granted.bonuses?.attackRiders ?? [])
+      .find(rider => rider.weaponSelection === "onActivation" && rider.weaponId)?.weaponId
+    : undefined
+  const activeWeaponId = originalWeaponId ?? selectedWeaponId
 
   const resolvedRolls = resolveBonusCollectionRolls(
     character,
@@ -117,8 +132,12 @@ export function useAbilityEffect(
   const persists = resolvedAbility.effectPersistence === "permanent"
   const previousEffectiveMaxHp = character.getEffectiveMaxHp()
   const previousCurrentHp = character.get("sheet").HP.current
-  const nextAbility = activateAbilityBenefits(character, resolvedAbility)
+  const nextAbility = switchingOption ? resolvedAbility : activateAbilityBenefits(character, resolvedAbility)
   let next = replaceAbilityAtSource(character, nextAbility, source)
+  if (switchingOption) {
+    const optionConditionIds = new Set((resolvedAbility.activationOptions ?? []).map(option => `${getAbilityConditionId(resolvedAbility.id, source)}:grant:${option.id}:abilities`))
+    next = withCharacterConditions(next, getCharacterConditions(next).filter(condition => !optionConditionIds.has(condition.id)))
+  }
 
   const maxHpBonuses = resolveBonuses(character, resolvedAbility.bonuses?.maxHp ?? [])
   if (maxHpBonuses.length > 0) {
@@ -154,7 +173,7 @@ export function useAbilityEffect(
         next,
         resolvedAbility,
         source,
-        optionAbilitiesGrant(selectedOption, resolvedAbility, optionAbilities),
+        optionAbilitiesGrant(selectedOption, resolvedAbility, optionAbilities, activeWeaponId),
         `${selectedOption.id}:abilities`,
         selectedOption.name,
       )
@@ -250,13 +269,21 @@ function optionAbilitiesGrant(
   option: AbilityActivationOption,
   parent: Ability,
   embedded: Ability[],
+  weaponId?: string,
 ): CharacterConditionGrant {
   return {
     name: option.name || embedded[0]?.name || "Opção de habilidade",
     description: option.description || embedded[0]?.description,
     behavior: "As habilidades desta opção existem enquanto a opção selecionada permanecer ativa.",
     tags: ["Habilidade", "Opção de habilidade"],
-    grantedAbilities: embedded,
+    grantedAbilities: embedded.map(granted => ({
+      ...granted,
+      bonuses: {
+        ...(granted.bonuses ?? {}),
+        attackRiders: (granted.bonuses?.attackRiders ?? []).map(rider =>
+          rider.weaponSelection === "onActivation" ? { ...rider, weaponId } : rider),
+      },
+    })),
     duration: option.duration ?? defaultOptionDuration(parent),
   }
 }
