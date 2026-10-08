@@ -28,7 +28,11 @@ import {
 import { getCurrentMaxHp } from "../../../../src/models/characters/characterHp";
 import { hasProficiency } from "../../../../src/models/characters/characterProficiencies";
 import { getUnarmedAttackProfile } from "../../../../src/models/characters/unarmedAttack";
-import { getActiveAttackRiders, getWeaponRiderTransformation } from "../../../../src/models/combat/AttackRider";
+import type { Ability } from "../../../../src/models/abilities/Ability";
+import type { AbilityRollDefinition } from "../../../../src/models/abilities/AbilityRoll";
+import { validateAbilityRoll } from "../../../../src/models/abilities/AbilityRoll";
+import { applyBonuses, getEquippedItems, getScopedCharacterBonuses } from "../../../../src/models/characters/characterStats";
+import { getActiveAttackRiders, getWeaponRiderTransformation, parseAttackRiderDice } from "../../../../src/models/combat/AttackRider";
 import { rollAttackRiderDamages } from "./attackRiderDice";
 import {
   getWeaponAttackAttribute,
@@ -1831,12 +1835,17 @@ function resolveServerActionRoll(
     const ability = [
       ...(character.getCharacterAbilities() ?? []),
       ...(character.get("sheet").race.naturalAbilities ?? []),
+      ...getEquippedItems(character).flatMap(item => item.abilities ?? []),
+      ...getCharacterConditions(character).flatMap(condition => condition.grantedAbilities ?? []),
     ].find((candidate) =>
       candidate.id === request.source.abilityId
       || candidate.originalAbilityId === request.source.abilityId
     );
     if (!ability) {
       return { ok: false, code: "ABILITY_NOT_FOUND", message: "The requested ability is not available to this character." };
+    }
+    if (ability.roll && diceRollingEnabled) {
+      return resolveConfiguredAbilityRoll(request, character, ability, base);
     }
     return {
       ok: true,
@@ -1873,6 +1882,102 @@ function resolveServerActionRoll(
     code: "ACTION_NOT_SUPPORTED",
     message: "The requested action type is not supported.",
   };
+}
+
+function resolveConfiguredAbilityRoll(
+  request: SessionActionRollRequest,
+  character: CharacterTemplate,
+  ability: Ability,
+  base: Pick<SessionActionRollResult, "id" | "requestId" | "actorId" | "characterId" | "visibility" | "createdAt">,
+): ActionResolution {
+  const roll = ability.roll as AbilityRollDefinition;
+  const error = validateAbilityRoll(roll);
+  if (error) return { ok: false, code: "ABILITY_ROLL_INVALID", message: error };
+  const attribute = roll.attribute ?? "str";
+  const proficiency = character.getProficiencyBonus();
+  const attributeModifier = character.getEffectiveAttributeModifier(attribute);
+  const modifier = roll.modifier ?? 0;
+  const result: SessionActionRollResult = {
+    ...base,
+    sourceType: "ability",
+    title: ability.name || "Habilidade",
+    subtitle: ability.actionKind ? `Habilidade · ${formatAbilityActionKind(ability.actionKind)}` : formatAbilityKind(ability.kind),
+    description: ability.description?.trim() || undefined,
+    details: ability.trigger ? [`Gatilho: ${ability.trigger}`] : undefined,
+    critical: false,
+  };
+
+  if (roll.kind === "attack") {
+    const attackType = roll.attackType ?? "weapon";
+    const basic = attributeModifier + (roll.proficient !== false ? proficiency : 0) + modifier;
+    const attackBonus =
+      attackType === "spell"
+        ? character.getEffectiveSpellAttackBonus(attribute, basic)
+        : attackType === "weapon"
+          ? applyBonuses(
+              character.getEffectiveAttackBonus(basic),
+              getScopedCharacterBonuses(character, "weaponAttackBonus", attribute),
+            )
+          : character.getEffectiveAttackBonus(basic);
+    const attack = rollActionD20(request.mode, attackBonus);
+    result.attack = attack;
+    result.critical = attack.natural === 20;
+  } else if (roll.kind === "abilityCheck" || roll.kind === "savingThrow") {
+    const baseModifier = roll.kind === "savingThrow"
+      ? character.getSavingThrowBonus(attribute)
+      : roll.skill
+        ? getAuthoritativeSkillBonus(character, roll.skill)
+        : character.getEffectiveAbilityCheckBonus(attribute);
+    const primary = rollActionD20(request.mode, baseModifier + modifier);
+    result.primary = {
+      ...primary,
+      kind: roll.kind,
+      label: roll.kind === "savingThrow"
+        ? "Teste de resistência"
+        : roll.skill ? "Teste de perícia" : "Teste de atributo",
+    };
+  } else if (roll.kind === "targetSave") {
+    const dcAttribute = roll.dcAttribute ?? "str";
+    const dc = roll.dc ?? character.getEffectiveAbilitySaveDc(
+      dcAttribute,
+      8 + proficiency + character.getEffectiveAttributeModifier(dcAttribute),
+    );
+    result.save = {
+      attribute: roll.saveAttribute ?? "con",
+      dc,
+      onSuccess: roll.onSave ?? "none",
+    };
+  }
+
+  const damages: SessionResolvedDamageRoll[] = [];
+  for (const component of roll.damage ?? []) {
+    const dice = parseAttackRiderDice(component.dice);
+    if (!dice) return { ok: false, code: "ABILITY_DAMAGE_INVALID", message: "Invalid ability damage dice." };
+    const critical = result.critical && component.critical !== false;
+    const rawBonus = dice.flat + (component.addAttributeModifier ? attributeModifier : 0);
+    const damageBonus = roll.kind === "attack" && roll.attackType === "spell"
+      ? character.getEffectiveSpellDamageBonus(attribute, rawBonus)
+      : rawBonus;
+    damages.push({
+      ...rollActionDamage([{ quantity: dice.quantity, sides: dice.sides }], damageBonus, critical),
+      label: component.label?.trim() || "Dano",
+      damageType: component.damageType,
+    });
+  }
+
+  if (roll.kind === "attack") {
+    const scope = roll.attackType === "spell"
+      ? "spell" : roll.attackType === "unarmed" ? "unarmed" : roll.attackType === "weapon" || !roll.attackType ? "weapon" : undefined;
+    if (scope) {
+      const riders = getActiveAttackRiders(character, {
+        scope,
+        targetEntryId: request.targetEntryId,
+      });
+      damages.push(...rollAttackRiderDamages(riders, result.critical, damages[0]?.damageType));
+    }
+  }
+  if (damages.length) result.damages = damages;
+  return { ok: true, result };
 }
 
 function formatAbilityActionKind(kind: string): string {
