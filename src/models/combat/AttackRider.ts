@@ -25,6 +25,8 @@ export type AttackRider = {
   damageTypeChoices?: DamageType[]
   /** Changes only the base weapon damage packet, not other typed riders. */
   replaceWeaponDamageType?: DamageType
+  /** How to determine the base weapon's damage type. Defaults to the legacy fixed value. */
+  weaponDamageTypeMode?: "fixed" | "selected" | "extra"
   /** Temporary weapon properties, without mutating the saved inventory item. */
   addThrown?: boolean
   thrownNormalRange?: number
@@ -71,7 +73,11 @@ export function parseAttackRiderDice(dice: string): ParsedRiderDice | undefined 
 }
 
 export function getWeaponRiderTransformation(riders: readonly AttackRider[]) {
-  const replacement = [...riders].reverse().find(rider => rider.replaceWeaponDamageType)?.replaceWeaponDamageType
+  const replacement = [...riders].reverse()
+    .map(rider => rider.weaponDamageTypeMode === "extra"
+      ? rider.damage?.damageType
+      : rider.replaceWeaponDamageType)
+    .find((type): type is DamageType => Boolean(type))
   const thrown = riders.some(rider => rider.addThrown)
   const returnAfterThrow = riders.some(rider => rider.returnsAfterThrow)
   const throwing = riders.find(rider => rider.addThrown && rider.thrownNormalRange && rider.thrownLongRange)
@@ -107,15 +113,22 @@ export function resolveAttackRiderDamageChoice(
   if (allowed.length && (!chosenType || !allowed.includes(chosenType))) {
     throw new Error("Escolha um tipo de dano permitido para este efeito.")
   }
-  return riders.map(rider =>
-    rider.damageTypeChoices?.length && chosenType
-      ? {
-          ...rider,
-          damage: rider.damage ? { ...rider.damage, damageType: chosenType } : undefined,
-          replaceWeaponDamageType: rider.replaceWeaponDamageType ? chosenType : undefined,
-        }
-      : rider,
-  )
+  return riders.map(rider => {
+    // Existing saved riders with a fixed replacement and choices previously
+    // followed the selected type. Preserve that behavior when no mode was saved.
+    const mode = rider.weaponDamageTypeMode
+      ?? (rider.replaceWeaponDamageType && rider.damageTypeChoices?.length ? "selected" : "fixed")
+    const chooseExtra = Boolean(rider.damageTypeChoices?.length && chosenType)
+    const chooseWeapon = mode === "selected" && Boolean(chosenType)
+    if (!chooseExtra && !chooseWeapon) return rider
+    return {
+      ...rider,
+      damage: chooseExtra && rider.damage
+        ? { ...rider.damage, damageType: chosenType }
+        : rider.damage,
+      replaceWeaponDamageType: chooseWeapon ? chosenType : rider.replaceWeaponDamageType,
+    }
+  })
 }
 
 export function getAbilityAttackRiderDamageChoices(ability: Ability, optionId?: string): DamageType[] {
