@@ -4,6 +4,7 @@ import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import { Select } from "../../../components/ui/Select"
 import { ATTRIBUTES, DIE_SIDES } from "../../../contexts/consts"
+import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../../../models/combat/Damage"
 import type { Ability } from "../../../models/abilities/Ability"
 import type { Bonus } from "../../../models/bonuses/Bonus"
 import type { Die, DieSides } from "../../../models/dice/Die"
@@ -219,6 +220,19 @@ export function WeaponFields({
         }
       />
 
+      <div className="grid gap-2">
+        <label className="text-xs text-text">Tipo do dano da arma</label>
+        <Select
+          value={weapon.damageType ?? ""}
+          onChange={event => onUpdate(current => ({
+            ...current,
+            damageType: (event.target.value || undefined) as DamageType | undefined,
+          }))}
+        >
+          <option value="">Não definido</option>
+          {DAMAGE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </Select>
+      </div>
       <div className="grid gap-2">
         <label className="text-xs text-text">Atributo</label>
         <Select
