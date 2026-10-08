@@ -1,5 +1,6 @@
 import type { CharacterTemplateProps } from "../../../../../src/models/characters/CharacterTemplate";
-import { getSpellOnCastAttackRiders } from "../../../../../src/models/magic/spells/spellAttackRiders";
+import { getSpellCastDamageChoices, getSpellOnCastAttackRiders } from "../../../../../src/models/magic/spells/spellAttackRiders";
+import { resolveAttackRiderDamageChoice } from "../../../../../src/models/combat/AttackRider";
 import { getAbilityUsageMax } from "../../../../../src/models/abilities/abilityActivation";
 import { getCharacterGrantedSpells, spendGrantedEquipmentSpellUse, spendGrantedSpellAbilityUse, type CharacterGrantedSpell } from "../../../../../src/models/characters/characterGrantedSpells";
 import { CharacterTemplate } from "../../../../../src/models/characters/CharacterTemplate";
@@ -264,17 +265,38 @@ export class SessionActor extends AbilitySessionActor {
       return;
     }
 
-    const spellRiders = getSpellOnCastAttackRiders(spell);
+    const allowedTypes = getSpellCastDamageChoices(spell);
+    const chosenType = operation.selectedDamageType;
+    if ((allowedTypes.length && (!chosenType || !allowedTypes.includes(chosenType)))
+      || (chosenType && !allowedTypes.includes(chosenType))) {
+      sendError(webSocket, "SPELL_DAMAGE_TYPE_INVALID", "Choose an allowed damage type for this spell.");
+      return;
+    }
+    const configuredRiders = getSpellOnCastAttackRiders(spell);
+    if (configuredRiders.some(rider => rider.weaponSelection === "onActivation")) {
+      if (!operation.selectedWeaponId || !character.get("equipment").weapons.some(weapon => weapon.id === operation.selectedWeaponId)) {
+        sendError(webSocket, "SPELL_WEAPON_REQUIRED", "Choose an equipped weapon for this spell.");
+        return;
+      }
+    }
+    const spellRiders = resolveAttackRiderDamageChoice(
+      configuredRiders.map(rider => rider.weaponSelection === "onActivation"
+        ? { ...rider, weaponId: operation.selectedWeaponId }
+        : rider),
+      chosenType,
+    );
     if (spellRiders.length) {
       if (!spell.concentration) {
         sendError(webSocket, "SPELL_RIDER_CONCENTRATION", "Target-specific spell riders require concentration.");
         return;
       }
-      const initiative = await this.ctx.storage.get<{ session?: { entries?: Array<{ id: string }> } }>("initiative-state");
-      const targetId = operation.targetEntryId?.trim();
-      if (!targetId || !initiative?.session?.entries?.some(entry => entry.id === targetId)) {
-        sendError(webSocket, "SPELL_RIDER_TARGET_REQUIRED", "Choose a combat target for this mark before casting.");
-        return;
+      if (spellRiders.some(rider => rider.targetSelection === "onCast")) {
+        const initiative = await this.ctx.storage.get<{ session?: { entries?: Array<{ id: string }> } }>("initiative-state");
+        const targetId = operation.targetEntryId?.trim();
+        if (!targetId || !initiative?.session?.entries?.some(entry => entry.id === targetId)) {
+          sendError(webSocket, "SPELL_RIDER_TARGET_REQUIRED", "Choose a combat target for this mark before casting.");
+          return;
+        }
       }
     }
 
@@ -308,7 +330,7 @@ export class SessionActor extends AbilitySessionActor {
                     ...(typeof condition.bonuses === "object" && condition.bonuses !== null ? condition.bonuses : {}),
                     attackRiders: spellRiders.map(rider => ({
                       ...rider,
-                      targetEntryId,
+                      targetEntryId: rider.targetSelection === "onCast" ? targetEntryId : rider.targetEntryId,
                     })),
                   },
                 }
@@ -331,6 +353,7 @@ export class SessionActor extends AbilitySessionActor {
         visibility: operation.visibility,
         rollDice: isDigitalDiceRollingEnabled(runtimeConfig),
         targetEntryId: operation.targetEntryId,
+        selectedDamageType: chosenType,
       });
     } catch (error) {
       sendError(
