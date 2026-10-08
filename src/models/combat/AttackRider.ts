@@ -17,8 +17,12 @@ export type AttackRider = {
   weaponSelection?: "onActivation"
   /** Restrict a mark to the selected combatant, never to all opponents. */
   targetEntryId?: string
+  /** A marked target is chosen when the spell is cast. */
+  targetSelection?: "onCast"
   /** Rolled once per successful hit; its type is independent of the base damage. */
   damage?: { dice: string; damageType?: DamageType }
+  /** When present, a player must choose one of these types at activation/cast. */
+  damageTypeChoices?: DamageType[]
   /** Changes only the base weapon damage packet, not other typed riders. */
   replaceWeaponDamageType?: DamageType
   /** Temporary weapon properties, without mutating the saved inventory item. */
@@ -86,4 +90,39 @@ export function optionRequiresWeaponSelection(ability: Ability, optionId?: strin
   return (option.abilities ?? (option.ability ? [option.ability] : [])).some(granted =>
     (granted.bonuses?.attackRiders ?? []).some(rider => rider.weaponSelection === "onActivation"),
   )
+}
+
+/** One choice can power all selectable riders on the same activation. */
+export function getAttackRiderDamageChoices(riders: readonly AttackRider[]): DamageType[] {
+  const groups = riders.map(rider => rider.damageTypeChoices ?? []).filter(group => group.length)
+  if (!groups.length) return []
+  return [...new Set(groups[0])].filter(type => groups.every(group => group.includes(type)))
+}
+
+export function resolveAttackRiderDamageChoice(
+  riders: readonly AttackRider[],
+  chosenType?: DamageType,
+): AttackRider[] {
+  const allowed = getAttackRiderDamageChoices(riders)
+  if (allowed.length && (!chosenType || !allowed.includes(chosenType))) {
+    throw new Error("Escolha um tipo de dano permitido para este efeito.")
+  }
+  return riders.map(rider =>
+    rider.damageTypeChoices?.length && chosenType
+      ? {
+          ...rider,
+          damage: rider.damage ? { ...rider.damage, damageType: chosenType } : undefined,
+          replaceWeaponDamageType: rider.replaceWeaponDamageType ? chosenType : undefined,
+        }
+      : rider,
+  )
+}
+
+export function getAbilityAttackRiderDamageChoices(ability: Ability, optionId?: string): DamageType[] {
+  const option = ability.activationOptions?.find(entry => entry.id === optionId)
+  const granted = option?.abilities ?? (option?.ability ? [option.ability] : [])
+  return getAttackRiderDamageChoices([
+    ...(ability.bonuses?.attackRiders ?? []),
+    ...granted.flatMap(entry => entry.bonuses?.attackRiders ?? []),
+  ])
 }
