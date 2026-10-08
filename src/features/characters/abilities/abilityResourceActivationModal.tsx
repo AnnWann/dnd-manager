@@ -255,6 +255,7 @@ export function AbilityResourceActivationModal({
                     manualRollRequirements.map((entry) => [entry.key, Number(manualRollValues[entry.key])]),
                   )
                 : undefined,
+              boundWeaponId || selectedWeaponId || undefined,
             )}
           >
             Usar habilidade
