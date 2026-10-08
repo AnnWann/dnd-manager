@@ -1,4 +1,5 @@
 import type { BonusCollection } from "../bonuses/Bonus"
+import type { DamageType } from "../combat/Damage"
 import type { AbilityRollDefinition } from "./AbilityRoll"
 import type { CharacterAcquisitionMetadata } from "../characters/CharacterAcquisition"
 import type {
@@ -74,6 +75,8 @@ export interface AbilityResourceCostGroup {
 }
 
 export interface AbilityResourceSelection {
+  /** Selected type for riders with configured damageTypeChoices. */
+  damageType?: DamageType
   /** Nível escolhido quando a habilidade permite upcast/escalonamento. */
   activationLevel?: number
   /** Em grupos OU, mapeia groupId para o costId escolhido. */
