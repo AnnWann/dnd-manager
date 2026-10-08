@@ -330,6 +330,7 @@ export class SessionActor extends AbilitySessionActor {
         mode: operation.mode,
         visibility: operation.visibility,
         rollDice: isDigitalDiceRollingEnabled(runtimeConfig),
+        targetEntryId: operation.targetEntryId,
       });
     } catch (error) {
       sendError(
