@@ -151,7 +151,7 @@ export function resolveSpellCastAction(args: {
       },
       damages: resolveDamageComponents(
         character,
-        resolution.damage ?? [],
+        components,
         context,
         attribute,
         false,
@@ -168,7 +168,7 @@ export function resolveSpellCastAction(args: {
         label: `Instância ${index + 1}`,
         damages: resolveDamageComponents(
           character,
-          resolution.damage ?? [],
+          components,
           context,
           attribute,
           false,
@@ -183,7 +183,7 @@ export function resolveSpellCastAction(args: {
     ...base,
     damages: resolveDamageComponents(
       character,
-      resolution.damage ?? [],
+      components,
       context,
       attribute,
       false,
