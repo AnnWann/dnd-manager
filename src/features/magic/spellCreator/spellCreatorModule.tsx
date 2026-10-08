@@ -1427,7 +1427,7 @@ function parseSpellJson(text: string, current: Spell): Spell {
       : undefined,
     resourceCost: parseResourceCost(parsed.resourceCost),
     castDamageTypeChoices: Array.isArray(parsed.castDamageTypeChoices)
-      ? DAMAGE_TYPE_OPTIONS.filter(option => parsed.castDamageTypeChoices.includes(option.value)).map(option => option.value)
+      ? DAMAGE_TYPE_OPTIONS.filter(option => (parsed.castDamageTypeChoices as unknown[]).includes(option.value)).map(option => option.value)
       : [],
     onCastAttackRiders: Array.isArray(parsed.onCastAttackRiders) ? structuredClone(parsed.onCastAttackRiders) as Spell["onCastAttackRiders"] : [],
     resolution,
