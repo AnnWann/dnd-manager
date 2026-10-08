@@ -1,3 +1,4 @@
+import type { DamageType } from "../../models/combat/Damage"
 import type { CharacterGrantedEquipmentSpellUsageSource, CharacterGrantedSpellUsageSource } from "../../models/characters/characterGrantedSpells"
 import type { SpellResourceType } from "../../models/magic/spells/Spell"
 import type { SessionDiceRollMode, SessionRollVisibility } from "../../shared/session-runtime/diceRollProtocol"
@@ -10,7 +11,7 @@ export type SessionSpellCastPayment =
   | { type: "equipment-spell-use"; source: CharacterGrantedEquipmentSpellUsageSource }
 
 export type SessionMagicOperation =
-  | { type: "character.spell.cast"; characterId: string; requestId: string; spellIndex: string; sourceId: string; castLevel: number; mode: SessionDiceRollMode; visibility?: SessionRollVisibility; payment: SessionSpellCastPayment; targetEntryId?: string }
+  | { type: "character.spell.cast"; characterId: string; requestId: string; spellIndex: string; sourceId: string; castLevel: number; mode: SessionDiceRollMode; visibility?: SessionRollVisibility; payment: SessionSpellCastPayment; targetEntryId?: string; selectedDamageType?: DamageType; selectedWeaponId?: string }
   | { type: "character.spell.prepare"; characterId: string; spellIndex: string; prepared: boolean }
   | { type: "character.spell.add"; characterId: string; spellEntry: Record<string, unknown> }
   | { type: "character.spell.remove"; characterId: string; spellIndex: string }
