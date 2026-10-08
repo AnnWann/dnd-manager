@@ -290,11 +290,13 @@ export class SessionActor extends AbilitySessionActor {
         sendError(webSocket, "SPELL_RIDER_CONCENTRATION", "Target-specific spell riders require concentration.");
         return;
       }
-      const initiative = await this.ctx.storage.get<{ session?: { entries?: Array<{ id: string }> } }>("initiative-state");
-      const targetId = operation.targetEntryId?.trim();
-      if (!targetId || !initiative?.session?.entries?.some(entry => entry.id === targetId)) {
-        sendError(webSocket, "SPELL_RIDER_TARGET_REQUIRED", "Choose a combat target for this mark before casting.");
-        return;
+      if (spellRiders.some(rider => rider.targetSelection === "onCast")) {
+        const initiative = await this.ctx.storage.get<{ session?: { entries?: Array<{ id: string }> } }>("initiative-state");
+        const targetId = operation.targetEntryId?.trim();
+        if (!targetId || !initiative?.session?.entries?.some(entry => entry.id === targetId)) {
+          sendError(webSocket, "SPELL_RIDER_TARGET_REQUIRED", "Choose a combat target for this mark before casting.");
+          return;
+        }
       }
     }
 
@@ -328,7 +330,7 @@ export class SessionActor extends AbilitySessionActor {
                     ...(typeof condition.bonuses === "object" && condition.bonuses !== null ? condition.bonuses : {}),
                     attackRiders: spellRiders.map(rider => ({
                       ...rider,
-                      targetEntryId,
+                      targetEntryId: rider.targetSelection === "onCast" ? targetEntryId : rider.targetEntryId,
                     })),
                   },
                 }
