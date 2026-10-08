@@ -7,9 +7,10 @@ import type { AttackRider } from "../../../models/combat/AttackRider"
 import { parseAttackRiderDice } from "../../../models/combat/AttackRider"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 
-export function AttackRidersEditor({ riders, character, onChange }: {
+export function AttackRidersEditor({ riders, character, onChange, defaultScope = "weapon" }: {
   riders: AttackRider[]
   character?: CharacterTemplate
+  defaultScope?: AttackRider["scope"]
   onChange: (riders: AttackRider[]) => void
 }) {
   const runtime = useOptionalSessionRuntime()
@@ -26,7 +27,7 @@ export function AttackRidersEditor({ riders, character, onChange }: {
           <div className="text-[11px] text-textMuted">Dados extras por acerto, troca do tipo de dano e propriedades temporárias de armas.</div>
         </div>
         <Button size="sm" variant="secondary" onClick={() => onChange([...riders, {
-          id: crypto.randomUUID(), label: "Dano adicional", scope: "weapon", damage: { dice: "1d6", damageType: "fire" },
+          id: crypto.randomUUID(), label: "Dano adicional", scope: defaultScope, damage: { dice: "1d6", damageType: "fire" },
         }])}>+ Efeito</Button>
       </div>
       {riders.map(rider => (
@@ -62,11 +63,30 @@ export function AttackRidersEditor({ riders, character, onChange }: {
             </label>
           </div>
           <label className="flex items-center gap-2 text-xs text-textH">
+            <input type="checkbox" checked={rider.targetSelection === "onCast"} onChange={e => patch(rider.id, { targetSelection: e.target.checked ? "onCast" : undefined })} />
+            Escolher um alvo marcado ao conjurar
+          </label>
+          <label className="flex items-center gap-2 text-xs text-textH">
             <input type="checkbox" checked={Boolean(rider.damage)} onChange={e => patch(rider.id, {
               damage: e.target.checked ? { dice: "1d6", damageType: "fire" } : undefined,
             })} />
             Adicionar dano por acerto
           </label>
+          {(rider.damage || rider.replaceWeaponDamageType) ? <div className="grid gap-2 rounded-lg border border-border bg-bg-subtle p-3">
+            <div className="text-xs font-semibold text-textH">Escolha do tipo de dano ao ativar</div>
+            <p className="text-[11px] text-textMuted">Marque os tipos permitidos. Se houver opções, o jogador precisará escolher um deles ao usar a habilidade ou magia. A escolha também altera a substituição do tipo da arma, quando habilitada.</p>
+            <div className="flex flex-wrap gap-2">
+              {DAMAGE_TYPE_OPTIONS.map(option => (
+                <label key={option.value} className="flex items-center gap-1.5 text-xs text-textH">
+                  <input type="checkbox" checked={(rider.damageTypeChoices ?? []).includes(option.value)}
+                    onChange={e => patch(rider.id, { damageTypeChoices: e.target.checked
+                      ? [...(rider.damageTypeChoices ?? []), option.value]
+                      : (rider.damageTypeChoices ?? []).filter(value => value !== option.value) })} />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </div> : null}
           {rider.damage ? <div className="grid gap-2 sm:grid-cols-2">
             <label className="grid gap-1 text-xs text-textMuted">Dados (ex.: 1d6 ou 2d8+1)
               <Input value={rider.damage.dice} onChange={e => patch(rider.id, { damage: { ...rider.damage!, dice: e.target.value } })} />

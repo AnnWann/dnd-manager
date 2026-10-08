@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { Button } from "../../../components/ui/Button"
 import { Card, CardContent, CardHeader } from "../../../components/ui/Card"
 import { Input } from "../../../components/ui/Input"
+import { AttackRidersEditor } from "../../characters/abilities/AttackRidersEditor"
+import { DAMAGE_TYPE_OPTIONS } from "../../../models/combat/Damage"
 import { Textarea } from "../../../components/ui/Textarea"
 import type {
   MagicCircleLevel,
@@ -1082,6 +1084,28 @@ export function SpellCreatorModule({
             ))}
           </section>
 
+          <section className="grid gap-3 rounded-xl border border-accentBorder bg-bg p-3">
+            <h3 className="text-xs font-semibold text-textH">Tipos de dano disponíveis na conjuração</h3>
+            <p className="text-[11px] text-textMuted">Marque os tipos que o jogador pode escolher ao conjurar. O escolhido substitui o tipo dos componentes de dano direto da magia.</p>
+            <div className="flex flex-wrap gap-2">
+              {DAMAGE_TYPE_OPTIONS.map(option => <label key={option.value} className="flex items-center gap-1.5 text-xs text-textH">
+                <input type="checkbox" checked={(spell.castDamageTypeChoices ?? []).includes(option.value)}
+                  onChange={event => updateSpell("castDamageTypeChoices", event.target.checked
+                    ? [...(spell.castDamageTypeChoices ?? []), option.value]
+                    : (spell.castDamageTypeChoices ?? []).filter(type => type !== option.value))} />
+                {option.label}
+              </label>)}
+            </div>
+          </section>
+          <AttackRidersEditor
+            defaultScope="spell"
+            riders={spell.onCastAttackRiders ?? []}
+            onChange={onCastAttackRiders => updateSpell("onCastAttackRiders", onCastAttackRiders)}
+          />
+          {(spell.onCastAttackRiders?.length ?? 0) > 0 && !spell.concentration ? (
+            <p className="text-xs text-danger">Riders de magias exigem concentração enquanto o efeito estiver ativo.</p>
+          ) : null}
+
           <textarea
             className="min-h-32 rounded-xl border border-accentBorder bg-bg px-3 py-2 text-sm text-text outline-none transition-colors focus:border-accent"
             value={spell.description}
@@ -1402,6 +1426,10 @@ function parseSpellJson(text: string, current: Spell): Spell {
       ? optionalString(parsed.material)
       : undefined,
     resourceCost: parseResourceCost(parsed.resourceCost),
+    castDamageTypeChoices: Array.isArray(parsed.castDamageTypeChoices)
+      ? DAMAGE_TYPE_OPTIONS.filter(option => (parsed.castDamageTypeChoices as unknown[]).includes(option.value)).map(option => option.value)
+      : [],
+    onCastAttackRiders: Array.isArray(parsed.onCastAttackRiders) ? structuredClone(parsed.onCastAttackRiders) as Spell["onCastAttackRiders"] : [],
     resolution,
     damageDice: firstDamage?.dice
       ? {

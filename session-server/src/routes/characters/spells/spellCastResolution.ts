@@ -1,4 +1,5 @@
 import type { CharacterTemplate } from "../../../../../src/models/characters/CharacterTemplate";
+import type { DamageType } from "../../../../../src/models/combat/Damage";
 import { getActiveAttackRiders } from "../../../../../src/models/combat/AttackRider";
 import { rollAttackRiderDamages } from "../../session/attackRiderDice";
 import { abilityShortPtBr } from "../../../../../src/i18n/ptBR";
@@ -33,6 +34,7 @@ export function resolveSpellCastAction(args: {
   visibility?: SessionRollVisibility;
   rollDice?: boolean;
   targetEntryId?: string;
+  selectedDamageType?: DamageType;
 }): SessionActionRollResult {
   const {
     requestId,
@@ -45,11 +47,13 @@ export function resolveSpellCastAction(args: {
     visibility,
     rollDice = true,
     targetEntryId,
+    selectedDamageType,
   } = args;
   const attribute = source.attribute;
   const modifier = character.getEffectiveAttributeModifier(attribute);
   const proficiency = character.getProficiencyBonus();
   const resolution = getEffectiveSpellResolution(spell);
+  const components = (resolution.damage ?? []).map(component => selectedDamageType ? { ...component, damageType: selectedDamageType } : component);
   const characterLevel = (character.get("sheet").classes ?? [])
     .reduce((total, entry) => total + Math.max(0, Math.trunc(entry.level)), 0);
   const context = { castLevel, characterLevel };
@@ -115,7 +119,7 @@ export function resolveSpellCastAction(args: {
           damages: [
             ...resolveDamageComponents(
               character,
-              resolution.damage ?? [],
+              components,
               context,
               attribute,
               critical,
@@ -147,7 +151,7 @@ export function resolveSpellCastAction(args: {
       },
       damages: resolveDamageComponents(
         character,
-        resolution.damage ?? [],
+        components,
         context,
         attribute,
         false,
@@ -164,7 +168,7 @@ export function resolveSpellCastAction(args: {
         label: `Instância ${index + 1}`,
         damages: resolveDamageComponents(
           character,
-          resolution.damage ?? [],
+          components,
           context,
           attribute,
           false,
@@ -179,7 +183,7 @@ export function resolveSpellCastAction(args: {
     ...base,
     damages: resolveDamageComponents(
       character,
-      resolution.damage ?? [],
+      components,
       context,
       attribute,
       false,
