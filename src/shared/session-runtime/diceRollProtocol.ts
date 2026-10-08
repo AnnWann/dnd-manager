@@ -86,6 +86,8 @@ export type SessionActionRollRequest = {
   mode: SessionDiceRollMode
   visibility?: SessionRollVisibility
   source: SessionActionRollSource
+  /** Initiative combatant selected as the target of this attack. */
+  targetEntryId?: string
 }
 
 export type SessionResolvedD20Roll = {
