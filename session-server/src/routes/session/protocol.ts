@@ -400,6 +400,7 @@ function isDiceRollRequest(value: unknown): value is SessionDiceRollRequest {
   if (!nonEmpty(value.requestId) || value.requestId.length > 120) return false;
   if (typeof value.label !== "string" || value.label.trim().length === 0 || value.label.length > 160) return false;
   if (!diceRollMode(value.mode) || !rollVisibility(value.visibility) || !isDiceRollSource(value.source)) return false;
+  if (value.targetEntryId !== undefined && (!nonEmpty(value.targetEntryId) || value.targetEntryId.length > 200)) return false;
 
   if (value.source.type === "manual") {
     if (
