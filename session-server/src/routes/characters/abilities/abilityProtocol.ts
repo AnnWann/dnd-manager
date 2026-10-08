@@ -154,6 +154,7 @@ function isResourceSelection(value: unknown): value is AbilityResourceSelection 
   if (value.activationLevel !== undefined && (!Number.isInteger(value.activationLevel) || value.activationLevel < 1 || value.activationLevel > 9)) {
     return false;
   }
+  if (value.damageType !== undefined && (!DAMAGE_TYPES.includes(value.damageType))) return false;
   if (value.alternatives !== undefined) {
     if (!isRecord(value.alternatives)) return false;
     for (const [groupId, costId] of Object.entries(value.alternatives)) {
