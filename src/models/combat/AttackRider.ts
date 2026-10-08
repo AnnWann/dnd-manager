@@ -12,6 +12,8 @@ export type AttackRider = {
   scope: "all" | "weapon" | "unarmed" | "spell"
   /** Restrict an effect to one weapon (e.g. Elemental Cleaver). */
   weaponId?: string
+  /** Select an equipped weapon when activating a stance or elemental infusion. */
+  weaponSelection?: "onActivation"
   /** Restrict a mark to the selected combatant, never to all opponents. */
   targetEntryId?: string
   /** Rolled once per successful hit; its type is independent of the base damage. */
@@ -45,6 +47,7 @@ export function getActiveAttackRiders(character: CharacterTemplate, context: Att
   ]
   return collections.flatMap(bonuses => bonuses?.attackRiders ?? [])
     .filter(rider => rider.scope === "all" || rider.scope === context.scope)
+    .filter(rider => rider.weaponSelection !== "onActivation" || Boolean(rider.weaponId))
     .filter(rider => !rider.weaponId || (context.scope === "weapon" && rider.weaponId === context.weaponId))
     .filter(rider => !rider.targetEntryId || rider.targetEntryId === context.targetEntryId)
 }
