@@ -2,6 +2,10 @@ import { useState } from "react"
 import { Crosshair, Hand, Scale, Sparkles, Swords } from "lucide-react"
 
 import { Button } from "../../../components/ui/Button"
+import { Select } from "../../../components/ui/Select"
+import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
+import { getActiveAttackRiders, getWeaponRiderTransformation } from "../../../models/combat/AttackRider"
+import { damageTypeLabel } from "../../../models/combat/Damage"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatBonusName, formatBonusValue, formatSkillName } from "../../../lib/formatBonus"
 import { formatSigned } from "../../../lib/formatSigned"
@@ -113,6 +117,9 @@ export function EquipmentWeaponsSection({
   updateCharacter,
 }: Props) {
   const { mode, isEditing, moveEquippedItem } = useCharacterWorkspace()
+  const runtime = useOptionalSessionRuntime()
+  const [targetEntryId, setTargetEntryId] = useState("")
+  const combatants = runtime?.initiativeState?.session?.entries ?? []
   const [dialogState, setDialogState] =
     useState<HandItemActionsDialogState | null>(null)
   const weapons = character.get("equipment").weapons
@@ -142,6 +149,12 @@ export function EquipmentWeaponsSection({
   return (
     <>
       <section>
+        {combatants.length ? <label className="mb-3 grid gap-1 text-xs text-textMuted">Alvo dos ataques (para marcas como Hex e Marca do Caçador)
+          <Select value={targetEntryId} onChange={event => setTargetEntryId(event.target.value)}>
+            <option value="">Sem alvo selecionado</option>
+            {combatants.map(entry => <option key={entry.id} value={entry.id}>{entry.customName || entry.name}</option>)}
+          </Select>
+        </label> : null}
         <div className="mb-3 flex items-end justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold text-textH">
@@ -267,6 +280,7 @@ export function EquipmentWeaponsSection({
                           characterId: character.get("id"),
                           source: { type: "weapon", weaponId: weapon.id },
                           mode: rollModeFromEvent(event.nativeEvent),
+                          targetEntryId: targetEntryId || undefined,
                         })
                       }
                     />
