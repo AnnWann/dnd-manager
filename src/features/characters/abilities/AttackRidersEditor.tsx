@@ -63,6 +63,10 @@ export function AttackRidersEditor({ riders, character, onChange, defaultScope =
             </label>
           </div>
           <label className="flex items-center gap-2 text-xs text-textH">
+            <input type="checkbox" checked={rider.targetSelection === "onCast"} onChange={e => patch(rider.id, { targetSelection: e.target.checked ? "onCast" : undefined })} />
+            Escolher um alvo marcado ao conjurar
+          </label>
+          <label className="flex items-center gap-2 text-xs text-textH">
             <input type="checkbox" checked={Boolean(rider.damage)} onChange={e => patch(rider.id, {
               damage: e.target.checked ? { dice: "1d6", damageType: "fire" } : undefined,
             })} />
