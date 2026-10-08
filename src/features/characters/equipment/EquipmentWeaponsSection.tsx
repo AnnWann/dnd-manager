@@ -183,6 +183,8 @@ export function EquipmentWeaponsSection({
               const attackBonus = weaponAttackBonus(character, weapon)
               const damageBonus = weaponDamageBonus(character, weapon)
               const damageText = formatDie(getWeaponDamageDie(weapon))
+              const activeRiders = getActiveAttackRiders(character, { scope: "weapon", weaponId: weapon.id, targetEntryId: targetEntryId || undefined })
+              const transformation = getWeaponRiderTransformation(activeRiders)
               const handUsage = getWeaponHandsUsed(weapon)
               const versatile = isVersatileWeapon(weapon)
               const improvised = isWeaponImprovisedGrip(weapon)
@@ -329,6 +331,13 @@ export function EquipmentWeaponsSection({
                       </div>
                     ) : null}
 
+                    {activeRiders.length ? <div className="mb-3 text-xs text-textMuted">
+                      <span className="font-semibold text-textH">Efeitos ativos: </span>
+                      {activeRiders.map(rider => rider.label).join(", ")}
+                      {transformation.damageType ? ` · Dano: ${damageTypeLabel(transformation.damageType)}` : ""}
+                      {transformation.thrown ? ` · Arremesso ${transformation.thrownNormalRange ?? 20}/${transformation.thrownLongRange ?? 60} pés` : ""}
+                      {transformation.returnsAfterThrow ? " · Retorna após o arremesso" : ""}
+                    </div> : null}
                     <WeaponBonusList weapon={weapon} />
 
                     <EquipmentFeaturesList
