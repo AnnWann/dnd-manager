@@ -296,7 +296,7 @@ function MiniAbilityEditor({ ability, character, onChange }: { ability: Ability;
 
         {tab === "effects" ? (
           <div className="grid gap-3">
-            <BonusesFields bonuses={ability.bonuses ?? {}} onChange={(bonuses) => onChange({ ...ability, bonuses })} />
+            <BonusesFields bonuses={ability.bonuses ?? {}} character={character} onChange={(bonuses) => onChange({ ...ability, bonuses })} />
             <ConditionSection
               title="Condição ao usar"
               description="É aplicada quando esta habilidade concedida é usada."
