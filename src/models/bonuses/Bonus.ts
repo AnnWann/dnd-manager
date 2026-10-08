@@ -1,4 +1,5 @@
 import type { DamageAffinity } from "../combat/Damage"
+import type { AttackRider } from "../combat/AttackRider"
 import type { Attribute } from "../sheet/Attribute"
 import type { Skill } from "../sheet/Skills"
 
@@ -50,6 +51,8 @@ export type SkillScopedBonus = {
 }
 
 export type BonusCollection = {
+  /** Typed on-hit dice and temporary attack/weapon transformations. */
+  attackRiders?: AttackRider[]
   armorClass?: Bonus[]
   initiative?: Bonus[]
   maxHp?: Bonus[]
