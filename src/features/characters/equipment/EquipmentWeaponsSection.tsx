@@ -296,6 +296,7 @@ export function EquipmentWeaponsSection({
                           characterId: character.get("id"),
                           label: `${weapon.name || "Arma"} — dano`,
                           source: { type: "weapon-damage", weaponId: weapon.id },
+                          targetEntryId: targetEntryId || undefined,
                         })
                       }
                     />
