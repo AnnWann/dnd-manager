@@ -14,7 +14,7 @@ export type AttackRider = {
   /** Restrict a mark to the selected combatant, never to all opponents. */
   targetEntryId?: string
   /** Rolled once per successful hit; its type is independent of the base damage. */
-  damage?: { dice: string; damageType: DamageType }
+  damage?: { dice: string; damageType?: DamageType }
   /** Changes only the base weapon damage packet, not other typed riders. */
   replaceWeaponDamageType?: DamageType
   /** Temporary weapon properties, without mutating the saved inventory item. */
