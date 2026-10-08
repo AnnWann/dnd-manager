@@ -2,6 +2,7 @@ import type { DamageType } from "./Damage"
 import type { CharacterTemplate } from "../characters/CharacterTemplate"
 import { getCharacterConditions } from "../characters/characterConditionStorage"
 import { getActiveAbilities, getEquippedItems } from "../characters/characterStats"
+import { isAbilityBenefitsActive } from "../abilities/abilityActivation"
 
 /** Additional attack effects supplied by equipment, abilities or active conditions. */
 export type AttackRider = {
@@ -32,12 +33,15 @@ export type AttackRiderContext = {
 
 /** No target supplied means a target-specific mark cannot trigger. */
 export function getActiveAttackRiders(character: CharacterTemplate, context: AttackRiderContext): AttackRider[] {
+  const activeConditions = getCharacterConditions(character)
+    .filter(condition => condition.duration.remaining !== 0 || !["rounds", "turns", "minutes", "hours", "days"].includes(condition.duration.type))
   const collections = [
     ...getEquippedItems(character).map(item => item.bonuses),
     ...getActiveAbilities(character).map(ability => ability.bonuses),
-    ...getCharacterConditions(character)
-      .filter(condition => condition.duration.remaining !== 0 || !["rounds", "turns", "minutes", "hours", "days"].includes(condition.duration.type))
-      .map(condition => condition.bonuses),
+    ...activeConditions.map(condition => condition.bonuses),
+    ...activeConditions.flatMap(condition => condition.grantedAbilities ?? [])
+      .filter(isAbilityBenefitsActive)
+      .map(ability => ability.bonuses),
   ]
   return collections.flatMap(bonuses => bonuses?.attackRiders ?? [])
     .filter(rider => rider.scope === "all" || rider.scope === context.scope)
