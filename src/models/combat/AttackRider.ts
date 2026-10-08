@@ -53,8 +53,8 @@ export type ParsedRiderDice = { quantity: number; sides: number; flat: number }
 
 /** Bounded numeric parser; never evaluate player-supplied expressions on the server. */
 export function parseAttackRiderDice(dice: string): ParsedRiderDice | undefined {
-  const value = dice.trim().replace(/\\s+/g, "").toLowerCase()
-  const match = /^(\\d{1,2})d(4|6|8|10|12|20)([+-]\\d{1,3})?$/.exec(value)
+  const value = dice.trim().replace(/\s+/g, "").toLowerCase()
+  const match = /^(\d{1,2})d(4|6|8|10|12|20)([+-]\d{1,3})?$/.exec(value)
   if (!match) return undefined
   const quantity = Number(match[1])
   const flat = Number(match[3] ?? 0)
