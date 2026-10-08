@@ -28,6 +28,8 @@ import {
 import { getCurrentMaxHp } from "../../../../src/models/characters/characterHp";
 import { hasProficiency } from "../../../../src/models/characters/characterProficiencies";
 import { getUnarmedAttackProfile } from "../../../../src/models/characters/unarmedAttack";
+import { getActiveAttackRiders, getWeaponRiderTransformation } from "../../../../src/models/combat/AttackRider";
+import { rollAttackRiderDamages } from "./attackRiderDice";
 import {
   getWeaponAttackAttribute,
   getWeaponDamageDie,
@@ -1700,6 +1702,11 @@ function resolveServerActionRoll(
     const proficiency = weapon.proficient && !isWeaponImprovisedGrip(weapon)
       ? character.getProficiencyBonus()
       : 0;
+    const riders = getActiveAttackRiders(character, {
+      scope: "weapon", weaponId: weapon.id, targetEntryId: request.targetEntryId,
+    });
+    const weaponEffect = getWeaponRiderTransformation(riders);
+    const damageType = weaponEffect.damageType ?? weapon.damageType;
     const description = joinDescription(
       weapon.desc,
       weapon.notes,
@@ -1710,6 +1717,9 @@ function resolveServerActionRoll(
     const details = [
       `Atributo: ${abilityShortPtBr(attribute)}`,
       ...(weapon.properties ?? []).map((property) => property.name),
+      ...(weaponEffect.thrown ? [`Arremesso ${weaponEffect.thrownNormalRange ?? 20}/${weaponEffect.thrownLongRange ?? 60} pés`] : []),
+      ...(weaponEffect.returnsAfterThrow ? ["Retorna à mão após arremessar"] : []),
+      ...(damageType ? [`Tipo de dano: ${damageType}`] : []),
     ];
     if (!diceRollingEnabled) {
       return {
@@ -1744,6 +1754,8 @@ function resolveServerActionRoll(
       ),
       critical,
     );
+    damage.damageType = damageType;
+    const damages = rollAttackRiderDamages(riders, critical, damageType);
 
     return {
       ok: true,
@@ -1756,6 +1768,7 @@ function resolveServerActionRoll(
         details,
         attack,
         damage,
+        damages,
         critical,
       },
     };
@@ -1763,6 +1776,7 @@ function resolveServerActionRoll(
 
   if (request.source.type === "unarmed") {
     const profile = getUnarmedAttackProfile(character);
+    const riders = getActiveAttackRiders(character, { scope: "unarmed", targetEntryId: request.targetEntryId });
     if (!diceRollingEnabled) {
       return {
         ok: true,
@@ -1802,6 +1816,7 @@ function resolveServerActionRoll(
         description: "Ataque corpo a corpo realizado sem uma arma equipada.",
         attack,
         damage,
+        damages: rollAttackRiderDamages(riders, critical, "bludgeoning"),
         critical,
       },
     };
