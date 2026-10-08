@@ -942,7 +942,7 @@ export function MinimalCharacterActions({
               </div>
             ) : selected.ability && abilityRequiresActivation(selected.ability) ? (
               <div className="grid gap-2 border-t border-border pt-3">
-                {isAbilityBenefitsActive(selected.ability) ? (
+                {isAbilityBenefitsActive(selected.ability) && !selected.ability.allowOptionSwitching ? (
                   <div className="flex justify-end">
                     <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>Encerrar efeito</Button>
                   </div>
@@ -961,6 +961,11 @@ export function MinimalCharacterActions({
                 ) : (selected.ability.activationOptions?.length ?? 0) > 0 ? (
                   <>
                     <div className="text-xs font-semibold text-textH">Escolha o efeito</div>
+                    {isAbilityBenefitsActive(selected.ability) ? (
+                      <div className="flex justify-end">
+                        <Button variant="ghost" onClick={() => changeAbilityState(selected, "deactivate")}>Encerrar efeito</Button>
+                      </div>
+                    ) : null}
                     {(selected.ability.activationOptions ?? []).map((option) => (
                       <button
                         key={option.id}
