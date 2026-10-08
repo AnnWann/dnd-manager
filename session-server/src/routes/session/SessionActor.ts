@@ -48,7 +48,7 @@ import {
   type InitiativeSession,
 } from "../../../../src/models/initiative/Initiative";
 import { CREATURE_ATTRIBUTE_LABELS, findCreatureSave, findCreatureSkill, parseCreatureDamageFormula } from "../../../../src/models/creatures/CreatureRolls";
-import { getCreatureEffectiveAbilityCheckBonus, getCreatureEffectiveAbilityModifier, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../../../src/models/creatures/CreatureCombatRuntime";
+import { createCreatureCombatCharacter, getCreatureEffectiveAbilityCheckBonus, getCreatureEffectiveAbilityModifier, getCreatureEffectiveInitiative, getCreatureEffectiveSaveBonus, getCreatureEffectiveSkillBonus, getCreatureFeatureEffectiveAttackBonus, getCreatureFeatureEffectiveDamageBonus } from "../../../../src/models/creatures/CreatureCombatRuntime";
 import type { CompendiumCreature, CreatureFeature } from "../../../../src/models/creatures/CompendiumCreature";
 import {
   getCharacterConditions,
@@ -1392,6 +1392,10 @@ function resolveServerCreatureRoll(
       entry,
     );
 
+    const riderScope = mechanics.attackType === "spell" ? "spell" : "weapon";
+    const riderCharacter = createCreatureCombatCharacter(creature, conditions, entry);
+    const riders = getActiveAttackRiders(riderCharacter, { scope: riderScope });
+    const weaponEffect = riderScope === "weapon" ? getWeaponRiderTransformation(riders) : undefined;
     const damages: SessionResolvedDamageRoll[] = [];
     for (const part of mechanics.damage) {
       const parsed = parseCreatureDamageFormula(part.formula);
@@ -1410,9 +1414,10 @@ function resolveServerCreatureRoll(
       damages.push({
         ...rolled,
         label: "Dano",
-        damageType: part.damageType,
+        damageType: weaponEffect?.damageType ?? part.damageType,
       });
     }
+    damages.push(...rollAttackRiderDamages(riders, critical, damages[0]?.damageType));
 
     return {
       ok: true,
