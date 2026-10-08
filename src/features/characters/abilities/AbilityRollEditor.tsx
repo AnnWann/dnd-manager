@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
@@ -48,7 +49,7 @@ function newDamage() {
   return { id: crypto.randomUUID(), label: "Dano", dice: "1d6" }
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="grid min-w-0 gap-1 text-xs text-textMuted"><span>{label}</span>{children}</label>
 }
 
