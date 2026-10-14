@@ -133,7 +133,7 @@ export class SessionActor extends BaseSessionActor {
         selected.push(...drops.rollGroups[roll - 1].items);
       }
 
-      const spawned = selected.map(cloneCreatureDropItemForGround);
+      const spawned = selected.map(item => cloneCreatureDropItemForGround(item));
       droppedItems.push(...spawned);
       for (const conditional of drops.conditional) {
         pendingConditionalLoot.push({

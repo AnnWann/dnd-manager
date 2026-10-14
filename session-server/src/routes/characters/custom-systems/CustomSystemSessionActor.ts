@@ -164,7 +164,11 @@ export class SessionActor extends BaseSessionActor {
     }
 
     const digitalDiceEnabled = isDigitalDiceRollingEnabled(activeRuntimeConfig);
-    if (!digitalDiceEnabled) {
+    if (
+      !digitalDiceEnabled
+      && (operation.type === "character.customSystem.ability.activate"
+        || operation.type === "character.customSystem.action.execute")
+    ) {
       const roll =
         operation.type === "character.customSystem.ability.activate"
           ? getCustomAbilityRollDefinition(

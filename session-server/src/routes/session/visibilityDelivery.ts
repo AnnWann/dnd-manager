@@ -244,7 +244,7 @@ function filterMessageForSocket(socket: WebSocket, message: unknown): unknown | 
     const result = readRecord(record.result);
     const visibility = result?.visibility;
     if (visibility === "roller-master") {
-      const actorId = typeof result.actorId === "string" ? result.actorId : "";
+      const actorId = typeof result?.actorId === "string" ? result.actorId : "";
       if (connection.role !== "MASTER" && actorId !== connection.userId) {
         return null;
       }
