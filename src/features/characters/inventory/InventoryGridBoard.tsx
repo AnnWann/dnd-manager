@@ -84,7 +84,7 @@ export function InventoryGridBoard({
     if (destinationId === POCKETS) {
       if (!showingPockets || !onMoveToPocket) return { ok: false, reason: "Bolsos indisponíveis." }
       if (pockets.length + ids.length > MAX_POCKETS) return { ok: false, reason: "Não há espaço nos bolsos (limite de 8)." }
-      if (ids.some(id => !items.some(item => item.id === id && canItemGoInPocket(item)))) {
+      if (ids.some(id => !items.some(item => item.id === id && canItemGoInPocket(item) && !isCompartment(item)))) {
         return { ok: false, reason: "Um dos itens não pode ser guardado nos bolsos." }
       }
       return { ok: true }
