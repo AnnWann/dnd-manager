@@ -512,7 +512,7 @@ function CurrencyWallet({
                 <InventoryFloatingMenu label={`Ações de ${item.name || "moedas"}`} placement="above">
                   {close => (
                     <>
-                  <div className="absolute bottom-9 right-0 z-30 min-w-48 rounded-xl border border-border bg-bg-elevated p-2 shadow-theme-lg">
+                  <div className="grid gap-1">
                     {onMoveItem ? <label className="mb-2 grid gap-1 text-[11px] text-textMuted">
                       Mover para
                       <Select value={getItemContainerId(item, allItems) ?? ""}
@@ -528,21 +528,21 @@ function CurrencyWallet({
                     </label> : null}
                     <button type="button" onClick={event => {
                       onViewItem(item)
-                      event.currentTarget.closest("details")?.removeAttribute("open")
+                      close()
                     }} className="block w-full rounded-md px-2 py-2 text-left text-xs text-textH hover:bg-accentBg">
                       Ver detalhes
                     </button>
                     {onTransferItem ? <button type="button" disabled={mutationsDisabled}
                       onClick={event => {
                         onTransferItem(item)
-                        event.currentTarget.closest("details")?.removeAttribute("open")
+                        close()
                       }} className="block w-full rounded-md px-2 py-2 text-left text-xs text-textH hover:bg-accentBg disabled:opacity-40">
                       {transferLabel}
                     </button> : null}
                     {onRemoveItem ? <button type="button" disabled={mutationsDisabled}
                       onClick={event => {
                         onRemoveItem(item.id)
-                        event.currentTarget.closest("details")?.removeAttribute("open")
+                        close()
                       }} className="block w-full rounded-md px-2 py-2 text-left text-xs text-danger hover:bg-accentBg disabled:opacity-40">
                       Remover
                     </button> : null}
