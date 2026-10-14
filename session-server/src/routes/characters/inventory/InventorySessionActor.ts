@@ -6,12 +6,9 @@ import { toggleInventoryItemAttunement } from "../../../../../src/models/charact
 import { removeEquippedItem, type EquippedItemReference } from "../../../../../src/models/characters/characterEquippedItemMovement";
 import { getCharacterConditions, withCharacterConditions } from "../../../../../src/models/characters/characterConditionStorage";
 import { getCurrentMaxHp } from "../../../../../src/models/characters/characterHp";
-import {
-  BAG_OF_HOLDING_CAPACITY_KG,
-  getBagOfHoldingWeightKg,
-} from "../../../../../src/models/items/bagOfHolding";
+import { releaseCompartmentContents, validateInventoryCompartments } from "../../../../../src/models/items/itemCompartments";
 import { areAllCurrenciesInBagOfHolding, setCurrenciesInsideBagOfHolding } from "../../../../../src/models/items/Currency";
-import { isBagOfHoldingItem, type Itemmable } from "../../../../../src/models/items/item";
+import type { Itemmable } from "../../../../../src/models/items/item";
 import { normalizeItemText } from "../../../../../src/lib/textNormalization";
 import { SessionActor as EquipmentSessionActor } from "../equipment/EquipmentSessionActor";
 import { parseInventoryClientMessage, type SessionInventoryOperation } from "./inventoryProtocol";
@@ -31,7 +28,6 @@ const ABILITIES_STATE_KEY = "abilities-state";
 const HP_STATE_KEY = "hp-state";
 const CONDITIONS_STATE_KEY = "conditions-state";
 const INVENTORY_STATE_KEY = "inventory-state";
-const BAG_CAPACITY_EPSILON = 0.000001;
 
 type SharedInventoryState = {
   initialized: boolean;
@@ -184,13 +180,9 @@ export class SessionActor extends EquipmentSessionActor {
     catch { result = null; }
     if (!result || !result.changed) return sendError(webSocket, "INVENTORY_OPERATION_REJECTED", "The requested inventory operation is invalid for the current state.");
 
-    const capacityViolation = findBagCapacityViolation(touchedIds, beforeAbilities, abilities);
+    const capacityViolation = findCompartmentViolation(touchedIds, beforeAbilities, abilities, beforeInventory, inventory);
     if (capacityViolation) {
-      return sendError(
-        webSocket,
-        "BAG_OF_HOLDING_CAPACITY_EXCEEDED",
-        `The requested operation would increase ${capacityViolation}'s Bag of Holding beyond ${BAG_OF_HOLDING_CAPACITY_KG} kg.`,
-      );
+      return sendError(webSocket, "COMPARTMENT_CAPACITY_EXCEEDED", capacityViolation);
     }
 
     const affectedScopes = snapshotsAllCharacters
@@ -359,7 +351,7 @@ function applyInventoryOperation(
     case "party.item.remove": {
       const next = inventory.partyInventory.filter((item) => item.id !== operation.itemId);
       if (next.length === inventory.partyInventory.length) return result(false);
-      inventory.partyInventory = next;
+      inventory.partyInventory = releaseCompartmentContents(inventory.partyInventory, operation.itemId);
       sharedChanged = true;
       inventory.revision += 1;
       return result(true);
@@ -415,7 +407,7 @@ function applyInventoryOperation(
     case "ground.item.remove": {
       const next = inventory.groundInventory.filter((item) => item.id !== operation.itemId);
       if (next.length === inventory.groundInventory.length) return result(false);
-      inventory.groundInventory = next;
+      inventory.groundInventory = releaseCompartmentContents(inventory.groundInventory, operation.itemId);
       sharedChanged = true;
       inventory.revision += 1;
       return result(true);
@@ -575,30 +567,26 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function findBagCapacityViolation(
+function findCompartmentViolation(
   characterIds: string[],
   before: Record<string, SessionAbilityState>,
   after: Record<string, SessionAbilityState>,
+  beforeShared: SharedInventoryState,
+  afterShared: SharedInventoryState,
 ): string | null {
-  for (const characterId of characterIds) {
-    const beforeState = before[characterId];
-    const afterState = after[characterId];
-    if (!beforeState || !afterState) continue;
-
-    const beforeRaw = beforeState.character as unknown as CharacterTemplateProps;
-    const afterRaw = afterState.character as unknown as CharacterTemplateProps;
-    const beforeInventory = beforeRaw.inventory ?? [];
-    const afterInventory = afterRaw.inventory ?? [];
-
-    if (!afterInventory.some(isBagOfHoldingItem)) continue;
-
-    const beforeWeight = getBagOfHoldingWeightKg(beforeInventory);
-    const afterWeight = getBagOfHoldingWeightKg(afterInventory);
-    const exceedsCapacity = afterWeight > BAG_OF_HOLDING_CAPACITY_KG + BAG_CAPACITY_EPSILON;
-    const increasedLoad = afterWeight > beforeWeight + BAG_CAPACITY_EPSILON;
-    if (exceedsCapacity && increasedLoad) return characterId;
+  const changed = (prior: Itemmable[], next: Itemmable[]): string | null => {
+    const error = validateInventoryCompartments(next)
+    if (!error || error === validateInventoryCompartments(prior)) return null
+    return error
   }
-  return null;
+  for (const characterId of characterIds) {
+    const beforeInventory = (before[characterId]?.character as unknown as CharacterTemplateProps | undefined)?.inventory ?? []
+    const afterInventory = (after[characterId]?.character as unknown as CharacterTemplateProps | undefined)?.inventory ?? []
+    const error = changed(beforeInventory, afterInventory)
+    if (error) return error
+  }
+  return changed(beforeShared.partyInventory, afterShared.partyInventory)
+    ?? changed(beforeShared.groundInventory, afterShared.groundInventory)
 }
 
 function inventoryOperationScopes(operation: SessionInventoryOperation): string[] {
