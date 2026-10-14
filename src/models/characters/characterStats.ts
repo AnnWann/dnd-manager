@@ -69,6 +69,7 @@ export function getEquippedItems(character: CharacterTemplate): Equipment[] {
     equipment.gloves,
     equipment.cape,
     ...(equipment.necklaces ?? []),
+    ...(equipment.bodyParts ?? []),
     ...equipment.rings,
     ...equipment.weapons,
     ...(equipment.heldItems ?? []).map((item) => item as Equipment),
