@@ -265,7 +265,9 @@ export function InventoryEditor({
           renderItem={(item, actions) => (
             <InventoryItemTile item={item} actions={actions}
               isAttuned={attunedItemIds.includes(item.id)}
-              typeLabel={inventoryItemTypeLabel(item)}
+              typeLabel={item.kind === "supply"
+                ? `${inventoryItemTypeLabel(item)} · ${formatSupplySummary(item as SupplyItem)}`
+                : inventoryItemTypeLabel(item)}
               mutationsDisabled={mutationsDisabled}
               onDetails={() => openDetails(item)}
               onToggleAttunement={item.magicItem && item.requiresAttunement && onToggleAttunement
