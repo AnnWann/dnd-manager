@@ -10,7 +10,8 @@ import { isConsumableItemKind } from "../../../models/items/itemConsumption"
 import type { SupplyItem } from "../../../models/items/SupplyItem"
 import { ItemDropdownDetails } from "./itemDropdownDetails"
 import { InventoryCompartmentBoard } from "./InventoryCompartmentBoard"
-import { canStoreItem } from "../../../models/items/itemCompartments"
+import { canStoreItem, getItemContainerId, isCompartment } from "../../../models/items/itemCompartments"
+import { Select } from "../../../components/ui/Select"
 
 type Props = {
   title: string
@@ -172,6 +173,7 @@ export function InventoryEditor({
         {showCurrencyWallet ? (
           <CurrencyWallet
             items={currencyItems}
+            allItems={items}
             mutationsDisabled={mutationsDisabled}
             onAddItem={onAddItem}
             onUpdateItem={onUpdateItem}
@@ -182,6 +184,12 @@ export function InventoryEditor({
             }
             transferLabel={transferLabel}
             onViewItem={openDetails}
+            onMoveItem={onUpdateItem ? (itemId, containerId) => {
+              const verdict = canStoreItem(items, itemId, containerId)
+              if (!verdict.ok) return
+              const moved = verdict.items.find(item => item.id === itemId)
+              if (moved) onUpdateItem(itemId, () => moved)
+            } : undefined}
           />
         ) : null}
 
@@ -454,6 +462,8 @@ function ItemDetailsDialog({
 
 function CurrencyWallet({
   items,
+  allItems,
+  onMoveItem,
   mutationsDisabled,
   onAddItem,
   onUpdateItem,
@@ -464,6 +474,8 @@ function CurrencyWallet({
   onViewItem,
 }: {
   items: Itemmable[]
+  allItems: Itemmable[]
+  onMoveItem?: (itemId: string, containerId?: string) => void
   mutationsDisabled: boolean
   onAddItem?: (item: Itemmable) => void
   onUpdateItem?: (
@@ -541,6 +553,15 @@ function CurrencyWallet({
                   }
                 />
               </label>
+              {onMoveItem ? <label className="mt-2 grid gap-1 text-[11px] text-textMuted">Guardar moedas em
+                <Select value={getItemContainerId(item, allItems) ?? ""}
+                  disabled={mutationsDisabled}
+                  onChange={event => onMoveItem(item.id, event.target.value || undefined)}>
+                  <option value="">Fora de compartimentos</option>
+                  {allItems.filter(isCompartment).map(container =>
+                    <option key={container.id} value={container.id}>{container.name}</option>)}
+                </Select>
+              </label> : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
                   size="sm"
