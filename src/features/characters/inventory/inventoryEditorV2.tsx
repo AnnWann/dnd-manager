@@ -189,33 +189,22 @@ export function InventoryEditor({
                 {equippedItems.length} equipado(s)
               </span>
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
               {equippedItems.filter(({ item, location }) =>
                 (!normalizedQuery || `${item.name} ${location}`.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR").includes(normalizedQuery)) &&
                 matchesInventoryFilter(item, filter)
-              ).map((entry, index) => (
-                <article key={`${entry.item.id}-${index}`}
-                  className="flex flex-col gap-3 rounded-xl border border-accentBorder bg-accentBg p-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="break-words text-sm font-semibold text-textH">{entry.item.name || "Item sem nome"}</span>
-                      <span className="rounded-full border border-accentBorder bg-bg px-2 py-0.5 text-[10px] font-semibold text-textH">Equipado</span>
-                      <span className="text-xs text-textMuted">{entry.location}</span>
-                    </div>
-                    <div className="mt-1 flex flex-wrap gap-3 text-xs text-textMuted">
-                      <span>Qtd. {entry.item.quantity ?? 1}</span>
-                      <span>Peso {entry.item.weight ?? 0} kg/un.</span>
-                      {entry.item.attuned ? <span>Sintonizado</span> : null}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    <Button size="sm" variant="secondary" onClick={() => openDetails(entry.item)}>Detalhes</Button>
-                    {onUnequipItem ? (
-                      <Button size="sm" variant="secondary" disabled={mutationsDisabled}
-                        onClick={() => onUnequipItem(entry)}>Desequipar</Button>
-                    ) : null}
-                  </div>
-                </article>
+              ).map(entry => (
+                <InventoryItemTile key={entry.item.id}
+                  item={entry.item}
+                  equipped location={entry.location}
+                  actions={{ selected: false, toggleSelected: () => {}, requestMove: () => {}, canMove: false }}
+                  isAttuned={Boolean(entry.item.attuned)}
+                  typeLabel={inventoryItemTypeLabel(entry.item)}
+                  mutationsDisabled={mutationsDisabled}
+                  onDetails={() => openDetails(entry.item)}
+                  onTransfer={onUnequipItem ? () => onUnequipItem(entry) : undefined}
+                  transferLabel="Desequipar"
+                />
               ))}
             </div>
           </section>
