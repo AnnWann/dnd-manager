@@ -1,5 +1,6 @@
 import type { CharacterTemplate } from "./CharacterTemplate"
 import { isBagOfHoldingItem, type Itemmable } from "../items/item"
+import { releaseCompartmentContents } from "../items/itemCompartments"
 import {
   prepareInventoryItemForInsert,
   removeSingleInventoryItem,
@@ -70,17 +71,7 @@ export function removeInventoryItem(
   const removed = inventory.find((item) => item.id === itemId)
   const nextInventory = removeSingleInventoryItem(inventory, itemId)
 
-  if (!removed || !isBagOfHoldingItem(removed)) {
-    return character.with("inventory", nextInventory)
-  }
-
-  return character.with(
-    "inventory",
-    nextInventory.map((item) => ({
-      ...item,
-      insideBagOfHolding: false,
-    })),
-  )
+  return character.with("inventory", removed ? releaseCompartmentContents(inventory, itemId) : nextInventory)
 }
 
 export function toggleInventoryItemAttunement(
