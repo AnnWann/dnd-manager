@@ -1,6 +1,7 @@
 import type { Itemmable } from "./item"
 import { isBagOfHoldingItem } from "./item"
 import { getItemStackWeightKg } from "./itemWeight"
+import { getStandardItemVolumeLiters, STANDARD_CONTAINER_SIZES } from "./standardItemVolumes"
 
 export type CompartmentSizeUnit = "slots" | "liters"
 export type ItemCompartment = {
@@ -21,7 +22,15 @@ export const BAG_OF_HOLDING_COMPARTMENT: ItemCompartment = {
 const EPSILON = 0.000001
 
 export function getItemCompartment(item: Itemmable): ItemCompartment | undefined {
-  return isBagOfHoldingItem(item) ? BAG_OF_HOLDING_COMPARTMENT : item.compartment
+  if (isBagOfHoldingItem(item)) return BAG_OF_HOLDING_COMPARTMENT
+  if (item.compartment) return item.compartment
+  // Pre-existing standard bags, sacks and containers lack saved compartment
+  // data. Recognize them without migrating or rewriting the inventory.
+  const source = item.compendiumItemId ?? item.id
+  if (!source.startsWith("compendium-")) return undefined
+  const standard = STANDARD_CONTAINER_SIZES[source.slice("compendium-".length)]
+  if (!standard) return undefined
+  return { unit: "liters", capacity: standard.capacityLiters, maxWeightKg: standard.maxWeightKg }
 }
 
 export function isCompartment(item: Itemmable): boolean {
@@ -57,7 +66,8 @@ export function getCompartmentContents(items: Itemmable[], containerId: string):
 /** A stack takes one slot by default; liters are per item, not per stack. */
 export function getItemOccupiedSize(item: Itemmable, unit: CompartmentSizeUnit): number {
   if (unit === "slots") return Math.max(0, item.slotsUsed ?? 1)
-  return Math.max(0, item.volumeLiters ?? 1) * Math.max(0, item.quantity ?? 1)
+  return Math.max(0, item.volumeLiters ?? getStandardItemVolumeLiters(item) ?? 1)
+    * Math.max(0, item.quantity ?? 1)
 }
 
 export function getCompartmentUsage(items: Itemmable[], container: Itemmable): {
