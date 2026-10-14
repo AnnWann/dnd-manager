@@ -12,11 +12,14 @@ import { ItemDropdownDetails } from "./itemDropdownDetails"
 import { InventoryCompartmentBoard } from "./InventoryCompartmentBoard"
 import { canStoreItem, getItemContainerId, isCompartment } from "../../../models/items/itemCompartments"
 import { Select } from "../../../components/ui/Select"
+import type { EquippedInventoryEntry } from "../../../models/characters/characterEquippedInventory"
 
 type Props = {
   title: string
   description: string
   items: Itemmable[]
+  equippedItems?: EquippedInventoryEntry[]
+  onUnequipItem?: (entry: EquippedInventoryEntry) => void
   searchQuery?: string
   emptyMessage: string
   mutationsDisabled?: boolean
@@ -98,6 +101,8 @@ export function InventoryEditor({
   title,
   description,
   items,
+  equippedItems = [],
+  onUnequipItem,
   searchQuery = "",
   emptyMessage,
   mutationsDisabled = false,
@@ -170,6 +175,50 @@ export function InventoryEditor({
       </CardHeader>
 
       <CardContent>
+        {equippedItems.length ? (
+          <section className="mb-5 grid gap-3" aria-label="Itens equipados">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-textH">Itens equipados</div>
+                <p className="mt-1 text-xs text-textMuted">
+                  Também aparecem aqui para consulta. Continuam na ficha de equipamento, sem duplicar peso ou efeitos.
+                </p>
+              </div>
+              <span className="rounded-full border border-accentBorder bg-accentBg px-2.5 py-1 text-xs text-textH">
+                {equippedItems.length} equipado(s)
+              </span>
+            </div>
+            <div className="grid gap-2">
+              {equippedItems.filter(({ item, location }) =>
+                (!normalizedQuery || `${item.name} ${location}`.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR").includes(normalizedQuery)) &&
+                matchesInventoryFilter(item, filter)
+              ).map((entry, index) => (
+                <article key={`${entry.item.id}-${index}`}
+                  className="flex flex-col gap-3 rounded-xl border border-accentBorder bg-accentBg p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="break-words text-sm font-semibold text-textH">{entry.item.name || "Item sem nome"}</span>
+                      <span className="rounded-full border border-accentBorder bg-bg px-2 py-0.5 text-[10px] font-semibold text-textH">Equipado</span>
+                      <span className="text-xs text-textMuted">{entry.location}</span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-3 text-xs text-textMuted">
+                      <span>Qtd. {entry.item.quantity ?? 1}</span>
+                      <span>Peso {entry.item.weight ?? 0} kg/un.</span>
+                      {entry.item.attuned ? <span>Sintonizado</span> : null}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <Button size="sm" variant="secondary" onClick={() => openDetails(entry.item)}>Detalhes</Button>
+                    {onUnequipItem ? (
+                      <Button size="sm" variant="secondary" disabled={mutationsDisabled}
+                        onClick={() => onUnequipItem(entry)}>Desequipar</Button>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
         {showCurrencyWallet ? (
           <CurrencyWallet
             items={currencyItems}
@@ -335,12 +384,12 @@ export function InventoryEditor({
 
       <ItemDetailsDialog
         item={viewingItem}
-        canEdit={Boolean(onUpdateItem)}
+        canEdit={Boolean(onUpdateItem) && !equippedItems.some(entry => entry.item.id === viewingItem?.id)}
         mutationsDisabled={mutationsDisabled}
         onClose={() => setViewingItem(null)}
         onEdit={openEdit}
         onUpdate={
-          viewingItem && onUpdateItem && !mutationsDisabled
+          viewingItem && onUpdateItem && !mutationsDisabled && !equippedItems.some(entry => entry.item.id === viewingItem.id)
             ? (updater) => onUpdateItem(viewingItem.id, updater)
             : undefined
         }
