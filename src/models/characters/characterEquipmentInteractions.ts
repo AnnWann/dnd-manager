@@ -319,6 +319,7 @@ function equipItemInHand(
       quantity: 1,
       pocketable: true,
       insideBagOfHolding: false,
+      containerId: undefined,
     }))
     const leftoverQuantity = remainingQuantity - pocketedQuantity
     const nextInventory = [
