@@ -10,6 +10,7 @@ import {
 } from "../characters/characterRestWithSorcery"
 import { areAllCurrenciesInBagOfHolding } from "../items/Currency"
 import type { Itemmable } from "../items/item"
+import { getItemContainerId, isCompartment, isInsideCompartment, releaseCompartmentContents, validateInventoryCompartments } from "../items/itemCompartments"
 import {
   consumeSelectedSupplies,
   getRequiredSupplyForRace,
@@ -184,9 +185,7 @@ export function applyGameOperation<TState extends AppStateV1>(
     case "party.item.remove":
       return {
         ...state,
-        partyInventory: (state.partyInventory ?? []).filter(
-          (item) => item.id !== operation.itemId,
-        ),
+        partyInventory: releaseCompartmentContents(state.partyInventory ?? [], operation.itemId),
       }
 
     case "ground.item.add":
@@ -211,9 +210,7 @@ export function applyGameOperation<TState extends AppStateV1>(
     case "ground.item.remove":
       return {
         ...state,
-        groundInventory: (state.groundInventory ?? []).filter(
-          (item) => item.id !== operation.itemId,
-        ),
+        groundInventory: releaseCompartmentContents(state.groundInventory ?? [], operation.itemId),
       }
 
     case "inventory.item.transfer":
@@ -347,8 +344,30 @@ function transferItem<TState extends AppStateV1>(
   )
   const movedQuantity = Math.min(availableQuantity, requestedQuantity)
 
-  if (movedQuantity >= availableQuantity) {
-    sourceInventory.splice(itemIndex, 1)
+  const completeTransfer = movedQuantity >= availableQuantity
+  const descendants = completeTransfer && isCompartment(sourceItem)
+    ? sourceInventory.filter(item => isInsideCompartment(item, sourceItem.id, sourceInventory))
+    : []
+  const transferIds = new Map<string, string>([
+    [sourceItem.id, request.destinationItemId ?? crypto.randomUUID()],
+    ...descendants.map(item => [item.id, crypto.randomUUID()] as [string, string]),
+  ])
+  const descendantItems = descendants.map(item => {
+    const parent = getItemContainerId(item, sourceInventory)
+    return normalizeItemText({
+      ...item,
+      id: transferIds.get(item.id)!,
+      containerId: parent ? transferIds.get(parent) : undefined,
+      insideBagOfHolding: Boolean(parent && sourceInventory.find(entry => entry.id === parent && entry.category === "bagOfHolding")),
+      heldHands: undefined,
+    })
+  })
+
+  if (completeTransfer) {
+    const leavingIds = new Set([sourceItem.id, ...descendants.map(item => item.id)])
+    for (let index = sourceInventory.length - 1; index >= 0; index--) {
+      if (leavingIds.has(sourceInventory[index].id)) sourceInventory.splice(index, 1)
+    }
   } else {
     sourceInventory[itemIndex] = touchItem(
       normalizeItemText({
@@ -366,14 +385,19 @@ function transferItem<TState extends AppStateV1>(
 
   const movedItem = normalizeItemText({
     ...sourceItem,
-    id: request.destinationItemId ?? crypto.randomUUID(),
+    id: transferIds.get(sourceItem.id)!,
     quantity: movedQuantity,
     heldHands: undefined,
     wieldedTwoHanded: undefined,
+    containerId: destinationKeepsCurrencyInBag
+      ? destinationInventory.find(entry => entry.category === "bagOfHolding")?.id
+      : undefined,
     insideBagOfHolding: destinationKeepsCurrencyInBag,
   })
 
   addOrMergeStack(destinationInventory, movedItem, meta)
+  destinationInventory.push(...descendantItems.map(item => touchItem(item, meta)))
+  if (validateInventoryCompartments(destinationInventory)) return state
 
   return {
     ...state,
@@ -408,17 +432,16 @@ function addOrMergeStack(
       quantity:
         Math.max(0, Number(existing.quantity) || 0) +
         Math.max(0, Number(movedItem.quantity) || 0),
-      insideBagOfHolding:
-        movedItem.kind === "currency"
-          ? movedItem.insideBagOfHolding === true
-          : false,
+      insideBagOfHolding: movedItem.insideBagOfHolding === true,
+      containerId: movedItem.containerId,
     }),
     meta,
   )
 }
 
 function areItemsStackCompatible(first: Itemmable, second: Itemmable): boolean {
-  if (first.kind !== second.kind) return false
+  if (first.kind !== second.kind || isCompartment(first) || isCompartment(second)) return false
+  if (first.containerId !== second.containerId) return false
   if (
     first.kind === "currency" &&
     first.insideBagOfHolding !== second.insideBagOfHolding
