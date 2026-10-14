@@ -94,6 +94,13 @@ export function equipInventoryItemWithRules(
       })
   }
 
+  if (item.equipSlot === "bodyPart") {
+    return character.with("inventory", inventoryWithoutItem).with("equipment", {
+      ...equipment,
+      bodyParts: [...(equipment.bodyParts ?? []), itemToEquip as Equipment],
+    })
+  }
+
   if (item.equipSlot === "necklace") {
     if ((equipment.necklaces ?? []).length >= 3) return character
 
