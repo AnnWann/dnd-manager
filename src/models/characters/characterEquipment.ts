@@ -559,9 +559,11 @@ export function getEquippedItems(character: CharacterTemplate): Equipment[] {
 
   return [
     equipment.armor,
+    equipment.shield,
     equipment.boots,
     equipment.gloves,
     equipment.helmet,
+    equipment.cape,
     ...(equipment.necklaces ?? []),
     ...(equipment.bodyParts ?? []),
     ...equipment.rings,
@@ -705,6 +707,9 @@ function updateEquipmentById(
     boots: updateItem(equipment.boots),
     gloves: updateItem(equipment.gloves),
     helmet: updateItem(equipment.helmet),
+    shield: updateItem(equipment.shield),
+    cape: updateItem(equipment.cape),
+    bodyParts: (equipment.bodyParts ?? []).map(updateItem),
     necklaces: (equipment.necklaces ?? []).map(updateItem),
     rings: equipment.rings.map(updateItem),
     weapons: equipment.weapons.map(updateItem),

@@ -317,6 +317,16 @@ function resetEquipmentResources(
     helmet: resetOptionalItem(equipment.helmet, restKind, recoveryFraction),
     gloves: resetOptionalItem(equipment.gloves, restKind, recoveryFraction),
     cape: resetOptionalItem(equipment.cape, restKind, recoveryFraction),
+    shield: resetOptionalItem(equipment.shield, restKind, recoveryFraction),
+    necklaces: (equipment.necklaces ?? []).map((item) =>
+      resetItemResources(item, restKind, recoveryFraction),
+    ),
+    bodyParts: (equipment.bodyParts ?? []).map((item) =>
+      resetItemResources(item, restKind, recoveryFraction),
+    ),
+    heldItems: (equipment.heldItems ?? []).map((item) =>
+      resetItemResources(item, restKind, recoveryFraction),
+    ),
     rings: equipment.rings.map((item) =>
       resetItemResources(item, restKind, recoveryFraction),
     ),
