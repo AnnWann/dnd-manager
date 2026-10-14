@@ -200,6 +200,7 @@ export function setCurrenciesInsideBagOfHolding(
         ? normalizeCurrencyItem({
             ...item,
             insideBagOfHolding,
+            containerId: undefined,
           })
         : item,
     ),
