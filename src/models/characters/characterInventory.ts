@@ -144,6 +144,7 @@ export function sendInventoryItemToBagOfHolding(
   return updateInventoryItem(character, itemId, (item) => ({
     ...item,
     insideBagOfHolding: true,
+    containerId: character.get("inventory").find(isBagOfHoldingItem)?.id,
   }))
 }
 
@@ -154,6 +155,7 @@ export function removeInventoryItemFromBagOfHolding(
   return updateInventoryItem(character, itemId, (item) => ({
     ...item,
     insideBagOfHolding: false,
+    containerId: undefined,
   }))
 }
 
@@ -164,5 +166,6 @@ export function toggleInventoryItemBagOfHolding(
   return updateInventoryItem(character, itemId, (item) => ({
     ...item,
     insideBagOfHolding: !item.insideBagOfHolding,
+    containerId: item.insideBagOfHolding ? undefined : character.get("inventory").find(isBagOfHoldingItem)?.id,
   }))
 }
