@@ -1,3 +1,4 @@
+import { Ellipsis } from "lucide-react"
 import { useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
@@ -9,7 +10,8 @@ import type { ItemKind, Itemmable } from "../../../models/items/item"
 import { isConsumableItemKind } from "../../../models/items/itemConsumption"
 import type { SupplyItem } from "../../../models/items/SupplyItem"
 import { ItemDropdownDetails } from "./itemDropdownDetails"
-import { InventoryCompartmentBoard } from "./InventoryCompartmentBoard"
+import { InventoryGridBoard } from "./InventoryGridBoard"
+import { InventoryItemTile } from "./InventoryItemTile"
 import { canStoreItem, getItemContainerId, isCompartment } from "../../../models/items/itemCompartments"
 import { Select } from "../../../components/ui/Select"
 import type { EquippedInventoryEntry } from "../../../models/characters/characterEquippedInventory"
@@ -188,33 +190,22 @@ export function InventoryEditor({
                 {equippedItems.length} equipado(s)
               </span>
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
               {equippedItems.filter(({ item, location }) =>
                 (!normalizedQuery || `${item.name} ${location}`.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR").includes(normalizedQuery)) &&
                 matchesInventoryFilter(item, filter)
-              ).map((entry, index) => (
-                <article key={`${entry.item.id}-${index}`}
-                  className="flex flex-col gap-3 rounded-xl border border-accentBorder bg-accentBg p-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="break-words text-sm font-semibold text-textH">{entry.item.name || "Item sem nome"}</span>
-                      <span className="rounded-full border border-accentBorder bg-bg px-2 py-0.5 text-[10px] font-semibold text-textH">Equipado</span>
-                      <span className="text-xs text-textMuted">{entry.location}</span>
-                    </div>
-                    <div className="mt-1 flex flex-wrap gap-3 text-xs text-textMuted">
-                      <span>Qtd. {entry.item.quantity ?? 1}</span>
-                      <span>Peso {entry.item.weight ?? 0} kg/un.</span>
-                      {entry.item.attuned ? <span>Sintonizado</span> : null}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    <Button size="sm" variant="secondary" onClick={() => openDetails(entry.item)}>Detalhes</Button>
-                    {onUnequipItem ? (
-                      <Button size="sm" variant="secondary" disabled={mutationsDisabled}
-                        onClick={() => onUnequipItem(entry)}>Desequipar</Button>
-                    ) : null}
-                  </div>
-                </article>
+              ).map(entry => (
+                <InventoryItemTile key={entry.item.id}
+                  item={entry.item}
+                  equipped location={entry.location}
+                  actions={{ selected: false, toggleSelected: () => {}, requestMove: () => {}, canMove: false }}
+                  isAttuned={Boolean(entry.item.attuned)}
+                  typeLabel={inventoryItemTypeLabel(entry.item)}
+                  mutationsDisabled={mutationsDisabled}
+                  onDetails={() => openDetails(entry.item)}
+                  onTransfer={onUnequipItem ? () => onUnequipItem(entry) : undefined}
+                  transferLabel="Desequipar"
+                />
               ))}
             </div>
           </section>
@@ -259,7 +250,7 @@ export function InventoryEditor({
           ))}
         </div>
 
-        <InventoryCompartmentBoard
+        <InventoryGridBoard
           items={items}
           filteredItems={filteredItems}
           filtered={filter !== "all" || Boolean(normalizedQuery)}
@@ -271,114 +262,24 @@ export function InventoryEditor({
             const moved = verdict.items.find(item => item.id === itemId)
             if (moved) onUpdateItem(itemId, () => moved)
           } : undefined}
-          renderItem={(item) => {
-              const isAttuned = attunedItemIds.includes(item.id)
-              const definition = findStandardDefinitionForItem(item)
-
-              return (
-                <article
-                  key={item.id}
-                  className="rounded-xl border border-border bg-[color:var(--social-bg)] p-3"
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-sm font-medium text-textH">
-                          {item.name || "Item sem nome"}
-                        </span>
-                        {definition ? <ItemBadge label="Compêndio" /> : null}
-                        {definition?.locked ? (
-                          <ItemBadge label="Definição protegida" />
-                        ) : null}
-                        {item.magicItem ? <ItemBadge label="Mágico" /> : null}
-                        {item.requiresAttunement ? (
-                          <ItemBadge label="Requer sintonia" />
-                        ) : null}
-                        {isAttuned ? <ItemBadge label="Sintonizado" /> : null}
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text">
-                        <span>{inventoryItemTypeLabel(item)}</span>
-                        <span>Qtd. {item.quantity ?? 1}</span>
-                        <span>Peso {item.weight ?? 0}</span>
-                        {item.kind === "supply" ? (
-                          <span>{formatSupplySummary(item as SupplyItem)}</span>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => openDetails(item)}
-                      >
-                        Ver detalhes
-                      </Button>
-
-                      {item.magicItem &&
-                      item.requiresAttunement &&
-                      onToggleAttunement ? (
-                        <Button
-                          size="sm"
-                          variant={isAttuned ? "primary" : "secondary"}
-                          disabled={mutationsDisabled}
-                          onClick={() => onToggleAttunement(item.id)}
-                        >
-                          {isAttuned ? "Desfazer sintonia" : "Sintonizar"}
-                        </Button>
-                      ) : null}
-
-                      {isConsumableItemKind(item) && onConsumeItem ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={mutationsDisabled}
-                          onClick={() => onConsumeItem(item.id)}
-                        >
-                          {item.kind === "ammunition"
-                            ? "Consumir munição"
-                            : "Consumir"}
-                        </Button>
-                      ) : null}
-
-                      {onEquipItem ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={mutationsDisabled}
-                          onClick={() => onEquipItem(item.id)}
-                        >
-                          Equipar
-                        </Button>
-                      ) : null}
-
-                      {onTransferItem ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={mutationsDisabled}
-                          onClick={() => onTransferItem(item)}
-                        >
-                          {transferLabel}
-                        </Button>
-                      ) : null}
-
-                      {onRemoveItem ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={mutationsDisabled}
-                          onClick={() => onRemoveItem(item.id)}
-                        >
-                          Remover
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                </article>
-              )
-
-          }}
+          renderItem={(item, actions) => (
+            <InventoryItemTile item={item} actions={actions}
+              isAttuned={attunedItemIds.includes(item.id)}
+              typeLabel={item.kind === "supply"
+                ? `${inventoryItemTypeLabel(item)} · ${formatSupplySummary(item as SupplyItem)}`
+                : inventoryItemTypeLabel(item)}
+              mutationsDisabled={mutationsDisabled}
+              onDetails={() => openDetails(item)}
+              onToggleAttunement={item.magicItem && item.requiresAttunement && onToggleAttunement
+                ? () => onToggleAttunement(item.id) : undefined}
+              onConsume={isConsumableItemKind(item) && onConsumeItem
+                ? () => onConsumeItem(item.id) : undefined}
+              onEquip={onEquipItem ? () => onEquipItem(item.id) : undefined}
+              onTransfer={onTransferItem ? () => onTransferItem(item) : undefined}
+              transferLabel={transferLabel}
+              onRemove={onRemoveItem ? () => onRemoveItem(item.id) : undefined}
+            />
+          )}
         />
       </CardContent>
 
@@ -602,43 +503,55 @@ function CurrencyWallet({
                   }
                 />
               </label>
-              {onMoveItem ? <label className="mt-2 grid gap-1 text-[11px] text-textMuted">Guardar moedas em
-                <Select value={getItemContainerId(item, allItems) ?? ""}
-                  disabled={mutationsDisabled}
-                  onChange={event => onMoveItem(item.id, event.target.value || undefined)}>
-                  <option value="">Fora de compartimentos</option>
-                  {allItems.filter(isCompartment).map(container =>
-                    <option key={container.id} value={container.id}>{container.name}</option>)}
-                </Select>
-              </label> : null}
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => onViewItem(item)}
-                >
-                  Ver detalhes
-                </Button>
-                {onTransferItem ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={mutationsDisabled}
-                    onClick={() => onTransferItem(item)}
-                  >
-                    {transferLabel}
-                  </Button>
-                ) : null}
-                {onRemoveItem ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={mutationsDisabled}
-                    onClick={() => onRemoveItem(item.id)}
-                  >
-                    Remover
-                  </Button>
-                ) : null}
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-[11px] text-textMuted">
+                  {getItemContainerId(item, allItems)
+                    ? `Em: ${allItems.find(entry => entry.id === getItemContainerId(item, allItems))?.name ?? "Compartimento"}`
+                    : "Fora de compartimentos"}
+                </span>
+                <details className="relative shrink-0" onBlur={event => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node)) event.currentTarget.open = false
+                }}>
+                  <summary aria-label={`Ações de ${item.name || "moedas"}`}
+                    className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-md text-textMuted hover:bg-bg-subtle [&::-webkit-details-marker]:hidden">
+                    <Ellipsis className="h-4 w-4" />
+                  </summary>
+                  <div className="absolute bottom-9 right-0 z-30 min-w-48 rounded-xl border border-border bg-bg-elevated p-2 shadow-theme-lg">
+                    {onMoveItem ? <label className="mb-2 grid gap-1 text-[11px] text-textMuted">
+                      Mover para
+                      <Select value={getItemContainerId(item, allItems) ?? ""}
+                        disabled={mutationsDisabled}
+                        onChange={event => {
+                          onMoveItem(item.id, event.target.value || undefined)
+                          event.currentTarget.closest("details")?.removeAttribute("open")
+                        }}>
+                        <option value="">Fora de compartimentos</option>
+                        {allItems.filter(isCompartment).map(container =>
+                          <option key={container.id} value={container.id}>{container.name}</option>)}
+                      </Select>
+                    </label> : null}
+                    <button type="button" onClick={event => {
+                      onViewItem(item)
+                      event.currentTarget.closest("details")?.removeAttribute("open")
+                    }} className="block w-full rounded-md px-2 py-2 text-left text-xs text-textH hover:bg-accentBg">
+                      Ver detalhes
+                    </button>
+                    {onTransferItem ? <button type="button" disabled={mutationsDisabled}
+                      onClick={event => {
+                        onTransferItem(item)
+                        event.currentTarget.closest("details")?.removeAttribute("open")
+                      }} className="block w-full rounded-md px-2 py-2 text-left text-xs text-textH hover:bg-accentBg disabled:opacity-40">
+                      {transferLabel}
+                    </button> : null}
+                    {onRemoveItem ? <button type="button" disabled={mutationsDisabled}
+                      onClick={event => {
+                        onRemoveItem(item.id)
+                        event.currentTarget.closest("details")?.removeAttribute("open")
+                      }} className="block w-full rounded-md px-2 py-2 text-left text-xs text-danger hover:bg-accentBg disabled:opacity-40">
+                      Remover
+                    </button> : null}
+                  </div>
+                </details>
               </div>
             </div>
           ))}
