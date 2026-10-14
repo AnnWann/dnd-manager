@@ -54,6 +54,7 @@ export function InventoryCompartmentBoard({
   }
   function startDrag(event: DragEvent, id: string) {
     if (!canMove) return
+    event.stopPropagation()
     event.dataTransfer.effectAllowed = "move"
     event.dataTransfer.setData("application/x-inventory-item", id)
     event.dataTransfer.setData("text/plain", id)
@@ -69,6 +70,7 @@ export function InventoryCompartmentBoard({
       if (!destination || !isCompartment(destination) || isInsideCompartment(destination, source, items)) return
     }
     event.preventDefault()
+    event.stopPropagation()
     event.dataTransfer.dropEffect = "move"
     setHoverTarget(id ?? "__root__")
   }
