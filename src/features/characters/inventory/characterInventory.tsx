@@ -8,9 +8,10 @@ import { getEquippedInventoryEntries } from "../../../models/characters/characte
 import { consumeCharacterInventoryItem } from "../../../models/characters/characterConsumables"
 import { getEncumbranceInfo } from "../../../models/characters/characterEncumbrance"
 import { equipInventoryItemWithRules } from "../../../models/characters/characterEquipmentInteractions"
-import { equipInventoryStackWithRules } from "../../../models/characters/characterInventoryStacks"
+import { equipInventoryStackWithRules, unequipPocketStack } from "../../../models/characters/characterInventoryStacks"
 import { toggleInventoryItemAttunement } from "../../../models/characters/characterInventory"
 import { validateInventoryCompartments } from "../../../models/items/itemCompartments"
+import { canItemGoInPocket } from "../../../models/items/itemPocketability"
 import {
   areAllCurrenciesInBagOfHolding,
   setCurrenciesInsideBagOfHolding,
@@ -76,6 +77,7 @@ export function CharacterInventoryTab({
 
   const characterId = character.get("id")
   const items = character.get("inventory") ?? []
+  const pocketItems = character.get("equipment").pockets
   const hasBagOfHolding = items.some(isBagOfHoldingItem)
   const normalizedSearchQuery = normalizeSearchText(searchQuery)
   const encumbrance = getEncumbranceInfo(character)
@@ -179,6 +181,34 @@ export function CharacterInventoryTab({
     updateCharacter(characterId, (current) => toggleInventoryItemAttunement(current, itemId))
   }
 
+  function moveToPocket(itemId: string) {
+    if (mutationsDisabled || pocketItems.length >= 8) return
+    const item = items.find(entry => entry.id === itemId)
+    if (!item || !canItemGoInPocket(item)) return
+    if (authoritative) {
+      runtime?.dispatchInventoryOperation({ type: "character.inventory.item.equip", characterId, itemId, destination: { type: "pocket" } })
+      return
+    }
+    updateCharacter(characterId, current =>
+      equipInventoryStackWithRules(current, itemId, { type: "pocket" }) ??
+      equipInventoryItemWithRules(current, itemId, { type: "pocket" }),
+    )
+  }
+
+  function removeFromPocket(itemId: string) {
+    if (mutationsDisabled) return
+    const index = pocketItems.findIndex(item => item.id === itemId)
+    if (index < 0) return
+    if (authoritative) {
+      runtime?.dispatchEquipmentOperation({ type: "character.equipment.pocket.unequip", characterId, index })
+      return
+    }
+    updateCharacter(characterId, current => {
+      const currentIndex = current.get("equipment").pockets.findIndex(item => item.id === itemId)
+      return currentIndex < 0 ? current : unequipPocketStack(current, currentIndex)
+    })
+  }
+
   function equipItem(destination: Parameters<typeof equipInventoryItemWithRules>[2]) {
     if (mutationsDisabled) return
     if (!equippingItem || !destination) return
@@ -224,6 +254,9 @@ export function CharacterInventoryTab({
         description={`Peso carregado: ${formatKg(encumbrance.weight)} de ${formatKg(encumbrance.carryingCapacity)}.`}
         items={items}
         equippedItems={getEquippedInventoryEntries(character)}
+        pocketItems={pocketItems}
+        onMoveToPocket={moveToPocket}
+        onRemovePocketItem={removeFromPocket}
         onUnequipItem={entry => {
           if (mutationsDisabled) return
           moveEquippedItem(characterId, entry.reference, "inventory")
