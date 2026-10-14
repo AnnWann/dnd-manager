@@ -23,6 +23,8 @@ import {
 } from "../../models/items/Currency"
 import { withShieldDefaults } from "../../models/items/equipment/Shield"
 import type { ItemKind, Itemmable } from "../../models/items/item"
+import { getItemCompartment } from "../../models/items/itemCompartments"
+import { isBagOfHoldingItem } from "../../models/items/item"
 import {
   canItemGoInPocket,
   getDefaultPocketableForKind,
@@ -341,6 +343,77 @@ export function ItemCreationDialog({
                   }
                 />
               </div>
+
+              <section className="grid gap-3 rounded-xl border border-border bg-bg-subtle p-3 md:col-span-3">
+                <div className="text-xs font-semibold text-textH">Tamanho e compartimento</div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1 text-xs text-text">
+                    Volume ocupado por unidade (litros)
+                    <Input type="number" min={0} step="any" value={draft.volumeLiters ?? 1}
+                      onChange={event => patch(current => ({ ...current, volumeLiters: Math.max(0, Number(event.target.value) || 0) }))} />
+                  </label>
+                  <label className="grid gap-1 text-xs text-text">
+                    Slots ocupados pela pilha
+                    <Input type="number" min={0} step="any" value={draft.slotsUsed ?? 1}
+                      onChange={event => patch(current => ({ ...current, slotsUsed: Math.max(0, Number(event.target.value) || 0) }))} />
+                  </label>
+                </div>
+                <p className="text-[11px] leading-5 text-textMuted">Se não definidos, cada unidade ocupa 1 L e cada pilha ocupa 1 slot. O peso continua em kg por unidade.</p>
+                <label className="flex items-center gap-2 text-xs text-textH">
+                  <input type="checkbox" checked={Boolean(getItemCompartment(draft))}
+                    disabled={isBagOfHoldingItem(draft)}
+                    onChange={event => patch(current => ({
+                      ...current,
+                      compartment: event.target.checked
+                        ? { unit: "slots", capacity: 10, maxWeightKg: null }
+                        : undefined,
+                    }))} />
+                  Este item é um compartimento (mochila, bolsa, caixa etc.)
+                </label>
+                {getItemCompartment(draft) ? (
+                  <div className="grid gap-3 rounded-lg border border-border bg-bg p-3 sm:grid-cols-2">
+                    <label className="grid gap-1 text-xs text-text">Unidade da capacidade
+                      <SharedSelect value={getItemCompartment(draft)!.unit}
+                        disabled={isBagOfHoldingItem(draft)}
+                        onChange={event => patch(current => ({
+                          ...current,
+                          compartment: { ...getItemCompartment(current)!, unit: event.target.value as "slots" | "liters" },
+                        }))}>
+                        <option value="slots">Slots</option>
+                        <option value="liters">Litros</option>
+                      </SharedSelect>
+                    </label>
+                    <label className="grid gap-1 text-xs text-text">Capacidade
+                      <Input type="number" min={0} step="any" value={getItemCompartment(draft)!.capacity}
+                        disabled={isBagOfHoldingItem(draft)}
+                        onChange={event => patch(current => ({
+                          ...current,
+                          compartment: { ...getItemCompartment(current)!, capacity: Math.max(0, Number(event.target.value) || 0) },
+                        }))} />
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-textH sm:col-span-2">
+                      <input type="checkbox" checked={getItemCompartment(draft)!.maxWeightKg === null}
+                        disabled={isBagOfHoldingItem(draft)}
+                        onChange={event => patch(current => ({
+                          ...current,
+                          compartment: { ...getItemCompartment(current)!, maxWeightKg: event.target.checked ? null : 20 },
+                        }))} />
+                      Peso máximo ilimitado
+                    </label>
+                    {getItemCompartment(draft)!.maxWeightKg !== null ? (
+                      <label className="grid gap-1 text-xs text-text sm:col-span-2">Peso máximo (kg)
+                        <Input type="number" min={0} step="any" value={getItemCompartment(draft)!.maxWeightKg ?? 0}
+                          disabled={isBagOfHoldingItem(draft)}
+                          onChange={event => patch(current => ({
+                            ...current,
+                            compartment: { ...getItemCompartment(current)!, maxWeightKg: Math.max(0, Number(event.target.value) || 0) },
+                          }))} />
+                      </label>
+                    ) : null}
+                    {isBagOfHoldingItem(draft) ? <p className="text-xs text-textMuted sm:col-span-2">A Bolsa Mágica possui capacidade canônica protegida.</p> : null}
+                  </div>
+                ) : null}
+              </section>
 
               {draft.kind === "currency" ? (
                 <label className="grid min-w-0 gap-2 md:col-span-3">
