@@ -1,3 +1,4 @@
+import type { SessionRuntimeConfigSnapshot } from "../../../../src/shared/session-runtime/sessionRuntimeConfig";
 import { DurableObject } from "cloudflare:workers";
 import {
   applyConditionOperation,
@@ -305,6 +306,7 @@ export class SessionActor extends DurableObject<Env> {
     }
 
     if (request.source.type === "spell") {
+      const spellSource = request.source;
       const spellcasting = creature.spellcasting;
       if (!spellcasting) {
         this.sendError(webSocket, "CREATURE_SPELLCASTING_UNAVAILABLE", "This creature does not have spellcasting configured.");
@@ -312,7 +314,7 @@ export class SessionActor extends DurableObject<Env> {
       }
 
       const configuredSpell = spellcasting.spells.find(
-        (candidate) => candidate.spellIndex === request.source.spellIndex,
+        (candidate) => candidate.spellIndex === spellSource.spellIndex,
       );
       const spell = findRuntimeSpell(runtimeConfig, request.source.spellIndex);
       if (!configuredSpell || !spell) {
@@ -932,7 +934,7 @@ export class SessionActor extends DurableObject<Env> {
         return;
       }
       const supplySettings = normalizeLongRestSupplySettings(
-        runtimeConfig?.longRestSupplies,
+        runtimeConfig?.config.longRestSupplies,
       );
       const useSharedInventory =
         inventory.partyInventoryAccessible !== false;
@@ -1832,14 +1834,15 @@ function resolveServerActionRoll(
   }
 
   if (request.source.type === "ability") {
+    const abilityId = request.source.abilityId;
     const ability = [
       ...(character.getCharacterAbilities() ?? []),
       ...(character.get("sheet").race.naturalAbilities ?? []),
       ...getEquippedItems(character).flatMap(item => item.abilities ?? []),
       ...getCharacterConditions(character).flatMap(condition => condition.grantedAbilities ?? []),
     ].find((candidate) =>
-      candidate.id === request.source.abilityId
-      || candidate.originalAbilityId === request.source.abilityId
+      candidate.id === abilityId
+      || candidate.originalAbilityId === abilityId
     );
     if (!ability) {
       return { ok: false, code: "ABILITY_NOT_FOUND", message: "The requested ability is not available to this character." };
