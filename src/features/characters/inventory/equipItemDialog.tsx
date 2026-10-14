@@ -200,6 +200,7 @@ function naturalSlotLabel(slot: EquipSlot): string {
     weapon: "Empunhar como arma",
     ring: "Usar como anel",
     necklace: "Usar como colar",
+    bodyPart: "Instalar como parte corporal",
   }
 
   return labels[slot]
