@@ -28,13 +28,14 @@ export function mergeItemIntoInventory(
   item: Itemmable,
 ): Itemmable[] {
   const quantity = Math.max(1, Math.trunc(item.quantity ?? 1))
-  const index = inventory.findIndex((entry) => itemsShareStack(entry, item))
+  const unpacked = { ...item, containerId: undefined, insideBagOfHolding: false }
+  const index = inventory.findIndex((entry) => itemsShareStack(entry, unpacked))
 
   if (index < 0) {
     return [
       ...inventory,
       {
-        ...item,
+        ...unpacked,
         quantity,
         heldHands: undefined,
         wieldedTwoHanded: undefined,
@@ -84,6 +85,7 @@ export function equipInventoryStackWithRules(
             pocketable: true,
             heldHands: undefined,
             insideBagOfHolding: false,
+            containerId: undefined,
           },
         ],
       })
