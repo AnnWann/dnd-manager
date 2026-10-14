@@ -204,7 +204,7 @@ export function normalizeStandardItem(item: Itemmable): Itemmable {
   if (!definition.locked) {
     return {
       ...restoreCanonicalSupplyMetadata(item, definition.item),
-      volumeLiters: item.volumeLiters ?? definition.item.volumeLiters,
+      volumeLiters: definition.item.volumeLiters,
       compartment: item.compartment ?? definition.item.compartment,
       compendiumItemId: sourceId,
       itemOrigin: "standard",
@@ -223,7 +223,7 @@ export function normalizeStandardItem(item: Itemmable): Itemmable {
       ...canonical,
       notes: typeof item.notes === "string" ? item.notes : "",
       containerId: item.containerId,
-      volumeLiters: item.volumeLiters ?? canonical.volumeLiters,
+      volumeLiters: canonical.volumeLiters,
       slotsUsed: item.slotsUsed,
       compendiumItemId: sourceId,
       itemOrigin: "standard",
