@@ -53,6 +53,7 @@ export function EquipmentFields({
             ["weapon", "Arma"],
             ["ring", "Anel"],
             ["necklace", "Colar"],
+            ["bodyPart", "Partes Corporais"],
             ["cape", "Capa"],
           ].map(([value, label]) => (
             <button
