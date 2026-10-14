@@ -9,10 +9,7 @@ import { getEncumbranceInfo } from "../../../models/characters/characterEncumbra
 import { equipInventoryItemWithRules } from "../../../models/characters/characterEquipmentInteractions"
 import { equipInventoryStackWithRules } from "../../../models/characters/characterInventoryStacks"
 import { toggleInventoryItemAttunement } from "../../../models/characters/characterInventory"
-import {
-  BAG_OF_HOLDING_CAPACITY_KG,
-  getBagOfHoldingWeightKg,
-} from "../../../models/items/bagOfHolding"
+import { validateInventoryCompartments } from "../../../models/items/itemCompartments"
 import {
   areAllCurrenciesInBagOfHolding,
   setCurrenciesInsideBagOfHolding,
@@ -37,7 +34,6 @@ type Props = {
   ) => void
 }
 
-const BAG_CAPACITY_EPSILON = 0.000001
 
 export function newInventoryItem(): Itemmable {
   return {
@@ -84,7 +80,6 @@ export function CharacterInventoryTab({
   const canTransfer =
     mode === "campaign" &&
     Boolean(transferItem && canTransferFromCharacter?.(characterId))
-  const bagWeight = hasBagOfHolding ? getBagOfHoldingWeightKg(items) : 0
   const hasCurrency = items.some((item) => item.kind === "currency" && (item.quantity ?? 0) > 0)
   const currenciesInsideBagOfHolding = hasBagOfHolding && areAllCurrenciesInBagOfHolding(items)
   const attunedItemIds = items.filter((item) => item.attuned === true).map((item) => item.id)
@@ -92,16 +87,9 @@ export function CharacterInventoryTab({
   const mutationsDisabled = mode === "user" && !isEditing
 
   function wouldExceedBagCapacity(candidateItems: Itemmable[]): boolean {
-    if (!hasBagOfHolding) return false
-    const currentWeight = getBagOfHoldingWeightKg(items)
-    const candidateWeight = getBagOfHoldingWeightKg(candidateItems)
-    if (candidateWeight <= BAG_OF_HOLDING_CAPACITY_KG + BAG_CAPACITY_EPSILON) return false
-    if (candidateWeight <= currentWeight + BAG_CAPACITY_EPSILON) return false
-    const excess = candidateWeight - BAG_OF_HOLDING_CAPACITY_KG
-    setBagLimitMessage(
-      `A Bolsa Mágica suporta no máximo ${formatKg(BAG_OF_HOLDING_CAPACITY_KG)}. ` +
-        `Essa ação deixaria a bolsa com ${formatKg(candidateWeight)}, excedendo o limite em ${formatKg(excess)}.`,
-    )
+    const error = validateInventoryCompartments(candidateItems)
+    if (!error || error === validateInventoryCompartments(items)) return false
+    setBagLimitMessage(error)
     return true
   }
 
@@ -206,7 +194,6 @@ export function CharacterInventoryTab({
     <>
       <div className="mb-4 grid gap-4">
         <CharacterEncumbrancePanel character={character} />
-        {hasBagOfHolding ? <BagOfHoldingCounter weight={bagWeight} /> : null}
       </div>
 
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -288,31 +275,12 @@ export function CharacterInventoryTab({
   )
 }
 
-function BagOfHoldingCounter({ weight }: { weight: number }) {
-  const remaining = Math.max(0, BAG_OF_HOLDING_CAPACITY_KG - weight)
-  const percentage = Math.min(100, Math.max(0, (weight / BAG_OF_HOLDING_CAPACITY_KG) * 100))
-  const isFull = weight >= BAG_OF_HOLDING_CAPACITY_KG - BAG_CAPACITY_EPSILON
-  const isOverCapacity = weight > BAG_OF_HOLDING_CAPACITY_KG + BAG_CAPACITY_EPSILON
-  return (
-    <section className={["rounded-xl border bg-bg p-3 shadow-theme-sm", isOverCapacity ? "border-danger" : "border-border"].join(" ")}>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div><div className="text-sm font-semibold text-textH">Bolsa Mágica</div><div className="mt-1 text-xs leading-5 text-text">Capacidade RAW: {formatKg(BAG_OF_HOLDING_CAPACITY_KG)}.</div></div>
-        <div className="text-left text-xs sm:text-right">
-          <div className={isOverCapacity ? "font-semibold text-danger" : "font-semibold text-textH"}>{formatKg(weight)} / {formatKg(BAG_OF_HOLDING_CAPACITY_KG)}</div>
-          <div className="mt-1 text-textMuted">{isOverCapacity ? `Excedeu em ${formatKg(weight - BAG_OF_HOLDING_CAPACITY_KG)}` : isFull ? "Bolsa cheia" : `Restam ${formatKg(remaining)}`}</div>
-        </div>
-      </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-bg-subtle"><div className={["h-full rounded-full transition-[width]", isOverCapacity ? "bg-danger" : "bg-accent"].join(" ")} style={{ width: `${percentage}%` }} /></div>
-    </section>
-  )
-}
-
 function BagOfHoldingLimitPopup({ message, onClose }: { message: string | null; onClose: () => void }) {
   if (!message) return null
   return (
     <div className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-4">
       <div className="w-full max-w-md rounded-xl border border-border bg-bg-elevated p-4 shadow-theme-lg">
-        <div className="text-sm font-semibold text-textH">Bolsa Mágica cheia</div>
+        <div className="text-sm font-semibold text-textH">Capacidade excedida</div>
         <p className="mt-2 text-sm leading-6 text-text">{message}</p>
         <div className="mt-4 flex justify-end"><Button size="sm" variant="secondary" onClick={onClose}>Entendi</Button></div>
       </div>
