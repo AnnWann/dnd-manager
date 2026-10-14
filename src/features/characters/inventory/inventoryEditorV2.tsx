@@ -9,7 +9,8 @@ import type { ItemKind, Itemmable } from "../../../models/items/item"
 import { isConsumableItemKind } from "../../../models/items/itemConsumption"
 import type { SupplyItem } from "../../../models/items/SupplyItem"
 import { ItemDropdownDetails } from "./itemDropdownDetails"
-import { InventoryCompartmentBoard } from "./InventoryCompartmentBoard"
+import { InventoryGridBoard } from "./InventoryGridBoard"
+import { InventoryItemTile } from "./InventoryItemTile"
 import { canStoreItem, getItemContainerId, isCompartment } from "../../../models/items/itemCompartments"
 import { Select } from "../../../components/ui/Select"
 import type { EquippedInventoryEntry } from "../../../models/characters/characterEquippedInventory"
@@ -259,7 +260,7 @@ export function InventoryEditor({
           ))}
         </div>
 
-        <InventoryCompartmentBoard
+        <InventoryGridBoard
           items={items}
           filteredItems={filteredItems}
           filtered={filter !== "all" || Boolean(normalizedQuery)}
@@ -271,114 +272,22 @@ export function InventoryEditor({
             const moved = verdict.items.find(item => item.id === itemId)
             if (moved) onUpdateItem(itemId, () => moved)
           } : undefined}
-          renderItem={(item) => {
-              const isAttuned = attunedItemIds.includes(item.id)
-              const definition = findStandardDefinitionForItem(item)
-
-              return (
-                <article
-                  key={item.id}
-                  className="rounded-xl border border-border bg-[color:var(--social-bg)] p-3"
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-sm font-medium text-textH">
-                          {item.name || "Item sem nome"}
-                        </span>
-                        {definition ? <ItemBadge label="Compêndio" /> : null}
-                        {definition?.locked ? (
-                          <ItemBadge label="Definição protegida" />
-                        ) : null}
-                        {item.magicItem ? <ItemBadge label="Mágico" /> : null}
-                        {item.requiresAttunement ? (
-                          <ItemBadge label="Requer sintonia" />
-                        ) : null}
-                        {isAttuned ? <ItemBadge label="Sintonizado" /> : null}
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text">
-                        <span>{inventoryItemTypeLabel(item)}</span>
-                        <span>Qtd. {item.quantity ?? 1}</span>
-                        <span>Peso {item.weight ?? 0}</span>
-                        {item.kind === "supply" ? (
-                          <span>{formatSupplySummary(item as SupplyItem)}</span>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => openDetails(item)}
-                      >
-                        Ver detalhes
-                      </Button>
-
-                      {item.magicItem &&
-                      item.requiresAttunement &&
-                      onToggleAttunement ? (
-                        <Button
-                          size="sm"
-                          variant={isAttuned ? "primary" : "secondary"}
-                          disabled={mutationsDisabled}
-                          onClick={() => onToggleAttunement(item.id)}
-                        >
-                          {isAttuned ? "Desfazer sintonia" : "Sintonizar"}
-                        </Button>
-                      ) : null}
-
-                      {isConsumableItemKind(item) && onConsumeItem ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={mutationsDisabled}
-                          onClick={() => onConsumeItem(item.id)}
-                        >
-                          {item.kind === "ammunition"
-                            ? "Consumir munição"
-                            : "Consumir"}
-                        </Button>
-                      ) : null}
-
-                      {onEquipItem ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={mutationsDisabled}
-                          onClick={() => onEquipItem(item.id)}
-                        >
-                          Equipar
-                        </Button>
-                      ) : null}
-
-                      {onTransferItem ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={mutationsDisabled}
-                          onClick={() => onTransferItem(item)}
-                        >
-                          {transferLabel}
-                        </Button>
-                      ) : null}
-
-                      {onRemoveItem ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={mutationsDisabled}
-                          onClick={() => onRemoveItem(item.id)}
-                        >
-                          Remover
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                </article>
-              )
-
-          }}
+          renderItem={(item, actions) => (
+            <InventoryItemTile item={item} actions={actions}
+              isAttuned={attunedItemIds.includes(item.id)}
+              typeLabel={inventoryItemTypeLabel(item)}
+              mutationsDisabled={mutationsDisabled}
+              onDetails={() => openDetails(item)}
+              onToggleAttunement={item.magicItem && item.requiresAttunement && onToggleAttunement
+                ? () => onToggleAttunement(item.id) : undefined}
+              onConsume={isConsumableItemKind(item) && onConsumeItem
+                ? () => onConsumeItem(item.id) : undefined}
+              onEquip={onEquipItem ? () => onEquipItem(item.id) : undefined}
+              onTransfer={onTransferItem ? () => onTransferItem(item) : undefined}
+              transferLabel={transferLabel}
+              onRemove={onRemoveItem ? () => onRemoveItem(item.id) : undefined}
+            />
+          )}
         />
       </CardContent>
 
