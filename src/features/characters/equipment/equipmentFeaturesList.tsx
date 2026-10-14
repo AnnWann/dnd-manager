@@ -46,6 +46,24 @@ export function EquipmentFeaturesList<T extends Equipment>({
     })
   }
 
+  function consumeAbilityCharge(abilityId: string) {
+    if (!character || userMode) return
+    updateCharacter(characterId, current => {
+      const equipped = current.getEquipmentAbilities().find(ability =>
+        ability.sourceItemId === equipment.id && ability.originalAbilityId === abilityId,
+      )
+      if (!equipped?.usage || equipped.usage.reset === "spellSlot") return current
+      const maximum = getAbilityUsageMax(current, equipped.usage)
+      if (equipped.usage.used >= maximum) return current
+      const { source, sourceItemId, sourceItemName, originalAbilityId, ...ability } = equipped
+      return current.updateEquipmentAbility(equipment.id, {
+        ...ability,
+        id: originalAbilityId,
+        usage: { ...equipped.usage, used: Math.min(maximum, equipped.usage.used + 1) },
+      })
+    })
+  }
+
   function updateSpellCharge(spellIndex: string, delta: number) {
     if (userMode) return
 
@@ -170,6 +188,17 @@ export function EquipmentFeaturesList<T extends Equipment>({
                         onClick={() => updateAbilityState(ability.id, "use")}
                       >
                         {(ability.kind ?? "active") === "passive" ? "Acionar" : "Usar"}
+                      </Button>
+                    ) : null}
+
+                    {usage && usage.reset !== "spellSlot" && !canTrigger ? (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={remaining !== undefined && remaining <= 0}
+                        onClick={() => consumeAbilityCharge(ability.id)}
+                      >
+                        Consumir carga
                       </Button>
                     ) : null}
 
