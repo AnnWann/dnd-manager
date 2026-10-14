@@ -49,7 +49,7 @@ export function InventoryGridBoard({
   const compartments = items.filter(isCompartment)
   const active = compartments.find(item => item.id === activeId)
   const currentContainerId = active?.id
-  const canMove = !mutationsDisabled && Boolean(onMoveItem)
+  const canMove = !mutationsDisabled && Boolean(onMoveItem) && compartments.length > 0
   const validSelection = selectedIds.filter(id => items.some(item => item.id === id && item.kind !== "currency"))
   const movingIds = moveDialogIds.filter(id => items.some(item => item.id === id))
 
@@ -210,7 +210,7 @@ export function InventoryGridBoard({
         <span>{error}</span><button type="button" aria-label="Dispensar erro" onClick={() => setError("")}><X className="h-4 w-4" /></button>
       </div> : null}
 
-      <section className="grid gap-2">
+      {compartments.length > 0 ? <section className="grid gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm font-semibold text-textH">
             <FolderOpen className="h-4 w-4 text-accent" />
@@ -240,7 +240,7 @@ export function InventoryGridBoard({
           </div>
           {compartments.map(folder)}
         </div>
-      </section>
+      </section> : null}
 
       <section className="min-w-0 rounded-xl border border-border bg-bg-subtle p-3 sm:p-4"
         onDragOver={event => { if (!currentContainerId && !filtered) accept(event) }}
