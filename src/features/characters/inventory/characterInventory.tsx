@@ -225,6 +225,7 @@ export function CharacterInventoryTab({
         emptyMessage={normalizedSearchQuery ? "Nenhum item corresponde à busca." : "Nenhum item encontrado."}
         mutationsDisabled={mutationsDisabled}
         onAddCompendiumItem={mode === "campaign" ? addCompendiumItem : undefined}
+        onAddItem={mode === "campaign" ? addCompendiumItem : undefined}
         onUpdateItem={updateItem}
         onRemoveItem={removeItem}
         onConsumeItem={mode === "campaign" ? consumeItem : undefined}
