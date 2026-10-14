@@ -132,6 +132,9 @@ export function normalizeCurrencyItem(item: Itemmable): CurrencyItem {
     requiresAttunement: false,
     attuned: false,
     insideBagOfHolding: item.insideBagOfHolding === true,
+    containerId: item.containerId,
+    volumeLiters: item.volumeLiters,
+    slotsUsed: item.slotsUsed,
     heldHands: undefined,
     ...(metadata.version === undefined ? {} : { version: metadata.version }),
     ...(metadata.updatedAt === undefined
@@ -208,7 +211,7 @@ export function getCurrencyTotalWeight(item: CurrencyItem): number {
 }
 
 function getCurrencyStackKey(item: CurrencyItem): string {
-  return `${item.currencyType}:${item.insideBagOfHolding ? "bag" : "carried"}`
+  return `${item.currencyType}:${item.containerId ? "container:" + item.containerId : item.insideBagOfHolding ? "bag" : "carried"}`
 }
 
 function normalizeCurrencyQuantity(value: unknown): number {
