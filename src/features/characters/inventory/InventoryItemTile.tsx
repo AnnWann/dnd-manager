@@ -118,7 +118,7 @@ export function InventoryItemTile(props: Props) {
       {open && typeof document !== "undefined" ? createPortal(
         <div ref={menuRef} role="menu" aria-label={`Ações de ${item.name || "item"}`}
           style={{ top: position.top, left: position.left }}
-          className="fixed z-[10020] max-h-[calc(100dvh-1rem)] min-w-48 overflow-y-auto rounded-xl border border-border bg-bg-elevated p-1.5 shadow-theme-lg">
+          className="fixed z-[2147483000] max-h-[calc(100dvh-1rem)] min-w-48 overflow-y-auto rounded-xl border border-border bg-bg-elevated p-1.5 shadow-theme-lg">
           {commands.map(command => <button type="button" role="menuitem" key={command.label}
             disabled={mutationsDisabled && command.label !== "Ver detalhes"}
             onClick={() => run(command.action)}
