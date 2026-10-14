@@ -1,4 +1,5 @@
 import type { CurrencyItem } from "./Currency"
+import type { ItemCompartment } from "./itemCompartments"
 import type { Armor } from "./equipment/Armor"
 import type { Equipment } from "./equipment/EquipmentSlot"
 import type { ConsumableItem, ThrowableItem } from "./equipment/PocketItem"
@@ -70,6 +71,13 @@ export type Item = {
   attuned?: boolean
 
   insideBagOfHolding?: boolean
+  /** Parent compartment ID; inventories remain flat for interoperability. */
+  containerId?: string
+  compartment?: ItemCompartment
+  /** Liters per item (defaults to 1). */
+  volumeLiters?: number
+  /** Slots occupied by this stack (defaults to 1). */
+  slotsUsed?: number
 
   /** Quantidade de mãos usadas enquanto o item está sendo segurado. */
   heldHands?: 1 | 2
