@@ -183,9 +183,6 @@ export function instantiateMatchingStandardItem(
     containerId: item.containerId,
     volumeLiters: item.volumeLiters,
     slotsUsed: item.slotsUsed,
-    containerId: item.containerId,
-    volumeLiters: item.volumeLiters,
-    slotsUsed: item.slotsUsed,
     attuned: item.attuned === true,
   })
 }
