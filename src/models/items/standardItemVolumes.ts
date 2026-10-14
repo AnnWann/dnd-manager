@@ -184,11 +184,11 @@ export const STANDARD_ITEM_VOLUME_LITERS: Readonly<Record<string, number>> = {
   "dragonchess-set": 4,
   "playing-card-set": 0.15,
   "three-dragon-ante-set": 0.15,
+
+  // Musical instruments
   "bagpipes": 9,
   "drum": 12,
   "dulcimer": 24,
-
-  // Musical instruments
   "flute": 1,
   "lute": 20,
   "lyre": 12,
@@ -196,11 +196,11 @@ export const STANDARD_ITEM_VOLUME_LITERS: Readonly<Record<string, number>> = {
   "pan-flute": 1.5,
   "shawm": 1.5,
   "viol": 16,
+
+  // Foci and holy symbols
   "arcane-crystal": 0.4,
   "arcane-orb": 1.2,
   "arcane-rod": 1.2,
-
-  // Foci and holy symbols
   "arcane-staff": 2.5,
   "arcane-wand": 0.3,
   "druidic-sprig": 0.2,
@@ -210,15 +210,17 @@ export const STANDARD_ITEM_VOLUME_LITERS: Readonly<Record<string, number>> = {
   "holy-amulet": 0.1,
   "holy-emblem": 0.1,
   "holy-reliquary": 1.5,
+
+  // Equipment packs
   "burglars-pack": 45,
   "diplomats-pack": 55,
-
-  // Equipment packs and saddles
   "dungeoneers-pack": 55,
   "entertainers-pack": 50,
   "explorers-pack": 60,
   "priests-pack": 32,
   "scholars-pack": 28,
+
+  // Mounting gear
   "animal-feed": 6,
   "bit-and-bridle": 3,
   "saddlebags": 8,
@@ -259,8 +261,9 @@ export const STANDARD_CONTAINER_SIZES: Readonly<Record<string, StandardContainer
 
 /** Supports both templates and already-owned instances with compendiumItemId. */
 export function getStandardItemVolumeLiters(
-  item: { id: string; compendiumItemId?: string },
+  item: { id: string; compendiumItemId?: string; category?: string },
 ): number | undefined {
+  if (item.category === "bagOfHolding") return STANDARD_ITEM_VOLUME_LITERS["bag-of-holding"]
   const key = item.compendiumItemId ?? item.id
   if (!key.startsWith("compendium-")) return undefined
   return STANDARD_ITEM_VOLUME_LITERS[key.slice("compendium-".length)]
