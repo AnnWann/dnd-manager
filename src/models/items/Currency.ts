@@ -91,6 +91,7 @@ export function createCurrencyItem(
     requiresAttunement: false,
     attuned: false,
     insideBagOfHolding,
+    volumeLiters: 0.002,
     heldHands: undefined,
   }
 }
@@ -133,7 +134,7 @@ export function normalizeCurrencyItem(item: Itemmable): CurrencyItem {
     attuned: false,
     insideBagOfHolding: item.insideBagOfHolding === true,
     containerId: item.containerId,
-    volumeLiters: item.volumeLiters,
+    volumeLiters: item.volumeLiters ?? 0.002,
     slotsUsed: item.slotsUsed,
     heldHands: undefined,
     ...(metadata.version === undefined ? {} : { version: metadata.version }),
