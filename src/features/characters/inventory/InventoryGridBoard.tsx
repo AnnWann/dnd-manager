@@ -199,6 +199,7 @@ export function InventoryGridBoard({
     ? items.filter(item => getItemContainerId(item, items) === currentContainerId && item.kind !== "currency")
     : []
   const nestedFolders = filtered ? [] : activeContents.filter(isCompartment)
+  const storedCurrencies = activeContents.filter(item => item.kind === "currency")
   const displayedItems = visible.filter(item => !isCompartment(item))
   const displayedFilteredFolders = filtered ? visible.filter(isCompartment) : []
   const parentId = active ? getItemContainerId(active, items) : undefined
@@ -264,6 +265,13 @@ export function InventoryGridBoard({
           </div>
           <div className="text-xs text-textMuted">{displayedItems.length + displayedFilteredFolders.length} item(ns)</div>
         </div>
+        {storedCurrencies.length && !filtered ? (
+          <div className="mb-3 rounded-lg border border-border bg-bg px-3 py-2 text-xs text-textMuted">
+            <span className="font-medium text-textH">Moedas guardadas: </span>
+            {storedCurrencies.map(item => `${item.quantity ?? 0}× ${item.name || "moedas"}`).join(" · ")}
+            <span className="ml-1">· Gerencie as quantidades na carteira acima.</span>
+          </div>
+        ) : null}
         {active && !filtered ? <details className="mb-3 rounded-lg border border-border bg-bg p-2">
           <summary className="cursor-pointer text-xs font-medium text-textH">
             Gerenciar este compartimento (editar, transferir ou retirar)
