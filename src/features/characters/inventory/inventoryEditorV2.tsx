@@ -526,21 +526,21 @@ function CurrencyWallet({
                           <option key={container.id} value={container.id}>{container.name}</option>)}
                       </Select>
                     </label> : null}
-                    <button type="button" onClick={event => {
+                    <button type="button" onClick={() => {
                       onViewItem(item)
                       close()
                     }} className="block w-full rounded-md px-2 py-2 text-left text-xs text-textH hover:bg-accentBg">
                       Ver detalhes
                     </button>
                     {onTransferItem ? <button type="button" disabled={mutationsDisabled}
-                      onClick={event => {
+                      onClick={() => {
                         onTransferItem(item)
                         close()
                       }} className="block w-full rounded-md px-2 py-2 text-left text-xs text-textH hover:bg-accentBg disabled:opacity-40">
                       {transferLabel}
                     </button> : null}
                     {onRemoveItem ? <button type="button" disabled={mutationsDisabled}
-                      onClick={event => {
+                      onClick={() => {
                         onRemoveItem(item.id)
                         close()
                       }} className="block w-full rounded-md px-2 py-2 text-left text-xs text-danger hover:bg-accentBg disabled:opacity-40">
