@@ -9,11 +9,14 @@ import type { ItemKind, Itemmable } from "../../../models/items/item"
 import { isConsumableItemKind } from "../../../models/items/itemConsumption"
 import type { SupplyItem } from "../../../models/items/SupplyItem"
 import { ItemDropdownDetails } from "./itemDropdownDetails"
+import { InventoryCompartmentBoard } from "./InventoryCompartmentBoard"
+import { canStoreItem } from "../../../models/items/itemCompartments"
 
 type Props = {
   title: string
   description: string
   items: Itemmable[]
+  searchQuery?: string
   emptyMessage: string
   mutationsDisabled?: boolean
   onAddItem?: (item: Itemmable) => void
@@ -94,6 +97,7 @@ export function InventoryEditor({
   title,
   description,
   items,
+  searchQuery = "",
   emptyMessage,
   mutationsDisabled = false,
   onAddItem,
@@ -116,8 +120,9 @@ export function InventoryEditor({
 
   const currencyItems = items.filter((item) => item.kind === "currency")
   const regularItems = items.filter((item) => item.kind !== "currency")
+  const normalizedQuery = searchQuery.trim().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR")
   const filteredItems = regularItems.filter((item) =>
-    matchesInventoryFilter(item, filter),
+    matchesInventoryFilter(item, filter) && (!normalizedQuery || item.name.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR").includes(normalizedQuery)),
   )
 
   function openDetails(item: Itemmable) {
@@ -190,15 +195,25 @@ export function InventoryEditor({
           ))}
         </div>
 
-        {filteredItems.length ? (
-          <div className="grid gap-3">
-            {filteredItems.map((item, index) => {
+        <InventoryCompartmentBoard
+          items={items}
+          filteredItems={filteredItems}
+          filtered={filter !== "all" || Boolean(normalizedQuery)}
+          mutationsDisabled={mutationsDisabled}
+          emptyMessage={emptyMessage}
+          onMoveItem={onUpdateItem ? (itemId, containerId) => {
+            const verdict = canStoreItem(items, itemId, containerId)
+            if (!verdict.ok) return
+            const moved = verdict.items.find(item => item.id === itemId)
+            if (moved) onUpdateItem(itemId, () => moved)
+          } : undefined}
+          renderItem={(item) => {
               const isAttuned = attunedItemIds.includes(item.id)
               const definition = findStandardDefinitionForItem(item)
 
               return (
                 <article
-                  key={`${item.id}-${index}`}
+                  key={item.id}
                   className="rounded-xl border border-border bg-[color:var(--social-bg)] p-3"
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -273,19 +288,6 @@ export function InventoryEditor({
                         </Button>
                       ) : null}
 
-                      {onToggleBagOfHolding ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={mutationsDisabled}
-                          onClick={() => onToggleBagOfHolding(item.id)}
-                        >
-                          {item.insideBagOfHolding
-                            ? "Retirar da bolsa"
-                            : "Enviar à bolsa"}
-                        </Button>
-                      ) : null}
-
                       {onTransferItem ? (
                         <Button
                           size="sm"
@@ -311,17 +313,9 @@ export function InventoryEditor({
                   </div>
                 </article>
               )
-            })}
-          </div>
-        ) : (
-          <p className="text-sm text-text">
-            {items.length
-              ? regularItems.length
-                ? "Nenhum item encontrado nesse filtro."
-                : "Nenhum item além das moedas."
-              : emptyMessage}
-          </p>
-        )}
+
+          }}
+        />
       </CardContent>
 
       <ItemDetailsDialog
