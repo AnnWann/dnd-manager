@@ -312,6 +312,7 @@ export function ItemCreationWizard({ onCancel, onCreate }: Props) {
                 <div className="mt-3 grid gap-1 text-xs text-textMuted sm:grid-cols-2">
                   <span>Tipo: {selectedItem.kind}</span>
                   <span>Peso: {selectedItem.weight} kg</span>
+                  <span>Volume ocupado: {selectedItem.volumeLiters ?? "não definido"} L/un.</span>
                   <span>Mágico: {selectedItem.magicItem ? "sim" : "não"}</span>
                   <span>Sintonia: {selectedItem.requiresAttunement ? "sim" : "não"}</span>
                 </div>
@@ -356,6 +357,7 @@ export function ItemCreationWizard({ onCancel, onCreate }: Props) {
               ? Math.max(1, Math.trunc(Number(quantity) || 1))
               : 1}
           </div>
+          {!isCustom && selectedItem ? <div><span className="text-textMuted">Volume ocupado:</span> {selectedItem.volumeLiters ?? "não definido"} L por unidade</div> : null}
           <div>
             <span className="text-textMuted">Origem:</span>{" "}
             {isCustom ? "Personalizado" : "Compêndio padrão"}
