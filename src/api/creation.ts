@@ -4,6 +4,7 @@ import type {
   CreationState,
 } from "../shared/creation/creation.types"
 import { apiClient } from "./api-client"
+import { notifySessionContentChanged } from "../lib/sessionEvents"
 
 type CreationSnapshotRequest = {
   promise: Promise<CreationSnapshot>
@@ -113,5 +114,6 @@ export async function saveCreationSnapshot(
   )
 
   primeCreationSnapshot(campaignId, response.data)
+  notifySessionContentChanged()
   return response.data
 }

@@ -236,11 +236,17 @@ export function CampaignLayout() {
             ? preferredActiveId
             : characters[0]?.id ?? ""
 
+          // Local session state may be older than the persisted Creation
+          // catalog. Always merge the server's spells, even on a repeat visit
+          // to this session, while retaining legacy local-only entries.
           const spellMap = new Map(
-            (stateBelongsToThisSession ? previous.spells ?? [] : importedSpells).map(
+            (stateBelongsToThisSession ? previous.spells ?? [] : []).map(
               (spell) => [spell.index, spell],
             ),
           )
+          for (const spell of importedSpells) {
+            spellMap.set(spell.index, spell)
+          }
           for (const spell of approvedSpells) {
             spellMap.set(spell.index, spell)
           }
