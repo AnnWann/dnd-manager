@@ -5,6 +5,7 @@ import {
   normalizeCurrencyItem,
 } from "../../models/items/Currency"
 import type { Itemmable } from "../../models/items/item"
+import { BAG_OF_HOLDING_COMPARTMENT } from "../../models/items/itemCompartments"
 import type { SupplyItem } from "../../models/items/SupplyItem"
 import {
   BASIC_ITEM_COMPENDIUM,
@@ -30,6 +31,7 @@ export const BAG_OF_HOLDING_COMPENDIUM_ITEM: Itemmable = {
   pocketable: false,
   kind: "gear",
   category: "bagOfHolding",
+  compartment: BAG_OF_HOLDING_COMPARTMENT,
   equippable: false,
   magicItem: true,
   requiresAttunement: false,
