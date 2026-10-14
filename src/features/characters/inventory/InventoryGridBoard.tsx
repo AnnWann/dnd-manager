@@ -35,7 +35,7 @@ function format(value: number): string {
   return value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })
 }
 
-export function InventoryCompartmentBoard({
+export function InventoryGridBoard({
   items, filteredItems, filtered, mutationsDisabled = false,
   emptyMessage, renderItem, onMoveItem,
 }: Props) {
