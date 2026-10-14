@@ -6,7 +6,7 @@ import { toggleInventoryItemAttunement } from "../../../../../src/models/charact
 import { removeEquippedItem, type EquippedItemReference } from "../../../../../src/models/characters/characterEquippedItemMovement";
 import { getCharacterConditions, withCharacterConditions } from "../../../../../src/models/characters/characterConditionStorage";
 import { getCurrentMaxHp } from "../../../../../src/models/characters/characterHp";
-import { releaseCompartmentContents, validateInventoryCompartments } from "../../../../../src/models/items/itemCompartments";
+import { getItemContainerId, isCompartment, isInsideCompartment, releaseCompartmentContents, validateInventoryCompartments } from "../../../../../src/models/items/itemCompartments";
 import { areAllCurrenciesInBagOfHolding, setCurrenciesInsideBagOfHolding } from "../../../../../src/models/items/Currency";
 import type { Itemmable } from "../../../../../src/models/items/item";
 import { normalizeItemText } from "../../../../../src/lib/textNormalization";
@@ -458,8 +458,30 @@ function transferInventoryItem(
   const requestedQuantity = Math.max(1, Math.trunc(Number(request.quantity) || availableQuantity));
   const movedQuantity = Math.min(availableQuantity, requestedQuantity);
 
-  if (movedQuantity >= availableQuantity) {
-    sourceInventory.splice(itemIndex, 1);
+  const completeTransfer = movedQuantity >= availableQuantity;
+  const descendants = completeTransfer && isCompartment(sourceItem)
+    ? sourceInventory.filter(item => isInsideCompartment(item, sourceItem.id, sourceInventory))
+    : [];
+  const transferIds = new Map<string, string>([
+    [sourceItem.id, request.destinationItemId ?? crypto.randomUUID()],
+    ...descendants.map(item => [item.id, crypto.randomUUID()] as [string, string]),
+  ]);
+  const descendantItems = descendants.map(item => {
+    const parent = getItemContainerId(item, sourceInventory);
+    return normalizeItemText({
+      ...item,
+      id: transferIds.get(item.id)!,
+      containerId: parent ? transferIds.get(parent) : undefined,
+      insideBagOfHolding: Boolean(parent && sourceInventory.find(entry => entry.id === parent && entry.category === "bagOfHolding")),
+      heldHands: undefined,
+    });
+  });
+
+  if (completeTransfer) {
+    const leavingIds = new Set([sourceItem.id, ...descendants.map(item => item.id)]);
+    for (let index = sourceInventory.length - 1; index >= 0; index--) {
+      if (leavingIds.has(sourceInventory[index].id)) sourceInventory.splice(index, 1);
+    }
   } else {
     sourceInventory[itemIndex] = normalizeItemText({
       ...sourceItem,
@@ -474,13 +496,17 @@ function transferInventoryItem(
 
   const movedItem = normalizeItemText({
     ...sourceItem,
-    id: request.destinationItemId ?? crypto.randomUUID(),
+    id: transferIds.get(sourceItem.id)!,
     quantity: movedQuantity,
     heldHands: undefined,
     wieldedTwoHanded: undefined,
+    containerId: destinationKeepsCurrencyInBag
+      ? destinationInventory.find(entry => entry.category === "bagOfHolding")?.id
+      : undefined,
     insideBagOfHolding: destinationKeepsCurrencyInBag,
   });
   addOrMergeStack(destinationInventory, movedItem);
+  destinationInventory.push(...descendantItems);
 
   const changedCharacters = new Set<string>();
   for (const [characterId, nextInventory] of inventoryByCharacterId) {
@@ -526,12 +552,15 @@ function addOrMergeStack(inventory: Itemmable[], movedItem: Itemmable): void {
   inventory[existingIndex] = normalizeItemText({
     ...existing,
     quantity: Math.max(0, Number(existing.quantity) || 0) + Math.max(0, Number(movedItem.quantity) || 0),
-    insideBagOfHolding: movedItem.kind === "currency" ? movedItem.insideBagOfHolding === true : false,
+    insideBagOfHolding: movedItem.insideBagOfHolding === true,
+    containerId: movedItem.containerId,
   });
 }
 
 function areItemsStackCompatible(first: Itemmable, second: Itemmable): boolean {
   if (first.kind !== second.kind) return false;
+  if (isCompartment(first) || isCompartment(second)) return false;
+  if (first.containerId !== second.containerId) return false;
   if (first.kind === "currency" && first.insideBagOfHolding !== second.insideBagOfHolding) return false;
   if (first.name.trim().toLocaleLowerCase("pt-BR") !== second.name.trim().toLocaleLowerCase("pt-BR")) return false;
   return stableStringify(stackComparableItem(first)) === stableStringify(stackComparableItem(second));
