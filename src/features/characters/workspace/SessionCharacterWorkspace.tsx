@@ -700,6 +700,7 @@ function collectEditableEquipmentItems(character: CharacterTemplate): Map<string
   for (const item of equipment.heldItems ?? []) add(`held:${item.id}`, { type: "held-item", itemId: item.id }, item)
   for (const item of equipment.rings) add(`ring:${item.id}`, { type: "ring", itemId: item.id }, item)
   for (const item of equipment.necklaces ?? []) add(`necklace:${item.id}`, { type: "necklace", itemId: item.id }, item)
+  for (const item of equipment.bodyParts ?? []) add(`body-part:${item.id}`, { type: "body-part", itemId: item.id }, item)
   return entries
 }
 
