@@ -180,6 +180,12 @@ export function instantiateMatchingStandardItem(
     name: definition.locked ? instantiated.name : item.name || instantiated.name,
     notes: item.notes,
     insideBagOfHolding: item.insideBagOfHolding === true,
+    containerId: item.containerId,
+    volumeLiters: item.volumeLiters,
+    slotsUsed: item.slotsUsed,
+    containerId: item.containerId,
+    volumeLiters: item.volumeLiters,
+    slotsUsed: item.slotsUsed,
     attuned: item.attuned === true,
   })
 }
@@ -214,6 +220,9 @@ export function normalizeStandardItem(item: Itemmable): Itemmable {
     return {
       ...canonical,
       notes: typeof item.notes === "string" ? item.notes : "",
+      containerId: item.containerId,
+      volumeLiters: item.volumeLiters,
+      slotsUsed: item.slotsUsed,
       compendiumItemId: sourceId,
       itemOrigin: "standard",
     }
@@ -226,6 +235,9 @@ export function normalizeStandardItem(item: Itemmable): Itemmable {
       notes: typeof item.notes === "string" ? item.notes : "",
       quantity: 1,
       insideBagOfHolding: false,
+      containerId: item.containerId,
+      volumeLiters: item.volumeLiters,
+      slotsUsed: item.slotsUsed,
       compendiumItemId: sourceId,
       itemOrigin: "standard",
     }
