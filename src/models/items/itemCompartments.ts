@@ -64,10 +64,41 @@ export function getCompartmentContents(items: Itemmable[], containerId: string):
 }
 
 /** A stack takes one slot by default; liters are per item, not per stack. */
-export function getItemOccupiedSize(item: Itemmable, unit: CompartmentSizeUnit): number {
+export function getItemOccupiedSize(
+  item: Itemmable,
+  unit: CompartmentSizeUnit,
+  inventory?: Itemmable[],
+): number {
   if (unit === "slots") return Math.max(0, item.slotsUsed ?? 1)
-  return Math.max(0, item.volumeLiters ?? getStandardItemVolumeLiters(item) ?? 1)
+  return getPackedVolumeLiters(item, inventory, new Set())
+}
+
+/**
+ * The contents of an ordinary bag occupy space in an outer bag too. Rigid
+ * containers already include their interior in their exterior dimensions,
+ * whereas flexible bags expand around their contents. An extradimensional
+ * Bag of Holding only consumes its own exterior volume.
+ */
+function getPackedVolumeLiters(
+  item: Itemmable,
+  inventory: Itemmable[] | undefined,
+  visited: Set<string>,
+): number {
+  const ownVolume = Math.max(0, item.volumeLiters ?? getStandardItemVolumeLiters(item) ?? 1)
     * Math.max(0, item.quantity ?? 1)
+  const container = getItemCompartment(item)
+  if (!inventory || !container || container.extradimensional || visited.has(item.id)) return ownVolume
+  const nextVisited = new Set(visited)
+  nextVisited.add(item.id)
+  const contentVolume = getCompartmentContents(inventory, item.id)
+    .reduce((sum, child) => sum + getPackedVolumeLiters(child, inventory, nextVisited), 0)
+  const source = item.compendiumItemId ?? item.id
+  const rigid = [
+    "barrel", "basket", "bucket", "chest", "glass-bottle",
+    "flask", "jug", "iron-pot", "vial", "crossbow-bolt-case",
+    "map-case", "quiver",
+  ].some(id => source === `compendium-${id}`)
+  return rigid ? Math.max(ownVolume, contentVolume) : ownVolume + contentVolume
 }
 
 export function getCompartmentUsage(items: Itemmable[], container: Itemmable): {
@@ -79,7 +110,7 @@ export function getCompartmentUsage(items: Itemmable[], container: Itemmable): {
   if (!config) return { size: 0, weightKg: 0, items: 0 }
   const children = getCompartmentContents(items, container.id)
   return {
-    size: children.reduce((sum, item) => sum + getItemOccupiedSize(item, config.unit), 0),
+    size: children.reduce((sum, item) => sum + getItemOccupiedSize(item, config.unit, items), 0),
     weightKg: children.reduce((sum, item) => sum + getPhysicalItemWeight(item, items, new Set([container.id])), 0),
     items: children.length,
   }
