@@ -80,9 +80,6 @@ export function CharacterInventoryTab({
   const items = character.get("inventory") ?? []
   const hasBagOfHolding = items.some(isBagOfHoldingItem)
   const normalizedSearchQuery = normalizeSearchText(searchQuery)
-  const visibleItems = normalizedSearchQuery
-    ? items.filter((item) => normalizeSearchText(item.name || "Item sem nome").includes(normalizedSearchQuery))
-    : items
   const encumbrance = getEncumbranceInfo(character)
   const canTransfer =
     mode === "campaign" &&
@@ -236,7 +233,8 @@ export function CharacterInventoryTab({
       <InventoryEditor
         title={`Inventário pessoal: ${character.get("name")}`}
         description={`Peso carregado: ${formatKg(encumbrance.weight)} de ${formatKg(encumbrance.carryingCapacity)}.`}
-        items={visibleItems}
+        items={items}
+        searchQuery={searchQuery}
         emptyMessage={normalizedSearchQuery ? "Nenhum item corresponde à busca." : "Nenhum item encontrado."}
         mutationsDisabled={mutationsDisabled}
         onAddCompendiumItem={mode === "campaign" ? addCompendiumItem : undefined}
