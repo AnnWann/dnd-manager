@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { Ellipsis, Package, Sword, FlaskConical, Shield, Backpack } from "lucide-react"
 import type { Itemmable } from "../../../models/items/item"
 import type { InventoryTileActions } from "./InventoryGridBoard"
@@ -24,6 +25,56 @@ export function InventoryItemTile(props: Props) {
   const { item, actions, isAttuned, typeLabel, mutationsDisabled, equipped = false, location, onDetails,
     onToggleAttunement, onConsume, onEquip, onTransfer, transferLabel, onRemove } = props
   const [open, setOpen] = useState(false)
+  const [position, setPosition] = useState({ top: 0, left: 0 })
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    if (!open) return
+
+    function reposition() {
+      const trigger = triggerRef.current
+      if (!trigger) return
+      const rect = trigger.getBoundingClientRect()
+      const menuWidth = menuRef.current?.offsetWidth ?? 192
+      const menuHeight = menuRef.current?.offsetHeight ?? 240
+      const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8))
+      const below = rect.bottom + 4
+      const above = rect.top - menuHeight - 4
+      const top = below + menuHeight <= window.innerHeight - 8 || below <= 8
+        ? below
+        : above >= 8 ? above : Math.max(8, window.innerHeight - menuHeight - 8)
+      setPosition(previous => previous.top === top && previous.left === left ? previous : { top, left })
+    }
+
+    reposition()
+    window.addEventListener("resize", reposition)
+    window.addEventListener("scroll", reposition, true)
+    return () => {
+      window.removeEventListener("resize", reposition)
+      window.removeEventListener("scroll", reposition, true)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node
+      if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false)
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return
+      setOpen(false)
+      triggerRef.current?.focus()
+    }
+    document.addEventListener("pointerdown", onPointerDown)
+    document.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown)
+      document.removeEventListener("keydown", onKeyDown)
+    }
+  }, [open])
+
   function run(action: () => void) { setOpen(false); action() }
   const commands: Array<{ label: string; action: () => void; destructive?: boolean }> = [
     { label: "Ver detalhes", action: onDetails },
@@ -49,23 +100,11 @@ export function InventoryItemTile(props: Props) {
           className="min-w-0 flex-1 break-words text-left text-sm font-medium leading-5 text-textH hover:underline">
           {item.name || "Item sem nome"}
         </button>
-        <div className="relative shrink-0" onBlur={event => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node)) setOpen(false)
-        }}>
-          <button type="button" aria-label={`Ações de ${item.name || "item"}`} aria-expanded={open}
-            aria-haspopup="menu" onClick={() => setOpen(!open)}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-textMuted hover:bg-bg">
-            <Ellipsis className="h-4 w-4" />
-          </button>
-          {open ? <div role="menu" className="absolute right-0 top-8 z-30 min-w-44 rounded-xl border border-border bg-bg-elevated p-1.5 shadow-theme-lg">
-            {commands.map(command => <button type="button" role="menuitem" key={command.label}
-              disabled={mutationsDisabled && command.label !== "Ver detalhes"}
-              onClick={() => run(command.action)}
-              className={`block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-accentBg disabled:opacity-40 ${command.destructive ? "text-danger" : "text-textH"}`}>
-              {command.label}
-            </button>)}
-          </div> : null}
-        </div>
+        <button ref={triggerRef} type="button" aria-label={`Ações de ${item.name || "item"}`}
+          aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(!open)}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-textMuted hover:bg-bg">
+          <Ellipsis className="h-4 w-4" />
+        </button>
       </div>
       <div className="mt-auto min-w-0">
         <div className="truncate text-[11px] text-textMuted">{location || typeLabel}</div>
@@ -76,6 +115,19 @@ export function InventoryItemTile(props: Props) {
           {isAttuned ? <span className="rounded bg-accentBg px-1.5 py-0.5 text-[10px] text-textH">Sintonizado</span> : null}
         </div>
       </div>
+      {open && typeof document !== "undefined" ? createPortal(
+        <div ref={menuRef} role="menu" aria-label={`Ações de ${item.name || "item"}`}
+          style={{ top: position.top, left: position.left }}
+          className="fixed z-[10020] max-h-[calc(100dvh-1rem)] min-w-48 overflow-y-auto rounded-xl border border-border bg-bg-elevated p-1.5 shadow-theme-lg">
+          {commands.map(command => <button type="button" role="menuitem" key={command.label}
+            disabled={mutationsDisabled && command.label !== "Ver detalhes"}
+            onClick={() => run(command.action)}
+            className={`block w-full rounded-lg px-3 py-2 text-left text-xs hover:bg-accentBg disabled:opacity-40 ${command.destructive ? "text-danger" : "text-textH"}`}>
+            {command.label}
+          </button>)}
+        </div>,
+        document.body,
+      ) : null}
     </article>
   )
 }
