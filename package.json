@@ -18,7 +18,7 @@
     "check:vercel-functions": "node scripts/check-vercel-functions.mjs",
     "check:native-selects": "node scripts/check-native-selects.mjs",
     "check:compendium-volumes": "node scripts/check-compendium-volumes.mjs",
-    "build": "npm run check:compendium-volumes && npm run check:user-workspace-boundaries && npm run check:vercel-functions && npm run check:native-selects && tsc -b && vite build",
+    "build": "npm install --prefix session-server && npm run typecheck:session-server && npm run check:compendium-volumes && npm run check:user-workspace-boundaries && npm run check:vercel-functions && npm run check:native-selects && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "db:migrate": "node scripts/migrate-relational.mjs",
