@@ -9,6 +9,8 @@ type Props = {
   isAttuned: boolean
   typeLabel: string
   mutationsDisabled: boolean
+  equipped?: boolean
+  location?: string
   onDetails: () => void
   onToggleAttunement?: () => void
   onConsume?: () => void
@@ -19,7 +21,7 @@ type Props = {
 }
 
 export function InventoryItemTile(props: Props) {
-  const { item, actions, isAttuned, typeLabel, mutationsDisabled, onDetails,
+  const { item, actions, isAttuned, typeLabel, mutationsDisabled, equipped = false, location, onDetails,
     onToggleAttunement, onConsume, onEquip, onTransfer, transferLabel, onRemove } = props
   const [open, setOpen] = useState(false)
   function run(action: () => void) { setOpen(false); action() }
@@ -37,11 +39,11 @@ export function InventoryItemTile(props: Props) {
     : item.kind === "supply" || item.kind === "consumable" ? FlaskConical
     : item.kind === "pack" ? Backpack : Package
   return (
-    <article className={`group relative flex min-h-[108px] min-w-0 flex-col gap-2 rounded-xl border p-3 transition-colors hover:border-accentBorder ${actions.selected ? "border-accentBorder bg-accentBg" : "border-border bg-bg-elevated"}`}>
+    <article className={`group relative flex min-h-[108px] min-w-0 flex-col gap-2 rounded-xl border p-3 transition-colors hover:border-accentBorder ${actions.selected || equipped ? "border-accentBorder bg-accentBg" : "border-border bg-bg-elevated"}`}>
       <div className="flex min-w-0 items-start gap-2">
-        <input aria-label={`Selecionar ${item.name || "item"}`} type="checkbox" checked={actions.selected}
+        {actions.canMove ? <input aria-label={`Selecionar ${item.name || "item"}`} type="checkbox" checked={actions.selected}
           onChange={actions.toggleSelected} disabled={!actions.canMove}
-          className="mt-1 h-4 w-4 shrink-0 cursor-pointer opacity-60 group-hover:opacity-100" />
+          className="mt-1 h-4 w-4 shrink-0 cursor-pointer opacity-60 group-hover:opacity-100" /> : null}
         <ItemIcon className="mt-0.5 h-5 w-5 shrink-0 text-textMuted" />
         <button type="button" onClick={onDetails} title={item.name}
           className="min-w-0 flex-1 break-words text-left text-sm font-medium leading-5 text-textH hover:underline">
@@ -66,9 +68,10 @@ export function InventoryItemTile(props: Props) {
         </div>
       </div>
       <div className="mt-auto min-w-0">
-        <div className="truncate text-[11px] text-textMuted">{typeLabel}</div>
+        <div className="truncate text-[11px] text-textMuted">{location || typeLabel}</div>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-textMuted">
           <span>×{item.quantity ?? 1}</span><span>{item.weight ?? 0} kg/un.</span>
+          {equipped ? <span className="rounded border border-accentBorder bg-bg px-1.5 py-0.5 text-[10px] font-semibold text-textH">Equipado</span> : null}
           {item.magicItem ? <span className="rounded bg-accentBg px-1.5 py-0.5 text-[10px] text-textH">Mágico</span> : null}
           {isAttuned ? <span className="rounded bg-accentBg px-1.5 py-0.5 text-[10px] text-textH">Sintonizado</span> : null}
         </div>
