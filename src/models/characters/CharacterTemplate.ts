@@ -287,6 +287,7 @@ export class CharacterTemplate {
         ...(props.equipment ?? {}),
         rings: props.equipment?.rings ?? [],
         necklaces: props.equipment?.necklaces ?? [],
+        bodyParts: props.equipment?.bodyParts ?? [],
         weapons: props.equipment?.weapons ?? [],
         heldItems: props.equipment?.heldItems ?? [],
         pockets: props.equipment?.pockets ?? [],
