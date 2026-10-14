@@ -559,9 +559,11 @@ export function getEquippedItems(character: CharacterTemplate): Equipment[] {
 
   return [
     equipment.armor,
+    equipment.shield,
     equipment.boots,
     equipment.gloves,
     equipment.helmet,
+    equipment.cape,
     ...(equipment.necklaces ?? []),
     ...(equipment.bodyParts ?? []),
     ...equipment.rings,
