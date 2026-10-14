@@ -117,6 +117,7 @@ export function InventoryEditor({
   const [creatingItem, setCreatingItem] = useState(false)
   const [viewingItem, setViewingItem] = useState<Itemmable | null>(null)
   const [editingItem, setEditingItem] = useState<Itemmable | null>(null)
+  const [newCompartment, setNewCompartment] = useState<Itemmable | null>(null)
 
   const currencyItems = items.filter((item) => item.kind === "currency")
   const regularItems = items.filter((item) => item.kind !== "currency")
@@ -148,15 +149,21 @@ export function InventoryEditor({
             </div>
           </div>
           {onAddItem ? (
-            <Button
-              className="w-full sm:w-auto"
-              size="sm"
-              variant="primary"
-              disabled={mutationsDisabled}
-              onClick={() => setCreatingItem(true)}
-            >
-              + Adicionar
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button className="w-full sm:w-auto" size="sm" variant="secondary"
+                disabled={mutationsDisabled}
+                onClick={() => setNewCompartment({
+                  id: crypto.randomUUID(), name: "Mochila", desc: "", notes: "",
+                  quantity: 1, weight: 1, kind: "pack", pocketable: false,
+                  compartment: { unit: "slots", capacity: 10, maxWeightKg: 20 },
+                })}>
+                + Compartimento
+              </Button>
+              <Button className="w-full sm:w-auto" size="sm" variant="primary"
+                disabled={mutationsDisabled} onClick={() => setCreatingItem(true)}>
+                + Adicionar
+              </Button>
+            </div>
           ) : null}
         </div>
       </CardHeader>
@@ -339,6 +346,18 @@ export function InventoryEditor({
           if (mutationsDisabled) return
           onAddItem?.(item)
           setCreatingItem(false)
+        }}
+      />
+
+      <ItemCreationDialog
+        open={!mutationsDisabled && newCompartment !== null}
+        title="Novo compartimento"
+        saveLabel="Criar compartimento"
+        item={newCompartment}
+        onClose={() => setNewCompartment(null)}
+        onSave={item => {
+          onAddItem?.(item)
+          setNewCompartment(null)
         }}
       />
 
