@@ -1,3 +1,4 @@
+import { Ellipsis } from "lucide-react"
 import { useState } from "react"
 
 import { Button } from "../../../components/ui/Button"
@@ -500,43 +501,55 @@ function CurrencyWallet({
                   }
                 />
               </label>
-              {onMoveItem ? <label className="mt-2 grid gap-1 text-[11px] text-textMuted">Guardar moedas em
-                <Select value={getItemContainerId(item, allItems) ?? ""}
-                  disabled={mutationsDisabled}
-                  onChange={event => onMoveItem(item.id, event.target.value || undefined)}>
-                  <option value="">Fora de compartimentos</option>
-                  {allItems.filter(isCompartment).map(container =>
-                    <option key={container.id} value={container.id}>{container.name}</option>)}
-                </Select>
-              </label> : null}
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => onViewItem(item)}
-                >
-                  Ver detalhes
-                </Button>
-                {onTransferItem ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={mutationsDisabled}
-                    onClick={() => onTransferItem(item)}
-                  >
-                    {transferLabel}
-                  </Button>
-                ) : null}
-                {onRemoveItem ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={mutationsDisabled}
-                    onClick={() => onRemoveItem(item.id)}
-                  >
-                    Remover
-                  </Button>
-                ) : null}
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-[11px] text-textMuted">
+                  {getItemContainerId(item, allItems)
+                    ? `Em: ${allItems.find(entry => entry.id === getItemContainerId(item, allItems))?.name ?? "Compartimento"}`
+                    : "Fora de compartimentos"}
+                </span>
+                <details className="relative shrink-0" onBlur={event => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node)) event.currentTarget.open = false
+                }}>
+                  <summary aria-label={`Ações de ${item.name || "moedas"}`}
+                    className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-md text-textMuted hover:bg-bg-subtle [&::-webkit-details-marker]:hidden">
+                    <Ellipsis className="h-4 w-4" />
+                  </summary>
+                  <div className="absolute bottom-9 right-0 z-30 min-w-48 rounded-xl border border-border bg-bg-elevated p-2 shadow-theme-lg">
+                    {onMoveItem ? <label className="mb-2 grid gap-1 text-[11px] text-textMuted">
+                      Mover para
+                      <Select value={getItemContainerId(item, allItems) ?? ""}
+                        disabled={mutationsDisabled}
+                        onChange={event => {
+                          onMoveItem(item.id, event.target.value || undefined)
+                          event.currentTarget.closest("details")?.removeAttribute("open")
+                        }}>
+                        <option value="">Fora de compartimentos</option>
+                        {allItems.filter(isCompartment).map(container =>
+                          <option key={container.id} value={container.id}>{container.name}</option>)}
+                      </Select>
+                    </label> : null}
+                    <button type="button" onClick={event => {
+                      onViewItem(item)
+                      event.currentTarget.closest("details")?.removeAttribute("open")
+                    }} className="block w-full rounded-md px-2 py-2 text-left text-xs text-textH hover:bg-accentBg">
+                      Ver detalhes
+                    </button>
+                    {onTransferItem ? <button type="button" disabled={mutationsDisabled}
+                      onClick={event => {
+                        onTransferItem(item)
+                        event.currentTarget.closest("details")?.removeAttribute("open")
+                      }} className="block w-full rounded-md px-2 py-2 text-left text-xs text-textH hover:bg-accentBg disabled:opacity-40">
+                      {transferLabel}
+                    </button> : null}
+                    {onRemoveItem ? <button type="button" disabled={mutationsDisabled}
+                      onClick={event => {
+                        onRemoveItem(item.id)
+                        event.currentTarget.closest("details")?.removeAttribute("open")
+                      }} className="block w-full rounded-md px-2 py-2 text-left text-xs text-danger hover:bg-accentBg disabled:opacity-40">
+                      Remover
+                    </button> : null}
+                  </div>
+                </details>
               </div>
             </div>
           ))}
