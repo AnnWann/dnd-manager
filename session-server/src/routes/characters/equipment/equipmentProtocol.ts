@@ -4,7 +4,8 @@ export type SessionEquipmentReference =
   | { type: "held-item"; itemId: string }
   | { type: "slot"; slot: "armor" | "helmet" | "gloves" | "boots" | "cape" }
   | { type: "ring"; itemId: string }
-  | { type: "necklace"; itemId: string };
+  | { type: "necklace"; itemId: string }
+  | { type: "body-part"; itemId: string };
 
 export type SessionEquipmentOperation =
   | {

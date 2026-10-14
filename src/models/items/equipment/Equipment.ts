@@ -13,6 +13,8 @@ export type CharacterEquipment = {
   shield?: Equipment
   rings: Equipment[]
   necklaces?: Equipment[]
+  /** Próteses, olhos e outras partes corporais, sem limite de slots. */
+  bodyParts?: Equipment[]
 
   // Armas realmente empunhadas.
   weapons: Weapon[]

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom"
 import { Button } from "../../../components/ui/Button"
 import { Input } from "../../../components/ui/Input"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { getEquippedInventoryEntries } from "../../../models/characters/characterEquippedInventory"
 import { consumeCharacterInventoryItem } from "../../../models/characters/characterConsumables"
 import { getEncumbranceInfo } from "../../../models/characters/characterEncumbrance"
 import { equipInventoryItemWithRules } from "../../../models/characters/characterEquipmentInteractions"
@@ -62,6 +63,7 @@ export function CharacterInventoryTab({
     isEditing = false,
     transferCharacters = [],
     transferItem,
+    moveEquippedItem,
     canTransferFromCharacter,
     canViewCharacterDetails,
   } = useCharacterWorkspace()
@@ -221,6 +223,11 @@ export function CharacterInventoryTab({
         title={`Inventário pessoal: ${character.get("name")}`}
         description={`Peso carregado: ${formatKg(encumbrance.weight)} de ${formatKg(encumbrance.carryingCapacity)}.`}
         items={items}
+        equippedItems={getEquippedInventoryEntries(character)}
+        onUnequipItem={entry => {
+          if (mutationsDisabled) return
+          moveEquippedItem(characterId, entry.reference, "inventory")
+        }}
         searchQuery={searchQuery}
         emptyMessage={normalizedSearchQuery ? "Nenhum item corresponde à busca." : "Nenhum item encontrado."}
         mutationsDisabled={mutationsDisabled}

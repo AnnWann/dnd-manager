@@ -21,7 +21,7 @@ import {
 
 type SingleSlot = Exclude<
   keyof CharacterEquipment,
-  "weapons" | "rings" | "necklaces" | "pockets" | "heldItems"
+  "weapons" | "rings" | "necklaces" | "bodyParts" | "pockets" | "heldItems"
 >
 
 function toWeapon(item: Itemmable): Weapon {
@@ -95,6 +95,7 @@ export function getWeight(character: CharacterTemplate): number {
     (equipment.helmet?.weight ?? 0) * (equipment.helmet?.quantity ?? 1) +
     ringsWeight +
     necklacesWeight +
+    (equipment.bodyParts ?? []).reduce((total, item) => total + (item.weight ?? 0) * (item.quantity ?? 1), 0) +
     weaponsWeight +
     heldItemsWeight +
     pocketsWeight
@@ -562,6 +563,7 @@ export function getEquippedItems(character: CharacterTemplate): Equipment[] {
     equipment.gloves,
     equipment.helmet,
     ...(equipment.necklaces ?? []),
+    ...(equipment.bodyParts ?? []),
     ...equipment.rings,
     ...equipment.weapons,
     // Anything actively held can carry equipment-style bonuses, abilities or

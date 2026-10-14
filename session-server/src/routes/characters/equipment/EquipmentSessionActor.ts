@@ -195,6 +195,9 @@ function updateEquippedItem(
   if (reference.type === "ring") {
     return character.with("equipment", { ...equipment, rings: equipment.rings.map((entry) => entry.id === reference.itemId ? item as any : entry) });
   }
+  if (reference.type === "body-part") {
+    return character.with("equipment", { ...equipment, bodyParts: (equipment.bodyParts ?? []).map(entry => entry.id === reference.itemId ? item as any : entry) });
+  }
   return character.with("equipment", { ...equipment, necklaces: (equipment.necklaces ?? []).map((entry) => entry.id === reference.itemId ? item as any : entry) });
 }
 

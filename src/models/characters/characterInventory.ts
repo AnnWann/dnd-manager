@@ -23,7 +23,10 @@ export function getCharacterCarriedItems(
     equipment.cape,
     equipment.shield,
     ...equipment.rings,
+    ...(equipment.necklaces ?? []),
+    ...(equipment.bodyParts ?? []),
     ...equipment.weapons,
+    ...(equipment.heldItems ?? []),
     ...equipment.pockets,
   ].filter((item): item is Itemmable => Boolean(item))
 }
@@ -113,6 +116,8 @@ export function toggleInventoryItemAttunement(
     gloves: patchItemAttunement(equipment.gloves, itemId),
     cape: patchItemAttunement(equipment.cape, itemId),
     shield: patchItemAttunement(equipment.shield, itemId),
+    necklaces: (equipment.necklaces ?? []).map((entry) => patchItemAttunement(entry, itemId)),
+    bodyParts: (equipment.bodyParts ?? []).map((entry) => patchItemAttunement(entry, itemId)),
     rings: equipment.rings.map((entry) =>
       patchItemAttunement(entry, itemId),
     ),

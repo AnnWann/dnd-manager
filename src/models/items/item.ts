@@ -16,6 +16,7 @@ export type EquipSlot =
   | "weapon"
   | "ring"
   | "necklace"
+  | "bodyPart"
 
 export type ItemKind =
   | "common"

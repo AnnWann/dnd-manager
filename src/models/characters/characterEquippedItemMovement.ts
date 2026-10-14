@@ -15,6 +15,7 @@ export type EquippedItemReference =
     }
   | { type: "ring"; itemId: string }
   | { type: "necklace"; itemId: string }
+  | { type: "body-part"; itemId: string }
 
 export function handReferenceToEquippedItemReference(
   reference: HandOccupantReference,
@@ -48,6 +49,7 @@ export function getEquippedItem(
   if (reference.type === "ring") {
     return equipment.rings.find((item) => item.id === reference.itemId)
   }
+  if (reference.type === "body-part") return (equipment.bodyParts ?? []).find(item => item.id === reference.itemId)
   return (equipment.necklaces ?? []).find(
     (item) => item.id === reference.itemId,
   )
@@ -113,6 +115,16 @@ export function removeEquippedItem(
         rings: equipment.rings.filter(
           (current) => current.id !== reference.itemId,
         ),
+      }),
+    }
+  }
+
+  if (reference.type === "body-part") {
+    return {
+      item,
+      character: character.with("equipment", {
+        ...equipment,
+        bodyParts: (equipment.bodyParts ?? []).filter(current => current.id !== reference.itemId),
       }),
     }
   }

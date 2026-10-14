@@ -57,6 +57,9 @@ export function getCarriedWeightKg(character: CharacterTemplate): number {
     getItemStackWeightKg(equipment.helmet) +
     getItemStackWeightKg(equipment.cape) +
     equipment.rings.reduce((total, item) => total + getItemStackWeightKg(item), 0) +
+    (equipment.necklaces ?? []).reduce((total, item) => total + getItemStackWeightKg(item), 0) +
+    (equipment.bodyParts ?? []).reduce((total, item) => total + getItemStackWeightKg(item), 0) +
+    (equipment.heldItems ?? []).reduce((total, item) => total + getItemStackWeightKg(item), 0) +
     equipment.weapons.reduce((total, item) => total + getItemStackWeightKg(item), 0) +
     equipment.pockets.reduce((total, item) => total + getItemStackWeightKg(item), 0)
 
