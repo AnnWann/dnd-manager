@@ -21,6 +21,9 @@ type Props = {
   description: string
   items: Itemmable[]
   equippedItems?: EquippedInventoryEntry[]
+  pocketItems?: Itemmable[]
+  onMoveToPocket?: (itemId: string) => void
+  onRemovePocketItem?: (itemId: string) => void
   onUnequipItem?: (entry: EquippedInventoryEntry) => void
   searchQuery?: string
   emptyMessage: string
@@ -104,6 +107,9 @@ export function InventoryEditor({
   description,
   items,
   equippedItems = [],
+  pocketItems,
+  onMoveToPocket,
+  onRemovePocketItem,
   onUnequipItem,
   searchQuery = "",
   emptyMessage,
@@ -131,6 +137,9 @@ export function InventoryEditor({
   const regularItems = items.filter((item) => item.kind !== "currency")
   const normalizedQuery = searchQuery.trim().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR")
   const filteredItems = regularItems.filter((item) =>
+    matchesInventoryFilter(item, filter) && (!normalizedQuery || item.name.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR").includes(normalizedQuery)),
+  )
+  const filteredPocketItems = (pocketItems ?? []).filter((item) =>
     matchesInventoryFilter(item, filter) && (!normalizedQuery || item.name.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR").includes(normalizedQuery)),
   )
 
@@ -253,6 +262,22 @@ export function InventoryEditor({
         <InventoryGridBoard
           items={items}
           filteredItems={filteredItems}
+          pocketItems={pocketItems}
+          filteredPocketItems={filteredPocketItems}
+          onMoveToPocket={onMoveToPocket}
+          renderPocketItem={pocketItems ? (item) => (
+            <InventoryItemTile
+              item={item}
+              location="Bolso"
+              actions={{ selected: false, toggleSelected: () => {}, requestMove: () => {}, canMove: false }}
+              isAttuned={Boolean(item.attuned)}
+              typeLabel={inventoryItemTypeLabel(item)}
+              mutationsDisabled={mutationsDisabled}
+              onDetails={() => openDetails(item)}
+              onTransfer={onRemovePocketItem ? () => onRemovePocketItem(item.id) : undefined}
+              transferLabel="Tirar do bolso"
+            />
+          ) : undefined}
           filtered={filter !== "all" || Boolean(normalizedQuery)}
           mutationsDisabled={mutationsDisabled}
           emptyMessage={emptyMessage}
@@ -285,12 +310,12 @@ export function InventoryEditor({
 
       <ItemDetailsDialog
         item={viewingItem}
-        canEdit={Boolean(onUpdateItem) && !equippedItems.some(entry => entry.item.id === viewingItem?.id)}
+        canEdit={Boolean(onUpdateItem) && !equippedItems.some(entry => entry.item.id === viewingItem?.id) && !pocketItems?.some(item => item.id === viewingItem?.id)}
         mutationsDisabled={mutationsDisabled}
         onClose={() => setViewingItem(null)}
         onEdit={openEdit}
         onUpdate={
-          viewingItem && onUpdateItem && !mutationsDisabled && !equippedItems.some(entry => entry.item.id === viewingItem.id)
+          viewingItem && onUpdateItem && !mutationsDisabled && !equippedItems.some(entry => entry.item.id === viewingItem.id) && !pocketItems?.some(item => item.id === viewingItem.id)
             ? (updater) => onUpdateItem(viewingItem.id, updater)
             : undefined
         }
