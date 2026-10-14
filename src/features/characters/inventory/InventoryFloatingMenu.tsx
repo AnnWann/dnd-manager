@@ -75,7 +75,7 @@ export function InventoryFloatingMenu({ label, children, placement = "auto" }: P
       {open && typeof document !== "undefined" ? createPortal(
         <div ref={menuRef} role="menu" aria-label={label}
           style={{ top: position.top, left: position.left }}
-          className="fixed z-[10020] max-h-[calc(100dvh-1rem)] min-w-48 overflow-y-auto rounded-xl border border-border bg-bg-elevated p-2 shadow-theme-lg">
+          className="fixed z-[2147483000] max-h-[calc(100dvh-1rem)] min-w-48 overflow-y-auto rounded-xl border border-border bg-bg-elevated p-2 shadow-theme-lg">
           {children(() => setOpen(false))}
         </div>,
         document.body,
