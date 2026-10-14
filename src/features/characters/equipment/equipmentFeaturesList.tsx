@@ -58,7 +58,7 @@ export function EquipmentFeaturesList<T extends Equipment>({
       const { source, sourceItemId, sourceItemName, originalAbilityId, ...ability } = equipped
       return current.updateEquipmentAbility(equipment.id, {
         ...ability,
-        id: originalAbilityId,
+        id: abilityId,
         usage: { ...equipped.usage, used: Math.min(maximum, equipped.usage.used + 1) },
       })
     })
