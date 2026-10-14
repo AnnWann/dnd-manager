@@ -264,6 +264,12 @@ export function InventoryCompartmentBoard({
           </div>
           <div className="text-xs text-textMuted">{displayedItems.length + displayedFilteredFolders.length} item(ns)</div>
         </div>
+        {active && !filtered ? <details className="mb-3 rounded-lg border border-border bg-bg p-2">
+          <summary className="cursor-pointer text-xs font-medium text-textH">
+            Gerenciar este compartimento (editar, transferir ou retirar)
+          </summary>
+          <div className="mt-2 max-w-64">{tile(active)}</div>
+        </details> : null}
         {nestedFolders.length ? <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
           {nestedFolders.map(item => <button type="button" key={item.id}
             onClick={() => setActiveId(item.id)}
