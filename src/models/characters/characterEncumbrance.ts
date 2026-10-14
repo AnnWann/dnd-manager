@@ -1,5 +1,6 @@
 import type { CreatureSize } from "../races/CharacterRace"
 import { getItemStackWeightKg } from "../items/itemWeight"
+import { getInventoryCarriedWeightKg } from "../items/itemCompartments"
 import type { CharacterTemplate } from "./CharacterTemplate"
 
 export const POUNDS_TO_KILOGRAMS = 0.45359237
@@ -59,13 +60,7 @@ export function getCarriedWeightKg(character: CharacterTemplate): number {
     equipment.weapons.reduce((total, item) => total + getItemStackWeightKg(item), 0) +
     equipment.pockets.reduce((total, item) => total + getItemStackWeightKg(item), 0)
 
-  const inventoryWeight = character
-    .get("inventory")
-    .reduce(
-      (total, item) =>
-        item.insideBagOfHolding ? total : total + getItemStackWeightKg(item),
-      0,
-    )
+  const inventoryWeight = getInventoryCarriedWeightKg(character.get("inventory"))
 
   return equippedWeight + inventoryWeight
 }

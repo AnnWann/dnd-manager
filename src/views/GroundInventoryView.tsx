@@ -132,6 +132,7 @@ export function GroundInventoryView() {
         items={groundInventory}
         emptyMessage="Não há itens largados no chão."
         onAddCompendiumItem={addItem}
+        onAddItem={canManage ? addItem : undefined}
         onUpdateItem={canManage ? updateItem : undefined}
         onRemoveItem={canManage ? removeItem : undefined}
         onTransferItem={setTransferringItem}

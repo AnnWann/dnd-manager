@@ -66,10 +66,6 @@ export function PartyInventoryView() {
     ? runtime.role === "MASTER"
     : canEditInventoryAccessible
   const canUseSharedInventory = isMaster || inventoryAccessible
-  const supplyItems = partyInventory.filter((item) => item.kind === "supply")
-  const regularPartyItems = partyInventory.filter(
-    (item) => item.kind !== "supply",
-  )
   const [transferringItem, setTransferringItem] =
     useState<Itemmable | null>(null)
 
@@ -631,27 +627,11 @@ export function PartyInventoryView() {
 
       <div className="w-full min-w-0 max-w-full overflow-hidden">
         <InventoryEditor
-          title="Suprimentos do grupo"
-          description="Comida, água e outros recursos consumidos pela viagem e pelos descansos ficam separados dos demais itens."
-          showCurrencyWallet={false}
-          items={supplyItems}
-          emptyMessage="O grupo não possui suprimentos armazenados."
-          onAddItem={addItem}
-          onUpdateItem={updateItem}
-          onRemoveItem={removeItem}
-          onConsumeItem={consumePartyItem}
-          onTransferItem={setTransferringItem}
-          transferLabel="Enviar a personagem"
-        />
-      </div>
-
-      <div className="w-full min-w-0 max-w-full overflow-hidden">
-        <InventoryEditor
-          title="Itens do grupo"
+          title="Inventário do grupo"
           description={hasCapacity
             ? `Peso compartilhado: ${formatNumber(totalWeight)} de ${formatNumber(carryCapacity)}.`
             : `Peso compartilhado: ${formatNumber(totalWeight)}. A capacidade ainda não foi definida pelo mestre.`}
-          items={regularPartyItems}
+          items={partyInventory}
           emptyMessage="O inventário do grupo não possui outros itens."
           onAddItem={addItem}
           onUpdateItem={updateItem}

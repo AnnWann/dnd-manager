@@ -5,6 +5,7 @@ import {
   normalizeCurrencyItem,
 } from "../../models/items/Currency"
 import type { Itemmable } from "../../models/items/item"
+import { BAG_OF_HOLDING_COMPARTMENT } from "../../models/items/itemCompartments"
 import type { SupplyItem } from "../../models/items/SupplyItem"
 import {
   BASIC_ITEM_COMPENDIUM,
@@ -30,6 +31,7 @@ export const BAG_OF_HOLDING_COMPENDIUM_ITEM: Itemmable = {
   pocketable: false,
   kind: "gear",
   category: "bagOfHolding",
+  compartment: BAG_OF_HOLDING_COMPARTMENT,
   equippable: false,
   magicItem: true,
   requiresAttunement: false,
@@ -178,6 +180,9 @@ export function instantiateMatchingStandardItem(
     name: definition.locked ? instantiated.name : item.name || instantiated.name,
     notes: item.notes,
     insideBagOfHolding: item.insideBagOfHolding === true,
+    containerId: item.containerId,
+    volumeLiters: item.volumeLiters,
+    slotsUsed: item.slotsUsed,
     attuned: item.attuned === true,
   })
 }
@@ -212,6 +217,9 @@ export function normalizeStandardItem(item: Itemmable): Itemmable {
     return {
       ...canonical,
       notes: typeof item.notes === "string" ? item.notes : "",
+      containerId: item.containerId,
+      volumeLiters: item.volumeLiters,
+      slotsUsed: item.slotsUsed,
       compendiumItemId: sourceId,
       itemOrigin: "standard",
     }
@@ -224,6 +232,9 @@ export function normalizeStandardItem(item: Itemmable): Itemmable {
       notes: typeof item.notes === "string" ? item.notes : "",
       quantity: 1,
       insideBagOfHolding: false,
+      containerId: item.containerId,
+      volumeLiters: item.volumeLiters,
+      slotsUsed: item.slotsUsed,
       compendiumItemId: sourceId,
       itemOrigin: "standard",
     }

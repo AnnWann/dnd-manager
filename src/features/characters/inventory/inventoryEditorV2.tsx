@@ -9,11 +9,15 @@ import type { ItemKind, Itemmable } from "../../../models/items/item"
 import { isConsumableItemKind } from "../../../models/items/itemConsumption"
 import type { SupplyItem } from "../../../models/items/SupplyItem"
 import { ItemDropdownDetails } from "./itemDropdownDetails"
+import { InventoryCompartmentBoard } from "./InventoryCompartmentBoard"
+import { canStoreItem, getItemContainerId, isCompartment } from "../../../models/items/itemCompartments"
+import { Select } from "../../../components/ui/Select"
 
 type Props = {
   title: string
   description: string
   items: Itemmable[]
+  searchQuery?: string
   emptyMessage: string
   mutationsDisabled?: boolean
   onAddItem?: (item: Itemmable) => void
@@ -94,6 +98,7 @@ export function InventoryEditor({
   title,
   description,
   items,
+  searchQuery = "",
   emptyMessage,
   mutationsDisabled = false,
   onAddItem,
@@ -113,11 +118,13 @@ export function InventoryEditor({
   const [creatingItem, setCreatingItem] = useState(false)
   const [viewingItem, setViewingItem] = useState<Itemmable | null>(null)
   const [editingItem, setEditingItem] = useState<Itemmable | null>(null)
+  const [newCompartment, setNewCompartment] = useState<Itemmable | null>(null)
 
   const currencyItems = items.filter((item) => item.kind === "currency")
   const regularItems = items.filter((item) => item.kind !== "currency")
+  const normalizedQuery = searchQuery.trim().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR")
   const filteredItems = regularItems.filter((item) =>
-    matchesInventoryFilter(item, filter),
+    matchesInventoryFilter(item, filter) && (!normalizedQuery || item.name.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR").includes(normalizedQuery)),
   )
 
   function openDetails(item: Itemmable) {
@@ -143,15 +150,21 @@ export function InventoryEditor({
             </div>
           </div>
           {onAddItem ? (
-            <Button
-              className="w-full sm:w-auto"
-              size="sm"
-              variant="primary"
-              disabled={mutationsDisabled}
-              onClick={() => setCreatingItem(true)}
-            >
-              + Adicionar
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button className="w-full sm:w-auto" size="sm" variant="secondary"
+                disabled={mutationsDisabled}
+                onClick={() => setNewCompartment({
+                  id: crypto.randomUUID(), name: "Mochila", desc: "", notes: "",
+                  quantity: 1, weight: 1, kind: "pack", pocketable: false,
+                  compartment: { unit: "slots", capacity: 10, maxWeightKg: 20 },
+                })}>
+                + Compartimento
+              </Button>
+              <Button className="w-full sm:w-auto" size="sm" variant="primary"
+                disabled={mutationsDisabled} onClick={() => setCreatingItem(true)}>
+                + Adicionar
+              </Button>
+            </div>
           ) : null}
         </div>
       </CardHeader>
@@ -160,6 +173,7 @@ export function InventoryEditor({
         {showCurrencyWallet ? (
           <CurrencyWallet
             items={currencyItems}
+            allItems={items}
             mutationsDisabled={mutationsDisabled}
             onAddItem={onAddItem}
             onUpdateItem={onUpdateItem}
@@ -170,6 +184,12 @@ export function InventoryEditor({
             }
             transferLabel={transferLabel}
             onViewItem={openDetails}
+            onMoveItem={onUpdateItem ? (itemId, containerId) => {
+              const verdict = canStoreItem(items, itemId, containerId)
+              if (!verdict.ok) return
+              const moved = verdict.items.find(item => item.id === itemId)
+              if (moved) onUpdateItem(itemId, () => moved)
+            } : undefined}
           />
         ) : null}
 
@@ -190,15 +210,25 @@ export function InventoryEditor({
           ))}
         </div>
 
-        {filteredItems.length ? (
-          <div className="grid gap-3">
-            {filteredItems.map((item, index) => {
+        <InventoryCompartmentBoard
+          items={items}
+          filteredItems={filteredItems}
+          filtered={filter !== "all" || Boolean(normalizedQuery)}
+          mutationsDisabled={mutationsDisabled}
+          emptyMessage={emptyMessage}
+          onMoveItem={onUpdateItem ? (itemId, containerId) => {
+            const verdict = canStoreItem(items, itemId, containerId)
+            if (!verdict.ok) return
+            const moved = verdict.items.find(item => item.id === itemId)
+            if (moved) onUpdateItem(itemId, () => moved)
+          } : undefined}
+          renderItem={(item) => {
               const isAttuned = attunedItemIds.includes(item.id)
               const definition = findStandardDefinitionForItem(item)
 
               return (
                 <article
-                  key={`${item.id}-${index}`}
+                  key={item.id}
                   className="rounded-xl border border-border bg-[color:var(--social-bg)] p-3"
                 >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -273,19 +303,6 @@ export function InventoryEditor({
                         </Button>
                       ) : null}
 
-                      {onToggleBagOfHolding ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          disabled={mutationsDisabled}
-                          onClick={() => onToggleBagOfHolding(item.id)}
-                        >
-                          {item.insideBagOfHolding
-                            ? "Retirar da bolsa"
-                            : "Enviar à bolsa"}
-                        </Button>
-                      ) : null}
-
                       {onTransferItem ? (
                         <Button
                           size="sm"
@@ -311,17 +328,9 @@ export function InventoryEditor({
                   </div>
                 </article>
               )
-            })}
-          </div>
-        ) : (
-          <p className="text-sm text-text">
-            {items.length
-              ? regularItems.length
-                ? "Nenhum item encontrado nesse filtro."
-                : "Nenhum item além das moedas."
-              : emptyMessage}
-          </p>
-        )}
+
+          }}
+        />
       </CardContent>
 
       <ItemDetailsDialog
@@ -345,6 +354,18 @@ export function InventoryEditor({
           if (mutationsDisabled) return
           onAddItem?.(item)
           setCreatingItem(false)
+        }}
+      />
+
+      <ItemCreationDialog
+        open={!mutationsDisabled && newCompartment !== null}
+        title="Novo compartimento"
+        saveLabel="Criar compartimento"
+        item={newCompartment}
+        onClose={() => setNewCompartment(null)}
+        onSave={item => {
+          onAddItem?.(item)
+          setNewCompartment(null)
         }}
       />
 
@@ -441,6 +462,8 @@ function ItemDetailsDialog({
 
 function CurrencyWallet({
   items,
+  allItems,
+  onMoveItem,
   mutationsDisabled,
   onAddItem,
   onUpdateItem,
@@ -451,6 +474,8 @@ function CurrencyWallet({
   onViewItem,
 }: {
   items: Itemmable[]
+  allItems: Itemmable[]
+  onMoveItem?: (itemId: string, containerId?: string) => void
   mutationsDisabled: boolean
   onAddItem?: (item: Itemmable) => void
   onUpdateItem?: (
@@ -528,6 +553,15 @@ function CurrencyWallet({
                   }
                 />
               </label>
+              {onMoveItem ? <label className="mt-2 grid gap-1 text-[11px] text-textMuted">Guardar moedas em
+                <Select value={getItemContainerId(item, allItems) ?? ""}
+                  disabled={mutationsDisabled}
+                  onChange={event => onMoveItem(item.id, event.target.value || undefined)}>
+                  <option value="">Fora de compartimentos</option>
+                  {allItems.filter(isCompartment).map(container =>
+                    <option key={container.id} value={container.id}>{container.name}</option>)}
+                </Select>
+              </label> : null}
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
                   size="sm"
