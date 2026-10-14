@@ -6,6 +6,7 @@ import { EquipmentPocketsSection } from "./EquipmentPocketSection"
 import { EquipmentHeldItemsSection } from "./EquipmentHeldItemsSection"
 import { EquipmentRingsSection } from "./equipmentRingSection"
 import { EquipmentNecklacesSection } from "./equipmentNecklaceSection"
+import { EquipmentBodyPartsSection } from "./equipmentBodyPartsSection"
 import { EquipmentSingleSlotSection } from "./EquipmentSingleSlotSection"
 import { EquipmentSummary } from "./equipmentSummary"
 import { EquipmentWeaponsSection } from "./EquipmentWeaponsSection"
@@ -24,7 +25,7 @@ export function CharacterEquipmentTab({ character, updateCharacter }: Props) {
       <CardHeader>
         <div className="text-sm font-semibold text-textH">Equipamento</div>
         <div className="mt-1 text-xs text-text">
-          Itens vestidos, empunhados, segurados, anéis, colares, bolsos e sintonias.
+          Itens vestidos, empunhados, partes corporais, anéis, colares, bolsos e sintonias.
         </div>
       </CardHeader>
 
@@ -92,6 +93,8 @@ export function CharacterEquipmentTab({ character, updateCharacter }: Props) {
           character={character}
           updateCharacter={updateCharacter}
         />
+
+        <EquipmentBodyPartsSection character={character} updateCharacter={updateCharacter} />
 
         <EquipmentPocketsSection
           character={character}
