@@ -156,6 +156,7 @@ export function pocketInventoryItemWithRules(
     quantity: 1,
     pocketable: true,
     insideBagOfHolding: false,
+    containerId: undefined,
   }))
   const remainingQuantity = availableQuantity - movedQuantity
   const nextInventory = [
