@@ -389,9 +389,9 @@ export class CharacterTemplate {
   getCarryingCapacity(): number {return getCarryingCapacity(this)}
   getEncumbranceLimit(): number {return getEncumbranceLimit(this)}
   getHeavyEncumbranceLimit(): number {return getHeavyEncumbranceLimit(this)}
-  wear<K extends Exclude<keyof CharacterEquipment, "weapons" | "rings" | "necklaces" | "pockets" | "heldItems">>(slot: K,item: CharacterEquipment[K],): CharacterTemplate {return wear(this, slot, item)}
+  wear<K extends Exclude<keyof CharacterEquipment, "weapons" | "rings" | "necklaces" | "bodyParts" | "pockets" | "heldItems">>(slot: K,item: CharacterEquipment[K],): CharacterTemplate {return wear(this, slot, item)}
   equipInventoryItem(itemId: string): CharacterTemplate {return equipInventoryItem(this, itemId)}
-  unequip(slot: Exclude<keyof CharacterEquipment, "weapons" | "rings" | "necklaces" | "pockets" | "heldItems">,): CharacterTemplate {return unequip(this, slot)}
+  unequip(slot: Exclude<keyof CharacterEquipment, "weapons" | "rings" | "necklaces" | "bodyParts" | "pockets" | "heldItems">,): CharacterTemplate {return unequip(this, slot)}
   unequipArmor(): CharacterTemplate {return unequipArmor(this)}
   getUsedArms(): number {return getUsedArms(this)}
   useWeapon(weapon: Weapon): CharacterTemplate {return useWeapon(this, weapon)}
