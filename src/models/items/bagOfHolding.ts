@@ -1,14 +1,11 @@
 import type { Itemmable } from "./item"
-import { getItemStackWeightKg } from "./itemWeight"
+import { getCompartmentUsage } from "./itemCompartments"
+import { isBagOfHoldingItem } from "./item"
 
 export const BAG_OF_HOLDING_CAPACITY_KG = 226
 
 export function getBagOfHoldingWeightKg(items: Itemmable[]): number {
-  return items.reduce(
-    (total, item) =>
-      item.insideBagOfHolding ? total + getItemStackWeightKg(item) : total,
-    0,
-  )
+  return items.filter(isBagOfHoldingItem).reduce((total, bag) => total + getCompartmentUsage(items, bag).weightKg, 0)
 }
 
 export function getBagOfHoldingRemainingKg(items: Itemmable[]): number {
