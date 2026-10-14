@@ -1,4 +1,5 @@
 import type { ItemKind, Itemmable } from "../../models/items/item"
+import { STANDARD_CONTAINER_SIZES, STANDARD_ITEM_VOLUME_LITERS } from "../../models/items/standardItemVolumes"
 import {
   WEAPON_PROPERTIES,
   type WeaponPropertyId,
@@ -36,6 +37,15 @@ function item(
     kind,
     quantity,
     pocketable,
+    // Volume occupied is an exterior/packed estimate per unit, not capacity.
+    volumeLiters: STANDARD_ITEM_VOLUME_LITERS[id],
+    ...(STANDARD_CONTAINER_SIZES[id]
+      ? { compartment: {
+          unit: "liters" as const,
+          capacity: STANDARD_CONTAINER_SIZES[id].capacityLiters,
+          maxWeightKg: STANDARD_CONTAINER_SIZES[id].maxWeightKg,
+        } }
+      : {}),
     ...extras,
   } as Itemmable
 }

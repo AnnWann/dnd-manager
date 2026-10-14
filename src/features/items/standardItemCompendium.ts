@@ -28,6 +28,8 @@ export const BAG_OF_HOLDING_COMPENDIUM_ITEM: Itemmable = {
   notes: "",
   quantity: 1,
   weight: 6.8,
+  // Approximate exterior volume of a folded bag, not its extradimensional interior.
+  volumeLiters: 10,
   pocketable: false,
   kind: "gear",
   category: "bagOfHolding",
@@ -181,8 +183,9 @@ export function instantiateMatchingStandardItem(
     notes: item.notes,
     insideBagOfHolding: item.insideBagOfHolding === true,
     containerId: item.containerId,
-    volumeLiters: item.volumeLiters,
-    slotsUsed: item.slotsUsed,
+    volumeLiters: item.volumeLiters ?? instantiated.volumeLiters,
+    compartment: item.compartment ?? instantiated.compartment,
+    slotsUsed: item.slotsUsed ?? instantiated.slotsUsed,
     attuned: item.attuned === true,
   })
 }
@@ -201,6 +204,8 @@ export function normalizeStandardItem(item: Itemmable): Itemmable {
   if (!definition.locked) {
     return {
       ...restoreCanonicalSupplyMetadata(item, definition.item),
+      volumeLiters: definition.item.volumeLiters,
+      compartment: item.compartment ?? definition.item.compartment,
       compendiumItemId: sourceId,
       itemOrigin: "standard",
     }
@@ -218,7 +223,7 @@ export function normalizeStandardItem(item: Itemmable): Itemmable {
       ...canonical,
       notes: typeof item.notes === "string" ? item.notes : "",
       containerId: item.containerId,
-      volumeLiters: item.volumeLiters,
+      volumeLiters: canonical.volumeLiters,
       slotsUsed: item.slotsUsed,
       compendiumItemId: sourceId,
       itemOrigin: "standard",
@@ -233,7 +238,7 @@ export function normalizeStandardItem(item: Itemmable): Itemmable {
       quantity: 1,
       insideBagOfHolding: false,
       containerId: item.containerId,
-      volumeLiters: item.volumeLiters,
+      volumeLiters: item.volumeLiters ?? definition.item.volumeLiters,
       slotsUsed: item.slotsUsed,
       compendiumItemId: sourceId,
       itemOrigin: "standard",
