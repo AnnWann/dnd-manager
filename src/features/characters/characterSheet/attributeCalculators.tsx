@@ -106,6 +106,7 @@ export function AttributeCalculators({ character }: Props) {
                 <WeaponAttackCard
                   key={`${weapon.id}-${index}`}
                   weapon={weapon}
+                  attribute={getCharacterWeaponAttackAttribute(character, weapon)}
                   attack={getWeaponAttack(weapon)}
                   damageBonus={getWeaponDamage(weapon)}
                   onClick={() => setHandDialog({ itemId: weapon.id })}
@@ -190,16 +191,17 @@ function CalculatorGroup({
 
 function WeaponAttackCard({
   weapon,
+  attribute,
   attack,
   damageBonus,
   onClick,
 }: {
   weapon: Weapon
+  attribute: Attribute
   attack: number
   damageBonus: number
   onClick: () => void
 }) {
-  const attribute = getCharacterWeaponAttackAttribute(character, weapon)
   const die = getWeaponDamageDie(weapon) ?? weapon.damage
   const damage = `${die.quantity}${die.sides}${damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""}`
   const hands = weapon.wieldedTwoHanded ? 2 : 1
