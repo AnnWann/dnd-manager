@@ -4,7 +4,7 @@ import { Crosshair, Hand, Scale, Sparkles, Swords } from "lucide-react"
 import { Button } from "../../../components/ui/Button"
 import { Select } from "../../../components/ui/Select"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
-import { getActiveAttackRiders, getWeaponRiderTransformation } from "../../../models/combat/AttackRider"
+import { getActiveAttackRiders, getCharacterWeaponAttackAttribute, getWeaponRiderTransformation } from "../../../models/combat/AttackRider"
 import { damageTypeLabel } from "../../../models/combat/Damage"
 import { attributeShort } from "../../../lib/attributeShorts"
 import { formatBonusName, formatBonusValue, formatSkillName } from "../../../lib/formatBonus"
@@ -14,7 +14,6 @@ import type { CharacterTemplate } from "../../../models/characters/CharacterTemp
 import { getUsedArmsIncludingShield } from "../../../models/characters/characterEquipmentInteractions"
 import { setWeaponGripWithRules } from "../../../models/characters/characterHands"
 import {
-  getWeaponAttackAttribute,
   getWeaponDamageDie,
   getWeaponHandsUsed,
   isVersatileWeapon,
@@ -82,7 +81,7 @@ function formatDie(die: Weapon["damage"] | undefined) {
 }
 
 function weaponAttackBonus(character: CharacterTemplate, weapon: Weapon) {
-  const modifierAttribute = getWeaponAttackAttribute(weapon)
+  const modifierAttribute = getCharacterWeaponAttackAttribute(character, weapon)
 
   const attributeMod = character.getEffectiveAttributeModifier(
     modifierAttribute,
@@ -96,11 +95,12 @@ function weaponAttackBonus(character: CharacterTemplate, weapon: Weapon) {
   return character.getEffectiveWeaponAttackBonus(
     weapon,
     attributeMod + proficiency,
+    modifierAttribute,
   )
 }
 
 function weaponDamageBonus(character: CharacterTemplate, weapon: Weapon) {
-  const modifierAttribute = getWeaponAttackAttribute(weapon)
+  const modifierAttribute = getCharacterWeaponAttackAttribute(character, weapon)
 
   const attributeMod = character.getEffectiveAttributeModifier(
     modifierAttribute,
@@ -109,6 +109,7 @@ function weaponDamageBonus(character: CharacterTemplate, weapon: Weapon) {
   return character.getEffectiveWeaponDamageBonus(
     weapon,
     attributeMod,
+    modifierAttribute,
   )
 }
 
@@ -132,6 +133,18 @@ export function EquipmentWeaponsSection({
     updateCharacter(character.get("id"), (current) =>
       setWeaponGripWithRules(current, index, wieldedTwoHanded),
     )
+  }
+
+  function setWeaponProficiency(index: number, proficient: boolean) {
+    if (!canChangeLoadout) return
+    updateCharacter(character.get("id"), current => {
+      const equipment = current.get("equipment")
+      return current.with("equipment", {
+        ...equipment,
+        weapons: equipment.weapons.map((entry, currentIndex) =>
+          currentIndex === index ? { ...entry, proficient } : entry),
+      })
+    })
   }
 
   function unequipWeapon(weapon: Weapon) {
@@ -179,7 +192,7 @@ export function EquipmentWeaponsSection({
         ) : (
           <div className="grid gap-3">
             {weapons.map((weapon, index) => {
-              const modifierAttribute = getWeaponAttackAttribute(weapon)
+              const modifierAttribute = getCharacterWeaponAttackAttribute(character, weapon)
               const attackBonus = weaponAttackBonus(character, weapon)
               const damageBonus = weaponDamageBonus(character, weapon)
               const damageText = formatDie(getWeaponDamageDie(weapon))
@@ -203,9 +216,12 @@ export function EquipmentWeaponsSection({
                         <h3 className="text-base font-semibold text-textH">
                           {weapon.name || "Arma sem nome"}
                         </h3>
-                        <span className="rounded-full bg-accentBg px-2 py-0.5 text-[10px] font-semibold text-accent">
-                          {weapon.proficient ? "Proficiente" : "Não proficiente"}
-                        </span>
+                        <label className="flex items-center gap-1.5 rounded-full bg-accentBg px-2 py-1 text-[10px] font-semibold text-textH" title="Proficiência desta arma para este personagem">
+                          <input type="checkbox" className="accent-accent" checked={Boolean(weapon.proficient)}
+                            disabled={!canChangeLoadout}
+                            onChange={e => setWeaponProficiency(index, e.target.checked)} />
+                          Proficiente
+                        </label>
                         <span className="rounded-full border border-border bg-bg px-2 py-0.5 text-[10px] font-semibold text-textMuted">
                           {improvised
                             ? "Improvisada · uma mão"

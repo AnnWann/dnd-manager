@@ -480,8 +480,8 @@ export class CharacterTemplate {
   getEffectiveSaveDc(baseValue: number): number {return getEffectiveSaveDc(this, baseValue)}
   getEffectiveSpellSaveDc(attribute: Attribute, baseValue: number): number {return getEffectiveSpellSaveDc(this, attribute, baseValue)}
   getEffectiveAbilitySaveDc(attribute: Attribute, baseValue: number): number {return getEffectiveAbilitySaveDc(this, attribute, baseValue)}
-  getEffectiveWeaponAttackBonus(weapon: Weapon,baseValue: number,): number {return getEffectiveWeaponAttackBonus(this, weapon, baseValue)}
-  getEffectiveWeaponDamageBonus(weapon: Weapon,baseValue: number,): number {return getEffectiveWeaponDamageBonus(this, weapon, baseValue)}
+  getEffectiveWeaponAttackBonus(weapon: Weapon,baseValue: number,attribute?: Attribute): number {return getEffectiveWeaponAttackBonus(this, weapon, baseValue, attribute)}
+  getEffectiveWeaponDamageBonus(weapon: Weapon,baseValue: number,attribute?: Attribute): number {return getEffectiveWeaponDamageBonus(this, weapon, baseValue, attribute)}
   getEquipmentBonuses(key: StatBonusKey): Bonus[] {return getEquipmentBonuses(this, key)}
   getEffectiveArmorClass(): number {return getEffectiveArmorClass(this)}
   getEffectiveInitiative(): number {return getEffectiveInitiative(this)}

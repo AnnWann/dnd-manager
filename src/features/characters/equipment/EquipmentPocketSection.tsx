@@ -1,5 +1,6 @@
 import { Button } from "../../../components/ui/Button"
 import { attributeShort } from "../../../lib/attributeShorts"
+import { getCharacterWeaponAttackAttribute } from "../../../models/combat/AttackRider"
 import { formatSigned } from "../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import { applyConsumableEffect } from "../../../models/characters/characterConsumables"
@@ -7,7 +8,6 @@ import { wieldPocketWeaponWithRules } from "../../../models/characters/character
 import { unequipPocketStack } from "../../../models/characters/characterInventoryStacks"
 import type { ConsumableItem, ThrowableItem } from "../../../models/items/equipment/PocketItem"
 import {
-  getWeaponAttackAttribute,
   getWeaponDamageDie,
   getWeaponHandsUsed,
   isVersatileWeapon,
@@ -236,7 +236,7 @@ function WeaponPocketSummary({
   character: CharacterTemplate
   weapon: Weapon
 }) {
-  const attribute = getWeaponAttackAttribute(weapon)
+  const attribute = getCharacterWeaponAttackAttribute(character, weapon)
   const attributeMod = character.getEffectiveAttributeModifier(attribute)
   const proficiency =
     weapon.proficient && !isWeaponImprovisedGrip(weapon)
@@ -245,8 +245,9 @@ function WeaponPocketSummary({
   const attackBonus = character.getEffectiveWeaponAttackBonus(
     weapon,
     attributeMod + proficiency,
+    attribute,
   )
-  const damageBonus = character.getEffectiveWeaponDamageBonus(weapon, attributeMod)
+  const damageBonus = character.getEffectiveWeaponDamageBonus(weapon, attributeMod, attribute)
   const activeDamage = getWeaponDamageDie(weapon) ?? weapon.damage
   const versatile = isVersatileWeapon(weapon)
   const handUsage = getWeaponHandsUsed(weapon)

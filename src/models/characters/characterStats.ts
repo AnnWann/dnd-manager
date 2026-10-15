@@ -494,6 +494,7 @@ export function getEffectiveWeaponAttackBonus(
   character: CharacterTemplate,
   weapon: Weapon,
   baseValue: number,
+  effectiveAttribute: Attribute = getWeaponAttackAttribute(weapon),
 ): number {
   if (isWeaponImprovisedGrip(weapon)) {
     return getEffectiveAttackBonus(
@@ -505,7 +506,7 @@ export function getEffectiveWeaponAttackBonus(
   const weaponAttackBonus = weapon.bonuses?.attack?.bonus
     ? resolveBonus(character, weapon.bonuses.attack.bonus)
     : undefined
-  const modifierAttribute = getWeaponAttackAttribute(weapon)
+  const modifierAttribute = effectiveAttribute
 
   return applyBonuses(baseValue, [
     ...getCharacterBonuses(character, "attackBonus"),
@@ -522,10 +523,11 @@ export function getEffectiveWeaponDamageBonus(
   character: CharacterTemplate,
   weapon: Weapon,
   baseValue: number,
+  effectiveAttribute: Attribute = getWeaponAttackAttribute(weapon),
 ): number {
   const modifierAttribute = isWeaponImprovisedGrip(weapon)
     ? "str"
-    : getWeaponAttackAttribute(weapon)
+    : effectiveAttribute
   const effectiveBase = isWeaponImprovisedGrip(weapon)
     ? getEffectiveAttributeModifier(character, "str")
     : baseValue

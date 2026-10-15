@@ -5,6 +5,8 @@ import type { CharacterTemplate } from "../../../models/characters/CharacterTemp
 import { DAMAGE_TYPE_OPTIONS, type DamageType } from "../../../models/combat/Damage"
 import type { AttackRider } from "../../../models/combat/AttackRider"
 import { parseAttackRiderDice } from "../../../models/combat/AttackRider"
+import { ATTRIBUTES, CLASS_NAMES } from "../../../contexts/consts"
+import type { Attribute } from "../../../models/sheet/Attribute"
 import { useOptionalSessionRuntime } from "../../session-runtime/useSessionRuntime"
 
 export function AttackRidersEditor({ riders, character, onChange, defaultScope = "weapon" }: {
@@ -24,7 +26,7 @@ export function AttackRidersEditor({ riders, character, onChange, defaultScope =
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="text-xs font-semibold text-textH">Efeitos em ataques (riders)</div>
-          <div className="text-[11px] text-textMuted">Dados extras por acerto, troca do tipo de dano e propriedades temporárias de armas.</div>
+          <div className="text-[11px] text-textMuted">Dados extras, atributo de ataque e dano, tipos de dano e propriedades temporárias de armas.</div>
         </div>
         <Button size="sm" variant="secondary" onClick={() => onChange([...riders, {
           id: crypto.randomUUID(), label: "Dano adicional", scope: defaultScope, damage: { dice: "1d6", damageType: "fire" },
@@ -107,11 +109,38 @@ export function AttackRidersEditor({ riders, character, onChange, defaultScope =
             </label>
           </div> : null}
           {rider.scope === "weapon" ? <>
-            <label className="flex items-center gap-2 text-xs text-textH">
-              <input type="checkbox" checked={rider.weaponSelection === "onActivation"}
-                onChange={e => patch(rider.id, { weaponSelection: e.target.checked ? "onActivation" : undefined, weaponId: undefined })} />
-              Escolher uma arma equipada ao ativar
+            <label className="grid gap-1 text-xs text-textMuted">Arma afetada
+              <Select value={rider.weaponSelection ?? "fixed"} onChange={e => patch(rider.id, {
+                weaponSelection: e.target.value === "fixed" ? undefined : e.target.value as "onActivation" | "sourceWeapon",
+                weaponId: undefined,
+              })}>
+                <option value="fixed">Arma escolhida acima (ou todas)</option>
+                <option value="onActivation">Escolher arma ao ativar</option>
+                <option value="sourceWeapon">Somente a arma que concede a habilidade</option>
+              </Select>
             </label>
+            <label className="grid gap-1 text-xs text-textMuted">Atributo para ataque e dano
+              <Select value={rider.weaponAttackAttribute ?? "default"} onChange={e => patch(rider.id, {
+                weaponAttackAttribute: e.target.value === "default" ? undefined : e.target.value as Attribute | "spellcasting",
+                weaponSpellcastingClass: undefined,
+              })}>
+                <option value="default">Manter atributo normal da arma</option>
+                {ATTRIBUTES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                <option value="spellcasting">Atributo de conjuração</option>
+              </Select>
+            </label>
+            {rider.weaponAttackAttribute === "spellcasting" ? (
+              <label className="grid gap-1 text-xs text-textMuted">Classe de conjuração
+                <Select value={rider.weaponSpellcastingClass ?? ""} onChange={e => patch(rider.id, { weaponSpellcastingClass: e.target.value || undefined })}>
+                  <option value="">Maior modificador de conjuração disponível</option>
+                  {Object.entries(CLASS_NAMES).map(([key, label]) =>
+                    <option key={key} value={key}>{label}</option>)}
+                </Select>
+              </label>
+            ) : null}
+            {rider.weaponAttackAttribute ? (
+              <p className="text-[11px] text-textMuted">Substitui o atributo dos ataques e do dano da arma enquanto ativo, sem conceder proficiência.</p>
+            ) : null}
             <label className="grid gap-1 text-xs text-textMuted">Substituir o tipo de dano da arma
               <Select
                 value={rider.weaponDamageTypeMode

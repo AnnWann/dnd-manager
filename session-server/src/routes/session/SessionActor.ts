@@ -33,10 +33,9 @@ import type { Ability } from "../../../../src/models/abilities/Ability";
 import type { AbilityRollDefinition } from "../../../../src/models/abilities/AbilityRoll";
 import { validateAbilityRoll } from "../../../../src/models/abilities/AbilityRoll";
 import { applyBonuses, getEquippedItems, getScopedCharacterBonuses } from "../../../../src/models/characters/characterStats";
-import { getActiveAttackRiders, getWeaponRiderTransformation, parseAttackRiderDice } from "../../../../src/models/combat/AttackRider";
+import { getActiveAttackRiders, getCharacterWeaponAttackAttribute, getWeaponRiderTransformation, parseAttackRiderDice } from "../../../../src/models/combat/AttackRider";
 import { rollAttackRiderDamages } from "./attackRiderDice";
 import {
-  getWeaponAttackAttribute,
   getWeaponDamageDie,
   isWeaponImprovisedGrip,
   type Weapon,
@@ -1709,7 +1708,7 @@ function resolveServerActionRoll(
     const weapon = findEquippedWeapon(character, request.source.weaponId);
     if (!weapon) return missingWeapon();
 
-    const attribute = getWeaponAttackAttribute(weapon);
+    const attribute = getCharacterWeaponAttackAttribute(character, weapon);
     const proficiency = weapon.proficient && !isWeaponImprovisedGrip(weapon)
       ? character.getProficiencyBonus()
       : 0;
@@ -1753,6 +1752,7 @@ function resolveServerActionRoll(
       character.getEffectiveWeaponAttackBonus(
         weapon,
         character.getEffectiveAttributeModifier(attribute) + proficiency,
+        attribute,
       ),
     );
     const critical = attack.natural === 20;
@@ -1762,6 +1762,7 @@ function resolveServerActionRoll(
       character.getEffectiveWeaponDamageBonus(
         weapon,
         character.getEffectiveAttributeModifier(attribute),
+        attribute,
       ),
       critical,
     );
@@ -2255,7 +2256,7 @@ function buildAuthoritativeDicePlan(
     case "weapon-attack": {
       const weapon = findEquippedWeapon(character, source.weaponId);
       if (!weapon) return missingWeapon();
-      const attribute = getWeaponAttackAttribute(weapon);
+      const attribute = getCharacterWeaponAttackAttribute(character, weapon);
       const proficiency = weapon.proficient && !isWeaponImprovisedGrip(weapon)
         ? character.getProficiencyBonus()
         : 0;
@@ -2265,6 +2266,7 @@ function buildAuthoritativeDicePlan(
         character.getEffectiveWeaponAttackBonus(
           weapon,
           character.getEffectiveAttributeModifier(attribute) + proficiency,
+          attribute,
         ),
       );
     }
@@ -2274,10 +2276,11 @@ function buildAuthoritativeDicePlan(
       const weapon = findEquippedWeapon(character, source.weaponId);
       if (!weapon) return missingWeapon();
       const die = getWeaponDamageDie(weapon) ?? weapon.damage;
-      const attribute = getWeaponAttackAttribute(weapon);
+      const attribute = getCharacterWeaponAttackAttribute(character, weapon);
       const modifier = character.getEffectiveWeaponDamageBonus(
         weapon,
         character.getEffectiveAttributeModifier(attribute),
+        attribute,
       );
       return {
         ok: true,

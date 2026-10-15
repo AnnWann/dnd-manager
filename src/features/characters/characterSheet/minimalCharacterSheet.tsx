@@ -10,12 +10,12 @@ import { formatSigned } from "../../../lib/formatSigned"
 import { clampInt } from "../../../lib/numberFormat"
 import { requestActionRoll, requestD20Roll, requestDamageRoll, rollModeFromEvent, rollModifierHint } from "../../../lib/diceRoller"
 import { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
+import { getCharacterWeaponAttackAttribute } from "../../../models/combat/AttackRider"
 import {
   formatUnarmedDamage,
   getUnarmedAttackProfile,
 } from "../../../models/characters/unarmedAttack"
 import {
-  getWeaponAttackAttribute,
   getWeaponDamageDie,
   isTwoHandedWeapon,
   isVersatileWeapon,
@@ -471,10 +471,10 @@ export function MinimalCharacterSheet({
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {character.get("equipment").weapons.length ? (
                 character.get("equipment").weapons.map((weapon, index) => {
-                  const attribute = getWeaponAttackAttribute(weapon)
+                  const attribute = getCharacterWeaponAttackAttribute(character, weapon)
                   const baseAttack = character.getEffectiveAttributeModifier(attribute) + (weapon.proficient && !isWeaponImprovisedGrip(weapon) ? proficiency : 0)
-                  const attack = character.getEffectiveWeaponAttackBonus(weapon, baseAttack)
-                  const damageBonus = character.getEffectiveWeaponDamageBonus(weapon, character.getEffectiveAttributeModifier(attribute))
+                  const attack = character.getEffectiveWeaponAttackBonus(weapon, baseAttack, attribute)
+                  const damageBonus = character.getEffectiveWeaponDamageBonus(weapon, character.getEffectiveAttributeModifier(attribute), attribute)
                   return (
                     <CompactWeaponTile
                       key={`${weapon.id}-${index}`}

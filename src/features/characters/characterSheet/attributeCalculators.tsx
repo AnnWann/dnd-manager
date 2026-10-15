@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react"
 import { Crosshair, ShieldCheck, Sparkles, Swords } from "lucide-react"
 
 import { attributeShort } from "../../../lib/attributeShorts"
+import { getCharacterWeaponAttackAttribute } from "../../../models/combat/AttackRider"
 import { formatSigned } from "../../../lib/formatSigned"
 import type { CharacterTemplate } from "../../../models/characters/CharacterTemplate"
 import {
@@ -9,7 +10,6 @@ import {
   getUnarmedAttackProfile,
 } from "../../../models/characters/unarmedAttack"
 import {
-  getWeaponAttackAttribute,
   getWeaponDamageDie,
   isWeaponImprovisedGrip,
   type Weapon,
@@ -39,7 +39,7 @@ export function AttributeCalculators({ character }: Props) {
   }
 
   function getWeaponAttack(weapon: Weapon): number {
-    const attribute = getWeaponAttackAttribute(weapon)
+    const attribute = getCharacterWeaponAttackAttribute(character, weapon)
     const proficiency =
       weapon.proficient && !isWeaponImprovisedGrip(weapon)
         ? proficiencyBonus
@@ -47,12 +47,13 @@ export function AttributeCalculators({ character }: Props) {
     return character.getEffectiveWeaponAttackBonus(
       weapon,
       getModifier(attribute) + proficiency,
+      attribute,
     )
   }
 
   function getWeaponDamage(weapon: Weapon): number {
-    const attribute = getWeaponAttackAttribute(weapon)
-    return character.getEffectiveWeaponDamageBonus(weapon, getModifier(attribute))
+    const attribute = getCharacterWeaponAttackAttribute(character, weapon)
+    return character.getEffectiveWeaponDamageBonus(weapon, getModifier(attribute), attribute)
   }
 
   function getSpellAttack(attribute: Attribute): number {
@@ -198,7 +199,7 @@ function WeaponAttackCard({
   damageBonus: number
   onClick: () => void
 }) {
-  const attribute = getWeaponAttackAttribute(weapon)
+  const attribute = getCharacterWeaponAttackAttribute(character, weapon)
   const die = getWeaponDamageDie(weapon) ?? weapon.damage
   const damage = `${die.quantity}${die.sides}${damageBonus !== 0 ? ` ${formatSigned(damageBonus)}` : ""}`
   const hands = weapon.wieldedTwoHanded ? 2 : 1

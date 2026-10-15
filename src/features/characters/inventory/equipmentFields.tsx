@@ -275,20 +275,6 @@ export function WeaponFields({
         />
       </div>
 
-      <label className="flex items-center gap-2 self-end text-xs text-text">
-        <input
-          type="checkbox"
-          checked={weapon.proficient ?? false}
-          onChange={(event) =>
-            onUpdate((current) => ({
-              ...current,
-              proficient: event.target.checked,
-            }))
-          }
-        />
-        Proficiente
-      </label>
-
       {versatile ? (
         <WeaponDamageFields
           title="Dano com duas mãos"
